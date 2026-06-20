@@ -6,18 +6,19 @@ use perl_semantic_facts::AnchorId;
 
 use super::model::{
     AstAnchor, BarewordExpr, BarewordFact, BarewordRole, BarewordTable, Binding, BindingReference,
-    BlockShell, CallExpr, CallForm, CompileConfidence, CompileDirective, CompileDirectiveAction,
-    CompileDirectiveKind, CompileEnvironment, CompileEnvironmentBoundary,
-    CompileEnvironmentBoundaryKind, CompilePhase, CompilePhaseBlock, CompileProvenance,
-    DynamicBoundary, DynamicBoundaryKind, ExportDeclaration, ExportDeclarationKind, GlobSlot,
-    GlobSlotKind, GlobSlotSource, HirBindingId, HirFile, HirId, HirItem, HirKind, HirScopeId,
-    IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr, InheritanceSource, LiteralExpr,
-    LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind,
-    ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash, PragmaArgumentKind,
-    PragmaEffect, PragmaStateFact, PrototypeFact, PrototypeTable, RecoveryConfidence, RequireDecl,
-    ScopeFrame, ScopeGraph, ScopeKind, StashConfidence, StashDynamicBoundary,
-    StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass, SubDecl, UseDecl,
-    VariableBinding, VariableDecl,
+    BlockShell, BranchKeyword, BranchShell, CallExpr, CallForm, CompileConfidence,
+    CompileDirective, CompileDirectiveAction, CompileDirectiveKind, CompileEnvironment,
+    CompileEnvironmentBoundary, CompileEnvironmentBoundaryKind, CompilePhase, CompilePhaseBlock,
+    CompileProvenance, ControlTransfer, ControlTransferKind, DynamicBoundary, DynamicBoundaryKind,
+    ExportDeclaration, ExportDeclarationKind, GlobSlot, GlobSlotKind, GlobSlotSource, HirBindingId,
+    HirFile, HirId, HirItem, HirKind, HirScopeId, IncRootAction, IncRootFact, IncRootKind,
+    IndirectCallExpr, InheritanceSource, LiteralExpr, LiteralKind, LoopKind, LoopShell,
+    MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind, ModuleResolutionStatus,
+    PackageDecl, PackageInheritanceEdge, PackageStash, PragmaArgumentKind, PragmaEffect,
+    PragmaStateFact, PrototypeFact, PrototypeTable, RecoveryConfidence, RequireDecl, ScopeFrame,
+    ScopeGraph, ScopeKind, StashConfidence, StashDynamicBoundary, StashDynamicBoundaryKind,
+    StashGraph, StashProvenance, StatementModifierKind, StatementModifierShell, StorageClass,
+    SubDecl, UseDecl, VariableBinding, VariableDecl,
 };
 
 /// Lower a parser AST into first-slice HIR items.
@@ -46,6 +47,9 @@ struct Lowerer {
     bareword_context: BarewordContext,
     pragma_environment: CompileTimePragmaEnvironment,
     scope_stack: Vec<HirScopeId>,
+    /// Label inherited from an enclosing `LABEL:` statement, consumed by the
+    /// loop it directly wraps.
+    pending_label: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +85,7 @@ impl Lowerer {
             bareword_context: BarewordContext::Expression,
             pragma_environment,
             scope_stack: vec![file_scope],
+            pending_label: None,
         }
     }
 
@@ -103,6 +108,13 @@ impl Lowerer {
                 }
             }
             NodeKind::Block { statements } => {
+                // A `LABEL: { ... }` labeled bare block absorbs the pending
+                // label here.  `BlockShell` does not carry a label field, so if
+                // the pending label were left alive it would silently propagate
+                // to the first loop found inside the block — which is the thing
+                // *inside* the labeled block, not the labeled block itself.
+                // Drop it so the loop gets no spurious label.
+                let _ = self.pending_label.take();
                 let scope_id =
                     self.enter_scope(ScopeKind::Block, node.location, self.package_context.clone());
                 self.push_item(
@@ -685,6 +697,188 @@ impl Lowerer {
             }
             NodeKind::Error { partial: Some(partial), .. } => {
                 self.visit(partial, RecoveryConfidence::Recovered);
+            }
+            NodeKind::If { condition, elsif_branches, else_branch, keyword, .. } => {
+                let keyword = match keyword.as_deref() {
+                    Some("unless") => BranchKeyword::Unless,
+                    _ => BranchKeyword::If,
+                };
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::BranchShell(BranchShell {
+                        keyword,
+                        condition_range: condition.location,
+                        elsif_count: elsif_branches.len(),
+                        has_else: else_branch.is_some(),
+                    }),
+                    self.package_context.clone(),
+                    Some(self.current_scope()),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::Ternary { condition, .. } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::BranchShell(BranchShell {
+                        keyword: BranchKeyword::Ternary,
+                        condition_range: condition.location,
+                        elsif_count: 0,
+                        has_else: true,
+                    }),
+                    self.package_context.clone(),
+                    Some(self.current_scope()),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::While { continue_block, keyword, .. } => {
+                let kind = match keyword.as_deref() {
+                    Some("until") => LoopKind::Until,
+                    _ => LoopKind::While,
+                };
+                let label = self.pending_label.take();
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::LoopShell(LoopShell {
+                        kind,
+                        has_condition: true,
+                        has_continue: continue_block.is_some(),
+                        declares_iterator: false,
+                        label,
+                    }),
+                    self.package_context.clone(),
+                    Some(self.current_scope()),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::For { init, condition, continue_block, .. } => {
+                let label = self.pending_label.take();
+                let declares_iterator = init.as_deref().is_some_and(is_lexical_declaration_node);
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::LoopShell(LoopShell {
+                        kind: LoopKind::CStyleFor,
+                        has_condition: condition.is_some(),
+                        has_continue: continue_block.is_some(),
+                        declares_iterator,
+                        label,
+                    }),
+                    self.package_context.clone(),
+                    Some(self.current_scope()),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::Foreach { variable, continue_block, .. } => {
+                let label = self.pending_label.take();
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::LoopShell(LoopShell {
+                        kind: LoopKind::Foreach,
+                        has_condition: false,
+                        has_continue: continue_block.is_some(),
+                        declares_iterator: is_lexical_declaration_node(variable),
+                        label,
+                    }),
+                    self.package_context.clone(),
+                    Some(self.current_scope()),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::LabeledStatement { label, statement } => {
+                let previous = self.pending_label.replace(label.clone());
+                self.visit(statement, confidence);
+                self.pending_label = previous;
+            }
+            NodeKind::Return { value } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::ControlTransfer(ControlTransfer {
+                        kind: ControlTransferKind::Return,
+                        label: None,
+                        has_value: value.is_some(),
+                    }),
+                    self.package_context.clone(),
+                    Some(self.current_scope()),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::LoopControl { op, label } => {
+                let kind = match op.as_str() {
+                    "last" => ControlTransferKind::Last,
+                    "redo" => ControlTransferKind::Redo,
+                    _ => ControlTransferKind::Next,
+                };
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::ControlTransfer(ControlTransfer {
+                        kind,
+                        label: label.clone(),
+                        has_value: false,
+                    }),
+                    self.package_context.clone(),
+                    Some(self.current_scope()),
+                );
+            }
+            NodeKind::Goto { target } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::ControlTransfer(ControlTransfer {
+                        kind: ControlTransferKind::Goto,
+                        label: goto_label(target),
+                        has_value: false,
+                    }),
+                    self.package_context.clone(),
+                    Some(self.current_scope()),
+                );
+                self.visit(target, confidence);
+            }
+            NodeKind::StatementModifier { modifier, condition, .. } => {
+                let modifier_kind = match modifier.as_str() {
+                    "if" => StatementModifierKind::If,
+                    "unless" => StatementModifierKind::Unless,
+                    "while" => StatementModifierKind::While,
+                    "until" => StatementModifierKind::Until,
+                    "for" | "foreach" => StatementModifierKind::Foreach,
+                    _ => StatementModifierKind::Other,
+                };
+                // Loop-form modifiers can inherit an enclosing `LABEL:`; branch
+                // forms are not loop targets, so they must not consume it.
+                let label = match modifier_kind {
+                    StatementModifierKind::While
+                    | StatementModifierKind::Until
+                    | StatementModifierKind::Foreach => self.pending_label.take(),
+                    StatementModifierKind::If
+                    | StatementModifierKind::Unless
+                    | StatementModifierKind::Other => None,
+                };
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::StatementModifierShell(StatementModifierShell {
+                        modifier: modifier_kind,
+                        condition_range: condition.location,
+                        label,
+                    }),
+                    self.package_context.clone(),
+                    Some(self.current_scope()),
+                );
+                self.visit_children(node, confidence);
             }
             NodeKind::Error { partial: None, .. }
             | NodeKind::MissingExpression
@@ -2153,5 +2347,23 @@ fn is_declaration_binding_node(node: &Node) -> bool {
         NodeKind::Variable { .. } | NodeKind::Typeglob { .. } => true,
         NodeKind::VariableWithAttributes { variable, .. } => is_declaration_binding_node(variable),
         _ => false,
+    }
+}
+
+/// Whether a loop's iterator/init position introduces a lexical declaration
+/// (`foreach my $x` or `for (my $i = 0; ...)`).
+fn is_lexical_declaration_node(node: &Node) -> bool {
+    matches!(
+        node.kind,
+        NodeKind::VariableDeclaration { .. } | NodeKind::VariableListDeclaration { .. }
+    )
+}
+
+/// Static label target for a `goto`, when the target is a plain label
+/// identifier rather than a sub reference or dynamic expression.
+fn goto_label(target: &Node) -> Option<String> {
+    match &target.kind {
+        NodeKind::Identifier { name } => Some(name.clone()),
+        _ => None,
     }
 }

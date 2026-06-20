@@ -9,83 +9,84 @@ This status tracks parser AST construct coverage for the crate-local HIR baselin
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| `lowered` | 16 | Emits one or more HIR items today. |
+| `lowered` | 25 | Emits one or more HIR items today. |
 | `dynamic_boundary` | 3 | Emits an explicit dynamic-boundary HIR item for unsupported static truth. |
-| `intentionally_skipped` | 18 | Traversal, metadata, or recovery placeholder; no standalone HIR item expected. |
-| `not_yet_modeled` | 32 | Parser AST construct exists, but HIR has no shell yet. |
+| `intentionally_skipped` | 19 | Traversal, metadata, or recovery placeholder; no standalone HIR item expected. |
+| `not_yet_modeled` | 23 | Parser AST construct exists, but HIR has no shell yet. |
 
-AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
+AST kinds tracked: `70`. HIR construct kinds tracked: `17`.
 
 ## Inventory
 
 | AST NodeKind | Status | HIR kinds | Note |
 | --- | --- | --- | --- |
-| `ArrayLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell. |
-| `Assignment` | `dynamic_boundary` | `DynamicBoundary` | Typeglob assignment with a non-static RHS emits `DynamicBoundary`; other assignments traverse. |
-| `Binary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Block` | `lowered` | `BlockShell` | Lowered as block shell and contributes a ScopeGraph block frame. |
-| `Class` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `DataSection` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Default` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Defer` | `not_yet_modeled` | - | Deferred cleanup needs scope/control-flow modeling before a HIR shell. |
-| `Diamond` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Do` | `dynamic_boundary` | `DynamicBoundary` | Non-block `do` forms emit `DynamicBoundary`; block bodies traverse. |
-| `Ellipsis` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Error` | `intentionally_skipped` | - | Recovered partials are traversed; raw error nodes emit no HIR. |
-| `Eval` | `dynamic_boundary` | `DynamicBoundary` | Expression `eval` emits `DynamicBoundary`; block bodies traverse. |
-| `ExpressionStatement` | `intentionally_skipped` | - | Statement wrapper is traversal-only. |
-| `For` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Foreach` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Format` | `not_yet_modeled` | - | No HIR shell yet; format declarations contribute a ScopeGraph format frame. |
-| `FunctionCall` | `lowered` | `CallExpr`, `DynamicBoundary`, `RequireDecl` | `require` calls lower as `RequireDecl`; coderef calls add a dynamic boundary. |
-| `Given` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Glob` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Goto` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `HashLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell. |
-| `Heredoc` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Identifier` | `lowered` | `BarewordExpr` | Lowered as bareword expression shell. |
-| `If` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `IndirectCall` | `lowered` | `IndirectCallExpr` | Lowered as indirect-object call shell. |
-| `LabeledStatement` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `LoopControl` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `MandatoryParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
-| `Match` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Method` | `lowered` | `MethodDecl` | Lowered as method declaration shell and contributes a method scope frame. |
-| `MethodCall` | `lowered` | `MethodCallExpr` | Lowered as method-call shell. |
-| `MissingBlock` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
-| `MissingExpression` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
-| `MissingIdentifier` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
-| `MissingStatement` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
-| `NamedParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
-| `No` | `intentionally_skipped` | - | `no` directives record CompileEnvironment facts; no standalone HIR item yet. |
-| `Number` | `lowered` | `LiteralExpr` | Lowered as numeric literal shell. |
-| `OptionalParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
-| `Package` | `lowered` | `PackageDecl` | Lowered and updates package context plus package scope. |
-| `PhaseBlock` | `intentionally_skipped` | - | Phase blocks record CompileEnvironment phase facts and contribute a ScopeGraph phase frame. |
 | `Program` | `intentionally_skipped` | - | Root wrapper is traversal-only. |
-| `Prototype` | `intentionally_skipped` | - | Captured as declaration metadata. |
-| `Readline` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Regex` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Return` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Signature` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
-| `SlurpyParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
-| `StatementModifier` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `String` | `lowered` | `LiteralExpr` | Lowered as string literal shell. |
-| `Subroutine` | `lowered` | `SubDecl` | Lowered as sub declaration shell and contributes a subroutine scope frame. |
-| `Substitution` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Ternary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Tie` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Transliteration` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Try` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Typeglob` | `not_yet_modeled` | - | No standalone HIR shell yet; typeglob assignments can contribute StashGraph slots or boundaries. |
-| `Unary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Undef` | `lowered` | `LiteralExpr` | Lowered as undef literal shell. |
-| `UnknownRest` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
-| `Untie` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Use` | `lowered` | `UseDecl` | Lowered as use declaration shell and records CompileEnvironment directive facts. |
-| `Variable` | `intentionally_skipped` | - | Consumed by declaration lowering or recorded as ScopeGraph references. |
+| `ExpressionStatement` | `intentionally_skipped` | - | Statement wrapper is traversal-only. |
 | `VariableDeclaration` | `lowered` | `VariableDecl` | Lowered as single variable declaration shell and records ScopeGraph bindings. |
 | `VariableListDeclaration` | `lowered` | `VariableDecl` | Lowered as list variable declaration shell and records ScopeGraph bindings. |
+| `NestedVariableList` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Variable` | `intentionally_skipped` | - | Consumed by declaration lowering or recorded as ScopeGraph references. |
 | `VariableWithAttributes` | `intentionally_skipped` | - | Consumed by declaration lowering or recorded as ScopeGraph references. |
+| `Assignment` | `dynamic_boundary` | `DynamicBoundary` | Typeglob assignment with a non-static RHS emits `DynamicBoundary`; other assignments traverse. |
+| `Binary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Ternary` | `lowered` | `BranchShell` | Ternary expression lowered as a branch shell with both arms present. |
+| `Unary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Diamond` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Ellipsis` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Undef` | `lowered` | `LiteralExpr` | Lowered as undef literal shell. |
+| `Readline` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Glob` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Typeglob` | `not_yet_modeled` | - | No standalone HIR shell yet; typeglob assignments can contribute StashGraph slots or boundaries. |
+| `Number` | `lowered` | `LiteralExpr` | Lowered as numeric literal shell. |
+| `String` | `lowered` | `LiteralExpr` | Lowered as string literal shell. |
+| `Heredoc` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `ArrayLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell. |
+| `HashLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell. |
+| `Block` | `lowered` | `BlockShell` | Lowered as block shell and contributes a ScopeGraph block frame. |
+| `Eval` | `dynamic_boundary` | `DynamicBoundary` | Expression `eval` emits `DynamicBoundary`; block bodies traverse. |
+| `Do` | `dynamic_boundary` | `DynamicBoundary` | Non-block `do` forms emit `DynamicBoundary`; block bodies traverse. |
+| `Defer` | `not_yet_modeled` | - | Deferred cleanup needs scope/control-flow modeling before a HIR shell. |
+| `Try` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `If` | `lowered` | `BranchShell` | `if`/`unless` block form lowered as a branch shell with condition anchor and arm counts. |
+| `LabeledStatement` | `intentionally_skipped` | - | Label metadata is threaded into the loop it wraps; no standalone HIR item. |
+| `While` | `lowered` | `LoopShell` | `while`/`until` lowered as a loop shell with condition and continue-block facts. |
+| `Tie` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Untie` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `For` | `lowered` | `LoopShell` | C-style `for` lowered as a loop shell with optional-condition and iterator facts. |
+| `Foreach` | `lowered` | `LoopShell` | `foreach` lowered as a loop shell with iterator-declaration and continue-block facts. |
+| `Given` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `When` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `While` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Default` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `StatementModifier` | `lowered` | `StatementModifierShell` | Postfix statement modifiers lowered as modifier shells with a condition anchor. |
+| `Subroutine` | `lowered` | `SubDecl` | Lowered as sub declaration shell and contributes a subroutine scope frame. |
+| `Prototype` | `intentionally_skipped` | - | Captured as declaration metadata. |
+| `Signature` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
+| `MandatoryParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
+| `OptionalParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
+| `SlurpyParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
+| `NamedParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
+| `Method` | `lowered` | `MethodDecl` | Lowered as method declaration shell and contributes a method scope frame. |
+| `Return` | `lowered` | `ControlTransfer` | Lowered as a control-transfer shell recording whether a value is returned. |
+| `LoopControl` | `lowered` | `ControlTransfer` | `next`/`last`/`redo` lowered as control-transfer shells with optional label. |
+| `Goto` | `lowered` | `ControlTransfer` | Lowered as a control-transfer shell; plain label targets are preserved. |
+| `MethodCall` | `lowered` | `MethodCallExpr` | Lowered as method-call shell. |
+| `FunctionCall` | `lowered` | `CallExpr`, `DynamicBoundary`, `RequireDecl` | `require` calls lower as `RequireDecl`; coderef calls add a dynamic boundary. |
+| `IndirectCall` | `lowered` | `IndirectCallExpr` | Lowered as indirect-object call shell. |
+| `Regex` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Match` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Substitution` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Transliteration` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Package` | `lowered` | `PackageDecl` | Lowered and updates package context plus package scope. |
+| `Use` | `lowered` | `UseDecl` | Lowered as use declaration shell and records CompileEnvironment directive facts. |
+| `No` | `intentionally_skipped` | - | `no` directives record CompileEnvironment facts; no standalone HIR item yet. |
+| `PhaseBlock` | `intentionally_skipped` | - | Phase blocks record CompileEnvironment phase facts and contribute a ScopeGraph phase frame. |
+| `DataSection` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Class` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Format` | `not_yet_modeled` | - | No HIR shell yet; format declarations contribute a ScopeGraph format frame. |
+| `Identifier` | `lowered` | `BarewordExpr` | Lowered as bareword expression shell. |
+| `Error` | `intentionally_skipped` | - | Recovered partials are traversed; raw error nodes emit no HIR. |
+| `MissingExpression` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
+| `MissingStatement` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
+| `MissingIdentifier` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
+| `MissingBlock` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
+| `UnknownRest` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |

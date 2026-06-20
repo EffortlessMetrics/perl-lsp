@@ -2729,6 +2729,14 @@ pub enum HirKind {
     LiteralExpr(LiteralExpr),
     /// Block expression shell without scope construction.
     BlockShell(BlockShell),
+    /// Conditional branch shell (`if`/`unless` block form, ternary).
+    BranchShell(BranchShell),
+    /// Loop shell (`while`/`until`, C-style `for`, `foreach`).
+    LoopShell(LoopShell),
+    /// Control-transfer shell (`return`, `next`/`last`/`redo`, `goto`).
+    ControlTransfer(ControlTransfer),
+    /// Statement-modifier shell (postfix `if`/`unless`/`while`/`until`/`for`).
+    StatementModifierShell(StatementModifierShell),
     /// Unsupported or intentionally dynamic Perl boundary.
     DynamicBoundary(DynamicBoundary),
 }
@@ -2741,14 +2749,18 @@ impl HirKind {
     pub const ALL_KIND_NAMES: &[&'static str] = &[
         "BarewordExpr",
         "BlockShell",
+        "BranchShell",
         "CallExpr",
+        "ControlTransfer",
         "DynamicBoundary",
         "IndirectCallExpr",
         "LiteralExpr",
+        "LoopShell",
         "MethodCallExpr",
         "MethodDecl",
         "PackageDecl",
         "RequireDecl",
+        "StatementModifierShell",
         "SubDecl",
         "UseDecl",
         "VariableDecl",
@@ -2965,4 +2977,142 @@ pub enum DynamicBoundaryKind {
     Autoload,
     /// Symbolic-reference dereference whose target cannot be modeled statically.
     SymbolicReferenceDeref,
+}
+
+/// Conditional-branch shell payload.
+///
+/// Models the static shape of an `if`/`unless` block statement or a ternary
+/// expression: how many alternatives exist and whether a fallthrough `else`
+/// arm is present. It is provider-neutral substrate proof, not an evaluator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct BranchShell {
+    /// Surface form that produced this branch.
+    pub keyword: BranchKeyword,
+    /// Source range of the primary condition expression.
+    pub condition_range: SourceLocation,
+    /// Number of `elsif` alternatives (block form only; `0` for ternary).
+    pub elsif_count: usize,
+    /// Whether a fallthrough `else` arm (or ternary else expression) exists.
+    pub has_else: bool,
+}
+
+/// Surface form of a [`BranchShell`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum BranchKeyword {
+    /// `if (...) { ... }` block statement.
+    If,
+    /// `unless (...) { ... }` block statement.
+    Unless,
+    /// `COND ? THEN : ELSE` ternary expression.
+    Ternary,
+}
+
+/// Loop shell payload.
+///
+/// Models the static shape of a `while`/`until`, C-style `for`, or `foreach`
+/// loop: its surface form, whether a static condition is present, whether a
+/// `continue` block follows, whether the loop declares its own iterator, and
+/// any controlling label inherited from an enclosing labeled statement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct LoopShell {
+    /// Loop surface form.
+    pub kind: LoopKind,
+    /// Whether the loop has a statically present condition expression.
+    ///
+    /// `while`/`until` always have one; C-style `for` may omit it (`for (;;)`);
+    /// `foreach` iterates a list rather than testing a condition, so this is
+    /// `false`.
+    pub has_condition: bool,
+    /// Whether a trailing `continue { ... }` block is present.
+    pub has_continue: bool,
+    /// Whether the loop binds its own iterator variable (`foreach my $x`).
+    pub declares_iterator: bool,
+    /// Controlling label from an enclosing `LABEL:` statement, if any.
+    pub label: Option<String>,
+}
+
+/// Loop surface form for a [`LoopShell`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum LoopKind {
+    /// `while (...) { ... }`.
+    While,
+    /// `until (...) { ... }`.
+    Until,
+    /// C-style `for (init; cond; update) { ... }`.
+    CStyleFor,
+    /// `foreach VAR (LIST) { ... }`.
+    Foreach,
+}
+
+/// Control-transfer shell payload.
+///
+/// Models a control-flow edge that leaves the normal fallthrough path:
+/// `return`, the loop-control verbs `next`/`last`/`redo`, or `goto`. Targets
+/// are preserved by name where statically known; dynamic `goto` targets are
+/// recorded by shape without resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ControlTransfer {
+    /// Transfer verb.
+    pub kind: ControlTransferKind,
+    /// Static target label, when the verb names one (`next OUTER`).
+    pub label: Option<String>,
+    /// Whether the transfer carries a value payload (`return $x`).
+    pub has_value: bool,
+}
+
+/// Control-transfer verb for a [`ControlTransfer`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ControlTransferKind {
+    /// `return` from the enclosing subroutine.
+    Return,
+    /// `next` to the next loop iteration.
+    Next,
+    /// `last` out of the enclosing loop.
+    Last,
+    /// `redo` the current loop iteration.
+    Redo,
+    /// `goto` a label, sub reference, or expression.
+    Goto,
+}
+
+/// Statement-modifier shell payload.
+///
+/// Models a postfix statement modifier (`STMT if COND`, `STMT while COND`,
+/// etc.). The modifier verb decides whether the construct is a branch or a
+/// loop; the condition range anchors the controlling expression.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct StatementModifierShell {
+    /// Modifier verb.
+    pub modifier: StatementModifierKind,
+    /// Source range of the controlling condition/list expression.
+    pub condition_range: SourceLocation,
+    /// Controlling label from an enclosing `LABEL:` statement, preserved for
+    /// loop-form modifiers (`while`/`until`/`for`). `None` for branch-form
+    /// modifiers (`if`/`unless`), which are not loop targets.
+    pub label: Option<String>,
+}
+
+/// Postfix statement-modifier verb for a [`StatementModifierShell`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum StatementModifierKind {
+    /// `STMT if COND`.
+    If,
+    /// `STMT unless COND`.
+    Unless,
+    /// `STMT while COND`.
+    While,
+    /// `STMT until COND`.
+    Until,
+    /// `STMT for LIST` / `STMT foreach LIST`.
+    Foreach,
+    /// An unrecognized modifier verb preserved verbatim.
+    Other,
 }

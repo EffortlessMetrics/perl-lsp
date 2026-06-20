@@ -206,6 +206,55 @@ fn row_for_ast_kind(ast_kind: &'static str) -> HirCoverageRow {
             &["VariableDecl"],
             "Lowered as list variable declaration shell and records ScopeGraph bindings.",
         ),
+        "If" => lowered(
+            ast_kind,
+            &["BranchShell"],
+            "`if`/`unless` block form lowered as a branch shell with condition anchor and arm counts.",
+        ),
+        "Ternary" => lowered(
+            ast_kind,
+            &["BranchShell"],
+            "Ternary expression lowered as a branch shell with both arms present.",
+        ),
+        "While" => lowered(
+            ast_kind,
+            &["LoopShell"],
+            "`while`/`until` lowered as a loop shell with condition and continue-block facts.",
+        ),
+        "For" => lowered(
+            ast_kind,
+            &["LoopShell"],
+            "C-style `for` lowered as a loop shell with optional-condition and iterator facts.",
+        ),
+        "Foreach" => lowered(
+            ast_kind,
+            &["LoopShell"],
+            "`foreach` lowered as a loop shell with iterator-declaration and continue-block facts.",
+        ),
+        "Return" => lowered(
+            ast_kind,
+            &["ControlTransfer"],
+            "Lowered as a control-transfer shell recording whether a value is returned.",
+        ),
+        "LoopControl" => lowered(
+            ast_kind,
+            &["ControlTransfer"],
+            "`next`/`last`/`redo` lowered as control-transfer shells with optional label.",
+        ),
+        "Goto" => lowered(
+            ast_kind,
+            &["ControlTransfer"],
+            "Lowered as a control-transfer shell; plain label targets are preserved.",
+        ),
+        "StatementModifier" => lowered(
+            ast_kind,
+            &["StatementModifierShell"],
+            "Postfix statement modifiers lowered as modifier shells with a condition anchor.",
+        ),
+        "LabeledStatement" => skipped(
+            ast_kind,
+            "Label metadata is threaded into the loop it wraps; no standalone HIR item.",
+        ),
         "Error" => {
             skipped(ast_kind, "Recovered partials are traversed; raw error nodes emit no HIR.")
         }
