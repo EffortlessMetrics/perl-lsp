@@ -223,13 +223,49 @@ mod tests {
 
     #[test]
     fn allocation_tracker_measure_allocations_preserves_result() -> Result<()> {
-        let (result, _measurement) = measure_allocations(|| {
+        let (result, measurement) = measure_allocations(|| {
             let mut values = Vec::with_capacity(1024);
             values.extend(0..1024_usize);
             values.len()
         });
 
         ensure!(result == 1024, "operation result must be preserved");
+        ensure!(
+            measurement.allocated_bytes > 0,
+            "allocation measurement should record allocated bytes"
+        );
+        ensure!(
+            measurement.allocation_count > 0,
+            "allocation measurement should record allocation count"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn allocation_tracker_measure_memory_usage_preserves_result() -> Result<()> {
+        let (result, memory_mb) = measure_memory_usage(|| {
+            let mut values = Vec::with_capacity(4096);
+            values.extend(0..4096_u64);
+            values.iter().copied().sum::<u64>()
+        });
+
+        ensure!(
+            result == 8_386_560,
+            "operation result must be preserved across memory measurement"
+        );
+        ensure!(memory_mb.is_finite(), "measured memory must be finite");
+        ensure!(memory_mb >= 0.0, "measured memory must not be negative");
+
+        Ok(())
+    }
+
+    #[test]
+    fn allocation_tracker_current_memory_usage_reports_finite_value() -> Result<()> {
+        let memory_mb = get_current_memory_usage()?;
+
+        ensure!(memory_mb.is_finite(), "current memory must be finite");
+        ensure!(memory_mb >= 0.0, "current memory must not be negative");
 
         Ok(())
     }
