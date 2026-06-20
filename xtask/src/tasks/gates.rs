@@ -33,6 +33,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crate::tasks::ci_scope::{self, ScopeOutput};
+use crate::tasks::git_context::git_stdout_with_worktree_fallback;
 use crate::utils::project_root;
 
 mod first_failure;
@@ -1337,11 +1338,7 @@ fn build_agent_receipt(root: &Path, results: &[GateResult], plan: &GatePlan) -> 
         })
         .unwrap_or_default();
     let (failures, next_actions) = failure_guidance(results);
-    let sha = cmd("git", ["rev-parse", "HEAD"])
-        .dir(root)
-        .read()
-        .map(|s| s.trim().to_string())
-        .unwrap_or_default();
+    let sha = git_stdout_with_worktree_fallback(root, &["rev-parse", "HEAD"]).unwrap_or_default();
     let is_latest = is_latest_commit(root);
 
     let scope = if let Some(scope) = scope_output {
@@ -1451,17 +1448,15 @@ fn failure_guidance(results: &[GateResult]) -> (Vec<AgentFailure>, Vec<String>) 
 fn is_latest_commit(root: &Path) -> bool {
     // In detached HEAD (PR runs), @{upstream} fails with "HEAD does not point to a branch".
     // Suppress stderr so that message does not leak into CI output.
-    let upstream =
-        match cmd("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
-            .dir(root)
-            .stderr_null()
-            .read()
-        {
-            Ok(value) => value.trim().to_string(),
-            Err(_) => return true,
-        };
-    let head = cmd("git", ["rev-parse", "HEAD"]).dir(root).read().ok();
-    let upstream_sha = cmd("git", ["rev-parse", &upstream]).dir(root).read().ok();
+    let upstream = match git_stdout_with_worktree_fallback(
+        root,
+        &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+    ) {
+        Ok(value) => value,
+        Err(_) => return true,
+    };
+    let head = git_stdout_with_worktree_fallback(root, &["rev-parse", "HEAD"]).ok();
+    let upstream_sha = git_stdout_with_worktree_fallback(root, &["rev-parse", &upstream]).ok();
     match (head, upstream_sha) {
         (Some(head), Some(upstream_sha)) => head.trim() == upstream_sha.trim(),
         _ => true,
@@ -2513,6 +2508,7 @@ mod tests {
     use std::collections::{BTreeMap, HashMap, HashSet};
     use std::fs;
     use std::path::Path;
+    use std::process::Command;
 
     use tempfile::tempdir;
 
@@ -2524,8 +2520,8 @@ mod tests {
         build_pr_fast_plan_from_scope_with_targets, compare_receipts, determine_overall_status,
         extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers,
         extract_output_summary, failure_guidance, filter_gates, is_blocking_gate_status,
-        is_cargo_test_command, load_policy_for_inspection, load_receipt, output_diff,
-        parse_first_failure, parse_test_metrics, plan_gates, read_gate_output,
+        is_cargo_test_command, is_latest_commit, load_policy_for_inspection, load_receipt,
+        output_diff, parse_first_failure, parse_test_metrics, plan_gates, read_gate_output,
         run_shell_command_with_timeout, run_single_gate, write_receipt,
     };
     use crate::tasks::ci_scope::{
@@ -2645,6 +2641,14 @@ mod tests {
 
     fn skipped_gate_names(plan: &super::GatePlan) -> Vec<String> {
         plan.skipped.iter().map(|skipped| skipped.name.clone()).collect()
+    }
+
+    fn run_git(repo: &Path, args: &[&str]) -> color_eyre::eyre::Result<String> {
+        let output = Command::new("git").args(args).current_dir(repo).output()?;
+        if !output.status.success() {
+            color_eyre::eyre::bail!("git {:?} failed with status {}", args, output.status);
+        }
+        Ok(String::from_utf8(output.stdout)?)
     }
 
     #[test]
@@ -3869,6 +3873,34 @@ gates:
         assert_eq!(agent_plan.skipped.len(), 1);
         assert_eq!(agent_plan.skipped[0].name, "clippy_core");
         assert_eq!(agent_plan.skipped[0].reason, "rust scoped plan selected");
+        Ok(())
+    }
+
+    #[test]
+    fn is_latest_commit_compares_configured_upstream() -> color_eyre::eyre::Result<()> {
+        let temp = tempdir()?;
+        let upstream = temp.path().join("upstream.git");
+        let repo = temp.path().join("repo");
+        let upstream_arg = upstream.to_string_lossy().to_string();
+        run_git(temp.path(), &["init", "--bare", upstream_arg.as_str()])?;
+        fs::create_dir_all(&repo)?;
+        run_git(&repo, &["init"])?;
+        run_git(&repo, &["config", "user.email", "agent@example.invalid"])?;
+        run_git(&repo, &["config", "user.name", "Agent Test"])?;
+        fs::write(repo.join("tracked.txt"), "base\n")?;
+        run_git(&repo, &["add", "tracked.txt"])?;
+        run_git(&repo, &["commit", "-m", "base"])?;
+        run_git(&repo, &["branch", "-M", "main"])?;
+        run_git(&repo, &["remote", "add", "origin", upstream_arg.as_str()])?;
+        run_git(&repo, &["push", "-u", "origin", "main"])?;
+
+        assert!(is_latest_commit(&repo), "freshly pushed branch should match upstream");
+
+        fs::write(repo.join("tracked.txt"), "base\nlocal\n")?;
+        run_git(&repo, &["add", "tracked.txt"])?;
+        run_git(&repo, &["commit", "-m", "local"])?;
+
+        assert!(!is_latest_commit(&repo), "unpushed local commit should be stale");
         Ok(())
     }
 

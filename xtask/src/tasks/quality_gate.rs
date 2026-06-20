@@ -5,7 +5,6 @@ use std::{
     fs,
     io::ErrorKind,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use chrono::{NaiveDate, Utc};
@@ -14,6 +13,8 @@ use color_eyre::eyre::{Context, Result, bail};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use serde_yaml_ng::Value as YamlValue;
+
+use crate::tasks::git_context::git_stdout_with_worktree_fallback;
 
 const PATCH_TARGET: f64 = 95.0;
 const PROJECT_TARGET: f64 = 95.0;
@@ -1811,18 +1812,8 @@ fn assert_current(path: &Path, expected: &str, label: &str) -> Result<()> {
 }
 
 fn current_head(root: &Path) -> Result<String> {
-    let output = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(root)
-        .output()
-        .context("running git rev-parse HEAD")?;
-    if !output.status.success() {
-        bail!("git rev-parse HEAD failed with status {}", output.status);
-    }
-    Ok(String::from_utf8(output.stdout)
-        .context("git rev-parse HEAD returned non-UTF8 output")?
-        .trim()
-        .to_string())
+    git_stdout_with_worktree_fallback(root, &["rev-parse", "HEAD"])
+        .context("running git rev-parse HEAD")
 }
 
 fn write_text(path: &Path, text: &str) -> Result<()> {
@@ -1851,9 +1842,18 @@ fn round2(value: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use std::{fs, process::Command};
     use tempfile::tempdir;
 
     use super::*;
+
+    fn run_git(repo: &Path, args: &[&str]) -> Result<String> {
+        let output = Command::new("git").args(args).current_dir(repo).output()?;
+        if !output.status.success() {
+            bail!("git {:?} failed with status {}", args, output.status);
+        }
+        Ok(String::from_utf8(output.stdout)?)
+    }
 
     #[test]
     fn coverage_receipt_preserves_recommended_project_clusters() -> Result<()> {
@@ -1900,6 +1900,21 @@ mod tests {
                 .and_then(Value::as_u64),
             Some(37)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn current_head_reads_repository_head() -> Result<()> {
+        let dir = tempdir()?;
+        run_git(dir.path(), &["init"])?;
+        run_git(dir.path(), &["config", "user.email", "agent@example.invalid"])?;
+        run_git(dir.path(), &["config", "user.name", "Agent Test"])?;
+        fs::write(dir.path().join("tracked.txt"), "base\n")?;
+        run_git(dir.path(), &["add", "tracked.txt"])?;
+        run_git(dir.path(), &["commit", "-m", "base"])?;
+        let head = run_git(dir.path(), &["rev-parse", "HEAD"])?.trim().to_string();
+
+        assert_eq!(current_head(dir.path())?, head);
         Ok(())
     }
 

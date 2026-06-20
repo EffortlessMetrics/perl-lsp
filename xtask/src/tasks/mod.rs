@@ -60,6 +60,7 @@ pub mod gate_policy;
 pub mod gate_receipts;
 pub mod gates;
 pub mod generated_files;
+pub mod git_context;
 pub mod github;
 pub mod hardening;
 #[cfg(feature = "parser-tasks")]
