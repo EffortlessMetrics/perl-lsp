@@ -7,6 +7,11 @@ This page tracks the Rust fact layers between parser output and LSP providers.
 It is intentionally separate from provider behavior: a fact layer can be
 fixture-backed before any live LSP feature consumes it.
 
+The durable contract for the layer set, the layering direction, the shared
+provenance/confidence/dynamic-boundary obligations, and the determinism rules is
+[PLSP-SPEC-0030: Compile state layers](../../specs/PLSP-SPEC-0030-compile-state-layers.md).
+This page reports current state; that spec defines what must stay true.
+
 ## Fact Layer Matrix
 
 | Layer | State | Owner | Evidence | Next proof |

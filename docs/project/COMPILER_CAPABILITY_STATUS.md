@@ -6,6 +6,9 @@ The product remains the language server. The compiler substrate is the
 load-bearing model that turns parsed Perl into editor facts with provenance,
 confidence, and dynamic-boundary behavior.
 
+The compile-state layer set and its cross-cutting obligations are contracted in
+[PLSP-SPEC-0030: Compile state layers](../specs/PLSP-SPEC-0030-compile-state-layers.md).
+
 Do not copy generated parser metrics here. For parser truth, use:
 
 - [Parser status](status/parser.md)

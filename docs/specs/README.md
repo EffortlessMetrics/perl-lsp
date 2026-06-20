@@ -49,6 +49,7 @@ generated sections.
 - [PLSP-SPEC-0027: Differential real-Perl oracle contract](PLSP-SPEC-0027-differential-real-perl-oracle.md)
 - [PLSP-SPEC-0028: lsp-stack extraction boundary](PLSP-SPEC-0028-lsp-stack-extraction.md)
 - [PLSP-SPEC-0029: LSP 3.18 conformance boundary](PLSP-SPEC-0029-lsp-318-conformance-boundary.md)
+- [PLSP-SPEC-0030: Compile state layers contract](PLSP-SPEC-0030-compile-state-layers.md)
 
 ## Acceptance and Proof
 
