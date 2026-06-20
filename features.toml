@@ -759,7 +759,7 @@ area = "debug"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs", "crates/perl-dap/tests/dap_capability_advertising_tests.rs"]
 description = "List callable step-in targets for the current frame (stepInTargets)"
 
 [[feature]]
@@ -789,7 +789,7 @@ area = "debug"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_step_through_tests.rs"]
+tests = ["crates/perl-dap/tests/dap_step_through_tests.rs", "crates/perl-dap/tests/dap_capability_advertising_tests.rs"]
 description = "Restart execution from the beginning of a stack frame (restartFrame)"
 
 [[feature]]
@@ -799,7 +799,7 @@ area = "debug"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_step_through_tests.rs"]
+tests = ["crates/perl-dap/tests/dap_step_through_tests.rs", "crates/perl-dap/tests/dap_capability_advertising_tests.rs"]
 description = "Terminate one or more threads (terminateThreads)"
 
 # Protocol / Lifecycle Features

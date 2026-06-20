@@ -754,8 +754,16 @@ print "result: $final\n";
             ("supportsCompletionsRequest", crate::feature_catalog::has_feature("dap.completions")),
             ("supportsModulesRequest", crate::feature_catalog::has_feature("dap.modules")),
             ("supportsDataBreakpoints", crate::feature_catalog::has_feature("dap.watchpoints")),
-            ("supportsTerminateThreadsRequest", false),
+            (
+                "supportsTerminateThreadsRequest",
+                crate::feature_catalog::has_feature("dap.terminate_threads"),
+            ),
             ("supportsGotoTargetsRequest", crate::feature_catalog::has_feature("dap.core")),
+            ("supportsRestartFrame", crate::feature_catalog::has_feature("dap.restart_frame")),
+            (
+                "supportsStepInTargetsRequest",
+                crate::feature_catalog::has_feature("dap.step_in_targets"),
+            ),
         ];
 
         for (capability, expected) in expectations {
@@ -848,6 +856,7 @@ print "result: $final\n";
             ("supportsDataBreakpoints", "setDataBreakpoints"),
             ("supportsLoadedSourcesRequest", "loadedSources"),
             ("supportsCancelRequest", "cancel"),
+            ("supportsRestartFrame", "restartFrame"),
             ("supportsStepInTargetsRequest", "stepInTargets"),
             ("supportsGotoTargetsRequest", "gotoTargets"),
             ("supportsTerminateThreadsRequest", "terminateThreads"),
@@ -936,11 +945,13 @@ print "result: $final\n";
             }
         }
 
-        // supportsTerminateThreadsRequest must be false (Perl limitation)
+        // supportsTerminateThreadsRequest matches feature advertising (now enabled)
+        let terminate_threads_expected =
+            crate::feature_catalog::has_feature("dap.terminate_threads");
         assert_eq!(
             capability_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
-            Some(false),
-            "supportsTerminateThreadsRequest must be false — Perl has no thread termination"
+            Some(terminate_threads_expected),
+            "supportsTerminateThreadsRequest must match dap.terminate_threads feature setting"
         );
 
         Ok(())
@@ -1394,7 +1405,8 @@ print "result: $final\n";
     }
 
     #[test]
-    fn test_terminate_threads_capability_is_false() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_terminate_threads_capability_is_advertised_when_feature_enabled()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let init = adapter.handle_request(1, "initialize", None);
         let capabilities = match init {
@@ -1402,10 +1414,11 @@ print "result: $final\n";
             _ => return Err("Expected successful initialize response".into()),
         };
         let cap_map = capabilities.as_object().ok_or("body must be object")?;
+        let expected = crate::feature_catalog::has_feature("dap.terminate_threads");
         assert_eq!(
             cap_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
-            Some(false),
-            "supportsTerminateThreadsRequest must be false"
+            Some(expected),
+            "supportsTerminateThreadsRequest must match dap.terminate_threads feature setting"
         );
         Ok(())
     }
