@@ -4342,6 +4342,92 @@ my $dynamic = $self->{$variable};
 }
 
 #[test]
+fn strict_subs_no_false_positive_on_postfix_hash_slice_key()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $href = { key => 1 };
+my @slice = $href->%{key};
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "key"
+        }),
+        "postfix hash-slice key $href->%{{key}} must not be flagged as bareword; got: {:?}",
+        issues
+            .iter()
+            .filter(|issue| matches!(issue.kind, IssueKind::UnquotedBareword))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_postfix_hash_slice_keeps_multi_key_bareword_guard()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $href = { good1 => 1, good2 => 2, key1 => 3, key2 => 4 };
+my @qw_slice = $href->%{qw(good1 good2)};
+my @bad_slice = $href->%{key1, key2};
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "key1"
+        }),
+        "postfix hash-slice comma-separated barewords must still be flagged under strict subs; got: {:?}",
+        issues
+    );
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "key2"
+        }),
+        "postfix hash-slice comma-separated barewords must still be flagged under strict subs; got: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && ["good1", "good2"].contains(&issue.variable_name.as_str())
+        }),
+        "postfix hash-slice qw() values must not be treated as strict barewords; got: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_postfix_array_slice_keeps_bareword_index_guard()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $aref = [1, 2];
+my @numeric_slice = $aref->@[0, 1];
+my @qw_slice = $aref->@[qw(a b)];
+my @bad_slice = $aref->@[foo];
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "foo"
+        }),
+        "postfix array-slice bareword index must still be flagged under strict subs; got: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && ["a", "b"].contains(&issue.variable_name.as_str())
+        }),
+        "qw() slice values must not be treated as strict barewords; got: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
 fn strict_subs_still_flags_genuine_barewords_near_arrow_deref()
 -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
