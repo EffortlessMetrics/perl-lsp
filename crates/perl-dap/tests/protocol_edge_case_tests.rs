@@ -585,6 +585,8 @@ fn test_scopes_round_trip() -> Result<()> {
             presentation_hint: Some("locals".to_string()),
             variables_reference: 100,
             expensive: false,
+            named_variables: None,
+            indexed_variables: None,
         }],
     };
     let json = serde_json::to_string(&body)?;

@@ -567,6 +567,12 @@ pub struct Scope {
     pub variables_reference: i64,
     /// Whether fetching variables is expensive
     pub expensive: bool,
+    /// Number of named child variables; can be used as a hint for the client to optimize pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub named_variables: Option<i64>,
+    /// Number of indexed child variables; can be used as a hint for the client to optimize pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indexed_variables: Option<i64>,
 }
 
 /// A variable in the debuggee

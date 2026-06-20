@@ -502,12 +502,16 @@ proptest! {
         variables_reference in 1i64..100_000,
         expensive in any::<bool>(),
         presentation_hint in proptest::option::of("arguments|locals|registers"),
+        named_variables in proptest::option::of(0i64..10_000),
+        indexed_variables in proptest::option::of(0i64..10_000),
     ) {
         let scope = Scope {
             name: name.clone(),
             presentation_hint: presentation_hint.clone(),
             variables_reference,
             expensive,
+            named_variables,
+            indexed_variables,
         };
 
         let json_str = serde_json::to_string(&scope)
@@ -519,6 +523,8 @@ proptest! {
         prop_assert_eq!(back.variables_reference, variables_reference);
         prop_assert_eq!(back.expensive, expensive);
         prop_assert_eq!(&back.presentation_hint, &presentation_hint);
+        prop_assert_eq!(back.named_variables, named_variables);
+        prop_assert_eq!(back.indexed_variables, indexed_variables);
     }
 
     #[test]

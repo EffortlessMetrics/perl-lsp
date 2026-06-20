@@ -604,12 +604,16 @@ fn scopes_response_body_round_trip() -> Result<(), Box<dyn std::error::Error>> {
                 presentation_hint: Some("locals".to_string()),
                 variables_reference: 1,
                 expensive: false,
+                named_variables: None,
+                indexed_variables: None,
             },
             Scope {
                 name: "Globals".to_string(),
                 presentation_hint: Some("globals".to_string()),
                 variables_reference: 2,
                 expensive: true,
+                named_variables: None,
+                indexed_variables: None,
             },
         ],
     };
