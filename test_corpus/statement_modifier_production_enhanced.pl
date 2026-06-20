@@ -107,7 +107,7 @@ print "Check 4: " . fast_check("valid") . "\n";
 # Efficient filtering
 my @large_dataset = (1..1000);
 my $filtered_count = 0;
-$filtered_count++ if $_ % 2 == 0 && $_ % 3 == 0 for @large_dataset;
+for (@large_dataset) { $filtered_count++ if $_ % 2 == 0 && $_ % 3 == 0; }
 print "Numbers divisible by 6 in 1..1000: $filtered_count\n";
 
 # Memory-efficient processing
@@ -116,7 +116,7 @@ sub process_stream {
     my $processed = 0;
     
     # Process items without storing entire result
-    $processed++ if process_item($_) for @$stream;
+    for (@$stream) { $processed++ if process_item($_); }
     
     return $processed;
 }
@@ -312,8 +312,8 @@ my @numbers = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
 my ($sum, $even_count, $odd_count, $prime_count) = (0, 0, 0, 0);
 
 $sum += $_ for @numbers;
-$even_count++ if $_ % 2 == 0 for @numbers;
-$odd_count++ if $_ % 2 == 1 for @numbers;
+for (@numbers) { $even_count++ if $_ % 2 == 0; }
+for (@numbers) { $odd_count++ if $_ % 2 == 1; }
 
 # Simple prime check
 sub is_prime {
@@ -328,7 +328,7 @@ sub is_prime {
     return 1;
 }
 
-$prime_count++ if is_prime($_) for @numbers;
+for (@numbers) { $prime_count++ if is_prime($_); }
 
 print "Statistics for numbers 1-10:\n";
 print "  Sum: $sum\n";
@@ -425,7 +425,7 @@ sub benchmark_modifier_vs_block {
     
     # Benchmark modifier syntax
     my $start = time();
-    $modifier_count++ if $_ % 2 == 0 for @test_data;
+    for (@test_data) { $modifier_count++ if $_ % 2 == 0; }
     my $modifier_time = time() - $start;
     
     # Benchmark block syntax

@@ -165,7 +165,7 @@ print "Global eval: $text\n";
 # Substitution with delimiters
 $text =~ s{Hello}{Hi};
 $text =~ s[World][Perl];
-$text =~ s<test>example>;
+$text =~ s<test><example>;
 
 # Transliteration operator
 my $tr_text = "abcde123";
