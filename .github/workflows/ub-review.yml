@@ -221,15 +221,21 @@ jobs:
           # Other CX jobs (ripr, rust-small) run Docker containers that write
           # workspace files as root. If a previous run left root-owned files
           # behind, actions/checkout@v6 fails with "Unable to clean or reset
-          # the repository" (exit 128). Chown back to the host runner user
-          # before checkout so the workspace is always in a cleanable state.
+          # the repository" (exit 128). Use Docker (running as root) to chown
+          # back and then delete the stale workspace target/ so it cannot cause
+          # `mkdir target` failures on the next run. Fall back to a host-side
+          # rm -rf in case the Docker image is unavailable.
           # Evidence: PR #1242 run 27084969856 job 79937532087 (ub-review
           # adoption datum #2 — first live CX43 run, 9s failure at checkout).
+          # Safe: CARGO_TARGET_DIR is /mnt/ci-scratch/... so build artifacts are
+          # not in workspace/target/; only xtask/ripr receipts accumulate there.
           set +e
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
             em-ci-rust:1.95 \
-            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true; rm -rf /workspace/target 2>/dev/null || true" || true
+          # Belt-and-suspenders: host-side rm in case Docker was unavailable above.
+          rm -rf "$GITHUB_WORKSPACE/target" || true
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -323,11 +329,15 @@ jobs:
           # Same root-owned-workspace recovery as CX53 above.
           # Evidence: PR #1242 run 27084969856 job 79937532087 — CX43 died at
           # checkout in 9s with "Unable to clean or reset the repository".
+          # Extended with rm -rf to also delete the stale target/ directory so it
+          # cannot cause `mkdir target` failures (see #1885).
           set +e
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
             em-ci-rust:1.95 \
-            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true; rm -rf /workspace/target 2>/dev/null || true" || true
+          # Belt-and-suspenders: host-side rm in case Docker was unavailable above.
+          rm -rf "$GITHUB_WORKSPACE/target" || true
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0

@@ -194,13 +194,20 @@ jobs:
         run: |
           # Docker writes workspace files as root. If a previous run left root-owned
           # files behind (e.g. cleanup step missed), actions/checkout@v6 fails with
-          # EACCES when it tries to 'git clean'. Use Docker to chown them back before
-          # checkout runs.
+          # EACCES when it tries to 'git clean'. Use Docker (running as root) to chown
+          # back and then delete the stale workspace target/ so it cannot cause
+          # `mkdir target` failures on the next run. Fall back to a host-side rm -rf
+          # in case the Docker image is unavailable.
+          # Safe on CI: CARGO_TARGET_DIR is set to /mnt/ci-scratch/... so the real
+          # build artifacts are NOT in workspace/target/. Only xtask/ripr JSON
+          # receipts accumulate there and they must not persist between runs.
           set +e
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
             em-ci-rust:1.95 \
-            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true; rm -rf /workspace/target 2>/dev/null || true" || true
+          # Belt-and-suspenders: host-side rm in case Docker was unavailable above.
+          rm -rf "$GITHUB_WORKSPACE/target" || true
 
       - name: Checkout
         uses: actions/checkout@v6
@@ -431,13 +438,20 @@ jobs:
         run: |
           # Docker writes workspace files as root. If a previous run left root-owned
           # files behind (e.g. cleanup step missed), actions/checkout@v6 fails with
-          # EACCES when it tries to 'git clean'. Use Docker to chown them back before
-          # checkout runs.
+          # EACCES when it tries to 'git clean'. Use Docker (running as root) to chown
+          # back and then delete the stale workspace target/ so it cannot cause
+          # `mkdir target` failures on the next run. Fall back to a host-side rm -rf
+          # in case the Docker image is unavailable.
+          # Safe on CI: CARGO_TARGET_DIR is set to /mnt/ci-scratch/... so the real
+          # build artifacts are NOT in workspace/target/. Only xtask/ripr JSON
+          # receipts accumulate there and they must not persist between runs.
           set +e
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
             em-ci-rust:1.95 \
-            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true; rm -rf /workspace/target 2>/dev/null || true" || true
+          # Belt-and-suspenders: host-side rm in case Docker was unavailable above.
+          rm -rf "$GITHUB_WORKSPACE/target" || true
 
       - name: Checkout
         uses: actions/checkout@v6
