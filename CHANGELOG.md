@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scaffolds, Mojolicious::Lite route scaffolds, and project-indexed package
   receiver method completions are now offered only when the workspace evidence
   supports them. (#1532, #1573, #1585)
+- **DAP logpoint interpolation substrate.** Breakpoint hit registration can now
+  interpolate supplied scalar variables in logpoint message templates while
+  preserving existing raw-message behavior when no variable map is available.
+  (#1807)
+- **VS Code first-run onboarding helpers.** The extension can suggest discovered
+  include paths from common Perl module directories, exposes an optional
+  server-gated AI completion walkthrough/prompt, and ships an openable demo
+  project for new installations. (#1898)
 
 ### Fixed
 
@@ -70,6 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DAP scopes expose pagination hint fields.** Scope responses now carry the
   optional `namedVariables` and `indexedVariables` fields from the DAP
   specification, preserving compatibility when counts are unavailable. (#1810)
+- **DAP variables responses expose `totalVariables` when known.** Debug clients
+  can now show accurate variables pagination counts without changing existing
+  responses where a count is unavailable. (#1811)
 - **DAP capability flags match implemented handlers.** The initialize response
   now advertises restart frame, step-in targets, and terminate-threads support
   when those routed handlers exist, so clients can discover the implemented
@@ -119,10 +130,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cached from a resolved module file is refreshed when that file's mtime
   changes outside the LSP document lifecycle, so hover no longer serves stale
   POD after on-disk edits. (#1882)
+- **Hover documentation escapes markdown metacharacters.** Documentation text
+  containing characters such as `*`, `_`, `#`, and `[]` now renders literally
+  in hover cards instead of becoming unintended markdown formatting. (#1840)
 - **Context-specific completions keep semantic groups together.** Hash-key,
   Moo/Moose type and option, and Object::Pad constructor-parameter completions
   now use separate sort tiers so clients do not interleave unrelated suggestions
   alphabetically. (#1875)
+- **Completion items send `filterText` to clients.** Completion responses now
+  serialize the internally-computed `filterText` field, preserving expected
+  client-side matching for snippets and other items whose label differs from
+  the typed prefix. (#1889)
+- **Duplicate quick-fix code actions are collapsed.** When overlapping
+  providers produce byte-identical lightbulb entries, the server now keeps one
+  action and builds `source.fixAll` from the deduplicated set. (#1913)
 
 #### Formatting
 
@@ -154,6 +175,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   key form while real strict-bareword violations still report. (#1562)
 - **DBI receiver completions are import-gated.** DBI-style receiver completions
   now stay quiet unless a visible `use DBI` fact supports them. (#1579)
+- **Quoted hash keys with special characters appear in completion.** Hash-key
+  completion now includes fully quoted fat-comma keys such as `'db-host'`,
+  `'api.key'`, and `'api key'` while keeping unquoted keys conservative. (#1839)
 
 #### Parser recovery and legacy syntax
 
@@ -170,6 +194,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`s///e` substitution replacement text is classified as Perl code.** This
   improves downstream semantic analysis for executable substitution bodies.
   (#1238)
+- **`given` blocks accept normal Perl statements.** The parser now handles
+  postfix `when`/`default` modifiers and ordinary statements inside `given`
+  blocks while preserving the classic `when { ... }` / `default { ... }` forms.
+  (#1893)
 
 #### Module resolution
 
@@ -194,6 +222,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for anchors, entities, occurrences, and file-scoped edges now include
   `FileId`, preventing identical source in different files from colliding while
   preserving the file-neutral reference-source sentinel. (#1876)
+- **File semantic bundle hashes include synthetic facts before hashing.**
+  Generated-member and eval-sub synthetic entities/anchors now flow into the
+  canonical shard builder before category hashes are computed, and shards carry
+  an explicit producer schema version. (#1904)
+- **AST child-classification flags match traversal.** `contains_children` now
+  agrees with `Node::for_each_child` for every `NodeKind`, with a drift-guard so
+  traversal consumers do not silently skip children. (#1891)
+- **HIR lowers core control-flow shells.** Branches, loops, control transfers,
+  and postfix statement modifiers now lower into PIR-v0-aligned HIR shells with
+  source anchors and static shape facts. No LSP provider behavior is cut over by
+  this substrate change. (#1902)
+- **Compile-state layers are specified and fixture-pinned.** PLSP-SPEC-0030 now
+  defines the L0-L6 compile-state stack, determinism obligations, dynamic
+  boundaries, and no-provider-cutover claim boundary, with alignment tests.
+  (#1895)
+- **Parser boundary responsibilities are documented.** POD, heredoc-body, and
+  `__DATA__` / `__END__` non-executable boundaries now have a consumer contract
+  in `PARSER_CONTRACTS.md`, including strict versus lenient detection posture.
+  (#1896)
 - **LSP transport framing uses checked body-offset arithmetic.**
   `Content-Length` frame parsing now guards the `body_start` offset calculation
   with checked arithmetic and recovers through the existing invalid-length path
@@ -214,6 +261,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workspace `target/` during pre-checkout ownership cleanup. Real Cargo output
   remains on `/mnt/ci-scratch`, while stale root-owned workspace receipts no
   longer block checkout or `target` creation. (#1886)
+- **Corpus gold fixtures avoid invalid Perl syntax.** Two parser gold fixtures
+  that were invalid under Perl 5 were corrected so corpus accuracy metrics no
+  longer count fixture bugs as parser false negatives. (#1903)
+- **Completion regression coverage covers sigil and quoted-key edges.**
+  Variable completion now has regression tests for `$`/`@`/`%` sigil filtering,
+  and the routed completion coverage pack exercises double-quoted special hash
+  keys after the #1839 gate repair. (#1842, #1894)
+- **PR summary rendering coverage was raised.** The coverage gate has additional
+  tests for PR summary rendering so Patch-95 behavior stays tied to the
+  coverage-reporting path. (#1890)
+- **Rust toolchain documentation matches the actual 1.95 floor.** Normative
+  onboarding, stability, CI, and template docs now align with `Cargo.toml`,
+  `rust-toolchain.toml`, clippy policy, and flake pins. (#1932)
 - **Workflow privilege analysis fails closed for untrusted event expressions.**
   Jobs with write permissions must prove every event-expression branch is
   anchored to a trusted event. (#1539)
