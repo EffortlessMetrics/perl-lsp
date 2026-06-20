@@ -1932,18 +1932,21 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         return false;
     }
 
-    client = createLanguageClient(currentServerPath);
-    bindClientState(client);
+    const startedClient = createLanguageClient(currentServerPath);
+    client = startedClient;
+    bindClientState(startedClient);
     try {
-        await client.start();
+        await startedClient.start();
     } catch (startError: unknown) {
         const msg = startError instanceof Error ? startError.message : String(startError);
         outputChannel.appendLine(`[startup] Language client failed to start: ${msg}`);
-        stateChangeDisposable?.dispose();
-        stateChangeDisposable = undefined;
-        try { void client.dispose(); } catch { /* already dead */ }
-        client = undefined;
-        healthWidget?.onStateChange(ClientState.Stopped);
+        if (client === startedClient) {
+            stateChangeDisposable?.dispose();
+            stateChangeDisposable = undefined;
+            client = undefined;
+            healthWidget?.onStateChange(ClientState.Stopped);
+        }
+        try { void startedClient.dispose(); } catch { /* already dead */ }
 
         // Probe the binary to get an actionable OS-level diagnosis (#3280).
         // If the probe result is Unknown (binary gave no useful output), fall
@@ -1983,8 +1986,15 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         }
         return false;
     }
+
+    if (client !== startedClient) {
+        outputChannel.appendLine('[startup] Language client was replaced during startup; skipping stale startup finalization.');
+        try { void startedClient.dispose(); } catch { /* already replaced */ }
+        return client !== undefined;
+    }
+
     // Expose the server version in the widget tooltip once the handshake completes.
-    const serverVersion = client.initializeResult?.serverInfo?.version;
+    const serverVersion = startedClient.initializeResult?.serverInfo?.version;
     if (serverVersion) {
         healthWidget?.setVersion(serverVersion);
     }
@@ -1992,7 +2002,7 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     await refreshTestAdapter(context);
 
     // Initialize streaming inline completion controller (config-gated)
-    refreshStreamingController(client);
+    refreshStreamingController(startedClient);
 
     // Clear any stale startup diagnosis — the server started successfully so
     // the root cause (e.g. missing Perl) no longer applies.
@@ -3031,7 +3041,18 @@ async function disposeLanguageClient() {
     if (client) {
         const activeClient = client;
         client = undefined;
-        await activeClient.stop();
-        void activeClient.dispose();
+        try {
+            await activeClient.stop();
+        } catch (stopErr: unknown) {
+            const msg = stopErr instanceof Error ? stopErr.message : String(stopErr);
+            outputChannel.appendLine(`[client] language client stop reported: ${msg}`);
+        } finally {
+            try {
+                void activeClient.dispose();
+            } catch (disposeErr: unknown) {
+                const msg = disposeErr instanceof Error ? disposeErr.message : String(disposeErr);
+                outputChannel.appendLine(`[client] language client dispose reported: ${msg}`);
+            }
+        }
     }
 }

@@ -326,10 +326,10 @@ gates:
       cargo test -p perl-lsp-rs --locked --test lsp_registration_tests &&
       cargo test -p perl-lsp-rs --locked --test lsp_cap_snap &&
       cargo test -p perl-lsp-rs-core --locked --lib inline_completion
-    timeout_seconds: 300
+    timeout_seconds: 600
     retry_count: 0
     budgets:
-      max_duration_ms: 240000
+      max_duration_ms: 540000
     quarantine: false
     tags:
       - test

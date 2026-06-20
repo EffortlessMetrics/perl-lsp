@@ -198,6 +198,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   baseline task now retries git `HEAD`/diff discovery with an
   ancestor-discovered `GIT_DIR`/`GIT_WORK_TREE` fallback, so stale-receipt repair
   packets still emit when bash/WSL git cannot resolve a worktree gitdir. (#1833)
+- **VSIX release verification is storage-safe and restart-safe.** The VS Code
+  bundle script now honors `CARGO_TARGET_DIR` when locating the release binary,
+  and the extension engine floor is aligned with the checked-in VS Code API
+  typings so `npm run verify:marketplace` can package the release candidate
+  from an agent worktree. First-run reinstall also no longer races activation
+  into stale language-client state. (#1867)
 - **Draft PR ripr routing treats skipped routers as neutral.** Draft pull
   requests no longer fail the ripr aggregate solely because the router
   intentionally skipped execution. (#1689)

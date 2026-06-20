@@ -197,6 +197,15 @@ fn inline_completion_contract_scope_stays_on_lsp_crates() -> Result<(), Box<dyn 
 
     assert_eq!(contract.tier, "pr_fast");
     assert!(contract.required, "inline_completion_contract must stay PR-blocking");
+    assert!(
+        contract.timeout_seconds.unwrap_or_default() >= 600,
+        "inline_completion_contract timeout must include cold CI compile headroom"
+    );
+    assert!(
+        contract.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+            >= 540_000,
+        "inline_completion_contract duration budget must reflect observed cold PR-fast runtime"
+    );
     assert_eq!(contract_planning.role, "rust_package_scoped");
     assert_eq!(contract_planning.packages, vec!["perl-lsp-rs", "perl-lsp-rs-core"]);
 
