@@ -414,7 +414,7 @@ pub use debug_adapter::{DapMessage, DebugAdapter};
 pub use server::{DapConfig, DapMode, DapServer};
 
 // Re-export Phase 2 public types
-pub use breakpoints::{BreakpointRecord, BreakpointStore};
+pub use breakpoints::{BreakpointRecord, BreakpointStore, interpolate_logpoint_message};
 #[allow(deprecated)]
 pub use dispatcher::{DapDispatcher, DispatchResult};
 pub use protocol::{

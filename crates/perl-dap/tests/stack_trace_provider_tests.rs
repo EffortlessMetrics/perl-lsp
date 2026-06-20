@@ -4,7 +4,7 @@
 //! - Frame filtering (hiding DB:: and shim frames)
 //! - Accurate line and column reporting
 //! - Function name package qualification
-//! - Empty stackFrames on no-session path (DAP spec compliant)
+//! - Placeholder frame support for infrastructure testing
 //!
 //! Specification: GitHub Issue #453 - AC8.2, AC8.2.1, AC8.2.4
 //!
@@ -150,10 +150,9 @@ fn test_stack_trace_response_sequence_numbers() -> Result<(), Box<dyn std::error
 /// The total number of frames available in the stack"). This test locks the
 /// invariant that totalFrames >= the number of frames in the response.
 ///
-/// The no-session path returns an empty stackFrames array (DAP spec allows this;
-/// PR #1212 removed the fabricated placeholder that was here before). With an
-/// empty stack, totalFrames must equal 0 — not some value derived from the
-/// `levels` window parameter.
+/// The no-session path returns an empty stackFrames array (per #995 — fabricated
+/// placeholder frame was removed). With 0 frames and levels=1, totalFrames must
+/// also equal 0, satisfying totalFrames >= returned window size.
 #[test]
 // AC:963
 fn test_total_frames_is_not_window_size() -> Result<(), Box<dyn std::error::Error>> {
@@ -173,17 +172,15 @@ fn test_total_frames_is_not_window_size() -> Result<(), Box<dyn std::error::Erro
     let total =
         body.get("totalFrames").and_then(|v| v.as_u64()).ok_or("Expected totalFrames number")?;
 
-    // The invariant: totalFrames >= returned window size (DAP spec §StackTraceResponse)
+    // The invariant: totalFrames >= returned window size (holds for 0 >= 0)
     assert!(
         total >= frames.len() as u64,
         "totalFrames ({total}) must be >= returned frame count ({})",
         frames.len()
     );
-    // No-session path: empty stack — totalFrames must be 0, not the levels window (1).
-    // Regression guard: if totalFrames were set to `levels` instead of pre-pagination
-    // depth, it would incorrectly report 1 here.
-    assert_eq!(frames.len(), 0, "no-session path returns empty stackFrames");
-    assert_eq!(total, 0, "totalFrames must be 0 for empty stack, not the levels window");
+    // No active session → honest empty list (#995). totalFrames must match.
+    assert_eq!(frames.len(), 0, "no active session must return empty stackFrames");
+    assert_eq!(total, 0, "totalFrames must equal actual frame depth (0 with no session)");
     Ok(())
 }
 
