@@ -108,7 +108,10 @@ fn test_dap_launch_missing_arguments() {
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
 
-    let response = adapter.handle_request(1, "launch", None);
+    // initialize must be called first (state machine validation added in #1754)
+    let _ = adapter.handle_request(1, "initialize", None);
+
+    let response = adapter.handle_request(2, "launch", None);
 
     match response {
         DapMessage::Response { success, command, message, .. } => {

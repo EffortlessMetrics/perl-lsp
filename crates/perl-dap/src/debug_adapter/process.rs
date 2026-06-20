@@ -18,6 +18,9 @@ impl DebugAdapter {
         request_seq: i64,
         _arguments: Option<Value>,
     ) -> DapMessage {
+        // Mark adapter as initialized (state machine validation)
+        self.initialized.store(true, std::sync::atomic::Ordering::Release);
+
         let supports_core = catalog_has_feature("dap.core");
         let supports_basic_breakpoints = catalog_has_feature("dap.breakpoints.basic");
         let supports_hit_conditions = catalog_has_feature("dap.breakpoints.hit_condition");
@@ -106,6 +109,23 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
+        // Validate state machine: initialize must be called before launch
+        if !self.initialized.load(std::sync::atomic::Ordering::Acquire) {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "launch".to_string(),
+                body: None,
+                message: Some(
+                    "initialize request must be sent before launch. \
+                     The DAP protocol requires that the client send an initialize request first \
+                     to establish the adapter's capabilities and prepare the session."
+                        .to_string(),
+                ),
+            };
+        }
+
         if let Some(args) = arguments {
             // Store launch arguments for restart support
             *lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args") =
@@ -1434,6 +1454,32 @@ impl DebugAdapter {
 
     /// Handle configurationDone request
     pub(super) fn handle_configuration_done(&self, seq: i64, request_seq: i64) -> DapMessage {
+        // Validate state machine: launch (or attach) must be called before configurationDone.
+        // NOTE: Each lock_or_recover call must complete and drop its guard before the next one
+        // to avoid re-entrancy deadlock on std::sync::Mutex (which is non-reentrant).
+        let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
+        let has_attached_pid =
+            lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid").is_some();
+        let has_tcp_session =
+            lock_or_recover(&self.tcp_session, "debug_adapter.tcp_session").is_some();
+
+        if !has_session && !has_attached_pid && !has_tcp_session {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "configurationDone".to_string(),
+                body: None,
+                message: Some(
+                    "No active debug session. \
+                     The launch or attach request must be sent before configurationDone. \
+                     The DAP protocol requires that the client send a launch (or attach) request first \
+                     to start the debugging session."
+                        .to_string(),
+                ),
+            };
+        }
+
         // Determine whether stopOnEntry was requested in the launch args.
         let stop_on_entry =
             lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args")
@@ -1771,9 +1817,13 @@ mod tests {
         let tmp_path = tmp.path().to_str().ok_or("temp path is not valid UTF-8")?.to_string();
 
         let mut adapter = DebugAdapter::new();
+
+        // Initialize first (required by state machine validation)
+        let _ = adapter.handle_initialize(1, 1, None);
+
         let response = adapter.handle_launch(
-            1,
-            1,
+            2,
+            2,
             Some(serde_json::json!({
                 "program": tmp_path
             })),
