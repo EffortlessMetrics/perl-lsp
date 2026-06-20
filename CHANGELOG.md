@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Automatic `.perltidyrc` discovery at the workspace root.** When no
+  `perltidy_profile` is explicitly configured, the server now discovers a
+  project-local `.perltidyrc` once during `initialize` — searching the
+  workspace root, then perltidy's documented `PERLTIDY` environment override,
+  then `$HOME/.perltidyrc` — and uses it when building the formatter config.
+  Explicit configuration always takes precedence. (#1777)
 - **Workspace method signature help for `->method()` calls.** Triggering
   signature help (or hovering) on an OO method call now resolves the signature
   from the workspace symbol index for methods defined in the same project,

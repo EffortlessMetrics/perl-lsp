@@ -35,8 +35,18 @@ fn document_not_open_error(uri: &str) -> JsonRpcError {
 
 impl LspServer {
     /// Build a `PerlTidyConfig` from the current server configuration.
+    ///
+    /// An explicitly configured `perltidy_profile` always wins. When no profile
+    /// is configured, the `.perltidyrc` discovered from the workspace root at
+    /// initialization is used so project-local formatting rules apply
+    /// automatically. When neither is present, `None` lets the formatter fall
+    /// back to its own defaults.
     fn build_perltidy_config(&self) -> PerlTidyConfig {
         let config = self.config.lock();
+        let profile = config
+            .perltidy_profile
+            .clone()
+            .or_else(|| self.discovered_perltidy_profile.lock().clone());
         PerlTidyConfig {
             maximum_line_length: config.perltidy_maximum_line_length,
             indent_columns: config.perltidy_indent_columns,
@@ -47,7 +57,7 @@ impl LspServer {
             add_trailing_commas: config.perltidy_add_trailing_commas,
             vertical_alignment: config.perltidy_vertical_alignment,
             block_comment_indentation: config.perltidy_block_comment_indentation,
-            profile: config.perltidy_profile.clone(),
+            profile,
             extra_args: config.perltidy_extra_args.clone(),
             timeout_secs: config.perltidy_timeout_secs,
         }
@@ -400,6 +410,50 @@ mod tests {
             data["error_kind"].as_str(),
             Some("io_error"),
             "data.error_kind should be 'io_error'"
+        );
+    }
+
+    #[test]
+    fn build_perltidy_config_uses_discovered_profile_when_unset() {
+        let server = LspServer::new();
+        server.config.lock().perltidy_profile = None;
+        *server.discovered_perltidy_profile.lock() = Some("/ws/.perltidyrc".to_string());
+
+        let config = server.build_perltidy_config();
+
+        assert_eq!(
+            config.profile.as_deref(),
+            Some("/ws/.perltidyrc"),
+            "discovered profile should be used when none is explicitly configured"
+        );
+    }
+
+    #[test]
+    fn build_perltidy_config_prefers_explicit_profile_over_discovered() {
+        let server = LspServer::new();
+        server.config.lock().perltidy_profile = Some("/explicit/.perltidyrc".to_string());
+        *server.discovered_perltidy_profile.lock() = Some("/ws/.perltidyrc".to_string());
+
+        let config = server.build_perltidy_config();
+
+        assert_eq!(
+            config.profile.as_deref(),
+            Some("/explicit/.perltidyrc"),
+            "explicit configuration must take precedence over discovery"
+        );
+    }
+
+    #[test]
+    fn build_perltidy_config_profile_none_when_unset_and_undiscovered() {
+        let server = LspServer::new();
+        server.config.lock().perltidy_profile = None;
+        *server.discovered_perltidy_profile.lock() = None;
+
+        let config = server.build_perltidy_config();
+
+        assert!(
+            config.profile.is_none(),
+            "profile should be None when neither configured nor discovered"
         );
     }
 

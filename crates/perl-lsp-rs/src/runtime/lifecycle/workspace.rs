@@ -12,9 +12,18 @@ static PERL_NOT_FOUND_WARNED: Once = Once::new();
 
 impl LspServer {
     /// Set the root path from the root URI during initialization
+    ///
+    /// Also performs one-time `.perltidyrc` discovery for the workspace so a
+    /// project-local profile applies without explicit configuration. Discovery
+    /// runs here (at initialize) rather than on every format request; an
+    /// explicitly configured `perltidy_profile` still takes precedence when the
+    /// formatter config is built.
     pub(crate) fn set_root_uri(&self, root_uri: &str) {
         let root_path = super::super::source_path_from_uri(root_uri);
+        let discovered =
+            root_path.as_deref().and_then(perl_lsp_rs_core::config::discover_perltidy_profile);
         *self.root_path.lock() = root_path;
+        *self.discovered_perltidy_profile.lock() = discovered;
     }
 
     /// Detect the Perl interpreter and surface an actionable message if not found.
@@ -205,6 +214,28 @@ mod tests {
         let server = LspServer::new();
         server.set_root_uri("untitled:Untitled-1");
         assert!(server.root_path.lock().is_none());
+        // With no file-scheme root there is no workspace to search, so discovery
+        // contributes nothing regardless of the ambient environment.
+        assert!(server.discovered_perltidy_profile.lock().is_none());
+    }
+
+    #[test]
+    fn set_root_uri_discovers_workspace_perltidyrc() -> std::io::Result<()> {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir()?;
+        let profile = temp.path().join(".perltidyrc");
+        std::fs::write(&profile, "-l=100\n")?;
+
+        server.set_root_uri(&format!("file://{}", temp.path().display()));
+
+        // The workspace profile is searched first, so this assertion holds
+        // regardless of any ambient $HOME/.perltidyrc or $PERLTIDY on the host.
+        assert_eq!(
+            server.discovered_perltidy_profile.lock().as_deref(),
+            profile.to_str(),
+            "workspace .perltidyrc should be discovered and cached at initialize"
+        );
+        Ok(())
     }
 
     #[test]
