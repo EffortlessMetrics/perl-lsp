@@ -104,6 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now exposes module/core-pragma and same-document POD section references from
   real POD blocks, and `documentLink/resolve` validates same-document section
   fragments before returning `#section` targets. (#1795)
+- **Context-specific completions keep semantic groups together.** Hash-key,
+  Moo/Moose type and option, and Object::Pad constructor-parameter completions
+  now use separate sort tiers so clients do not interleave unrelated suggestions
+  alphabetically. (#1875)
 
 #### Formatting
 
