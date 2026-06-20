@@ -1,4 +1,5 @@
 use super::*;
+use crate::util::escape_markdown_text;
 
 fn method_modifier_description(modifier_kind: &str) -> &'static str {
     match modifier_kind {
@@ -15,11 +16,12 @@ fn method_modifier_description(modifier_kind: &str) -> &'static str {
 
 pub(super) fn method_modifier_hover(modifier_kind: &str, method_name: &str, doc: &str) -> Value {
     let kind_label = method_modifier_description(modifier_kind);
+    let escaped_doc = escape_markdown_text(doc);
     json!({
         "contents": {
             "kind": "markdown",
             "value": format!(
-                "**Method Modifier (`{modifier_kind}`)**\n\n`{method_name}` — {kind_label}\n\n{doc}"
+                "**Method Modifier (`{modifier_kind}`)**\n\n`{method_name}` — {kind_label}\n\n{escaped_doc}"
             ),
         },
     })

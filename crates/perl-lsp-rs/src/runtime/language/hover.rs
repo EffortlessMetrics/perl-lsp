@@ -6,6 +6,7 @@ use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::documentation_targets::PerlDocumentationTarget;
 use crate::protocol::{req_position, req_uri};
+use crate::util::escape_markdown_text;
 mod hover_cards;
 mod hover_extracted;
 #[cfg(test)]
@@ -337,7 +338,7 @@ impl LspServer {
             let doc_info = symbol_info
                 .documentation
                 .as_ref()
-                .map(|d| format!("\n\n{}", d))
+                .map(|d| format!("\n\n{}", escape_markdown_text(d)))
                 .unwrap_or_default();
 
             return HoverExtracted::Complete(json!({

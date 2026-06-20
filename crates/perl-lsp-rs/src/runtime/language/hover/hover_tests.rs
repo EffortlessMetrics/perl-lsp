@@ -32,8 +32,8 @@ fn pragma_hover_links_external_and_virtual_perldoc() {
 }
 
 #[test]
-fn pod_hover_cache_prunes_at_cap_and_evicts_active_document_path()
--> Result<(), Box<dyn std::error::Error>> {
+fn pod_hover_cache_prunes_at_cap_and_evicts_active_document_path(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
     let dir = tempfile::tempdir()?;
 
@@ -213,10 +213,11 @@ fn resolved_module_hover_links_virtual_perldoc() -> Result<(), Box<dyn std::erro
 
     let workspace_uri =
         url::Url::from_directory_path(&root).map_err(|_| "failed to create workspace URI")?;
-    *server.workspace_folders.lock() = vec![
-        crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
-            .with_path(root.clone()),
-    ];
+    *server.workspace_folders.lock() =
+        vec![crate::runtime::workspace_folder::WorkspaceFolderState::new(
+            workspace_uri.to_string(),
+        )
+        .with_path(root.clone())];
     {
         let mut config = server.workspace_config.lock();
         config.include_paths = vec!["lib".to_string()];
@@ -647,5 +648,84 @@ fn find_phase_block_at_offset_recurses_through_program_to_find_phase_block() {
         LspServer::find_phase_block_at_offset(&program, 35),
         None,
         "offset not in any PhaseBlock must return None even when inside Program"
+    );
+}
+
+#[test]
+fn hover_documentation_with_markdown_chars_is_escaped() -> Result<(), Box<dyn std::error::Error>> {
+    // Test that documentation containing markdown special characters is properly escaped
+    // so they render as literal text, not as markdown formatting.
+    let text = r#"
+# This variable tracks *important* data [see docs]
+my $var = 42;
+"#;
+
+    let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+    let uri = "file:///test.pl".to_string();
+    server.did_open(json!({
+        "textDocument": {
+            "uri": uri,
+            "languageId": "perl",
+            "version": 1,
+            "text": text
+        }
+    }))?;
+
+    // Get hover at $var position (line 2, character 4 = inside '$var')
+    let hover = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 2, "character": 4 }
+    })))?;
+
+    let hover = must_some(hover);
+    let value = must_some(hover["contents"]["value"].as_str());
+
+    // The documentation should escape the asterisks and brackets
+    assert!(value.contains(r"\*important\*"), "markdown asterisks should be escaped: {}", value);
+    assert!(value.contains(r"\[see docs\]"), "markdown brackets should be escaped: {}", value);
+    assert!(
+        !value.contains("*important*"),
+        "unescaped asterisks should not be present (they would make bold text): {}",
+        value
+    );
+    assert!(
+        !value.contains("[see docs]"),
+        "unescaped brackets should not be present (they would be treated as links): {}",
+        value
+    );
+
+    Ok(())
+}
+
+#[test]
+fn method_modifier_hover_escapes_doc_markdown() {
+    // Verify that method modifier hover cards escape markdown in the user-supplied
+    // documentation string, while preserving intentional markdown in the hardcoded
+    // kind_label (e.g. the "runs **before** the method" descriptions).
+    let hover = super::hover_cards::method_modifier_hover(
+        "before",
+        "validate_input",
+        "Checks that *all* args are [valid] before calling the real method",
+    );
+    let value = must_some(hover["contents"]["value"].as_str());
+
+    // User-supplied doc should have markdown chars escaped
+    assert!(
+        value.contains(r"\*all\*"),
+        "asterisks in user doc should be escaped: {value}"
+    );
+    assert!(
+        value.contains(r"\[valid\]"),
+        "brackets in user doc should be escaped: {value}"
+    );
+    // The hardcoded kind_label **before** formatting should remain as-is
+    assert!(
+        value.contains("**before**"),
+        "hardcoded kind_label markdown should be preserved: {value}"
+    );
+    // Method name should appear in backtick span (not escaped — it's code)
+    assert!(
+        value.contains("`validate_input`"),
+        "method name should appear in code span: {value}"
     );
 }

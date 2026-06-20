@@ -60,6 +60,35 @@ pub fn nth_char_is<F: FnOnce(char) -> bool>(s: &str, n: usize, predicate: F) -> 
     s.chars().nth(n).is_some_and(predicate)
 }
 
+/// Escape special markdown characters in plain text to prevent unintended formatting.
+///
+/// Escapes: backtick (`), hash (#), asterisk (*), underscore (_), brackets ([, ]),
+/// and other markdown formatting characters so they render as literal text in hover cards.
+///
+/// This preserves the semantic content of comments and documentation while preventing
+/// markdown special characters from being interpreted as formatting directives.
+///
+/// # Examples
+///
+/// ```ignore
+/// assert_eq!(escape_markdown_text("*bold*"), "\\*bold\\*");
+/// assert_eq!(escape_markdown_text("[link]"), "\\[link\\]");
+/// assert_eq!(escape_markdown_text("code`here"), "code\\`here");
+/// ```
+pub fn escape_markdown_text(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '`' | '#' | '*' | '_' | '[' | ']' | '\\' | '|' | '-' => {
+                result.push('\\');
+                result.push(ch);
+            }
+            _ => result.push(ch),
+        }
+    }
+    result
+}
+
 /// Decode source text bytes while handling common editor encodings.
 ///
 /// Behavior:
@@ -574,9 +603,9 @@ pub fn offset_to_position(content: &str, offset: usize) -> Position {
 mod tests {
     use super::{
         arg_starts_in_call_body, arg_starts_top_level, byte_to_utf16_col, decode_text_bytes,
-        extract_module_reference, find_matching_paren, get_text_around_offset,
-        get_text_window_around_offset, offset_to_position, position_to_offset, slice_in_range,
-        slice_until_stmt_end, smart_arg_anchor,
+        escape_markdown_text, extract_module_reference, find_matching_paren,
+        get_text_around_offset, get_text_window_around_offset, offset_to_position,
+        position_to_offset, slice_in_range, slice_until_stmt_end, smart_arg_anchor,
     };
     use lsp_types::Position;
 
@@ -717,5 +746,86 @@ mod tests {
         let bytes = [0xFE, 0xFF, 0x00, 0x6D, 0x00];
         let decoded = decode_text_bytes(&bytes);
         assert!(!decoded.is_empty());
+    }
+
+    #[test]
+    fn escape_markdown_text_escapes_asterisks() {
+        let text = "This is *not* bold";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, "This is \\*not\\* bold");
+    }
+
+    #[test]
+    fn escape_markdown_text_escapes_underscores() {
+        let text = "This is _not_ italic";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, "This is \\_not\\_ italic");
+    }
+
+    #[test]
+    fn escape_markdown_text_escapes_backticks() {
+        let text = "This is `code` text";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, "This is \\`code\\` text");
+    }
+
+    #[test]
+    fn escape_markdown_text_escapes_brackets() {
+        let text = "This is [link] text";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, "This is \\[link\\] text");
+    }
+
+    #[test]
+    fn escape_markdown_text_escapes_hash() {
+        let text = "This is #heading text";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, "This is \\#heading text");
+    }
+
+    #[test]
+    fn escape_markdown_text_escapes_multiple_special_chars() {
+        let text = "Variable *tracks* [documentation] with `code`";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, "Variable \\*tracks\\* \\[documentation\\] with \\`code\\`");
+    }
+
+    #[test]
+    fn escape_markdown_text_preserves_plain_text() {
+        let text = "This is plain text";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, text);
+    }
+
+    #[test]
+    fn escape_markdown_text_escapes_dash() {
+        // Dashes are escaped conservatively (they can start list items at line
+        // start or form setext headings `---`). The output renders identically
+        // in all markdown renderers — `read\-only` displays as `read-only`.
+        let text = "read-only access";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, r"read\-only access");
+    }
+
+    #[test]
+    fn escape_markdown_text_escapes_backslash() {
+        // Backslashes are escaped so they render as literal backslashes.
+        // A comment like `C:\path\to\file` becomes `C:\\path\\to\\file`.
+        let text = r"C:\path\file";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, r"C:\\path\\file");
+    }
+
+    #[test]
+    fn escape_markdown_text_handles_empty_string() {
+        assert_eq!(escape_markdown_text(""), "");
+    }
+
+    #[test]
+    fn escape_markdown_text_handles_unicode() {
+        // Multi-byte UTF-8 should pass through unchanged.
+        let text = "Résumé: *important*";
+        let escaped = escape_markdown_text(text);
+        assert_eq!(escaped, r"Résumé: \*important\*");
     }
 }
