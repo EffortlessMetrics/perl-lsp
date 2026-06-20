@@ -45,6 +45,10 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 
 | [2026-06-coverage-job-ran-tests.md](2026-06-coverage-job-ran-tests.md) | Coverage-named checks must not hide test failures — decoupling measurement from validation | ci, coverage, observability, misclassification | #1457, #1470, #1469 |
 | [2026-06-substrate-self-validation-bootstrap.md](2026-06-substrate-self-validation-bootstrap.md) | You cannot validate a gate-fix through the broken gate | ci, substrate, bootstrap, recursion, incident, gate-logic, self-validation | #1469, #1477, #1478, #1479, #1484, #1485 |
+| [2026-06-ripr-draft-skip-fails-gate.md](2026-06-ripr-draft-skip-fails-gate.md) | ripr+ New Gap Gate fails on draft PRs when router skips them | ci, gate-logic, ripr, routing, draft-pr | #1578, #1574, #1556, #1555, #1512, #1511, #1558 |
+| [2026-06-docs-only-runs-rust-matrix.md](2026-06-docs-only-runs-rust-matrix.md) | Docs-only PRs run full Rust build matrix; pure .md changes fail irrelevantly | ci, routing, workflow-dispatch, build-matrix, documentation | #1558, #1512 |
+| [2026-06-validate-title-issue-ref-gap.md](2026-06-validate-title-issue-ref-gap.md) | validate-title fails on agent-generated PRs lacking issue reference in title | ci, pr-metadata, validation, agent-generated, title-check | #1583, #1519 |
+| [2026-06-merge-funnel-throughput-constraint.md](2026-06-merge-funnel-throughput-constraint.md) | Merge funnel, not discovery, is the binding throughput constraint | ci, workflow, throughput, merge-velocity, bottleneck, economics | #1578, #1574, #1556, #1555, #1512, #1511, #1558, #1583 |
 
 ---
 
@@ -98,4 +102,14 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | ground-truth | Ground-truth fact verification / trust-but-verify |
 | bootstrap | Bootstrap recursion / self-validating layer circularity |
 | self-validation | Layer validating its own correctness or fixes |
-
+| routing | Workflow dispatch routing; gate-selection logic |
+| draft-pr | Draft PR state handling in CI gates |
+| workflow-dispatch | GitHub Actions workflow dispatch routing |
+| build-matrix | Multi-target/multi-version build matrix |
+| documentation | Documentation-only changes (no code) |
+| pr-metadata | PR title, body, labels metadata validation |
+| validation | Validation check (gate, form, contract) |
+| agent-generated | PRs created by agents, not humans |
+| title-check | PR title validation / format enforcement |
+| throughput | Merge funnel throughput / cycle time |
+| bottleneck | Pipeline bottleneck / binding constraint |
