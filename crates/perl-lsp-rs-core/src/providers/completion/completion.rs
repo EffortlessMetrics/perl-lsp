@@ -1256,13 +1256,22 @@ impl CompletionProvider {
             // Find the last token (after the previous `,` or start)
             let token_start = key_segment.rfind([',', '(', '\n']).map(|p| p + 1).unwrap_or(0);
             let token = key_segment[token_start..].trim();
-            // Strip single or double quotes
-            let token = token
-                .strip_prefix('\'')
-                .and_then(|t| t.strip_suffix('\''))
-                .or_else(|| token.strip_prefix('"').and_then(|t| t.strip_suffix('"')))
-                .unwrap_or(token);
-            if !token.is_empty() && token.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            // Strip single or double quotes, tracking whether a complete quoted pair was found.
+            // Only fully-quoted keys (both opening AND closing quote present) may contain special
+            // characters (hyphens, dots, spaces, etc.).  Unquoted (bareword) tokens are restricted
+            // to alphanumeric + underscore to avoid accepting parse noise that leaks from mis-parsed
+            // value text or from unterminated string literals in incomplete source at the cursor.
+            let (token, was_quoted) =
+                if let Some(inner) = token.strip_prefix('\'').and_then(|t| t.strip_suffix('\'')) {
+                    (inner, true)
+                } else if let Some(inner) = token.strip_prefix('"').and_then(|t| t.strip_suffix('"')) {
+                    (inner, true)
+                } else {
+                    (token, false)
+                };
+            let is_valid_key = !token.is_empty()
+                && (was_quoted || token.chars().all(|c| c.is_alphanumeric() || c == '_'));
+            if is_valid_key {
                 let key_str = token.to_string();
                 if seen.insert(key_str.clone()) {
                     keys.push(key_str);

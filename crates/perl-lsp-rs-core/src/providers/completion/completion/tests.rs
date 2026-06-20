@@ -4227,6 +4227,92 @@ fn test_hash_key_completion_unknown_variable_returns_empty_for_that_hash() {
 }
 
 #[test]
+fn test_hash_key_completion_quoted_keys_with_special_characters() {
+    // Test that quoted keys with hyphens, dots, spaces, and other special characters
+    // are included in hash key completions.
+    let code = r#"my %data = ('db-host' => 'localhost', 'api.key' => 'secret', 'api key' => 'value', 'foo_bar' => 'normal');
+$data{db"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // 'db-host' should be suggested (starts with 'db' prefix)
+    assert!(
+        completions.iter().any(|c| c.label == "db-host"),
+        "expected 'db-host' (quoted key with hyphen) in completions for prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // 'api.key' should NOT be suggested (doesn't start with 'db')
+    assert!(
+        !completions.iter().any(|c| c.label == "api.key"),
+        "expected 'api.key' filtered out by prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // 'foo_bar' should NOT be suggested (doesn't start with 'db')
+    assert!(
+        !completions.iter().any(|c| c.label == "foo_bar"),
+        "expected 'foo_bar' filtered out by prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_hash_key_completion_quoted_keys_with_dots_and_spaces() {
+    // Test completion with dot and space separators in keys
+    let code = r#"my %config = ('db.host' => 1, 'api key' => 2);
+$config{api"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // 'api key' should be suggested (starts with 'api' prefix)
+    assert!(
+        completions.iter().any(|c| c.label == "api key"),
+        "expected 'api key' (quoted key with space) in completions for prefix 'api'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // 'db.host' should NOT be suggested (doesn't start with 'api')
+    assert!(
+        !completions.iter().any(|c| c.label == "db.host"),
+        "expected 'db.host' filtered out by prefix 'api'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_hash_key_completion_unterminated_quoted_key_no_bogus_suggestion() {
+    // Regression: 'db-host (opening quote but no closing quote) must not produce a
+    // completion item with a leading-quote artifact like "'db-host".  Previously the
+    // character-class guard rejected these implicitly; after relaxing it for quoted
+    // keys we must ensure only *fully*-quoted tokens (both delimiters present) are
+    // accepted as special-char keys.
+    let code = "my %cfg = ('db-host' => 1, host => 2);\n$cfg{db";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // The fully-quoted key 'db-host' should be present.
+    assert!(
+        completions.iter().any(|c| c.label == "db-host"),
+        "expected 'db-host' in completions; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // No completion item must carry a leading single-quote from an unterminated literal.
+    assert!(
+        completions.iter().all(|c| !c.label.starts_with('\'')),
+        "no completion label must start with a quote character (unterminated-literal artifact); got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn test_detect_hash_key_context_unicode_non_ident_after_brace_no_panic() {
     let source = "$config{☃ho";
     let result = CompletionProvider::detect_hash_key_context(source, source.len());
