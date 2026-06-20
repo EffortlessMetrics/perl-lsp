@@ -5135,6 +5135,19 @@ An explicitly configured `perltidy_profile` (via `.perl-lsp.toml` or
 `didChangeConfiguration`) always takes precedence over the discovered profile;
 discovery runs at initialize time rather than on every format request.
 
+The discovered profile's **supported scalar options** are also parsed once at
+initialize (via the shared `classify_perltidy_profile` mapping) and feed the
+**default native formatter**, so a project-local `.perltidyrc` shapes formatting
+in the native engine — not only when `external-legacy` mode passes `--profile`.
+Per-field precedence: an explicitly configured field
+(`perltidy_maximum_line_length`, `perltidy_indent_columns`, `perltidy_tabs`,
+`perltidy_opening_brace_on_new_line`, `perltidy_cuddled_else`,
+`perltidy_space_after_keyword`, `perltidy_add_trailing_commas`) wins; otherwise
+the discovered profile's value fills the gap. A discovered profile's options are
+applied only when no explicit `perltidy_profile` is configured, so an explicit
+profile is never mixed with a discovered one. Options that native formatting
+cannot represent are reported by the `native-format perltidy-compat` receipt.
+
 #### Error Handling and User Guidance (*Diataxis: How-to*)
 
 When the native formatter cannot safely rewrite a construct, it returns no edits
