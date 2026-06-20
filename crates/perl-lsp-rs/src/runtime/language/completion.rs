@@ -17,6 +17,7 @@ use crate::runtime::types::workspace_folder_matches_doc_uri;
 use crate::{
     protocol::{JsonRpcError, JsonRpcId, REQUEST_CANCELLED, req_position, req_uri},
     runtime::routing::{IndexAccessMode, route_index_access},
+    state::DocumentState,
     state::{completion_cap, completion_deadline},
 };
 use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
@@ -691,6 +692,102 @@ impl LspServer {
         }
     }
 
+    fn completion_item_to_lsp_value(
+        &self,
+        doc: &DocumentState,
+        c: crate::completion::CompletionItem,
+        snippet_support: bool,
+        commit_chars_support: bool,
+        label_details_support: bool,
+    ) -> Value {
+        let is_snippet = c.kind == CompletionItemKind::Snippet;
+        let insert_text_format = if is_snippet && snippet_support {
+            2 // Snippet format
+        } else {
+            1 // PlainText format
+        };
+
+        let mut item = json!({
+            "label": c.label,
+            "kind": match c.kind {
+                CompletionItemKind::Variable => 6,
+                CompletionItemKind::Function => 3,
+                CompletionItemKind::Keyword => 14,
+                CompletionItemKind::Module => 9,
+                CompletionItemKind::File => 17,
+                CompletionItemKind::Snippet => 15,
+                CompletionItemKind::Constant => 14,
+                CompletionItemKind::Property => 7,
+            },
+            "insertTextFormat": insert_text_format,
+        });
+
+        if let Some(detail) = c.detail {
+            item["detail"] = json!(detail);
+        }
+
+        if let Some(mut insert_text) = c.insert_text {
+            if is_snippet && !snippet_support {
+                insert_text = Self::degrade_snippet_to_plaintext(&insert_text);
+            }
+            item["insertText"] = json!(insert_text);
+        }
+
+        if let Some(documentation) = c.documentation {
+            item["documentation"] = json!({
+                "kind": "markdown",
+                "value": documentation
+            });
+        }
+
+        if commit_chars_support && let Some(chars) = commit_chars_for_kind(c.kind) {
+            item["commitCharacters"] = json!(chars);
+        }
+
+        if let Some(sort_text) = c.sort_text {
+            item["sortText"] = json!(sort_text);
+        }
+        if let Some(filter_text) = c.filter_text {
+            item["filterText"] = json!(filter_text);
+        }
+
+        if label_details_support {
+            if let Some(ld) = c.label_details {
+                let mut obj = serde_json::Map::new();
+                if let Some(d) = ld.detail {
+                    obj.insert("detail".to_string(), json!(d));
+                }
+                if let Some(desc) = ld.description {
+                    obj.insert("description".to_string(), json!(desc));
+                }
+                if !obj.is_empty() {
+                    item["labelDetails"] = Value::Object(obj);
+                }
+            }
+        }
+
+        if !c.additional_edits.is_empty() {
+            let edits: Vec<Value> = c
+                .additional_edits
+                .iter()
+                .map(|(loc, new_text)| {
+                    let (sl, sc) = self.offset_to_pos16(doc, loc.start);
+                    let (el, ec) = self.offset_to_pos16(doc, loc.end);
+                    json!({
+                        "range": {
+                            "start": { "line": sl, "character": sc },
+                            "end": { "line": el, "character": ec }
+                        },
+                        "newText": new_text
+                    })
+                })
+                .collect();
+            item["additionalTextEdits"] = json!(edits);
+        }
+
+        item
+    }
+
     /// Handle completion request
     pub(crate) fn handle_completion(
         &self,
@@ -837,95 +934,13 @@ impl LspServer {
                 let items: Vec<Value> = completions
                     .into_iter()
                     .map(|c| {
-                        // Determine insertTextFormat based on client capability and completion kind
-                        let is_snippet = c.kind == CompletionItemKind::Snippet;
-                        let insert_text_format = if is_snippet && snippet_support {
-                            2 // Snippet format
-                        } else {
-                            1 // PlainText format
-                        };
-
-                        let mut item = json!({
-                            "label": c.label,
-                            "kind": match c.kind {
-                                CompletionItemKind::Variable => 6,
-                                CompletionItemKind::Function => 3,
-                                CompletionItemKind::Keyword => 14,
-                                CompletionItemKind::Module => 9,
-                                CompletionItemKind::File => 17,
-                                CompletionItemKind::Snippet => 15,
-                                CompletionItemKind::Constant => 14,
-                                CompletionItemKind::Property => 7,
-                            },
-                            "insertTextFormat": insert_text_format,
-                        });
-
-                        // Only include detail if it has a value
-                        if let Some(detail) = c.detail {
-                            item["detail"] = json!(detail);
-                        }
-
-                        // Only include insertText if it has a value
-                        if let Some(mut insert_text) = c.insert_text {
-                            // Degrade snippets to plaintext if client doesn't support snippets
-                            if is_snippet && !snippet_support {
-                                // Remove snippet syntax: $1, $0, ${1:placeholder}, etc.
-                                insert_text = Self::degrade_snippet_to_plaintext(&insert_text);
-                            }
-                            item["insertText"] = json!(insert_text);
-                        }
-
-                        if let Some(documentation) = c.documentation {
-                            item["documentation"] = json!({
-                                "kind": "markdown",
-                                "value": documentation
-                            });
-                        }
-
-                        if commit_chars_support && let Some(chars) = commit_chars_for_kind(c.kind) {
-                            item["commitCharacters"] = json!(chars);
-                        }
-
-                        if let Some(sort_text) = c.sort_text {
-                            item["sortText"] = json!(sort_text);
-                        }
-
-                        if label_details_support {
-                            if let Some(ld) = c.label_details {
-                                let mut obj = serde_json::Map::new();
-                                if let Some(d) = ld.detail {
-                                    obj.insert("detail".to_string(), json!(d));
-                                }
-                                if let Some(desc) = ld.description {
-                                    obj.insert("description".to_string(), json!(desc));
-                                }
-                                if !obj.is_empty() {
-                                    item["labelDetails"] = Value::Object(obj);
-                                }
-                            }
-                        }
-
-                        // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
-                        if !c.additional_edits.is_empty() {
-                            let edits: Vec<Value> = c
-                                .additional_edits
-                                .iter()
-                                .map(|(loc, new_text)| {
-                                    let (sl, sc) = self.offset_to_pos16(doc, loc.start);
-                                    let (el, ec) = self.offset_to_pos16(doc, loc.end);
-                                    json!({
-                                        "range": {
-                                            "start": { "line": sl, "character": sc },
-                                            "end": { "line": el, "character": ec }
-                                        },
-                                        "newText": new_text
-                                    })
-                                })
-                                .collect();
-                            item["additionalTextEdits"] = json!(edits);
-                        }
-
-                        item
+                        self.completion_item_to_lsp_value(
+                            doc,
+                            c,
+                            snippet_support,
+                            commit_chars_support,
+                            label_details_support,
+                        )
                     })
                     .collect();
 
@@ -1123,83 +1138,13 @@ impl LspServer {
                             return None;
                         }
 
-                        let mut item = json!({
-                            "label": c.label,
-                            "kind": match c.kind {
-                                CompletionItemKind::Variable => 6,
-                                CompletionItemKind::Function => 3,
-                                CompletionItemKind::Keyword => 14,
-                                CompletionItemKind::Module => 9,
-                                CompletionItemKind::File => 17,
-                                CompletionItemKind::Snippet => 15,
-                                CompletionItemKind::Constant => 14,
-                                CompletionItemKind::Property => 7,
-                            },
-                        });
-                        let is_snippet = c.kind == CompletionItemKind::Snippet;
-                        let insert_text_format = if is_snippet && snippet_support { 2 } else { 1 };
-                        item["insertTextFormat"] = json!(insert_text_format);
-
-                        if let Some(detail) = c.detail {
-                            item["detail"] = json!(detail);
-                        }
-                        if let Some(mut insert_text) = c.insert_text {
-                            if is_snippet && !snippet_support {
-                                insert_text = Self::degrade_snippet_to_plaintext(&insert_text);
-                            }
-                            item["insertText"] = json!(insert_text);
-                        }
-                        if let Some(documentation) = c.documentation {
-                            item["documentation"] = json!({
-                                "kind": "markdown",
-                                "value": documentation
-                            });
-                        }
-
-                        if commit_chars_support && let Some(chars) = commit_chars_for_kind(c.kind) {
-                            item["commitCharacters"] = json!(chars);
-                        }
-
-                        if let Some(sort_text) = c.sort_text {
-                            item["sortText"] = json!(sort_text);
-                        }
-
-                        if label_details_support {
-                            if let Some(ld) = c.label_details {
-                                let mut obj = serde_json::Map::new();
-                                if let Some(d) = ld.detail {
-                                    obj.insert("detail".to_string(), json!(d));
-                                }
-                                if let Some(desc) = ld.description {
-                                    obj.insert("description".to_string(), json!(desc));
-                                }
-                                if !obj.is_empty() {
-                                    item["labelDetails"] = Value::Object(obj);
-                                }
-                            }
-                        }
-
-                        // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
-                        if !c.additional_edits.is_empty() {
-                            let edits: Vec<Value> = c
-                                .additional_edits
-                                .iter()
-                                .map(|(loc, new_text)| {
-                                    let (sl, sc) = self.offset_to_pos16(doc, loc.start);
-                                    let (el, ec) = self.offset_to_pos16(doc, loc.end);
-                                    json!({
-                                        "range": {
-                                            "start": { "line": sl, "character": sc },
-                                            "end": { "line": el, "character": ec }
-                                        },
-                                        "newText": new_text
-                                    })
-                                })
-                                .collect();
-                            item["additionalTextEdits"] = json!(edits);
-                        }
-
-                        Some(item)
+                        Some(self.completion_item_to_lsp_value(
+                            doc,
+                            c,
+                            snippet_support,
+                            commit_chars_support,
+                            label_details_support,
+                        ))
                     })
                     .collect();
 
@@ -1565,6 +1510,240 @@ mod tests {
     }
 
     #[test]
+    fn completion_item_serializer_serializes_filter_text() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_filter_text_serializer_some.pl";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "fo"
+            }
+        })))?;
+
+        let documents = server.documents_guard();
+        let doc = server.get_document(&documents, uri).ok_or("missing test document")?;
+        let item = crate::completion::CompletionItem {
+            label: "foreach".to_string(),
+            kind: CompletionItemKind::Snippet,
+            detail: None,
+            documentation: None,
+            insert_text: Some("foreach my ${1:$item} (@${2:list}) {\n\t$0\n}".to_string()),
+            additional_edits: Vec::new(),
+            sort_text: Some("1_foreach".to_string()),
+            filter_text: Some("foreach".to_string()),
+            text_edit_range: None,
+            commit_characters: None,
+            label_details: None,
+        };
+
+        let value = server.completion_item_to_lsp_value(doc, item, true, false, false);
+
+        assert_eq!(value.get("filterText").and_then(Value::as_str), Some("foreach"));
+        assert_eq!(value.get("insertTextFormat").and_then(Value::as_i64), Some(2));
+        Ok(())
+    }
+
+    #[test]
+    fn completion_item_serializer_omits_filter_text_when_unset()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_filter_text_serializer_none.pl";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $value = 1;\n"
+            }
+        })))?;
+
+        let documents = server.documents_guard();
+        let doc = server.get_document(&documents, uri).ok_or("missing test document")?;
+        let item = crate::completion::CompletionItem {
+            label: "fallback".to_string(),
+            kind: CompletionItemKind::Keyword,
+            detail: None,
+            documentation: None,
+            insert_text: Some("fallback".to_string()),
+            additional_edits: Vec::new(),
+            sort_text: Some("9_fallback".to_string()),
+            filter_text: None,
+            text_edit_range: None,
+            commit_characters: None,
+            label_details: None,
+        };
+
+        let value = server.completion_item_to_lsp_value(doc, item, true, false, false);
+
+        assert!(
+            value.get("filterText").is_none(),
+            "completion item should omit filterText when filter_text is unset: {value:?}"
+        );
+        assert_eq!(value.get("sortText").and_then(Value::as_str), Some("9_fallback"));
+        Ok(())
+    }
+
+    #[test]
+    fn completion_item_serializer_maps_remaining_kinds() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_filter_text_serializer_kinds.pl";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "use strict;\n"
+            }
+        })))?;
+
+        let documents = server.documents_guard();
+        let doc = server.get_document(&documents, uri).ok_or("missing test document")?;
+        let cases = [
+            (CompletionItemKind::Variable, 6),
+            (CompletionItemKind::Function, 3),
+            (CompletionItemKind::Module, 9),
+            (CompletionItemKind::File, 17),
+            (CompletionItemKind::Constant, 14),
+            (CompletionItemKind::Property, 7),
+        ];
+
+        for (kind, expected_kind) in cases {
+            let item = crate::completion::CompletionItem {
+                label: format!("{kind:?}"),
+                kind,
+                detail: None,
+                documentation: None,
+                insert_text: None,
+                additional_edits: Vec::new(),
+                sort_text: None,
+                filter_text: None,
+                text_edit_range: None,
+                commit_characters: None,
+                label_details: None,
+            };
+
+            let value = server.completion_item_to_lsp_value(doc, item, false, false, false);
+            assert_eq!(
+                value.get("kind").and_then(Value::as_i64),
+                Some(expected_kind),
+                "unexpected LSP kind for {kind:?}: {value:?}"
+            );
+            assert!(value.get("insertText").is_none());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn completion_item_serializer_emits_optional_lsp_fields()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_parser_core::SourceLocation;
+
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_filter_text_serializer_optional.pl";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "use strict;\n"
+            }
+        })))?;
+
+        let documents = server.documents_guard();
+        let doc = server.get_document(&documents, uri).ok_or("missing test document")?;
+        let item = crate::completion::CompletionItem {
+            label: "render".to_string(),
+            kind: CompletionItemKind::Function,
+            detail: Some("render($ctx)".to_string()),
+            documentation: Some("Render the current context.".to_string()),
+            insert_text: Some("render($ctx)".to_string()),
+            additional_edits: vec![(
+                SourceLocation { start: 0, end: 0 },
+                "use Demo::Renderer;\n".to_string(),
+            )],
+            sort_text: Some("2_render".to_string()),
+            filter_text: Some("render".to_string()),
+            text_edit_range: None,
+            commit_characters: None,
+            label_details: Some(
+                perl_lsp_rs_core::providers::completion_item::CompletionItemLabelDetails {
+                    detail: Some("($ctx)".to_string()),
+                    description: Some("Demo::Renderer".to_string()),
+                },
+            ),
+        };
+
+        let value = server.completion_item_to_lsp_value(doc, item, false, true, true);
+
+        assert_eq!(value.get("detail").and_then(Value::as_str), Some("render($ctx)"));
+        assert_eq!(
+            value.pointer("/documentation/value").and_then(Value::as_str),
+            Some("Render the current context.")
+        );
+        assert_eq!(value.get("filterText").and_then(Value::as_str), Some("render"));
+        assert!(value.get("commitCharacters").and_then(Value::as_array).is_some());
+        assert_eq!(value.pointer("/labelDetails/detail").and_then(Value::as_str), Some("($ctx)"));
+        assert_eq!(
+            value.pointer("/labelDetails/description").and_then(Value::as_str),
+            Some("Demo::Renderer")
+        );
+        assert_eq!(
+            value.pointer("/additionalTextEdits/0/newText").and_then(Value::as_str),
+            Some("use Demo::Renderer;\n")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn completion_item_serializer_degrades_snippet_without_client_support()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_filter_text_serializer_plain.pl";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "fo"
+            }
+        })))?;
+
+        let documents = server.documents_guard();
+        let doc = server.get_document(&documents, uri).ok_or("missing test document")?;
+        let item = crate::completion::CompletionItem {
+            label: "foreach".to_string(),
+            kind: CompletionItemKind::Snippet,
+            detail: None,
+            documentation: None,
+            insert_text: Some("foreach my ${1:$item} (@${2:list}) {\n\t$0\n}".to_string()),
+            additional_edits: Vec::new(),
+            sort_text: None,
+            filter_text: Some("foreach".to_string()),
+            text_edit_range: None,
+            commit_characters: None,
+            label_details: None,
+        };
+
+        let value = server.completion_item_to_lsp_value(doc, item, false, false, false);
+
+        assert_eq!(value.get("insertTextFormat").and_then(Value::as_i64), Some(1));
+        assert_eq!(
+            value.get("insertText").and_then(Value::as_str),
+            Some("foreach my $item (@list) {\n\t\n}")
+        );
+        Ok(())
+    }
+
+    #[test]
     fn completion_provider_decision_replays_live_completion_trace()
     -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::default();
@@ -1684,6 +1863,83 @@ mod tests {
             Some("textDocument/completion")
         );
         assert_eq!(receipt.get("is_incomplete").and_then(Value::as_bool), Some(false));
+        Ok(())
+    }
+
+    #[test]
+    fn regular_completion_serializes_snippet_filter_text() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_filter_text_regular.pl";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "fo"
+            }
+        })))?;
+
+        let response = server
+            .handle_completion(Some(json!({
+                "textDocument": { "uri": uri, "version": 1 },
+                "position": { "line": 0, "character": 2 }
+            })))?
+            .ok_or("expected completion response")?;
+        let items =
+            response.get("items").and_then(Value::as_array).ok_or("expected completion items")?;
+        let foreach_item = items
+            .iter()
+            .find(|item| item.get("label").and_then(Value::as_str) == Some("foreach"))
+            .ok_or_else(|| format!("expected foreach snippet completion, got: {items:?}"))?;
+
+        assert_eq!(
+            foreach_item.get("filterText").and_then(Value::as_str),
+            Some("foreach"),
+            "regular completion response should serialize snippet filter_text"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn cancellable_completion_serializes_snippet_filter_text()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_filter_text_cancellable.pl";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "fo"
+            }
+        })))?;
+
+        let response = server
+            .handle_completion_cancellable(
+                Some(json!({
+                    "textDocument": { "uri": uri, "version": 1 },
+                    "position": { "line": 0, "character": 2 }
+                })),
+                Some(&json!("completion-filter-text-cancellable")),
+            )?
+            .ok_or("expected completion response")?;
+        let items =
+            response.get("items").and_then(Value::as_array).ok_or("expected completion items")?;
+        let foreach_item = items
+            .iter()
+            .find(|item| item.get("label").and_then(Value::as_str) == Some("foreach"))
+            .ok_or_else(|| format!("expected foreach snippet completion, got: {items:?}"))?;
+
+        assert_eq!(
+            foreach_item.get("filterText").and_then(Value::as_str),
+            Some("foreach"),
+            "cancellable completion response should serialize snippet filter_text"
+        );
+
         Ok(())
     }
 

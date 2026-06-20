@@ -988,6 +988,57 @@ fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn test_snippet_completion_includes_filter_text() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
+
+    let uri = "file:///completion_filter_text_snippet.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "fo"
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 0, "character": 2 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let foreach_item = items
+        .iter()
+        .find(|item| item["label"] == "foreach")
+        .ok_or_else(|| format!("expected foreach snippet completion, got: {items:?}"))?;
+
+    assert_eq!(foreach_item["kind"].as_i64(), Some(15));
+    assert_eq!(
+        foreach_item["filterText"].as_str(),
+        Some("foreach"),
+        "snippet completions should expose their trigger as filterText"
+    );
+
+    Ok(())
+}
+
 /// Test array and hash element access completion
 #[test]
 fn test_element_access_completion() -> Result<(), Box<dyn std::error::Error>> {
