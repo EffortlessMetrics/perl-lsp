@@ -14,7 +14,10 @@ This document is kept factual and citable. Claims without a primary artifact
 [docs/learnings/README.md](../learnings/README.md) (especially 2026-06-coverage-gate-measurement.md,
 2026-06-ripr-output-schema-break.md). For portable patterns, see [docs/concepts/](../concepts/).
 For the parallel DAP wire-protocol contract index (variablesReference wire-band codec), see
-[docs/reference/DAP_CONTRACTS.md](DAP_CONTRACTS.md).
+[docs/reference/DAP_CONTRACTS.md](DAP_CONTRACTS.md). For the LSP 3.18
+`textDocument/inlineCompletion` conformance contract (wire shapes, trigger-kind
+policy, selectedCompletionInfo constraint, streaming extension, `@proposed`
+convention), see [docs/reference/INLINE_COMPLETION_CONTRACTS.md](INLINE_COMPLETION_CONTRACTS.md).
 For the semantic model substrate contracts (ownership boundary, semantic identity,
 FileSemanticBundle, SemanticSnapshot, SemanticResult, dynamic boundaries), see
 [docs/reference/SEMANTIC_SNAPSHOT_ARCHITECTURE.md](SEMANTIC_SNAPSHOT_ARCHITECTURE.md)
