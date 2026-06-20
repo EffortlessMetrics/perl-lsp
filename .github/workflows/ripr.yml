@@ -981,6 +981,19 @@ jobs:
             echo "- fallback_result: \`${FALLBACK_RESULT:-}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+          # Draft PRs intentionally skip ripr: route-ripr has
+          #   if: github.event.pull_request.draft != true || ...
+          # which causes ROUTE_RESULT=skipped for draft PRs.  A skipped router
+          # is NOT a gate failure — ripr simply does not apply yet.  Report
+          # neutral/pass so agents see the true failure class (gate-names-must-
+          # match-failure-classes.md, #1492).  When the PR is converted to
+          # ready-for-review the workflow re-triggers and ripr runs for real.
+          if [ "$ROUTE_RESULT" = "skipped" ]; then
+            echo "::notice::ripr router was skipped (draft PR or non-applicable event) — ripr gate is neutral/pass."
+            echo "ripr+ New Gap Gate: neutral (router skipped — draft PR or non-applicable event)"
+            exit 0
+          fi
+
           if [ "$ROUTE_RESULT" != "success" ]; then
             echo "::error::ripr router did not complete successfully: $ROUTE_RESULT"
             exit 1
