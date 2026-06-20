@@ -223,15 +223,7 @@ impl PerlOracleEnv {
     /// (`fetch_perl_inc`) already handles the `None` case by returning
     /// `Vec::new()`.
     pub fn for_startup_inc_probe(config: &WorkspaceConfig) -> Option<Self> {
-        use crate::platform::resolve_perl_path_with_toolchain;
-
-        let perl_binary = match config.perl_path.as_deref().filter(|p| !p.is_empty()) {
-            Some(path) => PathBuf::from(path),
-            None => match resolve_perl_path_with_toolchain() {
-                Ok(path) => path,
-                Err(_) => return None,
-            },
-        };
+        let perl_binary = super::PerlToolchainProfile::resolve(config)?.into_perl_binary();
 
         // Fall back to the process cwd; the startup probe does not depend on
         // it so any stable directory is fine.
@@ -297,15 +289,7 @@ impl PerlOracleEnv {
     /// surface an actionable error to the user instead of falling back to ambient
     /// `perl` lookup.
     pub fn for_language_probe(config: &WorkspaceConfig, cwd: PathBuf) -> Option<Self> {
-        use crate::platform::resolve_perl_path_with_toolchain;
-
-        let perl_binary = match config.perl_path.as_deref().filter(|p| !p.is_empty()) {
-            Some(path) => PathBuf::from(path),
-            None => match resolve_perl_path_with_toolchain() {
-                Ok(path) => path,
-                Err(_) => return None,
-            },
-        };
+        let perl_binary = super::PerlToolchainProfile::resolve(config)?.into_perl_binary();
 
         Some(Self {
             perl_binary,
@@ -338,15 +322,7 @@ impl PerlOracleEnv {
     /// callers should surface an actionable error instead of falling back to
     /// ambient `perl` lookup.
     pub fn for_execute_command(config: &WorkspaceConfig, cwd: PathBuf) -> Option<Self> {
-        use crate::platform::resolve_perl_path_with_toolchain;
-
-        let perl_binary = match config.perl_path.as_deref().filter(|p| !p.is_empty()) {
-            Some(path) => PathBuf::from(path),
-            None => match resolve_perl_path_with_toolchain() {
-                Ok(path) => path,
-                Err(_) => return None,
-            },
-        };
+        let perl_binary = super::PerlToolchainProfile::resolve(config)?.into_perl_binary();
 
         Some(Self {
             perl_binary,

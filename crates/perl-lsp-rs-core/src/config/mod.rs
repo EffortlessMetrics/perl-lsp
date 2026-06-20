@@ -17,11 +17,13 @@ use std::{fs::File, io::Read};
 
 mod native_build_hints;
 pub mod perl_oracle_env;
+pub mod toolchain_profile;
 
 pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
 pub use perl_lsp_perltidy::FormatterMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use perl_oracle_env::PerlOracleEnv;
+pub use toolchain_profile::PerlToolchainProfile;
 
 /// Critic diagnostic engine used for LSP policy diagnostics.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
