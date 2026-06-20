@@ -141,6 +141,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   serialize the internally-computed `filterText` field, preserving expected
   client-side matching for snippets and other items whose label differs from
   the typed prefix. (#1889)
+- **Multiline inline completions are parse-checked against the full document.**
+  Inline completion candidates whose replacement ranges span lines now run
+  full-document parse probes and fail closed when a range cannot be
+  reconstructed, preventing syntactically damaging ghost text from being shown.
+  (#1926)
 - **Duplicate quick-fix code actions are collapsed.** When overlapping
   providers produce byte-identical lightbulb entries, the server now keeps one
   action and builds `source.fixAll` from the deduplicated set. (#1913)
@@ -261,6 +266,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workspace `target/` during pre-checkout ownership cleanup. Real Cargo output
   remains on `/mnt/ci-scratch`, while stale root-owned workspace receipts no
   longer block checkout or `target` creation. (#1886)
+- **Hash-key completion regression tests have unique names.** The duplicate
+  test identifier that broke `perl-lsp-rs-core` test builds was renamed without
+  changing the fixture or assertions. (#1938)
+- **Gate-list rendering has CLI contract coverage.** The `cargo xtask gates
+  --list` path now has tests for PR-fast tier filtering, explicit gate
+  filtering, and actionable unknown-gate errors without executing configured
+  gates. (#1939, issue #1942)
 - **Corpus gold fixtures avoid invalid Perl syntax.** Two parser gold fixtures
   that were invalid under Perl 5 were corrected so corpus accuracy metrics no
   longer count fixture bugs as parser false negatives. (#1903)
