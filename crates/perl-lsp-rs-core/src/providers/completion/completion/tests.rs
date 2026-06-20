@@ -802,6 +802,77 @@ isa => 'St
 }
 
 #[test]
+fn test_completion_sorttext_prevents_context_mixing() -> Result<(), Box<dyn std::error::Error>> {
+    let hash_code = "my %config = (host => 'localhost', port => 5432);\n$config{ho";
+    let mut hash_parser = Parser::new(hash_code);
+    let hash_ast = must(hash_parser.parse());
+    let hash_provider = CompletionProvider::new(&hash_ast);
+    let hash_completions = hash_provider.get_completions(hash_code, hash_code.len());
+    let hash_item = must_some(hash_completions.iter().find(|item| item.label == "host"));
+    let hash_sort = must_some(hash_item.sort_text.as_deref());
+
+    let type_code = concat!(
+        "\n",
+        "use MyApp::Types qw(StrFoo);\n",
+        "use Moose;\n",
+        "\n",
+        "has 'id' => (\n",
+        "is => 'ro',\n",
+        "isa => 'S"
+    );
+    let mut type_parser = Parser::new(type_code);
+    let type_ast = must(type_parser.parse());
+    let type_provider = CompletionProvider::new_with_index_and_source(&type_ast, type_code, None);
+    let type_completions = type_provider.get_completions(type_code, type_code.len());
+    let str_item = must_some(type_completions.iter().find(|item| item.label == "Str"));
+    let str_sort = must_some(str_item.sort_text.as_deref());
+    let str_foo_item = must_some(type_completions.iter().find(|item| item.label == "StrFoo"));
+    let str_foo_sort = must_some(str_foo_item.sort_text.as_deref());
+
+    let option_code = r#"
+use Moose;
+
+has 'id' => (
+i"#;
+    let mut option_parser = Parser::new(option_code);
+    let option_ast = must(option_parser.parse());
+    let option_provider =
+        CompletionProvider::new_with_index_and_source(&option_ast, option_code, None);
+    let option_completions = option_provider.get_completions(option_code, option_code.len());
+    let option_item = must_some(option_completions.iter().find(|item| item.label == "is"));
+    let option_sort = must_some(option_item.sort_text.as_deref());
+
+    let field_code = r#"
+use Object::Pad;
+
+class Point {
+field $name :param;
+field $native_name :param;
+}
+
+Point->new(na"#;
+    let mut field_parser = Parser::new(field_code);
+    let field_ast = must(field_parser.parse());
+    let field_provider =
+        CompletionProvider::new_with_index_and_source(&field_ast, field_code, None);
+    let field_completions = field_provider.get_completions(field_code, field_code.len());
+    let field_item = must_some(field_completions.iter().find(|item| item.label == "name"));
+    let field_sort = must_some(field_item.sort_text.as_deref());
+
+    let mut sort_texts = vec![hash_sort, str_sort, str_foo_sort, option_sort, field_sort];
+    sort_texts.sort_unstable();
+
+    let expected = vec!["0f_name", "0h_host", "0o_is", "0t_Str", "0t_StrFoo"];
+    if sort_texts != expected {
+        return Err(
+            format!("expected grouped sortText values {expected:?}, got {sort_texts:?}").into()
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_regex_completion_binding_operator() {
     // Cursor right after the opening slash of a regex
     let code = r#"my $x = "hello"; $x =~ /"#;
