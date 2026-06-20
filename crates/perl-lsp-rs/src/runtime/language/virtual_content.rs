@@ -507,6 +507,7 @@ mod tests {
             synopsis: Some("use Local::Doc;".to_string()),
             description: Some("Local documentation from the workspace.".to_string()),
             methods: std::collections::HashMap::new(),
+            ..Default::default()
         };
         pod.methods.insert("reset".to_string(), "Reset local state.".to_string());
 
@@ -532,6 +533,7 @@ mod tests {
             synopsis: None,
             description: None,
             methods: std::collections::HashMap::new(),
+            ..Default::default()
         };
 
         let content = format_workspace_pod_virtual_content(

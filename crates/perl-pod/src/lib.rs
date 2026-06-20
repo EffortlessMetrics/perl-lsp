@@ -22,6 +22,14 @@ pub struct PodDoc {
     pub description: Option<String>,
     /// Method/function docs keyed by name, from `=head2 method_name`.
     pub methods: HashMap<String, String>,
+    /// Parameters from `=head1 ARGUMENTS`.
+    pub arguments: Option<String>,
+    /// Return value documentation from `=head1 RETURN VALUES`.
+    pub return_values: Option<String>,
+    /// Usage examples from `=head1 EXAMPLES`.
+    pub examples: Option<String>,
+    /// Related modules from `=head1 SEE ALSO`.
+    pub see_also: Option<String>,
 }
 
 impl PodDoc {
@@ -32,6 +40,10 @@ impl PodDoc {
             && self.synopsis.is_none()
             && self.description.is_none()
             && self.methods.is_empty()
+            && self.arguments.is_none()
+            && self.return_values.is_none()
+            && self.examples.is_none()
+            && self.see_also.is_none()
     }
 }
 
@@ -120,12 +132,20 @@ pub fn extract_pod(source: &str) -> PodDoc {
             flush_section(&mut doc, &current_section, &body, false);
             body.clear();
             let heading = heading.trim();
-            current_section = Some(match heading {
-                "NAME" => Section::Name,
-                "SYNOPSIS" => Section::Synopsis,
-                "DESCRIPTION" => Section::Description,
-                _ => Section::Other(()),
-            });
+            if let Some(section) = match heading {
+                "NAME" => Some(Section::Name),
+                "SYNOPSIS" => Some(Section::Synopsis),
+                "DESCRIPTION" => Some(Section::Description),
+                "ARGUMENTS" => Some(Section::Arguments),
+                "RETURN VALUES" => Some(Section::ReturnValues),
+                "EXAMPLES" => Some(Section::Examples),
+                "SEE ALSO" => Some(Section::SeeAlso),
+                _ => None,
+            } {
+                current_section = Some(section);
+            } else {
+                current_section = None;
+            }
             continue;
         }
 
@@ -168,8 +188,11 @@ enum Section {
     Name,
     Synopsis,
     Description,
+    Arguments,
+    ReturnValues,
+    Examples,
+    SeeAlso,
     Method(String),
-    Other(()),
 }
 
 /// Stores accumulated body text into the appropriate `PodDoc` field.
@@ -179,8 +202,11 @@ enum Section {
 /// - `Name` → `PodDoc::name`
 /// - `Synopsis` → `PodDoc::synopsis`
 /// - `Description` → `PodDoc::description` (first paragraph only)
+/// - `Arguments` → `PodDoc::arguments`
+/// - `ReturnValues` → `PodDoc::return_values`
+/// - `Examples` → `PodDoc::examples`
+/// - `SeeAlso` → `PodDoc::see_also`
 /// - `Method(name)` → `PodDoc::methods` entry
-/// - `Other` → ignored
 ///
 /// # Arguments
 ///
@@ -213,11 +239,20 @@ fn flush_section(doc: &mut PodDoc, section: &Option<Section>, body: &str, _in_ov
             let first_para = first_paragraph(&cleaned);
             doc.description = Some(first_para);
         }
+        Section::Arguments => {
+            doc.arguments = Some(cleaned);
+        }
+        Section::ReturnValues => {
+            doc.return_values = Some(cleaned);
+        }
+        Section::Examples => {
+            doc.examples = Some(cleaned);
+        }
+        Section::SeeAlso => {
+            doc.see_also = Some(cleaned);
+        }
         Section::Method(name) => {
             doc.methods.insert(name.clone(), cleaned);
-        }
-        Section::Other(_) => {
-            // Ignore other head1 sections for now
         }
     }
 }
