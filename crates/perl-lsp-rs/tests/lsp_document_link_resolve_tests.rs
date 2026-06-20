@@ -4,9 +4,36 @@
 //! links with data fields, and documentLink/resolve fills in the target.
 
 use perl_lsp::{JsonRpcRequest, LspServer};
-use serde_json::json;
+use serde_json::{Value, json};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+fn data_str<'a>(link: &'a Value, pointer: &str) -> Option<&'a str> {
+    link.pointer(pointer).and_then(Value::as_str)
+}
+
+fn initialized_server() -> LspServer {
+    let server = LspServer::new();
+    let init_params = json!({
+        "capabilities": {},
+        "rootUri": "file:///workspace"
+    });
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        method: "initialize".to_string(),
+        params: Some(init_params),
+    });
+
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    });
+
+    server
+}
 
 /// Test that documentLink/resolve returns target for deferred module links
 #[test]
@@ -509,6 +536,216 @@ fn test_document_link_resolve_url_type() -> TestResult {
     Ok(())
 }
 
+/// Test POD section links resolve to same-document URI fragments
+#[test]
+fn test_document_link_resolve_pod_section() -> TestResult {
+    let server = LspServer::new();
+
+    let init_params = json!({
+        "capabilities": {},
+        "rootUri": "file:///workspace"
+    });
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        method: "initialize".to_string(),
+        params: Some(init_params),
+    });
+
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    });
+
+    let link = json!({
+        "range": {
+            "start": {"line": 2, "character": 6},
+            "end": {"line": 2, "character": 18}
+        },
+        "tooltip": "Open POD section method_name",
+        "data": {
+            "type": "pod_section",
+            "section": "method_name",
+            "baseUri": "file:///workspace/test.pl"
+        }
+    });
+
+    let response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        method: "documentLink/resolve".to_string(),
+        params: Some(link),
+    });
+
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
+    let result = resp.result.ok_or("Expected result field in response")?;
+
+    assert_eq!(result["target"], "file:///workspace/test.pl#method_name");
+    assert_eq!(data_str(&result, "/data/type"), Some("pod_section"));
+    assert_eq!(data_str(&result, "/data/section"), Some("method_name"));
+
+    Ok(())
+}
+
+/// Test malformed POD section data is rejected as invalid params
+#[test]
+fn test_document_link_resolve_rejects_invalid_pod_section() -> TestResult {
+    let server = LspServer::new();
+
+    let init_params = json!({
+        "capabilities": {},
+        "rootUri": "file:///workspace"
+    });
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        method: "initialize".to_string(),
+        params: Some(init_params),
+    });
+
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    });
+
+    let link = json!({
+        "range": {
+            "start": {"line": 2, "character": 6},
+            "end": {"line": 2, "character": 23}
+        },
+        "data": {
+            "type": "pod_section",
+            "section": "Other/section",
+            "baseUri": "file:///workspace/test.pl"
+        }
+    });
+
+    let response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        method: "documentLink/resolve".to_string(),
+        params: Some(link),
+    });
+
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
+    let error = resp.error.ok_or("Expected error field in response")?;
+    assert_eq!(error.code, -32602);
+    assert!(
+        error.message.contains("Invalid POD section"),
+        "expected invalid POD section error, got: {}",
+        error.message
+    );
+
+    Ok(())
+}
+
+/// Test malformed POD section links without section data are rejected
+#[test]
+fn test_document_link_resolve_rejects_pod_section_missing_section() -> TestResult {
+    let server = initialized_server();
+    let link = json!({
+        "range": {
+            "start": {"line": 2, "character": 6},
+            "end": {"line": 2, "character": 18}
+        },
+        "data": {
+            "type": "pod_section",
+            "baseUri": "file:///workspace/test.pl"
+        }
+    });
+
+    let response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        method: "documentLink/resolve".to_string(),
+        params: Some(link),
+    });
+
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
+    let error = resp.error.ok_or("Expected error field in response")?;
+    assert_eq!(error.code, -32602);
+    assert!(
+        error.message.contains("Missing POD section"),
+        "expected missing POD section error, got: {}",
+        error.message
+    );
+
+    Ok(())
+}
+
+/// Test malformed POD section links without base URI data are rejected
+#[test]
+fn test_document_link_resolve_rejects_pod_section_missing_base_uri() -> TestResult {
+    let server = initialized_server();
+    let link = json!({
+        "range": {
+            "start": {"line": 2, "character": 6},
+            "end": {"line": 2, "character": 18}
+        },
+        "data": {
+            "type": "pod_section",
+            "section": "method_name"
+        }
+    });
+
+    let response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        method: "documentLink/resolve".to_string(),
+        params: Some(link),
+    });
+
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
+    let error = resp.error.ok_or("Expected error field in response")?;
+    assert_eq!(error.code, -32602);
+    assert!(
+        error.message.contains("Missing base URI"),
+        "expected missing base URI error, got: {}",
+        error.message
+    );
+
+    Ok(())
+}
+
+/// Test malformed POD section links with invalid base URI data are rejected
+#[test]
+fn test_document_link_resolve_rejects_pod_section_invalid_base_uri() -> TestResult {
+    let server = initialized_server();
+    let link = json!({
+        "range": {
+            "start": {"line": 2, "character": 6},
+            "end": {"line": 2, "character": 18}
+        },
+        "data": {
+            "type": "pod_section",
+            "section": "method_name",
+            "baseUri": "not a uri"
+        }
+    });
+
+    let response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        method: "documentLink/resolve".to_string(),
+        params: Some(link),
+    });
+
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
+    let error = resp.error.ok_or("Expected error field in response")?;
+    assert_eq!(error.code, -32602);
+    assert!(
+        error.message.contains("Invalid base URI"),
+        "expected invalid base URI error, got: {}",
+        error.message
+    );
+
+    Ok(())
+}
+
 /// Integration test: documentLink returns deferred links, resolve fills them in
 #[test]
 fn test_document_link_integration() -> TestResult {
@@ -598,6 +835,121 @@ require Foo::Bar;
         // Should now have a target
         assert!(resolved.get("target").is_some());
     }
+
+    Ok(())
+}
+
+/// Integration test: documentLink extracts POD L<> links and resolve fills targets
+#[test]
+fn test_document_link_integration_pod_l_markup() -> TestResult {
+    let server = LspServer::new();
+
+    let init_params = json!({
+        "capabilities": {},
+        "rootUri": "file:///workspace"
+    });
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        method: "initialize".to_string(),
+        params: Some(init_params),
+    });
+
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    });
+
+    let doc_uri = "file:///workspace/test.pl";
+    let doc_text = r#"package Local::Doc;
+
+=head1 SEE ALSO
+
+See L<Data::Dumper>, L<strict>, L</method_name>, L<Local::Doc>, and L<NotAModule>.
+
+=cut
+
+1;
+"#;
+
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "textDocument/didOpen".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": doc_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": doc_text
+            }
+        })),
+    });
+
+    let link_response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        method: "textDocument/documentLink".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": doc_uri
+            }
+        })),
+    });
+
+    let link_resp = link_response.ok_or("Expected response from documentLink")?;
+    let links = link_resp.result.ok_or("Expected result field in link response")?;
+    let links_array = links.as_array().ok_or("Expected links to be an array")?;
+
+    let module_link = links_array
+        .iter()
+        .find(|link| data_str(link, "/data/module") == Some("Data::Dumper"))
+        .ok_or("expected Data::Dumper POD document link")?;
+    let pragma_link = links_array
+        .iter()
+        .find(|link| data_str(link, "/data/module") == Some("strict"))
+        .ok_or("expected strict POD document link")?;
+    let section_link = links_array
+        .iter()
+        .find(|link| {
+            data_str(link, "/data/type") == Some("pod_section")
+                && data_str(link, "/data/section") == Some("method_name")
+        })
+        .ok_or("expected POD section document link")?;
+
+    assert!(
+        !links_array.iter().any(|link| data_str(link, "/data/module") == Some("Local::Doc")),
+        "self POD links should stay quiet: {links_array:#?}"
+    );
+    assert!(
+        !links_array.iter().any(|link| data_str(link, "/data/module") == Some("NotAModule")),
+        "single-segment unknown POD links should stay quiet: {links_array:#?}"
+    );
+
+    for link in [module_link, pragma_link] {
+        let resolve_response = server.handle_request(JsonRpcRequest {
+            _jsonrpc: "2.0".to_string(),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
+            method: "documentLink/resolve".to_string(),
+            params: Some(link.clone()),
+        });
+
+        let resolve_resp = resolve_response.ok_or("Expected response from documentLink/resolve")?;
+        let resolved = resolve_resp.result.ok_or("Expected result field in resolve response")?;
+        assert!(resolved.get("target").is_some());
+    }
+
+    let section_response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((4) as i64)),
+        method: "documentLink/resolve".to_string(),
+        params: Some(section_link.clone()),
+    });
+    let section_resp = section_response.ok_or("Expected response from documentLink/resolve")?;
+    let section_resolved = section_resp.result.ok_or("Expected section resolve result")?;
+    assert_eq!(section_resolved["target"], "file:///workspace/test.pl#method_name");
 
     Ok(())
 }

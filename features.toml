@@ -232,10 +232,11 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = [
+  "crates/perl-lsp-rs-core/src/providers/document_links/mod.rs",
   "crates/perl-lsp-rs/tests/lsp_document_links_test.rs",
   "crates/perl-lsp-rs/tests/lsp_document_links_e2e.rs",
 ]
-description = "Document links to modules and docs"
+description = "Document links to use/require modules, relative files, and POD L<> documentation references"
 
 [[feature]]
 id = "lsp.folding_range"
@@ -1030,7 +1031,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp-rs/tests/lsp_document_link_resolve_tests.rs"]
-description = "Resolve document link target"
+description = "Resolve deferred module, file, URL, and POD section document link targets"
 
 [[feature]]
 id = "lsp.inlay_hint_resolve"

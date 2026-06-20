@@ -78,6 +78,11 @@ fn normalize_document_link_file_path(file_path: &str) -> Cow<'_, str> {
     Cow::Owned(normalized)
 }
 
+fn is_valid_pod_section_fragment(section: &str) -> bool {
+    !section.is_empty()
+        && section.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | ' '))
+}
+
 impl LspServer {
     /// Handle textDocument/documentLink request
     pub(crate) fn handle_document_links(
@@ -195,6 +200,40 @@ impl LspServer {
                             link["target"] = json!(url);
                         }
                     }
+                    Some("pod_section") => {
+                        let section =
+                            data_obj.get("section").and_then(|s| s.as_str()).ok_or_else(|| {
+                                JsonRpcError {
+                                    code: INVALID_PARAMS,
+                                    message: "Missing POD section in data".into(),
+                                    data: None,
+                                }
+                            })?;
+                        if !is_valid_pod_section_fragment(section) {
+                            return Err(JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Invalid POD section in data".into(),
+                                data: Some(json!({"section": section})),
+                            });
+                        }
+
+                        let base_uri = data_obj
+                            .get("baseUri")
+                            .and_then(|u| u.as_str())
+                            .ok_or_else(|| JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Missing base URI in data".into(),
+                                data: None,
+                            })?;
+                        let mut target_url =
+                            url::Url::parse(base_uri).map_err(|_| JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Invalid base URI in data".into(),
+                                data: Some(json!({"baseUri": base_uri})),
+                            })?;
+                        target_url.set_fragment(Some(section));
+                        link["target"] = json!(target_url.to_string());
+                    }
                     _ => {
                         // Unknown link type - return error
                         return Err(JsonRpcError {
@@ -252,7 +291,9 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_document_link_file_path, resolve_file_link_target};
+    use super::{
+        is_valid_pod_section_fragment, normalize_document_link_file_path, resolve_file_link_target,
+    };
 
     #[test]
     fn normalize_document_link_file_path_collapses_windows_separators() {
@@ -283,5 +324,14 @@ mod tests {
             "//server/share/lib/Thing.pm",
         );
         assert_eq!(resolved, Some("file://server/share/lib/Thing.pm".to_string()));
+    }
+
+    #[test]
+    fn pod_section_fragments_reject_path_like_targets() {
+        assert!(is_valid_pod_section_fragment("method_name"));
+        assert!(is_valid_pod_section_fragment("method name"));
+        assert!(!is_valid_pod_section_fragment(""));
+        assert!(!is_valid_pod_section_fragment("Other/section"));
+        assert!(!is_valid_pod_section_fragment("Other::section"));
     }
 }
