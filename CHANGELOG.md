@@ -100,6 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `perldoc://`, and perldoc.perl.org targets through the same resolver, and
   malformed module payloads are rejected instead of turned into bad URLs.
   (#1638)
+- **POD `L<>` references are clickable document links.** `textDocument/documentLink`
+  now exposes module/core-pragma and same-document POD section references from
+  real POD blocks, and `documentLink/resolve` validates same-document section
+  fragments before returning `#section` targets. (#1795)
 
 #### Formatting
 
@@ -190,6 +194,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   jobs inside the always-triggered CI workflow; mixed code/doc PRs still run
   the full matrix, and workflow-trigger lint stays enforced. (#1688, #1816,
   #1817)
+- **Coverage-baseline recovery works in Windows worktrees.** The coverage
+  baseline task now retries git `HEAD`/diff discovery with an
+  ancestor-discovered `GIT_DIR`/`GIT_WORK_TREE` fallback, so stale-receipt repair
+  packets still emit when bash/WSL git cannot resolve a worktree gitdir. (#1833)
 - **Draft PR ripr routing treats skipped routers as neutral.** Draft pull
   requests no longer fail the ripr aggregate solely because the router
   intentionally skipped execution. (#1689)

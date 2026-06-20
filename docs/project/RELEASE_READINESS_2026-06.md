@@ -2,9 +2,12 @@
 
 **Status**: release-staged, maintainer-held. Do not tag, publish, or dispatch a release without Steven's explicit approval.
 **Updated**: 2026-06-20
-**Main SHA**: `c4a31c346e6b55ef6c5c4609c3910d64a86824ab`
+**Release payload SHA**: `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d`
+**Readiness bundle merge SHA**: `6dd58b2ba7f084a2de7545c159c57397350e7370`
 **Workspace version (`Cargo.toml`)**: `0.16.0`
 **Last release tag**: `v0.16.0` at `b6d9f12b995ad8ad78ca641940bd73e4b1a3c26d` (2026-06-06)
+
+Note: the release payload SHA is the latest audited merged closeout commit that changed release-facing product, CI, or changelog scope. The readiness bundle merge SHA records the doc-only staging bundle that captured the earlier closeout claims before #1833/#1795 landed. Verify the current `origin/main` SHA again at dispatch time; later doc-only clarification commits do not expand the product claim.
 
 Note: `v0.16.0` is a real tag, but it is not on current `origin/main` ancestry (`git describe origin/main` resolves from `v0.15.0`). Do not use a naive "commits since v0.16.0" count as release evidence without resolving that tag-lineage question.
 
@@ -22,16 +25,20 @@ Note: `v0.16.0` is a real tag, but it is not on current `origin/main` ancestry (
 
 ## Gate State
 
-Latest merged release-staging PR checked: [#1419](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1419), merge commit `c4a31c346e6b55ef6c5c4609c3910d64a86824ab`, merged 2026-06-20T07:37:45Z. The docs/assets-only CI skip was repaired and proven by [#1817](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1817), merge commit `f5f63fbf8df4e7aacddde13abf7e815a2e8f4160`, merged 2026-06-20T07:06:11Z.
+Latest merged release-scope PR checked: [#1795](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1795), merge commit `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d`, merged 2026-06-20T08:20:19Z. It followed the doc-only readiness refresh [#1837](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1837), merge commit `6dd58b2ba7f084a2de7545c159c57397350e7370`, and the quality-baseline repair [#1833](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1833), merge commit `6e588ff2ad37789170733aec255e27c4b43a22ae`. The docs/assets-only CI skip was repaired and proven by [#1817](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1817), merge commit `f5f63fbf8df4e7aacddde13abf7e815a2e8f4160`, merged 2026-06-20T07:06:11Z.
 
 | Required / decision gate | Status | Notes |
 |--------------------------|-----------------|-------|
-| `Perl LSP Rust Small Result` | PASS | #1419 GitHub check completed 2026-06-20T07:15:21Z. |
-| `ripr+ New Gap Gate` | PASS | #1419 GitHub check completed 2026-06-20T07:30:09Z. |
-| `Codecov / Patch 95` | PASS | #1419 GitHub check completed 2026-06-20T07:12:35Z. |
-| `Workflow Trigger Lint` | PASS | #1419 GitHub check completed 2026-06-20T07:17:15Z after #1816/#1817 removed required-workflow path filters. |
-| `PR Smoke (Fast Feedback)` | SKIPPED | #1419 is docs/assets-only; the always-triggered CI workflow classified it via `draft-pr-check` and skipped heavy Rust jobs. |
-| `CI Gate (Merge-Blocking)` | SKIPPED | Same docs/assets-only guard as above. #1817's own CI repair PR passed `CI Gate (Merge-Blocking)` at 2026-06-20T06:50:13Z. |
+| `Perl LSP Rust Small Result` | PASS | #1795 GitHub check completed 2026-06-20T07:53:45Z. |
+| `ripr+ New Gap Gate` | PASS | #1795 GitHub check completed 2026-06-20T08:09:49Z. |
+| `Codecov / Patch 95` | PASS | #1795 GitHub check completed 2026-06-20T08:14:07Z. |
+| `Workflow Trigger Lint` | PASS | #1795 GitHub check completed 2026-06-20T07:56:07Z after #1816/#1817 removed required-workflow path filters. |
+| `PR Smoke (Fast Feedback)` | PASS | #1795 GitHub check completed 2026-06-20T08:17:33Z. |
+| `CI Gate (Merge-Blocking)` | PASS | #1795 GitHub check completed 2026-06-20T08:17:41Z. |
+| `UX Regression Gate` | PASS | #1795 GitHub check completed 2026-06-20T08:05:37Z. |
+| `LSP 3.18 Claim Guard` | PASS | #1795 GitHub check completed 2026-06-20T07:56:22Z. |
+
+Advisory/non-required state observed during this refresh: #1795 `droid-review` ended `cancelled` after writing its live-run receipt and updating its PR comment, and `UB Review Advisory on GitHub Hosted` was still building its packet when inspected after merge. Do not treat either advisory as product proof for this bundle. Required merge gates listed above were green.
 
 Coverage semantics after #1482/#1549/#1576/#1581/#1586: coverage verdicts are scoped to coverage shortfall/setup/routing failures. Routed test failures belong to test-named gates, not the Codecov/Patch-95 verdict.
 
@@ -51,10 +58,10 @@ This table records the late closeout scope that updates the older 2026-06 draft.
 | Single-root LSP readiness | #1551 | Baseline PR smoke blockers were repaired: hover preservation, workspace file-op/index waits, empty workspace-folder no-op handling, progress harness determinism. |
 | Multi-root project model | #1522 | `workspace/symbol` waits for active indexing, includes `workspaceFolderUri`, and returns deterministic multi-root results. |
 | Diagnostics accuracy | #1562 | `$self->{name}` / `$ref->{key}` no longer produce false `UnquotedBareword` diagnostics under `use strict`. |
-| References, docs links, and folding | #1597, #1638, #1560 | Partial-index reference fallback avoids documents-lock re-entry; perldoc/MetaCPAN targets share one validated resolver; heredoc/multiline folding boundaries are corrected. |
+| References, docs links, and folding | #1597, #1638, #1560, #1795 | Partial-index reference fallback avoids documents-lock re-entry; perldoc/MetaCPAN targets share one validated resolver; POD `L<>` document links are exposed and resolved; heredoc/multiline folding boundaries are corrected. |
 | DAP honesty | #1430, #1444, #1496, #1498 | Variable-reference spaces are typed; evaluate and stack parsing report the real invalid input instead of stale or misleading state. |
 | Deterministic completion value | #1532, #1573, #1579, #1585 | Try::Tiny, Mojolicious, DBI, and indexed package receiver completions are offered only with supporting evidence. |
-| Measurement substrate | #1482, #1520, #1528, #1530, #1539, #1549, #1576, #1581, #1586, #1688, #1689, #1816, #1817 | Coverage/test semantics, CPAN bounded ratchet mode, runner disk failover, workflow privilege analysis, routed-suite expectations, draft-ripr neutrality, and trigger-safe docs/assets-only CI skipping are current. |
+| Measurement substrate | #1482, #1520, #1528, #1530, #1539, #1549, #1576, #1581, #1586, #1688, #1689, #1816, #1817, #1833 | Coverage/test semantics, CPAN bounded ratchet mode, runner disk failover, workflow privilege analysis, routed-suite expectations, draft-ripr neutrality, trigger-safe docs/assets-only CI skipping, and Windows-worktree coverage-baseline recovery are current. |
 
 Correction from earlier draft: #1524 is closed, not merged. The arrow-deref diagnostic fix landed as #1562.
 
@@ -62,7 +69,7 @@ Correction from earlier draft: #1524 is closed, not merged. The arrow-deref diag
 
 ## Product Smoke Receipts
 
-All product-smoke commands below were run locally on Windows against `origin/main`/`c94d50e8` lineage during the 2026-06-20 closeout pass unless noted. Later main commits through `c4a31c346e6b55ef6c5c4609c3910d64a86824ab` were docs/CI release-staging changes, not product-code changes. Cargo target output was redirected outside the worktree under `D:\cargo-target\perl-lsp-release-smoke*`.
+All product-smoke commands below were run locally on Windows against `origin/main`/`c94d50e8` lineage during the 2026-06-20 closeout pass unless noted. Later main commits through release payload `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d` were docs/CI release-staging changes plus the targeted POD document-link expansion in #1795. Cargo target output was redirected outside the worktree under `D:\cargo-target\perl-lsp-release-smoke*`.
 
 ### Parser / Robustness
 
@@ -135,7 +142,7 @@ Release wording may say "bounded CPAN top-50 profile passed" with the counts abo
 
 ## Release Channel Checklist
 
-- [x] Main SHA recorded.
+- [x] Release payload SHA and readiness bundle merge SHA recorded.
 - [x] Required gate state recorded from latest merged PR.
 - [x] Coverage/test gate semantics recorded after #1482/#1549 and follow-ups.
 - [x] Parser, LSP, DAP, and easy-path smoke receipts recorded.
@@ -153,4 +160,4 @@ This document does not authorize or initiate a release. No tag, no `crates.io` p
 
 ---
 
-Generated from current repo/GitHub state through `c4a31c346e6b55ef6c5c4609c3910d64a86824ab` and local smoke receipts on 2026-06-20. Claims above are limited to the commands and receipts named in this file.
+Generated from current repo/GitHub state through release payload `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d` and local smoke receipts on 2026-06-20. Claims above are limited to the commands and receipts named in this file. Verify the current `origin/main` SHA again before dispatch.
