@@ -656,6 +656,9 @@ pub struct ScopesResponseBody {
 pub struct VariablesResponseBody {
     /// Variables in the specified scope or container
     pub variables: Vec<ProtocolVariable>,
+    /// Total number of variables available (before pagination)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_variables: Option<i64>,
 }
 
 /// Response body for continue request

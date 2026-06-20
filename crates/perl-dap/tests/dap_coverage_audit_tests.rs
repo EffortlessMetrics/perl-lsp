@@ -327,6 +327,7 @@ fn test_variables_response_body_round_trip() -> Result<(), Box<dyn std::error::E
                 indexed_variables: Some(3),
             },
         ],
+        total_variables: Some(2),
     };
 
     let json = serde_json::to_string(&body)?;
@@ -336,6 +337,7 @@ fn test_variables_response_body_round_trip() -> Result<(), Box<dyn std::error::E
     assert_eq!(deserialized.variables[0].name, "$x");
     assert_eq!(deserialized.variables[0].variables_reference, 0);
     assert_eq!(deserialized.variables[1].indexed_variables, Some(3));
+    assert_eq!(deserialized.total_variables, Some(2));
     Ok(())
 }
 

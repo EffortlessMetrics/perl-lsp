@@ -55,6 +55,13 @@ impl VariableCache {
         Some(page)
     }
 
+    /// Returns the total number of variables stored for the given reference, or `None` if the
+    /// reference is not in the cache. This is the pre-pagination count, suitable for populating
+    /// the DAP `totalVariables` field.
+    pub(super) fn root_count(&self, reference: i32) -> Option<usize> {
+        self.entries.get(&reference).map(|e| e.full.len())
+    }
+
     pub(super) fn all_variables(&self) -> impl Iterator<Item = &Variable> {
         self.entries
             .values()

@@ -56,6 +56,8 @@ impl DebugAdapter {
         let variables_ref_raw = args.variables_reference;
         if variables_ref_raw <= 0 || variables_ref_raw > i32::MAX as i64 {
             // Out-of-range: return protocol-safe empty response immediately.
+            // totalVariables is omitted (not 0) — DAP spec says omit optional fields
+            // when the value is not meaningful (invalid ref has no defined total).
             return DapMessage::Response {
                 seq,
                 request_seq,
@@ -79,6 +81,8 @@ impl DebugAdapter {
             let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
             if let Some(ref session) = *session_guard {
                 if session.state != DebugState::Stopped {
+                    // Not stopped: variable refs are stale. Omit totalVariables —
+                    // we have no meaningful count when not paused.
                     return DapMessage::Response {
                         seq,
                         request_seq,
@@ -96,11 +100,16 @@ impl DebugAdapter {
         let mut parsed_child_cache = HashMap::new();
         let mut parsed_full_roots = Vec::new();
         let mut used_session_cache = false;
+        // Total count from cache (populated on cache-hit path when full count is known).
+        let mut cached_total: Option<usize> = None;
 
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
             // Serve requested pages from cache for stable references and cheap repeated expansion.
             if let Some(vars) = session.variable_cache.get_page(variables_ref, start, count) {
                 used_session_cache = true;
+                // Capture the full count from the cache entry so totalVariables is correct
+                // even on subsequent (paged) requests where parsed_full_roots is not repopulated.
+                cached_total = session.variable_cache.root_count(variables_ref);
                 parsed_from_output = vars;
             } else {
                 let mut framed_scope_lines = None;
@@ -128,6 +137,7 @@ impl DebugAdapter {
                     VariableReference::decode(variables_ref),
                     Some(VariableReference::EvalResult { .. })
                 ) {
+                    // Stale eval ref after resume — omit totalVariables; no meaningful count.
                     return DapMessage::Response {
                         seq,
                         request_seq,
@@ -276,6 +286,21 @@ impl DebugAdapter {
             parsed_from_output = slice_variables(&full_roots, start, count);
         }
 
+        // Capture total count before pagination (pre-slice length) for the DAP totalVariables
+        // field. Priority: fresh parse (parsed_full_roots) > cache hit (cached_total) > unknown.
+        // totalVariables is only emitted when we have a reliable full count; it is omitted
+        // (not null) otherwise, per the DAP spec's optional-field semantics.
+        let total_variables: Option<i64> = if !parsed_full_roots.is_empty() {
+            // Fresh parse: total is the full root list length before pagination.
+            Some(parsed_full_roots.len() as i64)
+        } else if let Some(n) = cached_total {
+            // Cache hit: the cache stores the original full list, so root_count() is reliable.
+            Some(n as i64)
+        } else {
+            // Fallback path or unknown — omit the field.
+            None
+        };
+
         let variables = if parsed_from_output.is_empty() {
             Self::fallback_scope_variables(variables_ref, start, count)
         } else {
@@ -298,14 +323,21 @@ impl DebugAdapter {
             let _ = session.variable_cache.get_page(variables_ref, start, count);
         }
 
+        // Build response body. totalVariables is optional per DAP spec — omit the field
+        // entirely when the value is not known, rather than emitting `null`.  The json!()
+        // macro serializes Option::None as JSON null (not field-absent), so we build the
+        // body with the field only when we have a reliable count.
+        let mut body = json!({ "variables": variables });
+        if let Some(total) = total_variables {
+            body["totalVariables"] = json!(total);
+        }
+
         DapMessage::Response {
             seq,
             request_seq,
             success: true,
             command: "variables".to_string(),
-            body: Some(json!({
-                "variables": variables
-            })),
+            body: Some(body),
             message: None,
         }
     }
