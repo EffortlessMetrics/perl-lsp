@@ -2,12 +2,13 @@
 
 **Status**: release-staged, maintainer-held. Do not tag, publish, or dispatch a release without Steven's explicit approval.
 **Updated**: 2026-06-20
-**Release payload SHA**: `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d`
-**Readiness bundle merge SHA**: `6dd58b2ba7f084a2de7545c159c57397350e7370`
+**Release payload SHA**: `b0c9edb5918bd3ec4443c99f6f75fa51077d1485`
+**Current `origin/main` SHA at refresh**: `b0c9edb5918bd3ec4443c99f6f75fa51077d1485`
+**Previous readiness bundle merge SHA**: `6dd58b2ba7f084a2de7545c159c57397350e7370`
 **Workspace version (`Cargo.toml`)**: `0.16.0`
 **Last release tag**: `v0.16.0` at `b6d9f12b995ad8ad78ca641940bd73e4b1a3c26d` (2026-06-06)
 
-Note: the release payload SHA is the latest audited merged closeout commit that changed release-facing product, CI, or changelog scope. The readiness bundle merge SHA records the doc-only staging bundle that captured the earlier closeout claims before #1833/#1795 landed. Verify the current `origin/main` SHA again at dispatch time; later doc-only clarification commits do not expand the product claim.
+Note: the release payload SHA is the latest audited merged closeout commit that changed release-facing product, CI, or changelog scope. It includes #1867, which restored storage-safe VSIX packaging verification and the package-level published-VSIX smoke receipt. The previous readiness bundle merge SHA records the doc-only staging bundle that captured the earlier closeout claims before #1833/#1795/#1867 landed. Verify the current `origin/main` SHA again at dispatch time; later doc-only clarification commits do not expand the product claim.
 
 Note: `v0.16.0` is a real tag, but it is not on current `origin/main` ancestry (`git describe origin/main` resolves from `v0.15.0`). Do not use a naive "commits since v0.16.0" count as release evidence without resolving that tag-lineage question.
 
@@ -25,20 +26,24 @@ Note: `v0.16.0` is a real tag, but it is not on current `origin/main` ancestry (
 
 ## Gate State
 
-Latest merged release-scope PR checked: [#1795](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1795), merge commit `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d`, merged 2026-06-20T08:20:19Z. It followed the doc-only readiness refresh [#1837](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1837), merge commit `6dd58b2ba7f084a2de7545c159c57397350e7370`, and the quality-baseline repair [#1833](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1833), merge commit `6e588ff2ad37789170733aec255e27c4b43a22ae`. The docs/assets-only CI skip was repaired and proven by [#1817](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1817), merge commit `f5f63fbf8df4e7aacddde13abf7e815a2e8f4160`, merged 2026-06-20T07:06:11Z.
+Latest merged release-scope PR checked: [#1867](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1867), merge commit `b0c9edb5918bd3ec4443c99f6f75fa51077d1485`, merged 2026-06-20T10:42:24Z. It follows the POD document-link expansion [#1795](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1795), merge commit `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d`, the doc-only readiness refresh [#1837](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1837), merge commit `6dd58b2ba7f084a2de7545c159c57397350e7370`, and the quality-baseline repair [#1833](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1833), merge commit `6e588ff2ad37789170733aec255e27c4b43a22ae`. The docs/assets-only CI skip was repaired and proven by [#1817](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1817), merge commit `f5f63fbf8df4e7aacddde13abf7e815a2e8f4160`, merged 2026-06-20T07:06:11Z.
 
 | Required / decision gate | Status | Notes |
 |--------------------------|-----------------|-------|
-| `Perl LSP Rust Small Result` | PASS | #1795 GitHub check completed 2026-06-20T07:53:45Z. |
-| `ripr+ New Gap Gate` | PASS | #1795 GitHub check completed 2026-06-20T08:09:49Z. |
-| `Codecov / Patch 95` | PASS | #1795 GitHub check completed 2026-06-20T08:14:07Z. |
-| `Workflow Trigger Lint` | PASS | #1795 GitHub check completed 2026-06-20T07:56:07Z after #1816/#1817 removed required-workflow path filters. |
-| `PR Smoke (Fast Feedback)` | PASS | #1795 GitHub check completed 2026-06-20T08:17:33Z. |
-| `CI Gate (Merge-Blocking)` | PASS | #1795 GitHub check completed 2026-06-20T08:17:41Z. |
-| `UX Regression Gate` | PASS | #1795 GitHub check completed 2026-06-20T08:05:37Z. |
-| `LSP 3.18 Claim Guard` | PASS | #1795 GitHub check completed 2026-06-20T07:56:22Z. |
+| `Perl LSP Rust Small Result` | PASS | #1867 GitHub check completed 2026-06-20T10:18:29Z. |
+| `ripr+ New Gap Gate` | PASS | #1867 GitHub check completed 2026-06-20T10:33:17Z. Primary `ripr+ on CX43` failed over; `ripr+ (Disk-Full Fallback)` passed. |
+| `Codecov / Patch 95` | PASS | #1867 GitHub check completed 2026-06-20T10:16:07Z. |
+| `Workflow Trigger Lint` | PASS | #1867 GitHub check completed 2026-06-20T10:20:34Z after #1816/#1817 removed required-workflow path filters. |
+| `Validate CI policy ledgers` | PASS | #1867 GitHub check completed 2026-06-20T10:15:56Z. |
+| `PR Smoke (Fast Feedback)` | PASS | #1867 GitHub check completed 2026-06-20T10:34:10Z. |
+| `CI Gate (Merge-Blocking)` | PASS | #1867 GitHub check completed 2026-06-20T10:34:19Z. |
+| `UX Regression Gate` | PASS | #1867 GitHub check completed 2026-06-20T10:30:06Z. |
+| `Extension Jest` | PASS | #1867 GitHub check completed 2026-06-20T10:16:26Z. |
+| `VS Code smoke matrix` | PASS | #1867 GitHub checks completed 2026-06-20T10:16:33Z to 2026-06-20T10:17:22Z on macOS, Ubuntu, and Windows. |
+| `LSP Memory Smoke` | PASS | #1867 GitHub check completed 2026-06-20T10:21:14Z. |
+| `UB Review Advisory on GitHub Hosted` | PASS | #1867 GitHub check completed 2026-06-20T10:38:31Z. Advisory proof, not product-smoke proof. |
 
-Advisory/non-required state observed during this refresh: #1795 `droid-review` ended `cancelled` after writing its live-run receipt and updating its PR comment, and `UB Review Advisory on GitHub Hosted` was still building its packet when inspected after merge. Do not treat either advisory as product proof for this bundle. Required merge gates listed above were green.
+Advisory/non-required state observed during this refresh: #1867 primary `ripr+ on CX43` failed quickly, then the disk-full fallback completed successfully and the aggregate `ripr+ New Gap Gate` passed. Required merge gates listed above were green.
 
 Coverage semantics after #1482/#1549/#1576/#1581/#1586: coverage verdicts are scoped to coverage shortfall/setup/routing failures. Routed test failures belong to test-named gates, not the Codecov/Patch-95 verdict.
 
@@ -69,7 +74,7 @@ Correction from earlier draft: #1524 is closed, not merged. The arrow-deref diag
 
 ## Product Smoke Receipts
 
-All product-smoke commands below were run locally on Windows against `origin/main`/`c94d50e8` lineage during the 2026-06-20 closeout pass unless noted. Later main commits through release payload `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d` were docs/CI release-staging changes plus the targeted POD document-link expansion in #1795. Cargo target output was redirected outside the worktree under `D:\cargo-target\perl-lsp-release-smoke*`.
+All product-smoke commands below were run locally on Windows against `origin/main`/`c94d50e8` lineage during the 2026-06-20 closeout pass unless noted. Later main commits through release payload `b0c9edb5918bd3ec4443c99f6f75fa51077d1485` were docs/CI release-staging changes, the targeted POD document-link expansion in #1795, and the storage-safe VSIX packaging/reinstall-smoke closeout in #1867. Cargo target output was redirected outside the worktree under `D:\cargo-target\perl-lsp-release-smoke*` or the specific external target dir named in the command.
 
 ### Parser / Robustness
 
@@ -112,8 +117,8 @@ All product-smoke commands below were run locally on Windows against `origin/mai
 | CLI health/check smoke | `cargo test -p perl-lsp-rs --test cli_smoke --profile agent --locked -- --nocapture` | PASS, 17 passed |
 | VS Code extension unit smoke | `npm ci`; `npm test -- --runInBand` in `vscode-extension` | PASS, 22 suites / 597 tests |
 | VS Code extension-host managed binary smoke | `PERL_LSP_SMOKE_RECEIPTS_DIR=D:\tmp\perl-lsp-vscode-smoke-receipts-20260620 npm run test:integration` | PASS, 1 extension-host test; current extension development build opened in VS Code 1.125.1, managed reinstall ran twice, checksum verified, health check found Perl 5.042000 and LSP binary |
-
-Caveat: no release-candidate VSIX install smoke was run. The local VSIX path currently invokes `vscode-extension/scripts/bundle-lsp.js`, which builds into repo-local `target/release`; that violates the storage discipline for this closeout pass. The integration smoke proves the extension development-host and managed-binary path, not final packaged VSIX contents.
+| Storage-safe VSIX packaging | `CARGO_TARGET_DIR=D:\cargo-target\perl-lsp-vsix-bundle-target-dir npm run verify:marketplace` in `vscode-extension` on #1867 | PASS, packaged `perl-lsp-rs-0.16.0.vsix` while locating the release binary from the external Cargo target dir |
+| Release-candidate VSIX install smoke | `PERL_LSP_PUBLISHED_EXTENSION_SOURCE=vsix PERL_LSP_PUBLISHED_VSIX_PATH=H:\Code\Rust\perl-lsp-vsix-bundle-target-dir\vscode-extension\perl-lsp-rs-0.16.0.vsix PERL_LSP_PUBLISHED_EXTENSION_VERSION=0.16.0 PERL_LSP_REQUIRE_STRUCTURED_COMMANDS=1 PERL_LSP_SMOKE_RECEIPTS_DIR=D:\tmp\perl-lsp-vsix-smoke-receipts-20260620-fixed npm run test:published` in `vscode-extension` on #1867 | PASS, 1 published-extension smoke in VS Code 1.125.1; receipts under `D:\tmp\perl-lsp-vsix-smoke-receipts-20260620-fixed\vsix\windows` show extension `0.16.0`, managed binary `0.16.0`, target `x86_64-pc-windows-msvc`, two structured reinstalls, checksum verified, lock-held second reinstall exercised, Perl 5.042000, and LSP binary health OK |
 
 ---
 
@@ -135,7 +140,6 @@ Release wording may say "bounded CPAN top-50 profile passed" with the counts abo
 | [#991](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/991) DAP trust lane | OPEN | Deferred; not required for this staged release because the focused DAP honesty matrix above is green. |
 | [#676](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/676) fuzz/config expansion | OPEN | Deferred; not part of this release gate. |
 | Full CPAN ratchet | Dark/caveated | Requires restored full-run receipt or explicit release caveat. |
-| Release-candidate VSIX install smoke | Not run | Extension-host integration smoke passed; package-level install proof remains caveated unless a storage-safe VSIX path is run. |
 | Broad feature waves / dependabot | Open queue | Deferred by release-closeout scope. |
 
 ---
@@ -147,7 +151,8 @@ Release wording may say "bounded CPAN top-50 profile passed" with the counts abo
 - [x] Coverage/test gate semantics recorded after #1482/#1549 and follow-ups.
 - [x] Parser, LSP, DAP, and easy-path smoke receipts recorded.
 - [x] Bounded CPAN receipt recorded.
-- [x] Full CPAN and VSIX caveats recorded.
+- [x] Full CPAN caveat recorded.
+- [x] Release-candidate VSIX package/install smoke receipt recorded.
 - [x] Changelog PR #1419 refreshed from merged scope only and merged.
 - [x] Deferred scope listed.
 - [x] Explicit maintainer dispatch hold preserved.
@@ -160,4 +165,4 @@ This document does not authorize or initiate a release. No tag, no `crates.io` p
 
 ---
 
-Generated from current repo/GitHub state through release payload `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d` and local smoke receipts on 2026-06-20. Claims above are limited to the commands and receipts named in this file. Verify the current `origin/main` SHA again before dispatch.
+Generated from current repo/GitHub state through release payload `b0c9edb5918bd3ec4443c99f6f75fa51077d1485` and local smoke receipts on 2026-06-20. Claims above are limited to the commands and receipts named in this file. Verify the current `origin/main` SHA again before dispatch.
