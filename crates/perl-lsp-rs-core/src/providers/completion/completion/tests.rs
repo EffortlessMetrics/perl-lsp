@@ -5216,6 +5216,121 @@ fn test_special_var_count_at_least_40() {
     assert!(total >= 40, "expected at least 40 special variables across all sigils, got {total}");
 }
 
+// -------------------------------------------------------------------------
+// Package-qualified method completion (issue #1606)
+//
+// When completing `Foo::method`, the completion system should provide
+// inherited methods from @ISA chains, not just direct package members.
+// This ensures parity with arrow-form method completion `Foo->method`.
+// -------------------------------------------------------------------------
+
+#[test]
+fn package_qualified_method_completion_includes_inherited() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Parent.pm")?,
+        r#"package Parent;
+sub inherited_method { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Child.pm")?,
+        r#"package Child;
+our @ISA = ('Parent');
+sub own_method { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "Child::";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    // Both own and inherited methods should appear
+    let own = completions.iter().find(|c| c.label == "own_method");
+    let inherited = completions.iter().find(|c| c.label == "inherited_method");
+
+    assert!(
+        own.is_some(),
+        "Package-qualified method completion for Child:: should include own_method"
+    );
+    assert!(
+        inherited.is_some(),
+        "Package-qualified method completion for Child:: should include inherited_method from Parent"
+    );
+
+    // Own methods should rank higher (tier 2 vs tier 3)
+    let own_sort = own.and_then(|c| c.sort_text.as_deref()).unwrap_or("");
+    let inherited_sort = inherited.and_then(|c| c.sort_text.as_deref()).unwrap_or("");
+    assert!(own_sort.starts_with("2_"), "own method should use tier 2, got {own_sort:?}");
+    assert!(
+        inherited_sort.starts_with("3_"),
+        "inherited method should use tier 3, got {inherited_sort:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn package_qualified_completion_includes_own_constants_and_variables()
+-> Result<(), Box<dyn std::error::Error>>
+{
+    // Regression test: constants and package variables must still appear when
+    // completing `Foo::` after the @ISA-chain BFS was introduced.  The BFS
+    // (`collect_all_package_members`) filters to Subroutine|Method only;
+    // without the supplemental `get_package_members` call these would silently
+    // vanish.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Config.pm")?,
+        r#"package Config;
+use constant PI => 3.14159;
+use constant MAX_RETRIES => 3;
+our $VERSION = '1.0';
+sub helper { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "Config::";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+    assert!(
+        completions.iter().any(|c| c.label == "PI"),
+        "Package-qualified completion must include own constants; got: {labels:?}"
+    );
+    assert!(
+        completions.iter().any(|c| c.label == "MAX_RETRIES"),
+        "Package-qualified completion must include own constants; got: {labels:?}"
+    );
+    assert!(
+        completions.iter().any(|c| c.label == "helper"),
+        "Package-qualified completion must include own subroutines; got: {labels:?}"
+    );
+
+    // Constants should have Constant kind
+    let pi = completions.iter().find(|c| c.label == "PI").unwrap();
+    assert_eq!(
+        pi.kind,
+        crate::providers::completion_item::CompletionItemKind::Constant,
+        "PI should be offered as a Constant completion item"
+    );
+
+    Ok(())
+}
+
 #[test]
 fn extract_fat_comma_keys_covers_quoted_and_bareword_forms() {
     // Exercises all three branches of the key-token classification in

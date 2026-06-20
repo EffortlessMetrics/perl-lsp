@@ -2066,7 +2066,10 @@ mod visible_symbol_completion_tests {
 /// approximates but does not exactly match C3 for complex diamond hierarchies.
 /// This is a pre-existing approximation shared with `navigation.rs`. A follow-up
 /// issue should address strict C3 ordering if it becomes important (see issue #3482).
-fn collect_all_package_members(index: &WorkspaceIndex, package_name: &str) -> Vec<WorkspaceSymbol> {
+pub(super) fn collect_all_package_members(
+    index: &WorkspaceIndex,
+    package_name: &str,
+) -> Vec<WorkspaceSymbol> {
     let mut seen_names: HashSet<String> = HashSet::new();
     let mut result: Vec<WorkspaceSymbol> = Vec::new();
 
