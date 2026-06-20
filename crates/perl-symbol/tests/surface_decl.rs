@@ -45,6 +45,7 @@ fn test_subroutine_produces_symbol_decl() {
         NodeKind::Subroutine {
             name: Some("greet".to_string()),
             name_span: Some(loc(4, 9)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -74,6 +75,7 @@ fn test_anonymous_subroutine_is_skipped() {
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -532,6 +534,7 @@ fn test_labeled_statement_produces_label_decl_and_walks_inner_statement() -> Res
         NodeKind::Subroutine {
             name: Some("inner".to_string()),
             name_span: Some(loc(10, 15)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -616,6 +619,7 @@ fn test_subroutine_inside_package_has_container() -> Result<(), String> {
         NodeKind::Subroutine {
             name: Some("bar".to_string()),
             name_span: Some(loc(14, 17)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -657,6 +661,7 @@ fn test_subroutine_inside_package_block() -> Result<(), String> {
         NodeKind::Subroutine {
             name: Some("baz".to_string()),
             name_span: Some(loc(16, 19)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -874,6 +879,7 @@ fn test_non_variable_decls_have_no_declarator() {
         NodeKind::Subroutine {
             name: Some("greet".to_string()),
             name_span: Some(loc(4, 9)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],

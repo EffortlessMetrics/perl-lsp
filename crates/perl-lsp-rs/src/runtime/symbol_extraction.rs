@@ -885,6 +885,7 @@ mod tests {
             NodeKind::Subroutine {
                 name: Some("test_sub".to_string()),
                 name_span: None,
+                declarator: None,
                 prototype: None,
                 signature: None,
                 attributes: vec![],

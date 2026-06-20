@@ -490,6 +490,7 @@ mod tests {
                     NodeKind::Subroutine {
                         name: Some("test_func".to_string()),
                         name_span: None,
+                        declarator: None,
                         prototype: None,
                         signature: None,
                         attributes: vec![],
@@ -519,6 +520,7 @@ mod tests {
             NodeKind::Subroutine {
                 name: Some("complex".to_string()),
                 name_span: None,
+                declarator: None,
                 prototype: None,
                 signature: Some(Box::new(Node::new(
                     NodeKind::Signature {

@@ -162,6 +162,7 @@ fn for_each_child_subroutine_with_all_parts() -> Result<(), Box<dyn std::error::
         NodeKind::Subroutine {
             name: Some("test_fn".to_string()),
             name_span: Some(loc(4, 11)),
+            declarator: None,
             prototype: Some(Box::new(proto)),
             signature: Some(Box::new(sig)),
             attributes: vec!["lvalue".to_string()],
@@ -182,6 +183,7 @@ fn for_each_child_subroutine_body_only() -> Result<(), Box<dyn std::error::Error
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -1440,7 +1442,7 @@ fn all_kind_names_contains_every_variant() -> Result<(), Box<dyn std::error::Err
         NodeKind::ALL_KIND_NAMES.iter().copied().collect();
 
     for variant in &all_variants {
-        let name = variant.kind_name();
+        let name = variant.kind.kind_name();
         assert!(all_names.contains(name), "kind_name {:?} not found in ALL_KIND_NAMES", name);
     }
 
@@ -1584,6 +1586,7 @@ fn sexp_named_subroutine_with_prototype() -> Result<(), Box<dyn std::error::Erro
         NodeKind::Subroutine {
             name: Some("test_fn".to_string()),
             name_span: Some(loc(4, 11)),
+            declarator: None,
             prototype: Some(Box::new(proto)),
             signature: None,
             attributes: vec![],
@@ -1616,6 +1619,7 @@ fn sexp_anonymous_subroutine_with_signature() -> Result<(), Box<dyn std::error::
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(sig)),
             attributes: vec![],

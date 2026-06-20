@@ -846,6 +846,7 @@ fn subroutine_body_inherits_pragma_state() -> Result<(), Box<dyn std::error::Err
         kind: NodeKind::Subroutine {
             name: Some("foo".to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],

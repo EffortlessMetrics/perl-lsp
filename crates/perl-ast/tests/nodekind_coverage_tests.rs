@@ -274,6 +274,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
                 NodeKind::Subroutine {
                     name: Some("helper".to_string()),
                     name_span: Some(loc()),
+                    declarator: None,
                     prototype: Some(Box::new(Node::new(
                         NodeKind::Prototype { content: "$".to_string() },
                         loc(),

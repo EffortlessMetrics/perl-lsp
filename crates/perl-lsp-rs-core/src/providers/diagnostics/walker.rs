@@ -281,6 +281,7 @@ mod tests {
                 NodeKind::Subroutine {
                     name: Some("foo".to_string()),
                     name_span: Some(loc(57)),
+                    declarator: None,
                     prototype: Some(Box::new(Node::new(
                         NodeKind::Prototype { content: "$".to_string() },
                         loc(58),

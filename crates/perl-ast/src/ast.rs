@@ -500,7 +500,15 @@ impl Node {
                 )
             }
 
-            NodeKind::Subroutine { name, prototype, signature, attributes, body, name_span: _ } => {
+            NodeKind::Subroutine {
+                name,
+                prototype,
+                signature,
+                attributes,
+                body,
+                name_span: _,
+                declarator: _,
+            } => {
                 if let Some(sub_name) = name {
                     // Named subroutine - bless test expected format: (sub name () block)
                     let mut parts = vec![sub_name.clone()];
@@ -1930,6 +1938,20 @@ pub enum NodeKind {
         /// - Essential for precise editor interactions
         name_span: Option<SourceLocation>,
 
+        /// Optional scope declarator: "my", "our", or "state" for lexical/package-scoped subs
+        ///
+        /// # Lexical Subroutines
+        /// - Perl 5.18+ feature: `my sub helper { ... }`, `our sub global { ... }`, `state sub memo { ... }`
+        /// - Distinguishes lexical scope binding from package-scoped subroutines
+        /// - Essential for scope tracking, renaming, and dead code detection
+        ///
+        /// # Values
+        /// - `None` — package-scoped subroutine (no declarator)
+        /// - `Some("my")` — lexical subroutine with lexical binding
+        /// - `Some("our")` — package-scoped subroutine with explicit package declaration
+        /// - `Some("state")` — persistent lexical subroutine (persistent across invocations)
+        declarator: Option<String>,
+
         /// Optional prototype node (e.g. `($;@)`).
         prototype: Option<Box<Node>>,
         /// Optional signature node (Perl 5.20+ feature).
@@ -2651,6 +2673,7 @@ mod tests {
             NodeKind::Subroutine {
                 name: None,
                 name_span: None,
+                declarator: None,
                 prototype: None,
                 signature: None,
                 attributes: vec![],

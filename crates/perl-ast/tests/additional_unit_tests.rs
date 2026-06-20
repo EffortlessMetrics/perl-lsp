@@ -597,6 +597,7 @@ fn count_nodes_subroutine_with_signature() {
         NodeKind::Subroutine {
             name: Some("add".to_string()),
             name_span: Some(loc(4, 7)),
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(sig)),
             attributes: vec![],
@@ -965,6 +966,7 @@ fn sexp_anonymous_subroutine() {
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -982,6 +984,7 @@ fn sexp_anonymous_subroutine_with_attributes() {
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec!["lvalue".to_string()],
@@ -1000,6 +1003,7 @@ fn sexp_named_subroutine_with_attributes() {
         NodeKind::Subroutine {
             name: Some("greet".to_string()),
             name_span: Some(loc(4, 9)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec!["lvalue".to_string()],
@@ -1048,6 +1052,7 @@ fn sexp_inner_keeps_anon_subroutine_wrapped() {
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],

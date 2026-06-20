@@ -555,6 +555,7 @@ impl SymbolExtractor {
                 attributes,
                 body,
                 name_span: _,
+                declarator: _,
             } => {
                 let sub_name =
                     name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "<anon>".to_string());

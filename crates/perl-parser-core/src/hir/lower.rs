@@ -156,7 +156,15 @@ impl Lowerer {
                     self.package_context = Some(name.clone());
                 }
             }
-            NodeKind::Subroutine { name, name_span, prototype, signature, attributes, body } => {
+            NodeKind::Subroutine {
+                name,
+                name_span,
+                prototype,
+                signature,
+                attributes,
+                body,
+                ..
+            } => {
                 let sub_scope = self.enter_scope(
                     ScopeKind::Subroutine,
                     node.location,

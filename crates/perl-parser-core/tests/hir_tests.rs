@@ -2022,6 +2022,7 @@ fn hir_marks_items_lowered_from_error_partials_as_recovered()
         NodeKind::Subroutine {
             name: Some("broken".to_string()),
             name_span: Some(SourceLocation { start: 4, end: 10 }),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: Vec::new(),

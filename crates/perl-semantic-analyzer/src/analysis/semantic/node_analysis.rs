@@ -119,7 +119,15 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Subroutine { name, prototype, signature, attributes, body, name_span: _ } => {
+            NodeKind::Subroutine {
+                name,
+                prototype,
+                signature,
+                attributes,
+                body,
+                name_span: _,
+                declarator: _,
+            } => {
                 if let Some(sub_name) = name {
                     // Named subroutine
                     let token = SemanticToken {

@@ -315,6 +315,7 @@ impl<'a> Parser<'a> {
             NodeKind::Subroutine {
                 name,
                 name_span,
+                declarator: None,
                 prototype,
                 signature,
                 attributes,
@@ -1124,6 +1125,7 @@ impl<'a> Parser<'a> {
             NodeKind::Subroutine {
                 name: Some(name),
                 name_span,
+                declarator: None,
                 prototype: None,
                 signature: None,
                 attributes: vec![],

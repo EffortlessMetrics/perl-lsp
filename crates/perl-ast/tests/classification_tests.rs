@@ -33,7 +33,7 @@ fn block_node() -> Node {
 // The canonical fixture lives in tests/helpers.rs. When a new NodeKind
 // variant is added, update helpers.rs (one place for all integration tests).
 fn all_variants() -> Vec<NodeKind> {
-    helpers::all_nodekind_instances()
+    helpers::all_nodekind_instances().into_iter().map(|n| n.kind).collect()
 }
 
 // ────────────────────────────────────────────────────────
@@ -276,6 +276,7 @@ fn category_spot_checks() {
         NodeKind::Subroutine {
             name: Some("foo".to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -390,6 +391,7 @@ fn flags_spot_checks() {
         let kind = NodeKind::Subroutine {
             name: Some("foo".to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],

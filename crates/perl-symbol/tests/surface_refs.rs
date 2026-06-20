@@ -310,6 +310,7 @@ fn sub_definition_and_sub_call_are_not_typed_as_distinct_edges() -> Result<()> {
         NodeKind::Subroutine {
             name: Some("foo".to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -485,6 +486,7 @@ fn signature_parameters_are_not_emitted_as_refs() -> Result<()> {
         NodeKind::Subroutine {
             name: Some("foo".to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(sig)),
             attributes: vec![],

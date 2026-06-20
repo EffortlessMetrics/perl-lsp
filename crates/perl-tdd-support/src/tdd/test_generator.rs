@@ -249,7 +249,7 @@ impl TestGenerator {
             code.push_str("    ok($result == 0 || $result == 1, 'Returns boolean');\n");
         }
 
-        code.push_str("};\n");
+        code.push_str("}};\n");
         code
     }
 
@@ -268,7 +268,7 @@ impl TestGenerator {
             code.push_str("    ok($result, 'Function returns value');\n");
         }
 
-        code.push_str("};\n");
+        code.push_str("}};\n");
         code
     }
 
@@ -463,7 +463,7 @@ impl TestGenerator {
                 } else {
                     snippet.push_str("    ok($result->real >= 0, 'Execution time recorded');\n");
                 }
-                snippet.push_str("};\n");
+                snippet.push_str("}};\n");
                 snippet
             }
             _ => String::new(),
@@ -1108,6 +1108,7 @@ mod tests {
             NodeKind::Subroutine {
                 name: Some("add".to_string()),
                 name_span: None,
+                declarator: None,
                 signature: Some(Box::new(Node::new(
                     NodeKind::Signature {
                         parameters: vec![
@@ -1193,6 +1194,7 @@ mod tests {
             NodeKind::Subroutine {
                 name: Some("complex_function".to_string()),
                 name_span: None,
+                declarator: None,
                 signature: Some(Box::new(Node::new(
                     NodeKind::Signature {
                         parameters: (0..7)
