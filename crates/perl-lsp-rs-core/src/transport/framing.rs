@@ -155,7 +155,13 @@ impl ContentLengthFramer {
             return Err(FramingError::FrameTooLarge { len: length });
         }
 
-        let body_start = header_end + header_len;
+        let body_start = match header_end.checked_add(header_len) {
+            Some(start) => start,
+            None => {
+                self.consume_header_block(header_end, header_len);
+                return Err(FramingError::InvalidContentLength);
+            }
+        };
         let Some(body_end) = body_start.checked_add(length) else {
             self.consume_header_block(header_end, header_len);
             return Err(FramingError::InvalidContentLength);
@@ -1725,6 +1731,89 @@ mod tests {
         assert!(
             matches!(framer.try_next(), Err(FramingError::FrameTooLarge { .. })),
             "expected FrameTooLarge for Content-Length > MAX_FRAME_SIZE"
+        );
+    }
+
+    // T7 — body_start arithmetic correctness: the slice extracted by
+    // try_next must equal the exact bytes pushed as the body.
+    //
+    // This test exercises the checked body_start path by verifying that
+    // `header_end.checked_add(header_len)` produces the right offset — i.e.
+    // `try_next` returns the exact bytes that were written as the body, not
+    // bytes from the header region.  A wrong offset (e.g. off by 1 from an
+    // unchecked or mis-sized addition) would produce a different byte slice.
+    //
+    // The test also chains two frames to confirm the drain leaves the framer
+    // in a clean state so frame 2 parses independently of frame 1.
+    #[test]
+    fn framer_body_start_offset_is_correct_and_state_resets() {
+        let body1 = b"hello";
+        let body2 = b"world!";
+        let mut wire = format!("Content-Length: {}\r\n\r\n", body1.len()).into_bytes();
+        wire.extend_from_slice(body1);
+        wire.extend_from_slice(format!("Content-Length: {}\r\n\r\n", body2.len()).as_bytes());
+        wire.extend_from_slice(body2);
+
+        let mut framer = ContentLengthFramer::new();
+        framer.push(&wire);
+
+        let got1 = framer.try_next();
+        assert!(
+            matches!(&got1, Ok(Some(b)) if b == body1),
+            "frame 1 body bytes must equal the pushed payload; got {got1:?}"
+        );
+
+        let got2 = framer.try_next();
+        assert!(
+            matches!(&got2, Ok(Some(b)) if b == body2),
+            "frame 2 body bytes must equal the pushed payload after frame 1 was consumed; got {got2:?}"
+        );
+
+        // Framer is fully drained — next call waits for more data.
+        assert!(
+            matches!(framer.try_next(), Ok(None)),
+            "expected Ok(None) once both frames are consumed"
+        );
+    }
+
+    // T8 — InvalidContentLength recovery: a header whose Content-Length value
+    // cannot be parsed returns InvalidContentLength and leaves the framer ready
+    // for a subsequent well-formed frame (no residual poison in the buffer).
+    //
+    // This exercises the `consume_header_block → resync → ready` path that is
+    // shared by both the parse error route and the overflow guards added in #1757.
+    // The defensive contract for every error path through try_next is:
+    //   * parse error          → InvalidContentLength, framer clear
+    //   * body_start overflow  → InvalidContentLength, framer clear (new, #1757)
+    //   * body_end overflow    → InvalidContentLength, framer clear (pre-existing)
+    //   * length > MAX_FRAME_SIZE → FrameTooLarge, framer clear (pre-existing)
+    // None of these panic; all leave the framer usable.
+    #[test]
+    fn framer_invalid_content_length_returns_error_and_framer_recovers() {
+        let mut framer = ContentLengthFramer::new();
+        // Push a header with an unparseable Content-Length value so that
+        // parse_content_length returns Invalid (not Found), causing the framer
+        // to emit InvalidContentLength without touching the body_start guard.
+        // This directly exercises the consume_header_block → clear → ready path.
+        let header = b"Content-Length: not-a-number\r\n\r\n";
+        framer.push(header);
+
+        let err = framer.try_next();
+        assert!(
+            matches!(err, Err(FramingError::InvalidContentLength)),
+            "non-numeric Content-Length must produce InvalidContentLength; got {err:?}"
+        );
+
+        // Framer must be usable after the error — push a well-formed follow-up frame.
+        let follow_up = b"ok-body";
+        let mut next_frame = format!("Content-Length: {}\r\n\r\n", follow_up.len()).into_bytes();
+        next_frame.extend_from_slice(follow_up);
+        framer.push(&next_frame);
+
+        let recovered = framer.try_next();
+        assert!(
+            matches!(&recovered, Ok(Some(b)) if b == follow_up),
+            "framer must recover after InvalidContentLength; got {recovered:?}"
         );
     }
 }
