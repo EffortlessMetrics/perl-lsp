@@ -52,7 +52,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
-          toolchain: 1.92.0
+          toolchain: 1.95.0
 
       - name: Install just
         uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4  # v2.79.7
