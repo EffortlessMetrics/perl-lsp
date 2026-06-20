@@ -19,6 +19,7 @@ const CURSOR: &str = "<<CURSOR>>";
 const TRY_TINY_BLOCK: &str = "{\n    \n} catch {\n    \n};";
 const MOJOLICIOUS_LITE_ROUTE: &str =
     "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};";
+const DANCER_ROUTE: &str = "'/path' => sub {\n    return 'ok';\n};";
 const TEST_MORE_IS_ASSERTION: &str = "is($got, $expected, 'test description');";
 const TEST2_OK_ASSERTION: &str = "ok($result, 'test description');";
 const DBI_PREPARE_METHOD: &str = "prepare()";
@@ -374,6 +375,53 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
         ],
     };
 
+    let dancer_route = CompletionPackContract {
+        provider_id: "dancer_route",
+        insert_text: DANCER_ROUTE,
+        filter_text: "get",
+        positive: &[
+            CompletionPackPositiveCase {
+                name: "dancer_import_present_valid_route_keyword",
+                source: "use Dancer;\nget <<CURSOR>>",
+                expected_replaces: None,
+                expected_after: "use Dancer;\nget '/path' => sub {\n    return 'ok';\n};",
+            },
+            CompletionPackPositiveCase {
+                name: "dancer2_import_present_valid_route_keyword",
+                source: "use Dancer2;\nget <<CURSOR>>",
+                expected_replaces: None,
+                expected_after: "use Dancer2;\nget '/path' => sub {\n    return 'ok';\n};",
+            },
+        ],
+        quiet: &[
+            CompletionPackQuietCase { name: "import_absent", source: "get <<CURSOR>>" },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                source: "use Dancer2;\n# get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                source: "use Dancer2;\nmy $text = \"get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                source: "use Dancer2;\n=pod\nget <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                source: "use Dancer2;\nforget <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                source: "use Dancer2;\nmy $get = 1;\n$get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_extra_closing_paren",
+                source: "use Dancer2;\nget <<CURSOR>>)",
+            },
+        ],
+    };
+
     let test_more_assertion = CompletionPackContract {
         provider_id: "test_more_assertion",
         insert_text: TEST_MORE_IS_ASSERTION,
@@ -536,6 +584,7 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
 
     assert_completion_pack_contract(try_tiny)?;
     assert_completion_pack_contract(mojolicious_lite)?;
+    assert_completion_pack_contract(dancer_route)?;
     assert_completion_pack_contract(test_more_assertion)?;
     assert_completion_pack_contract(test2_assertion)?;
     assert_completion_pack_contract(dbi_database_handle)?;

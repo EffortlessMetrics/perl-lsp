@@ -1951,6 +1951,14 @@ impl InlineCompletionProvider {
         )
     }
 
+    fn preferred_dancer_route(&self, context: &SemanticInlineContext) -> Option<String> {
+        context
+            .imported_modules
+            .iter()
+            .any(|module| matches!(module.name.as_str(), "Dancer" | "Dancer2"))
+            .then(|| "'/path' => sub {\n    return 'ok';\n};".to_string())
+    }
+
     fn push_unique(&self, values: &mut Vec<String>, value: String) {
         if values.iter().any(|existing| existing == &value) {
             return;
@@ -2301,6 +2309,22 @@ impl InlineCandidateSource for SyntaxCandidateSource {
         if ends_with_keyword(prefix, "get ")
             && line_suffix_after_prefix(full_line, prefix).trim().is_empty()
             && let Some(route) = provider.preferred_mojolicious_lite_route(semantic_context)
+        {
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    insert_text: route,
+                    filter_text: Some("get".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "get ")
+            && line_suffix_after_prefix(full_line, prefix).trim().is_empty()
+            && let Some(route) = provider.preferred_dancer_route(semantic_context)
         {
             sink.push(
                 Self::SOURCE,
@@ -5599,6 +5623,51 @@ mod tests {
                 == "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};"
         });
         assert_eq!(item.and_then(|item| item.filter_text.as_deref()), Some("get"));
+    }
+
+    #[test]
+    fn dancer_import_suggests_route_scaffold() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Dancer;\nget ";
+        let character = "get ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "'/path' => sub {\n    return 'ok';\n};");
+        assert_eq!(item.and_then(|item| item.filter_text.as_deref()), Some("get"));
+    }
+
+    #[test]
+    fn dancer2_import_suggests_route_scaffold() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Dancer2;\nget ";
+        let character = "get ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "'/path' => sub {\n    return 'ok';\n};");
+        assert_eq!(item.and_then(|item| item.filter_text.as_deref()), Some("get"));
+    }
+
+    #[test]
+    fn dancer_route_requires_visible_import() {
+        let provider = InlineCompletionProvider::new();
+        let source = "get ";
+        let character = "get ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(
+            completions
+                .items
+                .iter()
+                .all(|item| item.insert_text != "'/path' => sub {\n    return 'ok';\n};"),
+            "Dancer route scaffold must not appear without Dancer or Dancer2 import: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
     }
 
     #[test]
