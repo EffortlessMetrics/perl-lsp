@@ -1261,14 +1261,15 @@ impl CompletionProvider {
             // characters (hyphens, dots, spaces, etc.).  Unquoted (bareword) tokens are restricted
             // to alphanumeric + underscore to avoid accepting parse noise that leaks from mis-parsed
             // value text or from unterminated string literals in incomplete source at the cursor.
-            let (token, was_quoted) =
-                if let Some(inner) = token.strip_prefix('\'').and_then(|t| t.strip_suffix('\'')) {
-                    (inner, true)
-                } else if let Some(inner) = token.strip_prefix('"').and_then(|t| t.strip_suffix('"')) {
-                    (inner, true)
-                } else {
-                    (token, false)
-                };
+            let (token, was_quoted) = if let Some(inner) =
+                token.strip_prefix('\'').and_then(|t| t.strip_suffix('\''))
+            {
+                (inner, true)
+            } else if let Some(inner) = token.strip_prefix('"').and_then(|t| t.strip_suffix('"')) {
+                (inner, true)
+            } else {
+                (token, false)
+            };
             let is_valid_key = !token.is_empty()
                 && (was_quoted || token.chars().all(|c| c.is_alphanumeric() || c == '_'));
             if is_valid_key {

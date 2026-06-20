@@ -4285,6 +4285,27 @@ $config{api"#;
 }
 
 #[test]
+fn test_hash_key_completion_double_quoted_keys_with_special_characters() {
+    let code = r#"my %config = ("db.host" => 1, "api key" => 2, "bare" => 3);
+$config{api"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "api key"),
+        "expected double-quoted 'api key' in completions for prefix 'api'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    assert!(
+        !completions.iter().any(|c| c.label == "db.host"),
+        "expected double-quoted 'db.host' filtered out by prefix 'api'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn test_hash_key_completion_unterminated_quoted_key_no_bogus_suggestion() {
     // Regression: 'db-host (opening quote but no closing quote) must not produce a
     // completion item with a leading-quote artifact like "'db-host".  Previously the
