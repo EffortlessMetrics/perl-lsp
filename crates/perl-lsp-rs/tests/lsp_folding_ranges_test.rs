@@ -1,7 +1,7 @@
 //! Tests for textDocument/foldingRange LSP feature
 
 use perl_lsp::{JsonRpcRequest, LspServer};
-use serde_json::json;
+use serde_json::{Value, json};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -47,6 +47,35 @@ fn open_document(server: &LspServer, uri: &str, content: &str) {
         id: None,
     };
     server.handle_request(notification);
+}
+
+fn folding_ranges_for(uri: &str, content: &str) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+    let server = setup_server();
+    open_document(&server, uri, content);
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/foldingRange".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": uri
+            }
+        })),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2)),
+    };
+
+    let response = server.handle_request(request).ok_or("Expected response from server")?;
+    let result = response.result.ok_or("Expected result in response")?;
+    let ranges = result.as_array().ok_or("Expected array of folding ranges")?;
+    Ok(ranges.clone())
+}
+
+fn range_lines(range: &Value) -> Option<(u64, u64)> {
+    Some((range.get("startLine")?.as_u64()?, range.get("endLine")?.as_u64()?))
+}
+
+fn all_ranges_span_multiple_lines(ranges: &[Value]) -> bool {
+    ranges.iter().all(|range| range_lines(range).is_some_and(|(start, end)| end > start))
 }
 
 #[test]
@@ -369,6 +398,68 @@ fn test_folding_ranges_empty_document() -> TestResult {
 
     // Empty document should have no folding ranges
     assert_eq!(ranges.len(), 0, "Empty document should have no folding ranges");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_data_section_boundary_end_line_gt_start_line() -> TestResult {
+    let single_line_data = "use strict;\n__DATA__\none\n";
+    let single_line_ranges = folding_ranges_for("file:///data-single.pl", single_line_data)?;
+    assert!(
+        all_ranges_span_multiple_lines(&single_line_ranges),
+        "single-line data body must not produce invalid folding ranges: {single_line_ranges:?}"
+    );
+
+    let multi_line_data = "use strict;\n__DATA__\none\ntwo\n";
+    let multi_line_ranges = folding_ranges_for("file:///data-multi.pl", multi_line_data)?;
+    assert!(
+        multi_line_ranges.iter().any(|range| {
+            range.get("kind").and_then(|kind| kind.as_str()) == Some("comment")
+                && range_lines(range).is_some_and(|(start, end)| start == 2 && end == 3)
+        }),
+        "multi-line data body should produce a comment fold: {multi_line_ranges:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_heredoc_boundary_end_line_gt_start_line() -> TestResult {
+    let single_line_heredoc = "my $text = <<'END';\none\nEND\n";
+    let single_line_ranges = folding_ranges_for("file:///heredoc-single.pl", single_line_heredoc)?;
+    assert!(
+        all_ranges_span_multiple_lines(&single_line_ranges),
+        "single-line heredoc body must not produce invalid folding ranges: {single_line_ranges:?}"
+    );
+
+    let multi_line_heredoc = "my $text = <<'END';\none\ntwo\nEND\n";
+    let multi_line_ranges = folding_ranges_for("file:///heredoc-multi.pl", multi_line_heredoc)?;
+    assert!(
+        multi_line_ranges.iter().any(|range| {
+            range.get("kind").and_then(|kind| kind.as_str()) == Some("region")
+                && range_lines(range).is_some_and(|(start, end)| start == 1 && end == 2)
+        }),
+        "multi-line heredoc body should produce a region fold: {multi_line_ranges:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_ast_boundary_lsp_end_line_gt_start_line() -> TestResult {
+    let content = "sub tiny {\n}\nsub full {\n    my $x = 1;\n}\n";
+    let ranges = folding_ranges_for("file:///ast-boundary.pl", content)?;
+    assert!(
+        all_ranges_span_multiple_lines(&ranges),
+        "AST folding ranges must remain valid after inclusive endLine conversion: {ranges:?}"
+    );
+    assert!(
+        ranges
+            .iter()
+            .any(|range| range_lines(range).is_some_and(|(start, end)| { start == 2 && end == 3 })),
+        "multi-line subroutine should still produce an AST fold after short spans are filtered: {ranges:?}"
+    );
 
     Ok(())
 }

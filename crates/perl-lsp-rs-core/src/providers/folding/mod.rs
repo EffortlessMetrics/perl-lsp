@@ -82,7 +82,7 @@ impl FoldingRangeExtractor {
     /// Scans the source for heredoc bodies and returns their ranges.
     pub fn extract_heredoc_ranges(text: &str) -> Vec<FoldingRange> {
         let mut ranges = Vec::new();
-        let mut lexer = PerlLexer::new(text);
+        let mut lexer = PerlLexer::with_body_tokens(text);
 
         while let Some(token) = lexer.next_token() {
             if matches!(token.token_type, TokenType::HeredocBody(_)) {
@@ -320,7 +320,7 @@ impl FoldingRangeExtractor {
         let end_offset = node.location.end;
 
         // Only add if it's not trivial
-        if end_offset > start_offset + 1 {
+        if end_offset > start_offset.saturating_add(1) {
             self.ranges.push(FoldingRange { start_offset, end_offset, kind });
         }
     }
@@ -335,7 +335,7 @@ impl FoldingRangeExtractor {
         let start_offset = start.start;
         let end_offset = end.end;
 
-        if end_offset > start_offset + 1 {
+        if end_offset > start_offset.saturating_add(1) {
             self.ranges.push(FoldingRange { start_offset, end_offset, kind });
         }
     }
@@ -355,6 +355,43 @@ mod tests {
 
     fn bool_node(start: usize) -> Node {
         Node::new(NodeKind::Number { value: "1".to_string() }, loc(start, start + 1))
+    }
+
+    fn use_node(start: usize, end: usize, module: &str) -> Node {
+        Node::new(
+            NodeKind::Use { module: module.to_string(), args: Vec::new(), has_filter_risk: false },
+            loc(start, end),
+        )
+    }
+
+    fn variable_statement(start: usize, end: usize) -> Node {
+        let variable = Node::new(
+            NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() },
+            loc(start + 3, start + 9),
+        );
+        Node::new(
+            NodeKind::VariableDeclaration {
+                declarator: "my".to_string(),
+                variable: Box::new(variable),
+                attributes: Vec::new(),
+                initializer: None,
+            },
+            loc(start, end),
+        )
+    }
+
+    fn import_ranges(statements: Vec<Node>) -> Vec<FoldingRange> {
+        let end = statements.last().map(|node| node.location.end).unwrap_or(0);
+        let root = Node::new(NodeKind::Program { statements }, loc(0, end));
+        let mut extractor = FoldingRangeExtractor::new();
+        extractor.extract(&root)
+    }
+
+    fn import_range_count(ranges: &[FoldingRange]) -> usize {
+        ranges
+            .iter()
+            .filter(|range| matches!(range.kind.as_ref(), Some(FoldingRangeKind::Imports)))
+            .count()
     }
 
     #[test]
@@ -386,5 +423,148 @@ mod tests {
 
         assert!(ranges.iter().any(|range| range.start_offset == 0 && range.end_offset == 27));
         assert!(ranges.iter().any(|range| range.start_offset == 29 && range.end_offset == 56));
+    }
+
+    #[test]
+    fn program_import_block_boundary_end_idx_gt_start_idx_rejects_single_import_before_statement() {
+        let ranges = import_ranges(vec![use_node(0, 10, "strict"), variable_statement(11, 20)]);
+
+        assert_eq!(import_range_count(&ranges), 0);
+    }
+
+    #[test]
+    fn program_import_block_boundary_end_idx_gt_start_idx_accepts_multiple_imports_before_statement()
+     {
+        let ranges = import_ranges(vec![
+            use_node(0, 10, "strict"),
+            use_node(11, 23, "warnings"),
+            variable_statement(24, 33),
+        ]);
+
+        assert_eq!(import_range_count(&ranges), 1);
+    }
+
+    #[test]
+    fn program_trailing_import_block_boundary_end_idx_gt_start_idx_rejects_single_trailing_import()
+    {
+        let ranges = import_ranges(vec![variable_statement(0, 9), use_node(10, 20, "strict")]);
+
+        assert_eq!(import_range_count(&ranges), 0);
+    }
+
+    #[test]
+    fn program_trailing_import_block_boundary_end_idx_gt_start_idx_accepts_multiple_trailing_imports()
+     {
+        let ranges = import_ranges(vec![
+            variable_statement(0, 9),
+            use_node(10, 20, "strict"),
+            use_node(21, 33, "warnings"),
+        ]);
+
+        assert_eq!(import_range_count(&ranges), 1);
+    }
+
+    #[test]
+    fn add_range_from_node_boundary_end_offset_gt_start_offset_plus_one_rejects_trivial() {
+        let mut extractor = FoldingRangeExtractor::new();
+
+        extractor.add_range_from_node(&empty_block(5, 6), Some(FoldingRangeKind::Region));
+
+        assert!(extractor.ranges.is_empty());
+    }
+
+    #[test]
+    fn add_range_from_node_boundary_rejects_saturating_start_offset() {
+        let mut extractor = FoldingRangeExtractor::new();
+
+        extractor.add_range_from_node(
+            &empty_block(usize::MAX, usize::MAX),
+            Some(FoldingRangeKind::Region),
+        );
+
+        assert!(extractor.ranges.is_empty());
+    }
+
+    #[test]
+    fn add_range_from_node_boundary_end_offset_gt_start_offset_plus_one_accepts_multibyte_span() {
+        let mut extractor = FoldingRangeExtractor::new();
+
+        extractor.add_range_from_node(&empty_block(5, 7), Some(FoldingRangeKind::Region));
+
+        assert_eq!(extractor.ranges.len(), 1);
+        assert_eq!(extractor.ranges[0].start_offset, 5);
+        assert_eq!(extractor.ranges[0].end_offset, 7);
+    }
+
+    #[test]
+    fn add_range_from_locations_boundary_end_offset_gt_start_offset_plus_one_rejects_trivial() {
+        let mut extractor = FoldingRangeExtractor::new();
+
+        extractor.add_range_from_locations(&loc(5, 6), &loc(6, 6), Some(FoldingRangeKind::Imports));
+
+        assert!(extractor.ranges.is_empty());
+    }
+
+    #[test]
+    fn add_range_from_locations_boundary_rejects_saturating_start_offset() {
+        let mut extractor = FoldingRangeExtractor::new();
+
+        extractor.add_range_from_locations(
+            &loc(usize::MAX, usize::MAX),
+            &loc(usize::MAX, usize::MAX),
+            Some(FoldingRangeKind::Imports),
+        );
+
+        assert!(extractor.ranges.is_empty());
+    }
+
+    #[test]
+    fn add_range_from_locations_boundary_end_offset_gt_start_offset_plus_one_accepts_multibyte_span()
+     {
+        let mut extractor = FoldingRangeExtractor::new();
+
+        extractor.add_range_from_locations(&loc(5, 6), &loc(6, 7), Some(FoldingRangeKind::Imports));
+
+        assert_eq!(extractor.ranges.len(), 1);
+        assert_eq!(extractor.ranges[0].start_offset, 5);
+        assert_eq!(extractor.ranges[0].end_offset, 7);
+    }
+
+    #[test]
+    fn extract_heredoc_ranges_observes_multiline_body_tokens()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "my $sql = <<'SQL';\nselect 1\nfrom dual\nSQL\n";
+
+        let ranges = FoldingRangeExtractor::extract_heredoc_ranges(source);
+        let range = ranges.first().ok_or("expected a heredoc body range")?;
+        let body = source
+            .get(range.start_offset..range.end_offset)
+            .ok_or("heredoc range must be a valid source slice")?;
+
+        assert_eq!(ranges.len(), 1);
+        assert!(matches!(range.kind.as_ref(), Some(FoldingRangeKind::Region)));
+        assert!(body.contains("select 1"));
+        assert!(body.contains("from dual"));
+        assert!(!body.contains("<<"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn extract_heredoc_ranges_observes_single_line_body_token_for_lsp_filtering()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "my $text = <<TXT;\nbody\nTXT\n";
+
+        let ranges = FoldingRangeExtractor::extract_heredoc_ranges(source);
+        let range = ranges.first().ok_or("expected a heredoc body range")?;
+        let body = source
+            .get(range.start_offset..range.end_offset)
+            .ok_or("heredoc range must be a valid source slice")?;
+
+        assert_eq!(ranges.len(), 1);
+        assert!(body.contains("body"));
+        assert!(!body.contains("<<"));
+
+        Ok(())
     }
 }

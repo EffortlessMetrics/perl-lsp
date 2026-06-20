@@ -145,13 +145,7 @@ impl LspServer {
                     // Add fold for data section body if it exists
                     let start_line = marker_line + 1;
                     let end_line = total_lines.saturating_sub(1);
-                    if end_line > start_line {
-                        lsp_ranges.push(json!({
-                            "startLine": start_line,
-                            "endLine": end_line,
-                            "kind": "comment"
-                        }));
-                    }
+                    push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, "comment");
                 }
 
                 // Add heredoc folding ranges from lexer
@@ -163,13 +157,7 @@ impl LspServer {
                     let (end_line, _) =
                         self.offset_to_pos16(doc, range.end_offset.saturating_sub(1));
 
-                    if end_line > start_line {
-                        lsp_ranges.push(json!({
-                            "startLine": start_line,
-                            "endLine": end_line,
-                            "kind": "region"
-                        }));
-                    }
+                    push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, "region");
                 }
 
                 if let Some(ref ast) = doc.ast {
@@ -182,9 +170,9 @@ impl LspServer {
                         // Calculate actual line numbers from document content
                         let start_line = offset_to_line(&doc.text, range.start_offset);
                         let end_line = offset_to_line(&doc.text, range.end_offset);
-                        let lsp_end_line = end_line.saturating_sub(1);
-
-                        if lsp_end_line > start_line {
+                        if let Some(lsp_end_line) =
+                            lsp_inclusive_multiline_end_line(start_line, end_line)
+                        {
                             let mut lsp_range = json!({
                                 "startLine": start_line,
                                 "endLine": lsp_end_line,  // LSP folding ranges are inclusive
@@ -308,6 +296,139 @@ fn document_symbols_to_json(
 /// Helper function to convert offset to line number
 fn offset_to_line(content: &str, offset: usize) -> usize {
     content[..offset.min(content.len())].chars().filter(|&c| c == '\n').count()
+}
+
+fn push_multiline_folding_range<T>(
+    lsp_ranges: &mut Vec<Value>,
+    start_line: T,
+    end_line: T,
+    kind: &str,
+) where
+    T: Copy + Ord + serde::Serialize,
+{
+    if end_line > start_line {
+        lsp_ranges.push(json!({
+            "startLine": start_line,
+            "endLine": end_line,
+            "kind": kind
+        }));
+    }
+}
+
+fn lsp_inclusive_multiline_end_line(start_line: usize, raw_end_line: usize) -> Option<usize> {
+    let lsp_end_line = raw_end_line.saturating_sub(1);
+    (lsp_end_line > start_line).then_some(lsp_end_line)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn push_multiline_folding_range_boundary_discriminator_end_line_gt_start_line_rejects_equal_input()
+     {
+        let mut ranges = Vec::new();
+
+        push_multiline_folding_range(&mut ranges, 4, 4, "region");
+
+        assert!(ranges.is_empty());
+    }
+
+    #[test]
+    fn push_multiline_folding_range_boundary_discriminator_input_that_hits_the_boundary_end_line_gt_start_line_accepts_multiline_input()
+     {
+        let mut ranges = Vec::new();
+
+        push_multiline_folding_range(&mut ranges, 4, 6, "comment");
+
+        assert_eq!(ranges.len(), 1, "input that hits the boundary: end_line > start_line");
+        assert_eq!(ranges[0]["startLine"], json!(4));
+        assert_eq!(ranges[0]["endLine"], json!(6));
+        assert_eq!(ranges[0]["kind"], json!("comment"));
+    }
+
+    #[test]
+    fn lsp_inclusive_multiline_end_line_boundary_discriminator_lsp_end_line_gt_start_line_rejects_short_span()
+     {
+        assert_eq!(lsp_inclusive_multiline_end_line(4, 5), None);
+        assert_eq!(lsp_inclusive_multiline_end_line(4, 0), None);
+    }
+
+    #[test]
+    fn lsp_inclusive_multiline_end_line_boundary_discriminator_input_that_hits_the_boundary_lsp_end_line_gt_start_line_accepts_multiline_span()
+     {
+        assert_eq!(
+            lsp_inclusive_multiline_end_line(4, 6),
+            Some(5),
+            "input that hits the boundary: lsp_end_line > start_line"
+        );
+    }
+
+    fn folding_ranges_for_source(source: &str) -> Result<Vec<Value>, JsonRpcError> {
+        let server = LspServer::new();
+        let uri = "file:///folding-observer.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": source,
+            }
+        })))?;
+
+        let response = server.handle_folding_range(Some(json!({
+            "textDocument": { "uri": uri }
+        })))?;
+
+        Ok(response.and_then(|value| value.as_array().cloned()).unwrap_or_default())
+    }
+
+    #[test]
+    fn handle_folding_range_call_presence_observer_push_multiline_folding_range_data_section_comment()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let ranges = folding_ranges_for_source("print \"ok\\n\";\n__DATA__\nalpha\nbeta\n")?;
+
+        assert!(
+            ranges.iter().any(|range| {
+                range.get("kind") == Some(&json!("comment"))
+                    && range.get("startLine") == Some(&json!(2))
+                    && range.get("endLine") == Some(&json!(3))
+            }),
+            "input that reaches call push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, \"comment\")"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn handle_folding_range_call_presence_observer_push_multiline_folding_range_heredoc_region()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let ranges = folding_ranges_for_source("my $text = <<'TXT';\nalpha\nbeta\nTXT\n")?;
+
+        assert!(
+            ranges.iter().any(|range| {
+                range.get("kind") == Some(&json!("region"))
+                    && range.get("startLine") == Some(&json!(1))
+                    && range.get("endLine") == Some(&json!(2))
+            }),
+            "input that reaches call push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, \"region\")"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn handle_folding_range_call_presence_observer_ast_lsp_end_line_gt_start_line()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let ranges = folding_ranges_for_source("sub full {\n    my $value = 1;\n}\n")?;
+
+        assert!(ranges.iter().any(|range| {
+            range.get("startLine") == Some(&json!(0))
+                && range.get("endLine").and_then(Value::as_u64).is_some_and(|end| end > 0)
+        }));
+
+        Ok(())
+    }
 }
 
 impl LspServer {
