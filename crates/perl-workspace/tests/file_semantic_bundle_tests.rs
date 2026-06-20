@@ -193,8 +193,7 @@ fn file_fact_shard_carries_producer_schema_version() -> Result<(), Box<dyn std::
 
     // The shard must carry the producer schema version constant.
     assert_eq!(
-        shard.producer_schema_version,
-        1,
+        shard.producer_schema_version, 1,
         "producer_schema_version must be 1 (PRODUCER_SCHEMA_VERSION constant)"
     );
 
@@ -211,8 +210,8 @@ fn file_fact_shard_carries_producer_schema_version() -> Result<(), Box<dyn std::
 // That's expected if the internal type isn't exposed. The test structure
 // is written to compile once the API is available.
 #[test]
-fn replace_fact_shard_incremental_detects_synthetic_entity_change(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn replace_fact_shard_incremental_detects_synthetic_entity_change()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index a file with eval sub (first version)
