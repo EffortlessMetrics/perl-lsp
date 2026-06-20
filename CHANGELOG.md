@@ -273,6 +273,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   --list` path now has tests for PR-fast tier filtering, explicit gate
   filtering, and actionable unknown-gate errors without executing configured
   gates. (#1939, issue #1942)
+- **Test::More and Test2 inline-completion packs have contract fixtures.** The
+  completion-pack matrix now covers import-present positives plus no-import,
+  comment, string, POD, near-match, and malformed-context quiet paths for the
+  Test::More and Test2::V0 assertion packs. (#1945, issue #1943)
 - **Corpus gold fixtures avoid invalid Perl syntax.** Two parser gold fixtures
   that were invalid under Perl 5 were corrected so corpus accuracy metrics no
   longer count fixture bugs as parser false negatives. (#1903)
