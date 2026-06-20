@@ -31,6 +31,7 @@ use tokio::runtime::Runtime;
 use tokio::time::{Duration, sleep};
 
 mod check_project;
+mod doctor;
 
 /// Run the shared perl-lsp CLI and return the process exit code.
 pub fn run_cli<I>(args: I) -> i32
@@ -79,6 +80,7 @@ where
         }
         LaunchAction::Check => run_check(&command_name, &launch_plan.files),
         LaunchAction::CheckProject { ref dir } => check_project::run_check_project(dir),
+        LaunchAction::Doctor { ref dir } => doctor::run_doctor(dir),
         LaunchAction::Completion { ref shell } => {
             if let Some(script) = shell_completion(shell) {
                 print!("{}", render_shell_completion(script, &command_name));
@@ -455,6 +457,7 @@ fn print_version(command_name: &str) {
 mod tests {
     use super::{
         format_parse_error_context, invocation_name, render_help_text, render_shell_completion,
+        run_cli,
     };
     use std::ffi::OsString;
 
@@ -497,6 +500,30 @@ mod tests {
         assert!(rendered.contains("_my_perl_lsp"));
         assert!(rendered.contains("my-perl-lsp"));
         assert!(!rendered.contains("complete -F _perl_lsp perl-lsp"));
+    }
+
+    #[test]
+    fn run_cli_dispatches_doctor_action() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let dir_arg = dir.path().to_str().ok_or("non-UTF-8 temp path")?;
+
+        let exit_code = run_cli(["perl-lsp", "--doctor", dir_arg]);
+
+        assert_eq!(exit_code, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn run_cli_dispatches_doctor_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let file = dir.path().join("not-a-workspace.pl");
+        std::fs::write(&file, "use strict;\n")?;
+        let file_arg = file.to_str().ok_or("non-UTF-8 temp path")?;
+
+        let exit_code = run_cli(["perl-lsp", "--doctor", file_arg]);
+
+        assert_eq!(exit_code, 1);
+        Ok(())
     }
 
     #[test]

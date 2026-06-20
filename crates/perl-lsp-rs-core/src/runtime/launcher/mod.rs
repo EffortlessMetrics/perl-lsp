@@ -257,6 +257,10 @@ pub struct LspArgs {
     #[arg(long, conflicts_with = "check")]
     pub check_project: Option<Option<String>>,
 
+    /// Explain first-run workspace setup: Perl path, config, and effective @INC roots
+    #[arg(long, conflicts_with_all = ["check", "check_project"])]
+    pub doctor: Option<Option<String>>,
+
     /// Generate shell completions (bash, zsh, fish, powershell, pwsh)
     #[arg(long)]
     pub completion: Option<String>,
@@ -351,6 +355,11 @@ pub enum LaunchAction {
     /// Scan a project directory and report parsability summary.
     CheckProject {
         /// Directory to scan (defaults to ".").
+        dir: String,
+    },
+    /// Explain first-run workspace setup for a project directory.
+    Doctor {
+        /// Directory to inspect (defaults to ".").
         dir: String,
     },
     /// Generate shell completions for a given shell.
@@ -553,6 +562,9 @@ where
             } else if let Some(maybe_dir) = parsed_args.check_project {
                 let dir = maybe_dir.unwrap_or_else(|| ".".to_string());
                 LaunchAction::CheckProject { dir }
+            } else if let Some(maybe_dir) = parsed_args.doctor {
+                let dir = maybe_dir.unwrap_or_else(|| ".".to_string());
+                LaunchAction::Doctor { dir }
             } else if let Some(raw_shell) = parsed_args.completion {
                 let shell = normalize_completion_shell(&raw_shell).ok_or_else(|| {
                     LaunchParseError::InvalidShell { raw_shell: raw_shell.clone() }
@@ -686,6 +698,7 @@ pub fn help_text() -> String {
     out.push_str("Usage: perllsp [options]\n");
     out.push_str("       perllsp --check <file.pl> [file2.pm ...]\n");
     out.push_str("       perllsp --check-project [dir]\n");
+    out.push_str("       perllsp --doctor [dir]\n");
     out.push('\n');
     out.push_str("Server options:\n");
     out.push_str("  --stdio, --mcp       Use stdio for communication (default)\n");
@@ -720,6 +733,7 @@ pub fn help_text() -> String {
     out.push_str("Tool options:\n");
     out.push_str("  --check <files...>   Validate Perl files and report parse errors\n");
     out.push_str("  --check-project [dir] Scan project directory for parsability report\n");
+    out.push_str("  --doctor [dir]       Explain Perl path, config, and effective @INC roots\n");
     out.push_str("  --perltidy-compat-report <profile>\n");
     out.push_str("                       Report native formatter compatibility for .perltidyrc\n");
     out.push_str("  --perlcritic-compat-report <profile>\n");
@@ -737,6 +751,7 @@ pub fn help_text() -> String {
     out.push_str("  perllsp --stdio --feature-profile=prod  # production profile\n");
     out.push_str("  perllsp --check lib/MyModule.pm         # syntax check\n");
     out.push_str("  perllsp --check-project lib/             # project scan\n");
+    out.push_str("  perllsp --doctor .                       # first-run setup report\n");
     out.push_str("  perllsp --perltidy-compat-report .perltidyrc\n");
     out.push_str("  perllsp --perlcritic-compat-report .perlcriticrc\n");
     out.push_str("  perllsp --info                          # server information\n");
@@ -791,7 +806,7 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--stdio --mcp --socket --port --log --health --info --check --check-project --version --features-json --perltidy-compat-report --perlcritic-compat-report --feature-profile --completion --help"
+    opts="--stdio --mcp --socket --port --log --health --info --check --check-project --doctor --version --features-json --perltidy-compat-report --perlcritic-compat-report --feature-profile --completion --help"
 
     case "${prev}" in
         --port)
@@ -836,6 +851,7 @@ _perl-lsp() {
         '--info[Show server info]' \
         '--check[Validate Perl files]:file:_files -g "*.{pl,pm,t}"' \
         '--check-project[Scan project directory for parsability report]:dir:_directories' \
+        '--doctor[Explain Perl path, config, and effective @INC roots]:dir:_directories' \
         '--version[Show version information]' \
         '--features-json[Output features catalog as JSON]' \
         '--perltidy-compat-report[Report native formatter compatibility for .perltidyrc]:profile:_files' \
@@ -858,6 +874,7 @@ complete -c perl-lsp -l health -d 'Quick health check'
 complete -c perl-lsp -l info -d 'Show server info'
 complete -c perl-lsp -l check -F -d 'Validate Perl files'
 complete -c perl-lsp -l check-project -d 'Scan project directory for parsability report'
+complete -c perl-lsp -l doctor -d 'Explain Perl path, config, and effective @INC roots'
 complete -c perl-lsp -l version -d 'Show version information'
 complete -c perl-lsp -l features-json -d 'Output features catalog as JSON'
 complete -c perl-lsp -l perltidy-compat-report -F -d 'Report native formatter compatibility for .perltidyrc'
@@ -880,6 +897,7 @@ const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -Comma
         [CompletionResult]::new('--info', '--info', 'ParameterName', 'Show server info')
         [CompletionResult]::new('--check', '--check', 'ParameterName', 'Validate Perl files')
         [CompletionResult]::new('--check-project', '--check-project', 'ParameterName', 'Scan project directory for parsability report')
+        [CompletionResult]::new('--doctor', '--doctor', 'ParameterName', 'Explain Perl path, config, and effective @INC roots')
         [CompletionResult]::new('--version', '--version', 'ParameterName', 'Show version information')
         [CompletionResult]::new('--features-json', '--features-json', 'ParameterName', 'Output features catalog as JSON')
         [CompletionResult]::new('--perltidy-compat-report', '--perltidy-compat-report', 'ParameterName', 'Report native formatter compatibility for .perltidyrc')
@@ -1332,6 +1350,39 @@ mod tests {
         assert!(text.contains("--check-project"));
     }
 
+    // -- --doctor flag -----------------------------------------------
+
+    #[test]
+    fn parse_doctor_no_dir_defaults_to_dot() {
+        let plan = must(parse_args(["perl-lsp", "--doctor"]));
+        assert_eq!(plan.action, LaunchAction::Doctor { dir: ".".to_string() });
+    }
+
+    #[test]
+    fn parse_doctor_with_dir() {
+        let plan = must(parse_args(["perl-lsp", "--doctor", "app/"]));
+        assert_eq!(plan.action, LaunchAction::Doctor { dir: "app/".to_string() });
+    }
+
+    #[test]
+    fn parse_doctor_conflicts_with_check_project() {
+        let result = parse_args(["perl-lsp", "--doctor", "--check-project"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_doctor_conflicts_with_check() {
+        let result = parse_args(["perl-lsp", "--doctor", "--check", "script.pl"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn help_mentions_doctor_flag() {
+        let text = super::help_text();
+        assert!(text.contains("--doctor"));
+        assert!(text.contains("effective @INC roots"));
+    }
+
     // ── InvalidShell error ────────────────────────────────────────
 
     #[test]
@@ -1420,6 +1471,28 @@ mod tests {
         let _guard_cfc = EnvGuard::remove("CLICOLOR_FORCE");
         let _guard = EnvGuard::set("CLICOLOR", "0");
         assert!(!super::should_use_ansi(true), "CLICOLOR=0 must disable ANSI");
+    }
+
+    #[test]
+    fn env_truthy_boundary_discriminator_input_that_hits_the_boundary_normalized_is_empty_or_normalized_equals_0()
+     {
+        {
+            let _guard = EnvGuard::set("PERL_LSP_TEST_TRUTHY", "   ");
+            assert_eq!(
+                super::env_truthy("PERL_LSP_TEST_TRUTHY"),
+                Some(false),
+                "input that hits the boundary: normalized.is_empty() || normalized == \"0\""
+            );
+        }
+
+        {
+            let _guard = EnvGuard::set("PERL_LSP_TEST_TRUTHY", " 0 ");
+            assert_eq!(
+                super::env_truthy("PERL_LSP_TEST_TRUTHY"),
+                Some(false),
+                "input that hits the boundary: normalized.is_empty() || normalized == \"0\""
+            );
+        }
     }
 
     /// Guard: FORCE_COLOR=1 must enable ANSI even without a terminal.

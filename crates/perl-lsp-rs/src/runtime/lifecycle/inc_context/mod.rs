@@ -213,6 +213,8 @@ mod tests {
         let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
         config.include_paths = vec!["lib".to_string()];
         config.use_system_inc = false;
+        // This fixture asserts lexical + workspace roots only; ambient PERL5LIB would add roots.
+        config.use_perl5lib = false;
         config.resolution_timeout_ms = 123;
 
         let server = LspServer::new();
@@ -232,7 +234,7 @@ mod tests {
         assert_eq!(context.folder_uri.as_deref(), Some(workspace_uri.as_str()));
         assert_eq!(context.doc_uri.as_deref(), Some(doc_uri.as_str()));
         assert!(!context.use_system_inc);
-        assert!(context.use_perl5lib);
+        assert!(!context.use_perl5lib);
         assert_eq!(context.resolution_timeout_ms, 123);
         assert_eq!(context.effective_roots.len(), 2);
         assert_eq!(context.effective_roots[0].kind, IncRootKind::FileLocalLexical);
