@@ -170,6 +170,21 @@ mod tests {
     use color_eyre::eyre::ensure;
 
     #[test]
+    fn allocation_tracker_bytes_to_mb_uses_binary_mebibytes() -> Result<()> {
+        let cases = [(0, 0.0), (524_288, 0.5), (1_048_576, 1.0), (2_621_440, 2.5)];
+
+        for (bytes, expected) in cases {
+            let actual = bytes_to_mb(bytes);
+            ensure!(
+                (actual - expected).abs() < f64::EPSILON,
+                "expected {bytes} bytes to be {expected} MiB, got {actual}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn allocation_tracker_measured_memory_prefers_rss_delta_before_allocator_fallback() -> Result<()>
     {
         let cases = [
@@ -201,6 +216,31 @@ mod tests {
             (measurement.peak_delta_mb() - 1.5).abs() < f64::EPSILON,
             "expected 1.5 MiB, got {}",
             measurement.peak_delta_mb()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn allocation_tracker_measure_allocations_preserves_result() -> Result<()> {
+        let (result, _measurement) = measure_allocations(|| {
+            let mut values = Vec::with_capacity(1024);
+            values.extend(0..1024_usize);
+            values.len()
+        });
+
+        ensure!(result == 1024, "operation result must be preserved");
+
+        Ok(())
+    }
+
+    #[test]
+    fn allocation_tracker_measurement_saturates_when_baseline_exceeds_peak() -> Result<()> {
+        let measurement = allocation_measurement(usize::MAX);
+
+        ensure!(
+            measurement.peak_delta_bytes == 0,
+            "peak delta must saturate instead of underflowing"
         );
 
         Ok(())
