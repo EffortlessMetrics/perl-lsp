@@ -1,52 +1,18 @@
 //! Perl interpreter discovery and version reporting for process launch diagnostics.
 
 use crate::platform::PerlInterpreterResult;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
-use std::time::SystemTime;
+use std::path::Path;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PerlBinaryFingerprint {
-    len: u64,
-    modified: Option<SystemTime>,
-}
-
-static PERL_VERSION_CACHE: LazyLock<
-    Mutex<HashMap<PathBuf, (PerlBinaryFingerprint, Option<String>)>>,
-> = LazyLock::new(|| Mutex::new(HashMap::new()));
-
-fn perl_binary_fingerprint(perl_path: &Path) -> Option<PerlBinaryFingerprint> {
-    let metadata = std::fs::metadata(perl_path).ok()?;
-    let modified = metadata.modified().ok();
-    Some(PerlBinaryFingerprint { len: metadata.len(), modified })
-}
-
+/// Probe the interpreter version (value of `$]`), cached per binary fingerprint.
+///
+/// Delegates to [`PerlToolchainProfile::version`], the single source of truth
+/// for interpreter identity shared by the LSP analysis seams and the DAP launch
+/// path. The probe denies ambient `PERL5LIB`/`PERL5OPT` so the version is
+/// deterministic regardless of the editor's environment (the #8688 contract).
+///
+/// [`PerlToolchainProfile::version`]: perl_lsp_rs_core::config::PerlToolchainProfile::version
 fn detect_perl_version_cached(perl_path: &Path) -> Option<String> {
-    let fingerprint = perl_binary_fingerprint(perl_path)?;
-
-    if let Ok(cache) = PERL_VERSION_CACHE.lock()
-        && let Some((cached_fingerprint, cached_version)) = cache.get(perl_path)
-        && *cached_fingerprint == fingerprint
-    {
-        return cached_version.clone();
-    }
-
-    // PerlOracleEnv denies PERL5LIB/PERL5OPT so the version number is
-    // deterministic regardless of the editor's ambient environment (#8688).
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let oracle =
-        perl_lsp_rs_core::config::PerlOracleEnv::for_version_probe(perl_path.to_path_buf(), cwd);
-    let detected_version =
-        oracle.into_command().arg("-e").arg("print $]").output().ok().and_then(|out| {
-            if out.status.success() { String::from_utf8(out.stdout).ok() } else { None }
-        });
-
-    if let Ok(mut cache) = PERL_VERSION_CACHE.lock() {
-        cache.insert(perl_path.to_path_buf(), (fingerprint, detected_version.clone()));
-    }
-
-    detected_version
+    perl_lsp_rs_core::config::PerlToolchainProfile::from_binary(perl_path.to_path_buf()).version()
 }
 
 /// Try to detect the Perl interpreter available on the system and return a human-readable
