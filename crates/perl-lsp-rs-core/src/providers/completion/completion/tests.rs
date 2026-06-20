@@ -5279,8 +5279,7 @@ sub own_method { }
 
 #[test]
 fn package_qualified_completion_includes_own_constants_and_variables()
--> Result<(), Box<dyn std::error::Error>>
-{
+-> Result<(), Box<dyn std::error::Error>> {
     // Regression test: constants and package variables must still appear when
     // completing `Foo::` after the @ISA-chain BFS was introduced.  The BFS
     // (`collect_all_package_members`) filters to Subroutine|Method only;
