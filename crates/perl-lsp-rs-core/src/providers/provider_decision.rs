@@ -51,6 +51,8 @@ pub enum ProviderDecisionProvider {
     DapModulePaths,
     /// Perl or Perl-adjacent subprocess seam.
     PerlSubprocess,
+    /// Workspace trust report surface (report-only boundary).
+    WorkspaceTrustReport,
     /// Surface is not known to this schema version.
     Unknown,
 }
@@ -239,6 +241,55 @@ pub enum ProviderDecisionFallback {
     ShadowReceiptOnly,
 }
 
+/// Granular blocker recorded when a provider refuses or falls back.
+///
+/// Optional companion to [`ProviderDecisionReason`]: where `reason` explains the
+/// decision class, `blocker` names the specific guard that fired. The vocabulary
+/// matches the `blocker` enum in `schemas/provider_decision.v1.schema.json` and
+/// PLSP-SPEC-0016. It must not contradict the normalized `decision`, `reason`,
+/// `fact_source`, `confidence`, or `freshness` fields.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderDecisionBlocker {
+    /// Candidate came from generated or no-source information.
+    GeneratedNoSource,
+    /// Dynamic Perl boundary prevented static certainty.
+    DynamicBoundary,
+    /// Fact existed but was stale relative to the request.
+    StaleFact,
+    /// Fact did not meet the confidence threshold.
+    LowConfidence,
+    /// Multiple candidates left the identity ambiguous.
+    AmbiguousIdentity,
+    /// Symbol is imported or re-exported across module boundaries.
+    ImportedExported,
+    /// Symbol is reached through a typeglob alias.
+    TypeglobAlias,
+    /// Symbol is provided by an AUTOLOAD path.
+    Autoload,
+    /// Reference is resolved through a symbolic reference.
+    SymbolicRef,
+    /// Module is loaded through a dynamic `require`.
+    DynamicRequire,
+    /// Rollback proof was missing for an edit-producing action.
+    RollbackMissing,
+    /// Only a current-source reference was available.
+    CurrentSourceReference,
+    /// Only a workspace-level reference was available.
+    WorkspaceReference,
+    /// Fact class is not supported for this request.
+    UnsupportedFactClass,
+    /// An unsafe edit was blocked.
+    UnsafeEditBlocked,
+    /// No usable fact existed.
+    MissingFact,
+    /// Provider policy selected a fallback path.
+    FallbackPolicy,
+    /// Blocker is unknown to this schema version.
+    Unknown,
+}
+
 /// Request position summary safe to include in copyable bug reports.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -375,6 +426,12 @@ pub struct ProviderDecisionExplanation {
     /// Optional local bug-report payload that users can copy explicitly.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub copyable_payload: Option<ProviderDecisionCopyablePayload>,
+    /// Optional granular blocker naming the specific guard that fired.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocker: Option<ProviderDecisionBlocker>,
+    /// Optional spec claim boundary that scopes what this decision may claim.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub claim_boundary: Option<String>,
 }
 
 impl ProviderDecisionExplanation {
@@ -406,6 +463,8 @@ impl ProviderDecisionExplanation {
             request_receipt: None,
             user_message: None,
             copyable_payload: None,
+            blocker: None,
+            claim_boundary: None,
         }
     }
 
@@ -455,6 +514,18 @@ impl ProviderDecisionExplanation {
     /// Attach a local copyable bug-report payload.
     pub fn with_copyable_payload(mut self, payload: ProviderDecisionCopyablePayload) -> Self {
         self.copyable_payload = Some(payload);
+        self
+    }
+
+    /// Attach a granular blocker naming the specific guard that fired.
+    pub fn with_blocker(mut self, blocker: ProviderDecisionBlocker) -> Self {
+        self.blocker = Some(blocker);
+        self
+    }
+
+    /// Attach a spec claim boundary that scopes what this decision may claim.
+    pub fn with_claim_boundary(mut self, claim_boundary: impl Into<String>) -> Self {
+        self.claim_boundary = Some(claim_boundary.into());
         self
     }
 
@@ -542,6 +613,7 @@ fn provider_label(provider: ProviderDecisionProvider) -> &'static str {
         ProviderDecisionProvider::ModuleResolution => "Module resolution",
         ProviderDecisionProvider::DapModulePaths => "DAP module paths",
         ProviderDecisionProvider::PerlSubprocess => "Perl subprocess",
+        ProviderDecisionProvider::WorkspaceTrustReport => "Workspace trust report",
         ProviderDecisionProvider::Unknown => "Provider",
     }
 }
@@ -1097,6 +1169,202 @@ mod tests {
         assert_eq!(
             request_receipt.get("fallback").and_then(serde_json::Value::as_str),
             Some("no_edit")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn provider_decision_serializes_workspace_trust_report_provider() -> TestResult {
+        // PLSP-SPEC-0016 provider vocabulary includes `workspace_trust_report`,
+        // and the v1 schema lists it. The Rust enum must round-trip it.
+        let decision = ProviderDecisionExplanation::new(
+            ProviderDecisionProvider::WorkspaceTrustReport,
+            ProviderDecisionOutcome::Shadowed,
+            ProviderDecisionReason::ShadowOnly,
+            ProviderDecisionFactSource::LegacyWorkspace,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::NotApplicable,
+            false,
+            ProviderDecisionFallback::ShadowReceiptOnly,
+        );
+
+        let value = serde_json::to_value(&decision)?;
+        assert_eq!(
+            value.get("provider").and_then(serde_json::Value::as_str),
+            Some("workspace_trust_report")
+        );
+
+        let round_tripped: ProviderDecisionExplanation = serde_json::from_value(value)?;
+        assert_eq!(round_tripped.provider, ProviderDecisionProvider::WorkspaceTrustReport);
+        assert_eq!(provider_label(round_tripped.provider), "Workspace trust report");
+        Ok(())
+    }
+
+    #[test]
+    fn provider_decision_exposes_blocker_and_claim_boundary() -> TestResult {
+        // PLSP-SPEC-0016 lists `blocker` and `claim_boundary` as SHOULD-expose
+        // top-level fields; the v1 schema declares both at the top level.
+        let decision = ProviderDecisionExplanation::new(
+            ProviderDecisionProvider::Rename,
+            ProviderDecisionOutcome::Blocked,
+            ProviderDecisionReason::UnsafeEditBlocked,
+            ProviderDecisionFactSource::DynamicBoundary,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::Stale,
+            true,
+            ProviderDecisionFallback::NoEdit,
+        )
+        .with_blocker(ProviderDecisionBlocker::DynamicRequire)
+        .with_claim_boundary("rename is shadowed for dynamic boundaries");
+
+        let value = serde_json::to_value(&decision)?;
+        assert_eq!(
+            value.get("blocker").and_then(serde_json::Value::as_str),
+            Some("dynamic_require")
+        );
+        assert_eq!(
+            value.get("claim_boundary").and_then(serde_json::Value::as_str),
+            Some("rename is shadowed for dynamic boundaries")
+        );
+
+        let round_tripped: ProviderDecisionExplanation = serde_json::from_value(value)?;
+        assert_eq!(round_tripped.blocker, Some(ProviderDecisionBlocker::DynamicRequire));
+        Ok(())
+    }
+
+    #[test]
+    fn provider_decision_omits_blocker_and_claim_boundary_when_absent() -> TestResult {
+        // Both fields are optional; absence must not emit null or empty keys.
+        let decision = ProviderDecisionExplanation::new(
+            ProviderDecisionProvider::Hover,
+            ProviderDecisionOutcome::Acted,
+            ProviderDecisionReason::SourceBackedHighConfidence,
+            ProviderDecisionFactSource::SemanticFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::None,
+        );
+
+        let value = serde_json::to_value(&decision)?;
+        assert!(value.get("blocker").is_none(), "blocker must be omitted when absent");
+        assert!(
+            value.get("claim_boundary").is_none(),
+            "claim_boundary must be omitted when absent"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn provider_decision_copyable_payload_redacts_workspace_identity() -> TestResult {
+        // PLSP-SPEC-0016: copyable payloads must not include raw workspace roots,
+        // launch paths, secrets, or ambient environment values. Workspace identity
+        // is represented only by class + hash. This guards against future fields
+        // leaking raw paths into the serialized payload.
+        let explanation = ProviderDecisionExplanation::new(
+            ProviderDecisionProvider::SafeDelete,
+            ProviderDecisionOutcome::Blocked,
+            ProviderDecisionReason::UnsafeEditBlocked,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::NoEdit,
+        )
+        .with_user_message("Safe delete blocked. No edits were applied.");
+        let payload = ProviderDecisionCopyablePayload::from_explanation(
+            &explanation,
+            "0.16.0",
+            "single_root",
+            Some("9f86d081884c7d659a2feaa0c55ad015".to_string()),
+            Some(ProviderDecisionRequestPosition::new(Some("file".to_string()), Some(3), Some(0))),
+            "docs/project/status/SUPPORT_TIERS.md#claim-rows",
+        );
+        let explanation = explanation.with_copyable_payload(payload);
+
+        let serialized = serde_json::to_string(&explanation)?;
+        for marker in ["/home/", "/Users/", "/root/", "C:\\", "PERL5LIB", "$ENV{"] {
+            assert!(
+                !serialized.contains(marker),
+                "copyable payload leaked raw identity marker `{marker}`: {serialized}"
+            );
+        }
+
+        let value = serde_json::to_value(&explanation)?;
+        let payload = value
+            .get("copyable_payload")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("missing copyable_payload")?;
+        assert_eq!(
+            payload.get("workspace_root_class").and_then(serde_json::Value::as_str),
+            Some("single_root")
+        );
+        assert!(
+            payload.get("workspace_root_hash").and_then(serde_json::Value::as_str).is_some(),
+            "workspace identity must be represented by a hash"
+        );
+        // PLSP-SPEC-0016: `blocker` and `claim_boundary` are explanation-level fields only;
+        // they are absent from the copyable_payload schema and must not appear there.
+        assert!(
+            payload.get("blocker").is_none(),
+            "blocker must not appear in copyable_payload — it is explanation-level only"
+        );
+        assert!(
+            payload.get("claim_boundary").is_none(),
+            "claim_boundary must not appear in copyable_payload — it is explanation-level only"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn provider_decision_blocker_not_leaked_into_copyable_payload() -> TestResult {
+        // Regression guard: when an explanation carries a blocker and claim_boundary,
+        // from_explanation must NOT copy them into the copyable payload.
+        // The copyable_payload schema does not define these fields, so they must
+        // remain absent even when the parent explanation has them set.
+        let explanation = ProviderDecisionExplanation::new(
+            ProviderDecisionProvider::Rename,
+            ProviderDecisionOutcome::Blocked,
+            ProviderDecisionReason::DynamicBoundary,
+            ProviderDecisionFactSource::DynamicBoundary,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::Unknown,
+            true,
+            ProviderDecisionFallback::NoEdit,
+        )
+        .with_blocker(ProviderDecisionBlocker::TypeglobAlias)
+        .with_claim_boundary("rename is blocked at typeglob alias boundaries");
+
+        // Confirm the explanation itself carries the fields.
+        assert_eq!(explanation.blocker, Some(ProviderDecisionBlocker::TypeglobAlias));
+        assert!(explanation.claim_boundary.is_some());
+
+        let payload = ProviderDecisionCopyablePayload::from_explanation(
+            &explanation,
+            "0.16.0",
+            "single_root",
+            None,
+            None,
+            "docs/project/status/SUPPORT_TIERS.md#claim-rows",
+        );
+        let payload_value = serde_json::to_value(&payload)?;
+
+        assert!(
+            payload_value.get("blocker").is_none(),
+            "blocker must not be copied into copyable_payload by from_explanation"
+        );
+        assert!(
+            payload_value.get("claim_boundary").is_none(),
+            "claim_boundary must not be copied into copyable_payload by from_explanation"
+        );
+        // Core fields must still be present and correct.
+        assert_eq!(
+            payload_value.get("provider").and_then(serde_json::Value::as_str),
+            Some("rename")
+        );
+        assert_eq!(
+            payload_value.get("decision").and_then(serde_json::Value::as_str),
+            Some("blocked")
         );
         Ok(())
     }

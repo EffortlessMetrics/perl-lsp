@@ -1217,6 +1217,20 @@ fn default_provider_decision_explanation(
             Some("docs/architecture/perl-subprocess-seams.md"),
             Some("perl-oracle-env"),
         ),
+        ProviderDecisionProvider::WorkspaceTrustReport => (
+            // Report-only boundary (PLSP-SPEC-0016): the trust report aggregates
+            // existing runtime state without driving live provider behavior, so it
+            // is shadowed rather than acted, and must not promote support tiers.
+            ProviderDecisionOutcome::Shadowed,
+            ProviderDecisionReason::ShadowOnly,
+            ProviderDecisionFactSource::LegacyWorkspace,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::NotApplicable,
+            false,
+            ProviderDecisionFallback::ShadowReceiptOnly,
+            Some("docs/project/status/SUPPORT_TIERS.md"),
+            Some("workspace-trust-report-boundary"),
+        ),
         ProviderDecisionProvider::Unknown => (
             ProviderDecisionOutcome::Fallback,
             ProviderDecisionReason::MissingFact,
