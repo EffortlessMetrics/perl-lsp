@@ -423,17 +423,28 @@ jobs:
         working-directory: vscode-extension
         run: npm run test:ci
 
+      - name: Grammar snapshot tests (visual regression)
+        id: grammar
+        working-directory: vscode-extension
+        run: npm run test:grammar
+
       - name: Report extension Jest result (ci/extension-jest)
         if: always()
         uses: actions/github-script@v9
         with:
           script: |
-            // Blocking gate: the commit status reflects the real jest outcome.
+            // Blocking gate: the commit status reflects the real jest + grammar outcome.
             const jest = '${{ steps.jest.outcome }}';
-            const state = jest === 'success' ? 'success' : 'failure';
-            const description = state === 'success'
-              ? 'extension lint + typecheck + jest all green'
-              : 'extension jest failed — run: cd vscode-extension && npm run test:ci';
+            const grammar = '${{ steps.grammar.outcome }}';
+            const state = (jest === 'success' && grammar === 'success') ? 'success' : 'failure';
+            let description;
+            if (state === 'success') {
+              description = 'extension lint + typecheck + jest + grammar snapshots all green';
+            } else if (jest !== 'success') {
+              description = 'extension jest failed — run: cd vscode-extension && npm run test:ci';
+            } else {
+              description = 'grammar snapshot regression — run: cd vscode-extension && npm run test:grammar';
+            }
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,

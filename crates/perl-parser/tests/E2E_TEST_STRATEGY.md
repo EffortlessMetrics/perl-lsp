@@ -245,7 +245,7 @@ Update this document with new feature coverage.
 - [ ] Property-based testing with quickcheck
 - [ ] Fuzzing for protocol robustness
 - [ ] Performance regression tracking
-- [ ] Visual regression testing for UI features
+- [x] Visual regression testing for UI features (TextMate grammar scope snapshots — see `vscode-extension/test/grammar/`)
 - [ ] Integration with real editors (VSCode, Neovim)
 - [ ] Automated benchmark comparisons
 - [ ] Mutation testing for test quality

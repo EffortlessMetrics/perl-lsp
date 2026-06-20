@@ -1,0 +1,17 @@
+>#!/usr/bin/perl
+#^^^^^^^^^^^^^^^ source.perl comment.line.number-sign.perl
+># a full-line comment
+#^^^^^^^^^^^^^^^^^^^^^ source.perl comment.line.number-sign.perl
+>my $x = 1;    # trailing comment
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^ source.perl variable.other.scalar.perl
+#     ^ source.perl
+#      ^ source.perl keyword.operator.assignment.perl
+#       ^ source.perl
+#        ^ source.perl constant.numeric.integer.perl
+#         ^^^^^ source.perl
+#              ^^^^^^^^^^^^^^^^^^ source.perl comment.line.number-sign.perl
+>## doubled hash comment
+#^^^^^^^^^^^^^^^^^^^^^^^ source.perl comment.line.number-sign.perl
+>

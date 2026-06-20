@@ -221,6 +221,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Under the hood (not user-facing)
 
+- **TextMate grammar visual regression tests.** The VS Code extension's static
+  syntax highlighting (`syntaxes/perl.tmLanguage.json`) is now locked down by
+  scope snapshots under `vscode-extension/test/grammar/`, run via
+  `npm run test:grammar` and enforced in the Extension Jest CI job. Any
+  unintended change to highlighting surfaces as an explicit per-token diff.
+  Closes the long-standing "visual regression testing for UI features" item in
+  the E2E test strategy.
 - **Parser contract index.** Lexer and parser-core paired-delimiter and
   balanced-segment behavior is now covered by a conformance matrix and documented
   in `docs/reference/PARSER_CONTRACTS.md`. (#1319, #1321, #1324)

@@ -1,0 +1,125 @@
+>my $sum = 1 + 2 * 3;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^ source.perl variable.other.scalar.perl
+#       ^ source.perl
+#        ^ source.perl keyword.operator.assignment.perl
+#         ^ source.perl
+#          ^ source.perl constant.numeric.integer.perl
+#           ^ source.perl
+#            ^ source.perl keyword.operator.arithmetic.perl
+#             ^ source.perl
+#              ^ source.perl constant.numeric.integer.perl
+#               ^ source.perl
+#                ^ source.perl keyword.operator.arithmetic.perl
+#                 ^ source.perl
+#                  ^ source.perl constant.numeric.integer.perl
+#                   ^^ source.perl
+>my $cmp = $a <=> $b;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^ source.perl variable.other.scalar.perl
+#       ^ source.perl
+#        ^ source.perl keyword.operator.assignment.perl
+#         ^ source.perl
+#          ^^ source.perl variable.other.scalar.perl
+#            ^ source.perl
+#             ^^^ source.perl keyword.operator.comparison.perl
+#                ^ source.perl
+#                 ^^ source.perl variable.other.scalar.perl
+#                   ^^ source.perl
+>my $str_cmp = $x cmp $y;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^^ source.perl variable.other.scalar.perl
+#           ^ source.perl
+#            ^ source.perl keyword.operator.assignment.perl
+#             ^ source.perl
+#              ^^ source.perl variable.other.scalar.perl
+#                ^ source.perl
+#                 ^^^ source.perl keyword.operator.comparison.perl
+#                    ^ source.perl
+#                     ^^ source.perl variable.other.scalar.perl
+#                       ^^ source.perl
+>my $and = $p && $q || $r;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^ source.perl variable.other.scalar.perl
+#       ^ source.perl
+#        ^ source.perl keyword.operator.assignment.perl
+#         ^ source.perl
+#          ^^ source.perl variable.other.scalar.perl
+#            ^ source.perl
+#             ^^ source.perl keyword.operator.logical.perl
+#               ^ source.perl
+#                ^^ source.perl variable.other.scalar.perl
+#                  ^ source.perl
+#                   ^^ source.perl keyword.operator.logical.perl
+#                     ^ source.perl
+#                      ^^ source.perl variable.other.scalar.perl
+#                        ^^ source.perl
+>my $match = $s =~ /pattern/;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^ source.perl variable.other.scalar.perl
+#         ^ source.perl
+#          ^ source.perl keyword.operator.assignment.perl
+#           ^ source.perl
+#            ^^ source.perl variable.other.scalar.perl
+#              ^ source.perl
+#               ^ source.perl keyword.operator.assignment.perl
+#                ^ source.perl keyword.operator.bitwise.perl
+#                 ^ source.perl
+#                  ^ source.perl keyword.operator.arithmetic.perl
+#                   ^^^^^^^ source.perl
+#                          ^ source.perl keyword.operator.arithmetic.perl
+#                           ^^ source.perl
+>my $concat = 'a' . 'b';
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^ source.perl variable.other.scalar.perl
+#          ^ source.perl
+#           ^ source.perl keyword.operator.assignment.perl
+#            ^ source.perl
+#             ^ source.perl string.quoted.single.perl
+#              ^ source.perl string.quoted.single.perl
+#               ^ source.perl string.quoted.single.perl
+#                ^ source.perl
+#                 ^ source.perl keyword.operator.string.perl
+#                  ^ source.perl
+#                   ^ source.perl string.quoted.single.perl
+#                    ^ source.perl string.quoted.single.perl
+#                     ^ source.perl string.quoted.single.perl
+#                      ^^ source.perl
+>my $range = 1 .. 5;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^ source.perl variable.other.scalar.perl
+#         ^ source.perl
+#          ^ source.perl keyword.operator.assignment.perl
+#           ^ source.perl
+#            ^ source.perl constant.numeric.integer.perl
+#             ^ source.perl
+#              ^ source.perl keyword.operator.string.perl
+#               ^ source.perl keyword.operator.string.perl
+#                ^ source.perl
+#                 ^ source.perl constant.numeric.integer.perl
+#                  ^^ source.perl
+>my $ternary = $cond ? 'yes' : 'no';
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^^ source.perl variable.other.scalar.perl
+#           ^ source.perl
+#            ^ source.perl keyword.operator.assignment.perl
+#             ^ source.perl
+#              ^^^^^ source.perl variable.other.scalar.perl
+#                   ^^^ source.perl
+#                      ^ source.perl string.quoted.single.perl
+#                       ^^^ source.perl string.quoted.single.perl
+#                          ^ source.perl string.quoted.single.perl
+#                           ^^^ source.perl
+#                              ^ source.perl string.quoted.single.perl
+#                               ^^ source.perl string.quoted.single.perl
+#                                 ^ source.perl string.quoted.single.perl
+#                                  ^^ source.perl
+>

@@ -1136,6 +1136,8 @@
     "lint": "eslint src --ext .ts",
     "test": "jest --verbose",
     "test:ci": "jest --ci --coverage",
+    "test:grammar": "vscode-tmgrammar-snap --config package.json \"test/grammar/fixtures/*.pl\"",
+    "test:grammar:update": "vscode-tmgrammar-snap --config package.json -u \"test/grammar/fixtures/*.pl\"",
     "test:integration": "npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
     "test:published": "tsc -p ./tsconfig.published-smoke.json && node ./out/test/published/runPublishedSmoke.js",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
@@ -1172,6 +1174,7 @@
     "jest": "^30.4.2",
     "mocha": "^11.7.6",
     "ts-jest": "^29.4.11",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vscode-tmgrammar-test": "^0.1.3"
   }
 }

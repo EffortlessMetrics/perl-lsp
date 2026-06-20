@@ -1,0 +1,136 @@
+>use strict;
+#^^^ source.perl keyword.other.perl
+#   ^^^^^^^^^ source.perl
+>use warnings;
+#^^^ source.perl keyword.other.perl
+#   ^^^^^^^^^^^ source.perl
+>package My::Module;
+#^^^^^^^ source.perl keyword.other.perl
+#       ^^^^^^^^^ source.perl
+#                ^^ source.perl keyword.operator.comparison.perl
+#                  ^^ source.perl
+>
+>sub greet {
+#^^^ source.perl keyword.other.perl
+#   ^^^^^^^^^ source.perl
+>    my ($self, $name) = @_;
+#^^^^ source.perl
+#    ^^ source.perl keyword.other.perl
+#      ^^ source.perl
+#        ^^^^^ source.perl variable.other.scalar.perl
+#             ^^ source.perl
+#               ^^^^^ source.perl variable.other.scalar.perl
+#                    ^^ source.perl
+#                      ^ source.perl keyword.operator.assignment.perl
+#                       ^ source.perl
+#                        ^^ source.perl variable.other.array.perl
+#                          ^^ source.perl
+>    if ($name) {
+#^^^^ source.perl
+#    ^^ source.perl keyword.control.perl
+#      ^^ source.perl
+#        ^^^^^ source.perl variable.other.scalar.perl
+#             ^^^^ source.perl
+>        return "hi $name";
+#^^^^^^^^ source.perl
+#        ^^^^^^ source.perl support.function.builtin.perl
+#              ^ source.perl
+#               ^ source.perl string.quoted.double.perl
+#                ^^^ source.perl string.quoted.double.perl
+#                   ^^^^^ source.perl string.quoted.double.perl variable.interpolated.perl
+#                        ^ source.perl string.quoted.double.perl
+#                         ^^ source.perl
+>    } elsif (defined $self) {
+#^^^^^^ source.perl
+#      ^^^^^ source.perl keyword.control.perl
+#           ^^ source.perl
+#             ^^^^^^^ source.perl support.function.builtin.perl
+#                    ^ source.perl
+#                     ^^^^^ source.perl variable.other.scalar.perl
+#                          ^^^^ source.perl
+>        return 'hi';
+#^^^^^^^^ source.perl
+#        ^^^^^^ source.perl support.function.builtin.perl
+#              ^ source.perl
+#               ^ source.perl string.quoted.single.perl
+#                ^^ source.perl string.quoted.single.perl
+#                  ^ source.perl string.quoted.single.perl
+#                   ^^ source.perl
+>    } else {
+#^^^^^^ source.perl
+#      ^^^^ source.perl keyword.control.perl
+#          ^^^ source.perl
+>        return undef;
+#^^^^^^^^ source.perl
+#        ^^^^^^ source.perl support.function.builtin.perl
+#              ^ source.perl
+#               ^^^^^ source.perl constant.language.perl
+#                    ^^ source.perl
+>    }
+#^^^^^^ source.perl
+>}
+#^^ source.perl
+>
+>foreach my $i (1 .. 10) {
+#^^^^^^^ source.perl keyword.control.perl
+#       ^ source.perl
+#        ^^ source.perl keyword.other.perl
+#          ^ source.perl
+#           ^^ source.perl variable.other.scalar.perl
+#             ^^ source.perl
+#               ^ source.perl constant.numeric.integer.perl
+#                ^ source.perl
+#                 ^ source.perl keyword.operator.string.perl
+#                  ^ source.perl keyword.operator.string.perl
+#                   ^ source.perl
+#                    ^^ source.perl constant.numeric.integer.perl
+#                      ^^^^ source.perl
+>    next if $i % 2;
+#^^^^ source.perl
+#    ^^^^ source.perl keyword.control.perl
+#        ^ source.perl
+#         ^^ source.perl keyword.control.perl
+#           ^ source.perl
+#            ^^ source.perl variable.other.scalar.perl
+#              ^ source.perl
+#               ^ source.perl keyword.operator.arithmetic.perl
+#                ^ source.perl
+#                 ^ source.perl constant.numeric.integer.perl
+#                  ^^ source.perl
+>    last if $i > 8;
+#^^^^ source.perl
+#    ^^^^ source.perl keyword.control.perl
+#        ^ source.perl
+#         ^^ source.perl keyword.control.perl
+#           ^ source.perl
+#            ^^ source.perl variable.other.scalar.perl
+#              ^ source.perl
+#               ^ source.perl keyword.operator.comparison.perl
+#                ^ source.perl
+#                 ^ source.perl constant.numeric.integer.perl
+#                  ^^ source.perl
+>}
+#^^ source.perl
+>
+>while (my $line = <STDIN>) {
+#^^^^^ source.perl keyword.control.perl
+#     ^^ source.perl
+#       ^^ source.perl keyword.other.perl
+#         ^ source.perl
+#          ^^^^^ source.perl variable.other.scalar.perl
+#               ^ source.perl
+#                ^ source.perl keyword.operator.assignment.perl
+#                 ^ source.perl
+#                  ^ source.perl keyword.operator.comparison.perl
+#                   ^^^^^ source.perl
+#                        ^ source.perl keyword.operator.comparison.perl
+#                         ^^^^ source.perl
+>    chomp $line;
+#^^^^ source.perl
+#    ^^^^^ source.perl support.function.builtin.perl
+#         ^ source.perl
+#          ^^^^^ source.perl variable.other.scalar.perl
+#               ^^ source.perl
+>}
+#^^ source.perl
+>

@@ -1,0 +1,58 @@
+>my $single = 'no interpolation $here';
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^ source.perl variable.other.scalar.perl
+#          ^ source.perl
+#           ^ source.perl keyword.operator.assignment.perl
+#            ^ source.perl
+#             ^ source.perl string.quoted.single.perl
+#              ^^^^^^^^^^^^^^^^^^^^^^ source.perl string.quoted.single.perl
+#                                    ^ source.perl string.quoted.single.perl
+#                                     ^^ source.perl
+>my $double = "interp $name and @list";
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^ source.perl variable.other.scalar.perl
+#          ^ source.perl
+#           ^ source.perl keyword.operator.assignment.perl
+#            ^ source.perl
+#             ^ source.perl string.quoted.double.perl
+#              ^^^^^^^ source.perl string.quoted.double.perl
+#                     ^^^^^ source.perl string.quoted.double.perl variable.interpolated.perl
+#                          ^^^^^ source.perl string.quoted.double.perl
+#                               ^^^^^ source.perl string.quoted.double.perl variable.interpolated.perl
+#                                    ^ source.perl string.quoted.double.perl
+#                                     ^^ source.perl
+>my $q = q(single style);
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^ source.perl variable.other.scalar.perl
+#     ^ source.perl
+#      ^ source.perl keyword.operator.assignment.perl
+#       ^ source.perl
+#        ^ source.perl string.quoted.q.perl keyword.other.perl
+#         ^ source.perl string.quoted.q.perl
+#          ^^^^^^^^^^^^^^^ source.perl string.quoted.q.perl
+>my $qq = qq{double $style};
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.perl string.quoted.q.perl
+>my $words = qw(one two three);
+#^^^^^^^^^^^^^^ source.perl string.quoted.q.perl
+#              ^ source.perl string.quoted.q.perl
+#               ^ source.perl
+#                ^^ source.perl keyword.operator.comparison.perl
+#                  ^^^^^^^^^^^^^ source.perl
+>my $escaped = "tab\tnewline\n";
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^^ source.perl variable.other.scalar.perl
+#           ^ source.perl
+#            ^ source.perl keyword.operator.assignment.perl
+#             ^ source.perl
+#              ^ source.perl string.quoted.double.perl
+#               ^^^ source.perl string.quoted.double.perl
+#                  ^^ source.perl string.quoted.double.perl constant.character.escape.perl
+#                    ^^^^^^^ source.perl string.quoted.double.perl
+#                           ^^ source.perl string.quoted.double.perl constant.character.escape.perl
+#                             ^ source.perl string.quoted.double.perl
+#                              ^^ source.perl
+>
