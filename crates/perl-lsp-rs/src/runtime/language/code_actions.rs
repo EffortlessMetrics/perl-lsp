@@ -48,6 +48,27 @@ fn retain_requested_code_action_kinds(code_actions: &mut Vec<Value>, requested_k
     });
 }
 
+/// Remove exact-duplicate code actions produced by overlapping providers.
+///
+/// Several independent passes contribute to the response — the native built-in
+/// critic, the diagnostic-based quick-fix providers, the missing-pragma helper,
+/// and the modernize pass — and they can each emit the *same* edit for the same
+/// finding. A file missing `use strict`, for example, yields three byte-identical
+/// "Add 'use strict'" quick-fixes. Editors render every entry, so the user sees
+/// the same fix repeated in the lightbulb menu.
+///
+/// Collapse actions that share the same `kind`, `title`, resulting `edit`, and
+/// `command`, keeping the first occurrence so any attached `diagnostics` (set by
+/// the earliest provider) are preserved. Actions that differ in any of those
+/// fields — distinct edits, distinct titles — are left untouched.
+fn dedupe_code_actions(code_actions: &mut Vec<Value>) {
+    let mut seen = std::collections::HashSet::new();
+    code_actions.retain(|action| {
+        let field = |name: &str| action.get(name).map(ToString::to_string).unwrap_or_default();
+        seen.insert((field("kind"), field("title"), field("edit"), field("command")))
+    });
+}
+
 fn enforce_code_action_tag_capability(
     code_actions: &mut [Value],
     supports_llm_generated_tag: bool,
@@ -677,6 +698,11 @@ impl LspServer {
                 self.fill_pragma_action_edit(action, doc);
             }
             code_actions.extend(pragma_actions);
+
+            // Multiple providers can emit the same fix for the same finding;
+            // collapse byte-identical actions before aggregating or returning so
+            // the lightbulb menu does not show repeated entries.
+            dedupe_code_actions(&mut code_actions);
 
             // Aggregate all quick fixes collected so far into a single
             // `source.fixAll` action (LSP 3.17) when there are two or more

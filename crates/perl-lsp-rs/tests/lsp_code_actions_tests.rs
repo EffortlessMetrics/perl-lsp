@@ -684,3 +684,86 @@ open(my $fh, '<', 'data.txt');
     shutdown_and_exit(&server);
     Ok(())
 }
+
+/// Regression (issue #1787 follow-up): overlapping code-action providers must
+/// not return byte-identical duplicate quick-fixes. A file missing `use strict`
+/// previously yielded three identical "Add 'use strict'" actions plus two
+/// identical "Add missing pragmas" actions; the response must now contain each
+/// distinct (kind, title, edit) action at most once.
+#[test]
+fn test_code_actions_have_no_exact_duplicates() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///dedupe.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "print 'hi';\n"
+                }
+            }
+        }),
+    );
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 7878,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": { "uri": uri },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 0, "character": 11 }
+                },
+                "context": {
+                    "diagnostics": [{
+                        "range": {
+                            "start": { "line": 0, "character": 0 },
+                            "end": { "line": 0, "character": 5 }
+                        },
+                        "severity": 2,
+                        "code": "TestingAndDebugging::RequireUseStrict",
+                        "source": "perlcritic",
+                        "message": "Code before strictures are enabled"
+                    }]
+                }
+            }
+        }),
+    );
+
+    let actions = response["result"].as_array().cloned().unwrap_or_default();
+
+    // No two actions may share the same (kind, title, edit).
+    let mut seen = std::collections::HashSet::new();
+    for action in &actions {
+        let key = (
+            action["kind"].as_str().unwrap_or("").to_string(),
+            action["title"].as_str().unwrap_or("").to_string(),
+            action["edit"].to_string(),
+        );
+        assert!(
+            seen.insert(key.clone()),
+            "duplicate code action returned: {key:?}\nfull response: {actions:#?}"
+        );
+    }
+
+    // The "Add 'use strict'" quick-fix must appear exactly once.
+    let strict_count =
+        actions.iter().filter(|a| a["title"].as_str() == Some("Add 'use strict'")).count();
+    assert_eq!(
+        strict_count, 1,
+        "expected exactly one \"Add 'use strict'\" action, got {strict_count}: {actions:#?}"
+    );
+
+    shutdown_and_exit(&server);
+    Ok(())
+}
