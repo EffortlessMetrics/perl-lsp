@@ -71,7 +71,7 @@ just quick-ref
 - `use_small_heuristics = "Max"`
 
 ## Clippy Config (clippy.toml)
-- `msrv = "1.92"`
+- `msrv = "1.95"`
 - `too-many-arguments-threshold = 8`
 - `cognitive-complexity-threshold = 50`
 
