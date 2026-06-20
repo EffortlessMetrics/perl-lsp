@@ -18,6 +18,36 @@ impl DiagnosticsTracker {
         })
     }
 
+    /// Count diagnostics payloads seen for `uri`.
+    pub fn count_for_uri(events: &[LspEvent], uri: &str) -> usize {
+        events
+            .iter()
+            .filter(|event| {
+                matches!(event, LspEvent::Diagnostics { uri: event_uri, .. } if event_uri == uri)
+            })
+            .count()
+    }
+
+    /// Return the newest diagnostics payload after `already_seen` matching
+    /// events for `uri`.
+    pub fn latest_for_uri_after_count(
+        events: &[LspEvent],
+        uri: &str,
+        already_seen: usize,
+    ) -> Option<Vec<Value>> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                LspEvent::Diagnostics { uri: event_uri, diagnostics, .. } if event_uri == uri => {
+                    Some(diagnostics)
+                }
+                _ => None,
+            })
+            .skip(already_seen)
+            .last()
+            .cloned()
+    }
+
     /// Wait until diagnostics for `uri` satisfy `predicate`, returning the
     /// matching payload. Returns `None` on timeout.
     ///
@@ -47,6 +77,29 @@ impl DiagnosticsTracker {
                 if predicate(&diagnostics) {
                     return Some(diagnostics);
                 }
+            }
+
+            if Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// Wait until at least one diagnostics payload newer than `already_seen`
+    /// matching events is available for `uri`.
+    pub fn wait_for_uri_after_count(
+        mut events_provider: impl FnMut() -> Vec<LspEvent>,
+        uri: &str,
+        already_seen: usize,
+        timeout: Duration,
+    ) -> Option<Vec<Value>> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let events = events_provider();
+            if let Some(diagnostics) = Self::latest_for_uri_after_count(&events, uri, already_seen)
+            {
+                return Some(diagnostics);
             }
 
             if Instant::now() >= deadline {
@@ -97,6 +150,62 @@ mod tests {
             diagnostics: vec![json!({"message": "other"})],
         }];
         let latest = DiagnosticsTracker::latest_for_uri(&events, "file:///a.pl");
+        assert!(latest.is_none());
+    }
+
+    #[test]
+    fn count_for_uri_counts_only_matching_diagnostics() {
+        let events = vec![
+            LspEvent::Diagnostics {
+                uri: "file:///a.pl".to_string(),
+                version: Some(1),
+                diagnostics: vec![json!({"message": "old"})],
+            },
+            LspEvent::Diagnostics {
+                uri: "file:///b.pl".to_string(),
+                version: Some(1),
+                diagnostics: vec![json!({"message": "other"})],
+            },
+            LspEvent::Diagnostics {
+                uri: "file:///a.pl".to_string(),
+                version: Some(2),
+                diagnostics: vec![json!({"message": "new"})],
+            },
+        ];
+
+        assert_eq!(DiagnosticsTracker::count_for_uri(&events, "file:///a.pl"), 2);
+    }
+
+    #[test]
+    fn latest_for_uri_after_count_returns_newer_payload() {
+        let events = vec![
+            LspEvent::Diagnostics {
+                uri: "file:///a.pl".to_string(),
+                version: Some(1),
+                diagnostics: vec![json!({"message": "old"})],
+            },
+            LspEvent::Diagnostics {
+                uri: "file:///a.pl".to_string(),
+                version: Some(2),
+                diagnostics: vec![json!({"message": "new"})],
+            },
+        ];
+
+        let latest = DiagnosticsTracker::latest_for_uri_after_count(&events, "file:///a.pl", 1);
+
+        assert_eq!(latest, Some(vec![json!({"message": "new"})]));
+    }
+
+    #[test]
+    fn latest_for_uri_after_count_returns_none_without_newer_payload() {
+        let events = vec![LspEvent::Diagnostics {
+            uri: "file:///a.pl".to_string(),
+            version: Some(1),
+            diagnostics: vec![json!({"message": "old"})],
+        }];
+
+        let latest = DiagnosticsTracker::latest_for_uri_after_count(&events, "file:///a.pl", 1);
+
         assert!(latest.is_none());
     }
 

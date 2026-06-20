@@ -8,7 +8,12 @@ use super::*;
 
 #[allow(dead_code)]
 impl LspServer {
-    /// Extract workspace symbols from a document's AST
+    /// Extract workspace symbols from a document's AST.
+    ///
+    /// Resolves the `workspace_folder_uri` for each emitted symbol by matching
+    /// the document `uri` against the server's registered workspace folders.
+    /// This ensures multi-root workspace disambiguation works even in the
+    /// open-document fallback path (fix for issue #1514 bug 2).
     #[cfg(feature = "workspace")]
     pub(crate) fn extract_document_symbols(
         &self,
@@ -16,8 +21,9 @@ impl LspServer {
         source: &str,
         uri: &str,
     ) -> Vec<LspWorkspaceSymbol> {
+        let folder_uri = self.resolve_folder_uri_for_file(uri);
         let mut symbols = Vec::new();
-        self.extract_symbols_recursive(ast, source, uri, None, &mut symbols);
+        self.extract_symbols_recursive(ast, source, uri, None, folder_uri.as_deref(), &mut symbols);
         symbols
     }
 
@@ -31,7 +37,11 @@ impl LspServer {
         Vec::new()
     }
 
-    /// Recursively extract symbols from an AST node
+    /// Recursively extract symbols from an AST node.
+    ///
+    /// `folder_uri` is the workspace folder that owns this document — used to
+    /// populate `workspace_folder_uri` on every emitted symbol so that
+    /// multi-root workspace disambiguation works in the open-doc fallback path.
     #[cfg(feature = "workspace")]
     fn extract_symbols_recursive(
         &self,
@@ -39,6 +49,7 @@ impl LspServer {
         source: &str,
         uri: &str,
         container: Option<&str>,
+        folder_uri: Option<&str>,
         symbols: &mut Vec<LspWorkspaceSymbol>,
     ) {
         use perl_ast::classification::NodeKindCategory;
@@ -76,7 +87,7 @@ impl LspServer {
                                 ),
                                 container_name: container
                                     .map(|s| normalize_package_separator(s).into_owned()),
-                                workspace_folder_uri: None,
+                                workspace_folder_uri: folder_uri.map(ToOwned::to_owned),
                             });
 
                             // Recurse into body with this subroutine as container
@@ -85,6 +96,7 @@ impl LspServer {
                                 source,
                                 uri,
                                 Some(sub_name.as_str()),
+                                folder_uri,
                                 symbols,
                             );
                         }
@@ -108,7 +120,7 @@ impl LspServer {
                             ),
                             container_name: container
                                 .map(|s| normalize_package_separator(s).into_owned()),
-                            workspace_folder_uri: None,
+                            workspace_folder_uri: folder_uri.map(ToOwned::to_owned),
                         });
 
                         // Recurse into block with this package as container
@@ -118,6 +130,7 @@ impl LspServer {
                                 source,
                                 uri,
                                 Some(name.as_str()),
+                                folder_uri,
                                 symbols,
                             );
                         }
@@ -141,7 +154,7 @@ impl LspServer {
                             ),
                             container_name: container
                                 .map(|s| normalize_package_separator(s).into_owned()),
-                            workspace_folder_uri: None,
+                            workspace_folder_uri: folder_uri.map(ToOwned::to_owned),
                         });
 
                         // Recurse into body with this class as container
@@ -150,6 +163,7 @@ impl LspServer {
                             source,
                             uri,
                             Some(name.as_str()),
+                            folder_uri,
                             symbols,
                         );
                     }
@@ -172,7 +186,7 @@ impl LspServer {
                             ),
                             container_name: container
                                 .map(|s| normalize_package_separator(s).into_owned()),
-                            workspace_folder_uri: None,
+                            workspace_folder_uri: folder_uri.map(ToOwned::to_owned),
                         });
 
                         // Recurse into body with this method as container
@@ -181,6 +195,7 @@ impl LspServer {
                             source,
                             uri,
                             Some(name.as_str()),
+                            folder_uri,
                             symbols,
                         );
                     }
@@ -208,7 +223,7 @@ impl LspServer {
                                 ),
                                 container_name: container
                                     .map(|s| normalize_package_separator(s).into_owned()),
-                                workspace_folder_uri: None,
+                                workspace_folder_uri: folder_uri.map(ToOwned::to_owned),
                             });
                         }
                     }
@@ -253,7 +268,7 @@ impl LspServer {
                                 ),
                                 container_name: container
                                     .map(|s| normalize_package_separator(s).into_owned()),
-                                workspace_folder_uri: None,
+                                workspace_folder_uri: folder_uri.map(ToOwned::to_owned),
                             });
                         }
                     }
@@ -262,19 +277,25 @@ impl LspServer {
 
             NodeKind::Program { statements } => {
                 for stmt in statements {
-                    self.extract_symbols_recursive(stmt, source, uri, container, symbols);
+                    self.extract_symbols_recursive(
+                        stmt, source, uri, container, folder_uri, symbols,
+                    );
                 }
             }
 
             NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.extract_symbols_recursive(stmt, source, uri, container, symbols);
+                    self.extract_symbols_recursive(
+                        stmt, source, uri, container, folder_uri, symbols,
+                    );
                 }
             }
 
             // Recurse into expression statements so nested declarations are found
             NodeKind::ExpressionStatement { expression } => {
-                self.extract_symbols_recursive(expression, source, uri, container, symbols);
+                self.extract_symbols_recursive(
+                    expression, source, uri, container, folder_uri, symbols,
+                );
             }
 
             _ => {

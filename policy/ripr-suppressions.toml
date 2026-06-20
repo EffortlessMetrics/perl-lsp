@@ -1108,3 +1108,39 @@ reason = "Two ripr#1429-class seams in PR #1482 xtask coverage decoupling: (A) r
 created = "2026-06-15"
 review_after = "2026-07-15"
 expires = "2026-09-30"
+
+# =============================================================================
+# Multi-root workspace symbol tests (PR #1522): ripr#1428-class false-positives
+# in newly added test code.
+#
+# PR #1522 adds 6 weakly_exposed seams to multi_root_workspace_tests.rs:
+#   Lines 1519, 1525, 1623, 1627, 1704, 1709 (all error_path variants)
+#   in test functions: test_workspace_symbol_multi_root_deterministic_returns_both_folders,
+#   test_workspace_symbol_waits_for_index_when_building_at_request_time,
+#   and related integration tests.
+#
+# These are test-harness error returns (?)? and error variant paths in test
+# setup code, not production seams. RIPR's diff-scoped analysis treats newly
+# added test code as production seams — the same ripr#1428 class as
+# ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests.
+#
+# The test functions comprehensively exercise the multi-root workspace symbol
+# query pipeline: deterministic folder ordering, index-wait-on-building behavior,
+# cross-folder symbol isolation, module-navigation across roots. All seams
+# (error returns from Workspace::add_folder setup, Result unwraps in test)
+# are test infrastructure, not production seams.
+#
+# Suppression is minimal (single test file, test-only additions). Path scope
+# expires 2026-09-30. Remove when ripr#1428 is fixed upstream.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-multi-root-workspace-symbol-test-surface"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs/tests/multi_root_workspace_tests.rs"]
+classification = ["error_path", "weakly_exposed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "PR #1522 multi_root_workspace_tests.rs: 6 error_path weakly_exposed seams (lines 1519, 1525, 1623, 1627, 1704, 1709) flagged as new production seams by diff-scoped RIPR analysis. These are test-harness error returns (?)? and error unwrap variants in test setup code, not production seams. The test functions (test_workspace_symbol_multi_root_deterministic_returns_both_folders, test_completion_does_not_leak_symbols_across_folders, test_workspace_symbol_waits_for_index_when_building_at_request_time, etc.) comprehensively exercise the multi-root workspace symbol pipeline including folder ordering, index-wait behavior, cross-folder isolation, and module navigation. All seams are test infrastructure. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (newly added test files causing static-analysis false-positives). Suppression is minimal (single test file, test-only additions). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-16"
+review_after = "2026-07-16"
+expires = "2026-09-30"

@@ -172,6 +172,16 @@ impl LspServer {
         self.references_runtime_quality_receipt(params)
     }
 
+    /// Test-only entrypoint for LSP `textDocument/rename`.
+    ///
+    /// Exercises the live rename handler without needing an external transport.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or rename is refused.
+    pub fn test_handle_rename(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_rename_workspace(params)
+    }
+
     /// Test-only receipt for rename runtime blocker UX proof.
     ///
     /// Calls the live rename handler and compares it with the compiler-fact
@@ -563,5 +573,71 @@ impl LspServer {
 
         let url = url::Url::parse(uri).map_err(|e| e.to_string())?;
         coordinator.index().index_file(url, text.to_string())
+    }
+
+    /// Register workspace folder URIs on the server for multi-root workspace tests.
+    ///
+    /// Used by deterministic regression tests (e.g. #1514) that need workspace
+    /// folder matching without going through the full `initialize` handshake.
+    ///
+    /// Each `folder_uri` string becomes a `WorkspaceFolderState` entry and is also
+    /// propagated to the underlying workspace index via `set_workspace_folders`.
+    pub fn test_set_workspace_folder_uris(&self, folder_uris: &[&str]) {
+        use super::workspace_folder::WorkspaceFolderState;
+        let mut folders = self.workspace_folders.lock();
+        folders.clear();
+        for &uri in folder_uris {
+            folders.push(WorkspaceFolderState::new(uri.to_string()));
+        }
+        #[cfg(feature = "workspace")]
+        if let Some(coordinator) = self.index_coordinator.as_ref() {
+            coordinator
+                .index()
+                .set_workspace_folders(folder_uris.iter().map(|u| u.to_string()).collect());
+        }
+    }
+
+    /// Simulate background indexing completion by clearing the `indexing_in_progress`
+    /// flag and transitioning the coordinator to Ready.
+    ///
+    /// In production the background thread does this via RAII `IndexingGuard` drop.
+    /// In tests we call this directly after `test_index_file_in_building_state`.
+    #[cfg(feature = "workspace")]
+    pub fn test_simulate_indexing_complete(&self) {
+        use std::sync::atomic::Ordering;
+        self.indexing_in_progress.store(false, Ordering::Release);
+        if let Some(coordinator) = self.index_coordinator.as_ref() {
+            let file_count = coordinator.index().file_count();
+            let symbol_count = coordinator.index().symbol_count();
+            coordinator.transition_to_ready(file_count, symbol_count);
+        }
+    }
+
+    /// Set `indexing_in_progress` to `true` without spawning a background thread.
+    ///
+    /// Used by regression tests that need to simulate the race window where a
+    /// `workspace/symbol` request arrives while background indexing is still in
+    /// progress (i.e. `indexing_in_progress=true`, coordinator still Building).
+    ///
+    /// Pair with `test_simulate_indexing_complete` — called from a background thread
+    /// or after the LSP handler returns — to release the wait.
+    ///
+    /// In production this flag is set by `start_workspace_indexing` via
+    /// compare-exchange before the background thread is spawned.
+    #[cfg(feature = "workspace")]
+    pub fn test_simulate_indexing_start(&self) {
+        use std::sync::atomic::Ordering;
+        self.indexing_in_progress.store(true, Ordering::Release);
+    }
+
+    /// Notify a test when `workspace/symbol` enters the bounded index-ready wait.
+    ///
+    /// This is intentionally test-only instrumentation for deterministic race
+    /// regressions. The observer is consumed the first time the wait loop sees
+    /// `IndexState::Building`.
+    #[cfg(feature = "workspace")]
+    pub fn test_notify_index_ready_wait_entered(&self, sender: std::sync::mpsc::Sender<()>) {
+        let _ = self;
+        super::workspace::set_index_ready_wait_entered_observer(sender);
     }
 }

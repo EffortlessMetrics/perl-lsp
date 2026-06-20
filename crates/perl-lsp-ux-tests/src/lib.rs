@@ -642,6 +642,29 @@ impl UxHarness {
         Vec::new()
     }
 
+    /// Count diagnostics notifications already observed for a file.
+    pub fn diagnostics_event_count(&self, relative_path: &str) -> usize {
+        let uri = self.workspace.uri(relative_path);
+        DiagnosticsTracker::count_for_uri(&self.client.peek_events(), &uri)
+    }
+
+    /// Wait for a diagnostics notification after `already_seen` prior
+    /// notifications for the file.
+    pub fn wait_for_diagnostics_after_count(
+        &self,
+        relative_path: &str,
+        already_seen: usize,
+        timeout: std::time::Duration,
+    ) -> Option<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        DiagnosticsTracker::wait_for_uri_after_count(
+            || self.client.peek_events(),
+            &uri,
+            already_seen,
+            timeout,
+        )
+    }
+
     /// Wait for diagnostics to become empty for a file (cleared UX state).
     ///
     /// Returns `true` if an explicit `textDocument/publishDiagnostics` with an

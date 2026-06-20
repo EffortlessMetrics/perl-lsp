@@ -45,6 +45,31 @@ mod configuration_response;
 mod text_decode;
 
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+static INDEX_READY_WAIT_ENTERED_OBSERVER: std::sync::Mutex<Option<std::sync::mpsc::Sender<()>>> =
+    std::sync::Mutex::new(None);
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+pub(crate) fn set_index_ready_wait_entered_observer(sender: std::sync::mpsc::Sender<()>) {
+    if let Ok(mut observer) = INDEX_READY_WAIT_ENTERED_OBSERVER.lock() {
+        *observer = Some(sender);
+    }
+}
+
+#[cfg(feature = "workspace")]
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn notify_index_ready_wait_entered() {
+    let sender =
+        INDEX_READY_WAIT_ENTERED_OBSERVER.lock().ok().and_then(|mut observer| observer.take());
+    if let Some(sender) = sender {
+        let _ = sender.send(());
+    }
+}
+
+#[cfg(feature = "workspace")]
+#[cfg(not(any(test, feature = "expose_lsp_test_api")))]
+fn notify_index_ready_wait_entered() {}
+
 // Note: WalkDir logic has been extracted to super::file_discovery.
 // These helper functions are retained for potential future use by
 // other workspace operations (e.g., file watcher filtering).
@@ -230,7 +255,9 @@ impl LspServer {
     ///
     /// Uses routing helper for state-aware behavior:
     /// - **Ready state**: Full workspace index search with cooperative yielding
-    /// - **Building/Degraded state**: Query partial index first; fall through to open-doc
+    /// - **Building state**: Wait briefly for index readiness, then serve from
+    ///   the ready index when it completes (fix for issue #1514 race condition)
+    /// - **Degraded state**: Query partial index first; fall through to open-doc
     ///   search only when the partial index is also empty (Gap 2 fix, issue #4152)
     pub(super) fn handle_workspace_symbols_v2(
         &self,
@@ -249,6 +276,12 @@ impl LspServer {
         // Use routing helper for lifecycle-aware dispatch
         #[cfg(feature = "workspace")]
         {
+            // If the workspace is currently being indexed (Building state), wait
+            // briefly for readiness before serving, bounded by INDEX_READY_WAIT_MS.
+            // This eliminates the ~60% intermittent-empty race
+            // that occurs when workspace/symbol arrives right after `initialized`.
+            self.wait_for_index_ready_if_building();
+
             let access_mode = route_index_access(self.coordinator());
 
             match access_mode {
@@ -344,6 +377,111 @@ impl LspServer {
         self.search_open_documents_for_symbols(query, cap)
     }
 
+    /// Wait briefly until the workspace index transitions out of Building state
+    /// or the deadline expires.
+    ///
+    /// Called by `handle_workspace_symbols_v2` before routing so that a
+    /// `workspace/symbol` request issued immediately after `initialized` always
+    /// sees a Ready index rather than an empty partial index.
+    ///
+    /// The wait is bounded and only polls while `indexing_in_progress` is set.
+    /// Bounded by `INDEX_READY_WAIT_MS` milliseconds (default 2 s).
+    #[cfg(feature = "workspace")]
+    fn wait_for_index_ready_if_building(&self) {
+        use perl_parser::workspace_index::IndexState;
+        use std::time::Instant;
+
+        // Only wait when indexing is actively in progress.
+        if !self.indexing_in_progress.load(Ordering::Acquire) {
+            return;
+        }
+
+        const INDEX_READY_WAIT_MS: u128 = 2_000;
+        let deadline = Instant::now() + Duration::from_millis(INDEX_READY_WAIT_MS as u64);
+
+        let Some(coordinator) = self.coordinator() else {
+            return;
+        };
+
+        loop {
+            match coordinator.state() {
+                IndexState::Ready { .. } => {
+                    tracing::debug!("wait_for_index_ready: index is now Ready");
+                    break;
+                }
+                // Degraded means indexing ended early — serve what we have.
+                IndexState::Degraded { .. } => {
+                    tracing::debug!("wait_for_index_ready: index degraded, proceeding");
+                    break;
+                }
+                IndexState::Building { .. } => {
+                    notify_index_ready_wait_entered();
+                    if Instant::now() >= deadline {
+                        tracing::debug!(
+                            "wait_for_index_ready: deadline reached, serving partial index"
+                        );
+                        break;
+                    }
+                    // Keep the wait cheap under slow indexing while still
+                    // releasing quickly once the coordinator reaches Ready.
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+        }
+    }
+
+    /// Resolve the best-matching workspace folder URI for a given file URI.
+    ///
+    /// Used by the open-document fallback path to populate `workspaceFolderUri`
+    /// on symbols so that multi-root workspace disambiguation works even before
+    /// the workspace index is ready (fix for issue #1514 bug 2).
+    ///
+    /// Returns `None` when no workspace folder matches the file URI.
+    ///
+    /// Delegates to the same path-aware best-folder helper used by module
+    /// resolution and completion, so nested workspaces and Windows path casing
+    /// follow the existing runtime ownership rule.
+    #[cfg(feature = "workspace")]
+    pub(crate) fn resolve_folder_uri_for_file(&self, file_uri: &str) -> Option<String> {
+        let folders = self.workspace_folders.lock();
+        best_workspace_folder_for_doc(&folders, file_uri).map(|folder| folder.uri.clone())
+    }
+
+    #[cfg(feature = "workspace")]
+    fn populate_workspace_folder_uri_for_symbols(&self, all_symbols: &mut [Value]) {
+        // Populate workspaceFolderUri on each symbol for multi-root disambiguation.
+        // The open-doc fallback path does not go through WorkspaceIndex, so
+        // workspace_folder_uri is never set by the provider - inject it here
+        // by matching the symbol's location URI against the server's workspace folders
+        // (fix for issue #1514 bug 2).
+        for sym in all_symbols {
+            if let Some(obj) = sym.as_object_mut() {
+                // Skip symbols that already carry a workspaceFolderUri.
+                if obj.contains_key("workspaceFolderUri") {
+                    continue;
+                }
+                // Resolve from location.uri (standard LSP WorkspaceSymbol shape).
+                let file_uri = obj
+                    .get("location")
+                    .and_then(|loc| loc.get("uri"))
+                    .and_then(|u| u.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if !file_uri.is_empty() {
+                    if let Some(folder_uri) = self.resolve_folder_uri_for_file(&file_uri) {
+                        obj.insert("workspaceFolderUri".to_string(), Value::String(folder_uri));
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(all(feature = "workspace", any(test, feature = "expose_lsp_test_api")))]
+    /// Test-only helper for exercising workspace-folder URI injection branches.
+    pub fn test_populate_workspace_folder_uri_for_symbols(&self, all_symbols: &mut [Value]) {
+        self.populate_workspace_folder_uri_for_symbols(all_symbols);
+    }
+
     /// Search only open documents for symbols (degraded/fallback path)
     #[cfg(feature = "workspace")]
     fn search_open_documents_for_symbols(
@@ -394,6 +532,9 @@ impl LspServer {
                 .filter_map(|symbol| serde_json::to_value(symbol).ok()),
         );
         all_symbols.truncate(cap);
+
+        self.populate_workspace_folder_uri_for_symbols(&mut all_symbols);
+
         tracing::debug!(
             count = all_symbols.len(),
             "Workspace symbol: returned results from open documents"

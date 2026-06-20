@@ -7,7 +7,7 @@
 //!   then it should stay responsive and return either locations or an empty
 //!   result (degraded mode).
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
@@ -73,10 +73,21 @@ fn given_live_edit_when_variable_is_declared_then_navigation_remains_responsive(
         before
     );
 
+    let diagnostics_seen_before_edit = harness.diagnostics_event_count("live_edit.pl");
     harness.change_file_full("live_edit.pl", DECLARED_SOURCE)?;
 
-    let _post_edit_diagnostics =
-        harness.wait_for_latest_diagnostics("live_edit.pl", Duration::from_secs(6));
+    let post_edit_diagnostics = harness
+        .wait_for_diagnostics_after_count(
+            "live_edit.pl",
+            diagnostics_seen_before_edit,
+            Duration::from_secs(6),
+        )
+        .context("expected diagnostics after declaring $name")?;
+    assert!(
+        !has_global_symbol_diagnostic(&post_edit_diagnostics, "$name"),
+        "expected declared $name diagnostic to clear after edit, got: {:?}",
+        post_edit_diagnostics
+    );
 
     let definitions = harness.definition("live_edit.pl", 4, 7);
     assert!(
