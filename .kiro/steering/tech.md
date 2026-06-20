@@ -2,7 +2,7 @@
 
 ## Language and Toolchain
 - **Language**: Rust (Edition 2024)
-- **MSRV**: 1.92 (pinned in `rust-toolchain.toml`)
+- **MSRV**: 1.95 (pinned in `rust-toolchain.toml`)
 - **Toolchain components**: rustfmt, clippy (minimal profile)
 
 ## Build System

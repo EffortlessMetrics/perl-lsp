@@ -1,6 +1,6 @@
 # API Stability and SemVer Policy
 
-**MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha (`0.16.x` line)
+**MSRV:** 1.95 • **Edition:** 2024 • **Status:** Public alpha (`0.16.x` line)
 
 This document is the project's published compatibility contract for crates released to crates.io.
 It replaces informal wording like "we try" with explicit guarantees, review gates, and expected

@@ -55,7 +55,7 @@ Pre-built binaries are provided for:
 | macOS    | x86_64, Apple Silicon (aarch64) |
 | Windows  | x86_64 |
 
-Building from source (Rust 1.92+) works on any Rust-supported platform.
+Building from source (Rust 1.95+) works on any Rust-supported platform.
 
 ---
 

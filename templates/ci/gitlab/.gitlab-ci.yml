@@ -5,7 +5,7 @@
 # `$CI_REGISTRY_IMAGE/...` and keep the cache paths below.
 
 default:
-  image: rust:1.92-bookworm
+  image: rust:1.95-bookworm
   cache:
     key:
       files:

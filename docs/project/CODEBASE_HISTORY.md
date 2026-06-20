@@ -562,7 +562,7 @@ Common scopes: `(parser)`, `(lsp)`, `(dap)`, `(vscode)`, `(security)`,
    hover to notebook support, pull diagnostics, and type hierarchy.
 
 10. **Rust Edition 2024.** The project uses the newest Rust edition (2024) with
-    MSRV 1.92, adopting the latest language features.
+    MSRV 1.95, adopting the latest language features.
 
 11. **The commit velocity chart is a hockey stick.** From ~5 commits/month in
     2024 to ~569 commits/month in early 2026 -- a 100x increase.
