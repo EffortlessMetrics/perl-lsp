@@ -90,6 +90,8 @@ pub use perl_lexer::builtins;
 pub mod engine;
 /// Normalized high-level constructs lowered from the parser AST.
 pub mod hir;
+/// Perl Intermediate Representation (PIR) for static analysis and tooling.
+pub mod pir;
 /// Syntax-level types absorbed from Wave D satellite crates.
 pub mod syntax;
 /// Token stream and trivia utilities for the parser.
