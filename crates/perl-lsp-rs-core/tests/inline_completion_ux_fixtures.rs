@@ -19,6 +19,8 @@ const CURSOR: &str = "<<CURSOR>>";
 const TRY_TINY_BLOCK: &str = "{\n    \n} catch {\n    \n};";
 const MOJOLICIOUS_LITE_ROUTE: &str =
     "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};";
+const TEST_MORE_IS_ASSERTION: &str = "is($got, $expected, 'test description');";
+const TEST2_OK_ASSERTION: &str = "ok($result, 'test description');";
 const DBI_PREPARE_METHOD: &str = "prepare()";
 const DBI_FETCHROW_HASHREF_METHOD: &str = "fetchrow_hashref()";
 
@@ -372,6 +374,82 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
         ],
     };
 
+    let test_more_assertion = CompletionPackContract {
+        provider_id: "test_more_assertion",
+        insert_text: TEST_MORE_IS_ASSERTION,
+        filter_text: "is",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_visible_actual_expected",
+            source: "use Test::More;\n\nmy $got = compute();\nmy $expected = 42;\n\n<<CURSOR>>",
+            expected_replaces: None,
+            expected_after: "use Test::More;\n\nmy $got = compute();\nmy $expected = 42;\n\nis($got, $expected, 'test description');",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent_visible_actual_expected",
+                source: "my $got = compute();\nmy $expected = 42;\n\n<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n# <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nmy $text = \"<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n=pod\n<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nassert <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_incomplete_declaration",
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nmy <<CURSOR>>",
+            },
+        ],
+    };
+
+    let test2_assertion = CompletionPackContract {
+        provider_id: "test2_assertion",
+        insert_text: TEST2_OK_ASSERTION,
+        filter_text: "ok",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_visible_result",
+            source: "use Test2::V0;\n\nmy $result = compute();\n\n<<CURSOR>>",
+            expected_replaces: None,
+            expected_after: "use Test2::V0;\n\nmy $result = compute();\n\nok($result, 'test description');",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent_visible_result",
+                source: "my $result = compute();\n\n<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                source: "use Test2::V0;\nmy $result = compute();\n# <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                source: "use Test2::V0;\nmy $result = compute();\nmy $text = \"<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                source: "use Test2::V0;\nmy $result = compute();\n=pod\n<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                source: "use Test2::V0;\nmy $result = compute();\nassert <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_incomplete_declaration",
+                source: "use Test2::V0;\nmy $result = compute();\nmy <<CURSOR>>",
+            },
+        ],
+    };
+
     let dbi_database_handle = CompletionPackContract {
         provider_id: "dbi_database_handle_methods",
         insert_text: DBI_PREPARE_METHOD,
@@ -458,6 +536,8 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
 
     assert_completion_pack_contract(try_tiny)?;
     assert_completion_pack_contract(mojolicious_lite)?;
+    assert_completion_pack_contract(test_more_assertion)?;
+    assert_completion_pack_contract(test2_assertion)?;
     assert_completion_pack_contract(dbi_database_handle)?;
     assert_completion_pack_contract(dbi_statement_handle)
 }
