@@ -728,6 +728,10 @@ gates:
     command: >-
       cargo xtask check-from-raw &&
       cargo xtask check-memory-lifecycle-policy &&
+      cargo xtask check-semantic-token-classes &&
+      cargo xtask check-workspace-symbol-classes &&
+      cargo xtask check-provider-promotion-ledger &&
+      cargo xtask check-provider-confidence-matrix &&
       bash scripts/check-version-sync.sh &&
       bash scripts/check_release_history.sh &&
       bash ci/check_missing_docs.sh &&
