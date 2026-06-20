@@ -9,7 +9,7 @@ use std::error::Error;
 use lsp_types::{Position, Range};
 use perl_lsp_rs_core::providers::inline_completion::{
     InlineCompletionEnvironment, InlineCompletionItem, InlineCompletionList,
-    InlineCompletionProvider,
+    InlineCompletionProvider, InlinePackageMethodFact,
 };
 use perl_parser_core::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 
@@ -471,6 +471,7 @@ fn inline_completion_fixture_corpus_uses_request_environment_modules() -> TestRe
             "Local::Widget".to_string(),
             "Local::Worker".to_string(),
         ],
+        package_methods: Vec::new(),
     };
     let completions = scenario.completions_with_environment(&environment);
 
@@ -588,6 +589,102 @@ fn inline_completion_fixture_corpus_stays_silent_in_reject_zones() -> TestResult
 }
 
 #[test]
+fn inline_completion_fixture_corpus_uses_indexed_package_methods_conservatively() -> TestResult {
+    let environment = InlineCompletionEnvironment {
+        available_modules: Vec::new(),
+        package_methods: vec![
+            InlinePackageMethodFact {
+                package: "My::Service".to_string(),
+                name: "save".to_string(),
+            },
+            InlinePackageMethodFact {
+                package: "My::Service".to_string(),
+                name: "search".to_string(),
+            },
+        ],
+    };
+
+    let positive = InlineCompletionScenario::from_fixture("My::Service->sa<<CURSOR>>")?;
+    let completions = positive.completions_with_environment(&environment);
+    let item =
+        completions.items.iter().find(|item| item.insert_text == "save()").ok_or_else(|| {
+            format!(
+                "indexed_package_methods: expected save(), got {:?}",
+                completion_texts(&completions)
+            )
+        })?;
+    if item.filter_text.as_deref() != Some("save") {
+        return Err(format!("indexed_package_methods: unexpected filter text {:?}", item).into());
+    }
+    let range = item.range.as_ref().ok_or("indexed_package_methods: expected replacement range")?;
+    let replaced = slice_for_range(positive.text.as_str(), range)?;
+    if replaced != "sa" {
+        return Err(format!(
+            "indexed_package_methods: expected range to replace sa, got {replaced:?}"
+        )
+        .into());
+    }
+
+    let accepted = apply_inline_completion_item(&positive, item)?;
+    if accepted != "My::Service->save()" {
+        return Err(
+            format!("indexed_package_methods: accepted edit mismatch, got {accepted:?}").into()
+        );
+    }
+
+    let same_package =
+        InlineCompletionScenario::from_fixture("package My::Service;\nMy::Service->se<<CURSOR>>")?;
+    let completions = same_package.completions_with_environment(&environment);
+    let item =
+        completions.items.iter().find(|item| item.insert_text == "search()").ok_or_else(|| {
+            format!(
+                "indexed_package_methods:same_package expected search(), got {:?}",
+                completion_texts(&completions)
+            )
+        })?;
+    let range = item
+        .range
+        .as_ref()
+        .ok_or("indexed_package_methods:same_package expected replacement range")?;
+    let replaced = slice_for_range(same_package.text.as_str(), range)?;
+    if replaced != "se" {
+        return Err(format!(
+            "indexed_package_methods:same_package expected range to replace se, got {replaced:?}"
+        )
+        .into());
+    }
+
+    let quiet_with_environment = [
+        SilentFixture { name: "wrong_package", source: "Other::Service->sa<<CURSOR>>" },
+        SilentFixture {
+            name: "dynamic_variable_receiver",
+            source: "my $service = My::Service->new;\n$service->sa<<CURSOR>>",
+        },
+        SilentFixture { name: "comment_context", source: "# My::Service->sa<<CURSOR>>" },
+        SilentFixture { name: "string_context", source: "my $text = \"My::Service->sa<<CURSOR>>" },
+        SilentFixture { name: "pod_context", source: "=pod\nMy::Service->sa<<CURSOR>>" },
+        SilentFixture { name: "near_match_receiver_syntax", source: "My::Service=>sa<<CURSOR>>" },
+        SilentFixture {
+            name: "parse_damage_non_package_receiver",
+            source: "my @service;\n@service->sa<<CURSOR>>",
+        },
+    ];
+    for fixture in quiet_with_environment {
+        let scenario = InlineCompletionScenario::from_fixture(fixture.source)?;
+        let completions = scenario.completions_with_environment(&environment);
+        assert_completion_absent(fixture.name, &completions, "save()")?;
+        assert_completion_absent(fixture.name, &completions, "search()")?;
+    }
+
+    let missing_facts = InlineCompletionScenario::from_fixture("My::Service->sa<<CURSOR>>")?;
+    let completions = missing_facts.completions();
+    assert_completion_absent("missing_indexed_facts", &completions, "save()")?;
+    assert_completion_absent("missing_indexed_facts", &completions, "search()")?;
+
+    Ok(())
+}
+
+#[test]
 fn inline_completion_fixture_corpus_prefers_workspace_available_modules() -> TestResult {
     let scenario = InlineCompletionScenario::from_fixture("use My::W<<CURSOR>>")?;
     let environment = InlineCompletionEnvironment {
@@ -596,6 +693,7 @@ fn inline_completion_fixture_corpus_prefers_workspace_available_modules() -> Tes
             "My::Worker".to_string(),
             "Other::Widget".to_string(),
         ],
+        package_methods: Vec::new(),
     };
     let completions = scenario.completions_with_environment(&environment);
     let inserts = completion_texts(&completions);

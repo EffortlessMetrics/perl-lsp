@@ -290,6 +290,7 @@ fn run_scenario(
             .iter()
             .map(|module| module.to_string())
             .collect(),
+        package_methods: Vec::new(),
     };
     let completions = provider.get_inline_completions_with_environment(
         fixture.text.as_str(),

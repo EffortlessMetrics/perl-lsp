@@ -16,7 +16,9 @@ use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
 use perl_lsp_rs_core::providers::completion::collect_module_names_from_roots_with_cache;
-use perl_lsp_rs_core::providers::inline_completion::InlineCompletionEnvironment;
+use perl_lsp_rs_core::providers::inline_completion::{
+    InlineCompletionEnvironment, InlinePackageMethodFact,
+};
 use perl_lsp_rs_core::providers::normalize_provider_decision_receipt;
 use perl_parser_core::source_file::is_perl_source_uri;
 use std::path::{Path, PathBuf};
@@ -81,6 +83,75 @@ fn inline_workspace_module_name(symbol: &crate::workspace_index::WorkspaceSymbol
             symbol.container_name.as_ref().map(|container| format!("{container}::{}", symbol.name))
         })
         .unwrap_or_else(|| symbol.name.clone())
+}
+
+#[cfg(feature = "workspace")]
+fn is_inline_workspace_method_symbol(symbol: &crate::workspace_index::WorkspaceSymbol) -> bool {
+    symbol.has_body
+        && matches!(
+            symbol.kind,
+            crate::workspace_index::SymbolKind::Subroutine
+                | crate::workspace_index::SymbolKind::Method
+        )
+        && is_inline_package_method_name(symbol.name.as_str())
+}
+
+#[cfg(feature = "workspace")]
+fn inline_workspace_package_method_fact(
+    package: &str,
+    symbol: &crate::workspace_index::WorkspaceSymbol,
+) -> Option<InlinePackageMethodFact> {
+    if symbol.container_name.as_deref() != Some(package) {
+        let qualified_name = symbol.qualified_name.as_deref()?;
+        if qualified_name != format!("{package}::{}", symbol.name) {
+            return None;
+        }
+    }
+
+    Some(InlinePackageMethodFact { package: package.to_string(), name: symbol.name.clone() })
+}
+
+fn inline_package_receiver_method_fragment(prefix: &str) -> Option<(&str, &str)> {
+    let arrow_index = prefix.rfind("->")?;
+    let fragment = &prefix[arrow_index + 2..];
+    if !fragment.chars().all(is_inline_package_method_fragment_char) {
+        return None;
+    }
+
+    let receiver_prefix = prefix[..arrow_index].trim_end();
+    let receiver_start = receiver_prefix
+        .char_indices()
+        .rev()
+        .find_map(|(idx, ch)| {
+            (!is_inline_package_receiver_fragment_char(ch)).then_some(idx + ch.len_utf8())
+        })
+        .unwrap_or(0);
+    let receiver = receiver_prefix[receiver_start..].trim();
+    is_inline_package_receiver(receiver).then_some((receiver, fragment))
+}
+
+fn is_inline_package_receiver(receiver: &str) -> bool {
+    let Some(first) = receiver.chars().next() else {
+        return false;
+    };
+    receiver.chars().all(is_inline_package_receiver_fragment_char)
+        && (receiver.contains("::") || first.is_ascii_uppercase())
+}
+
+fn is_inline_package_receiver_fragment_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | ':')
+}
+
+fn is_inline_package_method_name(name: &str) -> bool {
+    let Some(first) = name.chars().next() else {
+        return false;
+    };
+    (first.is_ascii_alphabetic() || first == '_')
+        && name.chars().all(is_inline_package_method_fragment_char)
+}
+
+fn is_inline_package_method_fragment_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
 }
 
 fn inline_completion_trigger_kind(
@@ -931,38 +1002,46 @@ impl LspServer {
         character: u32,
         context: &perl_lsp_rs_core::providers::inline_completion::PreparedInlineCompletionContext,
     ) -> InlineCompletionEnvironment {
-        let Some(fragment) = inline_use_module_fragment(context.prefix.as_str()) else {
-            return InlineCompletionEnvironment::default();
-        };
-        if !should_collect_inline_modules(fragment) {
-            return InlineCompletionEnvironment::default();
+        let mut environment = InlineCompletionEnvironment::default();
+
+        if let Some(fragment) = inline_use_module_fragment(context.prefix.as_str())
+            && should_collect_inline_modules(fragment)
+            && let Some(cursor_offset) = position_to_offset(text, line, character)
+        {
+            let (include_paths, system_inc_paths, include_system_inc) =
+                self.module_completion_roots_for_doc(uri, text, cursor_offset);
+            let include_paths =
+                self.inline_module_scan_roots(uri, text, cursor_offset, include_paths);
+            let mut available_modules = collect_module_names_from_roots_with_cache(
+                fragment,
+                &include_paths,
+                &system_inc_paths,
+                include_system_inc,
+                Some(&self.module_scan_cache),
+                &|| false,
+            );
+            self.add_workspace_index_inline_modules(
+                fragment,
+                uri,
+                text,
+                cursor_offset,
+                &mut available_modules,
+            );
+            available_modules.sort();
+            available_modules.dedup();
+            environment.available_modules = available_modules;
         }
-        let Some(cursor_offset) = position_to_offset(text, line, character) else {
-            return InlineCompletionEnvironment::default();
-        };
 
-        let (include_paths, system_inc_paths, include_system_inc) =
-            self.module_completion_roots_for_doc(uri, text, cursor_offset);
-        let include_paths = self.inline_module_scan_roots(uri, text, cursor_offset, include_paths);
-        let mut available_modules = collect_module_names_from_roots_with_cache(
-            fragment,
-            &include_paths,
-            &system_inc_paths,
-            include_system_inc,
-            Some(&self.module_scan_cache),
-            &|| false,
-        );
-        self.add_workspace_index_inline_modules(
-            fragment,
-            uri,
-            text,
-            cursor_offset,
-            &mut available_modules,
-        );
-        available_modules.sort();
-        available_modules.dedup();
+        if let Some((package, _fragment)) =
+            inline_package_receiver_method_fragment(context.prefix.as_str())
+        {
+            self.add_workspace_index_inline_package_methods(
+                package,
+                &mut environment.package_methods,
+            );
+        }
 
-        InlineCompletionEnvironment { available_modules }
+        environment
     }
 
     fn inline_module_scan_roots(
@@ -1021,6 +1100,38 @@ impl LspServer {
 
         #[cfg(not(feature = "workspace"))]
         let _ = (fragment, uri, text, cursor_offset, available_modules);
+    }
+
+    fn add_workspace_index_inline_package_methods(
+        &self,
+        package: &str,
+        package_methods: &mut Vec<InlinePackageMethodFact>,
+    ) {
+        #[cfg(feature = "workspace")]
+        {
+            let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
+                return;
+            };
+
+            for symbol in coordinator.index().get_package_members(package) {
+                if !is_inline_workspace_method_symbol(&symbol) {
+                    continue;
+                }
+                let Some(method) = inline_workspace_package_method_fact(package, &symbol) else {
+                    continue;
+                };
+                package_methods.push(method);
+            }
+
+            package_methods.sort_by(|left, right| {
+                left.package.cmp(&right.package).then_with(|| left.name.cmp(&right.name))
+            });
+            package_methods
+                .dedup_by(|left, right| left.package == right.package && left.name == right.name);
+        }
+
+        #[cfg(not(feature = "workspace"))]
+        let _ = (package, package_methods);
     }
 
     /// Attempt AI-backed inline completion.
@@ -1849,6 +1960,74 @@ mod tests {
             "workspace-root-only module must not leak through scan roots; got {:?}",
             environment.available_modules
         );
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_environment_collects_indexed_package_methods()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::providers::inline_completion::{
+            InlineCompletionProvider, InlinePackageMethodFact,
+        };
+        use url::Url;
+
+        let server = LspServer::default();
+        let coordinator = server.coordinator().ok_or("missing workspace index coordinator")?;
+        coordinator.index().index_file(
+            Url::parse("file:///workspace/lib/My/Service.pm")?,
+            "package My::Service;\nsub save { 1 }\nsub search { 1 }\npackage My::Service::Nested;\nsub salvage { 1 }\n1;\n".to_string(),
+        )?;
+        coordinator.transition_to_ready(1, 1);
+
+        let provider = InlineCompletionProvider::new();
+        let doc_text = "My::Service->sa";
+        let character = doc_text.encode_utf16().count() as u32;
+        let context =
+            provider.prepare_context(doc_text, 0, character).ok_or("expected inline context")?;
+        let environment = server.inline_completion_environment_for_context(
+            "file:///workspace/script.pl",
+            doc_text,
+            0,
+            character,
+            &context,
+        );
+
+        assert_eq!(
+            environment.package_methods,
+            vec![
+                InlinePackageMethodFact {
+                    package: "My::Service".to_string(),
+                    name: "save".to_string(),
+                },
+                InlinePackageMethodFact {
+                    package: "My::Service".to_string(),
+                    name: "search".to_string(),
+                }
+            ],
+            "only matching source-backed methods from the explicit receiver package should be collected"
+        );
+        assert!(
+            environment.available_modules.is_empty(),
+            "receiver contexts should not trigger module scanning"
+        );
+
+        let dynamic_text = "my $service = My::Service->new;\n$service->sa";
+        let dynamic_character = "$service->sa".encode_utf16().count() as u32;
+        let dynamic_context = provider
+            .prepare_context(dynamic_text, 1, dynamic_character)
+            .ok_or("expected dynamic receiver context")?;
+        let dynamic_environment = server.inline_completion_environment_for_context(
+            "file:///workspace/script.pl",
+            dynamic_text,
+            1,
+            dynamic_character,
+            &dynamic_context,
+        );
+        assert!(
+            dynamic_environment.package_methods.is_empty(),
+            "dynamic variable receivers require type inference and must stay quiet"
+        );
+
         Ok(())
     }
 

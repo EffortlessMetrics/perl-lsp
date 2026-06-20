@@ -54,6 +54,17 @@ pub struct PreparedInlineCompletionContext {
 pub struct InlineCompletionEnvironment {
     /// Modules reachable from the current document's effective `@INC`.
     pub available_modules: Vec<String>,
+    /// Methods proven by the workspace index for explicit package receivers.
+    pub package_methods: Vec<InlinePackageMethodFact>,
+}
+
+/// A workspace-index-backed method available for an explicit package receiver.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlinePackageMethodFact {
+    /// Package or class name used as the receiver, for example `My::Service`.
+    pub package: String,
+    /// Method/subroutine name available on the package.
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,6 +79,7 @@ pub(crate) struct SemanticInlineContext {
     pub(crate) imported_modules: Vec<ModuleFact>,
     pub(crate) available_modules: Vec<ModuleFact>,
     pub(crate) current_package_methods: Vec<MethodFact>,
+    pub(crate) indexed_package_methods: Vec<InlinePackageMethodFact>,
     pub(crate) has_done_testing_call: bool,
     pub(crate) file_role: FileRole,
     pub(crate) style: InlineStyleContext,
@@ -442,6 +454,7 @@ impl InlineCandidateMetadata {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InlineCandidateReason {
     CurrentPackageMethod,
+    IndexedPackageMethod,
     DbiReceiverMethod,
     EffectiveIncModule,
     VisibleLexical,
@@ -474,15 +487,16 @@ impl InlineCandidateReason {
     fn stable_rank(self) -> u8 {
         match self {
             Self::CurrentPackageMethod => 0,
-            Self::DbiReceiverMethod => 1,
-            Self::EffectiveIncModule => 2,
-            Self::VisibleLexical => 3,
-            Self::SourceReceiver => 4,
-            Self::SourceModule => 5,
-            Self::SourceSyntax => 6,
-            Self::SourceTest => 7,
-            Self::SourceShebang => 8,
-            Self::SourceContextualFallback => 9,
+            Self::IndexedPackageMethod => 1,
+            Self::DbiReceiverMethod => 2,
+            Self::EffectiveIncModule => 3,
+            Self::VisibleLexical => 4,
+            Self::SourceReceiver => 5,
+            Self::SourceModule => 6,
+            Self::SourceSyntax => 7,
+            Self::SourceTest => 8,
+            Self::SourceShebang => 9,
+            Self::SourceContextualFallback => 10,
         }
     }
 }
@@ -498,6 +512,7 @@ impl InlineCandidateConfidence {
     fn for_reason(reason: InlineCandidateReason) -> Self {
         match reason {
             InlineCandidateReason::CurrentPackageMethod
+            | InlineCandidateReason::IndexedPackageMethod
             | InlineCandidateReason::DbiReceiverMethod
             | InlineCandidateReason::EffectiveIncModule
             | InlineCandidateReason::VisibleLexical
@@ -579,6 +594,10 @@ fn receiver_candidate_reason(
         return InlineCandidateReason::CurrentPackageMethod;
     }
 
+    if indexed_package_method_matches(context, method_name) {
+        return InlineCandidateReason::IndexedPackageMethod;
+    }
+
     if context.dbi_receiver_kind.is_some() {
         return InlineCandidateReason::DbiReceiverMethod;
     }
@@ -595,6 +614,27 @@ fn receiver_targets_current_package(context: &SemanticInlineContext) -> bool {
             .is_some_and(|current_package| package == "__PACKAGE__" || package == current_package),
         _ => false,
     }
+}
+
+fn receiver_indexed_package(context: &SemanticInlineContext) -> Option<&str> {
+    match context.receiver_hint.as_ref() {
+        Some(ReceiverHint::Package(package)) if package != "__PACKAGE__" => Some(package.as_str()),
+        _ => None,
+    }
+}
+
+fn indexed_package_method_matches(context: &SemanticInlineContext, method_name: &str) -> bool {
+    let Some(package) = receiver_indexed_package(context) else {
+        return false;
+    };
+    context
+        .indexed_package_methods
+        .iter()
+        .any(|method| method.package == package && method.name == method_name)
+}
+
+fn indexed_package_has_methods(context: &SemanticInlineContext, package: &str) -> bool {
+    context.indexed_package_methods.iter().any(|method| method.package == package)
 }
 
 fn module_candidate_reason(
@@ -661,6 +701,10 @@ fn receiver_candidate_bonus(item: &InlineCompletionItem, context: &SemanticInlin
     let method_name = item.insert_text.trim_end_matches("()");
     if context.current_package_methods.iter().any(|method| method.name == method_name) {
         return 30;
+    }
+
+    if indexed_package_method_matches(context, method_name) {
+        return 28;
     }
 
     10
@@ -1304,6 +1348,7 @@ impl InlineCompletionProvider {
             imported_modules,
             available_modules: Vec::new(),
             current_package_methods: Vec::new(),
+            indexed_package_methods: Vec::new(),
             has_done_testing_call: false,
             file_role: self.file_role(context),
             style: InlineStyleContext::unknown(context),
@@ -1370,6 +1415,7 @@ impl InlineCompletionProvider {
     ) -> SemanticInlineContext {
         let mut semantic_context = self.semantic_context_for_prepared_context(context);
         semantic_context.available_modules = available_module_facts(&environment.available_modules);
+        semantic_context.indexed_package_methods = environment.package_methods.clone();
         semantic_context.file_role = self.file_role_for_source(context, text);
         semantic_context.style = self.style_context_for_source(context, text);
         semantic_context.has_done_testing_call = source_has_done_testing_call(text);
@@ -1782,6 +1828,40 @@ impl InlineCompletionProvider {
             .collect()
     }
 
+    fn indexed_package_method_items(
+        &self,
+        context: &SemanticInlineContext,
+        package: &str,
+        fragment: &str,
+    ) -> Vec<InlineCompletionItem> {
+        let mut seen = Vec::<String>::new();
+        context
+            .indexed_package_methods
+            .iter()
+            .filter(|method| {
+                method.package == package
+                    && completion_matches_fragment(
+                        method.name.as_str(),
+                        &format!("{}()", method.name),
+                        fragment,
+                    )
+            })
+            .filter(|method| {
+                if seen.iter().any(|existing| existing == &method.name) {
+                    return false;
+                }
+                seen.push(method.name.clone());
+                true
+            })
+            .map(|method| InlineCompletionItem {
+                insert_text: format!("{}()", method.name),
+                filter_text: Some(method.name.clone()),
+                range: None,
+                command: None,
+            })
+            .collect()
+    }
+
     fn preferred_test_statement(&self, context: &SemanticInlineContext) -> Option<String> {
         self.preferred_is_assertion_arguments(context)
             .map(|arguments| format!("is({arguments}"))
@@ -1892,6 +1972,34 @@ impl InlineCandidateSource for ReceiverCandidateSource {
             if receiver_targets_current_package(semantic_context) {
                 for method in provider.current_package_method_items(semantic_context, fragment) {
                     sink.push(Self::SOURCE, 0, method);
+                }
+                if let Some(package) = receiver_indexed_package(semantic_context) {
+                    for method in
+                        provider.indexed_package_method_items(semantic_context, package, fragment)
+                    {
+                        sink.push(Self::SOURCE, 0, method);
+                    }
+                }
+            } else if let Some(package) = receiver_indexed_package(semantic_context) {
+                let methods =
+                    provider.indexed_package_method_items(semantic_context, package, fragment);
+                if !methods.is_empty() {
+                    for method in methods {
+                        sink.push(Self::SOURCE, 0, method);
+                    }
+                } else if !indexed_package_has_methods(semantic_context, package)
+                    && completion_matches_fragment("new", "new()", fragment)
+                {
+                    sink.push(
+                        Self::SOURCE,
+                        0,
+                        InlineCompletionItem {
+                            insert_text: "new()".into(),
+                            filter_text: Some("new".into()),
+                            range: None,
+                            command: None,
+                        },
+                    );
                 }
             } else if let Some(kind) = semantic_context.dbi_receiver_kind {
                 for method in dbi_receiver_method_items(kind, fragment) {
@@ -3584,6 +3692,7 @@ mod tests {
                 "My::App".to_string(),
                 "My::App::Config".to_string(),
             ],
+            package_methods: Vec::new(),
         };
         let completions =
             provider.get_inline_completions_with_environment("use My::", 0, 8, &environment);
@@ -3609,6 +3718,7 @@ mod tests {
         let provider = InlineCompletionProvider::new();
         let environment = InlineCompletionEnvironment {
             available_modules: vec!["My::App".to_string(), "Other::Tool".to_string()],
+            package_methods: Vec::new(),
         };
         let completions =
             provider.get_inline_completions_with_environment("require My::", 0, 12, &environment);
@@ -6118,6 +6228,28 @@ mod tests {
         assert_eq!(receiver_metadata.reason, InlineCandidateReason::CurrentPackageMethod);
         assert_eq!(receiver_metadata.confidence, InlineCandidateConfidence::High);
 
+        let indexed_source = "My::Service->sa";
+        let indexed_character = indexed_source.encode_utf16().count() as u32;
+        let indexed_prepared = provider
+            .prepare_context(indexed_source, 0, indexed_character)
+            .ok_or("expected indexed package receiver context")?;
+        let mut indexed_context = provider.semantic_context_for_prepared_context(&indexed_prepared);
+        indexed_context.indexed_package_methods =
+            vec![InlinePackageMethodFact { package: "My::Service".into(), name: "save".into() }];
+        let indexed_item = InlineCompletionItem {
+            insert_text: "save()".into(),
+            filter_text: Some("save".into()),
+            range: None,
+            command: None,
+        };
+        let indexed_metadata = InlineCandidateMetadata::for_candidate(
+            InlineCandidateSourceKind::Receiver,
+            &indexed_item,
+            &indexed_context,
+        );
+        assert_eq!(indexed_metadata.reason, InlineCandidateReason::IndexedPackageMethod);
+        assert_eq!(indexed_metadata.confidence, InlineCandidateConfidence::High);
+
         Ok(())
     }
 
@@ -6203,6 +6335,7 @@ mod tests {
 
         let reason_ranks: Vec<_> = [
             InlineCandidateReason::CurrentPackageMethod,
+            InlineCandidateReason::IndexedPackageMethod,
             InlineCandidateReason::DbiReceiverMethod,
             InlineCandidateReason::EffectiveIncModule,
             InlineCandidateReason::VisibleLexical,
@@ -6216,7 +6349,7 @@ mod tests {
         .into_iter()
         .map(|reason| reason.stable_rank())
         .collect();
-        assert_eq!(reason_ranks, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(reason_ranks, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
         let confidence_ranks: Vec<_> = [
             InlineCandidateConfidence::High,
