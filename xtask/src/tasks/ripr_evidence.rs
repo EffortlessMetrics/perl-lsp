@@ -3,6 +3,7 @@
 //! README badges stay repo-scoped. These commands produce diff-scoped artifacts
 //! under `target/` for PR review, annotations, and mutation routing.
 
+use crate::tasks::git_context::{default_windows_drive_mount_root, git_output_with_mount_root};
 use color_eyre::eyre::{Context, Result, bail, eyre};
 use glob::Pattern;
 use serde::Deserialize;
@@ -1846,9 +1847,8 @@ fn write_pr_diff(repo: &Path, base: &str, head: &str) -> Result<()> {
 }
 
 fn run_git_output(repo: &Path, args: &[&str]) -> Result<String> {
-    let mut git_args = vec!["-C".to_string(), repo.display().to_string()];
-    git_args.extend(args.iter().map(|arg| (*arg).to_string()));
-    run_output("git", &git_args)
+    let output = git_output_with_mount_root(repo, args, default_windows_drive_mount_root())?;
+    output_to_string("git", output)
 }
 
 fn run_ripr(args: &[String]) -> Result<String> {
