@@ -43,6 +43,12 @@ jobs:
     outputs:
       run_ci: ${{ steps.guard.outputs.run_ci }}
     steps:
+      - name: Checkout for docs-only detection
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       - name: Decide whether full CI should run
         id: guard
         run: |
@@ -53,8 +59,42 @@ jobs:
             echo "run_ci=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Draft PR detected — skipping CI jobs until ready for review"
           else
-            echo "run_ci=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Non-draft PR — running merge-gate (pr-smoke, conflict-markers, shards, UX tests); supersede protection via preflight-latest-check (#1484)"
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            pr_number="${{ github.event.pull_request.number }}"
+            pr_head_ref="refs/remotes/pr/${pr_number}/head"
+
+            if ! git fetch --no-tags --depth=1 origin "${base_sha}" "pull/${pr_number}/head:${pr_head_ref}"; then
+              echo "run_ci=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::Could not fetch PR diff refs; running full CI fail-safe"
+              exit 0
+            fi
+
+            mapfile -t changed_files < <(git diff --name-only "${base_sha}" "${pr_head_ref}")
+            if [ "${#changed_files[@]}" -eq 0 ]; then
+              echo "run_ci=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::No changed files detected — running full CI fail-safe"
+              exit 0
+            fi
+
+            docs_only=true
+            for path in "${changed_files[@]}"; do
+              case "$path" in
+                docs/*|*.md|vscode-extension/media/*|vscode-extension/snippets/*|tree-sitter-perl/examples/*)
+                  ;;
+                *)
+                  docs_only=false
+                  break
+                  ;;
+              esac
+            done
+
+            if [ "$docs_only" = "true" ]; then
+              echo "run_ci=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Docs/assets-only PR detected — skipping Rust CI jobs; lightweight workflows still run"
+            else
+              echo "run_ci=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Non-draft PR with code/config changes — running merge-gate (pr-smoke, conflict-markers, shards, UX tests); supersede protection via preflight-latest-check (#1484)"
+            fi
           fi
 
   # ── Preflight: skip superseded SHAs to save cost ─────────────────────
