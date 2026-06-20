@@ -102,6 +102,60 @@ fn pod_hover_cache_prunes_at_cap_and_evicts_active_document_path()
 }
 
 #[test]
+fn pod_hover_cache_refreshes_after_external_file_edit() -> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("ExternalEdit.pm");
+
+    std::fs::write(
+        &path,
+        "package ExternalEdit;\n\n=head1 NAME\n\nExternalEdit\n\n=head1 DESCRIPTION\n\nOriginal POD.\n\n=cut\n\n1;\n",
+    )?;
+
+    let first_hover = server.format_pod_for_hover(&path);
+    assert!(
+        first_hover.contains("Original POD"),
+        "initial POD hover should be cached: {first_hover}"
+    );
+    let cached_hover = server.format_pod_for_hover(&path);
+    assert_eq!(cached_hover, first_hover, "unchanged POD hover should use the cached document");
+
+    write_after_mtime_tick(
+        &path,
+        "package ExternalEdit;\n\n=head1 NAME\n\nExternalEdit\n\n=head1 DESCRIPTION\n\nUpdated POD.\n\n=cut\n\n1;\n",
+    )?;
+
+    let updated_hover = server.format_pod_for_hover(&path);
+    assert!(
+        updated_hover.contains("Updated POD"),
+        "POD hover should refresh after file mtime changes: {updated_hover}"
+    );
+    assert!(
+        !updated_hover.contains("Original POD"),
+        "stale cached POD should not remain after external file edit: {updated_hover}"
+    );
+
+    Ok(())
+}
+
+fn write_after_mtime_tick(
+    path: &std::path::Path,
+    contents: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let before_modified = std::fs::metadata(path)?.modified()?;
+
+    for _ in 0..30 {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(path, contents)?;
+        if std::fs::metadata(path)?.modified()? != before_modified {
+            return Ok(());
+        }
+    }
+
+    Err("file mtime did not change after rewrite".into())
+}
+
+#[test]
 fn missing_module_hover_gives_actionable_next_steps() {
     let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
     {
