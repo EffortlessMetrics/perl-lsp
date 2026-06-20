@@ -63,6 +63,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Malformed debugger stack contexts reject blank file names.** Stack parsing
   no longer accepts whitespace-only file fields as a real frame location.
   (#1498)
+- **DAP request ordering fails with explicit protocol errors.** `launch` now
+  requires a prior `initialize`, and `configurationDone` now requires an
+  active launch or attach session instead of accepting out-of-sequence clients.
+  (#1806)
+- **DAP scopes expose pagination hint fields.** Scope responses now carry the
+  optional `namedVariables` and `indexedVariables` fields from the DAP
+  specification, preserving compatibility when counts are unavailable. (#1810)
+- **DAP capability flags match implemented handlers.** The initialize response
+  now advertises restart frame, step-in targets, and terminate-threads support
+  when those routed handlers exist, so clients can discover the implemented
+  operations. (#1759)
 
 #### Editor settings
 
@@ -179,6 +190,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AST kind inventories are compiler-derived.** `ALL_KIND_NAMES` now derives
   from `NodeKind::VARIANTS`, removing a hand-maintained mirror list that could
   drift from the enum. (#1491)
+- **File-local semantic fact IDs include file identity.** Stable semantic IDs
+  for anchors, entities, occurrences, and file-scoped edges now include
+  `FileId`, preventing identical source in different files from colliding while
+  preserving the file-neutral reference-source sentinel. (#1876)
+- **LSP transport framing uses checked body-offset arithmetic.**
+  `Content-Length` frame parsing now guards the `body_start` offset calculation
+  with checked arithmetic and recovers through the existing invalid-length path
+  on overflow. (#1793)
 - **Coverage and test gates are separated.** Patch coverage now reports
   coverage shortfall/setup/routing failures separately from routed test
   failures, so a latent unrelated routed test belongs to a test-named gate
