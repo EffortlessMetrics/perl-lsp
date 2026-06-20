@@ -14,6 +14,8 @@ use support::lsp_harness::LspHarness;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
+const PERLDOC_TEXT_DOCUMENT_CONTENT_TIMEOUT: Duration = Duration::from_secs(12);
+
 #[derive(Clone, Default)]
 struct OutputCapture {
     buffer: Arc<Mutex<Vec<u8>>>,
@@ -50,8 +52,7 @@ fn initialized_harness() -> Result<LspHarness, String> {
     Ok(harness)
 }
 
-fn text_document_content_response(params: Option<Value>) -> Result<Value, String> {
-    let mut harness = initialized_harness()?;
+fn text_document_content_request(params: Option<Value>) -> Value {
     let mut request = json!({
         "jsonrpc": "2.0",
         "id": 0,
@@ -60,7 +61,19 @@ fn text_document_content_response(params: Option<Value>) -> Result<Value, String
     if let Some(params) = params {
         request["params"] = params;
     }
+    request
+}
+
+fn text_document_content_response(params: Option<Value>) -> Result<Value, String> {
+    let mut harness = initialized_harness()?;
+    let request = text_document_content_request(params);
     Ok(harness.request_raw(request))
+}
+
+fn perldoc_text_document_content_response(uri: &str) -> Result<Value, String> {
+    let mut harness = initialized_harness()?;
+    let request = text_document_content_request(Some(json!({ "uri": uri })));
+    Ok(harness.request_raw_with_timeout(request, PERLDOC_TEXT_DOCUMENT_CONTENT_TIMEOUT))
 }
 
 fn assert_error_code(response: &Value, expected_code: i32) -> TestResult {
@@ -141,7 +154,7 @@ fn text_document_content_unsupported_scheme_returns_deterministic_error() -> Tes
 
 #[test]
 fn text_document_content_perldoc_strict_returns_text_or_explicit_unavailable_error() -> TestResult {
-    let response = text_document_content_response(Some(json!({ "uri": "perldoc://strict" })))?;
+    let response = perldoc_text_document_content_response("perldoc://strict")?;
 
     if response.get("error").is_some() {
         assert_error_code(&response, INVALID_REQUEST)?;
@@ -168,7 +181,7 @@ fn text_document_content_perldoc_strict_returns_text_or_explicit_unavailable_err
 
 #[test]
 fn text_document_content_perldoc_warnings_links_back_to_strict_or_unavailable() -> TestResult {
-    let response = text_document_content_response(Some(json!({ "uri": "perldoc://warnings" })))?;
+    let response = perldoc_text_document_content_response("perldoc://warnings")?;
 
     if response.get("error").is_some() {
         assert_error_code(&response, INVALID_REQUEST)?;
