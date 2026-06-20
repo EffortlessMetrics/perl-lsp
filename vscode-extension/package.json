@@ -383,8 +383,8 @@
             "default": false,
             "scope": "resource",
             "order": 10,
-            "description": "Enable AI-powered inline completions. Requires a running language server with AI support.",
-            "markdownDescription": "Enable AI-powered inline completions. Requires a running language server with AI support."
+            "description": "Enable AI-powered inline code suggestions. Off by default; requires a language server that advertises inline-completion support. See the README for configuration.",
+            "markdownDescription": "Enable AI-powered inline code suggestions. Off by default; requires a language server that advertises inline-completion support. See the [README](https://github.com/EffortlessMetrics/perl-lsp/tree/master/vscode-extension#ai-completion) for configuration."
           },
           "perl-lsp.aiCompletion.streaming.enabled": {
             "type": "boolean",
@@ -613,6 +613,12 @@
         "title": "Restart Perl Language Server",
         "category": "Perl",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "perl-lsp.openDemoProject",
+        "title": "Open Demo Project",
+        "category": "Perl",
+        "icon": "$(folder-opened)"
       },
       {
         "command": "perl-lsp.showVersion",
@@ -1068,7 +1074,7 @@
           {
             "id": "open-project",
             "title": "Open a Perl Project",
-            "description": "Open a folder containing Perl files to activate workspace indexing.",
+            "description": "Open a folder containing Perl files to activate workspace indexing.\n\n**No project handy?** [Open the demo project](command:perl-lsp.openDemoProject) — it ships with `lib/Utils.pm` and `lib/Database.pm` so you can try completion, hover, and go-to-definition right away.",
             "media": {
               "image": "media/walkthrough/open-project.svg",
               "altText": "Open Project"
@@ -1090,6 +1096,15 @@
             "media": {
               "image": "media/walkthrough/try-goto-definition.svg",
               "altText": "Go to Definition"
+            }
+          },
+          {
+            "id": "ai-completion",
+            "title": "AI-Powered Completions (Optional)",
+            "description": "Perl LSP supports AI-powered inline code suggestions, but the feature is **off by default** and only available when your language server advertises support.\n\nEnable it under `Settings` → search `perl-lsp.aiCompletion` (or run the command from the palette). If your server supports it, the extension also offers a one-time prompt to turn it on.",
+            "media": {
+              "image": "media/walkthrough/ai-completion.svg",
+              "altText": "AI Completions"
             }
           },
           {

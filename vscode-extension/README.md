@@ -55,6 +55,26 @@ for support-tier boundaries, explanations, previews, and copyable receipts.
 - **Inlay Hints** -- Type annotations shown inline in the editor
 - **Code Folding** -- Collapse subs, blocks, POD, and heredocs
 
+### AI Completion
+
+Perl LSP supports **AI-powered inline completions**, surfaced through VS Code's
+inline-suggestion UI. The feature is **off by default** and only available when
+your language server advertises inline-completion support (`inlineCompletionProvider`).
+
+To enable it, set `perl-lsp.aiCompletion.enabled` to `true` (Settings → search
+`perl-lsp.aiCompletion`). Progressive streaming is controlled separately by
+`perl-lsp.aiCompletion.streaming.enabled`. When the running server advertises
+support and the feature is off, the extension also offers a one-time prompt to
+turn it on.
+
+### Quick Start: Demo Project
+
+New to the extension and don't have a Perl project handy? Run
+**Perl: Open Demo Project** from the command palette (or use the "Open a Perl
+Project" step in the Get Started walkthrough). It opens a small bundled project
+with `lib/Utils.pm` and `lib/Database.pm` so you can immediately try completion,
+hover, and go-to-definition.
+
 ### Debugging (via perl-dap)
 - **Breakpoints** -- Set breakpoints with conditional support
 - **Step Debugging** -- Step into, over, and out of function calls
@@ -208,6 +228,7 @@ Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 | Command | Description |
 |---------|-------------|
 | **Perl: Restart Language Server** | Restart the language server |
+| **Perl: Open Demo Project** | Open a bundled demo project to try features immediately |
 | **Perl: Show Server Version** | Display installed perllsp version |
 | **Perl: Reinstall Server Binary** | Re-download the managed binary |
 | **Perl: Organize Use Statements** | Sort and clean `use` statements |

@@ -293,12 +293,10 @@ impl DebugAdapter {
         let total_variables: Option<i64> = if !parsed_full_roots.is_empty() {
             // Fresh parse: total is the full root list length before pagination.
             Some(parsed_full_roots.len() as i64)
-        } else if let Some(n) = cached_total {
-            // Cache hit: the cache stores the original full list, so root_count() is reliable.
-            Some(n as i64)
         } else {
-            // Fallback path or unknown — omit the field.
-            None
+            // Cache hit (the cache stores the original full list, so root_count is reliable)
+            // maps to Some; the fallback/unknown path stays None and omits the field.
+            cached_total.map(|n| n as i64)
         };
 
         let variables = if parsed_from_output.is_empty() {

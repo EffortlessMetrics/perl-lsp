@@ -2,6 +2,25 @@
 
 All notable changes to the Perl Language Server extension will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **First-run include-path discovery**: on activation the extension scans
+  common Perl module directories (`src`, `local`, `vendor`, `lib`, `t/lib`,
+  `blib/lib`, `modules`) and offers a one-time suggestion to add any directory
+  that holds `.pm` files but isn't in `perl-lsp.includePaths` — so projects
+  without a `lib/` layout no longer fail silently. The suggestion is cached per
+  unique project structure and never re-prompts after dismissal. (#1633)
+- **AI completion discoverability**: a new "AI-Powered Completions (Optional)"
+  walkthrough step plus a capability-gated one-time prompt. When the running
+  server advertises `inlineCompletionProvider` and the feature is off, the
+  extension offers to enable `perl-lsp.aiCompletion.enabled`. The setting
+  description now states it is off by default and server-gated. (#1634)
+- **Demo project**: a new `Perl: Open Demo Project` command opens a bundled
+  demo project (`lib/Utils.pm`, `lib/Database.pm`) so first-time users can try
+  completion, hover, and go-to-definition without their own project ready. The
+  Get Started walkthrough's "Open a Perl Project" step now links to it. (#1635)
+
 ## [0.12.4] - 2026-04-12
 
 ### Added

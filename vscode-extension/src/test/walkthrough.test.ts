@@ -46,9 +46,9 @@ describe('package.json walkthrough contribution', () => {
     expect(Array.isArray(wt.steps)).toBe(true);
   });
 
-  test('walkthrough has all 7 required steps', () => {
+  test('walkthrough has all 8 required steps', () => {
     const wt = pkg.contributes.walkthroughs[0];
-    expect(wt.steps.length).toBe(7);
+    expect(wt.steps.length).toBe(8);
   });
 
   test('every step has id, title, description and media', () => {
@@ -71,7 +71,7 @@ describe('package.json walkthrough contribution', () => {
     expect(unique.size).toBe(ids.length);
   });
 
-  test('step ids match the 7 required topics', () => {
+  test('step ids match the 8 required topics', () => {
     const wt = pkg.contributes.walkthroughs[0];
     const ids: string[] = wt.steps.map((s: any) => s.id);
     const required = [
@@ -80,12 +80,28 @@ describe('package.json walkthrough contribution', () => {
       'open-project',
       'try-completion',
       'try-goto-definition',
+      'ai-completion',
       'configure-settings',
       'debug-first-script',
     ];
     for (const req of required) {
       expect(ids).toContain(req);
     }
+  });
+
+  test('open-project step offers the bundled demo project (#1635)', () => {
+    const wt = pkg.contributes.walkthroughs[0];
+    const step = wt.steps.find((s: any) => s.id === 'open-project');
+    expect(step).toBeDefined();
+    expect(step.description).toMatch(/command:perl-lsp\.openDemoProject/);
+  });
+
+  test('ai-completion step marks the feature optional and off by default (#1634)', () => {
+    const wt = pkg.contributes.walkthroughs[0];
+    const step = wt.steps.find((s: any) => s.id === 'ai-completion');
+    expect(step).toBeDefined();
+    expect(step.title).toMatch(/optional/i);
+    expect(step.description).toMatch(/off by default/i);
   });
 
   test('debug step clearly marks debugging as optional and mentions perl-dap', () => {
