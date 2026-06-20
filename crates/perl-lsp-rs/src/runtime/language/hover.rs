@@ -4,6 +4,7 @@
 
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
+use crate::documentation_targets::PerlDocumentationTarget;
 use crate::protocol::{req_position, req_uri};
 mod hover_cards;
 mod hover_extracted;
@@ -1284,9 +1285,15 @@ impl LspServer {
         doc_offset: Option<usize>,
     ) -> Value {
         // MetaCPAN link is included in every branch — compute once up front.
-        let metacpan_link = format!("[View on MetaCPAN](https://metacpan.org/pod/{module_name})");
-        let perldoc_virtual_link = Self::perldoc_virtual_link(module_name);
-        let docs_links = format!("{metacpan_link} \u{2022} {perldoc_virtual_link}");
+        let docs_links = PerlDocumentationTarget::new(module_name)
+            .map(|target| {
+                format!(
+                    "{} \u{2022} {}",
+                    target.metacpan_markdown_link("View on MetaCPAN"),
+                    target.virtual_perldoc_markdown_link()
+                )
+            })
+            .unwrap_or_default();
 
         // Try URI resolution (handles open docs + workspace folders)
         if let Some(uri) = self.resolve_module_to_path_with_doc_at_offset(
@@ -1370,10 +1377,6 @@ Not found in workspace or configured include paths.
         })
     }
 
-    fn perldoc_virtual_link(module_name: &str) -> String {
-        format!("[Open virtual perldoc](perldoc://{module_name})")
-    }
-
     fn format_missing_module_search_paths(include_paths: &[String]) -> String {
         if include_paths.is_empty() {
             return "- No include paths configured".to_string();
@@ -1388,14 +1391,16 @@ Not found in workspace or configured include paths.
     /// documentation, or `None` when it should fall through to regular module resolution.
     fn build_pragma_hover(module_name: &str) -> Option<Value> {
         let doc = crate::semantic::get_pragma_documentation(module_name)?;
+        let documentation_target = PerlDocumentationTarget::new(module_name)?;
 
         let version_line =
             doc.version_required.map(|v| format!("\n\n**Requires**: Perl {v}")).unwrap_or_default();
 
-        let perldoc_web_link =
-            format!("[perldoc {module_name}](https://perldoc.perl.org/{module_name})");
-        let perldoc_virtual_link = Self::perldoc_virtual_link(module_name);
-        let perldoc_links = format!("{perldoc_web_link} | {perldoc_virtual_link}");
+        let perldoc_links = format!(
+            "{} | {}",
+            documentation_target.perl_org_perldoc_markdown_link(),
+            documentation_target.virtual_perldoc_markdown_link()
+        );
 
         Some(json!({
             "contents": {

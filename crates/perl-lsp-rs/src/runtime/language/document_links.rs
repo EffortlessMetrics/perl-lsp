@@ -3,6 +3,7 @@
 //! Keeps document-link feature logic isolated from other language handlers.
 
 use super::super::*;
+use crate::documentation_targets::PerlDocumentationTarget;
 use crate::protocol::req_uri;
 use std::borrow::Cow;
 use std::path::Path;
@@ -146,13 +147,19 @@ impl LspServer {
                                 data: None,
                             })?;
 
+                        let documentation_target = PerlDocumentationTarget::new(module_name)
+                            .ok_or_else(|| JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Invalid module name in data".into(),
+                                data: Some(json!({"module": module_name})),
+                            })?;
+
                         // Try to resolve module to local file
                         if let Some(target) = self.resolve_module_to_path(module_name) {
                             link["target"] = json!(target);
                         } else {
                             // Fallback to MetaCPAN
-                            let target = format!("https://metacpan.org/pod/{}", module_name);
-                            link["target"] = json!(target);
+                            link["target"] = json!(documentation_target.metacpan_pod_uri());
                         }
                     }
                     Some("file") => {

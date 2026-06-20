@@ -328,6 +328,7 @@ pub mod cli;
 pub mod convert;
 pub mod diagnostics_catalog;
 pub mod dispatch;
+pub(crate) mod documentation_targets;
 pub mod execute_command;
 pub mod fallback;
 pub mod features;

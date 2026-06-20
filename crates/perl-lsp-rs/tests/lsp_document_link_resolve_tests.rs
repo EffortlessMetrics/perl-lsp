@@ -73,6 +73,57 @@ fn test_document_link_resolve_module() -> TestResult {
     Ok(())
 }
 
+/// Test that missing modules fall back to a stable MetaCPAN target
+#[test]
+fn test_document_link_resolve_missing_module_uses_metacpan_fallback() -> TestResult {
+    let server = LspServer::new();
+
+    let init_params = json!({
+        "capabilities": {},
+        "rootUri": "file:///workspace"
+    });
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        method: "initialize".to_string(),
+        params: Some(init_params),
+    });
+
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    });
+
+    let link = json!({
+        "range": {
+            "start": {"line": 0, "character": 4},
+            "end": {"line": 0, "character": 39}
+        },
+        "tooltip": "Open Definitely::Missing::Module",
+        "data": {
+            "type": "module",
+            "module": "Definitely::Missing::Module"
+        }
+    });
+
+    let response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        method: "documentLink/resolve".to_string(),
+        params: Some(link),
+    });
+
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
+    let result = resp.result.ok_or("Expected result field in response")?;
+
+    assert_eq!(result["target"], "https://metacpan.org/pod/Definitely::Missing::Module");
+    assert!(result.get("data").is_some(), "resolved link should preserve data");
+
+    Ok(())
+}
+
 /// Test that documentLink/resolve handles file path links
 #[test]
 fn test_document_link_resolve_file() -> TestResult {
@@ -240,6 +291,59 @@ fn test_document_link_resolve_invalid_data() -> TestResult {
     assert!(resp.error.is_some());
     let error = resp.error.ok_or("Expected error field in response")?;
     assert_eq!(error.code, -32602); // INVALID_PARAMS
+
+    Ok(())
+}
+
+/// Test error handling for malformed module target data
+#[test]
+fn test_document_link_resolve_rejects_invalid_module_target() -> TestResult {
+    let server = LspServer::new();
+
+    let init_params = json!({
+        "capabilities": {},
+        "rootUri": "file:///workspace"
+    });
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        method: "initialize".to_string(),
+        params: Some(init_params),
+    });
+
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    });
+
+    let link = json!({
+        "range": {
+            "start": {"line": 0, "character": 4},
+            "end": {"line": 0, "character": 13}
+        },
+        "data": {
+            "type": "module",
+            "module": "Local/Bad"
+        }
+    });
+
+    let response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        method: "documentLink/resolve".to_string(),
+        params: Some(link),
+    });
+
+    let resp = response.ok_or("Expected response from documentLink/resolve")?;
+    let error = resp.error.ok_or("Expected error field in response")?;
+    assert_eq!(error.code, -32602);
+    assert!(
+        error.message.contains("Invalid module name"),
+        "expected invalid module error, got: {}",
+        error.message
+    );
 
     Ok(())
 }
