@@ -117,6 +117,62 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Test that completion provider advertises insertTextModes (LSP 3.17)
+/// Clients can determine if the server supports insertReplaceEdit and expects
+/// insertTextFormat/insertTextModes negotiation.
+#[test]
+fn test_completion_advertises_insert_text_modes() -> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::new();
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        method: "initialize".to_string(),
+        params: Some(json!({
+            "processId": null,
+            "rootUri": "file:///tmp/test",
+            "capabilities": {}
+        })),
+    };
+
+    let response =
+        server.handle_request(request).ok_or("Initialize request failed to return response")?;
+    assert!(response.error.is_none(), "Initialize should succeed");
+    let caps = response.result.ok_or("Initialize response missing result")?["capabilities"].clone();
+
+    // Verify completionProvider exists and has completionItem settings
+    assert!(caps["completionProvider"].is_object(), "completionProvider must be advertised");
+    assert!(
+        caps["completionProvider"]["completionItem"].is_object(),
+        "completionProvider.completionItem must be an object"
+    );
+
+    // Verify insertTextModes is advertised (LSP 3.17)
+    // insertTextModes should be an array with values [1, 2] representing PlainText and Snippet
+    let insert_text_modes = &caps["completionProvider"]["completionItem"]["insertTextModes"];
+    assert!(
+        insert_text_modes.is_array(),
+        "completionProvider.completionItem.insertTextModes must be an array"
+    );
+
+    let modes: Vec<u32> = insert_text_modes
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|v| v.as_u64().map(|u| u as u32))
+        .collect();
+    assert!(!modes.is_empty(), "insertTextModes array must not be empty");
+    // Per LSP 3.17 spec and issue #1712 acceptance criteria, both PlainText (1)
+    // and Snippet (2) must be advertised — not just one or the other.
+    assert!(
+        modes.contains(&1) && modes.contains(&2),
+        "insertTextModes must include both PlainText (1) and Snippet (2): got {:?}",
+        modes
+    );
+
+    Ok(())
+}
+
 /// Test that unsupported methods return proper errors
 #[test]
 
