@@ -17,18 +17,6 @@ on:
     # reason (infinite-loop guard). `ready_for_review` and `converted_to_draft` are kept
     # because they change the draft-pr-check guard behavior and must trigger CI.
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
-    # Skip the Rust CI matrix for docs-only PRs. Lightweight checks (validate-title,
-    # link checks, methodology-gate) still run via other workflows.
-    # This filter prevents full Rust compilation and test suites from running on pure
-    # documentation changes. If a PR touches ANY non-docs file, the full matrix runs.
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      # Note: .github/workflows/ci.yml is intentionally NOT here — a PR that only
-      # modifies this file must still run CI to validate the change.
-      - 'vscode-extension/media/**'  # Icons, images — no Rust/TS integration impact
-      - 'vscode-extension/snippets/**'  # JSON snippets — no Rust/TS integration impact
-      - 'tree-sitter-perl/examples/**'  # Grammar examples (non-executable)
   merge_group: {}
   push:
     branches: [ main, master ]
