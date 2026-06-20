@@ -368,6 +368,7 @@ Metrics are **computed, not hand-edited**:
 - `README.md` must not contain volatile metrics -- link to `docs/project/status/index.md`
 - `.ci/blockers.yaml` is manually maintained — verify counts against `parser-corpus-baseline.json` before trusting `affected_files` values
 - `docs/reference/PARSER_CONTRACTS.md` is the durable contract index for parser behavioral invariants (quote-like, indirect-object, embedded-code, NodeKind classification, recovery nodes, formatting gates)
+- `docs/reference/SEMANTIC_SNAPSHOT_ARCHITECTURE.md` is the umbrella contract for the semantic model substrate (ownership boundary, semantic identity, FileSemanticBundle, SemanticSnapshot, SemanticResult, dynamic boundaries); implemented by #1600 / #1598 / #1601
 
 ## Coding Standards
 

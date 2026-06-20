@@ -15,6 +15,10 @@ This document is kept factual and citable. Claims without a primary artifact
 2026-06-ripr-output-schema-break.md). For portable patterns, see [docs/concepts/](../concepts/).
 For the parallel DAP wire-protocol contract index (variablesReference wire-band codec), see
 [docs/reference/DAP_CONTRACTS.md](DAP_CONTRACTS.md).
+For the semantic model substrate contracts (ownership boundary, semantic identity,
+FileSemanticBundle, SemanticSnapshot, SemanticResult, dynamic boundaries), see
+[docs/reference/SEMANTIC_SNAPSHOT_ARCHITECTURE.md](SEMANTIC_SNAPSHOT_ARCHITECTURE.md)
+(implemented by #1600 / #1598 / #1601).
 
 ---
 
