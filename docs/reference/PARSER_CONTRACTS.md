@@ -277,6 +277,16 @@ matches are extended. This is the drift guard.
 **Invariant (enforced by `NodeKindFlags::validate()`):**
 `recovery_artifact == true` implies `safe_for_breakpoint == false`.
 
+**Invariant (enforced by `contains_children_matches_for_each_child` test):**
+`contains_children` is a structural flag that must be `true` for exactly the
+variants that have at least one `Node`-typed field. The authoritative source is
+`Node::for_each_child`: building every variant with all child slots populated,
+`flags().contains_children == (child_count() > 0)`. A consumer that uses the flag
+to skip leaf nodes during traversal relies on this — a false negative silently
+drops a variant's children. (Corrected for `String`/`Heredoc`/`Readline`/`Glob`/
+`Use`/`No`, which carry no `Node` children, and `VariableDeclaration`/`Untie`/
+`Error`, which do.)
+
 ### Owner module
 
 `crates/perl-ast/src/classification.rs`

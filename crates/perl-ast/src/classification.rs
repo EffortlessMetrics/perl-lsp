@@ -310,7 +310,7 @@ impl NodeKind {
                 scope = true,
                 decl = true,
                 refs = false,
-                children = false,
+                children = true,
                 recovery = false,
                 bp = true
             ),
@@ -418,7 +418,7 @@ impl NodeKind {
                 scope = false,
                 decl = false,
                 refs = true,
-                children = true,
+                children = false,
                 recovery = false,
                 bp = true
             ),
@@ -427,7 +427,7 @@ impl NodeKind {
                 scope = false,
                 decl = false,
                 refs = false,
-                children = true,
+                children = false,
                 recovery = false,
                 bp = true
             ),
@@ -454,7 +454,7 @@ impl NodeKind {
                 scope = false,
                 decl = false,
                 refs = false,
-                children = true,
+                children = false,
                 recovery = false,
                 bp = false
             ),
@@ -463,7 +463,7 @@ impl NodeKind {
                 scope = false,
                 decl = false,
                 refs = false,
-                children = true,
+                children = false,
                 recovery = false,
                 bp = true
             ),
@@ -571,7 +571,7 @@ impl NodeKind {
                 scope = false,
                 decl = false,
                 refs = true,
-                children = false,
+                children = true,
                 recovery = false,
                 bp = true
             ),
@@ -808,7 +808,7 @@ impl NodeKind {
                 scope = false,
                 decl = false,
                 refs = false,
-                children = true,
+                children = false,
                 recovery = false,
                 bp = false
             ),
@@ -820,7 +820,7 @@ impl NodeKind {
                 scope = false,
                 decl = false,
                 refs = false,
-                children = true,
+                children = false,
                 recovery = false,
                 bp = false
             ),
@@ -874,7 +874,7 @@ impl NodeKind {
                 scope = false,
                 decl = false,
                 refs = false,
-                children = false,
+                children = true,
                 recovery = true,
                 bp = false
             ),
@@ -984,6 +984,22 @@ impl NodeKind {
     #[inline]
     pub fn is_recovery(&self) -> bool {
         self.flags().recovery_artifact
+    }
+
+    /// Returns `true` if this node kind can host `Node` children worth walking
+    /// during AST traversal.
+    ///
+    /// This is a **structural** flag: it is `true` for every variant that has
+    /// at least one `Node`-typed field (`Box<Node>`, `Vec<Node>`,
+    /// `Option<Box<Node>>`, …), regardless of whether a particular instance
+    /// populates them. A traversal filter may safely skip nodes for which this
+    /// returns `false` — they are always leaves under
+    /// [`Node::for_each_child`](crate::ast::Node::for_each_child).
+    ///
+    /// See [`NodeKindFlags::contains_children`].
+    #[inline]
+    pub fn contains_children(&self) -> bool {
+        self.flags().contains_children
     }
 }
 
@@ -1321,6 +1337,12 @@ mod tests {
                 kind.kind_name()
             );
             assert_eq!(
+                kind.contains_children(),
+                flags.contains_children,
+                "{}: contains_children() != flags.contains_children",
+                kind.kind_name()
+            );
+            assert_eq!(
                 kind.safe_for_breakpoint(),
                 flags.safe_for_breakpoint,
                 "{}: safe_for_breakpoint() != flags.safe_for_breakpoint",
@@ -1431,5 +1453,320 @@ mod tests {
             safe_for_breakpoint: true, // INVALID: recovery AND breakpoint
         };
         assert!(bad.validate().is_err());
+    }
+
+    // ── Test 6.5: contains_children() accessor returns correct values ──────────
+    //
+    // Direct coverage of the new `contains_children()` public accessor method.
+    // Tests leaf variants (expect false) and parent variants (expect true).
+
+    #[test]
+    fn contains_children_accessor_leaf_variants() {
+        // Leaf variants with no Node-typed fields
+        assert!(
+            !NodeKind::Number { value: "42".to_string() }.contains_children(),
+            "Number should not contain children"
+        );
+        assert!(
+            !NodeKind::String { value: "hello".to_string(), interpolated: false }
+                .contains_children(),
+            "String should not contain children"
+        );
+        assert!(
+            !NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }
+                .contains_children(),
+            "Variable should not contain children"
+        );
+        assert!(!NodeKind::Diamond.contains_children(), "Diamond should not contain children");
+        assert!(!NodeKind::Undef.contains_children(), "Undef should not contain children");
+    }
+
+    #[test]
+    fn contains_children_accessor_parent_variants() {
+        // Parent variants with Node-typed fields
+        assert!(
+            NodeKind::Block { statements: vec![leaf()] }.contains_children(),
+            "Block with statements should contain children"
+        );
+        assert!(
+            NodeKind::Program { statements: vec![leaf()] }.contains_children(),
+            "Program should contain children"
+        );
+        assert!(
+            NodeKind::VariableDeclaration {
+                declarator: "my".to_string(),
+                variable: Box::new(leaf()),
+                attributes: vec![],
+                initializer: None,
+            }
+            .contains_children(),
+            "VariableDeclaration with variable should contain children"
+        );
+        assert!(
+            NodeKind::Binary {
+                op: "+".to_string(),
+                left: Box::new(leaf()),
+                right: Box::new(leaf()),
+            }
+            .contains_children(),
+            "Binary should contain children"
+        );
+        assert!(
+            NodeKind::FunctionCall { name: "print".to_string(), args: vec![leaf()] }
+                .contains_children(),
+            "FunctionCall with args should contain children"
+        );
+    }
+
+    // ── Test 7: contains_children matches the real for_each_child traversal ────
+    //
+    // `contains_children` is a structural flag: it must be `true` for exactly
+    // the variants that have at least one `Node`-typed field. The authoritative
+    // source of "does this variant have Node children?" is `Node::for_each_child`
+    // (exercised here via `child_count()`). Building every variant with all of
+    // its optional/collection child slots populated makes `child_count() > 0`
+    // equivalent to "this variant can hold children" — so the flag must agree
+    // exactly. This guards against the drift that produced incorrect flags for
+    // String/Heredoc/Readline/Glob/Use/No (false positives) and
+    // VariableDeclaration/Untie/Error (false negatives).
+
+    /// One representative of every `NodeKind` variant with *every* `Node`-typed
+    /// field populated, so `child_count() > 0` iff the variant has Node children.
+    fn all_variants_maximal() -> Vec<Node> {
+        let n = |kind| Node::new(kind, loc());
+        vec![
+            n(NodeKind::Program { statements: vec![leaf()] }),
+            n(NodeKind::ExpressionStatement { expression: Box::new(leaf()) }),
+            n(NodeKind::VariableDeclaration {
+                declarator: "my".to_string(),
+                variable: Box::new(leaf()),
+                attributes: vec![],
+                initializer: Some(Box::new(leaf())),
+            }),
+            n(NodeKind::VariableListDeclaration {
+                declarator: "my".to_string(),
+                variables: vec![leaf()],
+                attributes: vec![],
+                initializer: Some(Box::new(leaf())),
+            }),
+            n(NodeKind::NestedVariableList { items: vec![leaf()] }),
+            n(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }),
+            n(NodeKind::VariableWithAttributes { variable: Box::new(leaf()), attributes: vec![] }),
+            n(NodeKind::Assignment {
+                lhs: Box::new(leaf()),
+                rhs: Box::new(leaf()),
+                op: "=".to_string(),
+            }),
+            n(NodeKind::Binary {
+                op: "+".to_string(),
+                left: Box::new(leaf()),
+                right: Box::new(leaf()),
+            }),
+            n(NodeKind::Ternary {
+                condition: Box::new(leaf()),
+                then_expr: Box::new(leaf()),
+                else_expr: Box::new(leaf()),
+            }),
+            n(NodeKind::Unary { op: "-".to_string(), operand: Box::new(leaf()) }),
+            n(NodeKind::Diamond),
+            n(NodeKind::Ellipsis),
+            n(NodeKind::Undef),
+            n(NodeKind::Readline { filehandle: Some("STDIN".to_string()) }),
+            n(NodeKind::Glob { pattern: "*.pl".to_string() }),
+            n(NodeKind::Typeglob { name: "foo".to_string() }),
+            n(NodeKind::Number { value: "42".to_string() }),
+            n(NodeKind::String { value: "hello".to_string(), interpolated: false }),
+            n(NodeKind::Heredoc {
+                delimiter: "EOF".to_string(),
+                content: "body".to_string(),
+                interpolated: false,
+                indented: false,
+                command: false,
+                body_span: None,
+            }),
+            n(NodeKind::ArrayLiteral { elements: vec![leaf()] }),
+            n(NodeKind::HashLiteral { pairs: vec![(leaf(), leaf())] }),
+            n(NodeKind::Block { statements: vec![leaf()] }),
+            n(NodeKind::Eval { block: Box::new(block_node()) }),
+            n(NodeKind::Do { block: Box::new(block_node()) }),
+            n(NodeKind::Defer { block: Box::new(block_node()) }),
+            n(NodeKind::Try {
+                body: Box::new(block_node()),
+                catch_blocks: vec![(None, Box::new(block_node()))],
+                finally_block: Some(Box::new(block_node())),
+            }),
+            n(NodeKind::If {
+                condition: Box::new(leaf()),
+                then_branch: Box::new(block_node()),
+                elsif_branches: vec![(Box::new(leaf()), Box::new(block_node()))],
+                else_branch: Some(Box::new(block_node())),
+                keyword: None,
+            }),
+            n(NodeKind::LabeledStatement {
+                label: "OUTER".to_string(),
+                statement: Box::new(leaf()),
+            }),
+            n(NodeKind::While {
+                condition: Box::new(leaf()),
+                body: Box::new(block_node()),
+                continue_block: Some(Box::new(block_node())),
+                keyword: None,
+            }),
+            n(NodeKind::Tie {
+                variable: Box::new(leaf()),
+                package: Box::new(leaf()),
+                args: vec![leaf()],
+            }),
+            n(NodeKind::Untie { variable: Box::new(leaf()) }),
+            n(NodeKind::For {
+                init: Some(Box::new(leaf())),
+                condition: Some(Box::new(leaf())),
+                update: Some(Box::new(leaf())),
+                body: Box::new(block_node()),
+                continue_block: Some(Box::new(block_node())),
+            }),
+            n(NodeKind::Foreach {
+                variable: Box::new(leaf()),
+                list: Box::new(leaf()),
+                body: Box::new(block_node()),
+                continue_block: Some(Box::new(block_node())),
+            }),
+            n(NodeKind::Given { expr: Box::new(leaf()), body: Box::new(block_node()) }),
+            n(NodeKind::When { condition: Box::new(leaf()), body: Box::new(block_node()) }),
+            n(NodeKind::Default { body: Box::new(block_node()) }),
+            n(NodeKind::StatementModifier {
+                statement: Box::new(leaf()),
+                modifier: "if".to_string(),
+                condition: Box::new(leaf()),
+            }),
+            n(NodeKind::Subroutine {
+                name: Some("foo".to_string()),
+                name_span: None,
+                prototype: Some(Box::new(Node::new(
+                    NodeKind::Prototype { content: "$@".to_string() },
+                    loc(),
+                ))),
+                signature: Some(Box::new(Node::new(
+                    NodeKind::Signature { parameters: vec![] },
+                    loc(),
+                ))),
+                attributes: vec![],
+                body: Box::new(block_node()),
+            }),
+            n(NodeKind::Prototype { content: "$@".to_string() }),
+            n(NodeKind::Signature { parameters: vec![leaf()] }),
+            n(NodeKind::MandatoryParameter { variable: Box::new(leaf()) }),
+            n(NodeKind::OptionalParameter {
+                variable: Box::new(leaf()),
+                default_value: Box::new(leaf()),
+            }),
+            n(NodeKind::SlurpyParameter { variable: Box::new(leaf()) }),
+            n(NodeKind::NamedParameter { variable: Box::new(leaf()) }),
+            n(NodeKind::Method {
+                name: "bar".to_string(),
+                signature: Some(Box::new(Node::new(
+                    NodeKind::Signature { parameters: vec![] },
+                    loc(),
+                ))),
+                attributes: vec![],
+                body: Box::new(block_node()),
+            }),
+            n(NodeKind::Return { value: Some(Box::new(leaf())) }),
+            n(NodeKind::LoopControl { op: "next".to_string(), label: None }),
+            n(NodeKind::Goto { target: Box::new(leaf()) }),
+            n(NodeKind::MethodCall {
+                object: Box::new(leaf()),
+                method: "foo".to_string(),
+                args: vec![leaf()],
+            }),
+            n(NodeKind::FunctionCall { name: "print".to_string(), args: vec![leaf()] }),
+            n(NodeKind::IndirectCall {
+                method: "new".to_string(),
+                object: Box::new(leaf()),
+                args: vec![leaf()],
+            }),
+            n(NodeKind::Regex {
+                pattern: "foo".to_string(),
+                replacement: None,
+                modifiers: "".to_string(),
+                has_embedded_code: false,
+            }),
+            n(NodeKind::Match {
+                expr: Box::new(leaf()),
+                pattern: "foo".to_string(),
+                modifiers: "".to_string(),
+                has_embedded_code: false,
+                negated: false,
+            }),
+            n(NodeKind::Substitution {
+                expr: Box::new(leaf()),
+                pattern: "foo".to_string(),
+                replacement: "bar".to_string(),
+                modifiers: "".to_string(),
+                has_embedded_code: false,
+                negated: false,
+            }),
+            n(NodeKind::Transliteration {
+                expr: Box::new(leaf()),
+                search: "a".to_string(),
+                replace: "b".to_string(),
+                modifiers: "".to_string(),
+                negated: false,
+            }),
+            n(NodeKind::Package {
+                name: "Foo".to_string(),
+                name_span: loc(),
+                block: Some(Box::new(block_node())),
+            }),
+            n(NodeKind::Use {
+                module: "strict".to_string(),
+                args: vec!["foo".to_string()],
+                has_filter_risk: false,
+            }),
+            n(NodeKind::No {
+                module: "strict".to_string(),
+                args: vec!["foo".to_string()],
+                has_filter_risk: false,
+            }),
+            n(NodeKind::PhaseBlock {
+                phase: "BEGIN".to_string(),
+                phase_span: None,
+                block: Box::new(block_node()),
+            }),
+            n(NodeKind::DataSection { marker: "__DATA__".to_string(), body: None }),
+            n(NodeKind::Class {
+                name: "Foo".to_string(),
+                parents: vec![],
+                body: Box::new(block_node()),
+            }),
+            n(NodeKind::Format { name: "STDOUT".to_string(), body: "".to_string() }),
+            n(NodeKind::Identifier { name: "foo".to_string() }),
+            n(NodeKind::Error {
+                message: "oops".to_string(),
+                expected: vec![],
+                found: None,
+                partial: Some(Box::new(leaf())),
+            }),
+            n(NodeKind::MissingExpression),
+            n(NodeKind::MissingStatement),
+            n(NodeKind::MissingIdentifier),
+            n(NodeKind::MissingBlock),
+            n(NodeKind::UnknownRest),
+        ]
+    }
+
+    #[test]
+    fn contains_children_matches_for_each_child() {
+        for node in all_variants_maximal() {
+            let has_children = node.child_count() > 0;
+            assert_eq!(
+                node.kind.contains_children(),
+                has_children,
+                "{}: contains_children() = {} but for_each_child yields {} children",
+                node.kind.kind_name(),
+                node.kind.contains_children(),
+                node.child_count(),
+            );
+        }
     }
 }
