@@ -5188,3 +5188,25 @@ fn test_special_var_count_at_least_40() {
 
     assert!(total >= 40, "expected at least 40 special variables across all sigils, got {total}");
 }
+
+#[test]
+fn extract_fat_comma_keys_covers_quoted_and_bareword_forms() {
+    // Exercises all three branches of the key-token classification in
+    // `extract_fat_comma_keys`: single-quoted, double-quoted, and bareword,
+    // plus the rejection path for an unquoted token with special characters.
+    fn collect(list_text: &str) -> Vec<String> {
+        let mut keys = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        CompletionProvider::extract_fat_comma_keys(list_text, &mut keys, &mut seen);
+        keys
+    }
+
+    // Bareword key (alphanumeric + underscore) is accepted.
+    assert!(collect("host => 1").iter().any(|k| k == "host"));
+    // Single-quoted key may contain special characters (hyphen).
+    assert!(collect("'db-name' => 1").iter().any(|k| k == "db-name"));
+    // Double-quoted key may contain special characters (dot).
+    assert!(collect("\"x.y\" => 1").iter().any(|k| k == "x.y"));
+    // Unquoted token with a non-word character is rejected (no quoting).
+    assert!(collect("a-b => 1").is_empty());
+}

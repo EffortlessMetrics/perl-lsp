@@ -493,7 +493,188 @@ Relevant code:
 
 ---
 
-## 6. Formatting Preserve Gates
+## 6. Boundary Detection — Consumer Responsibility
+
+### Contract
+
+Three classes of source region are **non-executable positional boundaries**:
+**POD blocks**, **heredoc bodies**, and **data sections** (`__DATA__` / `__END__`).
+The parser does not enforce them as *execution* boundaries, and **the degree of AST
+support varies**:
+
+- **data sections** are a first-class `NodeKind::DataSection { marker, body }` node,
+- **heredoc bodies** are recorded as `Heredoc.body_span` metadata on the
+  `NodeKind::Heredoc` node, and
+- **POD has no AST node at all** — it is purely consumer-detected.
+
+Any consumer that filters nodes or source positions by executability — a breakpoint
+validator, a formatter preserve-gate, a completion-context filter, a semantic-token
+painter — MUST apply the relevant positional check for its own domain, layered on
+top of the variant-level `NodeKind` classification of §4. Where an authoritative AST
+representation exists (the `DataSection` node, the `Heredoc.body_span` metadata),
+consumers **SHOULD prefer it** over reimplementing a source scan; a raw positional
+scan is the correct path only for POD and for pre-parse callers that have no AST yet.
+The classification API is explicit about the positional-layering requirement
+(`crates/perl-ast/src/classification.rs:5-7`):
+
+```
+//! Consumers that need positional facts (is this
+//! inside a heredoc body? inside POD? after `__DATA__`?) must layer those
+//! checks on top using their own positional knowledge.
+```
+
+**Canonical boundary rules:**
+
+1. **POD blocks.** A POD command paragraph begins with `=<letter>` — an `=`
+   immediately followed by an ASCII letter — at **column 0** (the first byte of a
+   line, after a newline), and runs until a line that is exactly `=cut`, or to
+   **EOF** if no `=cut` is found. Per `perlpodspec` a command paragraph must match
+   `\A=[a-zA-Z]`; a leading-whitespace `  =head1` is a *verbatim* paragraph, not a
+   POD command. POD content is never executable. (Perl-spec column-0 and EOF-fallback
+   facts verified against `perlpodspec`/`perlpod`, issue #1627 research-verifier.)
+
+2. **Heredoc bodies.** The source text between a heredoc's opening `<<DELIM` line
+   and its terminator. The parser records this as
+   `body_span: Option<SourceLocation>` on `NodeKind::Heredoc` (`SourceLocation` is a
+   half-open `[start, end)` byte span), populated post-lexically by
+   `drain_pending_heredocs`; an empty body yields `None`. Consumers MAY use this AST
+   metadata directly OR scan the source.
+
+3. **Data sections.** From a `__DATA__` or `__END__` marker at **column 0** to EOF;
+   everything after the marker is data, not code. The parser models this as a
+   first-class `NodeKind::DataSection { marker, body }` node
+   (`crates/perl-ast/src/ast.rs:2158`), classified `NodeKindCategory::Declaration`
+   with `executable = false` and `safe_for_breakpoint = false`
+   (`crates/perl-ast/src/classification.rs:256,836`). AST and semantic consumers
+   **should read this node directly** rather than rescanning the source. The lexer's
+   `find_data_marker_byte_lexed` is the **pre-parse** path: it recognizes the marker
+   as a `TokenType::DataMarker` token at the source level, for callers that must
+   split code from data *before* (or without) a full parse.
+
+### Owner module
+
+**Distributed — there is no single owner.** Each subsystem owns boundary detection
+for its own domain; this section is the canonical rule set they must agree on. The
+parser does **not** enforce these regions as *execution* boundaries at parse time,
+but it does provide authoritative AST representation for two of the three (the
+`NodeKind::DataSection` node and `Heredoc.body_span`); POD is purely
+consumer-detected. Consumers prefer the AST representation where it exists and fall
+back to positional source scans otherwise.
+
+### Consumers
+
+| Consumer | Boundary | Call site | Detection method | Column-0 enforced? | EOF fallback? |
+|---|---|---|---|---|---|
+| DAP breakpoint validator | POD | `crates/perl-dap/src/breakpoint/validator.rs:144` (`find_pod_regions`) + `:175` (`is_pod_directive`) | line scan; opens on any `=<letter>`, closes on a line equal to `=cut` | **yes** (strict) | yes (`:166`) |
+| DAP breakpoint validator | heredoc body | `crates/perl-dap/src/breakpoint/validator.rs:263` (`is_inside_heredoc_interior_node`) | reads `Heredoc.body_span` AST metadata | n/a | n/a |
+| Native formatter | POD | `crates/perl-lsp-perltidy/src/native.rs:1655` (`literal_preserve_region`) + `:1817` (`is_pod_start`) | line scan; `trim_start()` then a **closed set** of standard directives | **no** (lenient) | implicit (scans every line) |
+| Native formatter | data section | `crates/perl-lsp-perltidy/src/native.rs:1661` | exact `__DATA__`/`__END__` match after `trim_start().trim_end()` | **no** (lenient) | n/a |
+| Native formatter | heredoc / regex / subst / qw | `crates/perl-lsp-perltidy/src/native.rs:1754` (`token_literal_preserve_region_overlapping`) | token byte-span overlap (`token.start < range_end && token.end > range_start`) | n/a | n/a |
+| Parser → AST / semantic consumers | data section | `crates/perl-parser-core/src/engine/parser/declarations.rs:1164` (`parse_data_section`) → `NodeKind::DataSection` | authoritative AST node, classified `Declaration` / non-executable | yes (marker is column-0) | n/a |
+| Lexer (pre-parse) | data marker | `crates/perl-lexer/src/tokenizer/util.rs:22` (`find_data_marker_byte_lexed`) + `:14` (`marker_is_unindented_line_start`) | lexes to a `DataMarker` token, then verifies column 0 | **yes** (strict) | n/a |
+
+### Critical boundary: canonical rule vs. consumer risk posture
+
+This is the key thing this contract communicates. **Consumers intentionally diverge
+in strictness, and the divergence is governed by each consumer's risk posture — it
+is by design, not drift:**
+
+- A **breakpoint validator** must not *wrongly* classify executable code as POD: a
+  false positive silently drops a valid breakpoint. It therefore enforces the
+  strict, spec-correct **column-0** rule (`is_pod_directive` is fed a line trimmed of
+  trailing CR only, so leading whitespace disqualifies the `=` directive).
+
+- A **formatter preserve-gate** is *false-positive-safe*: over-detecting POD only
+  makes it bail out and skip reformatting, which never corrupts the document. It
+  therefore uses a lenient `trim_start()` check. For the formatter the **dangerous**
+  direction is a false *negative* (missing real POD and reflowing it).
+
+So the strictness asymmetry between DAP (strict column-0) and the formatter
+(lenient) is the correct engineering choice for each, even though it means the two
+detectors do not agree on an indented `  =head1`. The canonical rule (column-0,
+`\A=[a-zA-Z]`) is the spec ground-truth; the formatter's leniency is a deliberate
+conservative superset.
+
+### Proof
+
+**Issue #1627** — `docs(parser-contracts): add Consumer Boundary Detection contract
+for POD/__DATA__/__END__/heredoc`. Perl-spec claims (column-0 POD start, `=cut`/EOF
+close, `__DATA__`/`__END__` data semantics) verified by research-verifier against
+`perlpodspec`, `perlpod`, and `perldata`.
+
+**DAP POD-region tests** (inline in `validator.rs`): `test_is_pod_directive_basic`
+(`:679`), `test_pod_without_cut_extends_to_eof` (`:514`), `test_code_after_pod_is_executable`
+(`:503`), `test_multiple_pod_sections` (`:531`), `test_find_pod_regions_unclosed` (`:720`).
+
+**Formatter preserve-gate tests** (inline in `native.rs`):
+`literal_preserve_region_detects_perl_constructs_that_must_not_be_reflowed` (`:1912`),
+`byte_span_for_line_range_returns_correct_byte_interval` (`:1927`),
+`literal_preserve_region_for_range_ignores_pod_outside_range` (`:1973`),
+`literal_preserve_region_for_range_detects_pod_inside_range` (`:1984`),
+`token_literal_preserve_region_overlapping_detects_substitution_in_range` (`:2058`).
+The full set is the 7-test integration file noted in §7 plus these inline unit tests.
+
+**Lexer data-marker tests** (inline in `util.rs`): `test_find_data_marker_lexed`
+(`:75`), `test_find_data_marker_handles_crlf_and_leading_whitespace` (`:100`, asserts
+indented markers are rejected and CRLF handled), `test_find_data_marker_ignores_markers_inside_heredoc_and_pod`
+(`:148`).
+
+### Worked example
+
+```perl
+my $x = 1;
+=pod
+This is documentation
+=cut
+my $y = 2;
+```
+
+Every consumer must agree that lines 2–4 (`=pod` … `=cut`) are a non-executable POD
+region: the DAP breakpoint validator must reject breakpoints there
+(`is_inside_pod_region`, `validator.rs:187`), the formatter must not reflow them
+(`literal_preserve_region` returns `Some("POD")`), and a completion-context filter
+must suppress completions inside them. Lines 1 and 5 (`my $x` / `my $y`) are
+executable and outside the boundary.
+
+### Known exceptions / specializations
+
+- The formatter's `is_pod_start` (`native.rs:1817`) matches a **closed set** of
+  standard directives (`=pod`, `=head1`–`=head4`, `=over`, `=item`, `=back`,
+  `=begin`, `=end`, `=for`, `=encoding`, `=cut`), whereas the DAP `is_pod_directive`
+  matches **any** `=<ascii-letter>`. A nonstandard directive such as `=custom` opens
+  a POD block to DAP but is not recognized by the formatter's line check (it would
+  fall through to the token-based path). This is a second, narrower divergence on top
+  of the indentation one.
+
+- `find_data_marker_byte_lexed` ignores `__DATA__`/`__END__` substrings embedded in
+  heredocs, POD, or string literals, because it lexes rather than substring-matches
+  (`test_find_data_marker_ignores_markers_inside_heredoc_and_pod`). A naive
+  substring scan would not have this property.
+
+### Non-goals / future migrations
+
+- **The parser does not emit a `PodBlock` node.** POD is not executable and is
+  detected by consumers positionally; issue #1627 rejected adding a POD syntax node.
+  This is the *opposite* of data sections, which **are** a first-class
+  `NodeKind::DataSection` node, and of heredocs, whose bodies are recorded as
+  `Heredoc.body_span` metadata — POD is the sole boundary type of the three with no
+  AST representation.
+
+- **No centralized boundary-detection helper exists today**, and adding one is out of
+  scope for this contract. If a fourth consumer needs POD detection, consider
+  extracting the canonical column-0 POD scan into a shared helper — but only if the
+  new consumer's risk posture matches the strict (DAP) variant; the formatter's
+  lenient variant must stay lenient for the safety reason above.
+
+- **Candidate follow-up:** reconcile the formatter's directive-set narrowness (closed
+  list vs. any `=<letter>`) with the canonical rule, or document the per-consumer
+  rationale inline at each call site. The completion-context boundary suppression
+  tracked by issue #1624 is a new consumer that MUST implement detection per this
+  contract.
+
+---
+
+## 7. Formatting Preserve Gates
 
 ### Contract
 
@@ -578,6 +759,7 @@ that span line boundaries.
 | NodeKind classification | `perl-ast` | `crates/perl-ast/tests/classification_tests.rs` | #1295 |
 | NodeKind non-exhaustive consumer audit | `perl-semantic-analyzer`, `perl-symbol`, `perl-workspace` | grep `if let NodeKind::` + `_ =>` wildcard arms | #1457 deep-review |
 | Recovery node decision | `perl-ast` | (not fixture-coverable — never emitted) | open #915 |
+| Boundary detection (consumer responsibility) | distributed (`perl-dap`, `perl-lsp-perltidy`, `perl-lexer`) | inline tests in `validator.rs`, `native.rs`, `tokenizer/util.rs` | #1627 |
 | Formatting preserve gates | `perl-lsp-perltidy` | `crates/perl-lsp-perltidy/tests/native_formatter_parse_gate_tests.rs` | #1314 |
 
 **DAP contracts** are in a separate index: [docs/reference/DAP_CONTRACTS.md](DAP_CONTRACTS.md)
