@@ -198,10 +198,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   jobs inside the always-triggered CI workflow; mixed code/doc PRs still run
   the full matrix, and workflow-trigger lint stays enforced. (#1688, #1816,
   #1817)
-- **Coverage-baseline recovery works in Windows worktrees.** The coverage
-  baseline task now retries git `HEAD`/diff discovery with an
-  ancestor-discovered `GIT_DIR`/`GIT_WORK_TREE` fallback, so stale-receipt repair
-  packets still emit when bash/WSL git cannot resolve a worktree gitdir. (#1833)
+- **Release evidence git recovery works in Windows worktrees.** Coverage
+  baseline, native-tooling status, and RIPR evidence tasks now retry git
+  `HEAD`/diff discovery with an ancestor-discovered
+  `GIT_DIR`/`GIT_WORK_TREE` fallback, so stale-receipt and release-evidence
+  packets still emit when bash/WSL git cannot resolve a worktree gitdir.
+  (#1833, #1878, #1881)
 - **VSIX release verification is storage-safe and restart-safe.** The VS Code
   bundle script now honors `CARGO_TARGET_DIR` when locating the release binary,
   and the extension engine floor is aligned with the checked-in VS Code API
