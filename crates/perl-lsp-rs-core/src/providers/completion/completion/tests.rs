@@ -4260,7 +4260,7 @@ $data{db"#;
 }
 
 #[test]
-fn test_hash_key_completion_double_quoted_keys_with_special_characters() {
+fn test_hash_key_completion_double_quoted_hyphenated_key() {
     // Mirror of the single-quoted case for double-quoted keys: keys written with
     // `"..."` and containing special characters must also be completed. This
     // exercises the double-quote branch of the quote-stripping logic.
