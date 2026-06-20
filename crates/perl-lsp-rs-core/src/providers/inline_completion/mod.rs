@@ -6,7 +6,7 @@
 
 use perl_lexer::{PerlLexer, TokenType};
 use perl_parser_core::{Parser, RecoverySalvageProfile};
-use perl_position_tracking::utf16_line_col_to_offset;
+use perl_position_tracking::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 use serde::{Deserialize, Serialize};
 
 pub mod next_edit;
@@ -807,33 +807,44 @@ fn parse_damage_for_probe(source: &str) -> ParseDamage {
 }
 
 fn parse_probe_after_item(
-    current_line: &str,
+    text: &str,
     item: &InlineCompletionItem,
     line: u32,
     character: u32,
 ) -> Option<String> {
-    let (start_character, end_character) = item
+    let (start_line, start_character, end_line, end_character) = item
         .range
         .as_ref()
         .map(|range| {
-            if range.start.line != line || range.end.line != line {
+            if range.start.line > range.end.line
+                || (range.start.line == range.end.line
+                    && range.start.character > range.end.character)
+            {
                 return None;
             }
-            Some((range.start.character, range.end.character))
+            Some((range.start.line, range.start.character, range.end.line, range.end.character))
         })
-        .unwrap_or(Some((character, character)))?;
+        .unwrap_or(Some((line, character, line, character)))?;
 
-    let start = utf16_line_col_to_offset(current_line, 0, start_character);
-    let end = utf16_line_col_to_offset(current_line, 0, end_character);
+    let start = utf16_position_to_exact_offset(text, start_line, start_character)?;
+    let end = utf16_position_to_exact_offset(text, end_line, end_character)?;
     if start > end {
         return None;
     }
 
-    let mut probe = String::with_capacity(current_line.len() + item.insert_text.len());
-    probe.push_str(&current_line[..start]);
+    let replaced_len = end.saturating_sub(start);
+    let mut probe = String::with_capacity(
+        text.len().saturating_sub(replaced_len).saturating_add(item.insert_text.len()),
+    );
+    probe.push_str(&text[..start]);
     probe.push_str(item.insert_text.as_str());
-    probe.push_str(&current_line[end..]);
+    probe.push_str(&text[end..]);
     Some(probe)
+}
+
+fn utf16_position_to_exact_offset(text: &str, line: u32, character: u32) -> Option<usize> {
+    let offset = utf16_line_col_to_offset(text, line, character);
+    (offset_to_utf16_line_col(text, offset) == (line, character)).then_some(offset)
 }
 
 #[derive(Debug)]
@@ -953,7 +964,7 @@ impl InlineCompletionProvider {
                 line,
                 character,
             );
-            return self.filter_parse_safe_items(list, &context, line, character);
+            return self.filter_parse_safe_items(list, text, line, character);
         }
 
         InlineCompletionList { items: vec![] }
@@ -996,21 +1007,21 @@ impl InlineCompletionProvider {
     fn filter_parse_safe_items(
         &self,
         list: InlineCompletionList,
-        context: &PreparedInlineCompletionContext,
+        text: &str,
         line: u32,
         character: u32,
     ) -> InlineCompletionList {
-        let baseline = parse_damage_for_probe(context.current_line.as_str());
+        let baseline = parse_damage_for_probe(text);
         let items = list
             .items
             .into_iter()
             .filter(|item| {
-                parse_probe_after_item(context.current_line.as_str(), item, line, character)
+                parse_probe_after_item(text, item, line, character)
                     .map(|probe| {
                         let candidate = parse_damage_for_probe(probe.as_str());
                         !candidate.worse_than(&baseline)
                     })
-                    .unwrap_or(true)
+                    .unwrap_or(false)
             })
             .collect();
 
@@ -3776,7 +3787,6 @@ mod tests {
     #[test]
     fn parse_safety_rejects_candidate_that_adds_error() -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
-        let context = provider.prepare_context("", 0, 0).ok_or("expected prepared context")?;
         let list = InlineCompletionList {
             items: vec![
                 InlineCompletionItem {
@@ -3794,7 +3804,7 @@ mod tests {
             ],
         };
 
-        let filtered = provider.filter_parse_safe_items(list, &context, 0, 0);
+        let filtered = provider.filter_parse_safe_items(list, "", 0, 0);
 
         assert!(filtered.items.iter().any(|item| item.insert_text == "my $value = 1;"));
         assert!(filtered.items.iter().all(|item| item.insert_text != "my $value = ;"));
@@ -3805,7 +3815,6 @@ mod tests {
     fn parse_safety_rejects_multiline_candidate_that_adds_error()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
-        let context = provider.prepare_context("", 0, 0).ok_or("expected prepared context")?;
         let list = InlineCompletionList {
             items: vec![
                 InlineCompletionItem {
@@ -3823,7 +3832,7 @@ mod tests {
             ],
         };
 
-        let filtered = provider.filter_parse_safe_items(list, &context, 0, 0);
+        let filtered = provider.filter_parse_safe_items(list, "", 0, 0);
 
         assert!(
             filtered.items.iter().any(|item| item.insert_text == "my $value = 1;\nreturn $value;")
@@ -3835,11 +3844,49 @@ mod tests {
     }
 
     #[test]
+    fn parse_safety_rejects_multiline_range_candidate_that_adds_error()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $value = 1;\nmy $other = 2;";
+        let second_line = source.lines().nth(1).ok_or("expected second source line")?;
+        let second_line_end = u32::try_from(second_line.encode_utf16().count())?;
+        let range = lsp_types::Range {
+            start: lsp_types::Position::new(0, 0),
+            end: lsp_types::Position::new(1, second_line_end),
+        };
+        let list = InlineCompletionList {
+            items: vec![
+                InlineCompletionItem {
+                    insert_text: "my $value = 1;\nmy $other = 2;".into(),
+                    filter_text: Some("$value".into()),
+                    range: Some(range),
+                    command: None,
+                },
+                InlineCompletionItem {
+                    insert_text: "my $value = ;\nmy $other = 2;".into(),
+                    filter_text: Some("$value".into()),
+                    range: Some(range),
+                    command: None,
+                },
+            ],
+        };
+
+        let filtered = provider.filter_parse_safe_items(list, source, 0, 0);
+
+        assert!(
+            filtered.items.iter().any(|item| item.insert_text == "my $value = 1;\nmy $other = 2;")
+        );
+        assert!(
+            filtered.items.iter().all(|item| item.insert_text != "my $value = ;\nmy $other = 2;")
+        );
+        Ok(())
+    }
+
+    #[test]
     fn parse_safety_does_not_drop_incomplete_baseline_improvements()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
         let source = "my $value = ";
-        let context = provider.prepare_context(source, 0, 12).ok_or("expected prepared context")?;
         let list = InlineCompletionList {
             items: vec![InlineCompletionItem {
                 insert_text: "1;".into(),
@@ -3849,7 +3896,7 @@ mod tests {
             }],
         };
 
-        let filtered = provider.filter_parse_safe_items(list, &context, 0, 12);
+        let filtered = provider.filter_parse_safe_items(list, source, 0, 12);
 
         assert!(filtered.items.iter().any(|item| item.insert_text == "1;"));
         Ok(())
