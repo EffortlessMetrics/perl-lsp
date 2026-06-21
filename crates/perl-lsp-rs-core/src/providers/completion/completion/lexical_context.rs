@@ -309,15 +309,18 @@ fn extract_heredoc_delimiters_from_code_line_from(
                         && let Some(mut delimiter) = extract_heredoc_delimiter(after_marker)
                     {
                         let no_space_bareword = no_space_bareword_before_marker(line, index);
+                        let spaced_keyword_bareword =
+                            spaced_keyword_bareword_before_marker(line, index);
                         let no_space_requires_future =
                             is_ambiguous_no_space_output_filehandle_context(line, index)
                                 || no_space_bareword
                                     .is_some_and(is_ambiguous_no_space_bareword_word);
-                        delimiter.requires_future_close = no_space_requires_future
-                            || is_ambiguous_spaced_keyword_bareword_context(line, index);
+                        delimiter.requires_future_close =
+                            no_space_requires_future || spaced_keyword_bareword.is_some();
                         delimiter.ignore_future_body_heredocs =
                             is_no_space_candidate_body_context(line, index);
-                        delimiter.no_space_bareword = no_space_bareword.map(str::to_string);
+                        delimiter.constant_probe_bareword =
+                            no_space_bareword.or(spaced_keyword_bareword).map(str::to_string);
                         delimiters.push(delimiter);
                     }
                     index += 2;
@@ -344,7 +347,7 @@ fn extract_heredoc_delimiters_from_source_line(
         .filter(|delimiter| {
             !delimiter.requires_future_close
                 || (!delimiter
-                    .no_space_bareword
+                    .constant_probe_bareword
                     .as_deref()
                     .is_some_and(|word| has_constant_declaration_before(source, line_end, word))
                     && has_future_heredoc_close(source, line_end, delimiter))
@@ -451,6 +454,10 @@ fn is_heredoc_operator_context(line: &str, marker_index: usize) -> bool {
                 return true;
             }
 
+            if before_word_has_method_arrow(before_word) {
+                return false;
+            }
+
             if has_space_before_marker && is_bareword_shift_operand_context(before_word) {
                 return false;
             }
@@ -459,6 +466,10 @@ fn is_heredoc_operator_context(line: &str, marker_index: usize) -> bool {
         }
         _ => true,
     }
+}
+
+fn before_word_has_method_arrow(before_word: &str) -> bool {
+    before_word.trim_end_matches([' ', '\t']).ends_with("->")
 }
 
 fn is_ambiguous_no_space_output_filehandle_context(line: &str, marker_index: usize) -> bool {
@@ -522,26 +533,27 @@ fn is_no_space_candidate_body_context(line: &str, marker_index: usize) -> bool {
         || before_word.chars().next_back().is_some_and(|ch| matches!(ch, ';' | '{' | '}'))
 }
 
-fn is_ambiguous_spaced_keyword_bareword_context(line: &str, marker_index: usize) -> bool {
+fn spaced_keyword_bareword_before_marker(line: &str, marker_index: usize) -> Option<&str> {
     let raw_before_marker = &line[..marker_index];
     if !raw_before_marker.ends_with([' ', '\t']) {
-        return false;
+        return None;
     }
 
     let before_marker = raw_before_marker.trim_end_matches([' ', '\t']);
-    let word_start = before_marker
-        .char_indices()
-        .rev()
-        .find(|(_, ch)| !ch.is_ascii_alphanumeric() && *ch != '_')
-        .map_or(0, |(index, ch)| index + ch.len_utf8());
+    let word_start = ascii_word_start(before_marker);
     let before_word = before_marker[..word_start].trim_end_matches([' ', '\t']);
     let word = &before_marker[word_start..];
 
-    !word.is_empty()
+    if !word.is_empty()
         && matches!(
             before_word.split_ascii_whitespace().next_back(),
             Some("return" | "if" | "unless" | "while" | "until" | "for" | "foreach")
         )
+    {
+        Some(word)
+    } else {
+        None
+    }
 }
 
 fn is_braced_output_filehandle_context(before_marker: &str) -> bool {
@@ -979,7 +991,7 @@ struct HeredocDelimiter {
     allow_indented_close: bool,
     requires_future_close: bool,
     ignore_future_body_heredocs: bool,
-    no_space_bareword: Option<String>,
+    constant_probe_bareword: Option<String>,
 }
 
 impl HeredocDelimiter {
@@ -1035,7 +1047,7 @@ fn extract_heredoc_delimiter(text: &str) -> Option<HeredocDelimiter> {
         allow_indented_close,
         requires_future_close: false,
         ignore_future_body_heredocs: false,
-        no_space_bareword: None,
+        constant_probe_bareword: None,
     })
 }
 
@@ -1309,7 +1321,7 @@ mod tests {
             allow_indented_close: false,
             requires_future_close: true,
             ignore_future_body_heredocs: false,
-            no_space_bareword: None,
+            constant_probe_bareword: None,
         };
 
         assert!(!has_future_heredoc_close("<<EOF", 99, &delimiter));
@@ -1322,7 +1334,7 @@ mod tests {
             allow_indented_close: false,
             requires_future_close: true,
             ignore_future_body_heredocs: false,
-            no_space_bareword: None,
+            constant_probe_bareword: None,
         };
         let source = "return foo <<bar;\n=pod\nbar\n=cut\n";
         let line_end = "return foo <<bar;\n".len();
@@ -1333,6 +1345,18 @@ mod tests {
     #[test]
     fn heredoc_operator_context_accepts_start_of_line_marker() {
         assert!(is_heredoc_operator_context("<<EOF", 0));
+    }
+
+    #[test]
+    fn is_heredoc_operator_context_boundary_discriminator() {
+        assert_eq!(is_heredoc_operator_context("$obj->method <<EOF", 13), false);
+    }
+
+    #[test]
+    fn before_word_has_method_arrow_boundary_discriminator() {
+        assert_eq!(before_word_has_method_arrow("$obj->"), true);
+        assert_eq!(before_word_has_method_arrow("$obj-> \t"), true);
+        assert_eq!(before_word_has_method_arrow("$obj -"), false);
     }
 
     #[test]
@@ -1347,6 +1371,74 @@ mod tests {
         assert!(has_constant_declaration_before(source, source.len(), "MAPQ"));
         assert!(has_constant_declaration_before(source, source.len(), "MAPS"));
         assert!(!has_constant_declaration_before(source, source.len(), "BA"));
+    }
+
+    #[test]
+    fn constant_declaration_probe_rejects_prefix_lookalikes() {
+        assert!(!line_declares_constant("useful constant FOO => 1", "FOO"));
+        assert!(!line_declares_constant("use other FOO => 1", "FOO"));
+        assert!(!line_declares_constant("use constantish FOO => 1", "FOO"));
+    }
+
+    #[test]
+    fn heredoc_delimiter_parser_rejects_invalid_labels() {
+        assert!(extract_heredoc_delimiter(" EOF").is_none());
+        assert!(extract_heredoc_delimiter(r"\!EOF").is_none());
+        assert!(parse_quoted_heredoc_label(r#""EOF"#, '"').is_none());
+    }
+
+    #[test]
+    fn heredoc_delimiter_parser_accepts_underscore_labels() {
+        let escaped = extract_heredoc_delimiter(r"\_EOF");
+        assert_eq!(escaped.as_ref().map(|delimiter| delimiter.label.as_str()), Some("_EOF"));
+
+        let escaped_embedded = extract_heredoc_delimiter(r"\EO_F;");
+        assert_eq!(
+            escaped_embedded.as_ref().map(|delimiter| delimiter.label.as_str()),
+            Some("EO_F")
+        );
+
+        let bare = extract_heredoc_delimiter("_EOF");
+        assert_eq!(bare.as_ref().map(|delimiter| delimiter.label.as_str()), Some("_EOF"));
+
+        let bare_embedded = extract_heredoc_delimiter("EO_F;");
+        assert_eq!(bare_embedded.as_ref().map(|delimiter| delimiter.label.as_str()), Some("EO_F"));
+    }
+
+    #[test]
+    fn quoted_heredoc_label_preserves_quote_and_backslash_escapes() {
+        assert_eq!(parse_quoted_heredoc_label(r#""EO\"F""#, '"'), Some("EO\"F".to_string()));
+        assert_eq!(parse_quoted_heredoc_label(r#""EO\\F""#, '"'), Some(r"EO\F".to_string()));
+    }
+
+    #[test]
+    fn future_close_probe_skips_nested_heredoc_bodies() {
+        let delimiter = HeredocDelimiter {
+            label: "bar".to_string(),
+            allow_indented_close: false,
+            requires_future_close: true,
+            ignore_future_body_heredocs: false,
+            constant_probe_bareword: None,
+        };
+        let source = "return foo <<bar;\nmy $h = <<EOF;\nbar\nEOF\nbar\n";
+        let line_end = "return foo <<bar;\n".len();
+
+        assert!(has_future_heredoc_close(source, line_end, &delimiter));
+    }
+
+    #[test]
+    fn future_close_probe_resumes_after_multiline_literal() {
+        let delimiter = HeredocDelimiter {
+            label: "bar".to_string(),
+            allow_indented_close: false,
+            requires_future_close: true,
+            ignore_future_body_heredocs: false,
+            constant_probe_bareword: None,
+        };
+        let source = "return foo <<bar;\nmy $literal = '\ntext'; my $h = <<EOF;\nbar\nEOF\nbar\n";
+        let line_end = "return foo <<bar;\n".len();
+
+        assert!(has_future_heredoc_close(source, line_end, &delimiter));
     }
 
     #[test]

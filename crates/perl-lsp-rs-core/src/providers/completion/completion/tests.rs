@@ -5896,6 +5896,23 @@ fn test_return_spaced_lowercase_bareword_shift_does_not_suppress_completion_afte
     );
 }
 
+/// Future delimiter probes do not turn spaced return constant shifts into heredocs.
+#[test]
+fn test_return_spaced_constant_shift_future_label_does_not_suppress_completion_before_label() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $after = $shift\nbar\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "a later bar line must not make a return constant shift look like a heredoc"
+    );
+}
+
 /// Future delimiter probes must ignore matching text inside later literals.
 #[test]
 fn test_return_shift_future_literal_label_does_not_suppress_completion_before_literal() {
@@ -6240,11 +6257,32 @@ EOF
     assert!(completions.is_empty(), "bareword call heredocs must suppress inside the body");
 }
 
-/// Heredocs passed to method calls suppress inside the body.
+/// Method-result shifts are not heredoc calls without parentheses.
 #[test]
-fn test_no_completion_inside_method_call_heredoc() {
+fn test_method_result_shift_does_not_suppress_completion_before_label() {
     let code = r#"my $renderer = bless {}, 'Renderer';
-$renderer->render <<EOF;
+my $shifted = $renderer->mask <<MASK;
+my $after = $shift
+MASK
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "arrow-method left shifts must not be treated as heredoc bodies"
+    );
+}
+
+/// Parenthesized method-call heredocs suppress inside the body.
+#[test]
+fn test_no_completion_inside_parenthesized_method_call_heredoc() {
+    let code = r#"my $renderer = bless {}, 'Renderer';
+$renderer->render(<<EOF);
 $cursor
 EOF
 "#;
@@ -6255,7 +6293,10 @@ EOF
     let position = must_some(code.find("$cursor"));
     let completions = provider.get_completions(code, position);
 
-    assert!(completions.is_empty(), "method call heredocs must suppress inside the body");
+    assert!(
+        completions.is_empty(),
+        "parenthesized method-call heredocs must suppress inside the body"
+    );
 }
 
 /// Return-value call heredocs still suppress inside the body.
