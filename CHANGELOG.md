@@ -315,6 +315,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   active-goal manifest coverage tests keep the closeout proof paths visible to
   Patch-95 without treating routed test failures as coverage failures.
   (#1950, #2041)
+- **Agent lease proof-control-plane coverage is covered.** Agent lease acquire,
+  verify, expiry, stale snapshot/head, malformed input, and task-validation
+  paths now have focused xtask unit and CLI tests so lease proof infrastructure
+  remains visible to Patch-95. (#2045, issue #2043)
 - **CPAN corpus ratchet can run a bounded top-50 profile.** The post-merge corpus
   workflow now has a bounded representative mode in addition to the full ratchet;
   release accuracy claims still require the corresponding receipt. (#1520)
