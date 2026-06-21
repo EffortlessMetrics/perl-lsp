@@ -5220,6 +5220,1752 @@ fn test_special_var_count_at_least_40() {
     assert!(total >= 40, "expected at least 40 special variables across all sigils, got {total}");
 }
 
+/// Completion is suppressed inside heredoc blocks
+#[test]
+fn test_no_completion_inside_heredoc() {
+    let code = r#"my $text = <<EOF;
+This is a $var literal
+and this is @array
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    // Position inside heredoc (cursor on "var" in "$var literal")
+    let position = must_some(code.find("$var"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "should not complete inside heredoc");
+}
+
+/// Heredoc body text may itself contain `<<` without ending suppression.
+#[test]
+fn test_no_completion_inside_heredoc_with_shift_like_body_text() {
+    let code = r#"my $text = <<EOF;
+my $a = 1;
+$a << $b
+EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$b"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "shift-like text inside a heredoc body must not re-enable completions"
+    );
+}
+
+/// Multiple heredocs opened on one statement suppress through each body.
+#[test]
+fn test_no_completion_inside_second_heredoc_from_same_line() {
+    let code = r#"print <<A, <<B;
+first body
+A
+second body $cursor
+B
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "completion must stay suppressed inside the second heredoc body"
+    );
+}
+
+/// Tilde heredocs suppress completion through an indented body and closing marker.
+#[test]
+fn test_no_completion_inside_tilde_heredoc() {
+    let code = r#"my $text = <<~EOF;
+  literal $cursor
+  EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "completion must stay suppressed inside a <<~ heredoc body");
+}
+
+/// Indented heredocs allow quoted delimiters after horizontal space.
+#[test]
+fn test_no_completion_inside_spaced_quoted_tilde_heredoc() {
+    let code = r#"my $text = <<~ "EOF";
+  literal $cursor
+  EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "completion must stay suppressed inside a spaced quoted <<~ heredoc body"
+    );
+}
+
+/// Backslash heredocs suppress completion inside their bodies.
+#[test]
+fn test_no_completion_inside_backslash_heredoc() {
+    let code = r#"my $text = <<\EOF;
+literal $cursor
+EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "completion must stay suppressed inside a <<\\ heredoc body");
+}
+
+/// Backtick-delimited heredocs suppress completion inside their bodies.
+#[test]
+fn test_no_completion_inside_backtick_heredoc() {
+    let code = r#"my $text = <<`EOF`;
+literal $cursor
+EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "completion must stay suppressed inside a backtick-delimited heredoc body"
+    );
+}
+
+/// Digit-starting heredoc labels suppress completion inside their bodies.
+#[test]
+fn test_no_completion_inside_digit_label_heredoc() {
+    let code = r#"my $text = <<123;
+$cursor
+123
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "digit-starting heredoc labels must suppress inside the body");
+}
+
+/// Backslashed digit-starting heredoc labels suppress inside their bodies.
+#[test]
+fn test_no_completion_inside_backslash_digit_label_heredoc() {
+    let code = r#"my $text = <<\123;
+$cursor
+123
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "backslashed digit-starting heredoc labels must suppress inside the body"
+    );
+}
+
+/// Tilde heredocs also accept backslashed digit-starting labels.
+#[test]
+fn test_no_completion_inside_tilde_backslash_digit_label_heredoc() {
+    let code = r#"my $text = <<~\123;
+    $cursor
+    123
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "tilde backslashed digit-starting heredoc labels must suppress inside the body"
+    );
+}
+
+/// Empty quoted heredoc labels suppress completion until the blank terminator line.
+#[test]
+fn test_no_completion_inside_empty_quoted_label_heredoc() {
+    let code = "my $text = <<\"\";\n$cursor\n\nmy $after = 1;\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "empty quoted heredoc labels must suppress inside the body");
+}
+
+/// A heredoc opener can appear at the start of a statement line.
+#[test]
+fn test_no_completion_inside_start_of_line_heredoc() {
+    let code = r#"<<EOF;
+literal $cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "start-of-line heredocs must suppress inside the body");
+}
+
+/// Escaped quotes inside a quoted heredoc label are part of the terminator.
+#[test]
+fn test_completion_resumes_after_escaped_quote_heredoc_label_closes() {
+    let code = r#"my $text = <<"EO\"F";
+literal $cursor
+EO"F
+my $after = $te"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let body_position = must_some(code.find("$cursor"));
+    let body_completions = provider.get_completions(code, body_position);
+    assert!(
+        body_completions.is_empty(),
+        "escaped-quote heredoc labels must suppress inside the body"
+    );
+
+    let after_completions = provider.get_completions(code, code.len());
+    assert!(
+        after_completions.iter().any(|completion| completion.label == "$text"),
+        "$text should complete after the escaped-quote heredoc closes"
+    );
+}
+
+/// Escaped q-like delimiters keep heredoc-looking text inside the literal.
+#[test]
+fn test_escaped_q_like_delimiter_heredoc_text_does_not_suppress_completion_after() {
+    let code = r#"my $literal = q!escaped \! <<EOF!;
+my $after = $lit"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|completion| completion.label == "$literal"),
+        "escaped q-like delimiters must keep <<EOF as literal text"
+    );
+}
+
+/// Regex-like literal text containing `<<` must not start heredoc suppression.
+#[test]
+fn test_regex_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $regex_marker = qr/<<EOF/;\nmy $after = $regex";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$regex_marker"),
+        "regex literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Regex-like literal text with a punctuation delimiter must not start heredoc suppression.
+#[test]
+fn test_regex_literal_bang_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $regex_marker = qr!<<EOF!;\nmy $after = $regex";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$regex_marker"),
+        "regex literal text containing <<EOF with ! delimiters must not suppress later completions"
+    );
+}
+
+/// Bare slash regex text containing `<<` must not start heredoc suppression.
+#[test]
+fn test_bare_slash_regex_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $subject = 'value';\nif (/<<EOF/) {}\nmy $after = $subject";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$subject"),
+        "bare slash regex text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Bare slash regexes after Perl operators must not start heredoc suppression.
+#[test]
+fn test_operator_bare_regex_heredoc_text_does_not_suppress_completion_after() {
+    let code = r#"my $subject = 'value';
+my @rows = ('x');
+sub matches_subject {
+    return /<<EOF/;
+}
+my $count = grep /<<EOF/, @rows;
+my @parts = split /<<EOF/, $subject;
+my $after = $subject"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$subject"),
+        "operator bare regex text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Substitution replacement text containing `<<` must not start heredoc suppression.
+#[test]
+fn test_substitution_replacement_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $text = 'a';\n$text =~ s/a/<<EOF/;\nmy $after = $text";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "substitution replacement text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Whitespace after `s` still belongs to the substitution operator.
+#[test]
+fn test_spaced_substitution_replacement_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $text = 'a';\n$text =~ s /a/<<EOF/;\nmy $after = $text";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "spaced substitution replacement text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Substitution replacement text with punctuation delimiters must not start heredoc suppression.
+#[test]
+fn test_substitution_bang_replacement_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $text = 'a';\n$text =~ s!a!<<EOF!;\nmy $after = $text";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "substitution replacement text containing <<EOF with ! delimiters must not suppress later completions"
+    );
+}
+
+/// Paired substitution delimiters can span lines and must still hide heredoc-looking text.
+#[test]
+fn test_multiline_paired_substitution_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $text = 'a';\n$text =~ s(a)\n(<<EOF);\nmy $after = $text";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "paired substitution replacement text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Multi-section operators may use a different paired delimiter before a heredoc.
+#[test]
+fn test_mixed_paired_substitution_before_heredoc_opener_on_same_line() {
+    let code = r#"my $value = "old";
+print $value =~ s[old](new), <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "mixed paired substitution delimiters must not hide a later heredoc opener"
+    );
+}
+
+/// A subroutine named like a quote operator must not mask a later heredoc.
+#[test]
+fn test_sub_named_s_does_not_mask_heredoc_opener() {
+    let code = r#"sub s { 1 }
+my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "a sub named s must not be treated as a substitution while scanning later heredocs"
+    );
+}
+
+/// A malformed bare `s(...)` statement should not black out later heredocs.
+#[test]
+fn test_bare_s_statement_recovers_before_later_heredoc_opener() {
+    let code = r#"sub s { 1 }
+s(1);
+my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "scanner recovery after s(...) must still record the later heredoc"
+    );
+}
+
+/// Method and qualified names like `s` must not mask a later heredoc.
+#[test]
+fn test_method_or_qualified_s_does_not_mask_heredoc_opener() {
+    let code = r#"package Foo;
+sub s { 1 }
+package main;
+my $obj = bless {}, 'Foo';
+$obj->s(1);
+Foo::s(1);
+my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "method and qualified names named s must not be treated as substitutions"
+    );
+}
+
+/// Spaced left shifts against bareword constants must not start heredoc suppression.
+#[test]
+fn test_spaced_shift_bareword_does_not_suppress_completion_after() {
+    let code = "use constant EOF => 1;\nmy $shifted = 2 << EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "spaced left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// Unspaced left shifts against bareword constants must not start heredoc suppression.
+#[test]
+fn test_unspaced_shift_bareword_does_not_suppress_completion_after() {
+    let code = "use constant EOF => 1;\nmy $shifted = 2<<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced numeric left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// Unspaced sigiled left shifts must not start heredoc suppression.
+#[test]
+fn test_unspaced_sigiled_shift_bareword_does_not_suppress_completion_after() {
+    let code =
+        "use constant EOF => 1;\nmy $input = 2;\nmy $shifted = $input<<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced sigiled left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// Unspaced bareword constant shifts must not start heredoc suppression.
+#[test]
+fn test_unspaced_bareword_shift_does_not_suppress_completion_after() {
+    let code = "use constant FOO => 2;\nuse constant EOF => 1;\nmy $shifted = FOO<<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced bareword left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// A later bare line matching the right operand does not prove a constant shift is a heredoc.
+#[test]
+fn test_unspaced_bareword_shift_future_label_does_not_suppress_completion_before_label() {
+    let code = "use constant FOO => 2;\nuse constant BAR => 1;\nmy $shifted = FOO<<BAR;\nmy $after = $shift\nBAR\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "a later BAR line must not make a constant left shift look like a heredoc"
+    );
+}
+
+/// Quoted constant declarations still make no-space constant shifts non-heredocs.
+#[test]
+fn test_quoted_constant_shift_future_label_does_not_suppress_completion_before_label() {
+    let code = "use constant \"FOO\" => 2;\nuse constant \"BAR\" => 1;\nmy $shifted = FOO<<BAR;\nmy $after = $shift\nBAR\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "quoted use constant names must not leave constant shifts in heredoc mode"
+    );
+}
+
+/// Lowercase bareword constant shifts must not start heredoc suppression.
+#[test]
+fn test_unspaced_lowercase_bareword_shift_does_not_suppress_completion_after() {
+    let code = "use constant foo => 2;\nuse constant bar => 1;\nmy $shifted = foo<<bar;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced lowercase bareword left shifts must not be treated as heredoc openers"
+    );
+}
+
+/// Unspaced output statements with constant operands must not start heredoc suppression.
+#[test]
+fn test_unspaced_print_bareword_constant_shift_does_not_suppress_completion_after() {
+    let code = "use constant OUT => 4;\nuse constant EOF => 1;\nmy $shifted = print OUT<<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced print constant shifts must not be treated as heredoc openers"
+    );
+}
+
+/// Lowercase bareword constants in output statements are still left shifts without a terminator.
+#[test]
+fn test_unspaced_print_lowercase_constant_shift_does_not_suppress_completion_after() {
+    let code = "use constant out => 4;\nuse constant marker => 1;\nmy $shifted = print out<<marker;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced print lowercase constant shifts must not be treated as heredoc openers"
+    );
+}
+
+/// Spaced bareword constant shifts must not start heredoc suppression.
+#[test]
+fn test_spaced_bareword_shift_does_not_suppress_completion_after() {
+    let code = "use constant FOO => 2;\nuse constant EOF => 1;\nmy $shifted = FOO <<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "spaced bareword left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// Spaced bareword constant shifts after return must not start heredoc suppression.
+#[test]
+fn test_return_spaced_lowercase_bareword_shift_does_not_suppress_completion_after() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "spaced return-value bareword shifts must not be treated as heredoc openers"
+    );
+}
+
+/// Future delimiter probes must ignore matching text inside later literals.
+#[test]
+fn test_return_shift_future_literal_label_does_not_suppress_completion_before_literal() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $after = $shift\nmy $literal = \"\nbar\n\";\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "future close detection must not count delimiter-looking lines inside later literals"
+    );
+}
+
+/// Future delimiter probes must ignore matching text inside later POD blocks.
+#[test]
+fn test_return_shift_future_pod_label_does_not_suppress_completion_after_pod() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\n=pod\nbar\n=cut\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "future close detection must not count delimiter-looking lines inside later POD"
+    );
+}
+
+/// Future delimiter probes must ignore matching text inside later heredocs.
+#[test]
+fn test_return_shift_future_heredoc_label_keeps_later_heredoc_suppressed() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $h = <<EOF;\nbar\n$cursor\nEOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "future close detection must not count delimiter-looking lines inside later heredoc bodies"
+    );
+}
+
+/// Unspaced shift probes still track later real heredocs before accepting a close.
+#[test]
+fn test_unspaced_shift_future_heredoc_label_keeps_later_heredoc_suppressed() {
+    let code = "use constant foo => 2;\nuse constant bar => 1;\nmy $shifted = foo<<bar;\nmy $h = <<EOF;\nbar\n$cursor\nEOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "unspaced future close detection must not count delimiter-looking lines inside later heredoc bodies"
+    );
+}
+
+/// Future probes still notice a later heredoc opener after a literal closes.
+#[test]
+fn test_return_shift_future_literal_then_heredoc_label_keeps_later_heredoc_suppressed() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $literal = \"\ntext\"; my $h = <<EOF;\nbar\n$cursor\nEOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "future close detection must track heredocs opened after a multiline literal closes"
+    );
+}
+
+/// Return-value all-caps bareword calls can take heredoc arguments.
+#[test]
+fn test_no_completion_inside_return_all_caps_bareword_call_heredoc() {
+    let code = r#"sub RENDER { shift }
+sub build {
+    return RENDER <<EOF;
+$cursor
+EOF
+}
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "return all-caps bareword heredocs must suppress inside the body"
+    );
+}
+
+/// No-space print heredocs are still heredocs and suppress inside the body.
+#[test]
+fn test_no_completion_inside_print_heredoc_without_space() {
+    let code = r#"print<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print<<EOF heredocs must still suppress inside the body");
+}
+
+/// No-space call heredocs suppress inside the body.
+#[test]
+fn test_no_completion_inside_no_space_bareword_call_heredoc() {
+    let code = r#"system<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "lowercase no-space call heredocs must suppress inside the body"
+    );
+}
+
+/// All-caps no-space call heredocs suppress inside the body.
+#[test]
+fn test_no_completion_inside_all_caps_no_space_bareword_call_heredoc() {
+    let code = r#"sub RENDER { shift }
+RENDER<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "all-caps no-space call heredocs must suppress inside the body"
+    );
+}
+
+/// Future-close probes for no-space call heredocs treat candidate body text as text.
+#[test]
+fn test_no_completion_inside_no_space_call_heredoc_with_body_heredoc_text() {
+    let code = r#"sub render { shift }
+render<<BAR;
+my $inner = <<EOF;
+$cursor
+BAR
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "heredoc-looking text inside a no-space call heredoc body must not hide the real close"
+    );
+}
+
+/// Print heredocs with bareword filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_print_bareword_filehandle_heredoc() {
+    let code = r#"print OUT <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print OUT <<EOF must suppress inside the body");
+}
+
+/// Sigiled values before `<<` are expressions, not output filehandle heredocs.
+#[test]
+fn test_sigiled_shift_does_not_suppress_completion_after() {
+    let code = "my $fh = 4;\nuse constant EOF => 1;\nmy $shifted = $fh<<EOF;\nmy $after = $sh";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "sigiled left shifts must not be treated as output filehandle heredocs"
+    );
+}
+
+/// Print heredocs with unspaced bareword filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_unspaced_print_bareword_filehandle_heredoc() {
+    let code = r#"print OUT<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print OUT<<EOF must suppress inside the body");
+}
+
+/// Print heredocs with sigiled filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_print_sigiled_filehandle_heredoc() {
+    let code = r#"my $fh;
+print $fh <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print $fh <<EOF must suppress inside the body");
+}
+
+/// Print heredocs with braced filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_print_braced_filehandle_heredoc() {
+    let code = r#"my $fh;
+print {$fh} <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print {{$fh}} <<EOF must suppress inside the body");
+}
+
+/// Say heredocs with sigiled filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_say_sigiled_filehandle_heredoc() {
+    let code = r#"use feature 'say';
+my $fh;
+say $fh <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "say $fh <<EOF must suppress inside the body");
+}
+
+/// Printf heredocs with sigiled filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_printf_sigiled_filehandle_heredoc() {
+    let code = r#"my $fh;
+printf $fh <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "printf $fh <<EOF must suppress inside the body");
+}
+
+/// Printf heredocs with unspaced bareword filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_unspaced_printf_bareword_filehandle_heredoc() {
+    let code = r#"printf OUT<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "printf OUT<<EOF must suppress inside the body");
+}
+
+/// Heredocs passed to user-defined calls suppress inside the body.
+#[test]
+fn test_no_completion_inside_bareword_call_heredoc() {
+    let code = r#"render <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "bareword call heredocs must suppress inside the body");
+}
+
+/// Heredocs passed to method calls suppress inside the body.
+#[test]
+fn test_no_completion_inside_method_call_heredoc() {
+    let code = r#"my $renderer = bless {}, 'Renderer';
+$renderer->render <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "method call heredocs must suppress inside the body");
+}
+
+/// Return-value call heredocs still suppress inside the body.
+#[test]
+fn test_no_completion_inside_return_call_heredoc() {
+    let code = r#"sub render {}
+sub build {
+    return render <<EOF;
+$cursor
+EOF
+}
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "return call heredocs must suppress inside the body");
+}
+
+/// A sigiled variable named `$q` must not be mistaken for a q-like literal.
+#[test]
+fn test_variable_named_q_does_not_mask_heredoc_opener() {
+    let code = r#"my $q = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "$q before a heredoc opener must still record the delimiter");
+}
+
+/// A label with trailing spaces is body text, not the heredoc terminator.
+#[test]
+fn test_trailing_space_label_line_stays_inside_heredoc_body() {
+    let code = "my $text = <<EOF;\nEOF   \n$cursor\nEOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "EOF followed by spaces must not close the heredoc");
+}
+
+/// Tilde heredoc label lines with trailing spaces are body text, not terminators.
+#[test]
+fn test_tilde_heredoc_trailing_space_label_line_stays_inside_body() {
+    let code = "my $text = <<~EOF;\n  EOF   \n  $cursor\n  EOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "indented EOF followed by spaces must not close the heredoc");
+}
+
+/// q-like literal text containing `<<` must not start heredoc suppression.
+#[test]
+fn test_q_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q{<<EOF};\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "q-like literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Nested paired q-like delimiters must keep heredoc-looking text inside the literal.
+#[test]
+fn test_nested_q_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q{{} <<EOF };\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "nested q-like literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Fat-comma keys named like q-like operators must not hide heredoc values.
+#[test]
+fn test_fat_comma_q_key_before_heredoc_value_suppresses_inside_body() {
+    let code = r#"my %h = (q => <<EOF);
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "fat-comma q keys must not mask heredoc values");
+}
+
+/// Heredocs after a multiline literal that closes on the same line are still found.
+#[test]
+fn test_literal_closes_before_heredoc_opener_on_same_line() {
+    let code = r#"my $prefix = q{
+literal text
+}; my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "a heredoc opener after a closed multiline literal must suppress inside the body"
+    );
+}
+
+/// q-like literal text with a punctuation delimiter must not start heredoc suppression.
+#[test]
+fn test_q_literal_pipe_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q|<<EOF|;\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "q-like literal text containing <<EOF with | delimiters must not suppress later completions"
+    );
+}
+
+/// Spaced q-like literal text must not start heredoc suppression.
+#[test]
+fn test_spaced_q_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q /<<EOF/;\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "spaced q literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Spaced qq literal text must not start heredoc suppression.
+#[test]
+fn test_spaced_qq_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $qq_marker = qq /<<EOF/;\nmy $after = $qq";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$qq_marker"),
+        "spaced qq literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Newline-separated q delimiters must still keep heredoc-looking text inside the literal.
+#[test]
+fn test_newline_spaced_q_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q\n{<<EOF};\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "newline-spaced q literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Newline-separated substitution delimiters must keep POD-looking text inside the literal.
+#[test]
+fn test_newline_spaced_substitution_pod_text_does_not_suppress_completion_after() {
+    let code = r#"my $subject = "value";
+$subject =~ s
+{
+=pod
+}{replacement};
+my $after = $subject"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$subject"),
+        "newline-spaced substitution text containing =pod must not suppress later completions"
+    );
+}
+
+/// Regex-looking heredoc body text must not bypass heredoc suppression.
+#[test]
+fn test_no_regex_completion_inside_heredoc_body() {
+    let code = r#"my $text = <<EOF;
+if ($value =~ /li
+EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("/li")) + "/li".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "regex-looking heredoc body text must not produce regex completions"
+    );
+}
+
+/// Completion is suppressed inside POD blocks
+#[test]
+fn test_no_completion_inside_pod_block() {
+    let code = r#"=pod
+
+This is documentation about a $special variable
+and @array references
+
+=cut
+
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    // Position inside POD block (cursor on "special" in "$special")
+    let position = must_some(code.find("$special"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "should not complete inside POD block");
+}
+
+/// Regex-looking POD text must not bypass POD suppression.
+#[test]
+fn test_no_regex_completion_inside_pod_block() {
+    let code = r#"=pod
+if ($value =~ /li
+=cut
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("/li")) + "/li".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "regex-looking POD text must not produce regex completions");
+}
+
+/// Custom POD commands at column zero start POD blocks until `=cut`.
+#[test]
+fn test_no_completion_inside_custom_pod_command_block() {
+    let code = r#"=constructor new
+Documentation mentions a $cursor variable.
+=cut
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "custom column-zero POD commands must suppress completion until =cut"
+    );
+}
+
+/// Custom POD commands that start with `cut` are not the `=cut` terminator.
+#[test]
+fn test_no_completion_inside_cutting_pod_command_block() {
+    let code = r#"=cutting edge
+Documentation mentions a $cursor variable.
+=cut
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "`=cutting` must be treated as a custom POD command, not a terminator"
+    );
+}
+
+/// File-test `-s` operators are not substitution literals and must not mask POD.
+#[test]
+fn test_no_completion_inside_pod_after_file_test_s_operator() {
+    let code = r#"my $file = "README.md";
+my $size = -s $file;
+=pod
+
+$cursor
+=cut
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "file-test -s must not prevent POD suppression from starting");
+}
+
+/// POD-looking text inside a multiline q-like literal is not a POD block.
+#[test]
+fn test_pod_marker_inside_multiline_q_literal_does_not_suppress_completion_after() {
+    let code = r#"my $text = q{
+=pod
+};
+my $after = $text"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "POD-looking text inside a multiline q literal must not suppress later completions"
+    );
+}
+
+/// POD-looking text inside a multiline slash regex is not a POD block.
+#[test]
+fn test_pod_marker_inside_multiline_slash_regex_does_not_suppress_completion_after() {
+    let code = r#"my $subject = "value";
+if ($subject =~ /
+=pod
+/) {}
+my $after = $subject"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$subject"),
+        "POD-looking text inside a multiline slash regex must not suppress later completions"
+    );
+}
+
+/// Perl-looking POD prose must not make the terminator look like string context.
+#[test]
+fn test_completion_after_pod_prose_with_unmatched_q_literal_text() {
+    let code = r#"=pod
+Documentation mentions q{ as prose, not Perl code.
+=cut
+
+my $real_var = 1;
+$real"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$real_var"),
+        "POD prose containing unmatched q-like text must not suppress after =cut"
+    );
+}
+
+/// Earlier POD prose must not make later POD markers look like literal context.
+#[test]
+fn test_no_completion_inside_later_pod_after_unmatched_q_prose() {
+    let code = r#"=pod
+Documentation mentions q{ as prose, not Perl code.
+=cut
+
+=pod
+Documentation mentions a $cursor variable.
+=cut
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "unmatched q-like text in earlier POD prose must not disable later POD suppression"
+    );
+}
+
+/// Heredoc-looking POD prose must not make the terminator look like heredoc context.
+#[test]
+fn test_completion_after_pod_prose_with_heredoc_like_text() {
+    let code = r#"=pod
+Documentation mentions <<EOF as prose, not Perl code.
+=cut
+
+my $real_var = 1;
+$real"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$real_var"),
+        "POD prose containing heredoc-looking text must not suppress after =cut"
+    );
+}
+
+/// A fake heredoc marker in a comment must not mask a following POD block.
+#[test]
+fn test_no_completion_inside_pod_after_comment_heredoc_text() {
+    let code = r#"# docs mention <<EOF heredocs
+=pod
+
+Documentation mentions a $cursor variable.
+
+=cut
+
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "comment text that mentions <<EOF must not prevent POD suppression"
+    );
+}
+
+/// A fake heredoc marker in a string must not mask a following POD block.
+#[test]
+fn test_no_completion_inside_pod_after_string_heredoc_text() {
+    let code = r#"my $marker = "<<EOF";
+=pod
+
+Documentation mentions a $cursor variable.
+
+=cut
+
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "string text that contains <<EOF must not prevent POD suppression"
+    );
+}
+
+/// Perl-looking heredoc body text must not mask a later real POD block.
+#[test]
+fn test_no_completion_inside_pod_after_heredoc_with_unmatched_q_text() {
+    let code = r#"my $text = <<EOF;
+q{
+EOF
+=pod
+
+Documentation mentions a $cursor variable.
+
+=cut
+
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "heredoc body q-like text must not prevent later POD suppression"
+    );
+}
+
+/// POD-looking string text must not disable later heredoc suppression.
+#[test]
+fn test_no_completion_inside_heredoc_after_string_pod_marker() {
+    let code = r#"my $marker = "
+=pod
+";
+my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "string text that contains =pod must not prevent heredoc suppression"
+    );
+}
+
+/// POD-looking command-string text must not disable later completion.
+#[test]
+fn test_completion_after_backtick_string_pod_marker() {
+    let code = r#"my $cmd = `
+=pod
+not real POD
+`;
+my $after = $cmd"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$cmd"),
+        "backtick string text that contains =pod must not suppress later completions"
+    );
+}
+
+/// Heredoc-looking command-string text must not suppress later completion.
+#[test]
+fn test_completion_after_same_line_backtick_string_heredoc_marker() {
+    let code = "my $cmd = `printf <<EOF`;\nmy $after = $cmd";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$cmd"),
+        "backtick string text that contains <<EOF must not suppress later completions"
+    );
+}
+
+/// Completion works normally after POD block ends
+#[test]
+fn test_completion_after_pod_block() {
+    let code = r#"=pod
+Documentation here
+=cut
+
+my $real_var = 1;
+$real
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    // Position after POD, at cursor position completing "$real"
+    let completions = provider.get_completions(code, code.len() - 1);
+
+    // Should suggest variables after POD block
+    assert!(
+        completions.iter().any(|c| c.label == "$real_var"),
+        "should complete variables after POD block ends"
+    );
+}
+
+/// Indented `=pod` (leading whitespace) must NOT trigger POD suppression.
+/// Per perlpod, POD commands must appear at column 0.
+#[test]
+fn test_indented_pod_marker_does_not_suppress_completion() {
+    // A hash value that happens to look like `=pod` but is indented — not real POD.
+    let code = "my $x = 1;\n    # this comment mentions =pod but at indent\nmy $cursor = ";
+    let position = code.len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+
+    // $x declared above must appear — suppression must NOT have fired
+    assert!(
+        completions.iter().any(|c| c.label == "$x"),
+        "indented =pod-like content in a comment must not trigger POD suppression; $x should complete"
+    );
+}
+
+/// Heredoc body containing `=pod`-like content must NOT bleed into the POD
+/// state machine after the heredoc closes.
+#[test]
+fn test_heredoc_with_pod_content_does_not_suppress_completion_after() {
+    // The heredoc body contains `=pod` as literal text. After `END`, we are back
+    // in regular Perl code and completion should work normally.
+    let code = "my $text = <<END;\n=pod this is a literal string\nEND\nmy $after = ";
+    let position = code.len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+
+    // $text must appear — POD suppression must NOT bleed out of the heredoc
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "$text should complete after a heredoc whose body contained =pod"
+    );
+}
+
+/// A quoted heredoc terminator that looks like POD is still the terminator, not
+/// the start of a POD block.
+#[test]
+fn test_pod_like_quoted_heredoc_terminator_does_not_suppress_completion_after() {
+    let code = "my $text = <<\"=pod\";\nliteral\n=pod\nmy $after = ";
+    let position = code.len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "$text should complete after a quoted =pod heredoc terminator"
+    );
+}
+
+/// Completion is suppressed inside a heredoc body (not just at the $ sign).
+/// After the closing delimiter, completion resumes.
+#[test]
+fn test_completion_resumes_after_heredoc_closes() {
+    let code = "my $outer = <<EOF;\nliteral content\nEOF\nmy $after_heredoc = ";
+    let position = code.len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+
+    // $outer must appear — we are after the closing EOF, not inside the heredoc
+    assert!(
+        completions.iter().any(|c| c.label == "$outer"),
+        "$outer should complete after the heredoc closes"
+    );
+}
+
+/// Suppression is exact: a cursor positioned on the heredoc closing delimiter
+/// line itself should NOT be considered inside the heredoc body.
+#[test]
+fn test_heredoc_closing_delimiter_is_not_body() {
+    // Cursor is right before "EOF" on the closing line — not inside body.
+    let code = "my $x = <<EOF;\nliteral\nEOF\n";
+    // Position of the 'E' in the closing EOF line
+    let eof_line_pos = must_some(code.find("\nEOF\n")) + 1;
+    let position = eof_line_pos;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+    assert!(
+        completions.iter().any(|c| c.label == "$x"),
+        "cursor on closing delimiter line must not be treated as inside heredoc body"
+    );
+}
+
 // -------------------------------------------------------------------------
 // Package-qualified method completion (issue #1606)
 //

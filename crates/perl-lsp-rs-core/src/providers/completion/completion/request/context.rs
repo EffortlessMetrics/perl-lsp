@@ -26,6 +26,11 @@ pub(super) fn rejects_dash_trigger(context: &CompletionContext) -> bool {
         && !(context.prefix.ends_with("->") && context.prefix.len() > 2)
 }
 
+pub(super) fn rejects_lexical_block(source: &str, position: usize) -> bool {
+    CompletionProvider::is_in_heredoc(source, position)
+        || CompletionProvider::is_in_pod(source, position)
+}
+
 pub(super) fn complete_regex_context(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,

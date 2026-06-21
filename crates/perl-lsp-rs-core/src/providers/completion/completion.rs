@@ -1551,6 +1551,14 @@ impl CompletionProvider {
         lexical_context::is_in_comment(source, position)
     }
 
+    pub(crate) fn is_in_heredoc(source: &str, position: usize) -> bool {
+        lexical_context::is_in_heredoc(source, position)
+    }
+
+    pub(crate) fn is_in_pod(source: &str, position: usize) -> bool {
+        lexical_context::is_in_pod(source, position)
+    }
+
     /// Check if we're in a test context
     fn is_test_context(&self, source: &str, filepath: Option<&str>) -> bool {
         // Check if file ends with .t
