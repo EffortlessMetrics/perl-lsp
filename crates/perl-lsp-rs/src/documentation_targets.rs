@@ -25,6 +25,43 @@ impl PerlDocumentationTarget {
         Some(Self { name: trimmed.to_string() })
     }
 
+    /// Build a documentation target from a virtual perldoc URI.
+    pub(crate) fn from_perldoc_uri(uri: &str) -> Option<Self> {
+        let name = uri.strip_prefix("perldoc://")?;
+        if name != name.trim() {
+            return None;
+        }
+
+        Self::new(name)
+    }
+
+    /// Build a documentation target from a simple POD `L<>` module target.
+    ///
+    /// This intentionally accepts only module-like names and the core pragma
+    /// targets that virtual perldoc already enriches. Section-only links,
+    /// URLs, and empty labels are left to the client as plain POD text.
+    pub(crate) fn from_simple_pod_link_target(target: &str) -> Option<Self> {
+        let candidate = if let Some((label, link_target)) = target.split_once('|') {
+            if label.trim().is_empty() {
+                return None;
+            }
+            link_target.trim()
+        } else {
+            target.trim()
+        };
+
+        if is_supported_core_pragma_pod_target(candidate) || candidate.contains("::") {
+            Self::new(candidate)
+        } else {
+            None
+        }
+    }
+
+    /// Return the validated perldoc target name.
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Return the virtual perldoc document URI.
     pub(crate) fn perldoc_uri(&self) -> String {
         format!("perldoc://{}", self.name)
@@ -56,11 +93,6 @@ impl PerlDocumentationTarget {
     }
 }
 
-/// Construct a virtual perldoc URI for a validated Perl documentation name.
-pub(crate) fn perldoc_uri(name: &str) -> Option<String> {
-    PerlDocumentationTarget::new(name).map(|target| target.perldoc_uri())
-}
-
 /// Construct a MetaCPAN POD URI for a validated Perl documentation name.
 pub(crate) fn metacpan_pod_uri(name: &str) -> Option<String> {
     PerlDocumentationTarget::new(name).map(|target| target.metacpan_pod_uri())
@@ -88,3 +120,11 @@ fn is_perl_doc_name_segment(segment: &str) -> bool {
 
     chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
+
+fn is_supported_core_pragma_pod_target(target: &str) -> bool {
+    matches!(target, "strict" | "warnings")
+}
+
+#[cfg(test)]
+#[path = "documentation_targets_tests.rs"]
+mod tests;

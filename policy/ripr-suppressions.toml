@@ -11,7 +11,7 @@ schema_version = 1
 policy = "ripr-suppressions"
 owner = "EffortlessMetrics"
 status = "advisory"
-updated = "2026-06-19"
+updated = "2026-06-21"
 
 # -----------------------------------------------------------------------------
 # Generated status docs: validated through status-generation checks, not
@@ -73,6 +73,27 @@ issue = "#1567"
 reason = "Issue #1567 adds inline_completion_ux_fixtures.rs as an executable completion-pack contract receipt for Try::Tiny positive, no-import, comment, string, POD, near-match, parse-damage, visible-symbol conflict, and stable-range cases. RIPR 0.9.x classifies the new fixture matrix and helper plumbing as production exposure even though the product seam is exercised through InlineCompletionProvider and the focused fixture test cargo test -p perl-lsp-rs-core --test inline_completion_ux_fixtures. Keep this suppression narrow to the single receipt file and remove when RIPR stops counting test fixture plumbing as production seams."
 created = "2026-06-19"
 review_after = "2026-07-19"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# Documentation target resolver predicates: centralized string-boundary helpers
+# are covered by focused resolver and virtual-content tests, but RIPR 0.9.x cannot
+# trace the predicate evidence after #1962 moves link parsing behind the canonical
+# PerlDocumentationTarget resolver.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-doc-target-resolver-predicate-evidence"
+kind = "predicate_infection_untraceable"
+paths = [
+  "crates/perl-lsp-rs/src/documentation_targets.rs",
+  "crates/perl-lsp-rs/src/runtime/language/virtual_content.rs",
+]
+classification = ["weakly_exposed", "infection_unknown"]
+owner = "editor-trust"
+issue = "#1962"
+reason = "Issue #1962 centralizes perldoc URI and simple POD module-link parsing in PerlDocumentationTarget. Focused tests cover the accepted trimmed URI branch, whitespace rejection, alphanumeric/underscore tail acceptance, malformed target rejection, and the virtual-content current-module discriminator through from_perldoc_uri_accepts_already_trimmed_name_boundary, from_perldoc_uri_rejects_whitespace_instead_of_normalizing, perl_doc_name_segment_accepts_alphanumeric_and_underscore_tail, from_simple_pod_link_target_* tests, collect_simple_pod_module_links_boundary_discriminator, and parser_workspace_pod_related_perldoc_links_are_sorted_and_filtered. RIPR 0.9.x still reports weakly_exposed/infection_unknown seams for these string predicates and moved helper boundaries because the static tracer cannot connect the focused tests to the centralized resolver. Remove when EffortlessMetrics/ripr#1429 is fixed or targeted mutation replaces this advisory path."
+created = "2026-06-21"
+review_after = "2026-07-21"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
