@@ -1838,6 +1838,36 @@ enum Commands {
         #[arg(long)]
         binaries: bool,
     },
+
+    /// Generate or check deterministic HIR semantic snapshots over a corpus slice.
+    ///
+    /// This command is a SNAPSHOT rail — it proves that lower_ast() is
+    /// deterministic and stable across commits. It does NOT prove correctness.
+    /// Curated-gold assertions (independent human labeling) are a separate,
+    /// future schema and are NOT built here.
+    ///
+    /// KPI: semantic_snapshot_stability_rate (NOT semantic_gold_pass_rate).
+    ///
+    /// Examples:
+    ///   # Generate snapshot manifest
+    ///   cargo xtask generate-semantic-snapshot
+    ///   # Check for HIR drift
+    ///   cargo xtask generate-semantic-snapshot --check
+    #[command(name = "generate-semantic-snapshot")]
+    GenerateSemanticSnapshot {
+        /// Directory containing the corpus fixture `.pl` files.
+        #[arg(long, default_value = "crates/perl-corpus/fixtures/snapshot-slice")]
+        fixture_dir: PathBuf,
+
+        /// Path to write (generate) or read (check) the snapshot manifest JSON.
+        #[arg(long, default_value = "target/receipts/semantic-snapshot.json")]
+        output: PathBuf,
+
+        /// Check mode: compare against the recorded manifest and fail on drift.
+        /// When omitted, generates/overwrites the manifest.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum)]
@@ -3774,6 +3804,15 @@ fn main() -> Result<()> {
                 reason,
                 check_binaries: binaries,
             })
+        }
+        Commands::GenerateSemanticSnapshot { fixture_dir, output, check } => {
+            tasks::generate_semantic_snapshot::run(
+                tasks::generate_semantic_snapshot::GenerateSemanticSnapshotArgs {
+                    fixture_dir,
+                    output,
+                    check,
+                },
+            )
         }
     }
 }

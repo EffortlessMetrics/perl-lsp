@@ -59,6 +59,7 @@ pub mod freshness_check;
 pub mod gate_policy;
 pub mod gate_receipts;
 pub mod gates;
+pub mod generate_semantic_snapshot;
 pub mod generated_files;
 pub mod git_context;
 pub mod github;

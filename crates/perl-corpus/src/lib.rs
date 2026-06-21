@@ -237,6 +237,7 @@ pub mod metadata;
 pub mod metadata_backfill;
 pub mod prelude;
 pub mod sidecar;
+pub mod snapshot;
 pub mod tie_interface;
 
 pub use api::*;
