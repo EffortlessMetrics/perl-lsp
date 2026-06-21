@@ -28,20 +28,22 @@ fn test_perl_lsp_can_build_with_new_imports() {
 }
 
 #[test]
-fn test_perl_lsp_config_can_build_with_new_imports() {
-    // Verify that perl-lsp-config crate builds successfully with the new import paths
-    // It should depend on perl_dap instead of perl_dap_platform
+fn test_rs_core_config_can_build_after_absorption() -> Result<(), Box<dyn std::error::Error>> {
+    // Verify that the current home for the absorbed perl-lsp-config module
+    // builds successfully with the new import paths.
 
     let output = Command::new("cargo")
-        .args(["build", "-p", "perl-lsp-config", "--message-format=short"])
-        .output();
-    match output {
-        Ok(out) if !out.status.success() => {
-            panic!("perl-lsp-config build failed: {}", String::from_utf8_lossy(&out.stderr));
-        }
-        Err(e) => panic!("cargo build failed to start: {e}"),
-        _ => {}
+        .args(["build", "-p", "perl-lsp-rs-core", "--message-format=short"])
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "perl-lsp-rs-core build failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
     }
+
+    Ok(())
 }
 
 #[test]
