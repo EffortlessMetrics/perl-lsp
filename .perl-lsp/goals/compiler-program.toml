@@ -1,0 +1,109 @@
+id = "plsp-swarm-compiler-program"
+title = "Compiler-program lane"
+status = "active"
+owner = "codex-swarm"
+created = "2026-06-21"
+
+proposal = "docs/proposals/PLSP-PROP-0002-compiler-program.md"
+plan = "plans/compiler-program/implementation-plan.md"
+adr = "docs/adr/PLSP-ADR-0005-hir-body-pir-eir-boundaries.md"
+status_pointer = "docs/project/status/compiler_facts.md"
+tracker = "https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/2559"
+references = [
+  "https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/2563",
+  "https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/2564",
+  "https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/2565",
+]
+
+objective = """
+Build out the compiler-program layer above the fixture-backed HIR substrate:
+HIR body items (L0 expression shells), PIR-A expansion (branch/loop/return
+lowering), compiler world (SemanticSnapshot extension), and abstract compile
+engine — in expressions-before-control-flow order — without changing provider
+behavior or live LSP behavior.
+"""
+
+end_state = [
+  "PLSP-ADR-0005 is accepted and its HIR-body/PIR-A/EIR boundaries are in force.",
+  "Phase-2 slices have clear routing from the implementation plan.",
+  "Goal manifest is queryable by swarm agents for tracker #2559.",
+  "No provider cutover, no EIR crate, no generated status alteration follows from Phase-1 docs.",
+]
+
+claim_boundaries = [
+  "Do not add HIR body shells, PIR operations, or EIR types in Phase-1 PRs.",
+  "Do not change live provider behavior, provider cutover state, or generated status.",
+  "Do not create EIR crate or EIR data model without a separate EIR ADR.",
+  "Do not start Phase-2 slices before Phase-1 orientation PR is merged.",
+  "Do not conflate HIR body expansion (L0, PLSP-SPEC-0030) with PIR-A expansion (PLSP-SPEC-0025).",
+  "Do not treat compiler world as a new crate; it extends SemanticSnapshot.",
+]
+
+status_docs = [
+  "docs/project/status/compiler_facts.md",
+  "docs/project/status/hir_lowering.md",
+  "docs/project/COMPILER_CAPABILITY_STATUS.md",
+  "docs/project/COMPILER_BACKED_LSP_ROADMAP.md",
+]
+
+specs = [
+  "docs/specs/PLSP-SPEC-0025-pir-v0.md",
+  "docs/specs/PLSP-SPEC-0030-compile-state-layers.md",
+]
+
+[current]
+phase = "phase-1"
+lane = "substrate"
+repo = "perl-lsp-swarm"
+release_lineage_repo = "perl-lsp"
+status = "orientation_docs_active"
+
+[limits]
+substrate_prs = 2
+reliability_prs = 2
+
+[[lanes]]
+id = "substrate"
+pr_cap = 2
+owns = [
+  "hir_body_items",
+  "pir_a_expansion",
+  "compiler_world_integration",
+  "abstract_compile_engine",
+  "eir_planning",
+]
+rule = "No provider cutover, no EIR types, no live behavior change. Each PR names its layer (L0 HIR / PIR-A / compiler world) and cites ADR-0005."
+
+[[lanes]]
+id = "reliability"
+pr_cap = 2
+owns = [
+  "docs",
+  "plan_updates",
+  "orientation_maintenance",
+]
+rule = "Docs and plan maintenance only; no code changes that alter provider or compiler behavior."
+
+[substrate.next]
+items = [
+  "hir-body-binary-unary-shells",
+  "pir-a-read-side-lowering",
+]
+
+[[work_item]]
+id = "compiler-program-orientation"
+status = "active"
+lane = "substrate"
+claim_boundary = "Docs only: proposal, ADR, implementation plan, goal manifest. No HIR shells, no PIR operations, no EIR types, no compiler world, no provider cutover, no generated status change."
+files = [
+  "docs/proposals/PLSP-PROP-0002-compiler-program.md",
+  "docs/adr/PLSP-ADR-0005-hir-body-pir-eir-boundaries.md",
+  "plans/compiler-program/implementation-plan.md",
+  ".perl-lsp/goals/compiler-program.toml",
+]
+commands = [
+  "rtk git diff --check",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/proposals",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/adr",
+  "rtk cargo xtask ci-hygiene check-doc-paths plans/compiler-program",
+]

@@ -210,6 +210,8 @@ plans/*
 !plans/real-perl-editor-trust/
 !plans/real-perl-editor-trust/README.md
 !plans/real-perl-editor-trust/implementation-plan.md
+!plans/compiler-program/
+!plans/compiler-program/implementation-plan.md
 scanner_comparison/
 issue_updates/
 
