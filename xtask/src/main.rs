@@ -89,6 +89,14 @@ enum Commands {
     /// Validate differential real-Perl oracle receipt schema.
     CheckOracleReceiptSchema,
 
+    /// Run differential oracle comparison (PackageSubTable vertical slice).
+    ///
+    /// Loads fixtures from the manifest, runs the PackageSubTable extractor
+    /// against both the Rust HIR and real Perl, and emits comparison receipts
+    /// to target/receipts/oracle/. Requires `perl` on PATH.
+    #[command(name = "check-oracle-compare")]
+    CheckOracleCompare,
+
     /// Validate semantic-token class promotion registry.
     CheckSemanticTokenClasses,
 
@@ -2847,6 +2855,7 @@ fn main() -> Result<()> {
         Commands::CheckProviderPromotionLedger => provider_promotion_ledger::run(),
         Commands::CheckOracleFixtureManifest => oracle_fixture_manifest::run(),
         Commands::CheckOracleReceiptSchema => oracle_receipt_schema::run(),
+        Commands::CheckOracleCompare => oracle_runner::run(),
         Commands::CheckSemanticTokenClasses => semantic_token_classes::run(),
         Commands::CheckLsp318Claims => lsp_318_claims::run(),
         Commands::GenerateLsp318Matrix { check } => lsp_318_matrix::run(check),

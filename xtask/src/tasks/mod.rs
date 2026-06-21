@@ -86,6 +86,7 @@ pub mod native_format;
 pub mod native_tooling;
 pub mod oracle_fixture_manifest;
 pub mod oracle_receipt_schema;
+pub mod oracle_runner;
 pub mod parse_rust;
 pub mod parser_corpus_sweep;
 pub mod parser_matrix;
