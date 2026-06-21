@@ -336,6 +336,7 @@ fn relative_display(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use color_eyre::eyre::{ensure, eyre};
 
     // ----- helpers ----------------------------------------------------------
 
@@ -349,6 +350,16 @@ mod tests {
 
     fn valid_row() -> &'static str {
         r#"{"pr":"1234","title":"fix: thing","classification":"unclassified","confidence":"medium","evidence":[],"cleanup_done":false,"known_gaps":[]}"#
+    }
+
+    fn write_ledger(path: &Path, contents: &str) -> Result<()> {
+        let parent =
+            path.parent().ok_or_else(|| eyre!("ledger path has no parent: {}", path.display()))?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("creating ledger directory {}", parent.display()))?;
+        fs::write(path, contents)
+            .with_context(|| format!("writing ledger fixture {}", path.display()))?;
+        Ok(())
     }
 
     // ----- good rows --------------------------------------------------------
@@ -431,6 +442,36 @@ mod tests {
     }
 
     #[test]
+    fn test_non_string_and_null_core_fields_are_rejected() -> Result<()> {
+        for (case, line, expected) in [
+            (
+                "null pr",
+                r#"{"pr":null,"title":"t","classification":"unclassified","confidence":"low","evidence":[],"cleanup_done":false,"known_gaps":[]}"#,
+                "field `pr` must not be null",
+            ),
+            (
+                "non-string classification",
+                r#"{"pr":"1","title":"t","classification":7,"confidence":"low","evidence":[],"cleanup_done":false,"known_gaps":[]}"#,
+                "`classification` must be a string",
+            ),
+            (
+                "null close proof",
+                r#"{"pr":"1","title":"t","classification":"close-superseded","confidence":"high","evidence":[],"cleanup_done":false,"known_gaps":[],"close_proof":null}"#,
+                "requires non-null `close_proof`",
+            ),
+            (
+                "non-string confidence",
+                r#"{"pr":"1","title":"t","classification":"unclassified","confidence":false,"evidence":[],"cleanup_done":false,"known_gaps":[]}"#,
+                "`confidence` must be a string",
+            ),
+        ] {
+            let msg = first_msg(line);
+            ensure!(msg.contains(expected), "{case}: expected `{expected}`, got `{msg}`");
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_close_superseded_missing_close_proof() -> Result<()> {
         let msg = first_msg(
             r#"{"pr":"1","title":"t","classification":"close-superseded","confidence":"high","evidence":[],"cleanup_done":false,"known_gaps":[]}"#,
@@ -503,16 +544,98 @@ mod tests {
         Ok(())
     }
 
-    // ----- blank/comment lines skipped -------------------------------------
+    // ----- entry point and file discovery ----------------------------------
 
     #[test]
-    fn test_blank_lines_are_skipped() -> Result<()> {
-        // validate_line is not called for blank lines by the outer loop;
-        // confirm valid_row with blank sibling produces no errors.
-        let errs = line_errors("   "); // would not normally reach validate_line
-        // The outer loop skips blank lines, but validate_line itself gets a
-        // blank: it will fail to parse as JSON.
-        assert!(!errs.is_empty() || errs.is_empty()); // both outcomes are acceptable
+    fn test_validate_accepts_ledgers_with_blank_and_comment_lines() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let ledger_dir = temp.path().join("ledgers");
+        write_ledger(
+            &ledger_dir.join("b.jsonl"),
+            &format!("# already reviewed\n\n{}\n", valid_row()),
+        )?;
+        write_ledger(
+            &ledger_dir.join("a.jsonl"),
+            r#"{"pr":"4321","title":"test: second","classification":"builder-ready","confidence":"high","evidence":["local proof"],"cleanup_done":true,"known_gaps":[]}"#,
+        )?;
+        write_ledger(&ledger_dir.join("notes.txt"), "{not json, and not a ledger}\n")?;
+
+        validate(ValidateConfig { ledger_dir: Some(ledger_dir), format: ValidateFormat::Json })?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_validate_reports_invalid_rows_from_ledger_files() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let ledger_dir = temp.path().join("ledgers");
+        write_ledger(
+            &ledger_dir.join("ledger.jsonl"),
+            &format!("# comment\n\n{}\n{{\"bad\":\"row\"}}\n", valid_row()),
+        )?;
+
+        let err = validate(ValidateConfig {
+            ledger_dir: Some(ledger_dir),
+            format: ValidateFormat::Human,
+        })
+        .err()
+        .ok_or_else(|| eyre!("invalid ledger row unexpectedly passed validation"))?;
+
+        ensure!(
+            err.to_string().contains("ledger validation failed with"),
+            "unexpected validation error: {err:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_jsonl_files_sorts_and_ignores_non_ledgers() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let ledger_dir = temp.path().join("ledgers");
+        write_ledger(&ledger_dir.join("b.jsonl"), "{}\n")?;
+        write_ledger(&ledger_dir.join("a.jsonl"), "{}\n")?;
+        write_ledger(&ledger_dir.join("notes.txt"), "{}\n")?;
+
+        let files = collect_jsonl_files(&ledger_dir)?;
+        let names = files
+            .iter()
+            .map(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| eyre!("non-utf8 ledger path: {}", path.display()))
+                    .map(ToOwned::to_owned)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        ensure!(names == ["a.jsonl", "b.jsonl"], "expected sorted jsonl files only, got {names:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_missing_ledger_directory_is_empty_success() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let missing_dir = temp.path().join("missing-ledgers");
+
+        ensure!(
+            collect_jsonl_files(&missing_dir)?.is_empty(),
+            "missing ledger directory should collect no files"
+        );
+        validate(ValidateConfig { ledger_dir: Some(missing_dir), format: ValidateFormat::Human })?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_default_ledger_directory_resolves_to_project_ledgers() -> Result<()> {
+        let suffix = PathBuf::from("docs").join("agents").join("ledgers");
+        let resolved = resolve_ledger_dir(None)?;
+
+        ensure!(
+            resolved.ends_with(&suffix),
+            "default ledger directory should end with {}, got {}",
+            suffix.display(),
+            resolved.display()
+        );
         Ok(())
     }
 

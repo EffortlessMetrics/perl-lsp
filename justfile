@@ -1948,6 +1948,7 @@ coverage-proof base='origin/main':
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask workflow_policy_lint --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask allocation_tracker --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask agent_lease --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask agent_ledgers --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask active_goal_manifest --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask file_policy --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask native_tooling --locked
