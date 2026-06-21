@@ -75,7 +75,7 @@ fn is_valid_virtual_content_uri(uri: &str) -> bool {
 impl LspServer {
     fn fetch_virtual_content(&self, uri: &str) -> Option<String> {
         if let Some(target) = PerlDocumentationTarget::from_perldoc_uri(uri) {
-            self.fetch_workspace_perldoc(target.name())
+            self.fetch_workspace_perldoc(&target)
                 .or_else(|| {
                     let workspace_config = self.workspace_config.lock().clone();
                     fetch_perldoc(target.name(), &workspace_config)
@@ -86,11 +86,12 @@ impl LspServer {
         }
     }
 
-    fn fetch_workspace_perldoc(&self, module_name: &str) -> Option<String> {
+    fn fetch_workspace_perldoc(&self, target: &PerlDocumentationTarget) -> Option<String> {
         if self.root_path.lock().is_none() && self.workspace_folders.lock().is_empty() {
             return None;
         }
 
+        let module_name = target.name();
         let path = self.resolve_module_path(module_name, None)?;
         let source = match fs::read_to_string(&path) {
             Ok(source) => source,
@@ -102,7 +103,13 @@ impl LspServer {
         let pod = perl_pod::extract_pod(&source);
         let related_links = workspace_pod_related_perldoc_uris(module_name, &source);
 
-        format_workspace_pod_virtual_content(module_name, &path, &pod, &related_links)
+        format_workspace_pod_virtual_content(
+            module_name,
+            target.section(),
+            &path,
+            &pod,
+            &related_links,
+        )
     }
 }
 
@@ -122,6 +129,7 @@ fn enrich_core_pragma_perldoc(module_name: &str, content: String) -> String {
 
 fn format_workspace_pod_virtual_content(
     module_name: &str,
+    section: Option<&str>,
     path: &Path,
     pod: &perl_pod::PodDoc,
     related_links: &[String],
@@ -130,10 +138,12 @@ fn format_workspace_pod_virtual_content(
         return None;
     }
 
-    let mut sections = vec![format!(
-        "Workspace virtual perldoc\nModule: {module_name}\nSource: {}",
-        path.display()
-    )];
+    let mut header =
+        format!("Workspace virtual perldoc\nModule: {module_name}\nSource: {}", path.display());
+    if let Some(section) = section {
+        header.push_str(&format!("\nSection: {section}"));
+    }
+    let mut sections = vec![header];
 
     if !related_links.is_empty() {
         let links =
@@ -204,8 +214,10 @@ fn collect_simple_pod_module_links(line: &str, current_module: &str, uris: &mut 
             break;
         };
         let target = after_open[..end].trim();
-        if let Some(link_target) = PerlDocumentationTarget::from_simple_pod_link_target(target) {
-            if link_target.name() != current_module {
+        if let Some(link_target) =
+            PerlDocumentationTarget::from_workspace_pod_link_target(target, current_module)
+        {
+            if link_target.name() != current_module || link_target.section().is_some() {
                 uris.insert(link_target.perldoc_uri());
             }
         }
@@ -361,10 +373,12 @@ mod tests {
     }
 
     #[test]
-    fn parser_fetch_workspace_perldoc_requires_workspace() {
+    fn parser_fetch_workspace_perldoc_requires_workspace() -> TestResult {
         let server = LspServer::new();
+        let target = PerlDocumentationTarget::new("Local::Doc").ok_or("expected doc target")?;
 
-        assert!(server.fetch_workspace_perldoc("Local::Doc").is_none());
+        assert!(server.fetch_workspace_perldoc(&target).is_none());
+        Ok(())
     }
 
     #[test]
@@ -392,8 +406,9 @@ mod tests {
             config.use_system_inc = false;
         }
 
+        let target = PerlDocumentationTarget::new("Local::Doc").ok_or("expected doc target")?;
         let content =
-            server.fetch_workspace_perldoc("Local::Doc").ok_or("expected local workspace POD")?;
+            server.fetch_workspace_perldoc(&target).ok_or("expected local workspace POD")?;
 
         assert!(content.contains("Workspace virtual perldoc"));
         assert!(content.contains("Module: Local::Doc"));
@@ -423,7 +438,9 @@ mod tests {
             config.use_system_inc = false;
         }
 
-        assert!(server.fetch_workspace_perldoc("Local::Missing").is_none());
+        let target =
+            PerlDocumentationTarget::new("Local::Missing").ok_or("expected missing doc target")?;
+        assert!(server.fetch_workspace_perldoc(&target).is_none());
         Ok(())
     }
 
@@ -484,7 +501,8 @@ mod tests {
             config.use_system_inc = false;
         }
 
-        assert!(server.fetch_workspace_perldoc("Local::NoPod").is_none());
+        let target = PerlDocumentationTarget::new("Local::NoPod").ok_or("expected doc target")?;
+        assert!(server.fetch_workspace_perldoc(&target).is_none());
         Ok(())
     }
 
@@ -501,6 +519,7 @@ mod tests {
 
         let content = format_workspace_pod_virtual_content(
             "Local::Doc",
+            None,
             Path::new("lib/Local/Doc.pm"),
             &pod,
             &[],
@@ -510,6 +529,32 @@ mod tests {
         assert!(content.contains("Workspace virtual perldoc"));
         assert!(content.contains("Module: Local::Doc"));
         assert!(content.contains("Local::Doc - local docs"));
+        assert!(content.contains("METHOD reset\nReset local state."));
+        Ok(())
+    }
+
+    #[test]
+    fn parser_formats_workspace_pod_virtual_content_with_requested_section() -> TestResult {
+        let mut pod = perl_pod::PodDoc {
+            name: Some("Local::Doc - local docs".to_string()),
+            synopsis: None,
+            description: Some("Local documentation from the workspace.".to_string()),
+            methods: std::collections::HashMap::new(),
+            ..Default::default()
+        };
+        pod.methods.insert("reset".to_string(), "Reset local state.".to_string());
+
+        let content = format_workspace_pod_virtual_content(
+            "Local::Doc",
+            Some("reset"),
+            Path::new("lib/Local/Doc.pm"),
+            &pod,
+            &[],
+        )
+        .ok_or("expected workspace POD content")?;
+
+        assert!(content.contains("Module: Local::Doc"));
+        assert!(content.contains("Section: reset"));
         assert!(content.contains("METHOD reset\nReset local state."));
         Ok(())
     }
@@ -526,6 +571,7 @@ mod tests {
 
         let content = format_workspace_pod_virtual_content(
             "Local::Doc",
+            None,
             Path::new("lib/Local/Doc.pm"),
             &pod,
             &["perldoc://Alpha::First".to_string(), "perldoc://Zoo::Last".to_string()],
@@ -554,7 +600,9 @@ Local::Doc - local docs
 See L<Zoo::Last>, L<Alpha::First>, L<Zoo::Last>, and L<Local::Doc>.
 Labeled module links such as L<beta docs|Beta::Labeled> stay navigable.
 Core pragma links L<strict>, L<warnings>, and L<strict docs|strict> are valid virtual perldoc targets.
-Ignore L</reset>, L<section docs|/reset>, L<display|https://example.invalid>, L<|Beta::EmptyLabel>, L<display|Broken::>, and L<NotAModule>.
+Local section links such as L</reset> and L<section docs|/SEE ALSO> stay navigable.
+Module section links such as L<build docs|Local::Helper/build> stay navigable.
+Ignore L<display|https://example.invalid>, L<|Beta::EmptyLabel>, L<display|Broken::>, L<NotAModule>, L<NotAModule/reset>, and L<broken docs|Local::Helper/bad/section>.
 
 =cut
 
@@ -570,6 +618,9 @@ my $non_pod = 'L<Code::Reference>';
             vec![
                 "perldoc://Alpha::First",
                 "perldoc://Beta::Labeled",
+                "perldoc://Local::Doc#SEE%20ALSO",
+                "perldoc://Local::Doc#reset",
+                "perldoc://Local::Helper#build",
                 "perldoc://Zoo::Last",
                 "perldoc://strict",
                 "perldoc://warnings"

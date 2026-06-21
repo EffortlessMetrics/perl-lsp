@@ -6,6 +6,7 @@ fn from_perldoc_uri_parses_valid_perldoc_uri() {
     let target = must_some(PerlDocumentationTarget::from_perldoc_uri("perldoc://Local::Doc"));
 
     assert_eq!(target.name(), "Local::Doc");
+    assert_eq!(target.section(), None);
     assert_eq!(&target.perldoc_uri(), "perldoc://Local::Doc");
 }
 
@@ -18,7 +19,27 @@ fn from_perldoc_uri_accepts_already_trimmed_name_boundary() {
     let target = must_some(PerlDocumentationTarget::from_perldoc_uri(&uri));
 
     assert_eq!(target.name(), name);
+    assert_eq!(target.section(), None);
     assert_eq!(&target.perldoc_uri(), "perldoc://Local::Trimmed");
+}
+
+#[test]
+fn from_perldoc_uri_parses_section_fragment() {
+    let target = must_some(PerlDocumentationTarget::from_perldoc_uri("perldoc://Local::Doc#reset"));
+
+    assert_eq!(target.name(), "Local::Doc");
+    assert_eq!(target.section(), Some("reset"));
+    assert_eq!(&target.perldoc_uri(), "perldoc://Local::Doc#reset");
+}
+
+#[test]
+fn from_perldoc_uri_decodes_space_section_fragment() {
+    let target =
+        must_some(PerlDocumentationTarget::from_perldoc_uri("perldoc://Local::Doc#SEE%20ALSO"));
+
+    assert_eq!(target.name(), "Local::Doc");
+    assert_eq!(target.section(), Some("SEE ALSO"));
+    assert_eq!(&target.perldoc_uri(), "perldoc://Local::Doc#SEE%20ALSO");
 }
 
 #[test]
@@ -50,6 +71,24 @@ fn from_perldoc_uri_rejects_malformed_target_names() {
 }
 
 #[test]
+fn from_perldoc_uri_rejects_malformed_section_fragments() {
+    for uri in [
+        "perldoc://Local::Doc#",
+        "perldoc://Local::Doc#Other/section",
+        "perldoc://Local::Doc#Other::section",
+        "perldoc://Local::Doc#bad%2Gsection",
+        "perldoc://Local::Doc#bad%20",
+        "perldoc://Local::Doc#%20bad",
+        "perldoc://Local::Doc#bad section",
+    ] {
+        assert!(
+            PerlDocumentationTarget::from_perldoc_uri(uri).is_none(),
+            "expected malformed section URI {uri} to be rejected",
+        );
+    }
+}
+
+#[test]
 fn from_simple_pod_link_target_extracts_bare_module_target() {
     let bare = must_some(PerlDocumentationTarget::from_simple_pod_link_target("  Local::Doc  "));
 
@@ -62,6 +101,34 @@ fn from_simple_pod_link_target_extracts_labeled_module_target() {
         must_some(PerlDocumentationTarget::from_simple_pod_link_target("docs|  Local::Labeled  "));
 
     assert_eq!(&labeled.perldoc_uri(), "perldoc://Local::Labeled");
+}
+
+#[test]
+fn from_simple_pod_link_target_extracts_module_section_target() {
+    let section =
+        must_some(PerlDocumentationTarget::from_simple_pod_link_target("Local::Doc/reset"));
+    let labeled = must_some(PerlDocumentationTarget::from_simple_pod_link_target(
+        "reset docs|Local::Doc/SEE ALSO",
+    ));
+
+    assert_eq!(section.name(), "Local::Doc");
+    assert_eq!(section.section(), Some("reset"));
+    assert_eq!(&section.perldoc_uri(), "perldoc://Local::Doc#reset");
+    assert_eq!(labeled.name(), "Local::Doc");
+    assert_eq!(labeled.section(), Some("SEE ALSO"));
+    assert_eq!(&labeled.perldoc_uri(), "perldoc://Local::Doc#SEE%20ALSO");
+}
+
+#[test]
+fn from_workspace_pod_link_target_extracts_local_section_target() {
+    let section = must_some(PerlDocumentationTarget::from_workspace_pod_link_target(
+        "section docs|/reset",
+        "Local::Doc",
+    ));
+
+    assert_eq!(section.name(), "Local::Doc");
+    assert_eq!(section.section(), Some("reset"));
+    assert_eq!(&section.perldoc_uri(), "perldoc://Local::Doc#reset");
 }
 
 #[test]
@@ -98,9 +165,16 @@ fn from_simple_pod_link_target_rejects_empty_labels() {
 
 #[test]
 fn from_simple_pod_link_target_rejects_non_module_targets() {
-    for target in
-        ["/section", "docs|/section", "NotAModule", "docs|Broken::", "docs|https://example.invalid"]
-    {
+    for target in [
+        "/section",
+        "docs|/section",
+        "NotAModule",
+        "NotAModule/section",
+        "docs|Broken::",
+        "docs|https://example.invalid",
+        "docs|Local::Doc/bad/section",
+        "docs|Local::Doc/ reset",
+    ] {
         assert!(
             PerlDocumentationTarget::from_simple_pod_link_target(target).is_none(),
             "expected non-module target {target} to be rejected",

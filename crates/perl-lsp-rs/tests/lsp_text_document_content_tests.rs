@@ -228,7 +228,8 @@ use Local::VirtualDoc;
 Local POD served from the workspace module file.
 See also L<Local::Dependency>, L<Local::Dependency>, L<Local::Helper>, L<helper docs|Local::Labeled>, and L<Local::VirtualDoc>.
 Core pragma docs L<strict>, L<warnings>, and L<strict docs|strict> should stay navigable.
-Ignore local sections such as L</reset>, labeled local sections such as L<section docs|/reset>, and malformed labeled targets such as L<helper|Local::>.
+Local sections such as L</reset> and labeled local sections such as L<section docs|/SEE ALSO> should stay navigable.
+Ignore malformed labeled targets such as L<helper|Local::> and L<section docs|/bad/section>.
 
 =head2 reset
 
@@ -264,16 +265,16 @@ Reset the local virtual document fixture.
     );
     assert!(
         text.contains(
-            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper\n- perldoc://Local::Labeled\n- perldoc://strict\n- perldoc://warnings"
+            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper\n- perldoc://Local::Labeled\n- perldoc://Local::VirtualDoc#SEE%20ALSO\n- perldoc://Local::VirtualDoc#reset\n- perldoc://strict\n- perldoc://warnings"
         ),
-        "workspace POD module links should become sorted virtual perldoc links: {text}"
+        "workspace POD module and section links should become sorted virtual perldoc links: {text}"
     );
     assert!(
-        !text.contains("perldoc://Local::VirtualDoc"),
-        "workspace POD virtual content should ignore self-links: {text}"
+        !text.contains("- perldoc://Local::VirtualDoc\n"),
+        "workspace POD virtual content should ignore module-only self-links: {text}"
     );
     assert!(
-        !text.contains("perldoc://Local::>") && !text.contains("perldoc:///reset"),
+        !text.contains("perldoc://Local::>") && !text.contains("perldoc://Local::VirtualDoc#bad"),
         "workspace POD virtual content should ignore non-simple POD targets: {text}"
     );
     assert!(
@@ -297,7 +298,12 @@ Local::VirtualDoc - source docs
 =head1 DESCRIPTION
 
 See L<Local::Dependency>, L<Local::Dependency>, L<helper docs|Local::Helper>, and L<Local::VirtualDoc>.
-Ignore malformed or non-module targets: L<display|Local::>, L</section>, L<section docs|/section>, L<display|https://example.invalid>, L<|Local::EmptyLabel>, L<https://example.invalid>, L<Local::>.
+Also see local sections L</reset>, L<section docs|/SEE ALSO>, and module sections L<helper setup|Local::Helper/setup>.
+Ignore malformed or non-module targets: L<display|Local::>, L<section docs|/bad/section>, L<display|https://example.invalid>, L<|Local::EmptyLabel>, L<https://example.invalid>, L<Local::>, L<NotAModule/reset>.
+
+=head2 reset
+
+Reset the source virtual document.
 
 =cut
 
@@ -350,17 +356,29 @@ Helper docs are served from the linked workspace module.
 
     assert!(
         source_text.contains(
-            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper"
+            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper\n- perldoc://Local::Helper#setup\n- perldoc://Local::VirtualDoc#SEE%20ALSO\n- perldoc://Local::VirtualDoc#reset"
         ),
-        "source workspace POD should expose sorted related virtual links: {source_text}"
+        "source workspace POD should expose sorted related virtual module and section links: {source_text}"
     );
     assert!(
-        !source_text.contains("perldoc://Local::VirtualDoc")
-            && !source_text.contains("perldoc:///section")
+        !source_text.contains("- perldoc://Local::VirtualDoc\n")
             && !source_text.contains("perldoc://Local::EmptyLabel")
-            && !source_text.contains("perldoc://Local::>"),
+            && !source_text.contains("perldoc://Local::>")
+            && !source_text.contains("perldoc://Local::VirtualDoc#bad"),
         "source workspace POD should not expose self or non-simple links: {source_text}"
     );
+
+    let section_result = harness.request(
+        "workspace/textDocumentContent",
+        json!({ "uri": "perldoc://Local::VirtualDoc#reset" }),
+    )?;
+    let section_text = section_result.get("text").and_then(Value::as_str).ok_or_else(|| {
+        format!("workspace/textDocumentContent missing section result.text: {section_result}")
+    })?;
+
+    assert!(section_text.contains("Module: Local::VirtualDoc"));
+    assert!(section_text.contains("Section: reset"));
+    assert!(section_text.contains("METHOD reset\nReset the source virtual document."));
 
     for (module, name, description) in [
         (
