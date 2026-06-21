@@ -2203,6 +2203,7 @@ fn count_format_specifiers(format: &str) -> usize {
             index += 1;
         }
         if index < bytes.len() && bytes[index] == b'*' {
+            count += 1;
             index += 1;
         }
         if index < bytes.len() && bytes[index] == b'.' {
@@ -2211,6 +2212,7 @@ fn count_format_specifiers(format: &str) -> usize {
                 index += 1;
             }
             if index < bytes.len() && bytes[index] == b'*' {
+                count += 1;
                 index += 1;
             }
         }
@@ -3022,7 +3024,7 @@ mod tests {
 
     #[test]
     fn native_printf_format_arity_rule_accepts_matching_and_dynamic_formats() {
-        let source = "use strict;\nuse warnings;\nmy $fmt = \"%s\";\nprintf \"%s\", $name;\nprintf $fmt, $name;\nsprintf \"%s %d\", $name, $count;\n";
+        let source = "use strict;\nuse warnings;\nmy $fmt = \"%s\";\nprintf \"%s\", $name;\nprintf $fmt, $name;\nsprintf \"%s %d\", $name, $count;\nprintf \"%*s\", 10, $name;\nprintf \"%.*f\", 2, $value;\nsprintf \"%*.*s\", 10, 5, $name;\n";
         let ast = parse_source(source);
         let config = CriticConfig::default();
         let ctx = CriticContext::new(source, &ast, &config);
