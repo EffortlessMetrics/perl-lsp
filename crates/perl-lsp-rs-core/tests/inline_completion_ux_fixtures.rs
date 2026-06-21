@@ -107,8 +107,30 @@ struct CompletionPackPositiveCase {
 
 struct CompletionPackQuietCase {
     name: &'static str,
+    category: CompletionPackQuietCategory,
     source: &'static str,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CompletionPackQuietCategory {
+    ImportAbsent,
+    CommentContext,
+    StringContext,
+    PodContext,
+    NearMatchToken,
+    VisibleSymbolConflict,
+    ParseDamage,
+}
+
+const REQUIRED_COMPLETION_PACK_QUIET_CATEGORIES: &[CompletionPackQuietCategory] = &[
+    CompletionPackQuietCategory::ImportAbsent,
+    CompletionPackQuietCategory::CommentContext,
+    CompletionPackQuietCategory::StringContext,
+    CompletionPackQuietCategory::PodContext,
+    CompletionPackQuietCategory::NearMatchToken,
+    CompletionPackQuietCategory::VisibleSymbolConflict,
+    CompletionPackQuietCategory::ParseDamage,
+];
 
 #[test]
 fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult {
@@ -312,29 +334,39 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
             expected_after: "use Try::Tiny;\ntry {\n    \n} catch {\n    \n};",
         }],
         quiet: &[
-            CompletionPackQuietCase { name: "import_absent", source: "try <<CURSOR>>" },
+            CompletionPackQuietCase {
+                name: "import_absent",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "try <<CURSOR>>",
+            },
             CompletionPackQuietCase {
                 name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
                 source: "use Try::Tiny;\n# try <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
                 source: "use Try::Tiny;\nmy $text = \"try <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
                 source: "use Try::Tiny;\n=pod\ntry <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
                 source: "use Try::Tiny;\ngettry <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
                 source: "use Try::Tiny;\nmy $try = 1;\n$try <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "parse_damage_extra_closing_paren",
+                category: CompletionPackQuietCategory::ParseDamage,
                 source: "use Try::Tiny;\ntry <<CURSOR>>)",
             },
         ],
@@ -351,25 +383,39 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
             expected_after: "use Mojolicious::Lite;\nget '/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};",
         }],
         quiet: &[
-            CompletionPackQuietCase { name: "import_absent", source: "get <<CURSOR>>" },
+            CompletionPackQuietCase {
+                name: "import_absent",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "get <<CURSOR>>",
+            },
             CompletionPackQuietCase {
                 name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
                 source: "use Mojolicious::Lite;\n# get <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
                 source: "use Mojolicious::Lite;\nmy $text = \"get <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
                 source: "use Mojolicious::Lite;\n=pod\nget <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
                 source: "use Mojolicious::Lite;\nforget <<CURSOR>>",
             },
             CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use Mojolicious::Lite;\nmy $get = 1;\n$get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
                 name: "parse_damage_extra_closing_paren",
+                category: CompletionPackQuietCategory::ParseDamage,
                 source: "use Mojolicious::Lite;\nget <<CURSOR>>)",
             },
         ],
@@ -394,29 +440,39 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
             },
         ],
         quiet: &[
-            CompletionPackQuietCase { name: "import_absent", source: "get <<CURSOR>>" },
+            CompletionPackQuietCase {
+                name: "import_absent",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "get <<CURSOR>>",
+            },
             CompletionPackQuietCase {
                 name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
                 source: "use Dancer2;\n# get <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
                 source: "use Dancer2;\nmy $text = \"get <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
                 source: "use Dancer2;\n=pod\nget <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
                 source: "use Dancer2;\nforget <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
                 source: "use Dancer2;\nmy $get = 1;\n$get <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "parse_damage_extra_closing_paren",
+                category: CompletionPackQuietCategory::ParseDamage,
                 source: "use Dancer2;\nget <<CURSOR>>)",
             },
         ],
@@ -435,26 +491,37 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
         quiet: &[
             CompletionPackQuietCase {
                 name: "import_absent_visible_actual_expected",
+                category: CompletionPackQuietCategory::ImportAbsent,
                 source: "my $got = compute();\nmy $expected = 42;\n\n<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
                 source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n# <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
                 source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nmy $text = \"<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
                 source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n=pod\n<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
                 source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nassert <<CURSOR>>",
             },
             CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nmy $is = sub {};\n$is <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
                 name: "parse_damage_incomplete_declaration",
+                category: CompletionPackQuietCategory::ParseDamage,
                 source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nmy <<CURSOR>>",
             },
         ],
@@ -473,26 +540,37 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
         quiet: &[
             CompletionPackQuietCase {
                 name: "import_absent_visible_result",
+                category: CompletionPackQuietCategory::ImportAbsent,
                 source: "my $result = compute();\n\n<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
                 source: "use Test2::V0;\nmy $result = compute();\n# <<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
                 source: "use Test2::V0;\nmy $result = compute();\nmy $text = \"<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
                 source: "use Test2::V0;\nmy $result = compute();\n=pod\n<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
                 source: "use Test2::V0;\nmy $result = compute();\nassert <<CURSOR>>",
             },
             CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use Test2::V0;\nmy $result = compute();\nmy $ok = sub {};\n$ok <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
                 name: "parse_damage_incomplete_declaration",
+                category: CompletionPackQuietCategory::ParseDamage,
                 source: "use Test2::V0;\nmy $result = compute();\nmy <<CURSOR>>",
             },
         ],
@@ -511,30 +589,37 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
         quiet: &[
             CompletionPackQuietCase {
                 name: "import_absent_database_handle_hint",
+                category: CompletionPackQuietCategory::ImportAbsent,
                 source: "my $dbh = DBI->connect($dsn, $user, $pass);\n$dbh->pr<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n# $dbh->pr<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $text = \"$dbh->pr<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n=pod\n$dbh->pr<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "near_match_receiver_syntax",
+                category: CompletionPackQuietCategory::NearMatchToken,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n$dbh=>pr<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "non_dbi_receiver_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
                 source: "use DBI;\nmy $socket = Client->connect($dsn);\n$socket->pr<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "parse_damage_non_scalar_receiver",
+                category: CompletionPackQuietCategory::ParseDamage,
                 source: "use DBI;\nmy @dbh = DBI->connect($dsn, $user, $pass);\n@dbh->pr<<CURSOR>>",
             },
         ],
@@ -553,30 +638,37 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
         quiet: &[
             CompletionPackQuietCase {
                 name: "import_absent_statement_handle_hint",
+                category: CompletionPackQuietCategory::ImportAbsent,
                 source: "my $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth->fetch<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n# $sth->fetch<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\nmy $text = \"$sth->fetch<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n=pod\n$sth->fetch<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "near_match_receiver_syntax",
+                category: CompletionPackQuietCategory::NearMatchToken,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth=>fetch<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "non_dbi_receiver_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $query = $builder->prepare($sql);\n$query->fetch<<CURSOR>>",
             },
             CompletionPackQuietCase {
                 name: "parse_damage_non_scalar_receiver",
+                category: CompletionPackQuietCategory::ParseDamage,
                 source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy @sth = $dbh->prepare($sql);\n@sth->fetch<<CURSOR>>",
             },
         ],
@@ -1084,6 +1176,8 @@ fn assert_accepted_edit(fixture: AcceptedEditFixture) -> TestResult {
 }
 
 fn assert_completion_pack_contract(contract: CompletionPackContract) -> TestResult {
+    assert_completion_pack_receipt_categories(&contract)?;
+
     for case in contract.positive {
         let scenario = InlineCompletionScenario::from_fixture(case.source)?;
         let completions = scenario.completions();
@@ -1164,6 +1258,20 @@ fn assert_completion_pack_contract(contract: CompletionPackContract) -> TestResu
                 contract.provider_id,
                 case.name,
                 completion_texts(&completions)
+            )
+            .into());
+        }
+    }
+
+    Ok(())
+}
+
+fn assert_completion_pack_receipt_categories(contract: &CompletionPackContract) -> TestResult {
+    for required in REQUIRED_COMPLETION_PACK_QUIET_CATEGORIES {
+        if !contract.quiet.iter().any(|case| case.category == *required) {
+            return Err(format!(
+                "{} missing required quiet-path receipt category {required:?}",
+                contract.provider_id
             )
             .into());
         }
