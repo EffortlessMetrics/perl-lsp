@@ -125,7 +125,7 @@ mod tests {
 
     fn apply_action(source: &str, action: &CodeAction) -> String {
         let mut edits = action.edit.changes.clone();
-        edits.sort_by(|a, b| b.location.start.cmp(&a.location.start));
+        edits.sort_by_key(|edit| std::cmp::Reverse(edit.location.start));
 
         let mut output = source.to_string();
         for edit in edits {

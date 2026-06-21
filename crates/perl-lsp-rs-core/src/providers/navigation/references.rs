@@ -132,10 +132,11 @@ fn get_node_children(node: &Node) -> Vec<&Node> {
 mod tests {
     use super::*;
     use perl_parser_core::Parser;
+    use perl_tdd_support::must;
 
     fn parse(source: &str) -> Node {
         let mut parser = Parser::new(source);
-        parser.parse().expect("parse failed")
+        must(parser.parse())
     }
 
     #[test]

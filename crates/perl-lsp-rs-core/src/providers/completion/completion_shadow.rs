@@ -944,8 +944,8 @@ mod tests {
 
         assert!(result.legacy_symbols.is_empty());
         assert_eq!(result.receipt.query, ShadowQueryName::CompletionVisibility);
-        assert_eq!(result.receipt.old_result.available, true);
-        assert_eq!(result.receipt.new_result.available, true);
+        assert!(result.receipt.old_result.available);
+        assert!(result.receipt.new_result.available);
         assert_eq!(result.receipt.old_result.match_count, 0);
         assert_eq!(result.receipt.new_result.match_count, 0);
         assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
@@ -961,9 +961,9 @@ mod tests {
             completion_visibility_shadow(vec![], &queries, FileId(1), 10, None, "use Foo qw(foo)");
 
         assert!(result.legacy_symbols.is_empty());
-        assert_eq!(result.receipt.old_result.available, true);
+        assert!(result.receipt.old_result.available);
         assert_eq!(result.receipt.old_result.match_count, 0);
-        assert_eq!(result.receipt.new_result.available, true);
+        assert!(result.receipt.new_result.available);
         assert_eq!(result.receipt.new_result.match_count, 1);
         assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
         Ok(())
@@ -1012,7 +1012,7 @@ mod tests {
             completion_visibility_shadow(vec![], &queries, FileId(1), 0, None, "use Foo ':all'");
 
         assert_eq!(result.receipt.new_result.match_count, 3);
-        assert_eq!(result.receipt.new_result.available, true);
+        assert!(result.receipt.new_result.available);
         Ok(())
     }
 

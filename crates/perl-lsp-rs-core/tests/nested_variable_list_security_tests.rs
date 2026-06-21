@@ -13,10 +13,10 @@ fn nested_variable_list_parses_for_security_analysis() {
     // runs on the AST, not directly via the test)
     let code = "my ($a, ($b, $c)) = (1, (2, 3));";
     let mut parser = Parser::new(code);
-    let _ast = must(parser.parse());
+    let ast = must(parser.parse());
+    let sexp = ast.to_sexp();
 
-    // If we got here, the code parsed and can be analyzed by security linter
-    assert!(true);
+    assert!(sexp.contains("nested_variable_list"), "expected nested variable list: {sexp}");
 }
 
 #[test]
@@ -24,9 +24,13 @@ fn nested_variable_list_deep_nesting_parses() {
     // Exercise recursive parsing for deep nesting
     let code = "my ($x, ($y, ($z, $w))) = (1, (2, (3, 4)));";
     let mut parser = Parser::new(code);
-    let _ast = must(parser.parse());
+    let ast = must(parser.parse());
+    let sexp = ast.to_sexp();
 
-    assert!(true);
+    assert!(
+        sexp.matches("nested_variable_list").count() >= 2,
+        "expected recursive nested variable lists: {sexp}"
+    );
 }
 
 #[test]
@@ -34,7 +38,9 @@ fn nested_variable_list_with_signal_parses() {
     // Test nested variables with potential signal shadowing
     let code = "my ($a, ($SIG, $b)) = @_;";
     let mut parser = Parser::new(code);
-    let _ast = must(parser.parse());
+    let ast = must(parser.parse());
+    let sexp = ast.to_sexp();
 
-    assert!(true);
+    assert!(sexp.contains("nested_variable_list"), "expected nested variable list: {sexp}");
+    assert!(sexp.contains("SIG"), "expected signal variable to remain visible: {sexp}");
 }

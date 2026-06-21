@@ -39,7 +39,7 @@ fn actions_for(source: &str, diags: &[Diagnostic]) -> Vec<CodeAction> {
 /// Apply the first matching edit from an action and return the resulting source.
 fn edited(source: &str, action: &CodeAction) -> String {
     let mut edits = action.edit.changes.clone();
-    edits.sort_by(|a, b| b.location.start.cmp(&a.location.start));
+    edits.sort_by_key(|edit| std::cmp::Reverse(edit.location.start));
     let mut out = source.to_string();
     for edit in edits {
         out.replace_range(edit.location.start..edit.location.end, &edit.new_text);
@@ -48,10 +48,7 @@ fn edited(source: &str, action: &CodeAction) -> String {
 }
 
 /// Find the first action whose title matches the predicate.
-fn find_action<'a>(
-    actions: &'a [CodeAction],
-    pred: impl Fn(&str) -> bool,
-) -> Option<&'a CodeAction> {
+fn find_action(actions: &[CodeAction], pred: impl Fn(&str) -> bool) -> Option<&CodeAction> {
     actions.iter().find(|a| pred(&a.title))
 }
 

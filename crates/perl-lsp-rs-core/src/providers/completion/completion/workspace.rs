@@ -2001,6 +2001,10 @@ fn semantic_file_id(uri: &str) -> FileId {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_test_module,
+    reason = "policy:#2064: visible-symbol completion tests stay beside their filter seam"
+)]
 mod visible_symbol_completion_tests {
     use super::{VisibleSymbol, VisibleSymbolSource, is_live_visible_completion_candidate};
     use perl_semantic_facts::{Confidence, EntityId};

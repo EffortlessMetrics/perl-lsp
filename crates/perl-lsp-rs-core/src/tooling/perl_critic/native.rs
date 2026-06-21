@@ -2538,6 +2538,7 @@ mod tests {
     use super::*;
     use perl_parser::Parser;
     use perl_parser_core::position::{Position, Range};
+    use perl_tdd_support::{must, must_some};
 
     struct DummyRule;
 
@@ -2615,7 +2616,7 @@ mod tests {
 
     fn parse_source(source: &str) -> Node {
         let mut parser = Parser::new(source);
-        parser.parse().expect("test source should parse")
+        must(parser.parse())
     }
 
     #[test]
@@ -2661,7 +2662,7 @@ mod tests {
             }),
         };
 
-        let value = serde_json::to_value(&finding).expect("serialize native critic finding");
+        let value = must(serde_json::to_value(&finding));
 
         assert_eq!(value["rule_id"], "native.test.fixable");
         assert_eq!(value["category"], "style");
@@ -2777,7 +2778,7 @@ mod tests {
         assert_eq!(finding.message, "Code does not use strict");
         assert_eq!(finding.suppression_key, "native.testing.require_use_strict");
 
-        let fix = finding.fix.as_ref().expect("missing strict should have a safe fix");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Add 'use strict'");
         assert_eq!(fix.safety, FixSafety::Safe);
         assert_eq!(fix.edits.len(), 1);
@@ -2816,7 +2817,7 @@ mod tests {
         assert_eq!(finding.message, "Code does not use warnings");
         assert_eq!(finding.suppression_key, "native.testing.require_use_warnings");
 
-        let fix = finding.fix.as_ref().expect("missing warnings should have a safe fix");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Add 'use warnings'");
         assert_eq!(fix.safety, FixSafety::Safe);
         assert_eq!(fix.edits.len(), 1);
@@ -2878,7 +2879,7 @@ mod tests {
         assert_eq!(finding.suppression_key, "native.common.assignment_in_condition");
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$x = 5");
 
-        let fix = finding.fix.as_ref().expect("assignment condition should offer comparison fix");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Change to comparison (==)");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
@@ -3100,7 +3101,7 @@ mod tests {
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "defined @items");
         assert_eq!(finding.related.len(), 1);
 
-        let fix = finding.fix.as_ref().expect("deprecated defined should offer direct fix");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Replace with '@items'");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
@@ -3198,7 +3199,7 @@ mod tests {
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$value == undef");
         assert_eq!(finding.related.len(), 2);
 
-        let fix = finding.fix.as_ref().expect("undef comparison should offer defined() fix");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Use defined() check");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
@@ -3221,10 +3222,7 @@ mod tests {
             &source[findings[0].range.start.byte..findings[0].range.end.byte],
             "undef != $value"
         );
-        assert_eq!(
-            findings[0].fix.as_ref().expect("defined fix").edits[0].new_text,
-            "defined($value)"
-        );
+        assert_eq!(must_some(findings[0].fix.as_ref()).edits[0].new_text, "defined($value)");
     }
 
     #[test]
@@ -3395,7 +3393,7 @@ mod tests {
         assert_eq!(finding.message, "Unreachable code: this statement cannot be executed");
         assert_eq!(finding.suppression_key, "native.common.unreachable_code");
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "my $dead");
-        let fix = finding.fix.as_ref().expect("unreachable code should offer removal fix");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Remove unreachable code");
         assert_eq!(fix.safety, FixSafety::Safe);
         assert_eq!(
@@ -3478,7 +3476,7 @@ mod tests {
         assert_eq!(finding.suppression_key, "native.io.bareword_filehandle");
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "FH");
 
-        let fix = finding.fix.as_ref().expect("bareword filehandle should offer lexical fix");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Replace bareword filehandle 'FH' with lexical '$fh_fh'");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
@@ -3563,7 +3561,7 @@ mod tests {
             "open(my $fh, $path)"
         );
 
-        let fix = finding.fix.as_ref().expect("two-arg open should offer a safety fix");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Convert to three-argument open() for safety");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
@@ -4355,7 +4353,7 @@ mod tests {
         assert_eq!(finding.suppression_key, "native.variables.unused_lexical");
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$unused");
 
-        let fix = finding.fix.as_ref().expect("unused lexical should offer an intent marker");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Rename to '$_unused'");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
@@ -4394,7 +4392,7 @@ mod tests {
         assert_eq!(
             findings
                 .iter()
-                .map(|finding| finding.fix.as_ref().expect("fix").edits[0].new_text.as_str())
+                .map(|finding| must_some(finding.fix.as_ref()).edits[0].new_text.as_str())
                 .collect::<Vec<_>>(),
             vec!["@_items", "%_seen"]
         );
@@ -4467,7 +4465,7 @@ mod tests {
         assert_eq!(finding.suppression_key, "native.variables.unused_parameter");
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$unused");
 
-        let fix = finding.fix.as_ref().expect("unused parameter should offer an intent marker");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Rename to '$_unused'");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
@@ -4549,7 +4547,7 @@ mod tests {
         assert_eq!(finding.suppression_key, "native.variables.duplicate_parameter");
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$arg");
 
-        let fix = finding.fix.as_ref().expect("duplicate parameter should offer rename");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Rename duplicate parameter to '$arg_2'");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
@@ -4635,7 +4633,7 @@ mod tests {
         assert_eq!(finding.suppression_key, "native.variables.parameter_shadows_global");
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$name");
 
-        let fix = finding.fix.as_ref().expect("shadowing parameter should offer rename");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Rename parameter to '$p_name'");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
@@ -4722,7 +4720,7 @@ mod tests {
         assert_eq!(finding.suppression_key, "native.variables.duplicate_lexical");
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$dup");
 
-        let fix = finding.fix.as_ref().expect("duplicate my should offer a safe fix");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Remove duplicate 'my' declaration");
         assert_eq!(fix.safety, FixSafety::Safe);
         assert_eq!(fix.edits.len(), 1);
@@ -4811,7 +4809,7 @@ mod tests {
         assert_eq!(finding.suppression_key, "native.variables.shadowed_lexical");
         assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$value");
 
-        let fix = finding.fix.as_ref().expect("shadowed lexical should offer a rename");
+        let fix = must_some(finding.fix.as_ref());
         assert_eq!(fix.title, "Rename to '$inner_value'");
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);

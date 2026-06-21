@@ -260,8 +260,9 @@ $fmt->render("hello %s", 10);
     // limit:    is the second visible arg (call-site i=1) → paramIndex = 2
     let template_hint = method_hints
         .iter()
+        .copied()
         .find(|h| h["label"].as_str() == Some("template:"))
-        .expect("template hint must exist");
+        .ok_or("template hint must exist")?;
     assert_eq!(
         template_hint["data"]["paramIndex"].as_u64(),
         Some(1),
@@ -269,8 +270,9 @@ $fmt->render("hello %s", 10);
     );
     let limit_hint = method_hints
         .iter()
+        .copied()
         .find(|h| h["label"].as_str() == Some("limit:"))
-        .expect("limit hint must exist");
+        .ok_or("limit hint must exist")?;
     assert_eq!(
         limit_hint["data"]["paramIndex"].as_u64(),
         Some(2),
@@ -378,15 +380,17 @@ $obj->format_output("tmpl", "arg2");
     let template_hint = hints
         .iter()
         .find(|h| h["label"].as_str() == Some("template:"))
-        .expect("template hint must exist");
+        .ok_or("template hint must exist")?;
     assert_eq!(
         template_hint["data"]["paramIndex"].as_u64(),
         Some(1),
         "template: paramIndex must be 1 (self is index 0 in the declaration list); \
          hint: {template_hint}"
     );
-    let data_hint =
-        hints.iter().find(|h| h["label"].as_str() == Some("data:")).expect("data hint must exist");
+    let data_hint = hints
+        .iter()
+        .find(|h| h["label"].as_str() == Some("data:"))
+        .ok_or("data hint must exist")?;
     assert_eq!(
         data_hint["data"]["paramIndex"].as_u64(),
         Some(2),
@@ -447,15 +451,17 @@ My::Class->create("name", 42);
     // paramIndex assertions: class is at declaration index 0 (skipped).
     // name: is emitted for call-site i=0 → paramIndex = i+1 = 1.
     // id:   is emitted for call-site i=1 → paramIndex = i+1 = 2.
-    let name_hint =
-        hints.iter().find(|h| h["label"].as_str() == Some("name:")).expect("name hint must exist");
+    let name_hint = hints
+        .iter()
+        .find(|h| h["label"].as_str() == Some("name:"))
+        .ok_or("name hint must exist")?;
     assert_eq!(
         name_hint["data"]["paramIndex"].as_u64(),
         Some(1),
         "name: paramIndex must be 1 (class is index 0 in declaration); hint: {name_hint}"
     );
     let id_hint =
-        hints.iter().find(|h| h["label"].as_str() == Some("id:")).expect("id hint must exist");
+        hints.iter().find(|h| h["label"].as_str() == Some("id:")).ok_or("id hint must exist")?;
     assert_eq!(
         id_hint["data"]["paramIndex"].as_u64(),
         Some(2),

@@ -3,7 +3,10 @@
 //! and platform module are properly absorbed into perl-lsp-rs-core.
 
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn workspace_root() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
@@ -25,7 +28,7 @@ fn test_feature_catalog_module_accessible() {
     let _ = feature_catalog::Maturity::Planned;
 
     // Should have key functions
-    assert!(feature_catalog::DEFAULT_DAP_FEATURES.len() > 0);
+    assert!(!feature_catalog::DEFAULT_DAP_FEATURES.is_empty());
 }
 
 /// Test 2: config_module_accessible via perl_lsp_rs_core::config::*
@@ -80,7 +83,7 @@ fn test_platform_module_with_resolve_perl_path() {
 
 /// Test 5: perl-lsp-config has no cyclic dependency on perl-dap
 #[test]
-fn test_config_cargo_toml_has_no_dap_cycle() {
+fn test_config_cargo_toml_has_no_dap_cycle() -> TestResult {
     let root = workspace_root();
     let config_toml_path = root.join("crates/perl-lsp-config/Cargo.toml");
 
@@ -88,8 +91,7 @@ fn test_config_cargo_toml_has_no_dap_cycle() {
     // So we just verify the rs-core config module doesn't import perl-dap
     let rs_core_config = root.join("crates/perl-lsp-rs-core/src/config.rs");
     if rs_core_config.exists() {
-        let content =
-            fs::read_to_string(&rs_core_config).expect("rs-core config.rs should be readable");
+        let content = fs::read_to_string(&rs_core_config)?;
         assert!(
             !content.contains("perl_dap::"),
             "rs-core config.rs must not import from perl_dap (cycle break)"
@@ -105,14 +107,15 @@ fn test_config_cargo_toml_has_no_dap_cycle() {
             "perl-lsp-config Cargo.toml should not exist if rs-core config.rs is missing"
         );
     }
+
+    Ok(())
 }
 
 /// Test 6: perl-feature-catalog not in publish allowlist of root Cargo.toml
 #[test]
-fn test_perl_feature_catalog_not_published() {
+fn test_perl_feature_catalog_not_published() -> TestResult {
     let root = workspace_root();
-    let root_toml =
-        fs::read_to_string(root.join("Cargo.toml")).expect("root Cargo.toml should exist");
+    let root_toml = fs::read_to_string(root.join("Cargo.toml"))?;
 
     // After absorption, perl-feature-catalog should not be in the publish allow list
     // Find the allow section and check
@@ -124,14 +127,15 @@ fn test_perl_feature_catalog_not_published() {
         !after_allow.contains("\"perl-feature-catalog\""),
         "perl-feature-catalog should be removed from publish allowlist after absorption"
     );
+
+    Ok(())
 }
 
 /// Test 7: perl-lsp-config not in publish allowlist of root Cargo.toml
 #[test]
-fn test_perl_lsp_config_not_published() {
+fn test_perl_lsp_config_not_published() -> TestResult {
     let root = workspace_root();
-    let root_toml =
-        fs::read_to_string(root.join("Cargo.toml")).expect("root Cargo.toml should exist");
+    let root_toml = fs::read_to_string(root.join("Cargo.toml"))?;
 
     // After absorption, perl-lsp-config should not be in the publish allow list
     let allow_section_start =
@@ -142,14 +146,15 @@ fn test_perl_lsp_config_not_published() {
         !after_allow.contains("\"perl-lsp-config\""),
         "perl-lsp-config should be removed from publish allowlist after absorption"
     );
+
+    Ok(())
 }
 
 /// Test 8: perl-content-length-framing not in publish allowlist of root Cargo.toml
 #[test]
-fn test_perl_content_length_framing_not_published() {
+fn test_perl_content_length_framing_not_published() -> TestResult {
     let root = workspace_root();
-    let root_toml =
-        fs::read_to_string(root.join("Cargo.toml")).expect("root Cargo.toml should exist");
+    let root_toml = fs::read_to_string(root.join("Cargo.toml"))?;
 
     // After absorption, perl-content-length-framing should not be in the publish allow list
     let allow_section_start =
@@ -160,6 +165,8 @@ fn test_perl_content_length_framing_not_published() {
         !after_allow.contains("\"perl-content-length-framing\""),
         "perl-content-length-framing should be removed from publish allowlist after absorption"
     );
+
+    Ok(())
 }
 
 /// Test 9: Old crate directories are deleted (perl-feature-catalog)
@@ -188,19 +195,19 @@ fn test_perl_content_length_framing_dir_deleted() {
 
 /// Test 12: perl-lsp runtime uses rewritten config imports (zero perl_lsp_config:: refs)
 #[test]
-fn test_perl_lsp_runtime_rewired_config_imports() {
+fn test_perl_lsp_runtime_rewired_config_imports() -> TestResult {
     let root = workspace_root();
     // Check that perl-lsp/src/runtime files have been rewired to use perl_lsp_rs_core::config
     // instead of perl_lsp_config::
 
-    fn scan_dir(path: &Path) -> std::io::Result<()> {
+    fn scan_dir(path: &Path) -> TestResult {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                let _ = scan_dir(&path); // recursive
-            } else if path.extension().map_or(false, |ext| ext == "rs") {
-                let content = fs::read_to_string(&path).expect("should be able to read Rust file");
+                scan_dir(&path)?;
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                let content = fs::read_to_string(&path)?;
 
                 assert!(
                     !content.contains("perl_lsp_config::"),
@@ -214,25 +221,27 @@ fn test_perl_lsp_runtime_rewired_config_imports() {
 
     let runtime_dir = root.join("crates/perl-lsp-rs/src/runtime");
     if runtime_dir.exists() {
-        let _ = scan_dir(&runtime_dir);
+        scan_dir(&runtime_dir)?;
     }
+
+    Ok(())
 }
 
 /// Test 13: perl-dap uses rewritten framing imports (zero perl_content_length_framing:: refs)
 #[test]
-fn test_perl_dap_rewired_framing_imports() {
+fn test_perl_dap_rewired_framing_imports() -> TestResult {
     let root = workspace_root();
     // Check that perl-dap files have been rewired to use perl_lsp_rs_core::transport::framing
     // instead of perl_content_length_framing::
 
-    fn scan_dir(path: &Path) -> std::io::Result<()> {
+    fn scan_dir(path: &Path) -> TestResult {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                let _ = scan_dir(&path); // recursive
-            } else if path.extension().map_or(false, |ext| ext == "rs") {
-                let content = fs::read_to_string(&path).expect("should be able to read Rust file");
+                scan_dir(&path)?;
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                let content = fs::read_to_string(&path)?;
 
                 assert!(
                     !content.contains("perl_content_length_framing::"),
@@ -246,8 +255,10 @@ fn test_perl_dap_rewired_framing_imports() {
 
     let dap_src = root.join("crates/perl-dap/src");
     if dap_src.exists() {
-        let _ = scan_dir(&dap_src);
+        scan_dir(&dap_src)?;
     }
+
+    Ok(())
 }
 
 /// Test 14: G3 negative test g3_config_stays_standalone.rs is deleted
@@ -274,40 +285,45 @@ fn test_g3_content_length_framing_stays_deleted() {
 
 /// Test 16: Baseline updated to 31 published crates in xtask/published-crate-baseline.txt
 #[test]
-fn test_baseline_count_is_31() {
+fn test_baseline_count_is_31() -> TestResult {
     let root = workspace_root();
-    let baseline = fs::read_to_string(root.join("xtask/published-crate-baseline.txt"))
-        .expect("xtask/published-crate-baseline.txt should exist");
+    let baseline = fs::read_to_string(root.join("xtask/published-crate-baseline.txt"))?;
 
-    let count: usize = baseline.trim().parse().expect("baseline should contain a single number");
+    let count: usize = baseline.trim().parse()?;
 
     assert_eq!(count, 31, "Published crate count should be 31 (was 34, minus 3 absorbed crates)");
+
+    Ok(())
 }
 
 /// Test 17: Amendment 9 marker present in ADR 0041
 #[test]
-fn test_adr_0041_has_amendment_9() {
+fn test_adr_0041_has_amendment_9() -> TestResult {
     let root = workspace_root();
-    let adr = fs::read_to_string(root.join("docs/adr/0041-microcrate-collapse.md"))
-        .expect("ADR 0041 should exist");
+    let adr = fs::read_to_string(root.join("docs/adr/0041-microcrate-collapse.md"))?;
 
     assert!(
         adr.contains("Amendment 9"),
         "ADR 0041 should contain 'Amendment 9' marker documenting Wave Final"
     );
+
+    Ok(())
 }
 
 /// Test 18: publish allowlist contains no more than 31 quoted crate entries
 #[test]
-fn test_publish_allowlist_has_31_entries() {
+fn test_publish_allowlist_has_31_entries() -> TestResult {
     let root = workspace_root();
-    let root_toml =
-        fs::read_to_string(root.join("Cargo.toml")).expect("root Cargo.toml should exist");
+    let root_toml = fs::read_to_string(root.join("Cargo.toml"))?;
 
     // Extract [workspace.metadata.publish] section
-    let Some(allow_section) = root_toml.split("[workspace.metadata.publish]").nth(1) else {
-        panic!("[workspace.metadata.publish] section not found in root Cargo.toml");
-    };
+    let allow_section =
+        root_toml.split("[workspace.metadata.publish]").nth(1).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "[workspace.metadata.publish] section not found in root Cargo.toml",
+            )
+        })?;
 
     // Count quoted entries that look like crate names (quoted strings in allow = [...])
     // Find the `allow = [` array
@@ -324,6 +340,8 @@ fn test_publish_allowlist_has_31_entries() {
         "Published allowlist should contain exactly 31 crate entries (got {})",
         count
     );
+
+    Ok(())
 }
 
 // ============================================================================
@@ -333,11 +351,10 @@ fn test_publish_allowlist_has_31_entries() {
 /// Test 19: EDGE CASE: perl-lsp-rs-core itself does NOT import perl-dap (cycle prevention)
 /// This guards against a subtle regression where config module might re-introduce the cycle.
 #[test]
-fn test_rs_core_has_no_dap_dependency() {
+fn test_rs_core_has_no_dap_dependency() -> TestResult {
     let root = workspace_root();
     let rs_core_cargo = root.join("crates/perl-lsp-rs-core/Cargo.toml");
-    let content =
-        fs::read_to_string(&rs_core_cargo).expect("perl-lsp-rs-core/Cargo.toml should be readable");
+    let content = fs::read_to_string(&rs_core_cargo)?;
 
     // perl-dap should NOT be a direct dependency of perl-lsp-rs-core
     // (it can be a dev-dependency for tests, but not a regular dependency)
@@ -346,6 +363,8 @@ fn test_rs_core_has_no_dap_dependency() {
         !deps_section.contains("perl-dap"),
         "perl-lsp-rs-core must NOT depend on perl-dap (cycle break requirement)"
     );
+
+    Ok(())
 }
 
 /// Test 20: BOUNDARY: platform functions are truly public and accessible from external crates
@@ -366,10 +385,10 @@ fn test_platform_functions_are_public_and_callable() {
 /// Test 21: REGRESSION: perl-dap build catalog logic is package-local.
 /// If perl-dap/build.rs starts depending on repo-local files again, this would catch it.
 #[test]
-fn test_dap_build_uses_package_local_catalog() {
+fn test_dap_build_uses_package_local_catalog() -> TestResult {
     let root = workspace_root();
     let dap_build = root.join("crates/perl-dap/build.rs");
-    let content = fs::read_to_string(&dap_build).expect("perl-dap/build.rs should be readable");
+    let content = fs::read_to_string(&dap_build)?;
 
     // The build.rs should keep catalog loading package-local, not reference absorbed crates or repo paths.
     assert!(
@@ -391,12 +410,14 @@ fn test_dap_build_uses_package_local_catalog() {
         !content.contains("extern crate perl_feature_catalog"),
         "perl-dap/build.rs should not extern crate perl-feature-catalog after absorption"
     );
+
+    Ok(())
 }
 
 /// Test 22: BOUNDARY: old three crates have publish = false
 /// Prevents accidental re-publication of absorbed crates.
 #[test]
-fn test_absorbed_crates_have_publish_false() {
+fn test_absorbed_crates_have_publish_false() -> TestResult {
     let root = workspace_root();
 
     let crates = vec![
@@ -409,7 +430,7 @@ fn test_absorbed_crates_have_publish_false() {
         let cargo_toml = root.join(format!("{}/Cargo.toml", crate_dir));
 
         if cargo_toml.exists() {
-            let content = fs::read_to_string(&cargo_toml).expect("should be readable");
+            let content = fs::read_to_string(&cargo_toml)?;
 
             assert!(
                 content.contains("publish = false"),
@@ -418,15 +439,16 @@ fn test_absorbed_crates_have_publish_false() {
             );
         }
     }
+
+    Ok(())
 }
 
 /// Test 23: REGRESSION: ADR 0041 includes specific Wave Final details
 /// If someone edits the ADR without including the amendment, this catches the gap.
 #[test]
-fn test_adr_0041_has_wave_final_details() {
+fn test_adr_0041_has_wave_final_details() -> TestResult {
     let root = workspace_root();
-    let adr = fs::read_to_string(root.join("docs/adr/0041-microcrate-collapse.md"))
-        .expect("ADR 0041 should exist");
+    let adr = fs::read_to_string(root.join("docs/adr/0041-microcrate-collapse.md"))?;
 
     // Should mention Amendment 9 specifically
     assert!(adr.contains("Amendment 9"), "ADR 0041 missing Amendment 9 marker");
@@ -442,6 +464,8 @@ fn test_adr_0041_has_wave_final_details() {
     // Should document that 3 crates were absorbed
     let mentions_three = adr.contains("3 crate") || adr.contains("three crate");
     assert!(mentions_three, "ADR 0041 should document that 3 crates were absorbed in Wave Final");
+
+    Ok(())
 }
 
 /// Test 24: EDGE CASE: transport/framing module still exports ContentLengthFramer consistently
@@ -513,19 +537,19 @@ fn test_config_defaults_are_backward_compatible() {
 /// Test 26: BOUNDARY: no lingering imports of old crate names in perl-lsp/tests/
 /// Guards against test files that still reference the absorbed crates by old names.
 #[test]
-fn test_perl_lsp_tests_no_old_crate_refs() {
+fn test_perl_lsp_tests_no_old_crate_refs() -> TestResult {
     let root = workspace_root();
     let tests_dir = root.join("crates/perl-lsp-rs/tests");
 
     if tests_dir.exists() {
-        fn scan_for_old_crates(path: &Path) -> std::io::Result<()> {
+        fn scan_for_old_crates(path: &Path) -> TestResult {
             for entry in fs::read_dir(path)? {
                 let entry = entry?;
                 let path = entry.path();
                 if path.is_dir() {
-                    let _ = scan_for_old_crates(&path);
-                } else if path.extension().map_or(false, |ext| ext == "rs") {
-                    let content = fs::read_to_string(&path).expect("readable");
+                    scan_for_old_crates(&path)?;
+                } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    let content = fs::read_to_string(&path)?;
                     assert!(
                         !content.contains("extern crate perl_lsp_config"),
                         "Test file {} still references old perl_lsp_config crate",
@@ -546,17 +570,19 @@ fn test_perl_lsp_tests_no_old_crate_refs() {
             Ok(())
         }
 
-        let _ = scan_for_old_crates(&tests_dir);
+        scan_for_old_crates(&tests_dir)?;
     }
+
+    Ok(())
 }
 
 /// Test 27: REGRESSION: perl-lsp-rs-core/src/lib.rs properly re-exports absorbed modules
 /// If re-exports are missing, public API will be inaccessible.
 #[test]
-fn test_rs_core_lib_exports_absorbed_modules() {
+fn test_rs_core_lib_exports_absorbed_modules() -> TestResult {
     let root = workspace_root();
     let lib_rs = root.join("crates/perl-lsp-rs-core/src/lib.rs");
-    let content = fs::read_to_string(&lib_rs).expect("lib.rs should exist");
+    let content = fs::read_to_string(&lib_rs)?;
 
     // Should declare or re-export the key modules
     assert!(
@@ -578,4 +604,6 @@ fn test_rs_core_lib_exports_absorbed_modules() {
         content.contains("mod platform") || content.contains("pub mod platform"),
         "lib.rs must declare/export platform module"
     );
+
+    Ok(())
 }

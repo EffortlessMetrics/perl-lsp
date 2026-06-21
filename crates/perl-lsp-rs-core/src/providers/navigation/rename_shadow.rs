@@ -596,19 +596,19 @@ mod tests {
         PlanBlocker::new(reason, None, format!("{reason:?} blocker"))
     }
 
-    fn first_trace<'a>(
-        receipt: &'a SemanticShadowCompareReceipt,
-    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+    fn first_trace(
+        receipt: &SemanticShadowCompareReceipt,
+    ) -> Result<&ProviderFactTrace, Box<dyn std::error::Error>> {
         match receipt.fact_source_traces.first() {
             Some(trace) => Ok(trace),
             None => Err("missing fact-source trace".into()),
         }
     }
 
-    fn trace_for_source<'a>(
-        receipt: &'a SemanticShadowCompareReceipt,
+    fn trace_for_source(
+        receipt: &SemanticShadowCompareReceipt,
         source: ProviderFactSourceKind,
-    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+    ) -> Result<&ProviderFactTrace, Box<dyn std::error::Error>> {
         for trace in &receipt.fact_source_traces {
             if trace.source == source {
                 return Ok(trace);

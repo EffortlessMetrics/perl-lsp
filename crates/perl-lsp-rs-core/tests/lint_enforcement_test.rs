@@ -11,6 +11,7 @@
 //! These tests read the actual source files via `CARGO_MANIFEST_DIR` so they would
 //! catch any future accidental removal of the directives.
 
+use perl_tdd_support::{must, must_some};
 use std::fs;
 
 /// Returns the path to perl-lsp-rs-core's `lib.rs`.
@@ -25,10 +26,8 @@ fn launcher_mod_path() -> std::path::PathBuf {
     manifest_dir.join("src/runtime/launcher/mod.rs")
 }
 
-#[allow(clippy::expect_used)]
 fn read_source(path: &std::path::Path) -> String {
-    fs::read_to_string(path)
-        .unwrap_or_else(|_| panic!("source file must be readable: {}", path.display()))
+    must(fs::read_to_string(path))
 }
 
 fn find_line_number(source: &str, pattern: &str) -> Option<usize> {
@@ -43,9 +42,9 @@ fn test_workspace_cargo_has_print_deny() {
         .ancestors()
         .skip(1) // skip the crate dir
         .find(|p| p.join("Cargo.toml").exists() && p.join("Cargo.lock").exists())
-        .expect("workspace root Cargo.toml must be readable");
-    let cargo_toml = std::fs::read_to_string(workspace_root.join("Cargo.toml"))
-        .expect("workspace Cargo.toml must be readable");
+        .map(std::path::Path::to_path_buf);
+    let workspace_root = must_some(workspace_root);
+    let cargo_toml = must(std::fs::read_to_string(workspace_root.join("Cargo.toml")));
     assert!(
         cargo_toml.contains("print_stderr = \"deny\""),
         "workspace Cargo.toml must contain print_stderr = \"deny\" in [workspace.lints.clippy]"

@@ -2235,12 +2235,14 @@ profile = "recommended"
             Err(_) => return Ok(()),
         };
 
-        let mut config = WorkspaceConfig::default();
-        config.use_system_inc = true;
-        config.perl_path = Some(perl_path.to_string_lossy().into_owned());
-        // perl_args runs BEFORE -e 'print @INC', so we make perl sleep up front.
-        // The sleep is much longer than SYSTEM_INC_PROBE_TIMEOUT (1s).
-        config.perl_args = vec!["-e".into(), "sleep 10".into()];
+        let mut config = WorkspaceConfig {
+            use_system_inc: true,
+            perl_path: Some(perl_path.to_string_lossy().into_owned()),
+            // perl_args runs BEFORE -e 'print @INC', so we make perl sleep up front.
+            // The sleep is much longer than SYSTEM_INC_PROBE_TIMEOUT (1s).
+            perl_args: vec!["-e".into(), "sleep 10".into()],
+            ..WorkspaceConfig::default()
+        };
 
         let start = Instant::now();
         let paths = config.get_system_inc().to_vec();
@@ -2271,8 +2273,7 @@ profile = "recommended"
     /// environment (stripped or inherited based on `use_perl5lib`).
     #[test]
     fn use_perl5lib_toggle_invalidates_system_inc_cache() {
-        let mut config = WorkspaceConfig::default();
-        config.use_system_inc = true;
+        let mut config = WorkspaceConfig { use_system_inc: true, ..WorkspaceConfig::default() };
         assert!(config.use_perl5lib, "default usePerl5lib should be true");
 
         // Pre-populate the cache; flipping usePerl5lib must clear it.

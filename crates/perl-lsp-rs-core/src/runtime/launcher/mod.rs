@@ -1029,7 +1029,7 @@ mod tests {
         DEFAULT_LSP_PORT, DiagnosticMode, LaunchAction, RuntimeMode, RuntimeTuning, TransportMode,
         parse_args,
     };
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn init_logging_does_not_panic_without_log_file() {
@@ -1102,8 +1102,7 @@ mod tests {
         for (shell, needle) in
             [("bash", "--mcp"), ("zsh", "--mcp"), ("fish", "-l mcp"), ("powershell", "--mcp")]
         {
-            let script = super::shell_completion(shell)
-                .unwrap_or_else(|| panic!("missing completion for {shell}"));
+            let script = must_some(super::shell_completion(shell));
             assert!(script.contains(needle), "{shell} completion is missing {needle}: {script}");
         }
 

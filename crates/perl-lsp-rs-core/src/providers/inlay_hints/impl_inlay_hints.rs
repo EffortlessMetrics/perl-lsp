@@ -697,11 +697,12 @@ where
 mod tests {
     use super::*;
     use perl_parser_core::Parser;
+    use perl_tdd_support::must;
 
     /// Parse source into an AST node.
     fn ast_for(src: &str) -> Node {
         let mut p = Parser::new(src);
-        p.parse().expect("parse should succeed in test helper")
+        must(p.parse())
     }
 
     /// Dummy position converter for lib tests.
@@ -715,7 +716,7 @@ mod tests {
     fn method_labels_for<'a>(hints: &'a [Value], method: &str) -> Vec<&'a str> {
         hints
             .iter()
-            .filter(|h| h["data"]["functionName"].as_str().map_or(false, |n| n == method))
+            .filter(|h| h["data"]["functionName"].as_str().is_some_and(|n| n == method))
             .filter_map(|h| h["label"].as_str())
             .collect()
     }

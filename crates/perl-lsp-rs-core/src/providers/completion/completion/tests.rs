@@ -2393,12 +2393,16 @@ $obj->"#;
     let provider = CompletionProvider::new_with_index(&ast, Some(index));
     let completions = provider.get_completions(code, code.len());
 
-    let bark = completions.iter().find(|c| c.label == "bark");
-    if bark.is_none() {
-        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
-        panic!("fallback should include imported Foo's `bark`; got labels: {labels:?}");
-    }
-    let bark = bark.expect("checked above");
+    let bark = match completions.iter().find(|c| c.label == "bark") {
+        Some(bark) => bark,
+        None => {
+            let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+            return Err(format!(
+                "fallback should include imported Foo's `bark`; got labels: {labels:?}"
+            )
+            .into());
+        }
+    };
     let detail = must_some(bark.detail.as_deref());
     assert!(
         detail.contains("receiver: unknown, low confidence"),
@@ -2790,13 +2794,13 @@ sub mew { }
         .first()
         .copied()
         .and_then(|b| (b as char).to_digit(10).map(|d| d as u8))
-        .expect("exact sort_text must start with a digit");
+        .ok_or("exact sort_text must start with a digit")?;
     let fallback_tier: u8 = mew_sort
         .as_bytes()
         .first()
         .copied()
         .and_then(|b| (b as char).to_digit(10).map(|d| d as u8))
-        .expect("fallback sort_text must start with a digit");
+        .ok_or("fallback sort_text must start with a digit")?;
     assert!(
         exact_tier < fallback_tier,
         "exact tier {exact_tier} must sort above fallback tier {fallback_tier}"

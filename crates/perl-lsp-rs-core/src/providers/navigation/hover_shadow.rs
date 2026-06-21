@@ -1776,7 +1776,7 @@ mod tests {
             let label = occurrence_kind_label(*kind);
             // All should produce a label (DynamicBoundary is "dynamic boundary")
             assert!(
-                label.len() > 0 || *kind == OccurrenceKind::Definition,
+                !label.is_empty() || *kind == OccurrenceKind::Definition,
                 "OccurrenceKind::{kind:?} should have a label"
             );
         }

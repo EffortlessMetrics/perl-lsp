@@ -115,6 +115,10 @@ fn split_sigil(name: &str) -> (&str, &str) {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_test_module,
+    reason = "policy:#2064: large quick-fix regression block remains near the first fix helpers to avoid reorder-only churn"
+)]
 mod tests {
     use super::*;
     use perl_tdd_support::must_some;

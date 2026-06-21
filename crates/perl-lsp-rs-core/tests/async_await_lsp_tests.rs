@@ -135,49 +135,53 @@ fn await_appears_in_completions() {
 }
 
 #[test]
-fn async_has_documentation() {
+fn async_has_documentation() -> Result<(), Box<dyn std::error::Error>> {
     let items = completions_at_end("async");
-    let item = find_item(&items, "async").expect("async must appear in completions");
-    let doc = item.documentation.as_deref().expect("async must have documentation");
+    let item = find_item(&items, "async").ok_or("async must appear in completions")?;
+    let doc = item.documentation.as_deref().ok_or("async must have documentation")?;
     assert!(
         doc.contains("5.36") || doc.to_lowercase().contains("experimental"),
         "async documentation should mention Perl 5.36+ or experimental, got: {doc}"
     );
+    Ok(())
 }
 
 #[test]
-fn await_has_documentation() {
+fn await_has_documentation() -> Result<(), Box<dyn std::error::Error>> {
     let items = completions_at_end("await");
-    let item = find_item(&items, "await").expect("await must appear in completions");
-    let doc = item.documentation.as_deref().expect("await must have documentation");
+    let item = find_item(&items, "await").ok_or("await must appear in completions")?;
+    let doc = item.documentation.as_deref().ok_or("await must have documentation")?;
     assert!(
         doc.to_lowercase().contains("future")
             || doc.to_lowercase().contains("suspend")
             || doc.to_lowercase().contains("experimental"),
         "await documentation should mention Future, suspend, or experimental, got: {doc}"
     );
+    Ok(())
 }
 
 #[test]
-fn async_completion_kind_is_keyword() {
+fn async_completion_kind_is_keyword() -> Result<(), Box<dyn std::error::Error>> {
     let items = completions_at_end("async");
-    let item = find_item(&items, "async").expect("async must appear in completions");
+    let item = find_item(&items, "async").ok_or("async must appear in completions")?;
     assert!(
         matches!(item.kind, CompletionItemKind::Keyword),
         "async should have CompletionItemKind::Keyword, got: {:?}",
         item.kind
     );
+    Ok(())
 }
 
 #[test]
-fn await_completion_kind_is_keyword() {
+fn await_completion_kind_is_keyword() -> Result<(), Box<dyn std::error::Error>> {
     let items = completions_at_end("await");
-    let item = find_item(&items, "await").expect("await must appear in completions");
+    let item = find_item(&items, "await").ok_or("await must appear in completions")?;
     assert!(
         matches!(item.kind, CompletionItemKind::Keyword),
         "await should have CompletionItemKind::Keyword, got: {:?}",
         item.kind
     );
+    Ok(())
 }
 
 // ============================================================================

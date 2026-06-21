@@ -599,8 +599,7 @@ mod tests {
     fn for_execute_command_respects_config_flags() {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
-        let mut config = WorkspaceConfig::default();
-        config.use_perl5lib = true;
+        let config = WorkspaceConfig { use_perl5lib: true, ..WorkspaceConfig::default() };
         let env = PerlOracleEnv::for_execute_command(&config, cwd.clone());
         if let Some(e) = env {
             assert!(e.allow_perl5lib, "allow_perl5lib must mirror config.use_perl5lib=true");
@@ -608,7 +607,7 @@ mod tests {
             assert!(e.allow_local_lib, "allow_local_lib must always be true for execute-command");
         }
 
-        config.use_perl5lib = false;
+        let config = WorkspaceConfig { use_perl5lib: false, ..WorkspaceConfig::default() };
         let env = PerlOracleEnv::for_execute_command(&config, cwd);
         if let Some(e) = env {
             assert!(!e.allow_perl5lib, "allow_perl5lib must mirror config.use_perl5lib=false");
@@ -625,15 +624,14 @@ mod tests {
     fn for_perldoc_respects_config_flags() {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
-        let mut config = WorkspaceConfig::default();
-        config.use_perl5lib = true;
+        let config = WorkspaceConfig { use_perl5lib: true, ..WorkspaceConfig::default() };
         let env = PerlOracleEnv::for_perldoc(&config, cwd.clone());
         assert!(env.allow_perl5lib, "perldoc should honor explicit use_perl5lib=true");
         assert!(!env.allow_perl5opt, "perldoc must strip PERL5OPT");
         assert!(!env.allow_local_lib, "perldoc must strip local::lib activation vars");
         assert_eq!(env.extra_env.get("LC_ALL").map(String::as_str), Some("C"));
 
-        config.use_perl5lib = false;
+        let config = WorkspaceConfig { use_perl5lib: false, ..WorkspaceConfig::default() };
         let env = PerlOracleEnv::for_perldoc(&config, cwd);
         assert!(!env.allow_perl5lib, "perldoc should honor explicit use_perl5lib=false");
         assert!(!env.allow_perl5opt, "perldoc must strip PERL5OPT");
@@ -782,8 +780,7 @@ mod tests {
     fn for_language_probe_respects_config_flags() {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
-        let mut config = WorkspaceConfig::default();
-        config.use_perl5lib = true;
+        let config = WorkspaceConfig { use_perl5lib: true, ..WorkspaceConfig::default() };
         let env = PerlOracleEnv::for_language_probe(&config, cwd.clone());
         if let Some(e) = env {
             assert!(e.allow_perl5lib, "allow_perl5lib must mirror config.use_perl5lib=true");
@@ -791,7 +788,7 @@ mod tests {
             assert!(!e.allow_local_lib, "allow_local_lib must always be false for language probe");
         }
 
-        config.use_perl5lib = false;
+        let config = WorkspaceConfig { use_perl5lib: false, ..WorkspaceConfig::default() };
         let env = PerlOracleEnv::for_language_probe(&config, cwd);
         if let Some(e) = env {
             assert!(!e.allow_perl5lib, "allow_perl5lib must mirror config.use_perl5lib=false");
@@ -812,8 +809,10 @@ mod tests {
         };
 
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let mut config = WorkspaceConfig::default();
-        config.perl_path = Some(perl.to_string_lossy().into_owned());
+        let config = WorkspaceConfig {
+            perl_path: Some(perl.to_string_lossy().into_owned()),
+            ..WorkspaceConfig::default()
+        };
 
         let oracle = PerlOracleEnv::for_language_probe(&config, cwd)
             .ok_or("for_language_probe returned None unexpectedly")?;
@@ -847,9 +846,11 @@ mod tests {
         };
 
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let mut config = WorkspaceConfig::default();
-        config.use_perl5lib = false;
-        config.perl_path = Some(perl.to_string_lossy().into_owned());
+        let config = WorkspaceConfig {
+            use_perl5lib: false,
+            perl_path: Some(perl.to_string_lossy().into_owned()),
+            ..WorkspaceConfig::default()
+        };
 
         let oracle = PerlOracleEnv::for_language_probe(&config, cwd)
             .ok_or("for_language_probe returned None unexpectedly")?;
@@ -877,9 +878,7 @@ mod tests {
     /// `for_startup_inc_probe` maps `config.use_perl5lib` → `allow_perl5lib`.
     #[test]
     fn for_startup_inc_probe_respects_config_flags() {
-        let mut config = WorkspaceConfig::default();
-
-        config.use_perl5lib = true;
+        let config = WorkspaceConfig { use_perl5lib: true, ..WorkspaceConfig::default() };
         let env = PerlOracleEnv::for_startup_inc_probe(&config);
         if let Some(e) = env {
             assert!(e.allow_perl5lib, "allow_perl5lib should be true when use_perl5lib=true");
@@ -887,7 +886,7 @@ mod tests {
             assert!(!e.allow_local_lib, "allow_local_lib must always be false for startup probe");
         }
 
-        config.use_perl5lib = false;
+        let config = WorkspaceConfig { use_perl5lib: false, ..WorkspaceConfig::default() };
         let env = PerlOracleEnv::for_startup_inc_probe(&config);
         if let Some(e) = env {
             assert!(!e.allow_perl5lib, "allow_perl5lib should be false when use_perl5lib=false");
@@ -1139,9 +1138,11 @@ mod tests {
         };
 
         // Override perl_binary so the Oracle actually runs.
-        let mut config = WorkspaceConfig::default();
-        config.use_perl5lib = false;
-        config.perl_path = Some(perl.to_string_lossy().into_owned());
+        let config = WorkspaceConfig {
+            use_perl5lib: false,
+            perl_path: Some(perl.to_string_lossy().into_owned()),
+            ..WorkspaceConfig::default()
+        };
 
         let oracle = PerlOracleEnv::for_startup_inc_probe(&config)
             .ok_or("for_startup_inc_probe returned None unexpectedly")?;
