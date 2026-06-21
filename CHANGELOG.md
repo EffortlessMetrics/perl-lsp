@@ -139,6 +139,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reference fallback avoids document-lock re-entry.** Partial-index reference
   fallback no longer re-enters the documents lock while searching open files.
   (#1597)
+- **PL701 missing-module suggestions point at setup guidance.** Missing-module
+  diagnostics now append `perllsp --doctor <workspace>` and the PL701 docs URL
+  to legacy and context-aware suggestion text while preserving branch-specific
+  `includePaths`, `useSystemInc`, `resolutionTimeout`, and `cpanm` hints.
+  (#2047, issue #2049)
 - **Perl documentation links share one validated target resolver.** Hover,
   document-link, resolve, and virtual perldoc surfaces now build MetaCPAN,
   `perldoc://`, and perldoc.perl.org targets through the same resolver, and
