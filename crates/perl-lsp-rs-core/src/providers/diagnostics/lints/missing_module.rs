@@ -195,6 +195,26 @@ const MAX_LABELED_SHOWN: usize = 5;
 /// How many total search roots before suggesting a timeout increase.
 const MANY_ROOTS_THRESHOLD: usize = 8;
 
+fn module_not_found_docs_url() -> &'static str {
+    if let Some(url) = DiagnosticCode::ModuleNotFound.documentation_url() {
+        url
+    } else {
+        "https://docs.perl-lsp.org/errors/PL701"
+    }
+}
+
+fn with_pl701_setup_guidance(base: impl Into<String>) -> String {
+    let mut suggestion = base.into();
+    suggestion.truncate(suggestion.trim_end().len());
+    if !matches!(suggestion.chars().last(), Some('.') | Some('!') | Some('?')) {
+        suggestion.push('.');
+    }
+    suggestion.push_str(" Run `perllsp --doctor <workspace>` for effective @INC; see ");
+    suggestion.push_str(module_not_found_docs_url());
+    suggestion.push('.');
+    suggestion
+}
+
 /// Pick the single most actionable configuration suggestion given the set of
 /// labeled search paths that were consulted.
 ///
@@ -206,7 +226,9 @@ const MANY_ROOTS_THRESHOLD: usize = 8;
 /// 5. Generic fallback.
 fn choose_context_suggestion(module: &str, search_context: &[ModuleSearchPathDisplay]) -> String {
     if search_context.is_empty() {
-        return "Open a workspace folder or configure `perl.workspace.includePaths`.".to_string();
+        return with_pl701_setup_guidance(
+            "Open a workspace folder or configure `perl.workspace.includePaths`.",
+        );
     }
 
     let has_perl5lib = search_context.iter().any(|p| p.source == "PERL5LIB");
@@ -219,22 +241,26 @@ fn choose_context_suggestion(module: &str, search_context: &[ModuleSearchPathDis
         has_workspace && !has_perl5lib && !has_system_inc && !has_use_lib && !has_findbin;
 
     if workspace_only {
-        return format!(
+        return with_pl701_setup_guidance(format!(
             "Add the module's directory to `perl.workspace.includePaths` or install the module with: cpanm {module}"
-        );
+        ));
     }
 
     if search_context.len() >= MANY_ROOTS_THRESHOLD {
-        return "Increase `perl.workspace.resolutionTimeout` if this is on a slow filesystem."
-            .to_string();
+        return with_pl701_setup_guidance(
+            "Increase `perl.workspace.resolutionTimeout` if this is on a slow filesystem.",
+        );
     }
 
     if !has_system_inc {
-        return "Enable `perl.workspace.useSystemInc` to consider interpreter startup `@INC`."
-            .to_string();
+        return with_pl701_setup_guidance(
+            "Enable `perl.workspace.useSystemInc` to consider interpreter startup `@INC`.",
+        );
     }
 
-    format!("Install with: cpanm {module} or add to `perl.workspace.includePaths`")
+    with_pl701_setup_guidance(format!(
+        "Install with: cpanm {module} or add to `perl.workspace.includePaths`"
+    ))
 }
 
 /// Format the PL701 message body for labeled search paths.
@@ -365,10 +391,9 @@ pub fn check_missing_modules<F>(
             message,
             related_information: vec![],
             tags: vec![],
-            suggestion: Some(format!(
-                "Install with: cpanm {} or add to .perl-lsp.toml: include_paths",
-                module_str
-            )),
+            suggestion: Some(with_pl701_setup_guidance(format!(
+                "Install with: cpanm {module_str} or add to .perl-lsp.toml: include_paths"
+            ))),
         });
     }
 }
@@ -806,6 +831,18 @@ mod tests {
     }
 
     #[test]
+    fn pl701_suggestion_points_to_doctor_and_docs() -> Result<(), String> {
+        let source = "use My::Package;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().ok_or("missing PL701 suggestion")?;
+        assert_pl701_setup_guidance(suggestion);
+        Ok(())
+    }
+
+    #[test]
     fn modules_starting_with_v_are_not_treated_as_versions() {
         let source = "use vTools::Parser;\n";
         let ast = must(Parser::new(source).parse());
@@ -846,6 +883,113 @@ mod tests {
 
     fn make_ctx(entries: &[(&str, &str)]) -> Vec<ModuleSearchPathDisplay> {
         entries.iter().map(|(p, s)| ModuleSearchPathDisplay::new(*p, *s)).collect()
+    }
+
+    fn assert_pl701_setup_guidance(suggestion: &str) {
+        assert!(
+            suggestion.contains("perllsp --doctor <workspace>"),
+            "PL701 suggestion should mention the doctor command; got: {suggestion:?}"
+        );
+        assert!(
+            suggestion.contains(module_not_found_docs_url()),
+            "PL701 suggestion should link the PL701 docs; got: {suggestion:?}"
+        );
+    }
+
+    #[test]
+    fn module_not_found_docs_url_uses_catalog_documentation_url_when_present() -> Result<(), String>
+    {
+        let catalog_url = DiagnosticCode::ModuleNotFound
+            .documentation_url()
+            .ok_or("PL701 should have a catalog documentation URL")?;
+        assert_eq!(
+            module_not_found_docs_url(),
+            catalog_url,
+            "PL701 setup guidance should use the diagnostic catalog URL when present",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn setup_guidance_appends_doctor_and_catalog_docs_url() -> Result<(), String> {
+        let catalog_url = DiagnosticCode::ModuleNotFound
+            .documentation_url()
+            .ok_or("PL701 should have a catalog documentation URL")?;
+        let suggestion = with_pl701_setup_guidance("Install with: cpanm My::Package");
+        assert!(
+            suggestion.starts_with("Install with: cpanm My::Package. Run"),
+            "setup guidance should preserve the hint and separate appended guidance; got: {suggestion:?}",
+        );
+        assert!(
+            suggestion.contains("perllsp --doctor <workspace>"),
+            "setup guidance should mention the doctor command; got: {suggestion:?}",
+        );
+        assert!(
+            suggestion.contains(catalog_url),
+            "setup guidance should include the catalog documentation URL; got: {suggestion:?}",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn setup_guidance_preserves_existing_sentence_separator() {
+        let suggestion = with_pl701_setup_guidance("Open a workspace folder.");
+        assert!(
+            suggestion.starts_with("Open a workspace folder. Run"),
+            "setup guidance should not duplicate punctuation; got: {suggestion:?}",
+        );
+    }
+
+    #[test]
+    fn perl5lib_without_system_inc_suggestion_keeps_use_system_inc_and_setup_guidance() {
+        let ctx =
+            make_ctx(&[("lib", "workspace includePaths"), ("/home/user/perl5/lib", "PERL5LIB")]);
+
+        let suggestion = choose_context_suggestion("My::Package", &ctx);
+
+        assert!(
+            suggestion.contains("useSystemInc"),
+            "PERL5LIB without interpreter startup @INC should suggest useSystemInc; got: {suggestion:?}",
+        );
+        assert_pl701_setup_guidance(&suggestion);
+    }
+
+    #[test]
+    fn context_variant_suggestions_point_to_doctor_and_docs_for_each_branch() {
+        let many_roots: Vec<ModuleSearchPathDisplay> = (1..=9)
+            .map(|i| ModuleSearchPathDisplay::new(format!("/path/dir{i}"), "PERL5LIB"))
+            .collect();
+        let cases = vec![
+            ("empty", Vec::new()),
+            ("workspace_only", make_ctx(&[("lib", "workspace includePaths")])),
+            (
+                "no_system_inc",
+                make_ctx(&[
+                    ("lib", "workspace includePaths"),
+                    ("/home/user/perl5/lib", "PERL5LIB"),
+                ]),
+            ),
+            ("many_roots", many_roots),
+            (
+                "fallback",
+                make_ctx(&[
+                    ("lib", "workspace includePaths"),
+                    ("/usr/lib/perl5", "interpreter startup @INC"),
+                ]),
+            ),
+        ];
+
+        for (name, ctx) in cases {
+            let suggestion = choose_context_suggestion("My::Package", &ctx);
+            assert_pl701_setup_guidance(&suggestion);
+            assert!(
+                suggestion.contains("My::Package")
+                    || suggestion.contains("workspace folder")
+                    || suggestion.contains("resolutionTimeout")
+                    || suggestion.contains("useSystemInc"),
+                "{name} branch should retain its actionable hint; got: {suggestion:?}"
+            );
+        }
     }
 
     #[test]
