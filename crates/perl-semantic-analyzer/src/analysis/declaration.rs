@@ -2064,7 +2064,8 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
 /// # Perl Parsing Context
 /// Perl package semantics:
 /// - `package Foo;` declarations change current namespace
-/// - Scope continues until next package declaration or EOF
+/// - Scope continues until next package declaration, current block end, or EOF
+/// - `package Foo { ... }` scopes the package to the explicit block
 /// - Default package is "main" when no explicit declaration
 /// - Package names follow Perl identifier rules (`::`-separated)
 ///
@@ -2078,23 +2079,55 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
 /// println!("Current package: {}", pkg);
 /// ```
 pub fn current_package_at(ast: &Node, offset: usize) -> &str {
-    // Find the nearest package declaration before the offset
-    fn scan<'a>(node: &'a Node, offset: usize, last: &mut Option<&'a str>) {
-        if let NodeKind::Package { name, .. } = &node.kind {
-            if node.location.start <= offset {
-                *last = Some(name.as_str());
+    fn package_in_statement_list<'a>(
+        statements: &'a [Node],
+        offset: usize,
+        mut current_pkg: &'a str,
+    ) -> &'a str {
+        for child in statements {
+            if child.location.start > offset {
+                break;
+            }
+
+            if child.location.start <= offset && offset <= child.location.end {
+                return package_in_node(child, offset, current_pkg);
+            }
+
+            if let NodeKind::Package { name, block: None, .. } = &child.kind {
+                current_pkg = name.as_str();
             }
         }
-        for child in get_node_children(node) {
-            if child.location.start <= offset {
-                scan(child, offset, last);
+
+        current_pkg
+    }
+
+    fn package_in_node<'a>(node: &'a Node, offset: usize, current_pkg: &'a str) -> &'a str {
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                package_in_statement_list(statements, offset, current_pkg)
+            }
+            NodeKind::Package { name, block, .. } if node.location.start <= offset => {
+                let package_name = name.as_str();
+                if let Some(block) = block
+                    && block.location.start <= offset
+                    && offset <= block.location.end
+                {
+                    return package_in_node(block, offset, package_name);
+                }
+                package_name
+            }
+            _ => {
+                for child in get_node_children(node) {
+                    if child.location.start <= offset && offset <= child.location.end {
+                        return package_in_node(child, offset, current_pkg);
+                    }
+                }
+                current_pkg
             }
         }
     }
 
-    let mut last_pkg: Option<&str> = None;
-    scan(ast, offset, &mut last_pkg);
-    last_pkg.unwrap_or("main")
+    package_in_node(ast, offset, "main")
 }
 
 /// Finds the most specific AST node containing the given byte offset.
