@@ -1116,9 +1116,9 @@ fn test_is_not_in_regex_division() {
 }
 
 #[test]
-fn test_regex_completion_preserves_sigil_completions_in_interpolation() {
+fn test_regex_completion_suppresses_sigil_completions_in_patterns() {
     // Cursor is inside the regex body at the end of `$fo` — before the
-    // closing `/`. Variable completions must be offered, not flag completions.
+    // closing `/`. Variable completions are noisy inside regex patterns.
     let code = r#"my $foo = 1; my $bar = qr/^$fo/"#;
     // Position just before the closing '/'
     let pos = code.len() - 1;
@@ -1129,8 +1129,62 @@ fn test_regex_completion_preserves_sigil_completions_in_interpolation() {
     let completions = provider.get_completions(code, pos);
 
     assert!(
-        completions.iter().any(|item| item.label == "$foo"),
-        "expected interpolated regex variables to keep scalar completions"
+        !completions.iter().any(|item| item.label == "$foo"),
+        "expected variable completions to be suppressed inside regex patterns, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_regex_completion_suppresses_at_sigil_in_patterns() {
+    let code = r#"my @arr = (1, 2); $str =~ /prefix @ar"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "@arr"),
+        "expected array completions to be suppressed inside regex patterns, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_substitution_replacement_side_still_offers_variables() {
+    // Cursor is in the replacement side of s///, which remains a string-like
+    // expression context rather than a regex pattern.
+    let code = r#"my $baz = "x"; s/old/$ba"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        completions.iter().any(|item| item.label == "$baz"),
+        "expected variable completions on the replacement side of s///, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_regex_pattern_side_suppresses_variables_not_flags() {
+    let code = r#"$x =~ /\d"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        completions.iter().any(|item| item.label == r"\d"),
+        "regex constructs should still be offered for non-sigil prefixes inside regex, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
     );
 }
 
