@@ -1947,6 +1947,7 @@ coverage-proof base='origin/main':
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask ci_route --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask workflow_policy_lint --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask allocation_tracker --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask agent_lease --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask active_goal_manifest --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask file_policy --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask native_tooling --locked
@@ -1957,6 +1958,7 @@ coverage-proof base='origin/main':
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask semantic_inline_next_edit --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --locked \
         --test active_goal_manifest_cli \
+        --test agent_leases_cli \
         --test ci_route_cli \
         --test codecov_patch_gate_policy \
         --test quality_ci_wiring_policy \
