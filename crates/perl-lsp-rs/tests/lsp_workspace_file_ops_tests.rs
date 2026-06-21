@@ -70,6 +70,22 @@ fn wait_for_method(output: &OutputCapture, method: &str) -> Option<Value> {
     }
 }
 
+fn wait_for_index_tasks_drained(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        let pending = server.pending_index_tasks();
+        if pending == 0 {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(
+                format!("expected background index tasks to drain, pending={pending}").into()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
 /// Helper to create a test LSP server
 fn create_test_server() -> LspServer {
     let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
@@ -820,6 +836,8 @@ fn test_will_delete_files_skips_warnings_for_co_deleted_dependents()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+    wait_for_index_tasks_drained(&server)?;
+    output.clear();
 
     let dependent_open = json!({
         "textDocument": {
@@ -830,6 +848,7 @@ fn test_will_delete_files_skips_warnings_for_co_deleted_dependents()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(dependent_open));
+    wait_for_index_tasks_drained(&server)?;
     output.clear();
 
     let params = json!({
@@ -873,6 +892,8 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(first_module_open));
+    wait_for_index_tasks_drained(&server)?;
+    output.clear();
 
     let second_module_open = json!({
         "textDocument": {
@@ -883,6 +904,8 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(second_module_open));
+    wait_for_index_tasks_drained(&server)?;
+    output.clear();
 
     let first_dependent = json!({
         "textDocument": {
@@ -893,6 +916,8 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(first_dependent));
+    wait_for_index_tasks_drained(&server)?;
+    output.clear();
 
     let second_dependent = json!({
         "textDocument": {
@@ -903,6 +928,7 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(second_dependent));
+    wait_for_index_tasks_drained(&server)?;
     output.clear();
 
     let params = json!({
