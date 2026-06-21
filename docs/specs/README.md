@@ -50,6 +50,11 @@ generated sections.
 - [PLSP-SPEC-0028: lsp-stack extraction boundary](PLSP-SPEC-0028-lsp-stack-extraction.md)
 - [PLSP-SPEC-0029: LSP 3.18 conformance boundary](PLSP-SPEC-0029-lsp-318-conformance-boundary.md)
 - [PLSP-SPEC-0030: Compile state layers contract](PLSP-SPEC-0030-compile-state-layers.md)
+- [PLSP-SPEC-0031: Context and operator-semantics contract](PLSP-SPEC-0031-context-and-operator-semantics.md)
+- [PLSP-SPEC-0032: PIR-A place, effect, and CFG contract](PLSP-SPEC-0032-pir-a-places-effects-cfg.md)
+- [PLSP-SPEC-0033: Three-rail evidence contract](PLSP-SPEC-0033-three-rail-evidence.md)
+- [PLSP-SPEC-0034: Compiler-world contract](PLSP-SPEC-0034-compiler-world.md)
+- [PLSP-SPEC-0035: Executable-profile charter and EIR contract](PLSP-SPEC-0035-executable-profile-and-eir.md)
 
 ## Acceptance and Proof
 
