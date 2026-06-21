@@ -38,7 +38,7 @@ items:
               line: 0
           uri: "file:///snapshot-changed.pl"
         message: "ℹ️ The 'use warnings' pragma enables helpful warning messages about questionable constructs, uninitialized values, and deprecated features."
-    severity: 3
+    severity: 2
     source: perl-lsp
   - code: PL102
     data:

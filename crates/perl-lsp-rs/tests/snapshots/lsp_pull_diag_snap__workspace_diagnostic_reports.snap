@@ -39,7 +39,7 @@ items:
                   line: 0
               uri: "file:///workspace-diagnostic-a.pl"
             message: "ℹ️ The 'use warnings' pragma enables helpful warning messages about questionable constructs, uninitialized values, and deprecated features."
-        severity: 3
+        severity: 2
         source: perl-lsp
       - code: PL102
         data:
@@ -183,7 +183,7 @@ items:
                   line: 0
               uri: "file:///workspace-diagnostic-b.pl"
             message: "ℹ️ The 'use strict' pragma enforces good coding practices by requiring variable declarations, disabling barewords, and preventing symbolic references."
-        severity: 3
+        severity: 2
         source: perl-lsp
       - code: PL101
         data:
@@ -220,7 +220,7 @@ items:
                   line: 0
               uri: "file:///workspace-diagnostic-b.pl"
             message: "ℹ️ The 'use warnings' pragma enables helpful warning messages about questionable constructs, uninitialized values, and deprecated features."
-        severity: 3
+        severity: 2
         source: perl-lsp
       - code: native.testing.require_use_strict
         data:
