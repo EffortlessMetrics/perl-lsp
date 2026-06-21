@@ -4,9 +4,18 @@ use perl_tdd_support::must_some;
 use serde_json::json;
 use std::fs;
 
+fn initialize_adapter(adapter: &mut DebugAdapter) {
+    let response = adapter.handle_request(1, "initialize", None);
+    assert!(
+        matches!(response, DapMessage::Response { success: true, .. }),
+        "initialize should succeed before launch security checks, got: {response:?}"
+    );
+}
+
 #[test]
 fn test_launch_rejects_path_traversal() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
 
     // Create a temporary workspace directory
     let temp_dir = tempfile::tempdir()?;
@@ -27,7 +36,7 @@ fn test_launch_rejects_path_traversal() -> Result<(), Box<dyn std::error::Error>
     });
 
     // Handle launch request
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     // Verify response
     match response {
@@ -48,6 +57,7 @@ fn test_launch_rejects_path_traversal() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn test_launch_allows_valid_path() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
 
     // Create a temporary workspace directory
     let temp_dir = tempfile::tempdir()?;
@@ -65,7 +75,7 @@ fn test_launch_allows_valid_path() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Handle launch request
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     // Verify response
     match response {

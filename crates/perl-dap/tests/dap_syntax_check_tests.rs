@@ -26,11 +26,20 @@ fn perl_available() -> bool {
     PerlOracleEnv::for_dap_test_fixture().is_some()
 }
 
+fn initialize_adapter(adapter: &mut DebugAdapter) {
+    let response = adapter.handle_request(1, "initialize", None);
+    assert!(
+        matches!(response, DapMessage::Response { success: true, .. }),
+        "initialize should succeed before launch syntax checks, got: {response:?}"
+    );
+}
+
 // ── syntax error cases ──────────────────────────────────────────────────────
 
 #[test]
 fn test_launch_rejects_missing_semicolon() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
     let tmp = tempfile::tempdir()?;
 
     // Missing semicolon between statements — perl -c catches this
@@ -42,7 +51,7 @@ fn test_launch_rejects_missing_semicolon() -> Result<(), Box<dyn std::error::Err
         "args":    []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -61,6 +70,7 @@ fn test_launch_rejects_missing_semicolon() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn test_launch_rejects_unclosed_brace() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
     let tmp = tempfile::tempdir()?;
 
     // Unclosed block brace
@@ -76,7 +86,7 @@ fn test_launch_rejects_unclosed_brace() -> Result<(), Box<dyn std::error::Error>
         "args":    []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -95,6 +105,7 @@ fn test_launch_rejects_unclosed_brace() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn test_launch_rejects_simple_syntax_error() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
     let tmp = tempfile::tempdir()?;
 
     // `use strict` + bareword: perl -c exits non-zero with a clear error.
@@ -111,7 +122,7 @@ fn test_launch_rejects_simple_syntax_error() -> Result<(), Box<dyn std::error::E
         "args":    []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -132,6 +143,7 @@ fn test_launch_rejects_simple_syntax_error() -> Result<(), Box<dyn std::error::E
 #[test]
 fn test_launch_allows_syntactically_valid_script() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
     let tmp = tempfile::tempdir()?;
 
     // Valid Perl — no syntax error.  If perl is not on PATH the launch will
@@ -149,7 +161,7 @@ fn test_launch_allows_syntactically_valid_script() -> Result<(), Box<dyn std::er
         "args":    []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -172,6 +184,7 @@ fn test_launch_allows_syntactically_valid_script() -> Result<(), Box<dyn std::er
 #[test]
 fn test_syntax_error_message_contains_line_number() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
     let tmp = tempfile::tempdir()?;
 
     // Assignment with no right-hand side on line 2
@@ -183,7 +196,7 @@ fn test_syntax_error_message_contains_line_number() -> Result<(), Box<dyn std::e
         "args":    []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -203,6 +216,7 @@ fn test_syntax_error_message_contains_line_number() -> Result<(), Box<dyn std::e
 fn test_launch_syntax_check_honors_perl5lib_env_override() -> Result<(), Box<dyn std::error::Error>>
 {
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
     let tmp = tempfile::tempdir()?;
     let lib_dir = tmp.path().join("lib");
     fs::create_dir_all(lib_dir.join("Local"))?;
@@ -227,7 +241,7 @@ fn test_launch_syntax_check_honors_perl5lib_env_override() -> Result<(), Box<dyn
         }
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -253,6 +267,7 @@ fn test_launch_include_paths_are_receipt_only_until_dap_module_path_cutover()
     }
 
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
     let tmp = tempfile::tempdir()?;
     let lib_dir = tmp.path().join("lib");
     fs::create_dir_all(lib_dir.join("TrustReceipt"))?;
@@ -276,7 +291,7 @@ fn test_launch_include_paths_are_receipt_only_until_dap_module_path_cutover()
         "env": {}
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -300,9 +315,12 @@ fn test_launch_include_paths_are_receipt_only_until_dap_module_path_cutover()
 fn test_launch_reports_missing_module_with_install_hint() -> Result<(), Box<dyn std::error::Error>>
 {
     let mut adapter = DebugAdapter::new();
+    initialize_adapter(&mut adapter);
     let tmp = tempfile::tempdir()?;
 
-    for module_name in ["Some::Missing::Module", "Optional::Dep", "Tied::Hash::With::Spaces"] {
+    for (request_seq, module_name) in
+        [(2, "Some::Missing::Module"), (3, "Optional::Dep"), (4, "Tied::Hash::With::Spaces")]
+    {
         let script = write_script(
             &tmp,
             "missing_module.pl",
@@ -315,10 +333,14 @@ fn test_launch_reports_missing_module_with_install_hint() -> Result<(), Box<dyn 
             "args": []
         });
 
-        let response = adapter.handle_request(1, "launch", Some(args));
+        let response = adapter.handle_request(request_seq, "launch", Some(args));
 
         match response {
-            DapMessage::Response { success, message, .. } => {
+            DapMessage::Response { success, message, request_seq: echoed_request_seq, .. } => {
+                assert_eq!(
+                    echoed_request_seq, request_seq,
+                    "launch response must echo the missing-module request sequence"
+                );
                 assert!(!success, "Launch should fail for missing module {module_name}");
                 let msg = must_some(message);
                 assert!(

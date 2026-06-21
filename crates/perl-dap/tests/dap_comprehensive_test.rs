@@ -5,7 +5,7 @@ use serde_json::json;
 use std::fs::write;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
-use tempfile::tempdir;
+use tempfile::{TempDir, tempdir};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -32,11 +32,13 @@ fn wait_for_event(
 }
 
 /// Helper to create a test Perl script
-fn create_test_script(content: &str) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+fn create_test_script(
+    content: &str,
+) -> Result<(TempDir, std::path::PathBuf), Box<dyn std::error::Error>> {
     let dir = tempdir()?;
     let script_path = dir.path().join("test.pl");
     write(&script_path, content)?;
-    Ok(script_path)
+    Ok((dir, script_path))
 }
 
 #[test]
@@ -83,13 +85,15 @@ fn test_dap_launch_with_invalid_program() {
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
 
+    let _ = adapter.handle_request(1, "initialize", None);
+
     let launch_args = json!({
         "program": "/nonexistent/file.pl",
         "args": [],
         "stopOnEntry": false
     });
 
-    let response = adapter.handle_request(1, "launch", Some(launch_args));
+    let response = adapter.handle_request(2, "launch", Some(launch_args));
 
     match response {
         DapMessage::Response { success, command, message, .. } => {
@@ -577,7 +581,11 @@ my $result = $x + $y;
 print "Result: $result\n";
 "#;
 
-    let script_path = create_test_script(script_content)?;
+    let (_script_dir, script_path) = create_test_script(script_content)?;
+    assert!(
+        script_path.exists(),
+        "created DAP lifecycle script must stay on disk while its TempDir is held"
+    );
     let mut adapter = DebugAdapter::new();
     let (tx, rx) = channel();
     adapter.set_event_sender(tx);

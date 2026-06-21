@@ -9,6 +9,16 @@ use std::sync::mpsc::channel;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+fn initialize_adapter(adapter: &mut DebugAdapter) -> TestResult {
+    match adapter.handle_request(1, "initialize", None) {
+        DapMessage::Response { success: true, .. } => Ok(()),
+        other => {
+            Err(format!("initialize should succeed before launch security checks: {other:?}")
+                .into())
+        }
+    }
+}
+
 /// Test that `-e` flag injection is blocked
 ///
 /// Vulnerability: If program argument accepts "-e", Perl would interpret the
@@ -18,13 +28,14 @@ fn test_command_injection_via_program_argument() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, rx) = channel();
     adapter.set_event_sender(tx);
+    initialize_adapter(&mut adapter)?;
 
     let args = json!({
         "program": "-e",
         "args": ["BEGIN { print \"pwned\\n\"; } exit;"]
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     // Verify response indicates failure (due to file "-e" not found)
     match response {
@@ -62,13 +73,14 @@ fn test_launch_with_nonexistent_file_errors_gracefully() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
+    initialize_adapter(&mut adapter)?;
 
     let args = json!({
         "program": "nonexistent_file_12345.pl",
         "args": []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -87,13 +99,14 @@ fn test_launch_with_empty_program_rejected() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
+    initialize_adapter(&mut adapter)?;
 
     let args = json!({
         "program": "",
         "args": []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -116,13 +129,14 @@ fn test_launch_with_whitespace_program_rejected() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
+    initialize_adapter(&mut adapter)?;
 
     let args = json!({
         "program": "   \t\n  ",
         "args": []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -145,6 +159,7 @@ fn test_launch_with_directory_rejected() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
+    initialize_adapter(&mut adapter)?;
 
     // Use tempdir for cross-platform compatibility (avoids hardcoded /tmp on non-Unix)
     let temp_dir = tempfile::tempdir()?;
@@ -155,7 +170,7 @@ fn test_launch_with_directory_rejected() -> TestResult {
         "args": []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
         DapMessage::Response { success, message, .. } => {
@@ -174,15 +189,16 @@ fn test_other_flag_injection_blocked() -> TestResult {
     let mut adapter = DebugAdapter::new();
     let (tx, _rx) = channel();
     adapter.set_event_sender(tx);
+    initialize_adapter(&mut adapter)?;
 
     // Test various dangerous flags
-    for flag in &["-E", "-n", "-p", "-i", "-0", "--"] {
+    for (offset, flag) in ["-E", "-n", "-p", "-i", "-0", "--"].into_iter().enumerate() {
         let args = json!({
             "program": flag,
             "args": []
         });
 
-        let response = adapter.handle_request(1, "launch", Some(args));
+        let response = adapter.handle_request((offset as i64) + 2, "launch", Some(args));
 
         match response {
             DapMessage::Response { success, message, .. } => {

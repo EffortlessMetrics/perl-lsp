@@ -15,13 +15,11 @@
 //! divergence in issue #353):
 //!
 //! - `DapDispatcher` rejected `configurationDone` before `initialize` with
-//!   an error containing `"before initialized"`. `DebugAdapter` is more
-//!   permissive and returns success regardless of initialization state.
-//!   Since the production server already uses `DebugAdapter`, this is the
-//!   behavior users have observed for many minor releases; the removal
-//!   only deletes the unused strict check. The test
-//!   `configuration_done_before_initialize_is_permissive` codifies the
-//!   current behavior so it is not silently changed again.
+//!   an error containing `"before initialized"`. `DebugAdapter` now rejects
+//!   `configurationDone` until a launch or attach establishes a debug
+//!   session. The test
+//!   `configuration_done_before_launch_or_attach_fails_structured` codifies
+//!   that observed production contract.
 //! - `DapDispatcher` had a failed-initialize no-event test. `DebugAdapter`
 //!   accepts initialize arguments permissively and has no corresponding
 //!   initialize failure path.
@@ -274,29 +272,23 @@ fn inline_values_returns_scalars_for_two_line_script() {
 
 // --- configurationDone --------------------------------------------------------
 
-/// Documents the deliberate divergence from `DapDispatcher`:
-/// `DebugAdapter::handle_configuration_done` (in
-/// `crates/perl-dap/src/debug_adapter/process.rs`) does not gate on the
-/// initialized state - it returns success regardless. This has been the
-/// production behavior for many releases (since `DapServer::run` has only
-/// ever wired `DebugAdapter` through stdio). Removing the unused
-/// `DapDispatcher` strict check does not change observed behavior.
-///
-/// If a future change re-introduces the strict check on `DebugAdapter`,
-/// this test will need to be updated alongside the issue documentation.
+/// Documents the production `DebugAdapter` contract:
+/// `configurationDone` before launch/attach returns a structured failure
+/// instead of claiming success without an active debug session.
 #[test]
-fn configuration_done_before_initialize_is_permissive() {
+fn configuration_done_before_launch_or_attach_fails_structured() {
     let mut adapter = DebugAdapter::new();
     let response = adapter.handle_request(1, "configurationDone", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(
-                success,
-                "DebugAdapter returns success even before initialize \
-                 (DapDispatcher's strict check was unused in production)"
-            );
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "configurationDone before launch/attach must fail");
             assert_eq!(command, "configurationDone");
+            let message = must_some(message);
+            assert!(
+                message.contains("launch or attach request must be sent before configurationDone"),
+                "expected launch/attach ordering guidance, got: {message}"
+            );
         }
         other => must(Err::<(), _>(format!("expected Response, got {other:?}"))),
     }
