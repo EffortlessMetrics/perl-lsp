@@ -1923,6 +1923,35 @@
       ]
     },
     {
+      "id": "strict_warnings_guided_edit",
+      "scenario_file": "ux_scenario_68_strict_warnings_guided_edit.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "code_actions",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "open a Perl package missing strict and warnings, request deterministic pragma quick fixes, and verify plain-edit plus snippet-capable client shapes",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "minimal clients receive plain TextEdit strict and warnings quick fixes",
+        "source.fixAll applies both pragma edits to the expected final document",
+        "snippet-capable workspace-edit clients receive SnippetTextEdit documentChanges for pragma quick fixes",
+        "deterministic pragma actions do not emit WorkspaceEdit.metadata or generated-assistance tags"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",

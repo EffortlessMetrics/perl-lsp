@@ -207,6 +207,10 @@ impl FixAllRange {
 ///   Exact-duplicate `(range, newText)` pairs are deduped by a separate hash
 ///   set, so two providers that independently suggest the same pragma each
 ///   produce only one edit in the aggregate.
+/// * Strict/warnings pragma insertions are also deduped semantically, because
+///   diagnostics and source-aware helpers can suggest the same pragma at
+///   different insertion points. The source-aware helper is added first, so the
+///   aggregate keeps its range and drops later duplicate pragma insertions.
 /// * The aggregate is only emitted when at least two distinct edits survive
 ///   conflict resolution — a single quick fix is already the preferred action
 ///   and does not need a wrapper.
@@ -247,6 +251,38 @@ fn quickfix_text_edits_for_uri<'a>(action: &'a Value, uri: &str) -> Option<Vec<&
     if collected.is_empty() { None } else { Some(collected) }
 }
 
+#[derive(Clone, Copy, Default)]
+struct PragmaInsertKeys {
+    strict: bool,
+    warnings: bool,
+}
+
+impl PragmaInsertKeys {
+    fn is_empty(self) -> bool {
+        !self.strict && !self.warnings
+    }
+
+    fn all_seen_by(self, seen: Self) -> bool {
+        (!self.strict || seen.strict) && (!self.warnings || seen.warnings)
+    }
+
+    fn mark_seen(self, seen: &mut Self) {
+        seen.strict |= self.strict;
+        seen.warnings |= self.warnings;
+    }
+}
+
+fn pragma_insert_keys(new_text: &str) -> PragmaInsertKeys {
+    match new_text {
+        "use strict;\n" => PragmaInsertKeys { strict: true, warnings: false },
+        "use warnings;\n" => PragmaInsertKeys { strict: false, warnings: true },
+        "use strict;\nuse warnings;\n" | "use strict;\nuse warnings;\n\n" => {
+            PragmaInsertKeys { strict: true, warnings: true }
+        }
+        _ => PragmaInsertKeys::default(),
+    }
+}
+
 fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {
     let mut accepted_ranges: Vec<FixAllRange> = Vec::new();
     let mut merged_edits: Vec<Value> = Vec::new();
@@ -254,6 +290,7 @@ fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {
     let mut seen_diagnostic_keys: std::collections::HashSet<String> =
         std::collections::HashSet::new();
     let mut seen_edit_keys: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut seen_pragma_insertions = PragmaInsertKeys::default();
 
     for action in code_actions {
         if action.get("kind").and_then(Value::as_str) != Some("quickfix") {
@@ -280,21 +317,42 @@ fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {
             continue;
         }
 
-        if action_ranges.iter().any(|r| accepted_ranges.iter().any(|a| a.overlaps(r))) {
+        let mut candidate_edits = Vec::new();
+        for (edit, range) in edits.iter().zip(action_ranges.iter()) {
+            let new_text = edit.get("newText").and_then(Value::as_str).unwrap_or_default();
+            let pragma_keys = pragma_insert_keys(new_text);
+            if !pragma_keys.is_empty() && pragma_keys.all_seen_by(seen_pragma_insertions) {
+                continue;
+            }
+
+            let range_repr = edit.get("range").map(|r| r.to_string()).unwrap_or_default();
+            let edit_key = format!("{range_repr}|{new_text}");
+            if seen_edit_keys.contains(&edit_key) {
+                continue;
+            }
+
+            candidate_edits.push((edit, *range, edit_key, pragma_keys));
+        }
+
+        if candidate_edits.is_empty() {
+            continue;
+        }
+
+        if candidate_edits
+            .iter()
+            .any(|(_, range, _, _)| accepted_ranges.iter().any(|a| a.overlaps(range)))
+        {
             continue;
         }
 
         // Accept the action: record its ranges and copy its edits verbatim,
         // deduping identical (range, newText) pairs so two providers that
         // both add `use strict;\n` at offset 0 produce a single edit.
-        accepted_ranges.extend(action_ranges.iter().copied());
-        for edit in edits {
-            let new_text = edit.get("newText").and_then(Value::as_str).unwrap_or_default();
-            let range_repr = edit.get("range").map(|r| r.to_string()).unwrap_or_default();
-            let key = format!("{range_repr}|{new_text}");
-            if seen_edit_keys.insert(key) {
-                merged_edits.push(edit.clone());
-            }
+        for (edit, range, edit_key, pragma_keys) in candidate_edits {
+            seen_edit_keys.insert(edit_key);
+            pragma_keys.mark_seen(&mut seen_pragma_insertions);
+            accepted_ranges.push(range);
+            merged_edits.push((*edit).clone());
         }
 
         if let Some(diags) = action.get("diagnostics").and_then(Value::as_array) {
@@ -452,6 +510,17 @@ impl LspServer {
                 (start_offset, end_offset),
                 &diagnostics,
             );
+
+            // Add missing pragma actions (use strict / use warnings) before
+            // provider-specific diagnostics so `source.fixAll` prefers the
+            // source-aware insertion point when multiple providers suggest the
+            // same pragma.
+            let mut pragma_actions =
+                crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.text);
+            for action in &mut pragma_actions {
+                self.fill_pragma_action_edit(action, doc);
+            }
+            code_actions.extend(pragma_actions);
 
             // Add Perl::Critic quick fixes
             let builtin_analyzer = BuiltInAnalyzer::new();
@@ -690,14 +759,6 @@ impl LspServer {
                     }
                 }));
             }
-
-            // Add missing pragma actions (use strict / use warnings) when applicable
-            let mut pragma_actions =
-                crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.text);
-            for action in &mut pragma_actions {
-                self.fill_pragma_action_edit(action, doc);
-            }
-            code_actions.extend(pragma_actions);
 
             // Multiple providers can emit the same fix for the same finding;
             // collapse byte-identical actions before aggregating or returning so
@@ -1805,6 +1866,39 @@ mod tests {
         let texts: Vec<&str> = edits.iter().filter_map(|edit| edit["newText"].as_str()).collect();
         assert!(texts.contains(&"use strict;\n"));
         assert!(texts.contains(&"use warnings;\n"));
+    }
+
+    #[test]
+    fn build_source_fix_all_deduplicates_semantic_pragma_insertions() {
+        let uri = "file:///pragma_dupes.pl";
+        let actions = vec![
+            make_quickfix(uri, 1, 0, 0, "use strict;\n", "Add use strict;", Some("PL100")),
+            make_quickfix(uri, 1, 0, 0, "use warnings;\n", "Add use warnings;", Some("PL101")),
+            make_quickfix(uri, 0, 0, 0, "use strict;\n", "Add 'use strict'", Some("PL100")),
+            make_quickfix(uri, 0, 0, 0, "use warnings;\n", "Add 'use warnings'", Some("PL101")),
+            make_quickfix(
+                uri,
+                0,
+                0,
+                0,
+                "use strict;\nuse warnings;\n",
+                "Add 'use strict' and 'use warnings'",
+                Some("PL100"),
+            ),
+        ];
+
+        let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
+        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
+        assert_eq!(edits.len(), 2, "semantic pragma duplicates must dedupe: {edits:#?}");
+
+        let texts: Vec<&str> = edits.iter().filter_map(|edit| edit["newText"].as_str()).collect();
+        assert_eq!(texts, vec!["use strict;\n", "use warnings;\n"]);
+
+        let start_lines: Vec<u64> = edits
+            .iter()
+            .filter_map(|edit| edit.pointer("/range/start/line").and_then(Value::as_u64))
+            .collect();
+        assert_eq!(start_lines, vec![1, 1], "fixAll should keep source-aware pragma ranges");
     }
 
     #[test]
