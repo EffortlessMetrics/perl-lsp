@@ -20,7 +20,7 @@
 //!
 //! Each snapshot entry records:
 //! - `fixture_id` — stable identifier for the source fixture
-//! - `source_hash` — SHA-256 of the source text (hex, lowercase)
+//! - `source_hash` — within-build-deterministic hash of the source text (hex, lowercase)
 //! - `hir_schema_version` — monotonic HIR schema model version string
 //! - `hir_summary` — deterministic structural summary of the lowered `HirFile`
 //!
@@ -76,7 +76,12 @@ pub struct HirSummary {
 pub struct SnapshotEntry {
     /// Stable fixture identifier (matches the fixture filename stem).
     pub fixture_id: String,
-    /// SHA-256 hex digest of the fixture source text (lowercase, no prefix).
+    /// Within-build-deterministic hash of the fixture source text (lowercase hex, no prefix).
+    ///
+    /// Computed via [`source_hash`]. **Not** SHA-256, **not** stable across Rust
+    /// versions or platforms — suitable only for within-environment drift detection.
+    /// FIXME: if cross-version or cross-machine snapshot persistence is ever required,
+    /// migrate to a named stable digest (e.g. the `sha2` crate).
     pub source_hash: String,
     /// HIR schema version at snapshot generation time.
     pub hir_schema_version: String,
@@ -152,24 +157,29 @@ impl SnapshotManifest {
     }
 }
 
-/// Compute the SHA-256 hex digest of a source string.
+/// Compute a within-build-deterministic hash of a source string.
 ///
-/// Uses a portable pure-Rust implementation. The digest is lowercase hex
-/// without any prefix.
+/// Returns lowercase hex without any prefix. The output is 32 characters
+/// (two concatenated 64-bit `DefaultHasher` values encoded as 16-hex-char each).
+///
+/// # Stability caveats
+///
+/// `std::collections::hash_map::DefaultHasher` is **not** SHA-256, **not** FNV,
+/// and **not** stable across Rust versions or platforms — its output can change
+/// between Rust releases or between machines. This function is intentionally
+/// scoped to **within-environment drift detection** (the snapshot rail defined by
+/// PLSP-SPEC-0033 needs only within-run consistency).
+///
+/// FIXME: if cross-version or cross-machine snapshot persistence is ever required,
+/// replace this with a named stable digest (e.g. the `sha2` crate).
 pub fn source_hash(source: &str) -> String {
-    // Minimal SHA-256 using std::collections::hash_map::DefaultHasher is not
-    // cryptographic. We use a simple, stable manual SHA-256 via the sha2-like
-    // round-based approach. Since we only need *determinism*, not
-    // *cryptographic strength*, we use a well-known stable deterministic hash.
-    //
-    // NOTE: We avoid pulling in the `sha2` crate to keep deps minimal.
-    // Instead we use a reproducible FNV-style 64-bit hash over bytes and
-    // encode it as a padded 64-char hex string (zero-padded to look like a
-    // short hash). This is stable within one build and across platforms.
+    // Uses two independent DefaultHasher seeds to spread 128 bits of hash output
+    // while staying dependency-free. This is sufficient for within-build drift
+    // detection — it is NOT a cryptographic or cross-platform hash.
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
-    // Two independent seeds for 128-bit spread (avoids collisions for small
+    // Two independent seeds for 128-bit spread (reduces collisions for small
     // fixtures while staying dependency-free).
     let mut h1 = DefaultHasher::new();
     source.hash(&mut h1);
