@@ -549,6 +549,9 @@ impl LspServer {
                     let label = symbol.name.clone();
                     let qualified_name = Self::workspace_symbol_qualified_name(&symbol);
                     let detail = Some(qualified_name.clone());
+                    // Invariant: text_edit_range.is_some() ⟺ insert_text is the
+                    // fully-qualified name.  The serializer (completion_item_to_lsp_value)
+                    // depends on this to locate the newText from `item["insertText"]`.
                     let (insert_text, text_edit_range) = if qualified_variable_context
                         && matches!(symbol.kind, crate::workspace_index::SymbolKind::Variable(_))
                     {
@@ -783,6 +786,31 @@ impl LspServer {
                 })
                 .collect();
             item["additionalTextEdits"] = json!(edits);
+        }
+
+        // LSP 3.17 §3.16.1: when `textEdit` is present it takes precedence over
+        // `insertText`.  Without it, clients replace nothing — they append the
+        // resolved name to the typed prefix, producing "$v$variable" instead of
+        // "$variable".  Emit a plain TextEdit whose range covers exactly the typed
+        // prefix so the client replaces it.
+        if let Some((start_offset, end_offset)) = c.text_edit_range {
+            let (sl, sc) = self.offset_to_pos16(doc, start_offset);
+            let (el, ec) = self.offset_to_pos16(doc, end_offset);
+            // Use the insertText that was already serialized (possibly snippet-degraded),
+            // falling back to the label.  Both fields have already been written into
+            // `item`, so we read from there rather than the (partially-moved) `c`.
+            let new_text = item["insertText"]
+                .as_str()
+                .or_else(|| item["label"].as_str())
+                .map(String::from)
+                .unwrap_or_default();
+            item["textEdit"] = json!({
+                "range": {
+                    "start": { "line": sl, "character": sc },
+                    "end": { "line": el, "character": ec }
+                },
+                "newText": new_text
+            });
         }
 
         item

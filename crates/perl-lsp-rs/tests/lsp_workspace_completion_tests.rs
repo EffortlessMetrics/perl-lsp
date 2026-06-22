@@ -82,6 +82,27 @@ fn await_open_processing(server: &common::LspServer) {
     drain_until_quiet(server, Duration::from_millis(50), Duration::from_millis(500));
 }
 
+/// Wait for the workspace index to incorporate a freshly opened module.
+///
+/// After `textDocument/didOpen` for a module file, the server dispatches a
+/// background task (tokio blocking pool) to extract and insert symbols into
+/// the workspace index.  No LSP notification is emitted when a per-file
+/// background indexing task completes (the `perl-lsp/index-ready` notification
+/// is sent once during `initialized` and is consumed by `initialize_lsp`).
+///
+/// This helper drains pending LSP traffic first, then waits a fixed interval
+/// to give the blocking-pool task time to commit its symbol insertions.  The
+/// 500ms wall-clock budget is generous enough for debug builds on slow CI
+/// machines while remaining acceptable in total test time.
+fn await_module_indexed(server: &common::LspServer) {
+    // Drain any pending diagnostics / notifications from the didOpen.
+    drain_until_quiet(server, Duration::from_millis(50), Duration::from_millis(500));
+    // Fixed sleep: the background indexing task emits no notification when it
+    // completes, so we must wait a wall-clock budget for it to finish.
+    // 500ms is sufficient for debug-build Perl symbol extraction on slow machines.
+    std::thread::sleep(Duration::from_millis(500));
+}
+
 /// Test cross-file function completion
 ///
 /// When a user types a function name, the completion provider should suggest
@@ -636,6 +657,219 @@ fn test_completion_detail_includes_literal_bless_confidence_label()
         detail.contains("receiver: literal bless, medium confidence"),
         "literal bless completion detail should expose medium-confidence receiver evidence. Got: {detail:?}"
     );
+
+    Ok(())
+}
+
+/// Verify that `textEdit` is emitted for qualified variable completions.
+///
+/// LSP 3.17 §3.16.1: when a `textEdit` is present it takes precedence over
+/// `insertText`.  Without `textEdit`, clients insert the full resolved name
+/// *after* the typed prefix rather than replacing it, producing "$v$variable"
+/// instead of "$variable".
+///
+/// Setup: index `Cfg.pm` (contains `our $CFG_VALUE`), then request completion
+/// at the cursor position after `$Cfg::CF` in a usage file.  The returned item
+/// should carry a `textEdit` whose range covers exactly the typed prefix and
+/// whose `newText` equals the full qualified label.
+#[test]
+fn test_completion_textedit_replaces_qualified_prefix() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    // Index a module that exposes a package variable.
+    let module_uri = "file:///workspace/Cfg.pm";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": module_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package Cfg;\n\nour $CFG_VALUE = 1;\n\n1;\n"
+                }
+            }
+        }),
+    );
+    // Wait for the workspace index to incorporate $CFG_VALUE before requesting completion.
+    await_module_indexed(&server);
+
+    // Open a usage file with a partially-typed qualified variable.
+    //
+    // Text (0-indexed columns):
+    //   "my $x = $Cfg::CF"
+    //    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+    //                        1 1 1 1 1 1
+    //
+    // "my $x = " = 8 chars (cols 0-7).  "$Cfg::CF" = 8 chars (cols 8-15).
+    // Cursor is at column 16 (one past the last char).  The typed prefix is
+    // "$Cfg::CF" (8 bytes), so the replace range is columns [8, 16) on line 0.
+    let script_uri = "file:///workspace/cfg_usage.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": script_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = $Cfg::CF"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    // Request completion at end-of-prefix (line 0, char 16).
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": script_uri },
+                "position": { "line": 0, "character": 16 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+
+    // Find the CFG_VALUE completion item.
+    let cfg_item = items
+        .iter()
+        .find(|item| item["label"].as_str().map_or(false, |l| l.contains("CFG_VALUE")))
+        .ok_or_else(|| format!("Expected a CFG_VALUE completion item. Got items: {items:?}"))?;
+
+    // The item must carry a `textEdit` field.
+    let text_edit =
+        cfg_item.get("textEdit").ok_or("Expected textEdit field on CFG_VALUE completion item")?;
+
+    // Range must cover exactly the typed prefix: start col 8, end col 16 on line 0.
+    let start = &text_edit["range"]["start"];
+    let end = &text_edit["range"]["end"];
+    assert_eq!(start["line"], 0, "textEdit start line");
+    assert_eq!(start["character"], 8, "textEdit start character (after 'my $x = ')");
+    assert_eq!(end["line"], 0, "textEdit end line");
+    assert_eq!(end["character"], 16, "textEdit end character (end of '$Cfg::CF')");
+
+    // newText must be the fully-qualified variable name, not just the bare label.
+    // An exact-equality check catches the regression this PR fixes: without the
+    // textEdit field, clients append the resolved name *after* the prefix; with it,
+    // newText must be the complete replacement string "$Cfg::CFG_VALUE".
+    let new_text = text_edit["newText"].as_str().ok_or("textEdit.newText must be a string")?;
+    assert_eq!(new_text, "$Cfg::CFG_VALUE", "textEdit.newText must be the fully-qualified name");
+
+    Ok(())
+}
+
+/// Like `test_completion_textedit_replaces_qualified_prefix` but with a multibyte character
+/// before the cursor to verify UTF-16 position encoding.
+///
+/// The pound sign `£` (U+00A3) is a 2-byte UTF-8 sequence but a single UTF-16 code unit,
+/// so UTF-16 column indices equal UTF-8 column indices here (both advance by 1 code unit).
+/// This test confirms the offset→position conversion path produces correct UTF-16 columns
+/// even when non-ASCII bytes precede the typed prefix.
+#[test]
+fn test_completion_textedit_utf16_position() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    // Index a module with a qualified variable.
+    let module_uri = "file:///workspace/Enc.pm";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": module_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package Enc;\n\nour $ENC_KEY = 'utf8';\n\n1;\n"
+                }
+            }
+        }),
+    );
+    // Wait for the workspace index to incorporate $ENC_KEY before requesting completion.
+    await_module_indexed(&server);
+
+    // Open a usage file.  The `£` sign is U+00A3: 2 UTF-8 bytes, 1 UTF-16 code unit.
+    //
+    // Text: "my $cost = £$Enc::EN"  (21 bytes total)
+    //
+    // UTF-8 byte layout:
+    //   m  y     $  c  o  s  t     =     £(hi) £(lo) $  E  n  c  :  :  E  N
+    //   0  1  2  3  4  5  6  7  8  9 10    11    12  13 14 15 16 17 18 19 20
+    //
+    // UTF-16 code-unit layout (£ is U+00A3, in BMP → 1 UTF-16 unit):
+    //   m  y     $  c  o  s  t     =     £  $  E  n  c  :  :  E  N
+    //   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
+    //
+    // "$Enc::EN" starts at byte 13 (UTF-16 col 12) and ends at byte 21
+    // (UTF-16 col 20).  The cursor is placed at UTF-16 col 20 (end of prefix).
+    let script_uri = "file:///workspace/enc_usage.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": script_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $cost = \u{00A3}$Enc::EN"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    // Cursor at end of `$Enc::EN`:
+    //   UTF-8 offset 21 → UTF-16 col 20 (£ costs 2 UTF-8 bytes, 1 UTF-16 unit)
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": script_uri },
+                "position": { "line": 0, "character": 20 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+
+    // Find the ENC_KEY completion item.
+    let enc_item = items
+        .iter()
+        .find(|item| item["label"].as_str().map_or(false, |l| l.contains("ENC_KEY")))
+        .ok_or_else(|| format!("Expected an ENC_KEY completion item. Got items: {items:?}"))?;
+
+    let text_edit =
+        enc_item.get("textEdit").ok_or("Expected textEdit field on ENC_KEY completion item")?;
+
+    // UTF-16 positions: prefix starts at col 12, ends at col 20.
+    let start = &text_edit["range"]["start"];
+    let end = &text_edit["range"]["end"];
+    assert_eq!(start["line"], 0, "textEdit start line");
+    assert_eq!(
+        start["character"], 12,
+        "textEdit start character (UTF-16 col after 'my $cost = £')"
+    );
+    assert_eq!(end["line"], 0, "textEdit end line");
+    assert_eq!(end["character"], 20, "textEdit end character (UTF-16 col at end of '$Enc::EN')");
+
+    let new_text = text_edit["newText"].as_str().ok_or("textEdit.newText must be a string")?;
+    assert_eq!(new_text, "$Enc::ENC_KEY", "textEdit.newText must be the fully-qualified name");
 
     Ok(())
 }
