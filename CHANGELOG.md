@@ -19,11 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Explicit configuration always takes precedence. (#1899, issue #1777)
 - **Default native formatter honors the discovered `.perltidyrc`.** The
   supported scalar options in a discovered profile (line width, indent, tabs,
-  brace/else placement, keyword spacing, trailing commas) are parsed once at
-  `initialize` and feed the native formatter, so project formatting applies in
-  the default engine — not just `external-legacy` mode. Explicitly configured
-  fields still win per option; a discovered profile is never mixed with an
-  explicitly configured `perltidy_profile`. (#2016, issue #1953)
+  brace/else placement, keyword spacing, trailing commas) are parsed at
+  `initialize` and applied to the server config as a layer between the built-in
+  defaults and user configuration, so project formatting applies in the default
+  native engine — not just `external-legacy` mode. Precedence: built-in
+  defaults < discovered profile < `.perl-lsp.toml` / `didChangeConfiguration`,
+  so an explicitly configured field still wins. (#2016, #2025, issue #1953)
 - **First-run doctor report.** `perllsp --doctor [dir]` now prints a read-only
   workspace setup report covering project config, Perl interpreter probing,
   configured include roots, `PERL5LIB`, system `@INC`, rejected roots, and the

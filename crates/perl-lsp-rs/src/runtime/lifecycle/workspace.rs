@@ -10,39 +10,33 @@ use std::sync::Once;
 /// Fires at most once per LSP session, when Perl is not found anywhere.
 static PERL_NOT_FOUND_WARNED: Once = Once::new();
 
-/// Read a `.perltidyrc` profile and extract the native-formatter scalar options
-/// it maps to (line width, indent, tab/brace/else/keyword/trailing-comma).
-///
-/// Returns `None` if the file cannot be read; an unreadable or empty profile
-/// simply contributes no options. The parsing/classification is delegated to
-/// the shared `classify_perltidy_profile` machinery so the editor and the
-/// `native-format perltidy-compat` report agree on the mapping.
-fn read_perltidy_native_options(
-    path: &str,
-) -> Option<perl_lsp_rs_core::tooling::native_compat::PerltidyNativeConfigSuggestion> {
-    let raw = std::fs::read_to_string(path).ok()?;
-    Some(perl_lsp_rs_core::tooling::native_compat::classify_perltidy_profile(&raw).suggested_config)
-}
-
 impl LspServer {
     /// Set the root path from the root URI during initialization
     ///
     /// Also performs one-time `.perltidyrc` discovery for the workspace so a
-    /// project-local profile applies without explicit configuration. Discovery
-    /// runs here (at initialize) rather than on every format request; an
-    /// explicitly configured `perltidy_profile` still takes precedence when the
-    /// formatter config is built.
+    /// project-local profile applies without explicit configuration. The
+    /// discovered profile's supported scalar options are applied to the server
+    /// config here — at initialize, **before** `.perl-lsp.toml` and
+    /// `didChangeConfiguration` are applied — so they override the built-in
+    /// defaults while explicit user configuration still wins. The discovered
+    /// path is also cached for the external adapter (`--profile`). An explicitly
+    /// configured `perltidy_profile` takes precedence when the formatter config
+    /// is built.
     pub(crate) fn set_root_uri(&self, root_uri: &str) {
         let root_path = super::super::source_path_from_uri(root_uri);
         let discovered =
             root_path.as_deref().and_then(perl_lsp_rs_core::config::discover_perltidy_profile);
-        // Parse the discovered profile's supported scalar options once so the
-        // default native formatter can honor them (the external path passes the
-        // profile via --profile; the native path consumes scalar config fields).
-        let discovered_options = discovered.as_deref().and_then(read_perltidy_native_options);
+        let discovered_options =
+            discovered.as_deref().and_then(super::super::read_perltidy_native_options);
         *self.root_path.lock() = root_path;
         *self.discovered_perltidy_profile.lock() = discovered;
-        *self.discovered_perltidy_options.lock() = discovered_options;
+        // Apply the discovered profile's options as a base layer over the
+        // built-in defaults. This must happen before user config is applied;
+        // a per-request `.or()` merge cannot work because the defaults are
+        // `Some(..)` and would always short-circuit the profile value.
+        if let Some(options) = discovered_options {
+            self.config.lock().apply_perltidy_native_options(&options);
+        }
     }
 
     /// Detect the Perl interpreter and surface an actionable message if not found.
@@ -258,20 +252,24 @@ mod tests {
     }
 
     #[test]
-    fn set_root_uri_parses_discovered_perltidyrc_native_options() -> std::io::Result<()> {
+    fn set_root_uri_applies_discovered_perltidyrc_options_to_config() -> std::io::Result<()> {
         let server = LspServer::new();
         let temp = tempfile::tempdir()?;
-        std::fs::write(temp.path().join(".perltidyrc"), "-l=100\n-i 2\n")?;
+        std::fs::write(temp.path().join(".perltidyrc"), "-l=120\n-i 3\n")?;
 
         server.set_root_uri(&format!("file://{}", temp.path().display()));
 
-        let opts = server.discovered_perltidy_options.lock().clone();
+        // The discovered profile is applied at initialize and overrides the
+        // built-in defaults (which are Some(80)/Some(4)), so the native
+        // formatter actually honors the project profile. Workspace-first search
+        // keeps this assertion independent of any ambient $HOME/$PERLTIDY profile.
+        let config = server.config.lock();
         assert_eq!(
-            opts.as_ref().and_then(|o| o.perltidy_maximum_line_length),
-            Some(100),
-            "discovered profile's line width should be parsed for native formatting"
+            config.perltidy_maximum_line_length,
+            Some(120),
+            "discovered profile's line width must override the built-in default (80)"
         );
-        assert_eq!(opts.as_ref().and_then(|o| o.perltidy_indent_columns), Some(2));
+        assert_eq!(config.perltidy_indent_columns, Some(3));
         Ok(())
     }
 

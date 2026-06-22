@@ -1201,6 +1201,44 @@ fn discover_perltidy_profile_from(
     None
 }
 
+impl ServerConfig {
+    /// Apply native-formatter scalar options parsed from a `.perltidyrc` profile
+    /// as a base layer, overwriting only the fields the profile actually sets.
+    ///
+    /// This is intended to run **after** the built-in defaults but **before**
+    /// user configuration (`.perl-lsp.toml` / `didChangeConfiguration`), so a
+    /// project-local profile beats the built-in defaults while an explicitly
+    /// configured field still wins. It must not be applied at format time:
+    /// because the built-in defaults are `Some(..)`, a per-request `.or()` merge
+    /// can never reach the profile value.
+    pub fn apply_perltidy_native_options(
+        &mut self,
+        options: &crate::tooling::native_compat::PerltidyNativeConfigSuggestion,
+    ) {
+        if let Some(value) = options.perltidy_maximum_line_length {
+            self.perltidy_maximum_line_length = Some(value);
+        }
+        if let Some(value) = options.perltidy_indent_columns {
+            self.perltidy_indent_columns = Some(value);
+        }
+        if let Some(value) = options.perltidy_tabs {
+            self.perltidy_tabs = Some(value);
+        }
+        if let Some(value) = options.perltidy_opening_brace_on_new_line {
+            self.perltidy_opening_brace_on_new_line = Some(value);
+        }
+        if let Some(value) = options.perltidy_cuddled_else {
+            self.perltidy_cuddled_else = Some(value);
+        }
+        if let Some(value) = options.perltidy_space_after_keyword {
+            self.perltidy_space_after_keyword = Some(value);
+        }
+        if let Some(value) = options.perltidy_add_trailing_commas {
+            self.perltidy_add_trailing_commas = Some(value);
+        }
+    }
+}
+
 impl ProjectConfig {
     /// Apply project config to `ServerConfig` as the base layer.
     ///
@@ -1349,6 +1387,30 @@ mod tests {
 
         assert_eq!(discovered.as_deref(), profile.to_str());
         Ok(())
+    }
+
+    #[test]
+    fn apply_perltidy_native_options_overrides_only_specified_fields() {
+        let mut config = ServerConfig::default();
+        // Built-in defaults that the profile must be able to override.
+        assert_eq!(config.perltidy_maximum_line_length, Some(80));
+        assert_eq!(config.perltidy_indent_columns, Some(4));
+
+        // Profile sets only the line width.
+        let options =
+            crate::tooling::native_compat::classify_perltidy_profile("-l=120\n").suggested_config;
+        config.apply_perltidy_native_options(&options);
+
+        assert_eq!(
+            config.perltidy_maximum_line_length,
+            Some(120),
+            "the profile's line width must override the built-in default"
+        );
+        assert_eq!(
+            config.perltidy_indent_columns,
+            Some(4),
+            "fields the profile does not set must be left unchanged"
+        );
     }
 
     #[test]

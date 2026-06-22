@@ -6,7 +6,8 @@
 use crate::runtime::diagnostics::PullDiagnosticsOrchestrator;
 use crate::runtime::types::{
     DocumentScanView, PendingWorkspaceConfigurationRequest, ServerRequestId,
-    best_workspace_folder_for_doc, source_path_from_uri, workspace_folder_path,
+    best_workspace_folder_for_doc, read_perltidy_native_options, source_path_from_uri,
+    workspace_folder_path,
 };
 use crate::runtime::workspace_folder::WorkspaceFolderState;
 
@@ -174,19 +175,14 @@ pub struct LspServer {
     workspace_folders: Arc<Mutex<Vec<WorkspaceFolderState>>>,
     /// Root path for module resolution
     root_path: Arc<Mutex<Option<PathBuf>>>,
-    /// Cached `.perltidyrc` profile discovered from the workspace root during
+    /// `.perltidyrc` profile path discovered from the workspace root during
     /// initialization. `None` means discovery has not run or found nothing; an
     /// explicitly configured `perltidy_profile` always takes precedence over
-    /// this value when building a formatter config.
+    /// this value when building a formatter config. The discovered profile's
+    /// scalar options are applied to the server config at initialize time (see
+    /// `set_root_uri`); this field retains the path for the external adapter's
+    /// `--profile` argument.
     discovered_perltidy_profile: Arc<Mutex<Option<String>>>,
-    /// Native-formatter scalar options parsed from the discovered `.perltidyrc`
-    /// at initialization (line width, indent, brace/else placement, etc.). These
-    /// fill the corresponding formatter-config fields only when no explicit
-    /// `perltidy_profile` is configured and the user has not set the field
-    /// directly, so the default native formatter honors a project-local profile.
-    discovered_perltidy_options: Arc<
-        Mutex<Option<perl_lsp_rs_core::tooling::native_compat::PerltidyNativeConfigSuggestion>>,
-    >,
     /// Advertised server capabilities
     advertised_features: Mutex<crate::protocol::capabilities::AdvertisedFeatures>,
     /// Client supports pull diagnostics
