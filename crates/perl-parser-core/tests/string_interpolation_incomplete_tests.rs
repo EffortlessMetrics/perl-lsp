@@ -40,6 +40,26 @@ fn assert_has_unclosed_interpolation_diagnostic(source: &str) -> R {
     Ok(())
 }
 
+fn assert_no_unclosed_interpolation_diagnostic(source: &str) -> R {
+    let mut parser = Parser::new(source);
+    let parsed = parser.parse_with_recovery();
+
+    let has_unclosed = parsed
+        .diagnostics
+        .iter()
+        .map(ToString::to_string)
+        .any(|diag| diag.contains("Unclosed") && diag.contains("interpolated"));
+    if has_unclosed {
+        return Err(format!(
+            "Did not expect unclosed interpolation diagnostics for source:\n{source}\n\nDiagnostics:\n{:?}",
+            parsed.diagnostics
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
 #[test]
 fn double_quote_incomplete_hash_key() -> R {
     let source = r#"my $msg = "Key: $hash{incomplete";"#;
@@ -98,6 +118,32 @@ fn double_quote_incomplete_arrow_paren_call() -> R {
 }
 
 #[test]
+fn double_quote_dbi_prepare_incomplete_hash_field() -> R {
+    let source = r#"
+my $sth = $dbh->prepare("select * from users where id = $params->{id");
+"#;
+    assert_clean_sexp_without_error_nodes(source)?;
+    assert_has_unclosed_interpolation_diagnostic(source)?;
+    Ok(())
+}
+
+#[test]
+fn double_quote_sql_partial_scalar_is_clean() -> R {
+    let source = r#"my $sql = "select * from users where name like $na";"#;
+    assert_clean_sexp_without_error_nodes(source)?;
+    assert_no_unclosed_interpolation_diagnostic(source)?;
+    Ok(())
+}
+
+#[test]
+fn double_quote_partial_arrow_after_scalar_is_literal() -> R {
+    let source = r#"my $msg = "Value: $obj->";"#;
+    assert_clean_sexp_without_error_nodes(source)?;
+    assert_no_unclosed_interpolation_diagnostic(source)?;
+    Ok(())
+}
+
+#[test]
 fn double_quote_incomplete_block_deref() -> R {
     // "${incomplete" — block-dereference form (${expr}) with missing closing brace
     let source = r#"my $msg = "Deref: ${incomplete";"#;
@@ -110,21 +156,7 @@ fn double_quote_incomplete_block_deref() -> R {
 fn double_quote_complete_interpolation_cases() -> R {
     let source = r#"my $msg = "Complete: $hash{key} $array[0] $obj->{field}";"#;
     assert_clean_sexp_without_error_nodes(source)?;
-
-    let mut parser = Parser::new(source);
-    let parsed = parser.parse_with_recovery();
-    let has_unclosed = parsed
-        .diagnostics
-        .iter()
-        .map(ToString::to_string)
-        .any(|diag| diag.contains("Unclosed") && diag.contains("interpolated"));
-    if has_unclosed {
-        return Err(format!(
-            "Did not expect unclosed interpolation diagnostics for complete interpolation. Diagnostics: {:?}",
-            parsed.diagnostics
-        )
-        .into());
-    }
+    assert_no_unclosed_interpolation_diagnostic(source)?;
 
     Ok(())
 }
