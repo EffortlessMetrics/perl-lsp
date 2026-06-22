@@ -132,7 +132,7 @@ impl DebugAdapter {
                 Some(args.clone());
 
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
-            let perl_interpreter = args.get("perl").and_then(|p| p.as_str()).unwrap_or("perl");
+            let perl_interpreter = Self::resolve_launch_interpreter(&args);
 
             // Set workspace root for path validation (prefer cwd, fall back to program's parent)
             let workspace = args
@@ -171,7 +171,7 @@ impl DebugAdapter {
             // Launch Perl debugger
             match self.launch_debugger(
                 program,
-                perl_interpreter,
+                &perl_interpreter,
                 perl_args,
                 stop_on_entry,
                 env_overrides,
@@ -233,7 +233,59 @@ impl DebugAdapter {
         }
     }
 
-    /// Launch the Perl debugger
+    /// Resolve the Perl interpreter for a debug launch from its `launch.json`
+    /// arguments.
+    ///
+    /// Resolution order:
+    ///
+    /// 1. An explicit, non-empty interpreter from either the documented
+    ///    `perlPath` key (the camelCase form of [`LaunchConfiguration`]'s
+    ///    `perl_path`) or the `perl` alias is honored **verbatim** — the user's
+    ///    deliberate choice always wins.
+    /// 2. Otherwise, if the launch config supplies its own `PATH` via `env`, the
+    ///    bare `"perl"` is kept so the launch-specific `PATH` selects the
+    ///    interpreter at spawn time. Resolving here would consult the parent
+    ///    process environment and silently ignore that `PATH`.
+    /// 3. Otherwise the interpreter is resolved through the shared
+    ///    [`PerlToolchainProfile`] so the debug session uses the same
+    ///    toolchain-detected interpreter (perlbrew → plenv → `PATH`) the LSP
+    ///    analyzes with, closing the DAP/LSP "which perl?" gap (#1929).
+    /// 4. If nothing resolves, falls back to `"perl"`, preserving the previous
+    ///    default so the launch still produces the usual "perl not on PATH"
+    ///    diagnostic.
+    ///
+    /// [`LaunchConfiguration`]: perl_dap_config::LaunchConfiguration
+    /// [`PerlToolchainProfile`]: perl_lsp_rs_core::config::PerlToolchainProfile
+    fn resolve_launch_interpreter(args: &Value) -> String {
+        let explicit = args
+            .get("perlPath")
+            .and_then(|p| p.as_str())
+            .or_else(|| args.get("perl").and_then(|p| p.as_str()))
+            .filter(|p| !p.is_empty());
+        if let Some(path) = explicit {
+            return path.to_string();
+        }
+
+        let launch_overrides_path = args
+            .get("env")
+            .and_then(Value::as_object)
+            .is_some_and(|env| env.keys().any(|key| key.eq_ignore_ascii_case("PATH")));
+        if launch_overrides_path {
+            return "perl".to_string();
+        }
+
+        perl_lsp_rs_core::config::PerlToolchainProfile::resolve(
+            &perl_lsp_rs_core::config::WorkspaceConfig::default(),
+        )
+        .map(|profile| profile.into_perl_binary().to_string_lossy().into_owned())
+        .unwrap_or_else(|| "perl".to_string())
+    }
+
+    /// Launch the Perl debugger for the given script.
+    ///
+    /// Validates the program path and interpreter, runs a pre-launch `perl -c`
+    /// syntax check, then spawns `perl -d` with the supplied arguments and
+    /// environment overrides. Returns the thread ID on success.
     pub(super) fn launch_debugger(
         &mut self,
         program: &str,
@@ -1731,6 +1783,70 @@ mod tests {
     use super::{
         DebugAdapter, detect_perl_info, format_perl_spawn_error, is_valid_perl_interpreter,
     };
+
+    /// An explicit, non-empty interpreter is honored verbatim — from the
+    /// documented `perlPath` key or the `perl` alias — and the toolchain
+    /// resolver must not override the user's deliberate choice.
+    #[test]
+    fn resolve_launch_interpreter_honors_explicit_value() {
+        let perl_alias = serde_json::json!({ "perl": "/usr/bin/perl" });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&perl_alias), "/usr/bin/perl");
+
+        let perl_path_key = serde_json::json!({ "perlPath": "/opt/perlbrew/perls/x/bin/perl" });
+        assert_eq!(
+            DebugAdapter::resolve_launch_interpreter(&perl_path_key),
+            "/opt/perlbrew/perls/x/bin/perl"
+        );
+
+        // An explicit interpreter wins even when the launch config also sets PATH.
+        let explicit_with_path = serde_json::json!({
+            "perl": "/custom/perl",
+            "env": { "PATH": "/custom/bin" },
+        });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&explicit_with_path), "/custom/perl");
+    }
+
+    /// The documented `perlPath` key takes precedence over the `perl` alias when
+    /// both are present.
+    #[test]
+    fn resolve_launch_interpreter_prefers_perlpath_over_perl_alias() {
+        let both = serde_json::json!({ "perlPath": "/canonical/perl", "perl": "/alias/perl" });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&both), "/canonical/perl");
+    }
+
+    /// When the launch config supplies its own `PATH` via `env` and no explicit
+    /// interpreter, the bare `"perl"` is kept so the launch `PATH` selects the
+    /// interpreter at spawn time — resolving against the parent environment here
+    /// would ignore it. Regression guard for the #2026 review.
+    #[test]
+    fn resolve_launch_interpreter_defers_to_launch_path_override() {
+        let path_override = serde_json::json!({ "env": { "PATH": "/project/perl/bin" } });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&path_override), "perl");
+
+        // Case-insensitive key match (Windows-style `Path`).
+        let win_path = serde_json::json!({ "env": { "Path": "C:/perl/bin" } });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&win_path), "perl");
+    }
+
+    /// With no explicit interpreter and no launch `PATH` override, the
+    /// interpreter is resolved through the shared toolchain profile rather than
+    /// defaulting to a bare `"perl"`. The result is never empty: either a real
+    /// resolved path or the `"perl"` fallback when nothing can be found.
+    #[test]
+    fn resolve_launch_interpreter_resolves_default_via_profile() {
+        for args in [
+            serde_json::json!({}),
+            serde_json::json!({ "perl": "" }),
+            serde_json::json!({ "env": { "RUST_LOG": "debug" } }),
+        ] {
+            let resolved = DebugAdapter::resolve_launch_interpreter(&args);
+            assert!(!resolved.is_empty(), "resolved interpreter must never be empty");
+            assert!(
+                resolved == "perl" || resolved.to_lowercase().contains("perl"),
+                "resolved default should be a perl interpreter; got: {resolved:?}"
+            );
+        }
+    }
 
     #[test]
     fn missing_module_name_parses_standard_module_path() {

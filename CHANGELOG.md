@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **DAP debug sessions use the same Perl interpreter as LSP analysis.** When a
+  `launch.json` configuration omits an explicit `perl`, the debugger now
+  resolves the interpreter through the shared toolchain profile
+  (perlbrew → plenv → `PATH`) instead of ignoring the active toolchain and
+  defaulting to a bare `"perl"`. An explicit `launch.json` `perl` is still
+  honored verbatim, and resolution falls back to `"perl"` when nothing is found
+  so the existing "perl not on PATH" diagnostic is preserved. Completes the
+  unified executable-profile work that also centralized interpreter resolution
+  and cached version probing across LSP and DAP. (#1929)
 - **Automatic `.perltidyrc` discovery at the workspace root.** When no
   `perltidy_profile` is explicitly configured, the server now discovers a
   project-local `.perltidyrc` once during `initialize` — searching the
