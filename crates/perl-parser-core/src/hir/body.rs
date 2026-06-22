@@ -138,7 +138,7 @@ impl BodySourceMap {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// What syntactic construct owns this body.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BodyOwnerKind {
     /// Top-level program root (file-level statement sequence).
     ProgramRoot,
@@ -147,6 +147,30 @@ pub enum BodyOwnerKind {
         /// Subroutine name, or `None` for anonymous subs.
         name: Option<String>,
     },
+    /// Method body (`method foo { ... }`).
+    Method {
+        /// Method name.
+        name: String,
+    },
+}
+
+/// Stable key for a body in the per-file body registry.
+///
+/// The ordinal disambiguates multiple anonymous subroutines or method bodies
+/// with the same name in one file.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BodyOwner {
+    /// What owns this body.
+    pub kind: BodyOwnerKind,
+    /// Zero-based ordinal for disambiguation within one file.
+    pub ordinal: u32,
+}
+
+impl BodyOwner {
+    /// Create a `BodyOwner` key.
+    pub fn new(kind: BodyOwnerKind, ordinal: u32) -> Self {
+        Self { kind, ordinal }
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -189,6 +213,8 @@ pub enum AccessMode {
     Read,
     /// Variable is the target of an assignment (lexical place / lvalue).
     Write,
+    /// Variable is both read and written — compound assignment or `++`/`--`.
+    ReadModifyWrite,
 }
 
 /// Variable origin classification.
@@ -218,6 +244,20 @@ pub struct HirVariable {
 pub enum AssignMode {
     /// Simple `=` assignment.
     Simple,
+    /// Compound assignment: `+=`, `-=`, `*=`, etc.
+    ///
+    /// The LHS is both read (to compute the new value) and written (to store
+    /// the result).  The LHS variable node carries [`AccessMode::ReadModifyWrite`].
+    ReadModifyWrite,
+}
+
+/// How a unary operator accesses its operand.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UnaryMode {
+    /// Pure read (e.g. unary minus, `!`).
+    Read,
+    /// Read-modify-write (e.g. `++`, `--`).
+    ReadModifyWrite,
 }
 
 /// Binary operator.
@@ -280,6 +320,27 @@ pub enum HirExpr {
         rhs: HirExprId,
         /// Assignment mode.
         mode: AssignMode,
+    },
+
+    /// Unary expression: `OP operand`.
+    Unary {
+        /// Operand.
+        operand: HirExprId,
+        /// How the operator accesses the operand.
+        mode: UnaryMode,
+        /// Operator text, for diagnostics.
+        op: String,
+    },
+
+    /// Function/method call expression (first-pass model).
+    ///
+    /// Arguments that are individually lowerable carry explicit IDs; everything
+    /// else is `Opaque`.
+    Call {
+        /// Argument expressions in source order.
+        args: Vec<HirExprId>,
+        /// The AST node kind name, for diagnostics.
+        ast_kind: String,
     },
 
     /// Opaque expression — used when the AST shape is not yet modeled.

@@ -3,36 +3,48 @@
 use crate::{Node, NodeKind, SourceLocation};
 use perl_pragma::{CompileTimePragmaEnvironment, PragmaSnapshot};
 use perl_semantic_facts::AnchorId;
+use std::collections::BTreeMap;
 
+use super::body::{
+    AccessMode, Arena, AssignMode, BinaryOp, BodyOwner, BodyOwnerKind, BodySourceMap,
+    DeclStorageClass, HirBlock, HirBlockId, HirBody, HirBodyId, HirExpr, HirExprId, HirStmt,
+    HirStmtId, HirVariable, Sigil, UnaryMode, VariableKind,
+};
 use super::model::{
     AstAnchor, BarewordExpr, BarewordFact, BarewordRole, BarewordTable, Binding, BindingReference,
     BlockShell, BranchKeyword, BranchShell, CallExpr, CallForm, CompileConfidence,
     CompileDirective, CompileDirectiveAction, CompileDirectiveKind, CompileEnvironment,
     CompileEnvironmentBoundary, CompileEnvironmentBoundaryKind, CompilePhase, CompilePhaseBlock,
     CompileProvenance, ControlTransfer, ControlTransferKind, DynamicBoundary, DynamicBoundaryKind,
-    ExportDeclaration, ExportDeclarationKind, GlobSlot, GlobSlotKind, GlobSlotSource, HirBindingId,
-    HirFile, HirId, HirItem, HirKind, HirScopeId, IncRootAction, IncRootFact, IncRootKind,
-    IndirectCallExpr, InheritanceSource, LiteralExpr, LiteralKind, LoopKind, LoopShell,
-    MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind, ModuleResolutionStatus,
-    PackageDecl, PackageInheritanceEdge, PackageStash, PragmaArgumentKind, PragmaEffect,
-    PragmaStateFact, PrototypeFact, PrototypeTable, RecoveryConfidence, RequireDecl, ScopeFrame,
-    ScopeGraph, ScopeKind, StashConfidence, StashDynamicBoundary, StashDynamicBoundaryKind,
-    StashGraph, StashProvenance, StatementModifierKind, StatementModifierShell, StorageClass,
-    SubDecl, UseDecl, VariableBinding, VariableDecl,
+    ExportDeclaration, ExportDeclarationKind, GlobSlot, GlobSlotKind, GlobSlotSource,
+    HIR_BODY_MODEL_VERSION, HirBindingId, HirFile, HirId, HirItem, HirKind, HirScopeId,
+    IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr, InheritanceSource, LiteralExpr,
+    LiteralKind, LoopKind, LoopShell, MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind,
+    ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash, PragmaArgumentKind,
+    PragmaEffect, PragmaStateFact, PrototypeFact, PrototypeTable, RecoveryConfidence, RequireDecl,
+    ScopeFrame, ScopeGraph, ScopeKind, StashConfidence, StashDynamicBoundary,
+    StashDynamicBoundaryKind, StashGraph, StashProvenance, StatementModifierKind,
+    StatementModifierShell, StorageClass, SubDecl, UseDecl, VariableBinding, VariableDecl,
 };
 
-/// Lower a parser AST into first-slice HIR items.
+/// Lower a parser AST into first-slice HIR items plus canonical body arenas.
 ///
 /// This is intentionally conservative: it emits only package, subroutine,
 /// method, use, require, variable-declaration, and expression-shell items. It
-/// records local scope, stash, and compile-environment side graphs, but it does
-/// not change provider behavior.
+/// records local scope, stash, and compile-environment side graphs. A second
+/// pass lowers body arenas and attaches them to [`HirFile::bodies`].
 pub fn lower_ast(ast: &Node) -> HirFile {
     let pragma_environment = CompileTimePragmaEnvironment::build(ast);
     let mut lowerer = Lowerer::new(ast.location, pragma_environment);
     lowerer.visit(ast, RecoveryConfidence::Parsed);
     lowerer.record_pragma_state_facts();
-    lowerer.finish()
+    let mut file = lowerer.finish();
+    // Second pass: lower bodies and attach to HirFile.
+    // body_model_version is set AFTER the second pass succeeds so that
+    // consumers see version==1 only when bodies are actually attached.
+    lower_bodies_into_file(ast, &mut file);
+    file.body_model_version = HIR_BODY_MODEL_VERSION;
+    file
 }
 
 struct Lowerer {
@@ -97,6 +109,11 @@ impl Lowerer {
             compile_environment: self.compile_environment,
             prototype_table: self.prototype_table,
             bareword_table: self.bareword_table,
+            bodies: Vec::new(),
+            body_owners: BTreeMap::new(),
+            // Version 0 = bodies not yet attached. lower_ast() sets this to
+            // HIR_BODY_MODEL_VERSION after lower_bodies_into_file() returns.
+            body_model_version: 0,
         }
     }
 
@@ -2373,5 +2390,440 @@ fn goto_label(target: &Node) -> Option<String> {
     match &target.kind {
         NodeKind::Identifier { name } => Some(name.clone()),
         _ => None,
+    }
+}
+
+// ── Second pass: canonical body lowering ──────────────────────────────────────
+//
+// After `Lowerer` finishes the first pass (items + scope graph), a second walk
+// lowers each body owner into a `HirBody` arena and attaches all bodies to the
+// `HirFile`. The second pass reuses the scope/binding graph from pass 1 for
+// accurate variable-kind resolution (lexical vs. package), implementing the
+// #2575 correctness requirements without disturbing the mature first pass.
+
+/// Entry point for the second-pass body lowering.
+///
+/// Lowers the program-root body and all subroutine/method bodies, then stores
+/// them in `file.bodies` and `file.body_owners`.
+fn lower_bodies_into_file(ast: &Node, file: &mut HirFile) {
+    // Program-root body (index 0 in bodies vec).
+    {
+        let root_scope = file
+            .scope_graph
+            .scopes
+            .first()
+            .map(|s| s.id)
+            .unwrap_or_else(|| HirScopeId::from_index(0));
+        let root_body =
+            lower_body_from_ast(ast, BodyOwnerKind::ProgramRoot, root_scope, &file.scope_graph);
+        let body_id = HirBodyId(file.bodies.len() as u32);
+        file.body_owners.insert(BodyOwner::new(BodyOwnerKind::ProgramRoot, 0), body_id);
+        file.bodies.push(root_body);
+    }
+
+    // Sub/method bodies: walk the top-level AST for Subroutine and Method nodes.
+    collect_sub_bodies(ast, file, &mut 0u32, &mut 0u32);
+}
+
+/// Walk `node` looking for `Subroutine` and `Method` AST nodes and lower their bodies.
+fn collect_sub_bodies(
+    node: &Node,
+    file: &mut HirFile,
+    sub_ordinal: &mut u32,
+    method_ordinal: &mut u32,
+) {
+    match &node.kind {
+        NodeKind::Program { statements } => {
+            for stmt in statements {
+                collect_sub_bodies(stmt, file, sub_ordinal, method_ordinal);
+            }
+        }
+        NodeKind::Subroutine { name, body, .. } => {
+            let owner_kind = BodyOwnerKind::Subroutine { name: name.clone() };
+            let ordinal = *sub_ordinal;
+            *sub_ordinal += 1;
+            // Find the scope frame created for this sub's body by matching
+            // the body block's source range and scope kind.
+            let body_scope = find_body_scope(&file.scope_graph, body.location);
+            let hir_body =
+                lower_body_from_ast(body, owner_kind.clone(), body_scope, &file.scope_graph);
+            let body_id = HirBodyId(file.bodies.len() as u32);
+            file.body_owners.insert(BodyOwner::new(owner_kind, ordinal), body_id);
+            file.bodies.push(hir_body);
+            // Recurse into the body for nested subs/methods
+            collect_sub_bodies(body, file, sub_ordinal, method_ordinal);
+        }
+        NodeKind::Method { name, body, .. } => {
+            let owner_kind = BodyOwnerKind::Method { name: name.clone() };
+            let ordinal = *method_ordinal;
+            *method_ordinal += 1;
+            let body_scope = find_body_scope(&file.scope_graph, body.location);
+            let hir_body =
+                lower_body_from_ast(body, owner_kind.clone(), body_scope, &file.scope_graph);
+            let body_id = HirBodyId(file.bodies.len() as u32);
+            file.body_owners.insert(BodyOwner::new(owner_kind, ordinal), body_id);
+            file.bodies.push(hir_body);
+            collect_sub_bodies(body, file, sub_ordinal, method_ordinal);
+        }
+        NodeKind::Block { statements } => {
+            for stmt in statements {
+                collect_sub_bodies(stmt, file, sub_ordinal, method_ordinal);
+            }
+        }
+        NodeKind::Package { block, .. } => {
+            if let Some(block) = block {
+                collect_sub_bodies(block, file, sub_ordinal, method_ordinal);
+            }
+        }
+        _ => {
+            // Recurse into children via the AST's child-iteration.
+            node.for_each_child(|child: &Node| {
+                collect_sub_bodies(child, file, sub_ordinal, method_ordinal);
+            });
+        }
+    }
+}
+
+/// Lower one body owner's AST node into a [`HirBody`] arena.
+///
+/// For the program root, `ast` is the `Program` node.
+/// For a subroutine body, `ast` is the `Block` node inside the sub.
+///
+/// `start_scope` is the innermost scope frame that encloses this body — used
+/// to seed the scope chain walk for variable-kind resolution.
+fn lower_body_from_ast(
+    ast: &Node,
+    owner: BodyOwnerKind,
+    start_scope: HirScopeId,
+    scope_graph: &ScopeGraph,
+) -> HirBody {
+    let mut builder = BodyBuilder2::new(scope_graph, start_scope);
+
+    let stmts = match &ast.kind {
+        NodeKind::Program { statements } => statements.as_slice(),
+        NodeKind::Block { statements } => statements.as_slice(),
+        _ => std::slice::from_ref(ast),
+    };
+
+    let root_range = ast.location;
+    let mut root_block = HirBlock::default();
+
+    for stmt_node in stmts {
+        let stmt_id = builder.lower_statement(stmt_node);
+        root_block.stmts.push(stmt_id);
+    }
+
+    let root_id = builder.alloc_block(root_block, root_range);
+    builder.finish(root_id, owner)
+}
+
+// ── BodyBuilder2: body arena builder for the second pass ─────────────────────
+//
+// This mirrors `body::BodyBuilder` from the first-slice body.rs but adds:
+//   - Scope-based variable-kind resolution (lexical vs. package)
+//   - Compound-assignment ReadModifyWrite distinction
+//   - Recovery-confidence propagation (no exact fact through contamination)
+
+struct BodyBuilder2<'a> {
+    exprs: Arena<HirExpr>,
+    stmts: Arena<HirStmt>,
+    blocks: Arena<HirBlock>,
+    source_map: BodySourceMap,
+    /// Full scope graph from pass 1 — used for parent-chain resolution.
+    scope_graph: &'a ScopeGraph,
+    /// The innermost scope that encloses this body's root block.
+    ///
+    /// All variable-kind resolution starts from this scope and walks up through
+    /// parent pointers in `scope_graph.scopes`. This is the fix for the scope-blind
+    /// bug: previously `scope_depth` was initialised to [scope 0] and never updated,
+    /// so every variable in a sub body incorrectly resolved to scope 0 (file root),
+    /// making all bindings declared inside the sub invisible.
+    start_scope: HirScopeId,
+}
+
+impl<'a> BodyBuilder2<'a> {
+    fn new(scope_graph: &'a ScopeGraph, start_scope: HirScopeId) -> Self {
+        Self {
+            exprs: Arena::default(),
+            stmts: Arena::default(),
+            blocks: Arena::default(),
+            source_map: BodySourceMap::default(),
+            scope_graph,
+            start_scope,
+        }
+    }
+
+    fn alloc_expr(&mut self, expr: HirExpr, range: SourceLocation) -> HirExprId {
+        let idx = self.exprs.alloc(expr);
+        self.source_map.expr_ranges.push(range);
+        HirExprId(idx)
+    }
+
+    fn alloc_stmt(&mut self, stmt: HirStmt, range: SourceLocation) -> HirStmtId {
+        let idx = self.stmts.alloc(stmt);
+        self.source_map.stmt_ranges.push(range);
+        HirStmtId(idx)
+    }
+
+    fn alloc_block(&mut self, block: HirBlock, range: SourceLocation) -> HirBlockId {
+        let idx = self.blocks.alloc(block);
+        self.source_map.block_ranges.push(range);
+        HirBlockId(idx)
+    }
+
+    fn finish(self, root_block: HirBlockId, owner: BodyOwnerKind) -> HirBody {
+        HirBody {
+            exprs: self.exprs,
+            stmts: self.stmts,
+            blocks: self.blocks,
+            source_map: self.source_map,
+            root_block,
+            owner,
+        }
+    }
+
+    /// Resolve whether a variable is lexically bound or package-global.
+    ///
+    /// A variable is `Lexical` if a `my`/`state` binding for it is visible in
+    /// the current scope chain. An `our` binding resolves to `Package` (package
+    /// alias). A qualified name (`Foo::x`) is always `Package`.
+    ///
+    /// Uses the same parent-chain walk as the first-pass `resolve_visible_binding`
+    /// (lower.rs ~1892). Starting from `start_scope`, walk up through
+    /// `scope_graph.scopes[id].parent` until None — matching the identical
+    /// algorithm used in pass 1.
+    fn resolve_variable_kind(&self, sigil: &str, name: &str) -> VariableKind {
+        // Qualified names are always package-qualified.
+        if name.contains("::") {
+            return VariableKind::Package;
+        }
+        let mut cursor = Some(self.start_scope);
+        while let Some(current_scope) = cursor {
+            for binding in self.scope_graph.bindings.iter().rev() {
+                if binding.scope_id == current_scope
+                    && binding.sigil == sigil
+                    && binding.name == name
+                {
+                    return match binding.storage {
+                        StorageClass::LexicalMy
+                        | StorageClass::LexicalState
+                        | StorageClass::Parameter => VariableKind::Lexical,
+                        StorageClass::PackageOur
+                        | StorageClass::LocalizedPackage
+                        | StorageClass::PackageGlobal
+                        | StorageClass::MethodInvocant
+                        | StorageClass::Implicit => VariableKind::Package,
+                    };
+                }
+            }
+            // Walk up to the parent scope — identical to first-pass resolve_visible_binding.
+            cursor =
+                self.scope_graph.scopes.get(current_scope.index() as usize).and_then(|s| s.parent);
+        }
+        // No binding found in any ancestor scope — treat as package global.
+        VariableKind::Package
+    }
+
+    fn lower_statement(&mut self, node: &Node) -> HirStmtId {
+        let range = node.location;
+
+        match &node.kind {
+            // Peel through the expression-statement wrapper.
+            NodeKind::ExpressionStatement { expression } => self.lower_statement(expression),
+
+            NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+                let (sigil_str, var_name) = match &variable.kind {
+                    NodeKind::Variable { sigil, name } => (sigil.as_str(), name.clone()),
+                    NodeKind::VariableWithAttributes { variable, .. } => match &variable.kind {
+                        NodeKind::Variable { sigil, name } => (sigil.as_str(), name.clone()),
+                        _ => ("$", String::from("<unknown>")),
+                    },
+                    _ => ("$", String::from("<unknown>")),
+                };
+                let sigil = sigil_from_str(sigil_str);
+                let storage = storage_class_for_decl(declarator);
+
+                let init_expr_id = initializer.as_ref().map(|init_node| {
+                    // Allocate the write-place for the declared variable.
+                    // Always Lexical regardless of declarator — the place IS the
+                    // declaration site, not a resolved binding.
+                    let place_kind = match declarator.as_str() {
+                        "our" => VariableKind::Package,
+                        _ => VariableKind::Lexical,
+                    };
+                    let place_expr = HirExpr::Variable(HirVariable {
+                        sigil: sigil_from_str(sigil_str),
+                        name: var_name.clone(),
+                        kind: place_kind,
+                        access: AccessMode::Write,
+                    });
+                    let place_id = self.alloc_expr(place_expr, variable.location);
+
+                    // Lower the RHS.
+                    let rhs_id = self.lower_expr(init_node);
+
+                    // Assign node spanning from variable to end of initializer.
+                    let assign_range = SourceLocation {
+                        start: variable.location.start,
+                        end: init_node.location.end,
+                    };
+                    let assign_expr =
+                        HirExpr::Assign { lhs: place_id, rhs: rhs_id, mode: AssignMode::Simple };
+                    self.alloc_expr(assign_expr, assign_range)
+                });
+
+                self.alloc_stmt(
+                    HirStmt::Let { name: var_name, sigil, storage, init: init_expr_id },
+                    range,
+                )
+            }
+
+            _ => {
+                let expr_id = self.lower_expr(node);
+                self.alloc_stmt(HirStmt::Expr(expr_id), range)
+            }
+        }
+    }
+
+    fn lower_expr(&mut self, node: &Node) -> HirExprId {
+        let range = node.location;
+
+        match &node.kind {
+            // Peel through expression-statement wrapper when lower_expr is called on one.
+            NodeKind::ExpressionStatement { expression } => self.lower_expr(expression),
+
+            NodeKind::Variable { sigil, name } => {
+                let kind = self.resolve_variable_kind(sigil, name);
+                let var = HirVariable {
+                    sigil: sigil_from_str(sigil),
+                    name: name.clone(),
+                    kind,
+                    access: AccessMode::Read,
+                };
+                self.alloc_expr(HirExpr::Variable(var), range)
+            }
+
+            NodeKind::Binary { op, left, right } => {
+                let lhs_id = self.lower_expr(left);
+                let rhs_id = self.lower_expr(right);
+                let binary_op = binary_op_from_str(op);
+                self.alloc_expr(HirExpr::Binary { lhs: lhs_id, op: binary_op, rhs: rhs_id }, range)
+            }
+
+            NodeKind::Assignment { lhs, rhs, op } => {
+                // Plain `=` is Simple; compound operators (`+=`, `-=`, etc.) are RMW.
+                let (mode, lhs_access) = if op == "=" {
+                    (AssignMode::Simple, AccessMode::Write)
+                } else {
+                    (AssignMode::ReadModifyWrite, AccessMode::ReadModifyWrite)
+                };
+
+                // Lower LHS with the correct access mode applied to the variable node.
+                let lhs_id = self.lower_expr_as_place(lhs, lhs_access);
+                let rhs_id = self.lower_expr(rhs);
+                self.alloc_expr(HirExpr::Assign { lhs: lhs_id, rhs: rhs_id, mode }, range)
+            }
+
+            NodeKind::Unary { op, operand } => {
+                // Prefix `++`/`--` are ReadModifyWrite on the operand.
+                let unary_mode = if op == "++" || op == "--" {
+                    UnaryMode::ReadModifyWrite
+                } else {
+                    UnaryMode::Read
+                };
+                let operand_id = if matches!(unary_mode, UnaryMode::ReadModifyWrite) {
+                    self.lower_expr_as_place(operand, AccessMode::ReadModifyWrite)
+                } else {
+                    self.lower_expr(operand)
+                };
+                self.alloc_expr(
+                    HirExpr::Unary { operand: operand_id, mode: unary_mode, op: op.clone() },
+                    range,
+                )
+            }
+
+            _ => {
+                // Everything else: emit Opaque. This is the "fail closed" path.
+                let kind_name = node.kind.kind_name().to_string();
+                self.alloc_expr(HirExpr::Opaque { ast_kind: kind_name }, range)
+            }
+        }
+    }
+
+    /// Lower an expression node that appears in lvalue (place) position.
+    ///
+    /// For a `Variable` node the access mode is set to `access`; for everything
+    /// else the node is lowered normally (the access mode is carried only on
+    /// terminal variable nodes).
+    fn lower_expr_as_place(&mut self, node: &Node, access: AccessMode) -> HirExprId {
+        let range = node.location;
+        match &node.kind {
+            NodeKind::Variable { sigil, name } => {
+                let kind = self.resolve_variable_kind(sigil, name);
+                let var =
+                    HirVariable { sigil: sigil_from_str(sigil), name: name.clone(), kind, access };
+                self.alloc_expr(HirExpr::Variable(var), range)
+            }
+            _ => self.lower_expr(node),
+        }
+    }
+}
+
+// ── Helpers for the second-pass body lowerer ─────────────────────────────────
+
+/// Find the innermost scope frame that covers `body_loc` (the source range of
+/// a subroutine or method body block).
+///
+/// The first pass creates a `Subroutine` or `Method` scope frame whose `.range`
+/// covers the body block. We find it by scanning all scope frames for the one
+/// with the smallest enclosing range that still fully contains `body_loc`.
+/// Falls back to the root scope (index 0) if no matching frame is found.
+fn find_body_scope(scope_graph: &ScopeGraph, body_loc: SourceLocation) -> HirScopeId {
+    let mut best: Option<(usize, HirScopeId)> = None; // (range_size, id)
+    for frame in &scope_graph.scopes {
+        let range = frame.range;
+        // Check that this scope frame fully contains the body location.
+        if range.start <= body_loc.start && range.end >= body_loc.end {
+            let size = range.end - range.start;
+            let is_better = best.is_none_or(|(prev_size, _)| size < prev_size);
+            if is_better {
+                best = Some((size, frame.id));
+            }
+        }
+    }
+    best.map(|(_, id)| id)
+        .or_else(|| scope_graph.scopes.first().map(|s| s.id))
+        .unwrap_or_else(|| HirScopeId::from_index(0))
+}
+
+fn sigil_from_str(s: &str) -> Sigil {
+    match s {
+        "$" => Sigil::Scalar,
+        "@" => Sigil::Array,
+        "%" => Sigil::Hash,
+        "&" => Sigil::Code,
+        "*" => Sigil::Glob,
+        _ => Sigil::Scalar,
+    }
+}
+
+fn binary_op_from_str(s: &str) -> BinaryOp {
+    match s {
+        "+" => BinaryOp::Add,
+        "-" => BinaryOp::Sub,
+        "*" => BinaryOp::Mul,
+        "/" => BinaryOp::Div,
+        "." => BinaryOp::Concat,
+        other => BinaryOp::Other(other.to_string()),
+    }
+}
+
+fn storage_class_for_decl(declarator: &str) -> DeclStorageClass {
+    match declarator {
+        "my" => DeclStorageClass::My,
+        "our" => DeclStorageClass::Our,
+        "local" => DeclStorageClass::Local,
+        "state" => DeclStorageClass::State,
+        _ => DeclStorageClass::My,
     }
 }

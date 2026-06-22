@@ -9,9 +9,9 @@ mod lower;
 mod model;
 
 pub use body::{
-    AccessMode, Arena, AssignMode, BinaryOp, BodyOwnerKind, BodySourceMap, DeclStorageClass,
-    HirBlock, HirBlockId, HirBody, HirBodyId, HirExpr, HirExprId, HirStmt, HirStmtId, HirVariable,
-    Sigil, VariableKind, lower_body,
+    AccessMode, Arena, AssignMode, BinaryOp, BodyOwner, BodyOwnerKind, BodySourceMap,
+    DeclStorageClass, HirBlock, HirBlockId, HirBody, HirBodyId, HirExpr, HirExprId, HirStmt,
+    HirStmtId, HirVariable, Sigil, UnaryMode, VariableKind, lower_body,
 };
 pub use lower::lower_ast;
 pub use model::{
@@ -24,9 +24,9 @@ pub use model::{
     DynamicBoundaryKind, ExportDeclaration, ExportDeclarationKind, FrameworkAdapterKind,
     FrameworkAdapterRegistry, FrameworkDynamicBoundaryFact, FrameworkExportedSymbolFact,
     FrameworkExportedSymbolKind, FrameworkFactGraph, GlobSlot, GlobSlotKind, GlobSlotSource,
-    HirBindingId, HirFile, HirId, HirItem, HirKind, HirScopeId, IncRootAction, IncRootFact,
-    IncRootKind, IndirectCallExpr, InheritanceSource, LiteralExpr, LiteralKind, LoopKind,
-    LoopShell, MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind,
+    HIR_BODY_MODEL_VERSION, HirBindingId, HirFile, HirId, HirItem, HirKind, HirScopeId,
+    IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr, InheritanceSource, LiteralExpr,
+    LiteralKind, LoopKind, LoopShell, MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind,
     ModuleResolutionCacheInvalidation, ModuleResolutionCacheKey, ModuleResolutionCacheRootKey,
     ModuleResolutionCandidate, ModuleResolutionCandidatePathState, ModuleResolutionCandidateRoot,
     ModuleResolutionCandidateStatus, ModuleResolutionRoot, ModuleResolutionStatus, PackageDecl,

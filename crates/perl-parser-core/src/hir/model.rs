@@ -1,6 +1,7 @@
 //! HIR data model.
 
 use crate::SourceLocation;
+use crate::hir::body::{BodyOwner, HirBody, HirBodyId};
 use perl_semantic_facts::{
     AnchorId, Confidence, ExportSet, ExportTag, FileId, ImportKind, ImportSpec, ImportSymbols,
     Provenance, ScopeId, VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
@@ -96,6 +97,11 @@ pub enum RecoveryConfidence {
     Unknown,
 }
 
+/// Body model version for the canonical body representation in [`HirFile`].
+///
+/// Increment when the body arena layout changes in a backward-incompatible way.
+pub const HIR_BODY_MODEL_VERSION: u32 = 1;
+
 /// HIR for one parsed file.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
@@ -112,6 +118,15 @@ pub struct HirFile {
     pub prototype_table: PrototypeTable,
     /// Source-backed bareword classification facts lowered beside HIR items.
     pub bareword_table: BarewordTable,
+    /// Canonical body arenas for all body owners in this file.
+    ///
+    /// Bodies are attached by the second pass of [`crate::hir::lower_ast`].
+    /// Index 0 is always the program-root body when the file is non-empty.
+    pub bodies: Vec<HirBody>,
+    /// Map from [`BodyOwner`] key to its index in [`HirFile::bodies`].
+    pub body_owners: BTreeMap<BodyOwner, HirBodyId>,
+    /// Body model version — see [`HIR_BODY_MODEL_VERSION`].
+    pub body_model_version: u32,
 }
 
 impl HirFile {
@@ -119,6 +134,16 @@ impl HirFile {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
+    }
+
+    /// Return the program-root body, if present.
+    ///
+    /// The root body is always stored at `bodies[0]` when the file is non-empty
+    /// and the second-pass body lowering ran.
+    #[inline]
+    #[must_use]
+    pub fn root_body(&self) -> Option<&HirBody> {
+        self.bodies.first()
     }
 
     /// Project compile-time effects using the default model metadata.
