@@ -386,6 +386,33 @@ impl LspServer {
         self.handle_document_diagnostic(params)
     }
 
+    /// Test-only entrypoint for LSP `workspace/diagnostic`.
+    ///
+    /// Exercises the pull-style workspace-diagnostics handler without an
+    /// external transport.  Used by generation-guard tests that need to drive
+    /// both the document and workspace pull paths under controlled conditions.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params (`previousResultIds` array, optional).
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or the handler fails.
+    pub fn test_handle_workspace_diagnostic(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_workspace_diagnostic(params)
+    }
+
+    /// Return the current generation counter for an open document.
+    ///
+    /// Returns `None` when the document is not open.  Used by tests to read
+    /// the generation before and after simulated `didChange` events so they can
+    /// assert that the staleness guard does not false-positive.
+    pub fn test_document_generation(&self, uri: &str) -> Option<u32> {
+        self.document_generation(uri)
+    }
+
     /// Test-only entrypoint for `workspace/didChangeConfiguration`.
     ///
     /// Applies the same configuration-update path as a real client notification.
