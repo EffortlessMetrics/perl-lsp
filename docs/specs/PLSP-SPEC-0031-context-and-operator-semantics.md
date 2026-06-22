@@ -113,8 +113,17 @@ demand inward:
 - For an **unprototyped** call, the argument list is flattened in **list**
   value-context (one flat list); the callee does not constrain caller-side
   argument context.
-- For a call with a **signature** or **prototype**, argument contexts are bound
-  in the callee per its declared shape, not flattened.
+- For a call with a **prototype**, argument contexts are imposed at the
+  **call site** by the parser — prototypes are a compile-time parse directive
+  that change how the caller's argument list is parsed (see
+  [`docs/project/PARSING_PERL.md` line ~266](../project/PARSING_PERL.md)):
+  `&` coerces a block, `$` imposes scalar context on the next argument, etc.
+  Prototypes have **no** callee-side binding effect.
+- For a call with a **signature** (Perl 5.20+, enabled via `use feature
+  'signatures'` or `use v5.36`+), argument bindings are established as
+  **lexical variables in the callee body**. Unlike prototypes, signatures have
+  **no call-site parse effect** — the caller's argument list is still flattened
+  in list context and then bound by the callee's signature.
 - A subroutine's `return` (and final expression) is evaluated in the **caller's**
   value-context (the `wantarray` of the call site), recorded as a constraint and
   resolved when the call site is known; `Unknown` when the call site is dynamic.
