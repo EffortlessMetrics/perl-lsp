@@ -363,6 +363,18 @@ impl LspServer {
                 "scoped compiler our-variable declaration class cutover proof only; package-scoped our variable declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
             ));
         }
+        if let Some(candidate) = semantic_token_state_variable_declaration_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "state_variable_declaration",
+                "variable",
+                "matched_existing_live_variable_token",
+                "unmatched_existing_live_variable_token",
+                true,
+                "scoped compiler state-variable declaration class cutover proof only; lexical state variable declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
+            ));
+        }
 
         receipts
     }
@@ -538,6 +550,30 @@ mod tests {
         // back (no candidate) rather than record a false compiler-token identity.
         let source = "# our $todo\nmy $x = 1;\n";
         assert!(semantic_token_our_variable_declaration_candidate(source).is_none());
+    }
+
+    #[test]
+    fn state_variable_declaration_candidate_scans_past_non_declaration_marker()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // An earlier non-declaration `state ` (here inside a comment) must not
+        // mask the real source-backed declaration that follows.
+        let source = "# state $todo\nstate $count = 0;\n$count++;\n";
+        let candidate = semantic_token_state_variable_declaration_candidate(source)
+            .ok_or("real `state` declaration should be detected past the comment marker")?;
+        assert!(
+            candidate.identity.starts_with("token:state_variable_declaration:$count:"),
+            "expected the $count declaration identity, got {}",
+            candidate.identity
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn state_variable_declaration_candidate_requires_a_real_declaration() {
+        // Only a non-declaration `state ` marker is present; the detector must
+        // fall back rather than record a false compiler-token identity.
+        let source = "# state $todo\nmy $x = 1;\n";
+        assert!(semantic_token_state_variable_declaration_candidate(source).is_none());
     }
 
     #[test]
@@ -930,21 +966,38 @@ fn semantic_token_lexical_variable_use_candidate(
 fn semantic_token_our_variable_declaration_candidate(
     source: &str,
 ) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
-    const MARKER: &str = "our ";
-    // Scan every `our ` marker, not just the first: an earlier non-declaration
-    // marker (e.g. `# our $todo` or an `our` inside a string) must not mask a
-    // later real source-backed declaration. Each candidate must still begin its
-    // line (after only whitespace) and yield a sigiled variable name; otherwise
-    // we keep scanning and ultimately fall back, preserving the fail-closed
-    // boundary.
-    for (marker_start, _) in source.match_indices(MARKER) {
+    line_start_variable_declaration_candidate(source, "our ", "our_variable_declaration")
+}
+
+fn semantic_token_state_variable_declaration_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    line_start_variable_declaration_candidate(source, "state ", "state_variable_declaration")
+}
+
+/// Detect a line-leading sigiled variable declaration introduced by `marker`
+/// (`our `, `state `, …) and emit its `token:<token_class>:<name>:compiler`
+/// candidate.
+///
+/// Every marker occurrence is scanned, not just the first: an earlier
+/// non-declaration marker (e.g. a comment or an occurrence inside a string)
+/// must not mask a later real source-backed declaration. Each candidate must
+/// begin its line (after only whitespace) and yield a sigiled variable name;
+/// otherwise we keep scanning and ultimately fall back, preserving the
+/// fail-closed boundary.
+fn line_start_variable_declaration_candidate(
+    source: &str,
+    marker: &str,
+    token_class: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    for (marker_start, _) in source.match_indices(marker) {
         let line_start = source[..marker_start].rfind('\n').map_or(0, |offset| offset + 1);
         if !source[line_start..marker_start].chars().all(char::is_whitespace) {
             continue;
         }
 
         let Some((name_start, name_end)) =
-            variable_name_after_marker(source, marker_start + MARKER.len())
+            variable_name_after_marker(source, marker_start + marker.len())
         else {
             continue;
         };
@@ -957,7 +1010,7 @@ fn semantic_token_our_variable_declaration_candidate(
         };
 
         return Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-            format!("token:our_variable_declaration:{name}:compiler"),
+            format!("token:{token_class}:{name}:compiler"),
             ProviderFactSourceKind::CompilerFact,
             Provenance::SemanticAnalyzer,
             Confidence::Medium,
@@ -1219,6 +1272,25 @@ fn semantic_tokens_live_slice_provider_trace(
             source_backed_state: "source_backed_our_variable_declaration_live_token_match",
             user_message: "Semantic tokens exposed the source-backed compiler our-variable declaration live trace because it matched the existing parser/HIR variable token. No new semantic tokens were emitted.",
             claim_boundary: "only source-backed compiler our-variable declaration spans that exactly match existing live parser/HIR variable tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader variable classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    let state_variable_declaration_candidate =
+        semantic_token_state_variable_declaration_candidate(source);
+    saw_compiler_token_candidate |= state_variable_declaration_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        state_variable_declaration_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "variable",
+            compiler_token_class: "state_variable_declaration",
+            source_backed_state: "source_backed_state_variable_declaration_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler state-variable declaration live trace because it matched the existing parser/HIR variable token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler state-variable declaration spans that exactly match existing live parser/HIR variable tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader variable classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
         },
     ) {
         return trace;

@@ -257,6 +257,21 @@ $shared++;
 
 1;
 "#;
+const STATE_VARIABLE_SEMANTIC_TOKEN_URI: &str =
+    "file:///workspace/lib/Trace/StateVariableTokens.pm";
+// File-scoped `state` so the state-variable detector is the first reviewed
+// compiler-token candidate to match (no `sub`/`my`/`our`/etc. ahead of it),
+// which lets the live request expose the state-variable trace as the acted
+// decision.
+const STATE_VARIABLE_SEMANTIC_TOKEN_DOC: &str = r#"use strict;
+use warnings;
+use feature 'state';
+
+state $count = 0;
+$count++;
+
+1;
+"#;
 
 fn create_server() -> LspServer {
     let output =
@@ -620,6 +635,20 @@ fn open_lexical_variable_use_semantic_token_document(
         "textDocument": {
             "uri": LEXICAL_VARIABLE_USE_SEMANTIC_TOKEN_URI,
             "text": LEXICAL_VARIABLE_USE_SEMANTIC_TOKEN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_state_variable_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": STATE_VARIABLE_SEMANTIC_TOKEN_URI,
+            "text": STATE_VARIABLE_SEMANTIC_TOKEN_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -2323,6 +2352,67 @@ fn live_semantic_tokens_request_exposes_reviewed_our_variable_declaration_trace(
             |message| message.contains("compiler our-variable declaration live trace")
         ),
         "explanation must surface the reviewed our-variable declaration trace: {explanation}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_exposes_reviewed_state_variable_declaration_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_state_variable_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {"uri": STATE_VARIABLE_SEMANTIC_TOKEN_URI, "version": 1}
+            })),
+        )),
+        "semantic tokens state variable declaration",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_compiler_token_live_slice")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_state_variable_declaration_live_token_match")
+    );
+    assert_eq!(
+        receipt.get("compiler_token_class").and_then(Value::as_str),
+        Some("state_variable_declaration")
+    );
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("variable"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("broader variable classes")
+            && boundary.contains("generated/no-source")
+            && boundary.contains("dynamic-boundary"),
+        "state-variable trace must preserve scoped blockers: {boundary}"
+    );
+    assert!(
+        explanation.get("user_message").and_then(Value::as_str).is_some_and(
+            |message| message.contains("compiler state-variable declaration live trace")
+        ),
+        "explanation must surface the reviewed state-variable declaration trace: {explanation}"
     );
     Ok(())
 }
