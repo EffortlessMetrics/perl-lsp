@@ -117,6 +117,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now advertises restart frame, step-in targets, and terminate-threads support
   when those routed handlers exist, so clients can discover the implemented
   operations. (#1759)
+- **DAP transport handles non-request messages explicitly.** Client-originated
+  Response and Event messages are now accepted and logged without producing
+  spurious stdout or disrupting normal request handling. (#1790, issue #1608)
+- **DAP event writes fail closed after persistent transport failure.** The event
+  handler now detects repeated write/flush failures, marks the transport broken,
+  and lets the main loop shut down cleanly instead of silently losing events or
+  hanging on a broken socket. (#1809, issue #1609)
 
 #### Editor settings
 
@@ -146,6 +153,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multi-root `workspace/symbol` is deterministic.** Workspace-symbol queries
   now wait briefly for active indexing, preserve each symbol's workspace-folder
   URI, and return repeatable results across roots. (#1522)
+- **Workspace indexing counters stay truthful after duplicate parse-complete
+  signals.** Pending parse metrics now saturate at zero instead of wrapping to
+  `usize::MAX`, so first-open indexing/degraded status cannot report a
+  permanent parse storm from out-of-order lifecycle notifications. (#2606,
+  issue #2553)
 - **Reference fallback avoids document-lock re-entry.** Partial-index reference
   fallback no longer re-enters the documents lock while searching open files.
   (#1597)
@@ -190,6 +202,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for package receivers now considers inherited methods in the workspace model
   instead of limiting suggestions to methods declared directly on the receiver.
   (#1841)
+- **Completions stay quiet in strings and non-code regions.** General variable,
+  function, and method completions are suppressed inside ordinary strings, regex
+  patterns, heredoc bodies, and POD, while path completions and intentional
+  quoted module/import contexts remain available. Heredoc left-shift detection
+  now keeps arrow-method and constant-shift Perl contexts from being mistaken
+  for heredoc bodies. (#1808, #1813, #1821, #2573)
 - **Multiline inline completions are parse-checked against the full document.**
   Inline completion candidates whose replacement ranges span lines now run
   full-document parse probes and fail closed when a range cannot be
@@ -217,6 +235,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rename uses character-aware word boundaries.** The boundary check now
   handles multi-byte UTF-8 characters correctly, preventing partial-match
   renames that would corrupt identifiers containing non-ASCII characters. (#1288)
+- **Package-scoped rename refuses unsafe fallback edits.** Package renames now
+  prefer exact qualified-call edits and empty unsafe fallback plans instead of
+  silently applying same-file edits when workspace or index facts are incomplete.
+  (#2070, issue #1511)
 
 #### Diagnostics and code actions
 
@@ -227,6 +249,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Arrow-deref hash keys are no longer flagged as strict barewords.**
   `$self->{name}` and `$ref->{key}` are recognized as Perl's auto-quoted hash
   key form while real strict-bareword violations still report. (#1562)
+- **Missing `use strict` / `use warnings` diagnostics use Warning severity.**
+  PL100 and PL101 now match the diagnostic catalog, so first-open pragma
+  guidance is visible at the intended warning level. (#2061, issue #1766)
+- **`source.fixAll` deduplicates strict/warnings pragma inserts.** Fix-all now
+  keeps one semantic strict insert and one warnings insert, preferring the
+  source-aware insertion point instead of producing duplicate pragmas from
+  overlapping providers. (#2058, issue #2056)
+- **Printf dynamic width and precision specifiers stay quiet.** The format
+  checker no longer reports false positives for valid `%*` and `%.*` printf
+  forms. (#1868, issue #1637)
 - **DBI receiver completions are import-gated.** DBI-style receiver completions
   now stay quiet unless a visible `use DBI` fact supports them. (#1579)
 - **Quoted hash keys with special characters appear in completion.** Hash-key
@@ -314,6 +346,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`our` declaration semantic-token facts are scoped.** Semantic facts for
   package-scoped `our` declarations now carry a scoped fact class, avoiding
   ambiguity for downstream semantic consumers. (#1920, issue #1922)
+- **`state` declaration semantic-token facts are scoped.** The output-neutral
+  compiler-token cutover now covers the `my` / `our` / `state` lexical
+  declaration trio while continuing to fall back to parser/HIR token output for
+  unmatched, stale, generated, or low-confidence spans. (#2030, issue #2027)
 - **Parser boundary responsibilities are documented.** POD, heredoc-body, and
   `__DATA__` / `__END__` non-executable boundaries now have a consumer contract
   in `PARSER_CONTRACTS.md`, including strict versus lenient detection posture.
@@ -337,6 +373,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CPAN corpus ratchet can run a bounded top-50 profile.** The post-merge corpus
   workflow now has a bounded representative mode in addition to the full ratchet;
   release accuracy claims still require the corresponding receipt. (#1520)
+- **Semantic snapshot and PackageSubTable oracle rails are available.** The
+  corpus/tooling substrate now has a semantic SNAPSHOT stability rail, an
+  end-to-end PackageSubTable differential runner slice, and the first HIR-body
+  vertical slice for assignment-shaped expressions. These are compiler-foundation
+  receipts, not live LSP provider cutovers. (#2569, #2570, #2571)
+- **DAP test seed helpers are gated from production artifacts.** Integration
+  tests that need debug-adapter seed helpers now opt into the `test-helpers`
+  Cargo feature, and the full parser/DAP CI recipe enables that feature
+  explicitly. (#2596, issue #1341)
+- **DAP conditional-breakpoint behavior has a real debugger receipt.** The
+  conditional-breakpoint regression now launches `perl -d` and observes the
+  true stop iteration instead of simulating Perl condition semantics in Rust.
+  (#1843, issue #1629)
 - **Runner disk preflight and failover are explicit.** Self-hosted runner
   routing now treats disk hygiene as a preflight invariant and falls back only
   for disk-preflight failures, without masking real test or gate failures.
