@@ -1346,7 +1346,7 @@ ci-test-parser-dap-full:
         sh -c 'echo "🧪 Running all perl-parser lib tests..." && \
         cargo test -p perl-parser --lib -j1 -- --test-threads=1 && \
         echo "🧪 Running all perl-dap tests..." && \
-        cargo test -p perl-dap -j1 -- --test-threads=1 && \
+        cargo test -p perl-dap --features test-helpers -j1 -- --test-threads=1 && \
         echo "🔍 Running clippy on affected crates (no-deps)..." && \
         cargo clippy -p perl-parser-core -p perl-parser -p perl-dap --lib --no-deps -j1 -- -D warnings'
     @echo "✅ Full Parser/DAP tests passed"

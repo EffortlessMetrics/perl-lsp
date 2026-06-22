@@ -408,6 +408,7 @@ impl DebugAdapter {
     /// Push a line into the recent-output buffer for testing parser paths.
     ///
     /// Only for use in tests; not part of the public API contract.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn push_recent_output_line_for_test(&self, line: &str) {
         let mut output = lock_or_recover(&self.recent_output, "debug_adapter.push_recent_output");
         Self::append_recent_output_line_locked(&mut output, line);
@@ -420,6 +421,7 @@ impl DebugAdapter {
     /// verify the "session is not stopped" path without a live debugging scenario.
     ///
     /// Only for use in tests; not part of the public API contract.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn seed_running_session_for_test(&self) {
         use crate::debug_adapter::session::{DebugSession, DebugState, ResumeMode};
         use crate::debug_adapter::variable_cache::VariableCache;
@@ -450,6 +452,7 @@ impl DebugAdapter {
     /// "session present, signal delivery failed" path in `handle_pause`.
     ///
     /// Only for use in tests; not part of the public API contract.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn seed_attached_pid_for_test(&self, pid: u32) {
         if let Ok(mut guard) = self.attached_pid.lock() {
             *guard = Some(pid);
@@ -545,6 +548,7 @@ impl DebugAdapter {
     /// frameId validation paths in handle_evaluate.
     ///
     /// Only for use in tests; not part of the public API contract.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn seed_stopped_session_with_frames_for_test(&self, frames: Vec<crate::types::StackFrame>) {
         use std::process::{Command, Stdio};
         let Ok(child) = Command::new("perl")

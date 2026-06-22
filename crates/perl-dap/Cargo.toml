@@ -96,6 +96,10 @@ default = ["dap-phase1", "dap-phase2", "dap-phase3"]
 dap-phase1 = []  # AC1-AC4: Bridge to Perl::LanguageServer
 dap-phase2 = []  # AC5-AC16: Native adapter, integration tests, performance, security
 dap-phase3 = []  # AC17-AC19: Non-regression, dependency management, packaging
+# Gates test-seed helpers (push_recent_output_line_for_test, seed_*_for_test) so they
+# are excluded from production builds.  Integration tests that use them must be run
+# with --features test-helpers (or have required-features = ["test-helpers"] in Cargo.toml).
+test-helpers = []
 
 # Test targets with acceptance criteria mapping
 [[test]]
@@ -382,6 +386,28 @@ path = "tests/wave_h_external_red_tests.rs"
 name = "prop_dap_protocol_roundtrip"
 path = "tests/prop_dap_protocol_roundtrip.rs"
 # Property tests: DAP protocol message JSON round-trip invariants
+
+# Tests that call test-seed helpers gated behind #[cfg(any(test, feature = "test-helpers"))].
+# Run with: cargo test -p perl-dap --features test-helpers
+[[test]]
+name = "eval_ref_cache_miss_resume_tests"
+path = "tests/eval_ref_cache_miss_resume_tests.rs"
+required-features = ["test-helpers"]
+
+[[test]]
+name = "dap_evaluate_comprehensive_tests"
+path = "tests/dap_evaluate_comprehensive_tests.rs"
+required-features = ["test-helpers"]
+
+[[test]]
+name = "dap_variable_reference_hardening_tests"
+path = "tests/dap_variable_reference_hardening_tests.rs"
+required-features = ["test-helpers"]
+
+[[test]]
+name = "pause_signal_delivery_tests"
+path = "tests/pause_signal_delivery_tests.rs"
+required-features = ["test-helpers"]
 
 [[bench]]
 name = "dap_benchmarks"
