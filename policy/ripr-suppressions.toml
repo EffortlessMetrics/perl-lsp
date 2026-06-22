@@ -1183,3 +1183,47 @@ reason = "PR #1522 multi_root_workspace_tests.rs: 6 error_path weakly_exposed se
 created = "2026-06-16"
 review_after = "2026-07-16"
 expires = "2026-09-30"
+
+# =============================================================================
+# DAP transport framing + lifecycle test surfaces (#991): ripr#1428-class
+# false-positives in newly added test code.
+#
+# PR #991 adds two test surfaces that diff-scoped RIPR 0.9.0 treats as new
+# production seams:
+#   (A) transport.rs — an in-crate #[cfg(test)] mod (SharedBuf writer, framed_*
+#       helpers, first_frame_body, and 11 test_transport_* functions) that drive
+#       the crate-private run_with_io loop directly. run_with_io is pub(super),
+#       so the tests live in-crate rather than in tests/ (which cannot reach it
+#       and would require a #[doc(hidden)] pub production shim). RIPR flags the
+#       test plumbing (struct/impl, predicates, return values) as production
+#       seams — the same ripr#1428 class as ripr-suppress-dap-invalid-ref-
+#       hardening-test-helpers (variables.rs #[cfg(test)] mod).
+#   (B) dap_lifecycle_matrix_tests.rs — the C1-C6 cleanup/teardown lifecycle
+#       cells (predicate/error-path plumbing in test assertions, e.g. the
+#       relaunch-after-terminate message-class check). Test-file plumbing, same
+#       ripr#1428 class as ripr-suppress-seam-proof-tests.
+#
+# Coverage evidence: the transport framing seam (ContentLengthFramer recovery,
+# CRLF/LF separators, malformed headers/bodies, EOF, multi-message, recovery
+# after a bad frame) is exercised by the 11 in-crate test_transport_* tests via
+# run_with_io over std::io::Cursor; the lifecycle cells exercise the no-session
+# handlers (threads/modules/variables/stackTrace/scopes/launch/restart) end to
+# end. Both are pure test surfaces, not production seams.
+#
+# Suppression is minimal (one production file scoped to its #[cfg(test)] mod and
+# one test file). Remove when ripr#1428 is fixed upstream.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-dap-transport-framing-and-lifecycle-test-surface"
+kind = "test_receipt_surface"
+paths = [
+  "crates/perl-dap/src/debug_adapter/transport.rs",
+  "crates/perl-dap/tests/dap_lifecycle_matrix_tests.rs",
+]
+classification = ["weakly_exposed", "static_unknown", "infection_unknown", "propagation_unknown"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "PR #991 adds two test surfaces that diff-scoped RIPR 0.9.0 misclassifies as new production seams. (A) transport.rs gains an in-crate #[cfg(test)] mod (SharedBuf writer, framed_request/framed_raw/first_frame_body helpers, 11 test_transport_* functions) that drive the crate-private pub(super) run_with_io loop directly over std::io::Cursor; the tests live in-crate because run_with_io is not public and an external tests/ file would need a #[doc(hidden)] pub production shim. RIPR flags the test plumbing (struct/impl, predicates at line 252, return values) as production seams — same ripr#1428 class as ripr-suppress-dap-invalid-ref-hardening-test-helpers (variables.rs #[cfg(test)] mod). (B) dap_lifecycle_matrix_tests.rs gains the C1-C6 cleanup/teardown cells whose assertion plumbing (predicate/error-path, e.g. lines 561/564 relaunch-after-terminate message-class check) is flagged as production seams — same class as ripr-suppress-seam-proof-tests. The transport framing seam (ContentLengthFramer recovery, CRLF/LF separators, malformed header/body, EOF, multi-message, recovery-after-bad-frame) and the no-session lifecycle handlers are fully exercised by these tests. Both are pure test surfaces. Suppression is minimal (one production file's #[cfg(test)] mod plus one test file). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-20"
+review_after = "2026-07-20"
+expires = "2026-09-30"
