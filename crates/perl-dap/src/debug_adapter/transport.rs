@@ -207,18 +207,40 @@ impl DebugAdapter {
                     }
                 };
 
-                let DapMessage::Request { seq, command, arguments } = msg else {
-                    continue;
-                };
-
-                let response = self.dispatch_request(seq, &command, arguments);
-                let payload = match serde_json::to_vec(&response) {
-                    Ok(payload) => payload,
-                    Err(e) => {
-                        tracing::error!(error = %e, "Failed to serialize DAP response");
+                let (seq, command, arguments) = match msg {
+                    DapMessage::Request { seq, command, arguments } => (seq, command, arguments),
+                    DapMessage::Response {
+                        seq, request_seq, command, success, message, ..
+                    } => {
+                        // Log reception of response messages from client (for potential future
+                        // server-initiated requests that expect responses). Currently the adapter
+                        // does not initiate requests, so these are unexpected but valid per DAP spec.
+                        tracing::debug!(
+                            seq,
+                            request_seq,
+                            command,
+                            success,
+                            message = ?message,
+                            "Received Response message from client (not yet handled)"
+                        );
+                        continue;
+                    }
+                    DapMessage::Event { seq, event, body } => {
+                        // Log reception of event messages from client. The DAP protocol permits
+                        // bidirectional event flow for advanced features. Currently these are
+                        // unexpected, but we handle them gracefully by logging.
+                        tracing::debug!(
+                            seq,
+                            event,
+                            body = ?body,
+                            "Received Event message from client (not yet handled)"
+                        );
                         continue;
                     }
                 };
+
+                let response = self.dispatch_request(seq, &command, arguments);
+                let payload = serde_json::to_vec(&response).map_err(io::Error::other)?;
 
                 let mut writer = lock_or_recover(&shared_writer, "response_writer");
                 write_framed_payload(&mut *writer, &payload)?;
@@ -295,6 +317,24 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Default)]
+    struct SharedWriter {
+        bytes: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl Write for SharedWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let mut bytes =
+                self.bytes.lock().map_err(|_| io::Error::other("writer buffer mutex poisoned"))?;
+            bytes.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
     // ── Frame builder ─────────────────────────────────────────────────────────
 
     fn framed_request(seq: i64, command: &str) -> Vec<u8> {
@@ -308,6 +348,14 @@ mod tests {
         let mut frame = header.into_bytes();
         frame.extend_from_slice(&body);
         frame
+    }
+
+    fn framed_message(message: &DapMessage) -> Result<Vec<u8>, serde_json::Error> {
+        let body = serde_json::to_vec(message)?;
+        let header = format!("Content-Length: {}\r\n\r\n", body.len());
+        let mut frame = header.into_bytes();
+        frame.extend_from_slice(&body);
+        Ok(frame)
     }
 
     // ── Tests ─────────────────────────────────────────────────────────────────
@@ -346,6 +394,35 @@ mod tests {
             writer.fail_after_writes + 1,
             "failed boundary write must still be counted"
         );
+    }
+
+    #[test]
+    fn test_run_with_io_handles_non_request_messages_without_output()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut input_bytes = framed_message(&DapMessage::Response {
+            seq: 1,
+            request_seq: 99,
+            success: true,
+            command: "serverInitiatedRequest".to_string(),
+            body: None,
+            message: Some("client response".to_string()),
+        })?;
+        input_bytes.extend_from_slice(&framed_message(&DapMessage::Event {
+            seq: 2,
+            event: "clientEvent".to_string(),
+            body: Some(serde_json::json!({"source": "client"})),
+        })?);
+
+        let mut adapter = DebugAdapter::new();
+        let writer = SharedWriter::default();
+        let written = writer.bytes.clone();
+
+        let result = adapter.run_with_io(Cursor::new(input_bytes), writer);
+
+        assert!(result.is_ok(), "non-request messages must not fail the transport loop");
+        let bytes = written.lock().map_err(|_| "writer buffer mutex poisoned")?;
+        assert!(bytes.is_empty(), "non-request messages must not emit adapter output");
+        Ok(())
     }
 
     /// A writer that succeeds for a few writes then fails permanently triggers the

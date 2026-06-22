@@ -150,9 +150,9 @@ fn test_stack_trace_response_sequence_numbers() -> Result<(), Box<dyn std::error
 /// The total number of frames available in the stack"). This test locks the
 /// invariant that totalFrames >= the number of frames in the response.
 ///
-/// The no-session path returns an empty stackFrames array (per #995 — fabricated
-/// placeholder frame was removed). With 0 frames and levels=1, totalFrames must
-/// also equal 0, satisfying totalFrames >= returned window size.
+/// The no-session path returns an empty stackFrames array (per #995; fabricated
+/// placeholder frame support was removed). With 0 frames and levels=1,
+/// totalFrames must also equal 0, satisfying totalFrames >= returned window size.
 #[test]
 // AC:963
 fn test_total_frames_is_not_window_size() -> Result<(), Box<dyn std::error::Error>> {
@@ -172,13 +172,13 @@ fn test_total_frames_is_not_window_size() -> Result<(), Box<dyn std::error::Erro
     let total =
         body.get("totalFrames").and_then(|v| v.as_u64()).ok_or("Expected totalFrames number")?;
 
-    // The invariant: totalFrames >= returned window size (holds for 0 >= 0)
+    // The invariant: totalFrames >= returned window size (holds for 0 >= 0).
     assert!(
         total >= frames.len() as u64,
         "totalFrames ({total}) must be >= returned frame count ({})",
         frames.len()
     );
-    // No active session → honest empty list (#995). totalFrames must match.
+    // No active session means an honest empty list (#995). totalFrames must match.
     assert_eq!(frames.len(), 0, "no active session must return empty stackFrames");
     assert_eq!(total, 0, "totalFrames must equal actual frame depth (0 with no session)");
     Ok(())
