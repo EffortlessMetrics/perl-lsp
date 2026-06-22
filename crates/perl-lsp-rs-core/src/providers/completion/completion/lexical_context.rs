@@ -3,11 +3,90 @@ use std::cmp::Ordering;
 
 /// Simple heuristic to check if position is in a string.
 pub(super) fn is_in_string(source: &str, position: usize) -> bool {
-    let before = &source[..position];
-    let single_quotes = before.matches('\'').count();
-    let double_quotes = before.matches('"').count();
+    if invalid_string_position(source, position) {
+        return false;
+    }
 
-    single_quotes % 2 == 1 || double_quotes % 2 == 1
+    let mut active_delimiters: std::collections::VecDeque<HeredocDelimiter> =
+        std::collections::VecDeque::new();
+    let mut literal_state = LiteralScanState::default();
+    let mut in_pod_block = false;
+    let mut line_start = 0usize;
+
+    for raw_line in source.split_inclusive('\n') {
+        let line_end = line_start + raw_line.len();
+        let line = strip_line_ending(raw_line);
+
+        if let Some(delimiter) = active_delimiters.front() {
+            if delimiter.matches_close(line) {
+                if position_within_line(position, line_start, line_end) {
+                    return false;
+                }
+                active_delimiters.pop_front();
+            } else if position_within_line(position, line_start, line_end) {
+                return false;
+            }
+            line_start = line_end;
+            continue;
+        }
+
+        if in_pod_block {
+            if position_within_line(position, line_start, line_end) {
+                return false;
+            }
+            if is_pod_end_marker(line) {
+                in_pod_block = false;
+            }
+            line_start = line_end;
+            continue;
+        }
+
+        if !literal_state.is_active() && is_pod_start_marker(line) {
+            if position_within_line(position, line_start, line_end) {
+                return false;
+            }
+            in_pod_block = true;
+            line_start = line_end;
+            continue;
+        }
+
+        if position_within_line(position, line_start, line_end) {
+            literal_state.scan_segment(source.as_bytes(), line_start, position);
+            return literal_state.in_single_quote
+                || literal_state.in_double_quote
+                || literal_state.in_backtick
+                || literal_state.literal.as_ref().is_some_and(ActiveLiteral::is_string_like);
+        }
+
+        let started_in_literal = literal_state.is_active();
+        let resumed_code_index =
+            literal_state.scan_segment(source.as_bytes(), line_start, line_end);
+        if started_in_literal {
+            if let Some(resumed_code_index) = resumed_code_index {
+                active_delimiters.extend(extract_heredoc_delimiters_from_source_line(
+                    source,
+                    line,
+                    line_end,
+                    resumed_code_index - line_start,
+                ));
+            }
+        } else {
+            active_delimiters
+                .extend(extract_heredoc_delimiters_from_source_line(source, line, line_end, 0));
+        }
+
+        line_start = line_end;
+    }
+
+    false
+}
+
+fn invalid_string_position(source: &str, position: usize) -> bool {
+    position > source.len() || !source.is_char_boundary(position)
+}
+
+fn position_within_line(position: usize, line_start: usize, line_end: usize) -> bool {
+    position >= line_start && position <= line_end
 }
 
 /// Heuristic to check if position is inside a regex literal.
@@ -626,6 +705,13 @@ struct QuoteLikeLiteral {
     closer: u8,
     sections: usize,
     consumed: usize,
+    kind: QuoteLikeLiteralKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum QuoteLikeLiteralKind {
+    String,
+    Regex,
 }
 
 struct ActiveLiteral {
@@ -634,6 +720,7 @@ struct ActiveLiteral {
     sections_remaining: usize,
     depth: usize,
     awaiting_section_opener: bool,
+    kind: QuoteLikeLiteralKind,
 }
 
 impl ActiveLiteral {
@@ -644,7 +731,12 @@ impl ActiveLiteral {
             sections_remaining: literal.sections,
             depth: 1,
             awaiting_section_opener: false,
+            kind: literal.kind,
         }
+    }
+
+    fn is_string_like(&self) -> bool {
+        self.kind == QuoteLikeLiteralKind::String
     }
 
     fn advance(&mut self, byte: u8, escaped: &mut bool) -> bool {
@@ -821,25 +913,37 @@ fn quote_like_literal_start(bytes: &[u8], index: usize) -> Option<QuoteLikeLiter
         return None;
     }
 
-    let (delimiter_index, sections, allow_space) = match bytes.get(index).copied()? {
-        b'q' if bytes.get(index + 1) == Some(&b'r') => (index + 2, 1, true),
-        b'q' if matches!(bytes.get(index + 1), Some(b'q' | b'w' | b'x')) => (index + 2, 1, true),
-        b't' if bytes.get(index + 1) == Some(&b'r') => (index + 2, 2, true),
-        b'q' => (index + 1, 1, true),
-        b'm' => (index + 1, 1, true),
-        b's' | b'y' => (index + 1, 2, true),
-        _ => return None,
-    };
+    let (delimiter_offset, sections, allow_space, kind) =
+        quote_like_operator_parameters(bytes.get(index).copied()?, bytes.get(index + 1).copied())?;
 
+    let delimiter_index = index + delimiter_offset;
     let delimiter_index =
         if allow_space { skip_ascii_space(bytes, delimiter_index) } else { delimiter_index };
+    if quote_like_is_braced_bareword_key(bytes, index, delimiter_index) {
+        return None;
+    }
     if bytes.get(delimiter_index..delimiter_index + 2) == Some(b"=>") {
         return None;
     }
 
     let opener = bytes.get(delimiter_index).copied()?;
     let closer = quote_like_closer(opener)?;
-    Some(QuoteLikeLiteral { opener, closer, sections, consumed: delimiter_index + 1 - index })
+    Some(QuoteLikeLiteral { opener, closer, sections, consumed: delimiter_index + 1 - index, kind })
+}
+
+fn quote_like_operator_parameters(
+    byte: u8,
+    next: Option<u8>,
+) -> Option<(usize, usize, bool, QuoteLikeLiteralKind)> {
+    match (byte, next) {
+        (b'q', Some(b'r')) => Some((2, 1, true, QuoteLikeLiteralKind::Regex)),
+        (b'q', Some(b'q' | b'w' | b'x')) => Some((2, 1, true, QuoteLikeLiteralKind::String)),
+        (b't', Some(b'r')) => Some((2, 2, true, QuoteLikeLiteralKind::Regex)),
+        (b'q', _) => Some((1, 1, true, QuoteLikeLiteralKind::String)),
+        (b'm', _) => Some((1, 1, true, QuoteLikeLiteralKind::Regex)),
+        (b's' | b'y', _) => Some((1, 2, true, QuoteLikeLiteralKind::Regex)),
+        _ => None,
+    }
 }
 
 fn quote_like_is_file_test_s_operator(bytes: &[u8], index: usize) -> bool {
@@ -858,6 +962,20 @@ fn quote_like_is_file_test_s_operator(bytes: &[u8], index: usize) -> bool {
 
     before <= 1
         || bytes.get(before - 2).is_none_or(|byte| !byte.is_ascii_alphanumeric() && *byte != b'_')
+}
+
+fn quote_like_is_braced_bareword_key(bytes: &[u8], index: usize, delimiter_index: usize) -> bool {
+    let mut before = index;
+    while before > 0 && matches!(bytes.get(before - 1), Some(b' ' | b'\t')) {
+        before -= 1;
+    }
+
+    if bytes.get(before.saturating_sub(1)) != Some(&b'{') {
+        return false;
+    }
+
+    let after_operator = skip_ascii_space(bytes, delimiter_index);
+    bytes.get(after_operator) == Some(&b'}')
 }
 
 fn quote_like_follows_sub_declaration(bytes: &[u8], index: usize) -> bool {
@@ -893,7 +1011,13 @@ fn slash_regex_literal_start(bytes: &[u8], index: usize) -> Option<QuoteLikeLite
         return None;
     }
 
-    Some(QuoteLikeLiteral { opener: b'/', closer: b'/', sections: 1, consumed: 1 })
+    Some(QuoteLikeLiteral {
+        opener: b'/',
+        closer: b'/',
+        sections: 1,
+        consumed: 1,
+        kind: QuoteLikeLiteralKind::Regex,
+    })
 }
 
 fn slash_follows_binding_operator(bytes: &[u8], index: usize) -> bool {
@@ -1314,6 +1438,23 @@ fn is_pod_end_marker(line: &str) -> bool {
 mod tests {
     use super::*;
 
+    fn assert_quote_like_start(
+        source: &[u8],
+        index: usize,
+        consumed: usize,
+        sections: usize,
+        kind: QuoteLikeLiteralKind,
+    ) {
+        let literal = quote_like_literal_start(source, index);
+        assert!(literal.is_some(), "expected quote-like literal for {source:?} at {index}");
+
+        if let Some(literal) = literal {
+            assert_eq!(literal.consumed, consumed);
+            assert_eq!(literal.sections, sections);
+            assert_eq!(literal.kind, kind);
+        }
+    }
+
     #[test]
     fn future_close_probe_rejects_out_of_range_start() {
         let delimiter = HeredocDelimiter {
@@ -1325,6 +1466,156 @@ mod tests {
         };
 
         assert!(!has_future_heredoc_close("<<EOF", 99, &delimiter));
+    }
+
+    #[test]
+    fn invalid_string_position_boundary_discriminator() {
+        let source = "é";
+
+        assert_eq!(invalid_string_position(source, 0), false);
+        assert_eq!(invalid_string_position(source, source.len()), false);
+        assert_eq!(invalid_string_position(source, 1), true);
+        assert_eq!(invalid_string_position(source, source.len() + 1), true);
+    }
+
+    #[test]
+    fn position_within_line_boundary_discriminator() {
+        assert_eq!(position_within_line(9, 10, 15), false);
+        assert_eq!(position_within_line(10, 10, 15), true);
+        assert_eq!(position_within_line(12, 10, 15), true);
+        assert_eq!(position_within_line(15, 10, 15), true);
+        assert_eq!(position_within_line(16, 10, 15), false);
+    }
+
+    #[test]
+    fn is_in_string_rejects_out_of_range_and_non_boundary_positions() {
+        assert_eq!(is_in_string("abc", 3), false);
+        assert_eq!(is_in_string("abc", 4), false);
+        assert_eq!(is_in_string("\"é", 1), true);
+        assert_eq!(is_in_string("\"é", 2), false);
+        assert_eq!(is_in_string("\"é", 3), true);
+        assert_eq!(is_in_string("\"é", 4), false);
+        assert_eq!(is_in_string("\"a", 2), true);
+    }
+
+    #[test]
+    fn is_in_string_respects_line_start_boundary() {
+        let source = "my $x = 1;\n\"open\nstill_open";
+
+        assert_eq!(is_in_string(source, 10), false);
+        assert_eq!(is_in_string(source, 11), false);
+        assert_eq!(is_in_string(source, 12), true);
+        assert_eq!(is_in_string(source, 17), true);
+        assert_eq!(is_in_string(source, 27), true);
+    }
+
+    #[test]
+    fn is_in_string_tracks_quote_parity_and_escapes() {
+        assert_eq!(is_in_string("\"", 1), true);
+        assert_eq!(is_in_string("\"\"", 2), false);
+        assert_eq!(is_in_string("'", 1), true);
+        assert_eq!(is_in_string("''", 2), false);
+        assert_eq!(is_in_string("my $x = 'open", 13), true);
+        assert_eq!(is_in_string("my $x = 'closed'", 16), false);
+        assert_eq!(is_in_string("my $x = \"open", 13), true);
+        assert_eq!(is_in_string("my $x = \"closed\"", 16), false);
+        assert_eq!(is_in_string("my $x = 'single' . \"double", 26), true);
+        assert_eq!(is_in_string("`", 1), true);
+    }
+
+    #[test]
+    fn literal_scan_quote_parity_boundary_discriminator() {
+        let mut no_quote = LiteralScanState::default();
+        assert_eq!(no_quote.scan_segment(b"", 0, 0), None);
+        assert_eq!(no_quote.is_active(), false);
+
+        let mut one_single_quote = LiteralScanState::default();
+        assert_eq!(one_single_quote.scan_segment(b"'", 0, 1), None);
+        assert_eq!(one_single_quote.in_single_quote, true);
+        assert_eq!(one_single_quote.in_double_quote, false);
+        assert_eq!(one_single_quote.is_active(), true);
+
+        let mut two_single_quotes = LiteralScanState::default();
+        assert_eq!(two_single_quotes.scan_segment(b"''", 0, 2), None);
+        assert_eq!(two_single_quotes.in_single_quote, false);
+        assert_eq!(two_single_quotes.in_double_quote, false);
+        assert_eq!(two_single_quotes.is_active(), false);
+
+        let mut one_double_quote = LiteralScanState::default();
+        assert_eq!(one_double_quote.scan_segment(br#"""#, 0, 1), None);
+        assert_eq!(one_double_quote.in_single_quote, false);
+        assert_eq!(one_double_quote.in_double_quote, true);
+        assert_eq!(one_double_quote.is_active(), true);
+
+        let mut two_double_quotes = LiteralScanState::default();
+        assert_eq!(two_double_quotes.scan_segment(br#""""#, 0, 2), None);
+        assert_eq!(two_double_quotes.in_single_quote, false);
+        assert_eq!(two_double_quotes.in_double_quote, false);
+        assert_eq!(two_double_quotes.is_active(), false);
+    }
+
+    #[test]
+    fn is_in_string_tracks_quote_like_string_literals() {
+        assert_eq!(is_in_string("my $text = qq{Hello $me", 23), true);
+        assert_eq!(is_in_string("my $text = q($me", 16), true);
+        assert_eq!(is_in_string("my $rx = qr{$me", 15), false);
+    }
+
+    #[test]
+    fn is_in_string_does_not_treat_hash_keys_as_quote_like_literals() {
+        let after_q_key = "$h{q}; my $name";
+        let after_qq_key = "$h{qq}; my $name";
+        let after_qw_key = "$h{qw}; my $name";
+        let after_qx_key = "$h{qx}; my $name";
+        let after_qr_key = "$h{qr}; my $name";
+        let after_arrow_q_key = "$h->{ q }; my $name";
+        let after_s_key = "$h{s}; my $name";
+        let after_tr_key = "$h{tr}; my $name";
+        let after_y_key = "$h{y}; my $name";
+        let inside_string_after_m_key = "$h{m}; my $text = \"Hello $na";
+
+        assert_eq!(is_in_string(after_q_key, after_q_key.len()), false);
+        assert_eq!(is_in_string(after_qq_key, after_qq_key.len()), false);
+        assert_eq!(is_in_string(after_qw_key, after_qw_key.len()), false);
+        assert_eq!(is_in_string(after_qx_key, after_qx_key.len()), false);
+        assert_eq!(is_in_string(after_qr_key, after_qr_key.len()), false);
+        assert_eq!(is_in_string(after_arrow_q_key, after_arrow_q_key.len()), false);
+        assert_eq!(is_in_string(after_s_key, after_s_key.len()), false);
+        assert_eq!(is_in_string(after_tr_key, after_tr_key.len()), false);
+        assert_eq!(is_in_string(after_y_key, after_y_key.len()), false);
+        assert_eq!(is_in_string(inside_string_after_m_key, inside_string_after_m_key.len()), true);
+    }
+
+    #[test]
+    fn is_in_string_skips_pod_q_like_text() {
+        let source = "=pod\nq($cursor\n=cut\nmy $after = ";
+
+        assert_eq!(is_in_string(source, 2), false);
+        assert_eq!(is_in_string(source, source.len()), false);
+    }
+
+    #[test]
+    fn is_in_string_handles_escaped_quote() {
+        let source = r#"my $text = "Hello \" $name"#;
+
+        assert!(is_in_string(source, source.len()));
+    }
+
+    #[test]
+    fn is_in_string_skips_heredoc_body_and_closing_line_quotes() {
+        let source = r#"my $text = <<EOF;
+literal
+EOF
+my $after = "op"#;
+
+        assert_eq!(is_in_string(source, 17), false);
+        assert_eq!(is_in_string(source, 18), false);
+        assert_eq!(is_in_string(source, 25), false);
+        assert_eq!(is_in_string(source, 26), false);
+        assert_eq!(is_in_string(source, 27), false);
+        assert_eq!(is_in_string(source, 30), false);
+        assert_eq!(is_in_string(source, 31), false);
+        assert_eq!(is_in_string(source, 45), true);
     }
 
     #[test]
@@ -1466,7 +1757,13 @@ mod tests {
 
     #[test]
     fn active_literal_escape_consumes_next_byte() {
-        let literal = QuoteLikeLiteral { opener: b'!', closer: b'!', sections: 1, consumed: 2 };
+        let literal = QuoteLikeLiteral {
+            opener: b'!',
+            closer: b'!',
+            sections: 1,
+            consumed: 2,
+            kind: QuoteLikeLiteralKind::String,
+        };
         let mut active = ActiveLiteral::new(literal);
         let mut escaped = true;
 
@@ -1511,6 +1808,97 @@ mod tests {
         assert_eq!(state.scan_segment(b"q!", 0, 2), None);
         assert!(state.literal.is_some());
         assert_eq!(state.pending_literal_body_start, None);
+    }
+
+    fn assert_scan_starts_quote_like_literal(
+        source: &[u8],
+        kind: QuoteLikeLiteralKind,
+        sections_remaining: usize,
+        opener: u8,
+        closer: u8,
+    ) {
+        let mut state = LiteralScanState::default();
+
+        assert_eq!(state.scan_segment(source, 0, source.len()), None);
+        assert_eq!(state.pending_literal_body_start, None);
+        assert!(state.literal.is_some(), "expected active literal for {source:?}");
+        if let Some(literal) = state.literal.as_ref() {
+            assert_eq!(literal.kind, kind);
+            assert_eq!(literal.sections_remaining, sections_remaining);
+            assert_eq!(literal.opener, opener);
+            assert_eq!(literal.closer, closer);
+        }
+    }
+
+    #[test]
+    fn literal_scan_quote_like_operator_boundary_discriminator() {
+        assert_scan_starts_quote_like_literal(b"qr{", QuoteLikeLiteralKind::Regex, 1, b'{', b'}');
+        assert_scan_starts_quote_like_literal(b"qq{", QuoteLikeLiteralKind::String, 1, b'{', b'}');
+        assert_scan_starts_quote_like_literal(b"qw(", QuoteLikeLiteralKind::String, 1, b'(', b')');
+        assert_scan_starts_quote_like_literal(b"qx/", QuoteLikeLiteralKind::String, 1, b'/', b'/');
+        assert_scan_starts_quote_like_literal(b"tr/", QuoteLikeLiteralKind::Regex, 2, b'/', b'/');
+    }
+
+    #[test]
+    fn quote_like_literal_start_discriminates_qr_from_q_strings() {
+        assert_eq!(Some(&b'r'), b"qr{abc}".get(1));
+        assert_eq!(
+            quote_like_operator_parameters(b'q', Some(b'r')),
+            Some((2, 1, true, QuoteLikeLiteralKind::Regex))
+        );
+
+        let qr_literal = quote_like_literal_start(b"qr{abc}", 0);
+
+        assert!(qr_literal.is_some());
+        if let Some(literal) = qr_literal {
+            assert_eq!(literal.consumed, 3);
+            assert_eq!(literal.sections, 1);
+            assert_eq!(literal.kind, QuoteLikeLiteralKind::Regex);
+        }
+        assert_quote_like_start(b"q{abc}", 0, 2, 1, QuoteLikeLiteralKind::String);
+        assert!(quote_like_literal_start(b"qa{abc}", 0).is_none());
+    }
+
+    #[test]
+    fn quote_like_literal_start_discriminates_q_string_variants() {
+        assert_eq!(
+            quote_like_operator_parameters(b'q', Some(b'q')),
+            Some((2, 1, true, QuoteLikeLiteralKind::String))
+        );
+        assert_eq!(
+            quote_like_operator_parameters(b'q', Some(b'w')),
+            Some((2, 1, true, QuoteLikeLiteralKind::String))
+        );
+        assert_eq!(
+            quote_like_operator_parameters(b'q', Some(b'x')),
+            Some((2, 1, true, QuoteLikeLiteralKind::String))
+        );
+
+        assert_quote_like_start(b"qq{abc}", 0, 3, 1, QuoteLikeLiteralKind::String);
+        assert_quote_like_start(b"qw(foo)", 0, 3, 1, QuoteLikeLiteralKind::String);
+        assert_quote_like_start(b"qx/path/", 0, 3, 1, QuoteLikeLiteralKind::String);
+        assert_quote_like_start(b"qr{abc}", 0, 3, 1, QuoteLikeLiteralKind::Regex);
+    }
+
+    #[test]
+    fn quote_like_literal_start_discriminates_tr_operator() {
+        assert_eq!(Some(&b'r'), b"tr/a/b".get(1));
+        assert_eq!(
+            quote_like_operator_parameters(b't', Some(b'r')),
+            Some((2, 2, true, QuoteLikeLiteralKind::Regex))
+        );
+        assert_eq!(quote_like_operator_parameters(b't', Some(b'/')), None);
+
+        let tr_literal = quote_like_literal_start(b"tr/a/b", 0);
+
+        assert!(tr_literal.is_some());
+        if let Some(literal) = tr_literal {
+            assert_eq!(literal.consumed, 3);
+            assert_eq!(literal.sections, 2);
+            assert_eq!(literal.kind, QuoteLikeLiteralKind::Regex);
+        }
+        assert!(quote_like_literal_start(b"t/a", 0).is_none());
+        assert!(quote_like_literal_start(b"try { 1 }", 0).is_none());
     }
 
     #[test]

@@ -1,12 +1,31 @@
 use super::*;
+use crate::providers::file_completion::CWD_LOCK as FILE_COMPLETION_CWD_LOCK;
 use perl_parser_core::Parser;
 use perl_tdd_support::{must, must_some};
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
 use url::Url;
+
+struct CurrentDirGuard {
+    previous: PathBuf,
+}
+
+impl CurrentDirGuard {
+    fn change_to(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let previous = std::env::current_dir()?;
+        std::env::set_current_dir(path)?;
+        Ok(Self { previous })
+    }
+}
+
+impl Drop for CurrentDirGuard {
+    fn drop(&mut self) {
+        let _ = std::env::set_current_dir(&self.previous);
+    }
+}
 
 #[test]
 fn test_variable_completion() {
@@ -1186,6 +1205,227 @@ fn test_regex_pattern_side_suppresses_variables_not_flags() {
         "regex constructs should still be offered for non-sigil prefixes inside regex, got: {:?}",
         completions.iter().map(|item| &item.label).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_variables() {
+    let code = r#"my $message = "hi"; my $text = "Hello $me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected scalar variable completions to be suppressed inside strings, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_after_escaped_quote() {
+    let code = r#"my $message = "hi"; my $text = "Hello \" $me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected escaped quotes to keep string-context suppression active, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_in_single_quotes() {
+    let code = r#"my $message = "hi"; my $text = 'Hello $me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected scalar variable completions to be suppressed inside single-quoted strings, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_in_qq_literal() {
+    let code = r#"my $message = "hi"; my $text = qq{Hello $me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected scalar variable completions to be suppressed inside qq literals, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_in_q_literal() {
+    let code = r#"my $message = "hi"; my $text = q($me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected scalar variable completions to be suppressed inside q literals, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_function_sigils() {
+    let code = r#"sub helper {} my $text = "call &he"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "&helper"),
+        "expected function completions to be suppressed inside strings, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_after_hash_key_q_stays_in_code_context() {
+    let code = r#"my $name = "hi"; my %h = (q => 1); $h{q}; $na"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        completions.iter().any(|item| item.label == "$name"),
+        "hash-key q must not poison following code as string context, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_after_hash_key_m_still_suppresses_inside_later_string() {
+    let code = r#"my $name = "hi"; my %h = (m => 1); $h{m}; my $text = "Hello $na"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$name"),
+        "hash-key m must not hide a later real string context, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_preserves_path_completion() -> Result<(), Box<dyn std::error::Error>> {
+    let _cwd_guard = FILE_COMPLETION_CWD_LOCK.lock()?;
+    let temp = TempDir::new()?;
+    fs::create_dir_all(temp.path().join("src"))?;
+    let _dir_guard = CurrentDirGuard::change_to(temp.path())?;
+
+    let code = r#"my $path = "./""#;
+    let pos = code.len() - 1;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        completions.iter().any(|item| item.label == "src/"),
+        "expected path completion to remain available inside string paths, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_string_completion_suppresses_method_arrow_completions() {
+    let code = r#"my $dbh; my $s = "$dbh->""#;
+    let pos = code.len() - 1;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| matches!(item.label.as_str(), "can" | "selectrow_array")),
+        "method completions must stay suppressed inside strings, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_multiline_use_qw_structural_completions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/MyUtils.pm")?,
+        "package MyUtils;\nsub helper_one {}\n1;\n".to_string(),
+    )?;
+    let code = "my $text = \"before\nuse MyUtils qw(he";
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions.iter().any(|item| item.label == "helper_one"),
+        "use/qw-looking text inside a multiline string must not trigger import completions; got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_string_completion_suppresses_multiline_require_structural_completions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+    let code = "my $text = \"before\nrequire Ut";
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions
+            .iter()
+            .any(|item| item.label == "Utils" && item.kind == CompletionItemKind::Module),
+        "require-looking text inside a multiline string must not trigger module completions; got: {:?}",
+        completions.iter().map(|item| (&item.label, &item.kind)).collect::<Vec<_>>()
+    );
+    Ok(())
 }
 
 #[test]

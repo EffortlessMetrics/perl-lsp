@@ -601,6 +601,9 @@ impl CompletionProvider {
         }
         let before = &source[..position];
         let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        if Self::current_line_starts_in_string(source, position) {
+            return None;
+        }
         let line = before[line_start..].trim_start();
 
         // Must start with `use `
@@ -714,6 +717,14 @@ impl CompletionProvider {
         } else {
             false
         }
+    }
+
+    pub(super) fn current_line_starts_in_string(source: &str, position: usize) -> bool {
+        let Some(before) = source.get(..position) else {
+            return false;
+        };
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        lexical_context::is_in_string(source, line_start)
     }
 
     fn is_open_quoted_require_module_context(inner: &str, quote: char) -> bool {

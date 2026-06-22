@@ -7,6 +7,10 @@
 
 use crate::providers::completion_item::{CompletionItem, CompletionItemKind};
 
+#[cfg(test)]
+pub(crate) static CWD_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
+
 /// Options for configuring the file completion provider.
 #[derive(Debug, Clone)]
 pub struct FileCompletionOptions {
@@ -183,15 +187,12 @@ fn file_completion_metadata(entry: &walkdir::DirEntry) -> (String, Option<String
 
 #[cfg(test)]
 mod tests {
-    use super::{FileCompletionContext, complete_file_paths};
+    use super::{CWD_LOCK, FileCompletionContext, complete_file_paths};
     use std::{
         fs,
         path::{Path, PathBuf},
-        sync::{LazyLock, Mutex},
     };
     use tempfile::tempdir;
-
-    static CWD_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     struct CurrentDirGuard {
         previous: PathBuf,

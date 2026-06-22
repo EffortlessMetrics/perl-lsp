@@ -25,16 +25,16 @@ pub(super) fn complete_dispatch(
         return CompletionFlow::SortAndReturn;
     }
 
+    if context.in_string {
+        complete_file_path_context(completions, context, source, is_cancelled);
+        return CompletionFlow::SortAndReturn;
+    }
+
     if let Some(flow) = complete_sigil_context(provider, completions, context, is_cancelled) {
         return flow;
     }
 
     if complete_symbol_namespace_context(provider, completions, context) {
-        return CompletionFlow::SortAndReturn;
-    }
-
-    if context.in_string {
-        complete_file_path_context(completions, context, source, is_cancelled);
         return CompletionFlow::SortAndReturn;
     }
 
@@ -106,7 +106,7 @@ fn complete_use_or_structural_context(
         return true;
     }
 
-    if is_method_arrow_context(context) {
+    if !context.in_string && is_method_arrow_context(context) {
         methods::add_method_completions(completions, context, source, &provider.symbol_table);
         workspace::add_workspace_method_completions(
             completions,

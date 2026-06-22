@@ -14,7 +14,8 @@ pub(super) fn prepare_context(
     }))
     .ok()
     .map(|mut context| {
-        context.in_use_statement = CompletionProvider::is_use_statement_context(source, position);
+        context.in_use_statement = CompletionProvider::is_use_statement_context(source, position)
+            && !CompletionProvider::current_line_starts_in_string(source, position);
         context
     })?;
 
