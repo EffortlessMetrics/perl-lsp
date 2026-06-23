@@ -12,7 +12,9 @@
 )]
 
 use crate::LspServer;
-use crate::ripr_facts_emitter::{emit_relations_and_discriminators, emit_tests_and_oracles};
+use crate::ripr_facts_emitter::{
+    emit_boundaries_and_commands, emit_relations_and_discriminators, emit_tests_and_oracles,
+};
 use perl_lsp_rs_core::runtime::launcher::{
     LaunchAction, LaunchConfig, StartupTimer, TransportMode, format_health_output,
     format_info_output, format_startup_banner, help_text, init_logging, log_server_startup,
@@ -222,9 +224,14 @@ fn run_ripr_facts(
 
     // PR 7 (perl-lsp-swarm#2594): emit relations + concrete discriminators +
     // observed-sink facts.
-    let (relations, changed_observables, observed_sinks) =
+    let (relations, _changed_observables, _observed_sinks) =
         emit_relations_and_discriminators(root, &tests, &oracles);
     let has_relation_facts = !relations.is_empty();
+
+    // PR 8 (perl-lsp-swarm#2595): emit dynamic boundaries + limitations +
+    // typed verify-command candidates.
+    let (boundaries, boundary_limitations, verify_commands) = emit_boundaries_and_commands(root);
+    let has_boundary_facts = !boundaries.is_empty();
 
     let mut packet = build_unavailable_packet(schema, root, base, head, &normalized_classes);
 
@@ -235,16 +242,22 @@ fn run_ripr_facts(
     // Populate relations array (PR 7).
     packet["relations"] = serde_json::Value::Array(relations);
 
-    // Upgrade status if we found test or relation facts.
-    if has_test_facts || has_relation_facts {
+    // Populate dynamic_boundaries + verify_commands arrays (PR 8).
+    packet["dynamic_boundaries"] = serde_json::Value::Array(boundaries);
+    packet["verify_commands"] = serde_json::Value::Array(verify_commands);
+
+    // Upgrade status + merge limitations if we found any facts.
+    if has_test_facts || has_relation_facts || has_boundary_facts {
         packet["packet_status"] = serde_json::json!("partial");
-        // Replace the limitation with one noting partial coverage.
-        packet["limitations"] = serde_json::json!([{
+        // Merge boundary limitations with the emitter-partial limitation.
+        let mut all_limitations = boundary_limitations;
+        all_limitations.push(serde_json::json!({
             "limitation_id": "emitter-partial",
             "kind": "partial_emitter",
-            "message": "PR 6 (tests/oracles) + PR 7 (relations/discriminators) landed; files/owners/changes (PR 5) + boundaries (PR 8) are not yet emitted.",
+            "message": "PRs 6-8 landed (tests/oracles, relations/discriminators, boundaries/commands). Files/owners/changes (PR 5) still not yet emitted.",
             "evidence_refs": []
-        }]);
+        }));
+        packet["limitations"] = serde_json::Value::Array(all_limitations);
     }
 
     // Write the packet to the output path.
