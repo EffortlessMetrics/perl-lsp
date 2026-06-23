@@ -28,6 +28,8 @@ pub mod definition_shadow;
 pub mod hover_shadow;
 mod refactor_receipt_helpers;
 mod references;
+/// PIR-A find-references shadow compare path (compiler substrate migration, PR2 #2634).
+pub mod references_pir_shadow;
 /// Find-references shadow compare path (semantic migration).
 pub mod references_shadow;
 /// Rename shadow compare and cutover path (semantic migration).
