@@ -12,6 +12,7 @@
 )]
 
 use crate::LspServer;
+use crate::ripr_facts_emitter::emit_tests_and_oracles;
 use perl_lsp_rs_core::runtime::launcher::{
     LaunchAction, LaunchConfig, StartupTimer, TransportMode, format_health_output,
     format_info_output, format_startup_banner, help_text, init_logging, log_server_startup,
@@ -212,12 +213,30 @@ fn run_ripr_facts(
         }
     };
 
-    // Emit a valid `unavailable` packet. The emitter body lands in PRs 5-8.
-    // Today every call produces `unavailable` because no FileFactShard→packet
-    // mapping exists yet. This is the honest state: the CLI surface works,
-    // args validate, but the packet is unavailable until the emitter slices
-    // land.
-    let packet = build_unavailable_packet(schema, root, base, head, &normalized_classes);
+    // Emit the packet. PR 6 (perl-lsp-swarm#2593) adds test + oracle emission;
+    // files/owners/changes (PR 5) + relations/discriminators (PR 7) + boundaries
+    // (PR 8) land in subsequent PRs. When tests are found, upgrade packet_status
+    // from `unavailable` to `partial` (some fact classes are populated).
+    let (tests, oracles) = emit_tests_and_oracles(root);
+    let has_test_facts = !tests.is_empty();
+
+    let mut packet = build_unavailable_packet(schema, root, base, head, &normalized_classes);
+
+    // Populate tests + oracles arrays.
+    packet["tests"] = serde_json::Value::Array(tests);
+    packet["oracles"] = serde_json::Value::Array(oracles);
+
+    // Upgrade status if we found test facts.
+    if has_test_facts {
+        packet["packet_status"] = serde_json::json!("partial");
+        // Replace the limitation with one noting partial coverage.
+        packet["limitations"] = serde_json::json!([{
+            "limitation_id": "emitter-partial",
+            "kind": "partial_emitter",
+            "message": "PR 6 (tests/oracles) landed; files/owners/changes (PR 5) + relations/discriminators (PR 7) + boundaries (PR 8) are not yet emitted.",
+            "evidence_refs": []
+        }]);
+    }
 
     // Write the packet to the output path.
     if let Err(error) = write_packet(out, &packet) {
@@ -225,7 +244,8 @@ fn run_ripr_facts(
         return 1;
     }
 
-    eprintln!("ripr-facts: wrote unavailable packet to `{out}` (emitter body lands in PRs 5-8)");
+    let status = packet["packet_status"].as_str().unwrap_or("unknown");
+    eprintln!("ripr-facts: wrote {status} packet to `{out}`");
     0
 }
 
@@ -935,8 +955,7 @@ mod tests {
 
     #[test]
     fn ripr_facts_rejects_empty_out() {
-        let rc =
-            run_ripr_facts("ripr-perl-facts-v1", ".", None, None, "owners", "");
+        let rc = run_ripr_facts("ripr-perl-facts-v1", ".", None, None, "owners", "");
         assert_eq!(rc, 1, "empty out path must exit 1");
     }
 

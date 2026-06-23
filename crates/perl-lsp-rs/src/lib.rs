@@ -334,6 +334,7 @@ pub mod fallback;
 pub mod features;
 pub mod handlers;
 pub mod protocol;
+pub mod ripr_facts_emitter;
 pub mod runtime;
 pub mod security;
 pub mod server;
