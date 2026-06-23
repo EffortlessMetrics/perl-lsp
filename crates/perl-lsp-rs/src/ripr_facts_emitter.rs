@@ -119,15 +119,19 @@ fn collect_t_files(t_dir: &std::path::Path) -> Vec<(String, String, String)> {
 }
 
 /// Detect the test framework from `use` statements in the file content.
+///
+/// Returns the serde-expected wire string matching ripr's `TestFramework`
+/// enum (`#[serde(rename = "Test::More")]` etc.). M1 contract convergence
+/// (Campaign 31): the producer and consumer must use the SAME vocabulary.
 fn detect_framework(content: &str) -> &'static str {
     if content.contains("use Test2::V0") || content.contains("use Test2::Suite") {
-        "test2_v0"
+        "Test2::V0"
     } else if content.contains("use Test::Exception") {
-        "test_exception"
+        "Test::Exception"
     } else if content.contains("use Test::Fatal") {
-        "test_fatal"
+        "Test::Fatal"
     } else if content.contains("use Test::More") {
-        "test_more"
+        "Test::More"
     } else {
         "unknown"
     }
@@ -194,7 +198,12 @@ pub(crate) fn emit_relations_and_discriminators(
                 let relation_id = format!("relation:{test_file_id}:{pm_path}");
                 relations.push(json!({
                     "relation_id": relation_id,
-                    "change_id": null,
+                    // M1 contract convergence: change_id must be a string (not
+                    // null) per the ripr schema. Use a placeholder when no
+                    // change is linked — ripr's ingestion boundary validates
+                    // referential integrity, so this will fail closed until
+                    // a real change is associated.
+                    "change_id": "change:unresolved",
                     "owner_id": format!("owner:{pm_path}:{package_name}"),
                     "test_id": test["test_id"],
                     "oracle_id": null,
@@ -436,12 +445,12 @@ mod tests {
 
     #[test]
     fn detect_test_more_framework() {
-        assert_eq!(detect_framework("use Test::More;\nok(1);"), "test_more");
+        assert_eq!(detect_framework("use Test::More;\nok(1);"), "Test::More");
     }
 
     #[test]
     fn detect_test2_v0_framework() {
-        assert_eq!(detect_framework("use Test2::V0;\nok(1);"), "test2_v0");
+        assert_eq!(detect_framework("use Test2::V0;\nok(1);"), "Test2::V0");
     }
 
     #[test]
@@ -477,7 +486,7 @@ mod tests {
         // (is + ok). The exact count depends on how many assertion kinds
         // appear — `is` gives 1, `ok` gives 1.
         assert!(!tests.is_empty(), "must emit at least one test fact");
-        assert_eq!(tests[0]["framework"], "test_more");
+        assert_eq!(tests[0]["framework"], "Test::More");
         assert!(!oracles.is_empty(), "must emit at least one oracle fact");
 
         // Check that oracles have the right kind/strength.

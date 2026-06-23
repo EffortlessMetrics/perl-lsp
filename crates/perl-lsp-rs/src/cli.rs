@@ -343,10 +343,13 @@ fn build_unavailable_packet(
 ) -> serde_json::Value {
     serde_json::json!({
         "schema_version": schema,
-        "packet_id": format!("perl-lsp-ripr-facts-unavailable-{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0)),
+        // M1 contract convergence: deterministic packet ID (no timestamp).
+        // The ID is derived from the schema + root + fact_classes so the same
+        // input always produces the same packet ID.
+        "packet_id": format!(
+            "perl-lsp-ripr-facts-{schema}-{root}-{}",
+            fact_classes.join(",")
+        ),
         "packet_status": "unavailable",
         "packet_fingerprint": null,
         "producer": {
