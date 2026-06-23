@@ -56,7 +56,21 @@ impl Write for OutputCapture {
 }
 
 fn wait_for_method(output: &OutputCapture, method: &str) -> Option<Value> {
-    let deadline = Instant::now() + Duration::from_millis(250);
+    wait_for_method_with_timeout(output, method, Duration::from_millis(250))
+}
+
+/// Poll the captured output for `method` until `timeout`, returning immediately
+/// on first sight. Positive assertions need a generous deadline: the handler
+/// enqueues the notification synchronously, but it is flushed by a separate
+/// outbound writer thread, so it can lag the request response under parallel
+/// test load. 5s is generous under representative parallelism; pathological
+/// full-core saturation can still exceed it (tracked in #2605).
+fn wait_for_method_with_timeout(
+    output: &OutputCapture,
+    method: &str,
+    timeout: Duration,
+) -> Option<Value> {
+    let deadline = Instant::now() + timeout;
     loop {
         if let Some(message) =
             output.messages().into_iter().find(|message| message["method"].as_str() == Some(method))
@@ -942,7 +956,7 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         .ok_or("expected workspace edit response")?;
     assert!(edit.is_object());
 
-    let message = wait_for_method(&output, "window/showMessage")
+    let message = wait_for_method_with_timeout(&output, "window/showMessage", Duration::from_secs(5))
         .ok_or("expected aggregated safe-delete warning notification")?;
     let message_text =
         message["params"]["message"].as_str().ok_or("expected warning message text")?;
@@ -1002,7 +1016,7 @@ fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_impor
         .ok_or("expected workspace edit response")?;
     assert!(edit.is_object());
 
-    let message = wait_for_method(&output, "window/showMessage")
+    let message = wait_for_method_with_timeout(&output, "window/showMessage", Duration::from_secs(5))
         .ok_or("expected safe-delete warning notification")?;
     let message_text =
         message["params"]["message"].as_str().ok_or("expected warning message text")?;
