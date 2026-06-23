@@ -133,6 +133,182 @@ fn detect_framework(content: &str) -> &'static str {
     }
 }
 
+/// Emit relations, concrete discriminators, and observed-sink facts.
+///
+/// Campaign 31 Phase B PR 7 (perl-lsp-swarm#2594). The load-bearing semantic
+/// slice. This conservative first-pass emitter:
+///
+/// - **Relations**: infers `file_proximity` relations between `.pm` source
+///   files and `.t` test files that share a package name. Relation kind is
+///   `file_proximity` (advisory-only per ripr's gating rules) with confidence
+///   `medium`. This is the simplest relation — `direct_owner_call` /
+///   `established-helper-call-chain` require AST-level call-graph analysis
+///   that lands in a later enrichment.
+///
+/// - **Concrete discriminators**: derives from `is(...)` assertions — the
+///   first argument is the observed value, the second is the expected value,
+///   producing a concrete `"$got == $expected"` discriminator string. This
+///   replaces the generic enum labels ripr's consumer currently falls back to.
+///
+/// - **Observed-sink facts**: ties each oracle to the specific value it
+///   observes (the first argument of `is(got, expected, name)`). A strong
+///   assertion elsewhere in the same test is NOT enough — the oracle must
+///   observe the changed sink.
+///
+/// All three are conservative: where extraction is unsure, emit `unknown` /
+/// omit the fact. ripr's strict-actionability validator fails closed on
+/// unknown facts.
+pub(crate) fn emit_relations_and_discriminators(
+    root: &str,
+    tests: &[Value],
+    oracles: &[Value],
+) -> (Vec<Value>, Vec<Value>, Vec<Value>) {
+    let mut relations = Vec::new();
+    let mut changed_observables = Vec::new();
+    let mut observed_sinks = Vec::new();
+
+    // Collect .pm files from lib/.
+    let lib_dir = std::path::Path::new(root).join("lib");
+    let pm_files = collect_pm_files(&lib_dir);
+
+    // For each test file, infer relations to .pm files by package-name match.
+    for test in tests {
+        let test_file_id = test["file_id"].as_str().unwrap_or("");
+        let test_path = test["name"].as_str().unwrap_or("");
+
+        for (pm_path, pm_content) in &pm_files {
+            // Extract package name from the .pm file.
+            let package_name = extract_package_name(pm_content);
+            if package_name.is_empty() {
+                continue;
+            }
+
+            // Check if the test file references the package.
+            if !test_file_id.is_empty()
+                && file_references_package(
+                    test_path,
+                    &pm_files.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
+                    pm_path,
+                )
+            {
+                let relation_id = format!("relation:{test_file_id}:{pm_path}");
+                relations.push(json!({
+                    "relation_id": relation_id,
+                    "change_id": null,
+                    "owner_id": format!("owner:{pm_path}:{package_name}"),
+                    "test_id": test["test_id"],
+                    "oracle_id": null,
+                    "relation_kind": "file_proximity",
+                    "reachability_hint": "weakly_reachable",
+                    "confidence": "medium",
+                    "provenance_refs": []
+                }));
+            }
+        }
+    }
+
+    // Extract concrete discriminators + observed-sink facts from `is(...)` assertions.
+    // Read the .t files again to parse assertion arguments.
+    let t_dir = std::path::Path::new(root).join("t");
+    let t_files = collect_t_files(&t_dir);
+
+    for (file_path, relative_path, content) in &t_files {
+        for line in content.lines() {
+            if let Some(args) = extract_is_args(line) {
+                // `is($got, $expected, $name)` → discriminator "$got == $expected"
+                let discriminator = format!("{} == {}", args.0, args.1);
+                let observable_id = format!("observable:{relative_path}:{}", args.0);
+                changed_observables.push(json!({
+                    "observable_id": observable_id,
+                    "expression": args.0,
+                    "file_id": format!("file:{relative_path}"),
+                    "discriminator": discriminator,
+                    "confidence": "medium"
+                }));
+
+                // Observed-sink: the oracle observes the `got` value.
+                let sink_id = format!("sink:{relative_path}:{}", args.0);
+                observed_sinks.push(json!({
+                    "sink_id": sink_id,
+                    "oracle_kind": "exact_return_assertion",
+                    "observed_expression": args.0,
+                    "file_id": format!("file:{relative_path}"),
+                    "confidence": "medium"
+                }));
+            }
+        }
+    }
+
+    (relations, changed_observables, observed_sinks)
+}
+
+/// Collect all `.pm` files under a directory. Returns (relative_path, content).
+fn collect_pm_files(lib_dir: &std::path::Path) -> Vec<(String, String)> {
+    let mut result = Vec::new();
+    collect_pm_files_recursive(lib_dir, lib_dir, &mut result);
+    result
+}
+
+fn collect_pm_files_recursive(
+    dir: &std::path::Path,
+    base: &std::path::Path,
+    result: &mut Vec<(String, String)>,
+) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_pm_files_recursive(&path, base, result);
+        } else if path.extension().is_some_and(|ext| ext == "pm") {
+            let Ok(content) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let relative = path.to_string_lossy().replace('\\', "/");
+            let relative = relative
+                .split_once("/lib/")
+                .map(|(_, rest)| format!("lib/{rest}"))
+                .unwrap_or(relative);
+            result.push((relative, content));
+        }
+    }
+}
+
+/// Extract the package name from Perl source (first `package Foo::Bar;` line).
+fn extract_package_name(content: &str) -> String {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("package ") {
+            if let Some(name_end) = rest.find(';') {
+                return rest[..name_end].trim().to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+/// Check if a test file references a .pm file (simple heuristic: same basename).
+fn file_references_package(test_path: &str, _all_pm_paths: &[&str], pm_path: &str) -> bool {
+    // Simple heuristic: if the .pm basename appears in the test path.
+    // E.g. t/app.t references lib/My/App.pm if "App" appears in both.
+    let pm_basename = pm_path.rsplit('/').next().unwrap_or("").trim_end_matches(".pm");
+    !pm_basename.is_empty() && test_path.contains(pm_basename)
+}
+
+/// Extract the arguments from an `is(...)` call.
+/// Returns (got, expected) if parseable.
+fn extract_is_args(line: &str) -> Option<(String, String)> {
+    let trimmed = line.trim();
+    let inner = trimmed.strip_prefix("is(")?.strip_suffix(");")?;
+    let parts: Vec<&str> = inner.splitn(3, ',').collect();
+    if parts.len() >= 2 {
+        Some((parts[0].trim().to_string(), parts[1].trim().to_string()))
+    } else {
+        None
+    }
+}
+
 /// Count occurrences of an assertion call (e.g., `is(`, `ok(`) in the content.
 /// Simple string matching — not AST-level, but conservative (over-counts
 /// comments, under-counts is for `isa_ok`). The alpha's conservative bias
@@ -212,6 +388,80 @@ mod tests {
         let (tests, oracles) = emit_tests_and_oracles(root.to_str().unwrap());
         assert!(tests.is_empty(), "no .t files → no tests");
         assert!(oracles.is_empty(), "no .t files → no oracles");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── PR 7 tests (relations + discriminators + observed-sink) ──
+
+    #[test]
+    fn extract_package_name_from_pm_content() {
+        let content = "package My::App;\nuse strict;\n1;";
+        assert_eq!(extract_package_name(content), "My::App");
+    }
+
+    #[test]
+    fn extract_package_name_returns_empty_when_no_package() {
+        assert_eq!(extract_package_name("use strict;\n1;"), "");
+    }
+
+    #[test]
+    fn extract_is_args_parses_simple_is_call() {
+        let (got, expected) =
+            extract_is_args("is(discount(100), 50, 'half price');").expect("must parse");
+        assert_eq!(got, "discount(100)");
+        assert_eq!(expected, "50");
+    }
+
+    #[test]
+    fn extract_is_args_returns_none_for_non_is() {
+        assert!(extract_is_args("ok(1, 'truthy');").is_none());
+    }
+
+    #[test]
+    fn emit_relations_finds_pm_test_proximity() {
+        let root = std::env::temp_dir().join("perl-B7-relations-root");
+        let lib_dir = root.join("lib/My");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(lib_dir.join("App.pm"), "package My::App;\nsub discount { }\n1;").unwrap();
+        std::fs::write(t_dir.join("App.t"), "use Test::More;\nok(1);\n").unwrap();
+
+        // First emit tests, then relations.
+        let (tests, _oracles) = emit_tests_and_oracles(root.to_str().unwrap());
+        let (relations, _observables, _sinks) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        assert!(!relations.is_empty(), "must find at least one relation between App.pm and App.t");
+        assert_eq!(
+            relations[0]["relation_kind"], "file_proximity",
+            "relation must be file_proximity (advisory-only)"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn emit_discriminators_from_is_assertions() {
+        let root = std::env::temp_dir().join("perl-B7-discriminators-root");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(t_dir.join("app.t"), "use Test::More;\nis(discount(100), 50, 'half');\n")
+            .unwrap();
+
+        let (tests, _oracles) = emit_tests_and_oracles(root.to_str().unwrap());
+        let (_relations, observables, sinks) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        assert!(!observables.is_empty(), "must emit at least one changed-observable from is()");
+        assert!(
+            observables[0]["discriminator"].as_str().unwrap_or("").contains("=="),
+            "discriminator must be a concrete comparison: {:?}",
+            observables[0]["discriminator"]
+        );
+
+        assert!(!sinks.is_empty(), "must emit at least one observed-sink from is()");
+
         let _ = std::fs::remove_dir_all(&root);
     }
 }

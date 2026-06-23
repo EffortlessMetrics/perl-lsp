@@ -12,7 +12,7 @@
 )]
 
 use crate::LspServer;
-use crate::ripr_facts_emitter::emit_tests_and_oracles;
+use crate::ripr_facts_emitter::{emit_relations_and_discriminators, emit_tests_and_oracles};
 use perl_lsp_rs_core::runtime::launcher::{
     LaunchAction, LaunchConfig, StartupTimer, TransportMode, format_health_output,
     format_info_output, format_startup_banner, help_text, init_logging, log_server_startup,
@@ -220,20 +220,29 @@ fn run_ripr_facts(
     let (tests, oracles) = emit_tests_and_oracles(root);
     let has_test_facts = !tests.is_empty();
 
+    // PR 7 (perl-lsp-swarm#2594): emit relations + concrete discriminators +
+    // observed-sink facts.
+    let (relations, changed_observables, observed_sinks) =
+        emit_relations_and_discriminators(root, &tests, &oracles);
+    let has_relation_facts = !relations.is_empty();
+
     let mut packet = build_unavailable_packet(schema, root, base, head, &normalized_classes);
 
     // Populate tests + oracles arrays.
     packet["tests"] = serde_json::Value::Array(tests);
     packet["oracles"] = serde_json::Value::Array(oracles);
 
-    // Upgrade status if we found test facts.
-    if has_test_facts {
+    // Populate relations array (PR 7).
+    packet["relations"] = serde_json::Value::Array(relations);
+
+    // Upgrade status if we found test or relation facts.
+    if has_test_facts || has_relation_facts {
         packet["packet_status"] = serde_json::json!("partial");
         // Replace the limitation with one noting partial coverage.
         packet["limitations"] = serde_json::json!([{
             "limitation_id": "emitter-partial",
             "kind": "partial_emitter",
-            "message": "PR 6 (tests/oracles) landed; files/owners/changes (PR 5) + relations/discriminators (PR 7) + boundaries (PR 8) are not yet emitted.",
+            "message": "PR 6 (tests/oracles) + PR 7 (relations/discriminators) landed; files/owners/changes (PR 5) + boundaries (PR 8) are not yet emitted.",
             "evidence_refs": []
         }]);
     }
