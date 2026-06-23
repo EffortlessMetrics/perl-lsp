@@ -2742,6 +2742,29 @@ impl<'a> BodyBuilder2<'a> {
                 )
             }
 
+            NodeKind::FunctionCall { args, .. } => {
+                // Lower each argument as a read expression so variable references
+                // in call-arg positions produce correct LexicalRead PIR nodes.
+                // The call itself is still not modeled (recorded as unsupported
+                // in the PIR lowerer), but its arguments are correctly extracted.
+                let arg_ids: Vec<HirExprId> = args.iter().map(|a| self.lower_expr(a)).collect();
+                self.alloc_expr(
+                    HirExpr::Call { args: arg_ids, ast_kind: "FunctionCall".to_string() },
+                    range,
+                )
+            }
+
+            NodeKind::Return { value } => {
+                // Lower the return value as a read expression when present.
+                // This surfaces variable reads in `return $x` positions.
+                let arg_ids: Vec<HirExprId> =
+                    if let Some(v) = value { vec![self.lower_expr(v)] } else { vec![] };
+                self.alloc_expr(
+                    HirExpr::Call { args: arg_ids, ast_kind: "Return".to_string() },
+                    range,
+                )
+            }
+
             _ => {
                 // Everything else: emit Opaque. This is the "fail closed" path.
                 let kind_name = node.kind.kind_name().to_string();

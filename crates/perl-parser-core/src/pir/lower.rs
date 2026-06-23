@@ -341,6 +341,23 @@ fn hir_kind_name(kind: &HirKind) -> &'static str {
     }
 }
 
+/// Lower a single [`HirBody`] to PIR nodes, preserving body identity.
+///
+/// This is the engine for the lexical extractor: it processes one HirBody at a time,
+/// yielding all PIR nodes emitted from that body without merging into a flat graph.
+/// Body boundaries are preserved, enabling per-body analysis like scope isolation.
+///
+/// A fresh [`BodyLowerer`] is created for each call so state (fallthrough tracking,
+/// node IDs) is isolated to the single body. The returned nodes are in lowering order.
+///
+/// Returns a `Vec` of [`PirNode`], in lowering order. Each node carries its source anchor.
+#[must_use]
+pub fn lower_single_body(body: &HirBody, body_id: HirBodyId, file: &HirFile) -> Vec<PirNode> {
+    let mut lowerer = BodyLowerer::new(None);
+    lowerer.lower_body(body, body_id, file);
+    lowerer.nodes
+}
+
 // ── PIR-A: lower from canonical HirFile::bodies ───────────────────────────────
 //
 // This is the new canonical lowering path introduced in PR 2 (#2578). It lowers
@@ -579,9 +596,15 @@ impl BodyLowerer {
                 *self.unsupported.entry(ast_kind_to_static(ast_kind)).or_insert(0) += 1;
             }
 
-            HirExpr::Call { args: _, ast_kind: _ } => {
-                // PIR-A does not lower calls from body arenas yet.
+            HirExpr::Call { args, ast_kind: _ } => {
+                // Record the call itself as unsupported — PIR-A does not yet model
+                // calls from body arenas as named PIR nodes. However, we DO walk
+                // the argument expressions so that variable reads in call-arg position
+                // (e.g. `print $x`, `return $x`) correctly produce LexicalRead nodes.
                 *self.unsupported.entry("Call").or_insert(0) += 1;
+                for arg_id in args {
+                    self.lower_expr(body, *arg_id, file);
+                }
             }
         }
     }
