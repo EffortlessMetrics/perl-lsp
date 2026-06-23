@@ -277,6 +277,49 @@ pub struct LspArgs {
     #[arg(long, value_name = "PROFILE", conflicts_with = "perltidy_compat_report")]
     pub perlcritic_compat_report: Option<String>,
 
+    /// Export a ripr-perl-facts-v1 fact packet (Campaign 31, ripr-swarm#1379).
+    /// Does NOT start the LSP server or execute Perl.
+    #[arg(
+        long,
+        conflicts_with_all = [
+            "check",
+            "check_project",
+            "doctor",
+            "features_json",
+            "perltidy_compat_report",
+            "perlcritic_compat_report"
+        ]
+    )]
+    pub ripr_facts: bool,
+
+    /// Schema version for --ripr-facts (must be `ripr-perl-facts-v1`).
+    #[arg(long, value_name = "SCHEMA", default_value = "ripr-perl-facts-v1")]
+    pub ripr_schema: String,
+
+    /// Repository root for --ripr-facts (defaults to `.`).
+    #[arg(long, value_name = "ROOT", default_value = ".")]
+    pub ripr_root: String,
+
+    /// Base ref for the diff (e.g. `origin/main`).
+    #[arg(long, value_name = "BASE")]
+    pub ripr_base: Option<String>,
+
+    /// Head ref for the diff (e.g. `HEAD`).
+    #[arg(long, value_name = "HEAD")]
+    pub ripr_head: Option<String>,
+
+    /// Comma-separated fact-class subset (e.g. `owners,changes,tests,oracles`).
+    #[arg(
+        long,
+        value_name = "CLASSES",
+        default_value = "files,owners,changes,tests,oracles,relations,dynamic_boundaries,verify_commands,limitations,provenance"
+    )]
+    pub ripr_fact_classes: String,
+
+    /// Output path for the packet (e.g. `target/ripr/reports/perl-facts.json`).
+    #[arg(long, value_name = "OUT", default_value = "target/ripr/reports/perl-facts.json")]
+    pub ripr_out: String,
+
     /// Set feature profile
     #[arg(long)]
     pub feature_profile: Option<String>,
@@ -380,6 +423,25 @@ pub enum LaunchAction {
     PerlcriticCompatReport {
         /// Profile path to classify.
         profile: String,
+    },
+    /// Export a `ripr-perl-facts-v1` fact packet for the ripr repair-routing
+    /// lane (Campaign 31, ripr-swarm#1379). This is a batch handoff — it does
+    /// NOT start the LSP server or execute Perl. The emitter body lands across
+    /// PRs 5-8 (perl-lsp-swarm#2592-#2595); this variant is the command
+    /// surface + arg validation + the unavailable-packet fallback.
+    RiprFacts {
+        /// Packet schema version (must be `ripr-perl-facts-v1`).
+        schema: String,
+        /// Repository root (repo-relative, forward-slash; defaults to `.`).
+        root: String,
+        /// Base ref for the diff (e.g. `origin/main`); `None` = working tree.
+        base: Option<String>,
+        /// Head ref for the diff (e.g. `HEAD`); `None` = working tree.
+        head: Option<String>,
+        /// Comma-separated fact-class subset to emit (e.g. `owners,changes,tests,oracles`).
+        fact_classes: String,
+        /// Output path (repo-relative; e.g. `target/ripr/reports/perl-facts.json`).
+        out: String,
     },
     /// Print CLI help output.
     Help,
@@ -576,6 +638,14 @@ where
                 LaunchAction::PerltidyCompatReport { profile }
             } else if let Some(profile) = parsed_args.perlcritic_compat_report {
                 LaunchAction::PerlcriticCompatReport { profile }
+            } else if parsed_args.ripr_facts {
+                let schema = parsed_args.ripr_schema.clone();
+                let root = parsed_args.ripr_root.clone();
+                let base = parsed_args.ripr_base.clone();
+                let head = parsed_args.ripr_head.clone();
+                let fact_classes = parsed_args.ripr_fact_classes.clone();
+                let out = parsed_args.ripr_out.clone();
+                LaunchAction::RiprFacts { schema, root, base, head, fact_classes, out }
             } else {
                 LaunchAction::Run
             };

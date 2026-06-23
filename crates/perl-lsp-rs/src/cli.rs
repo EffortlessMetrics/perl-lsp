@@ -102,6 +102,14 @@ where
         LaunchAction::PerlcriticCompatReport { ref profile } => {
             run_perlcritic_compat_report(profile)
         }
+        LaunchAction::RiprFacts {
+            ref schema,
+            ref root,
+            ref base,
+            ref head,
+            ref fact_classes,
+            ref out,
+        } => run_ripr_facts(schema, root, base.as_deref(), head.as_deref(), fact_classes, out),
         LaunchAction::Help => {
             println!("{}", render_help_text(&command_name));
             0
@@ -157,6 +165,194 @@ fn run_perlcritic_compat_report(profile: &str) -> i32 {
     let report = classify_perlcritic_profile(&raw);
     print!("{}", render_perlcritic_compat_markdown(profile, &report));
     0
+}
+
+/// Expected schema version for `ripr-perl-facts-v1` packets.
+const EXPECTED_RIPR_FACTS_SCHEMA: &str = "ripr-perl-facts-v1";
+
+/// Run the `ripr-facts` exporter (Campaign 31, ripr-swarm#1379).
+///
+/// This PR (PR 4) wires the CLI surface + arg validation + the unavailable-
+/// packet fallback. The emitter body (mapping FileFactShard into the packet
+/// shape) lands across PRs 5-8 (perl-lsp-swarm#2592-#2595).
+fn run_ripr_facts(
+    schema: &str,
+    root: &str,
+    base: Option<&str>,
+    head: Option<&str>,
+    fact_classes: &str,
+    out: &str,
+) -> i32 {
+    // Validate schema version.
+    if schema != EXPECTED_RIPR_FACTS_SCHEMA {
+        eprintln!(
+            "ripr-facts: unsupported schema `{schema}`; expected `{EXPECTED_RIPR_FACTS_SCHEMA}`"
+        );
+        return 1;
+    }
+
+    // Validate root is repo-relative (forward-slash, no host/drive/temp).
+    if let Err(reason) = validate_ripr_facts_path(root, "root") {
+        eprintln!("ripr-facts: {reason}");
+        return 1;
+    }
+
+    // Validate out path.
+    if let Err(reason) = validate_ripr_facts_path(out, "out") {
+        eprintln!("ripr-facts: {reason}");
+        return 1;
+    }
+
+    // Validate + normalize fact classes.
+    let normalized_classes = match normalize_fact_classes(fact_classes) {
+        Ok(classes) => classes,
+        Err(reason) => {
+            eprintln!("ripr-facts: {reason}");
+            return 1;
+        }
+    };
+
+    // Emit a valid `unavailable` packet. The emitter body lands in PRs 5-8.
+    // Today every call produces `unavailable` because no FileFactShard→packet
+    // mapping exists yet. This is the honest state: the CLI surface works,
+    // args validate, but the packet is unavailable until the emitter slices
+    // land.
+    let packet = build_unavailable_packet(schema, root, base, head, &normalized_classes);
+
+    // Write the packet to the output path.
+    if let Err(error) = write_packet(out, &packet) {
+        eprintln!("ripr-facts: failed to write packet to `{out}`: {error}");
+        return 1;
+    }
+
+    eprintln!("ripr-facts: wrote unavailable packet to `{out}` (emitter body lands in PRs 5-8)");
+    0
+}
+
+/// Validate a path is repo-relative: forward-slash, no host/drive/temp prefix,
+/// no `..` escape, no leading `/` or `./`.
+fn validate_ripr_facts_path(path: &str, field: &str) -> Result<(), String> {
+    if path.is_empty() {
+        return Err(format!("`{field}` must not be empty"));
+    }
+    if path.starts_with('/') {
+        return Err(format!("`{field}` must be repo-relative, not absolute: `{path}`"));
+    }
+    if path.starts_with("./") {
+        return Err(format!("`{field}` must not start with `./`: `{path}`"));
+    }
+    if path.contains("..") {
+        return Err(format!("`{field}` must not contain `..` (path escape): `{path}`"));
+    }
+    // Reject Windows drive letters (e.g. `C:\`) and UNC paths.
+    if path.len() >= 2 && path.as_bytes()[1] == b':' {
+        return Err(format!("`{field}` must be repo-relative, not a drive path: `{path}`"));
+    }
+    Ok(())
+}
+
+/// The closed vocabulary of fact classes the producer can emit.
+const VALID_FACT_CLASSES: &[&str] = &[
+    "files",
+    "owners",
+    "changes",
+    "tests",
+    "oracles",
+    "relations",
+    "dynamic_boundaries",
+    "verify_commands",
+    "limitations",
+    "provenance",
+];
+
+/// Parse + deduplicate + deterministically order the comma-separated
+/// fact-class list.
+fn normalize_fact_classes(raw: &str) -> Result<Vec<String>, String> {
+    let mut seen: Vec<String> = Vec::new();
+    for class in raw.split(',').map(str::trim).filter(|c| !c.is_empty()) {
+        if !VALID_FACT_CLASSES.contains(&class) {
+            return Err(format!(
+                "unknown fact class `{class}`; valid: {}",
+                VALID_FACT_CLASSES.join(", ")
+            ));
+        }
+        if !seen.iter().any(|s| s == class) {
+            seen.push(class.to_string());
+        }
+    }
+    // Deterministic order: canonical VALID_FACT_CLASSES order.
+    seen.sort_by_key(|c| {
+        VALID_FACT_CLASSES.iter().position(|v| *v == c.as_str()).unwrap_or(usize::MAX)
+    });
+    if seen.is_empty() {
+        return Err("fact_classes must not be empty".to_string());
+    }
+    Ok(seen)
+}
+
+/// Build a schema-valid `unavailable` packet (the honest state until PRs 5-8
+/// land the emitter body).
+fn build_unavailable_packet(
+    schema: &str,
+    root: &str,
+    base: Option<&str>,
+    head: Option<&str>,
+    fact_classes: &[String],
+) -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": schema,
+        "packet_id": format!("perl-lsp-ripr-facts-unavailable-{}", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)),
+        "packet_status": "unavailable",
+        "packet_fingerprint": null,
+        "producer": {
+            "name": "perl-lsp",
+            "version": env!("CARGO_PKG_VERSION"),
+            "capabilities": fact_classes,
+        },
+        "root": {
+            "repo_relative": root,
+            "vcs_head": head,
+            "path_style": "posix",
+        },
+        "input": {
+            "base": base,
+            "head": head,
+            "diff_id": null,
+            "requested_fact_classes": fact_classes,
+        },
+        "files": [],
+        "owners": [],
+        "changes": [],
+        "tests": [],
+        "oracles": [],
+        "relations": [],
+        "dynamic_boundaries": [],
+        "verify_commands": [],
+        "limitations": [{
+            "limitation_id": "emitter-not-yet-implemented",
+            "kind": "missing_emitter",
+            "message": "The ripr-facts emitter body lands in PRs 5-8 (perl-lsp-swarm#2592-#2595). Today every call produces an unavailable packet.",
+            "evidence_refs": []
+        }],
+        "provenance": [{
+            "provenance_id": "cli-surface",
+            "source": "operator_config",
+            "confidence": "high"
+        }]
+    })
+}
+
+/// Write a JSON packet to the output path, creating parent directories.
+fn write_packet(out: &str, packet: &serde_json::Value) -> std::io::Result<()> {
+    let path = std::path::Path::new(out);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(packet)?;
+    std::fs::write(path, json)
 }
 
 /// Spawn a blocking reader thread that reads LSP messages from `reader` and
@@ -456,8 +652,9 @@ fn print_version(command_name: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        format_parse_error_context, invocation_name, render_help_text, render_shell_completion,
-        run_cli,
+        build_unavailable_packet, format_parse_error_context, invocation_name,
+        normalize_fact_classes, render_help_text, render_shell_completion, run_cli, run_ripr_facts,
+        validate_ripr_facts_path, write_packet,
     };
     use std::ffi::OsString;
 
@@ -552,5 +749,206 @@ mod tests {
                 .any(|line| line == "  help: add a semicolon ';' at the end of the statement")
         );
         Ok(())
+    }
+
+    // ── ripr-facts command tests (Campaign 31 PR 4, perl-lsp-swarm#2591) ──
+
+    #[test]
+    fn ripr_facts_validates_schema_version() {
+        let rc = run_ripr_facts(
+            "wrong-schema",
+            ".",
+            None,
+            None,
+            "owners,changes",
+            "target/ripr/test-wrong-schema.json",
+        );
+        assert_eq!(rc, 1, "wrong schema must exit 1");
+    }
+
+    #[test]
+    fn ripr_facts_rejects_absolute_root() {
+        let rc = run_ripr_facts(
+            "ripr-perl-facts-v1",
+            "/absolute/path",
+            None,
+            None,
+            "owners",
+            "target/ripr/test-abs-root.json",
+        );
+        assert_eq!(rc, 1, "absolute root must exit 1");
+    }
+
+    #[test]
+    fn ripr_facts_rejects_path_escape() {
+        let rc =
+            run_ripr_facts("ripr-perl-facts-v1", ".", None, None, "owners", "../../../etc/passwd");
+        assert_eq!(rc, 1, "path escape must exit 1");
+    }
+
+    #[test]
+    fn ripr_facts_rejects_unknown_fact_class() {
+        let rc = run_ripr_facts(
+            "ripr-perl-facts-v1",
+            ".",
+            None,
+            None,
+            "owners,bogus_class",
+            "target/ripr/test-bad-class.json",
+        );
+        assert_eq!(rc, 1, "unknown fact class must exit 1");
+    }
+
+    #[test]
+    fn ripr_facts_rejects_drive_path() {
+        let rc = run_ripr_facts(
+            "ripr-perl-facts-v1",
+            "C:/repo",
+            None,
+            None,
+            "owners",
+            "target/ripr/test-drive.json",
+        );
+        assert_eq!(rc, 1, "Windows drive path must exit 1");
+    }
+
+    #[test]
+    fn ripr_facts_rejects_dot_slash_root() {
+        let rc = run_ripr_facts(
+            "ripr-perl-facts-v1",
+            "./repo",
+            None,
+            None,
+            "owners",
+            "target/ripr/test-dot-slash.json",
+        );
+        assert_eq!(rc, 1, "./ prefix must exit 1");
+    }
+
+    #[test]
+    fn ripr_facts_rejects_empty_fact_classes() {
+        let rc = run_ripr_facts(
+            "ripr-perl-facts-v1",
+            ".",
+            None,
+            None,
+            "",
+            "target/ripr/test-empty-classes.json",
+        );
+        assert_eq!(rc, 1, "empty fact_classes must exit 1");
+    }
+
+    #[test]
+    fn ripr_facts_accepts_valid_invocation() {
+        let out = "target/ripr/test-valid-invocation.json";
+        let rc = run_ripr_facts(
+            "ripr-perl-facts-v1",
+            ".",
+            Some("origin/main"),
+            Some("HEAD"),
+            "files,owners,changes,tests,oracles",
+            out,
+        );
+        assert_eq!(rc, 0, "valid invocation must exit 0");
+        let written = std::fs::read_to_string(out).expect("packet must be written");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&written).expect("packet must be JSON");
+        assert_eq!(parsed["packet_status"], "unavailable");
+        // Clean up.
+        let _ = std::fs::remove_file(out);
+    }
+
+    #[test]
+    fn ripr_facts_deduplicates_and_orders_fact_classes() {
+        let normalized = normalize_fact_classes("changes,owners,owners,changes,tests")
+            .expect("valid classes normalize");
+        // Canonical order (VALID_FACT_CLASSES order): files, owners, changes, tests, ...
+        assert_eq!(normalized, vec!["owners", "changes", "tests"]);
+    }
+
+    #[test]
+    fn ripr_facts_unavailable_packet_has_correct_shape() {
+        let packet = build_unavailable_packet(
+            "ripr-perl-facts-v1",
+            ".",
+            Some("origin/main"),
+            Some("HEAD"),
+            &["owners".to_string(), "changes".to_string()],
+        );
+        assert_eq!(packet["schema_version"], "ripr-perl-facts-v1");
+        assert_eq!(packet["packet_status"], "unavailable");
+        assert_eq!(packet["producer"]["name"], "perl-lsp");
+        assert_eq!(packet["root"]["repo_relative"], ".");
+        assert_eq!(packet["input"]["base"], "origin/main");
+        assert_eq!(packet["input"]["head"], "HEAD");
+        assert_eq!(
+            packet["input"]["requested_fact_classes"],
+            serde_json::json!(["owners", "changes"])
+        );
+        // The limitation explains why the packet is unavailable.
+        assert_eq!(packet["limitations"][0]["kind"], "missing_emitter");
+        // All fact arrays are empty (unavailable).
+        for key in [
+            "files",
+            "owners",
+            "changes",
+            "tests",
+            "oracles",
+            "relations",
+            "dynamic_boundaries",
+            "verify_commands",
+        ] {
+            assert!(packet[key].as_array().unwrap().is_empty(), "array {key} should be empty");
+        }
+    }
+
+    #[test]
+    fn ripr_facts_writes_unavailable_packet_to_disk() -> std::io::Result<()> {
+        let out = "target/ripr/test-ripr-facts-write.json";
+        let packet = build_unavailable_packet(
+            "ripr-perl-facts-v1",
+            ".",
+            None,
+            None,
+            &["owners".to_string()],
+        );
+        write_packet(out, &packet)?;
+        let written = std::fs::read_to_string(out)?;
+        let parsed: serde_json::Value = serde_json::from_str(&written)?;
+        assert_eq!(parsed["schema_version"], "ripr-perl-facts-v1");
+        assert_eq!(parsed["packet_status"], "unavailable");
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_facts_rejects_empty_root() {
+        let rc = run_ripr_facts(
+            "ripr-perl-facts-v1",
+            "",
+            None,
+            None,
+            "owners",
+            "target/ripr/test-empty-root.json",
+        );
+        assert_eq!(rc, 1, "empty root must exit 1");
+    }
+
+    #[test]
+    fn ripr_facts_rejects_empty_out() {
+        let rc =
+            run_ripr_facts("ripr-perl-facts-v1", ".", None, None, "owners", "");
+        assert_eq!(rc, 1, "empty out path must exit 1");
+    }
+
+    #[test]
+    fn ripr_facts_validates_path_helper_directly() {
+        // Directly test the path validator for all branches.
+        assert!(validate_ripr_facts_path(".", "test").is_ok());
+        assert!(validate_ripr_facts_path("target/ripr/x.json", "test").is_ok());
+        assert!(validate_ripr_facts_path("", "test").is_err());
+        assert!(validate_ripr_facts_path("/abs", "test").is_err());
+        assert!(validate_ripr_facts_path("./rel", "test").is_err());
+        assert!(validate_ripr_facts_path("../escape", "test").is_err());
+        assert!(validate_ripr_facts_path("C:/drive", "test").is_err());
     }
 }
