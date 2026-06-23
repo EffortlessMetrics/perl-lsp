@@ -8,7 +8,11 @@
 
 use std::collections::HashMap;
 
-use crate::hir::{CallForm, DynamicBoundaryKind, HirFile, HirItem, HirKind, HirScopeId};
+use crate::hir::{
+    AccessMode, AssignMode, CallForm, DeclStorageClass, DynamicBoundaryKind,
+    HIR_BODY_MODEL_VERSION, HirBody, HirBodyId, HirExpr, HirExprId, HirFile, HirItem, HirKind,
+    HirScopeId, HirStmt, Sigil, UnaryMode, VariableKind,
+};
 
 use super::model::{
     LexicalName, PIR_RECEIPT_VERSION, PirAnchorCoverage, PirCallee, PirContext,
@@ -337,6 +341,444 @@ fn hir_kind_name(kind: &HirKind) -> &'static str {
     }
 }
 
+// ── PIR-A: lower from canonical HirFile::bodies ───────────────────────────────
+//
+// This is the new canonical lowering path introduced in PR 2 (#2578). It lowers
+// Read/Write/Modify operations directly from the body arenas attached to
+// `HirFile::bodies` by `lower_ast()` (PR 1, #2575/#2602).
+//
+// The old `lower_hir` (flat-items path above) lowers from `HirFile::items` and
+// is now dormant relative to body-based facts. It is retained for backward
+// compatibility until its callers are migrated; once fully superseded it should
+// be retired (#2578 follow-up).
+
+/// Lower a [`HirFile`]'s canonical body arenas into a PIR-A graph.
+///
+/// Requires that `lower_ast()` has run — i.e. `file.body_model_version ==
+/// HIR_BODY_MODEL_VERSION`. If the version check fails the returned graph is
+/// empty and the receipt records the mismatch in `ambient_inputs`.
+#[must_use]
+pub fn lower_hir_bodies(file: &HirFile) -> PirGraph {
+    lower_hir_bodies_with_identity(file, None)
+}
+
+/// Returns `true` iff `version` matches the current HIR body-model version.
+///
+/// Extracted as a pure predicate so the schema-version equality boundary is
+/// independently unit-testable with *literal* version arguments (below / equal /
+/// above) — a fixture-construction test that assigns the constant to a field
+/// cannot expose this equality to static analysis.
+#[inline]
+#[must_use]
+fn body_model_version_matches(version: u32) -> bool {
+    version == HIR_BODY_MODEL_VERSION
+}
+
+/// Lower a [`HirFile`]'s canonical body arenas into a PIR-A graph, tagging the
+/// receipt with an optional caller-supplied source or fixture identity.
+#[must_use]
+pub fn lower_hir_bodies_with_identity(file: &HirFile, source_identity: Option<String>) -> PirGraph {
+    // Verifier rule: schema-version mismatch → empty graph.
+    if !body_model_version_matches(file.body_model_version) {
+        let receipt = PirReceipt {
+            schema_version: PIR_RECEIPT_VERSION,
+            source_identity,
+            lowering_mode: PirLoweringMode::HirV0,
+            node_count: 0,
+            edge_count: 0,
+            operation_counts: Default::default(),
+            context_counts: Default::default(),
+            source_anchor_coverage: Default::default(),
+            dynamic_boundary_counts: Default::default(),
+            unsupported_construct_counts: Default::default(),
+            ambient_inputs: vec![format!(
+                "body_model_version mismatch: expected {HIR_BODY_MODEL_VERSION}, got {}",
+                file.body_model_version
+            )],
+            provider_behavior_changed: false,
+        };
+        return PirGraph { nodes: vec![], edges: vec![], receipt };
+    }
+
+    let mut lowerer = BodyLowerer::new(source_identity);
+    for (body_idx, body) in file.bodies.iter().enumerate() {
+        lowerer.lower_body(body, HirBodyId(body_idx as u32), file);
+    }
+    lowerer.finish()
+}
+
+/// Body-arena lowerer for PIR-A.
+///
+/// Walks `HirBody` arenas and emits `Read`/`Write`/`Modify` PIR operations.
+/// Verifier rules are applied inline — any node that would emit a wrong fact
+/// instead produces nothing (fail-closed).
+struct BodyLowerer {
+    nodes: Vec<PirNode>,
+    edges: Vec<PirEdge>,
+    next_id: u32,
+    last_in_scope: HashMap<Option<HirScopeId>, PirId>,
+    unsupported: HashMap<&'static str, usize>,
+    source_identity: Option<String>,
+}
+
+impl BodyLowerer {
+    fn new(source_identity: Option<String>) -> Self {
+        Self {
+            nodes: Vec::new(),
+            edges: Vec::new(),
+            next_id: 0,
+            last_in_scope: HashMap::new(),
+            unsupported: HashMap::new(),
+            source_identity,
+        }
+    }
+
+    fn lower_body(&mut self, body: &HirBody, _body_id: HirBodyId, file: &HirFile) {
+        // Clear the intra-scope fallthrough state between bodies. Without this,
+        // the last node of body N would be connected by a spurious Fallthrough
+        // edge to the first node of body N+1 — incorrect because bodies are
+        // independent control-flow regions (sub bodies do not fall through into
+        // the program root body or into each other).
+        self.last_in_scope.clear();
+
+        // Walk the root block's statements.
+        if let Some(root_block) = body.block(body.root_block) {
+            for stmt_id in &root_block.stmts {
+                self.lower_stmt(body, *stmt_id, file);
+            }
+        }
+    }
+
+    fn lower_stmt(&mut self, body: &HirBody, stmt_id: crate::hir::HirStmtId, file: &HirFile) {
+        let stmt = match body.stmt(stmt_id) {
+            Some(s) => s,
+            None => return,
+        };
+        match stmt {
+            HirStmt::Let { name, sigil, storage, init } => {
+                // Emit exactly ONE Write op for the declaration target.
+                // `storage` determines whether this is a lexical (my/state) or
+                // package (our) slot. Ignoring `storage` was the root cause of
+                // BUG 1 (double Write), BUG 2 (our→wrong LexicalWrite), and
+                // BUG 3 (spurious LexicalWrite alongside correct StashWrite).
+                //
+                // We emit the Write here from the declaration metadata, then
+                // lower ONLY the RHS of the initialiser (not the HirExpr::Assign
+                // wrapper, which would re-emit the LHS variable as a second Write).
+                let range = body.source_map.stmt_ranges.get(stmt_id.0 as usize).copied();
+                if let Some(range) = range {
+                    let anchor = self.make_body_anchor(range);
+                    let op = match storage {
+                        DeclStorageClass::Our => PirOperation::StashWrite {
+                            symbol: SymbolName {
+                                sigil: sigil_str(sigil),
+                                name: name.clone(),
+                                package: None, // package context not yet threaded into body arena
+                            },
+                        },
+                        // my / state / any other declarator → lexical write
+                        _ => PirOperation::LexicalWrite {
+                            name: LexicalName { sigil: sigil_str(sigil), name: name.clone() },
+                        },
+                    };
+                    self.push_body_node(anchor, op, PirContext::Lvalue, None, file);
+                }
+                // Lower the RHS of the initialiser. The init expr in the HIR body
+                // is an HirExpr::Assign { lhs: Variable(Write), rhs, mode: Simple }.
+                // We skip the Assign wrapper and lower only the rhs to avoid
+                // re-emitting the LHS Variable as a second Write.
+                if let Some(init_id) = init {
+                    if let Some(HirExpr::Assign { rhs, .. }) = body.expr(*init_id) {
+                        self.lower_expr(body, *rhs, file);
+                    } else {
+                        // Not an Assign node (shouldn't happen in well-formed HIR,
+                        // but handle defensively — lower the init as-is).
+                        self.lower_expr(body, *init_id, file);
+                    }
+                }
+            }
+            HirStmt::Expr(expr_id) => {
+                self.lower_expr(body, *expr_id, file);
+            }
+        }
+    }
+
+    fn lower_expr(&mut self, body: &HirBody, expr_id: HirExprId, file: &HirFile) {
+        let expr = match body.expr(expr_id) {
+            Some(e) => e,
+            None => return,
+        };
+        let range = body.source_map.expr_ranges.get(expr_id.0 as usize).copied();
+        let range = match range {
+            Some(r) => r,
+            None => return, // no source range → fail-closed, emit nothing
+        };
+
+        match expr {
+            HirExpr::Variable(v) => {
+                self.lower_variable_expr(v, range, file);
+            }
+
+            HirExpr::Assign { lhs, rhs, mode } => {
+                match mode {
+                    AssignMode::Simple => {
+                        // Lower LHS as a Write place, then RHS as a Read.
+                        self.lower_expr(body, *lhs, file);
+                        self.lower_expr(body, *rhs, file);
+                        // Emit an Assign node spanning the whole expression.
+                        let anchor = self.make_body_anchor(range);
+                        self.push_body_node(
+                            anchor,
+                            PirOperation::Assign,
+                            PirContext::Void,
+                            None,
+                            file,
+                        );
+                    }
+                    AssignMode::ReadModifyWrite => {
+                        // Compound assign: emit a single Modify node — place evaluated once.
+                        // The LHS expr must be a Variable; if it isn't, fall through to unsupported.
+                        if let Some(HirExpr::Variable(v)) = body.expr(*lhs) {
+                            let op_text = compound_op_for_rmw_assign(body, *lhs);
+                            self.lower_variable_modify(v, op_text, range, file);
+                            // Lower RHS as a Read operand.
+                            self.lower_expr(body, *rhs, file);
+                        } else {
+                            // Non-variable LHS for compound assign → unsupported (fail-closed).
+                            *self.unsupported.entry("CompoundAssignNonVarLhs").or_insert(0) += 1;
+                        }
+                    }
+                }
+            }
+
+            HirExpr::Unary { operand, mode, op } => {
+                match mode {
+                    UnaryMode::ReadModifyWrite => {
+                        // `++`/`--` on a variable → Modify.
+                        if let Some(HirExpr::Variable(v)) = body.expr(*operand) {
+                            self.lower_variable_modify(v, op.clone(), range, file);
+                        } else {
+                            *self.unsupported.entry("UnaryRmwNonVar").or_insert(0) += 1;
+                        }
+                    }
+                    UnaryMode::Read => {
+                        self.lower_expr(body, *operand, file);
+                    }
+                }
+            }
+
+            HirExpr::Binary { lhs, rhs, op: _ } => {
+                // Lower both operands as reads; the binary op itself is not modeled
+                // in PIR-A (no CFG, no value tracking).
+                self.lower_expr(body, *lhs, file);
+                self.lower_expr(body, *rhs, file);
+            }
+
+            HirExpr::Opaque { ast_kind } => {
+                // Fail-closed: opaque nodes never emit exact facts.
+                *self.unsupported.entry(ast_kind_to_static(ast_kind)).or_insert(0) += 1;
+            }
+
+            HirExpr::Call { args: _, ast_kind: _ } => {
+                // PIR-A does not lower calls from body arenas yet.
+                *self.unsupported.entry("Call").or_insert(0) += 1;
+            }
+        }
+    }
+
+    /// Emit a Read or Write PIR node for a `HirVariable`, respecting its `VariableKind`.
+    ///
+    /// # Why `AccessMode::ReadModifyWrite` is not handled here
+    ///
+    /// `lower_variable_expr` is only called from `lower_expr` when it encounters a
+    /// standalone `HirExpr::Variable` node. In the current HIR design, a `Variable`
+    /// node with `access == ReadModifyWrite` only ever appears as:
+    ///
+    /// - The LHS of `HirExpr::Assign { mode: ReadModifyWrite }` — handled by extracting
+    ///   the variable and calling `lower_variable_modify` directly; `lower_expr(lhs)` is
+    ///   never called, so the Variable node itself never reaches `lower_expr`.
+    /// - The operand of `HirExpr::Unary { mode: ReadModifyWrite }` — same pattern:
+    ///   `lower_variable_modify` is called directly.
+    ///
+    /// Therefore this function only needs to handle `Read` and `Write` access. If a
+    /// future HIR change routes an RMW Variable here, the early-return below ensures
+    /// fail-closed behaviour (no wrong fact emitted, gap recorded in the receipt).
+    fn lower_variable_expr(
+        &mut self,
+        v: &crate::hir::HirVariable,
+        range: crate::SourceLocation,
+        file: &HirFile,
+    ) {
+        // Fail-closed guard: RMW variables are resolved through lower_variable_modify,
+        // not through this function. If HIR ever routes one here, emit nothing.
+        if v.access == AccessMode::ReadModifyWrite {
+            *self.unsupported.entry("RmwVariableFallthrough").or_insert(0) += 1;
+            return;
+        }
+
+        let anchor = self.make_body_anchor(range);
+        let sigil = sigil_str(&v.sigil);
+        // At this point access is Read or Write (RMwW filtered above).
+        let op = match &v.kind {
+            VariableKind::Lexical if v.access == AccessMode::Read => {
+                PirOperation::LexicalRead { name: LexicalName { sigil, name: v.name.clone() } }
+            }
+            VariableKind::Lexical => {
+                PirOperation::LexicalWrite { name: LexicalName { sigil, name: v.name.clone() } }
+            }
+            VariableKind::Package if v.access == AccessMode::Read => PirOperation::StashRead {
+                symbol: SymbolName {
+                    sigil,
+                    name: v.name.clone(),
+                    package: package_from_name(&v.name),
+                },
+            },
+            VariableKind::Package => PirOperation::StashWrite {
+                symbol: SymbolName {
+                    sigil,
+                    name: v.name.clone(),
+                    package: package_from_name(&v.name),
+                },
+            },
+        };
+        self.push_body_node(anchor, op, PirContext::Unknown, None, file);
+    }
+
+    /// Emit a Modify (or StashModify) PIR node for a compound-assign or `++`/`--`.
+    fn lower_variable_modify(
+        &mut self,
+        v: &crate::hir::HirVariable,
+        op_text: String,
+        range: crate::SourceLocation,
+        file: &HirFile,
+    ) {
+        let anchor = self.make_body_anchor(range);
+        let sigil = sigil_str(&v.sigil);
+        let op = match &v.kind {
+            VariableKind::Lexical => PirOperation::Modify {
+                name: LexicalName { sigil, name: v.name.clone() },
+                op: op_text,
+            },
+            VariableKind::Package => PirOperation::StashModify {
+                symbol: SymbolName {
+                    sigil,
+                    name: v.name.clone(),
+                    package: package_from_name(&v.name),
+                },
+                op: op_text,
+            },
+        };
+        self.push_body_node(anchor, op, PirContext::Unknown, None, file);
+    }
+
+    fn make_body_anchor(&self, range: crate::SourceLocation) -> PirSourceAnchor {
+        // Body nodes don't have a HirId — they come from the body arena, not the
+        // flat items list. Use a synthetic HirId(0) as a placeholder; the range
+        // and anchor_id carry the meaningful identity.
+        use crate::hir::HirId;
+        PirSourceAnchor {
+            kind: super::model::PirAnchorKind::ExplicitSource,
+            range: Some(range),
+            anchor_id: Some(perl_semantic_facts::AnchorId(range.start as u64)),
+            hir_item: Some(HirId::from_index(0)),
+        }
+    }
+
+    fn push_body_node(
+        &mut self,
+        source_anchor: PirSourceAnchor,
+        operation: PirOperation,
+        context: PirContext,
+        dynamic_boundary: Option<PirId>,
+        file: &HirFile,
+    ) -> PirId {
+        let id = PirId::from_index(self.next_id);
+        self.next_id += 1;
+
+        // Conservative intra-body fallthrough edges (scope = None for body nodes,
+        // since body arenas don't carry HirScopeId per-node in this slice).
+        let scope: Option<HirScopeId> = None;
+        if let Some(previous) = self.last_in_scope.get(&scope).copied() {
+            self.edges.push(PirEdge {
+                from: previous,
+                to: Some(id),
+                kind: PirEdgeKind::Fallthrough,
+            });
+        }
+        self.last_in_scope.insert(scope, id);
+
+        let _ = file; // reserved for future scope/package lookup from ScopeGraph
+        self.nodes.push(PirNode {
+            id,
+            source_anchor,
+            operation,
+            context,
+            dynamic_boundary,
+            scope,
+            package_context: None, // deferred: body arenas don't carry package_context yet
+        });
+        id
+    }
+
+    fn finish(self) -> PirGraph {
+        let receipt =
+            build_receipt(&self.nodes, self.edges.len(), self.unsupported, self.source_identity);
+        PirGraph { nodes: self.nodes, edges: self.edges, receipt }
+    }
+}
+
+// ── Helpers for PIR-A body lowering ──────────────────────────────────────────
+
+fn sigil_str(sigil: &Sigil) -> String {
+    match sigil {
+        Sigil::Scalar => "$".to_string(),
+        Sigil::Array => "@".to_string(),
+        Sigil::Hash => "%".to_string(),
+        Sigil::Code => "&".to_string(),
+        Sigil::Glob => "*".to_string(),
+    }
+}
+
+/// Extract package prefix from a qualified name (`Foo::x` → `Some("Foo")`).
+///
+/// Leading-`::` names (e.g. `::foo`) split into `("", "foo")`. The empty-string
+/// package half is filtered out so the result is `None` rather than `Some("")`,
+/// which would be a confusing artifact. Bare-name is the conservative fallback.
+fn package_from_name(name: &str) -> Option<String> {
+    name.rsplit_once("::").and_then(
+        |(pkg, _)| {
+            if pkg.is_empty() { None } else { Some(pkg.to_string()) }
+        },
+    )
+}
+
+/// Map a known-bad `ast_kind` string to a static str for the unsupported counter.
+fn ast_kind_to_static(kind: &str) -> &'static str {
+    // We can't return the dynamic string as a static ref; map to a small set
+    // of known opaque kinds. Everything else maps to "OpaqueExpr".
+    match kind {
+        "ExpressionStatement" => "OpaqueExpressionStatement",
+        "FunctionCall" | "Call" => "OpaqueCall",
+        "MethodCall" => "OpaqueMethodCall",
+        _ => "OpaqueExpr",
+    }
+}
+
+/// Return the compound operator text for the LHS variable node of an
+/// `AssignMode::ReadModifyWrite` assignment.
+///
+/// HIR stores the access mode on the variable node but not the original
+/// operator string at the Assign level (the body lowerer peels the AST `op`
+/// into `AssignMode` only). For PIR-A receipts we emit a reasonable default;
+/// the exact text is available in the HIR body source map if needed later.
+fn compound_op_for_rmw_assign(_body: &HirBody, _lhs_id: HirExprId) -> String {
+    // The operator string was recorded in the AST but is not yet threaded
+    // through the HirExpr::Assign variant. Use a conservative placeholder.
+    // A future HIR body revision can add `op: Option<String>` to Assign to
+    // forward the exact text; until then receipts show "compound" for the op.
+    "compound".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::model::PirAnchorKind;
@@ -350,6 +792,23 @@ mod tests {
         let output = parser.parse_with_recovery();
         let hir = lower_ast(&output.ast);
         lower_hir(&hir)
+    }
+
+    #[test]
+    fn body_model_version_matches_pins_equality_boundary() {
+        // Literal-argument boundary test for the schema-version predicate that
+        // guards `lower_hir_bodies_with_identity`. Passing the version directly
+        // pins below / equal / above so a mutation removing or flipping the
+        // equality is caught — and the discriminator value is statically visible.
+        assert!(body_model_version_matches(HIR_BODY_MODEL_VERSION), "exact version must match");
+        assert!(
+            !body_model_version_matches(HIR_BODY_MODEL_VERSION - 1),
+            "below-threshold version must not match"
+        );
+        assert!(
+            !body_model_version_matches(HIR_BODY_MODEL_VERSION + 1),
+            "above-threshold version must not match"
+        );
     }
 
     #[test]

@@ -207,7 +207,7 @@ impl Sigil {
 }
 
 /// How a variable is accessed.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AccessMode {
     /// Value is being read.
     Read,
@@ -218,7 +218,7 @@ pub enum AccessMode {
 }
 
 /// Variable origin classification.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VariableKind {
     /// `my`-declared lexical in scope.
     Lexical,

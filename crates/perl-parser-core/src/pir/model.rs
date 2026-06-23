@@ -308,6 +308,25 @@ pub enum PirOperation {
         /// The symbol being written.
         symbol: SymbolName,
     },
+    /// Compound read-modify-write on a lexical variable (`+=`, `-=`, `++`, etc.).
+    ///
+    /// The place is evaluated exactly once. The compound operator is preserved in
+    /// `op` so downstream analyses can distinguish `+=` from `++` without re-parsing.
+    Modify {
+        /// The lexical variable being modified.
+        name: LexicalName,
+        /// The compound operator text (`"+="`, `"-="`, `"*="`, `"++"`, `"--"`, etc.).
+        op: String,
+    },
+    /// Compound read-modify-write on a package/stash symbol.
+    ///
+    /// Mirrors [`Modify`](Self::Modify) for package slots.
+    StashModify {
+        /// The package symbol being modified.
+        symbol: SymbolName,
+        /// The compound operator text.
+        op: String,
+    },
     /// An assignment expression.
     Assign,
     /// A subroutine or function call.
@@ -356,6 +375,8 @@ impl PirOperation {
             Self::LexicalWrite { .. } => "LexicalWrite",
             Self::StashRead { .. } => "StashRead",
             Self::StashWrite { .. } => "StashWrite",
+            Self::Modify { .. } => "Modify",
+            Self::StashModify { .. } => "StashModify",
             Self::Assign => "Assign",
             Self::Call { .. } => "Call",
             Self::MethodCall { .. } => "MethodCall",
@@ -379,7 +400,9 @@ impl PirOperation {
         "LexicalWrite",
         "Loop",
         "MethodCall",
+        "Modify",
         "Return",
+        "StashModify",
         "StashRead",
         "StashWrite",
     ];
@@ -634,7 +657,9 @@ mod tests {
             "LexicalWrite",
             "Loop",
             "MethodCall",
+            "Modify",
             "Return",
+            "StashModify",
             "StashRead",
             "StashWrite",
         ];
