@@ -1136,7 +1136,11 @@ pub struct FileIndex {
 }
 
 /// Write-through semantic fact storage for one indexed file.
-#[derive(Clone, Debug)]
+///
+/// Derives `Serialize, Deserialize` (Campaign 31 PR 5, perl-lsp-swarm#2592)
+/// so the `perllsp ripr-facts` exporter can serialize the shard into the
+/// `ripr-perl-facts-v1` packet. Previously derived only `Clone, Debug`.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FileFactShard {
     /// Canonical file URI for this shard.
     pub source_uri: String,
@@ -7916,5 +7920,62 @@ mod entity_id_file_scoped_tests {
             "synthetic anchor injection API not yet available",
         )
         .into())
+    }
+}
+
+// ── FileFactShard serde round-trip (Campaign 31 PR 5, perl-lsp-swarm#2592) ──
+
+#[cfg(test)]
+mod file_fact_shard_serde_tests {
+    use super::*;
+
+    #[test]
+    fn file_fact_shard_serializes_and_deserializes_round_trip() {
+        let shard = FileFactShard {
+            source_uri: "file:///lib/My/App.pm".to_string(),
+            file_id: FileId(42),
+            content_hash: 12345,
+            producer_schema_version: 1,
+            anchors_hash: Some(100),
+            entities_hash: Some(200),
+            occurrences_hash: None,
+            edges_hash: None,
+            anchors: vec![],
+            entities: vec![],
+            occurrences: vec![],
+            edges: vec![],
+        };
+        let json = serde_json::to_string(&shard).expect("FileFactShard must serialize");
+        let deserialized: FileFactShard =
+            serde_json::from_str(&json).expect("FileFactShard must deserialize");
+
+        assert_eq!(deserialized.source_uri, shard.source_uri);
+        assert_eq!(deserialized.file_id, shard.file_id);
+        assert_eq!(deserialized.content_hash, shard.content_hash);
+        assert_eq!(deserialized.producer_schema_version, shard.producer_schema_version);
+        assert_eq!(deserialized.anchors_hash, shard.anchors_hash);
+        assert_eq!(deserialized.anchors.len(), 0);
+    }
+
+    #[test]
+    fn file_fact_shard_with_facts_serializes() {
+        let shard = FileFactShard {
+            source_uri: "file:///t/app.t".to_string(),
+            file_id: FileId(7),
+            content_hash: 999,
+            producer_schema_version: 1,
+            anchors_hash: Some(1),
+            entities_hash: Some(2),
+            occurrences_hash: Some(3),
+            edges_hash: Some(4),
+            anchors: vec![],
+            entities: vec![],
+            occurrences: vec![],
+            edges: vec![],
+        };
+        // Must serialize without error — the ripr-facts emitter relies on this.
+        let json = serde_json::to_string(&shard).expect("must serialize with facts");
+        assert!(json.contains("\"source_uri\":\"file:///t/app.t\""));
+        assert!(json.contains("\"content_hash\":999"));
     }
 }
