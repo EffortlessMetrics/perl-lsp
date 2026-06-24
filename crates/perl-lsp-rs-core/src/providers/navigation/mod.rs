@@ -43,9 +43,9 @@ mod type_definition;
 
 // Re-export key types and functions
 pub use self::references::find_references_single_file;
-pub use self::references_pir_shadow::references_pir_promote_unguarded;
 pub use self::references_pir_shadow::{
-    ENABLE_PIR_LEXICAL_REFERENCES, ReferencesPirPromoteOutcome, references_pir_promote,
+    DEFAULT_PROMOTION_MODE, PromotionMode, ReferenceOptions, ReferencesPirPromoteOutcome,
+    references_pir_promote,
 };
 pub use self::type_definition::TypeDefinitionProvider;
 pub use crate::providers::document_links::compute_links;
