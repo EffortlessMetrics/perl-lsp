@@ -75,6 +75,10 @@ impl<'a> Parser<'a> {
 
     /// Parse unary expression
     fn parse_unary(&mut self) -> ParseResult<Node> {
+        self.with_recursion_guard(|s| s.parse_unary_inner())
+    }
+
+    fn parse_unary_inner(&mut self) -> ParseResult<Node> {
         if self.peek_kind() == Some(TokenKind::Slash) {
             self.tokens.relex_as_term();
         }
