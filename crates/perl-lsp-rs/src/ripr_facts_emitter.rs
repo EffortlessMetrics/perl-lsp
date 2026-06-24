@@ -476,12 +476,15 @@ pub(crate) fn emit_boundaries_and_commands(root: &str) -> (Vec<Value>, Vec<Value
     (boundaries, limitations, verify_commands)
 }
 
+// Staged ripr-facts Campaign 31 scaffolding (#2592) — used under --all-targets; allow until wired into the --lib path.
+#[allow(dead_code)]
 /// Map a content_hash (u64) to a hex digest string for the packet.
 fn content_hash_to_digest(hash: u64) -> String {
     format!("fnv64:{hash:016x}")
 }
 
 /// Strip a `file:///` prefix from a source URI and normalize to forward-slash.
+#[allow(dead_code)]
 fn uri_to_relative_path(uri: &str) -> String {
     uri.strip_prefix("file:///")
         .or_else(|| uri.strip_prefix("file://"))
@@ -490,6 +493,7 @@ fn uri_to_relative_path(uri: &str) -> String {
 }
 
 /// Determine file role from path extension.
+#[allow(dead_code)]
 fn file_role_from_path(path: &str) -> &'static str {
     if path.ends_with(".t") {
         "test"
@@ -517,6 +521,7 @@ fn file_role_from_path(path: &str) -> &'static str {
 /// - Exception path: lines containing `die`, `croak`, `confess`.
 ///
 /// Unknown changes become `behavior_hint: "unknown"` with a limitation.
+#[allow(dead_code)]
 pub(crate) fn emit_changes_from_diff(diff_text: &str) -> Vec<Value> {
     let mut changes = Vec::new();
     let mut current_file: Option<String> = None;
@@ -569,6 +574,7 @@ pub(crate) fn emit_changes_from_diff(diff_text: &str) -> Vec<Value> {
 /// Conservative: only the three alpha-supported classes produce concrete
 /// discriminators. Everything else is "unknown" with an empty discriminator
 /// (ripr's strict-actionability fails closed on unknown).
+#[allow(dead_code)]
 fn infer_behavior_and_discriminator(line: &str) -> (&'static str, String) {
     let trimmed = line.trim();
 
@@ -607,6 +613,7 @@ fn infer_behavior_and_discriminator(line: &str) -> (&'static str, String) {
 }
 
 /// Extract the condition expression from an if/unless/while line.
+#[allow(dead_code)]
 fn extract_condition(line: &str) -> Option<String> {
     let after_kw = line
         .strip_prefix("if ")
@@ -620,6 +627,7 @@ fn extract_condition(line: &str) -> Option<String> {
 }
 
 /// Extract the message from a die/croak/confess call.
+#[allow(dead_code)]
 fn extract_die_message(line: &str) -> Option<String> {
     for kw in &["die ", "croak ", "confess "] {
         if let Some(idx) = line.find(kw) {
@@ -637,6 +645,7 @@ fn extract_die_message(line: &str) -> Option<String> {
 }
 
 /// Simple FNV-1a hash for deterministic digests.
+#[allow(dead_code)]
 fn fnv1a_hash(text: &str) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;

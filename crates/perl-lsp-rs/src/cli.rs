@@ -13,8 +13,7 @@
 
 use crate::LspServer;
 use crate::ripr_facts_emitter::{
-    emit_boundaries_and_commands, emit_changes_from_diff, emit_relations_and_discriminators,
-    emit_tests_and_oracles,
+    emit_boundaries_and_commands, emit_relations_and_discriminators, emit_tests_and_oracles,
 };
 use perl_lsp_rs_core::runtime::launcher::{
     LaunchAction, LaunchConfig, StartupTimer, TransportMode, format_health_output,
