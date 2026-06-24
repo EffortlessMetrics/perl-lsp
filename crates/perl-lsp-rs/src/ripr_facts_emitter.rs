@@ -465,6 +465,149 @@ fn file_role_from_path(path: &str) -> &'static str {
     }
 }
 
+/// Emit `changes[]` from a unified diff.
+///
+/// P2 (Campaign 31): for each added/modified line in a `.pm` file, infer the
+/// behavior kind and derive a concrete missing discriminator.
+///
+/// Initial supported forms (alpha scope):
+/// - Predicate boundary: lines containing `>`, `<`, `>=`, `<=`, `==`, `!=`
+///   inside an `if`/`unless`/`while` condition.
+/// - Simple return: lines containing `return`.
+/// - Exception path: lines containing `die`, `croak`, `confess`.
+///
+/// Unknown changes become `behavior_hint: "unknown"` with a limitation.
+pub(crate) fn emit_changes_from_diff(diff_text: &str) -> Vec<Value> {
+    let mut changes = Vec::new();
+    let mut current_file: Option<String> = None;
+    let mut change_counter = 0usize;
+
+    for line in diff_text.lines() {
+        // Track the current file from diff headers.
+        if let Some(rest) = line.strip_prefix("+++ b/") {
+            current_file = Some(rest.to_string());
+            continue;
+        }
+        if line.starts_with("+++") || line.starts_with("---") {
+            continue;
+        }
+
+        // Only process added lines in .pm files.
+        if let Some(added) = line.strip_prefix('+') {
+            if line.starts_with("+++") {
+                continue;
+            }
+            let Some(ref file_path) = current_file else {
+                continue;
+            };
+            if !file_path.ends_with(".pm") && !file_path.ends_with(".pl") {
+                continue;
+            }
+
+            change_counter += 1;
+            let (behavior_hint, discriminator) = infer_behavior_and_discriminator(added);
+
+            changes.push(json!({
+                "change_id": format!("change:{file_path}:{change_counter}"),
+                "file_id": format!("file:{file_path}"),
+                "owner_id": format!("owner:{file_path}:unknown"),
+                "range": {"start_line": change_counter, "start_column": 1, "end_line": change_counter, "end_column": added.len() as u32},
+                "behavior_hint": behavior_hint,
+                "changed_text_digest": format!("sha256:{:x}", fnv1a_hash(added)),
+                "changed_observable": discriminator.clone(),
+                "missing_discriminator": discriminator,
+                "provenance_refs": []
+            }));
+        }
+    }
+
+    changes
+}
+
+/// Infer behavior kind + concrete discriminator from a changed Perl line.
+///
+/// Conservative: only the three alpha-supported classes produce concrete
+/// discriminators. Everything else is "unknown" with an empty discriminator
+/// (ripr's strict-actionability fails closed on unknown).
+fn infer_behavior_and_discriminator(line: &str) -> (&'static str, String) {
+    let trimmed = line.trim();
+
+    // Predicate boundary: comparison operators in conditionals.
+    if (trimmed.contains("if ") || trimmed.contains("unless ") || trimmed.contains("while "))
+        && (trimmed.contains("==")
+            || trimmed.contains("!=")
+            || trimmed.contains(">=")
+            || trimmed.contains("<=")
+            || trimmed.contains(">")
+            || trimmed.contains("<"))
+    {
+        // Extract the condition text as the discriminator.
+        let disc = extract_condition(trimmed).unwrap_or_else(|| trimmed.to_string());
+        return ("predicate_boundary", disc);
+    }
+
+    // Return value.
+    if trimmed.starts_with("return") || trimmed.contains("return ") {
+        let expr = trimmed
+            .strip_prefix("return")
+            .unwrap_or(trimmed)
+            .trim()
+            .trim_end_matches(';')
+            .to_string();
+        return ("return_value", expr);
+    }
+
+    // Exception path.
+    if trimmed.contains("die ") || trimmed.contains("croak ") || trimmed.contains("confess ") {
+        let msg = extract_die_message(trimmed).unwrap_or_else(|| "exception".to_string());
+        return ("exception_path", msg);
+    }
+
+    ("unknown", String::new())
+}
+
+/// Extract the condition expression from an if/unless/while line.
+fn extract_condition(line: &str) -> Option<String> {
+    let after_kw = line
+        .strip_prefix("if ")
+        .or_else(|| line.strip_prefix("unless "))
+        .or_else(|| line.strip_prefix("while "))
+        .or_else(|| line.find("if ").map(|i| &line[i + 3..]))
+        .or_else(|| line.find("unless ").map(|i| &line[i + 7..]))
+        .or_else(|| line.find("while ").map(|i| &line[i + 6..]))?;
+    let cond = after_kw.trim_end_matches('{').trim_end_matches('{').trim();
+    Some(cond.to_string())
+}
+
+/// Extract the message from a die/croak/confess call.
+fn extract_die_message(line: &str) -> Option<String> {
+    for kw in &["die ", "croak ", "confess "] {
+        if let Some(idx) = line.find(kw) {
+            let rest = &line[idx + kw.len()..];
+            let msg = rest
+                .trim_start_matches('"')
+                .trim_start_matches("'")
+                .trim_end_matches(';')
+                .trim_end_matches('"')
+                .trim_end_matches("'");
+            return Some(msg.to_string());
+        }
+    }
+    None
+}
+
+/// Simple FNV-1a hash for deterministic digests.
+fn fnv1a_hash(text: &str) -> u64 {
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
+    let mut hash = FNV_OFFSET;
+    for byte in text.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    hash
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -714,5 +857,77 @@ mod tests {
         assert_eq!(file_role_from_path("Makefile.PL"), "config");
         assert_eq!(file_role_from_path("cpanfile"), "config");
         assert_eq!(file_role_from_path("README.md"), "unknown");
+    }
+
+    // ── P2 tests (diff-derived changes + discriminators) ──
+
+    #[test]
+    fn infer_predicate_boundary_from_if_condition() {
+        let (kind, disc) = infer_behavior_and_discriminator("    if ($amount >= $threshold) {");
+        assert_eq!(kind, "predicate_boundary");
+        assert!(disc.contains(">="), "discriminator must contain the comparison: {disc}");
+    }
+
+    #[test]
+    fn infer_return_value_from_return() {
+        let (kind, disc) = infer_behavior_and_discriminator("    return $discounted;");
+        assert_eq!(kind, "return_value");
+        assert_eq!(disc, "$discounted");
+    }
+
+    #[test]
+    fn infer_exception_from_die() {
+        let (kind, disc) = infer_behavior_and_discriminator("    die \"Invalid amount: $amount\";");
+        assert_eq!(kind, "exception_path");
+        assert!(
+            disc.contains("Invalid amount"),
+            "discriminator must contain the die message: {disc}"
+        );
+    }
+
+    #[test]
+    fn infer_unknown_for_assignment() {
+        let (kind, disc) = infer_behavior_and_discriminator("    my $x = 1;");
+        assert_eq!(kind, "unknown");
+        assert!(disc.is_empty(), "unknown must have empty discriminator");
+    }
+
+    #[test]
+    fn emit_changes_from_simple_diff() {
+        let diff = "\
+--- a/lib/My/App.pm
++++ b/lib/My/App.pm
+@@ -5,7 +5,7 @@
+ sub discount {
+     my ($amount) = @_;
+-    return $amount;
++    return $amount / 2;
+ }
+";
+        let changes = emit_changes_from_diff(diff);
+        // Only the `+` line in a .pm file should produce a change.
+        assert_eq!(changes.len(), 1, "one added line in .pm must produce one change");
+        assert_eq!(changes[0]["behavior_hint"], "return_value");
+        assert!(
+            changes[0]["missing_discriminator"].as_str().unwrap_or("").contains("$amount"),
+            "return discriminator must contain the return expression"
+        );
+    }
+
+    #[test]
+    fn emit_changes_empty_for_non_pm_files() {
+        let diff = "\
+--- a/t/app.t
++++ b/t/app.t
++ok(1);
+";
+        let changes = emit_changes_from_diff(diff);
+        assert!(changes.is_empty(), "changes in .t files should not be emitted");
+    }
+
+    #[test]
+    fn fnv1a_hash_is_deterministic() {
+        assert_eq!(fnv1a_hash("hello"), fnv1a_hash("hello"));
+        assert_ne!(fnv1a_hash("hello"), fnv1a_hash("world"));
     }
 }

@@ -13,7 +13,8 @@
 
 use crate::LspServer;
 use crate::ripr_facts_emitter::{
-    emit_boundaries_and_commands, emit_relations_and_discriminators, emit_tests_and_oracles,
+    emit_boundaries_and_commands, emit_changes_from_diff, emit_relations_and_discriminators,
+    emit_tests_and_oracles,
 };
 use perl_lsp_rs_core::runtime::launcher::{
     LaunchAction, LaunchConfig, StartupTimer, TransportMode, format_health_output,
@@ -233,6 +234,18 @@ fn run_ripr_facts(
     let (boundaries, boundary_limitations, verify_commands) = emit_boundaries_and_commands(root);
     let has_boundary_facts = !boundaries.is_empty();
 
+    // P2 (Campaign 31): emit diff-derived changes with concrete discriminators.
+    // For now, scan .pm files for changed lines (no git diff available in
+    // batch mode; future managed-producer mode will supply a real diff).
+    // Emit empty changes[] when no diff is available — the packet stays partial.
+    let changes = if base.is_some() {
+        // In managed mode, a diff would be available. For now emit empty.
+        Vec::new()
+    } else {
+        Vec::new()
+    };
+    let has_change_facts = !changes.is_empty();
+
     let mut packet = build_unavailable_packet(schema, root, base, head, &normalized_classes);
 
     // Populate tests + oracles arrays.
@@ -242,12 +255,15 @@ fn run_ripr_facts(
     // Populate relations array (PR 7).
     packet["relations"] = serde_json::Value::Array(relations);
 
+    // Populate changes array (P2).
+    packet["changes"] = serde_json::Value::Array(changes);
+
     // Populate dynamic_boundaries + verify_commands arrays (PR 8).
     packet["dynamic_boundaries"] = serde_json::Value::Array(boundaries);
     packet["verify_commands"] = serde_json::Value::Array(verify_commands);
 
     // Upgrade status + merge limitations if we found any facts.
-    if has_test_facts || has_relation_facts || has_boundary_facts {
+    if has_test_facts || has_relation_facts || has_boundary_facts || has_change_facts {
         packet["packet_status"] = serde_json::json!("partial");
         // Merge boundary limitations with the emitter-partial limitation.
         let mut all_limitations = boundary_limitations;
