@@ -145,8 +145,10 @@ fn trace_count(receipt: &Value) -> Result<usize, Box<dyn std::error::Error>> {
 fn assert_trace_only_navigation_receipt(receipt: &serde_json::Map<String, Value>) {
     assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("live_provider_result"));
     assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("navigation_provider"));
-    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("low"));
-    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+    // `confidence` and `source_backed` are tier-dependent since the references
+    // scorecard PR: they are `"high"` / `true` when the semantic-source-backed
+    // tier answers, and `"low"` / `false` otherwise.  Do not assert fixed values
+    // here; assert them per-provider in caller code where the tier is known.
     assert_eq!(
         receipt.get("source_backed_state").and_then(Value::as_str),
         Some("not_proven_by_provider_trace")
@@ -213,6 +215,19 @@ fn navigation_provider_decision_replays_definition_and_references_traces()
         Some(u64::try_from(location_count(references_result.as_ref()))?)
     );
     assert_trace_only_navigation_receipt(references_receipt);
+    // The test workspace uses a simple function-call fixture that cannot reach the
+    // SemanticSourceBacked tier, so source_backed must be false and confidence "low".
+    // Assert here (not in the shared helper) because these values are now tier-dependent.
+    assert_eq!(
+        references_receipt.get("source_backed").and_then(Value::as_bool),
+        Some(false),
+        "references receipt must not be source_backed in a non-compiler-backed test workspace"
+    );
+    assert_eq!(
+        references_receipt.get("confidence").and_then(Value::as_str),
+        Some("low"),
+        "references receipt confidence must be \"low\" when not source_backed"
+    );
     assert_eq!(
         references_receipt.get("claim_boundary").and_then(Value::as_str),
         Some("records existing references response only; no broader live references cutover")
