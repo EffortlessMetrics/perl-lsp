@@ -42,7 +42,7 @@ mod scorecard_gate_fixtures;
 mod type_definition;
 
 // Re-export key types and functions
-pub use self::references::find_references_single_file;
+pub use self::references::{find_references_single_file, find_references_with_pir_shadow};
 pub use self::references_pir_shadow::{
     DEFAULT_PROMOTION_MODE, PromotionMode, ReferenceOptions, ReferencesPirPromoteOutcome,
     references_pir_promote,
