@@ -76,10 +76,17 @@ fn identity_byte_mapper(start: usize, end: usize) -> lsp_types::Range {
 /// Flip this to `PromoteExact` after human sign-off (see module comment).
 const SHADOW_WIRING_MODE: PromotionMode = PromotionMode::Shadow;
 
-/// Run the same-file references provider with PIR-A Shadow compare.
+/// Library-only PIR-A shadow-comparison wrapper for reference finding (dark infrastructure).
 ///
-/// This is the wired entry point for the `textDocument/references` same-file
-/// path. It:
+/// This is a **dark** function — it has no production caller in `perl-lsp-rs`. It is
+/// library-only infrastructure for the PIR-A shadow-comparison burn-in path. The
+/// actually-wired `textDocument/references` same-file entry point is
+/// `SemanticAnalyzer::find_all_references` in `crates/perl-lsp-rs/src/runtime/language/references.rs:594`.
+///
+/// Future promotion to production (replacing the legacy provider) is gated on the
+/// scorecard preconditions in the module docstring and a wiring decision; see issue #2635.
+///
+/// This function:
 ///
 /// 1. Calls `find_references_single_file` (legacy result — scope-blind).
 /// 2. If the cursor is on a `Variable` node, builds the PIR-A
