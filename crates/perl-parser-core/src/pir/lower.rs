@@ -482,7 +482,24 @@ impl BodyLowerer {
                 // We emit the Write here from the declaration metadata, then
                 // lower ONLY the RHS of the initialiser (not the HirExpr::Assign
                 // wrapper, which would re-emit the LHS variable as a second Write).
-                let range = body.source_map.stmt_ranges.get(stmt_id.0 as usize).copied();
+                // Anchor the declaration write at the VARIABLE token (`$x`) to match
+                // the legacy find-references / LSP anchoring, NOT the whole
+                // `my $x = ...` statement span (issue #2640, PR3 range parity). The
+                // variable's range is the LHS of the initialiser's `Assign`; fall back
+                // to the statement range for declarations without an initialiser.
+                // Resolve the initialiser to its `Assign` so its LHS variable range
+                // can anchor the write. `body.expr` is folded into the `and_then` so
+                // the `None` arm is reached by declarations WITHOUT an initialiser
+                // (`my $x;` / `our $x;` → `init` is `None`), not just the unreachable
+                // non-`Assign` case — keeping the arm exercised by tests.
+                let var_range = match init.as_ref().and_then(|init_id| body.expr(*init_id)) {
+                    Some(HirExpr::Assign { lhs, .. }) => {
+                        body.source_map.expr_ranges.get(lhs.0 as usize).copied()
+                    }
+                    _ => None,
+                };
+                let range = var_range
+                    .or_else(|| body.source_map.stmt_ranges.get(stmt_id.0 as usize).copied());
                 if let Some(range) = range {
                     let anchor = self.make_body_anchor(range);
                     let op = match storage {
@@ -880,6 +897,29 @@ mod tests {
             assert_eq!(symbol.name, "x");
         } else {
             panic!("expected StashWrite");
+        }
+    }
+
+    #[test]
+    fn decl_var_range_match_covers_init_and_no_init_arms() {
+        // Drive lower_single_body (the declaration write path) over an initialised
+        // AND a bare declaration, so the var-range match in lower_stmt is fully
+        // exercised by --lib coverage: `my $x = 1;` hits the `Some(Assign)` arm
+        // (LHS range lookup), `my $x;` hits the `None` arm (statement fallback).
+        use crate::hir::{HirBodyId, lower_ast};
+        for src in ["my $x = 1;", "my $x;"] {
+            let mut parser = crate::Parser::new(src);
+            let output = parser.parse_with_recovery();
+            let file = lower_ast(&output.ast);
+            let mut saw_write = false;
+            for (idx, body) in file.bodies.iter().enumerate() {
+                for node in super::lower_single_body(body, HirBodyId(idx as u32), &file) {
+                    if matches!(node.operation, PirOperation::LexicalWrite { .. }) {
+                        saw_write = true;
+                    }
+                }
+            }
+            assert!(saw_write, "expected a LexicalWrite for `{src}`");
         }
     }
 

@@ -956,8 +956,9 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         .ok_or("expected workspace edit response")?;
     assert!(edit.is_object());
 
-    let message = wait_for_method_with_timeout(&output, "window/showMessage", Duration::from_secs(5))
-        .ok_or("expected aggregated safe-delete warning notification")?;
+    let message =
+        wait_for_method_with_timeout(&output, "window/showMessage", Duration::from_secs(5))
+            .ok_or("expected aggregated safe-delete warning notification")?;
     let message_text =
         message["params"]["message"].as_str().ok_or("expected warning message text")?;
     assert!(
@@ -1016,8 +1017,9 @@ fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_impor
         .ok_or("expected workspace edit response")?;
     assert!(edit.is_object());
 
-    let message = wait_for_method_with_timeout(&output, "window/showMessage", Duration::from_secs(5))
-        .ok_or("expected safe-delete warning notification")?;
+    let message =
+        wait_for_method_with_timeout(&output, "window/showMessage", Duration::from_secs(5))
+            .ok_or("expected safe-delete warning notification")?;
     let message_text =
         message["params"]["message"].as_str().ok_or("expected warning message text")?;
     assert!(

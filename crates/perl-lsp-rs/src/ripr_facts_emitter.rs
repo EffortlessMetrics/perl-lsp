@@ -48,7 +48,7 @@ pub(crate) fn emit_tests_and_oracles(root: &str) -> (Vec<Value>, Vec<Value>) {
     let t_dir = std::path::Path::new(root).join("t");
     let t_files = collect_t_files(&t_dir);
 
-    for (file_path, relative_path, content) in t_files {
+    for (_file_path, relative_path, content) in t_files {
         let file_id = format!("file:{relative_path}");
 
         // Detect framework from `use` statements.
@@ -165,7 +165,7 @@ fn detect_framework(content: &str) -> &'static str {
 pub(crate) fn emit_relations_and_discriminators(
     root: &str,
     tests: &[Value],
-    oracles: &[Value],
+    _oracles: &[Value],
 ) -> (Vec<Value>, Vec<Value>, Vec<Value>) {
     let mut relations = Vec::new();
     let mut changed_observables = Vec::new();
@@ -221,7 +221,7 @@ pub(crate) fn emit_relations_and_discriminators(
     let t_dir = std::path::Path::new(root).join("t");
     let t_files = collect_t_files(&t_dir);
 
-    for (file_path, relative_path, content) in &t_files {
+    for (_file_path, relative_path, content) in &t_files {
         for line in content.lines() {
             if let Some(args) = extract_is_args(line) {
                 // `is($got, $expected, $name)` → discriminator "$got == $expected"
@@ -356,10 +356,7 @@ const DYNAMIC_BOUNDARY_PATTERNS: &[(&str, &str)] = &[
 /// closes the producer with boundary detection, limitations, verify-command
 /// candidates, and deterministic output.
 ///
-/// - **Dynamic boundaries**: scans `.pm` + `.t` files for the patterns in
-///   DYNAMIC_BOUNDARY_PATTERNS. Each match emits a `dynamic_boundaries` entry
-///   + a corresponding `limitations` entry. All boundaries fail closed in
-///   ripr's strict-actionability validator.
+/// - **Dynamic boundaries**: scans `.pm` + `.t` files for the patterns in `DYNAMIC_BOUNDARY_PATTERNS`. Each match emits a `dynamic_boundaries` entry + a corresponding `limitations` entry. All boundaries fail closed in ripr's strict-actionability validator.
 ///
 /// - **Typed verify-command candidates**: derives `prove <test_path>` for each
 ///   `.t` file. These are candidates — ripr's typed validator (PR 13) accepts/
