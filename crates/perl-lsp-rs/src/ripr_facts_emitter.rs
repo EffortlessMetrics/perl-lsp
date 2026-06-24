@@ -436,6 +436,35 @@ pub(crate) fn emit_boundaries_and_commands(root: &str) -> (Vec<Value>, Vec<Value
     (boundaries, limitations, verify_commands)
 }
 
+/// Map a content_hash (u64) to a hex digest string for the packet.
+fn content_hash_to_digest(hash: u64) -> String {
+    format!("fnv64:{hash:016x}")
+}
+
+/// Strip a `file:///` prefix from a source URI and normalize to forward-slash.
+fn uri_to_relative_path(uri: &str) -> String {
+    uri.strip_prefix("file:///")
+        .or_else(|| uri.strip_prefix("file://"))
+        .unwrap_or(uri)
+        .replace('\\', "/")
+}
+
+/// Determine file role from path extension.
+fn file_role_from_path(path: &str) -> &'static str {
+    if path.ends_with(".t") {
+        "test"
+    } else if path.ends_with(".pm") || path.ends_with(".pl") || path.ends_with(".psgi") {
+        "source"
+    } else if path.ends_with("Makefile.PL")
+        || path.ends_with("Build.PL")
+        || path.ends_with("cpanfile")
+    {
+        "config"
+    } else {
+        "unknown"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -658,5 +687,32 @@ mod tests {
         assert!(limitations.is_empty());
         assert!(cmds.is_empty());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── P1 tests (FileFactShard mapping helpers) ──
+
+    #[test]
+    fn content_hash_to_digest_formats_hex() {
+        assert_eq!(content_hash_to_digest(0), "fnv64:0000000000000000");
+        assert_eq!(content_hash_to_digest(255), "fnv64:00000000000000ff");
+        assert_eq!(content_hash_to_digest(0xcbf29ce484222325), "fnv64:cbf29ce484222325");
+    }
+
+    #[test]
+    fn uri_to_relative_path_strips_file_prefix() {
+        assert_eq!(uri_to_relative_path("file:///lib/My/App.pm"), "lib/My/App.pm");
+        assert_eq!(uri_to_relative_path("lib/App.pm"), "lib/App.pm");
+        assert_eq!(uri_to_relative_path("file://C:/repo/lib/App.pm"), "C:/repo/lib/App.pm");
+    }
+
+    #[test]
+    fn file_role_from_path_classifies_correctly() {
+        assert_eq!(file_role_from_path("lib/My/App.pm"), "source");
+        assert_eq!(file_role_from_path("script/run.pl"), "source");
+        assert_eq!(file_role_from_path("t/app.t"), "test");
+        assert_eq!(file_role_from_path("app.psgi"), "source");
+        assert_eq!(file_role_from_path("Makefile.PL"), "config");
+        assert_eq!(file_role_from_path("cpanfile"), "config");
+        assert_eq!(file_role_from_path("README.md"), "unknown");
     }
 }
