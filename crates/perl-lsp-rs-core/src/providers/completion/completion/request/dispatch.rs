@@ -30,11 +30,12 @@ pub(super) fn complete_dispatch(
         return CompletionFlow::SortAndReturn;
     }
 
-    if let Some(flow) = complete_sigil_context(provider, completions, context, is_cancelled) {
+    if let Some(flow) = complete_sigil_context(provider, completions, context, source, is_cancelled)
+    {
         return flow;
     }
 
-    if complete_symbol_namespace_context(provider, completions, context) {
+    if complete_symbol_namespace_context(provider, completions, context, source) {
         return CompletionFlow::SortAndReturn;
     }
 
@@ -132,6 +133,7 @@ fn complete_sigil_context(
     provider: &CompletionProvider,
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
+    source: &str,
     is_cancelled: &dyn Fn() -> bool,
 ) -> Option<CompletionFlow> {
     let (sigil, kind) = sigil_kind(context)?;
@@ -140,6 +142,7 @@ fn complete_sigil_context(
         packages::add_package_completions(
             completions,
             context,
+            source,
             &provider.symbol_table,
             &provider.workspace_index,
         );
@@ -172,6 +175,7 @@ fn complete_symbol_namespace_context(
     provider: &CompletionProvider,
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
+    source: &str,
 ) -> bool {
     if context.prefix.starts_with('&') {
         functions::add_function_completions(completions, context, &provider.symbol_table);
@@ -182,6 +186,7 @@ fn complete_symbol_namespace_context(
         packages::add_package_completions(
             completions,
             context,
+            source,
             &provider.symbol_table,
             &provider.workspace_index,
         );
@@ -278,6 +283,7 @@ fn complete_general_context(
     workspace::add_workspace_symbol_completions(
         completions,
         context,
+        source,
         &provider.workspace_index,
         &provider.import_map,
     );

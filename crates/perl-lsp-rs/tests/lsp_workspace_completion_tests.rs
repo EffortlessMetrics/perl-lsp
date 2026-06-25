@@ -481,6 +481,85 @@ tri
     Ok(())
 }
 
+/// Test that completing an unimported workspace subroutine attaches an
+/// `additionalTextEdits` entry inserting the required `use Module;` statement
+/// (issue #1694 — next-edit auto-import closure).
+#[test]
+fn test_completion_bare_function_auto_imports_module() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let module_uri = "file:///workspace/StringUtils.pm";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": module_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package StringUtils;\nsub trimmer { }\n1;\n"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    // Script does NOT import StringUtils — accepting the completion should add it.
+    let script_uri = "file:///workspace/needs_import.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": script_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "use strict;\ntrimm\n"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": script_uri },
+                "position": { "line": 1, "character": 5 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let trimmer = items
+        .iter()
+        .find(|item| item["label"].as_str().is_some_and(|l| l.contains("trimmer")))
+        .ok_or_else(|| {
+            format!(
+                "expected a `trimmer` workspace completion; got: {:?}",
+                items.iter().filter_map(|i| i["label"].as_str()).collect::<Vec<_>>()
+            )
+        })?;
+
+    let edits = trimmer["additionalTextEdits"]
+        .as_array()
+        .ok_or("trimmer completion should carry a serialized additionalTextEdits array")?;
+    assert!(
+        edits.iter().any(|e| e["newText"].as_str() == Some("use StringUtils;\n")),
+        "completion should auto-insert `use StringUtils;`; got additionalTextEdits: {edits:?}"
+    );
+
+    Ok(())
+}
+
 /// Test that `->` completion suggests inherited methods from parent class.
 ///
 /// Validates Gap 3 of issue #3482: add_workspace_method_completions must traverse

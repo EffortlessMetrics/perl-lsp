@@ -5,7 +5,7 @@
 use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
-    workspace,
+    workspace::{self, workspace_auto_import_edits},
 };
 use perl_semantic_analyzer::symbol::{
     Symbol as LocalSymbol, SymbolKind as LocalSymbolKind, SymbolTable,
@@ -324,6 +324,7 @@ fn add_local_package_completions(
 pub fn add_package_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
+    source: &str,
     symbol_table: &SymbolTable,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
 ) {
@@ -365,6 +366,16 @@ pub fn add_package_completions(
 
         let all_members = method_members.into_iter().chain(direct_members);
 
+        // A qualified member completion (`Foo::bar`, `$Foo::x`, `Foo::CONST`)
+        // implies the user wants `Foo` loaded. Prepare the auto-import once;
+        // it is suppressed for `main`, the current package, and already-imported
+        // modules.
+        let auto_import_edits = workspace_auto_import_edits(
+            source,
+            Some(package_name.as_str()),
+            &context.current_package,
+        );
+
         for symbol in all_members {
             let item_kind = match symbol.kind {
                 WsSymbolKind::Export | WsSymbolKind::Subroutine | WsSymbolKind::Method => {
@@ -400,7 +411,7 @@ pub fn add_package_completions(
                     insert_text: Some(qualified_member_name(&package_name, &symbol)),
                     sort_text: Some(format!("{}_{}", tier, symbol.name)),
                     filter_text: Some(symbol.name.clone()),
-                    additional_edits: vec![],
+                    additional_edits: auto_import_edits.clone(),
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
                     label_details: None,

@@ -3530,6 +3530,276 @@ fn test_use_statement_skips_past_module_name_at_qw() -> Result<(), Box<dyn std::
     Ok(())
 }
 
+// -------------------------------------------------------------------------
+// Auto-import additionalTextEdits for workspace symbol completions (#1694)
+//
+// Completing an unimported workspace subroutine, variable, or constant should
+// attach an `additionalTextEdits` entry inserting the required `use Module;`
+// statement, matching the behavior already provided for method completions.
+// -------------------------------------------------------------------------
+
+/// Find the auto-import edit text on the completion item whose label matches
+/// `label`, if any.
+fn auto_import_edit_text<'a>(completions: &'a [CompletionItem], label: &str) -> Option<&'a str> {
+    completions
+        .iter()
+        .find(|c| c.label == label)?
+        .additional_edits
+        .first()
+        .map(|(_, text)| text.as_str())
+}
+
+#[test]
+fn workspace_subroutine_completion_auto_imports_module() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nsub barker { }\n1;\n".to_string(),
+    )?;
+    let code = "use strict;\nbark";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    // Workspace subroutine completions are labelled by qualified name.
+    let edit = auto_import_edit_text(&completions, "Foo::barker")
+        .ok_or("expected `Foo::barker` workspace subroutine completion with an auto-import edit")?;
+    assert_eq!(edit, "use Foo;\n", "should auto-insert `use Foo;` for unimported subroutine");
+    Ok(())
+}
+
+#[test]
+fn workspace_constant_completion_auto_imports_module() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nuse constant ANSWER => 42;\n1;\n".to_string(),
+    )?;
+    let code = "use strict;\nANSW";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let item = completions
+        .iter()
+        .find(|c| c.label == "ANSWER")
+        .ok_or("expected `ANSWER` constant completion")?;
+    assert_eq!(item.kind, CompletionItemKind::Constant);
+    assert_eq!(
+        item.additional_edits.len(),
+        1,
+        "constant completion must carry exactly one auto-import edit; got {:?}",
+        item.additional_edits
+    );
+    assert_eq!(
+        item.additional_edits[0].1, "use Foo;\n",
+        "constant completion must auto-insert exactly `use Foo;`"
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_completion_suppresses_auto_import_when_already_imported()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nsub barker { }\n1;\n".to_string(),
+    )?;
+    // `Foo` is already imported, so no duplicate `use Foo;` edit should attach.
+    let code = "use strict;\nuse Foo;\nbark";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let item = completions
+        .iter()
+        .find(|c| c.label == "Foo::barker")
+        .ok_or("expected `Foo::barker` workspace completion")?;
+    assert_eq!(
+        item.additional_edits,
+        vec![],
+        "already-imported module must not produce a duplicate auto-import edit; got {:?}",
+        item.additional_edits
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_completion_no_auto_import_for_file_local_symbol()
+-> Result<(), Box<dyn std::error::Error>> {
+    // A symbol with no container module (file-local) must not generate an import.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(Url::parse("file:///main.pl")?, "sub barker { }\nbark\n".to_string())?;
+    let code = "sub barker { }\nbark";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    for item in completions.iter().filter(|c| c.label.contains("barker")) {
+        assert!(
+            item.additional_edits.is_empty(),
+            "file-local symbol must not carry an auto-import edit; got {:?}",
+            item.additional_edits
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn workspace_variable_completion_auto_imports_module() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nour $xylophone = 1;\n1;\n".to_string(),
+    )?;
+    let code = "use strict;\n$Foo::xyl";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let item = completions
+        .iter()
+        .find(|c| c.label == "$xylophone")
+        .ok_or("expected `$xylophone` workspace variable completion")?;
+    assert_eq!(item.kind, CompletionItemKind::Variable);
+    assert_eq!(
+        item.additional_edits.len(),
+        1,
+        "variable completion must carry exactly one auto-import edit; got {:?}",
+        item.additional_edits
+    );
+    assert_eq!(
+        item.additional_edits[0].1, "use Foo;\n",
+        "variable completion from Foo must auto-insert exactly `use Foo;`"
+    );
+    Ok(())
+}
+
+#[test]
+fn qualified_subroutine_completion_auto_imports_module() -> Result<(), Box<dyn std::error::Error>> {
+    // Qualified `Foo::bar` completions are served by add_package_completions
+    // (the `::` path), not add_workspace_symbol_completions. Observe that this
+    // path auto-imports the unimported defining module.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nsub barley { }\n1;\n".to_string(),
+    )?;
+    let code = "use strict;\nFoo::bar";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let item = completions
+        .iter()
+        .find(|c| c.label == "barley")
+        .ok_or("expected `barley` qualified subroutine completion")?;
+    assert_eq!(
+        item.additional_edits.len(),
+        1,
+        "qualified subroutine completion must carry exactly one auto-import edit; got {:?}",
+        item.additional_edits
+    );
+    assert_eq!(
+        item.additional_edits[0].1, "use Foo;\n",
+        "qualified subroutine completion must auto-insert exactly `use Foo;`"
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_auto_import_edits_returns_exact_edits_per_branch() {
+    // Direct call-observation with exact assertions on the helper that produces
+    // every workspace completion's `additionalTextEdits`, discriminating each
+    // guard branch (reachable, main, current package, empty, file-local,
+    // already-imported).
+    use super::workspace::workspace_auto_import_edits;
+
+    let source = "use strict;\nmy $x = 1;\n";
+    let after_use = "use strict;\n".len();
+
+    // Reachable, unimported, foreign module -> exactly one edit after the use block.
+    let edits = workspace_auto_import_edits(source, Some("My::App"), "main");
+    assert_eq!(edits.len(), 1, "expected exactly one edit; got {edits:?}");
+    assert_eq!(edits[0].1, "use My::App;\n");
+    assert_eq!(edits[0].0.start, after_use);
+    assert_eq!(edits[0].0.end, after_use);
+
+    // Implicit `main` package must never be auto-imported.
+    assert_eq!(workspace_auto_import_edits(source, Some("main"), "Other"), vec![]);
+    // The document's own current package needs no import.
+    assert_eq!(workspace_auto_import_edits(source, Some("Demo"), "Demo"), vec![]);
+    // Empty module name yields no edit.
+    assert_eq!(workspace_auto_import_edits(source, Some(""), "main"), vec![]);
+    // File-local symbol (no container module) yields no edit.
+    assert_eq!(workspace_auto_import_edits(source, None, "main"), vec![]);
+    // Already-imported module yields no duplicate edit.
+    assert_eq!(
+        workspace_auto_import_edits("use My::App;\nmy $x = 1;\n", Some("My::App"), "main"),
+        vec![]
+    );
+}
+
+#[test]
+fn unknown_receiver_fallback_completion_observes_auto_import_seam()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Drive the unknown-receiver method fallback so its auto-import seam is
+    // observed. `Foo` is already imported, so the fallback completion carries
+    // no duplicate `use Foo;` edit.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        "package Foo;\nsub bark { }\n1;\n".to_string(),
+    )?;
+    let code = "use Foo;\n1;\n$obj->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = completions
+        .iter()
+        .find(|c| c.label == "bark")
+        .ok_or("unknown-receiver fallback should surface Foo::bark")?;
+    assert!(
+        bark.additional_edits.is_empty(),
+        "fallback completion for an already-imported package must not add a use edit; got: {:?}",
+        bark.additional_edits
+    );
+    Ok(())
+}
+
+#[test]
+fn extract_fat_comma_keys_grips_quote_and_bareword_branches() {
+    // Call-observation coverage for the single-quoted, double-quoted, and
+    // bareword key branches in `CompletionProvider::extract_fat_comma_keys`.
+    // These branches are otherwise exercised only by integration tests, which
+    // the coverage job's `--lib` run does not execute.
+    let mut keys: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    CompletionProvider::extract_fat_comma_keys(
+        "'db-host' => 1, \"db.port\" => 2, host => 3",
+        &mut keys,
+        &mut seen,
+    );
+    assert!(
+        keys.contains(&"db-host".to_string()),
+        "single-quoted key should be extracted; got {keys:?}"
+    );
+    assert!(
+        keys.contains(&"db.port".to_string()),
+        "double-quoted key should be extracted; got {keys:?}"
+    );
+    assert!(keys.contains(&"host".to_string()), "bareword key should be extracted; got {keys:?}");
+}
+
 #[test]
 fn test_require_statement_triggers_module_completion() -> Result<(), Box<dyn std::error::Error>> {
     let index = Arc::new(WorkspaceIndex::new());

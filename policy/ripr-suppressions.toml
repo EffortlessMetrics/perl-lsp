@@ -1376,3 +1376,34 @@ reason = "PR #3032 adds two test seams flagged by diff-scoped RIPR: (A) platform
 created = "2026-06-25"
 review_after = "2026-09-25"
 expires = "2026-12-31"
+
+# =============================================================================
+# Completion auto-import additionalTextEdits (PR #1919, issue #1694):
+# ripr#1429-class weakly_exposed false-positives in production completion code.
+#
+# PR #1919 wires `additionalTextEdits` auto-import (`use Module;`) into workspace
+# subroutine/variable/constant completions, qualified `Package::member`
+# completions, and the unknown-receiver method fallback. RIPR 0.9.x flags the
+# changed return-value and field-construction seams in these three production
+# files as weakly_exposed because its static tracer cannot connect the focused
+# unit tests to the changed expressions (evidence: "observation_unverified",
+# stop_reasons ["fixture_opaque"]; the assertion texts it scores come from
+# unrelated files). All seams are covered by dedicated #[cfg(test)] lib tests
+# with exact (strong-oracle) assertions. Same ripr#1429 class as the
+# hover_cards.rs and workspace_rename.rs production-file suppressions.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-completion-auto-import-edits"
+kind = "predicate_infection_untraceable"
+paths = [
+  "crates/perl-lsp-rs-core/src/providers/completion/completion/auto_import.rs",
+  "crates/perl-lsp-rs-core/src/providers/completion/completion/packages.rs",
+  "crates/perl-lsp-rs-core/src/providers/completion/completion/workspace.rs",
+]
+classification = ["weakly_exposed", "no_static_path", "static_unknown"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #1919 (issue #1694) wires additionalTextEdits auto-import into workspace subroutine/variable/constant completions, qualified Package::member completions, and the unknown-receiver method fallback. RIPR 0.9.x reports weakly_exposed return-value and field-construction seams (workspace_auto_import_edits return value, the additional_edits field constructions in the completion-item arms, find_use_block_end's package fallback, build_auto_import_edit's edit tuple) because its static tracer cannot connect the focused tests to the changed expressions (evidence: observation_unverified, stop_reasons fixture_opaque; scored assertion texts come from unrelated files). All seams are covered by dedicated #[cfg(test)] lib tests with exact strong-oracle assertions: workspace_auto_import_edits_returns_exact_edits_per_branch (exhaustive exact edit-text and byte-offset assertions for reachable/main/current-package/empty/file-local/already-imported branches), workspace_subroutine/variable/constant_completion_auto_imports_module, qualified_subroutine_completion_auto_imports_module, workspace_completion_suppresses_auto_import_when_already_imported, workspace_completion_no_auto_import_for_file_local_symbol, unknown_receiver_fallback_completion_observes_auto_import_seam, find_use_block_end_after_package_without_use, edit_inserts_after_package_decl_when_no_use_block, and edit_returned_when_not_imported. Same ripr#1429 static-tracer-limitation class as the hover_cards.rs and workspace_rename.rs production-file suppressions. Suppression is narrow (three completion source files). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-06-25"
+review_after = "2026-07-25"
+expires = "2026-09-30"
