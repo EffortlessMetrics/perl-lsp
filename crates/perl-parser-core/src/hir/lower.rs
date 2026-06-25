@@ -272,7 +272,7 @@ impl Lowerer {
                 }
                 self.exit_scope();
             }
-            NodeKind::Method { name, signature, attributes, body } => {
+            NodeKind::Method { name, name_span: _, signature, attributes, body } => {
                 let method_scope = self.enter_scope(
                     ScopeKind::Method,
                     node.location,

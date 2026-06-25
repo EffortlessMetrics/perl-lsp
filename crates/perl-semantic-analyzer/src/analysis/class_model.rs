@@ -471,7 +471,7 @@ impl ClassModelBuilder {
                 self.visit_node(expression);
             }
 
-            NodeKind::Class { name, parents, body } => {
+            NodeKind::Class { name, name_span: _, parents, body } => {
                 self.flush_current_package();
                 self.current_package = name.clone();
                 self.current_framework = if self.current_framework == Framework::ObjectPad {

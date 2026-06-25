@@ -203,7 +203,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Method { name, signature, attributes, body } => {
+            NodeKind::Method { name, name_span: _, signature, attributes, body } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location, // Approximate, ideally name span
                     token_type: SemanticTokenType::FunctionDeclaration,

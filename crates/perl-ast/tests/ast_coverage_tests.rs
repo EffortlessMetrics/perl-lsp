@@ -327,7 +327,11 @@ fn for_each_child_leaf_nodes_visit_nothing() -> Result<(), Box<dyn std::error::E
         Node::new(NodeKind::Prototype { content: "$@".to_string() }, loc(0, 4)),
         Node::new(NodeKind::DataSection { marker: "__DATA__".to_string(), body: None }, loc(0, 8)),
         Node::new(
-            NodeKind::Format { name: "STDOUT".to_string(), body: "fmt".to_string() },
+            NodeKind::Format {
+                name: "STDOUT".to_string(),
+                name_span: None,
+                body: "fmt".to_string(),
+            },
             loc(0, 10),
         ),
         Node::new(NodeKind::LoopControl { op: "next".to_string(), label: None }, loc(0, 4)),
@@ -1081,7 +1085,11 @@ fn sexp_labeled_statement() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_format() -> Result<(), Box<dyn std::error::Error>> {
     let node = Node::new(
-        NodeKind::Format { name: "STDOUT".to_string(), body: "@<<<< @>>>>".to_string() },
+        NodeKind::Format {
+            name: "STDOUT".to_string(),
+            name_span: None,
+            body: "@<<<< @>>>>".to_string(),
+        },
         loc(0, 30),
     );
     let sexp = node.to_sexp();
@@ -1094,6 +1102,7 @@ fn sexp_class() -> Result<(), Box<dyn std::error::Error>> {
     let node = Node::new(
         NodeKind::Class {
             name: "Point".to_string(),
+            name_span: None,
             parents: vec![],
             body: Box::new(block(vec![])),
         },

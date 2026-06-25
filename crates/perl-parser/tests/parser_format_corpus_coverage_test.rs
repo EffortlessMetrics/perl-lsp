@@ -24,7 +24,7 @@ fn extract_format_statements(node: &Node) -> Vec<(String, String)> {
         NodeKind::Program { statements } => statements
             .iter()
             .filter_map(|stmt| {
-                if let NodeKind::Format { name, body } = &stmt.kind {
+                if let NodeKind::Format { name, body, .. } = &stmt.kind {
                     Some((name.clone(), body.clone()))
                 } else {
                     None
@@ -207,7 +207,7 @@ fn parser_format_corpus_ac6_ast_structure() -> Result<(), Box<dyn std::error::Er
 
         // Verify structure of first format node
         if let Some(first) = format_nodes.first() {
-            if let NodeKind::Format { name, body } = &first.kind {
+            if let NodeKind::Format { name, body, .. } = &first.kind {
                 assert!(
                     !body.is_empty() || name == "EMPTY",
                     "AC6: Format AST should capture name and body correctly"

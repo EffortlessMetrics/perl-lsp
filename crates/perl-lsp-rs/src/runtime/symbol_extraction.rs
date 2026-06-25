@@ -947,6 +947,7 @@ mod tests {
         let class_node = Node::new(
             NodeKind::Class {
                 name: "MyClass".to_string(),
+                name_span: None,
                 parents: vec![],
                 body: Box::new(Node::new(NodeKind::Block { statements: vec![] }, loc(12, 14))),
             },
@@ -975,6 +976,7 @@ mod tests {
         let method_node = Node::new(
             NodeKind::Method {
                 name: "my_method".to_string(),
+                name_span: None,
                 signature: None,
                 attributes: vec![],
                 body: Box::new(Node::new(NodeKind::Block { statements: vec![] }, loc(15, 17))),

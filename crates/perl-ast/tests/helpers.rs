@@ -217,7 +217,12 @@ pub fn all_nodekind_instances() -> Vec<Node> {
         Node::new(NodeKind::Typeglob { name: "foo".to_string() }, loc()),
         Node::new(NodeKind::DataSection { marker: "__DATA__".to_string(), body: None }, loc()),
         Node::new(
-            NodeKind::Class { name: "Foo".to_string(), parents: vec![], body: Box::new(block()) },
+            NodeKind::Class {
+                name: "Foo".to_string(),
+                name_span: None,
+                parents: vec![],
+                body: Box::new(block()),
+            },
             loc(),
         ),
         Node::new(NodeKind::ExpressionStatement { expression: Box::new(num("1")) }, loc()),
@@ -319,7 +324,10 @@ pub fn all_nodekind_instances() -> Vec<Node> {
             loc(),
         ),
         Node::new(NodeKind::Untie { variable: Box::new(var("%", "h")) }, loc()),
-        Node::new(NodeKind::Format { name: "STDOUT".to_string(), body: "".to_string() }, loc()),
+        Node::new(
+            NodeKind::Format { name: "STDOUT".to_string(), name_span: None, body: "".to_string() },
+            loc(),
+        ),
         Node::new(NodeKind::NestedVariableList { items: vec![] }, loc()),
         Node::new(
             NodeKind::VariableWithAttributes {
@@ -334,6 +342,7 @@ pub fn all_nodekind_instances() -> Vec<Node> {
         Node::new(
             NodeKind::Method {
                 name: "foo".to_string(),
+                name_span: None,
                 signature: None,
                 attributes: vec![],
                 body: Box::new(block()),

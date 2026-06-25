@@ -323,6 +323,7 @@ mod tests {
             Node::new(
                 NodeKind::Method {
                     name: "bar".to_string(),
+                    name_span: None,
                     signature: Some(sig),
                     attributes: Vec::new(),
                     body,
@@ -418,6 +419,7 @@ mod tests {
             Node::new(
                 NodeKind::Class {
                     name: "C".to_string(),
+                    name_span: None,
                     parents: vec!["Base".to_string()],
                     body: Box::new(Node::new(NodeKind::Block { statements: vec![] }, loc(80))),
                 },

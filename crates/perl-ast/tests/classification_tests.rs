@@ -266,8 +266,13 @@ fn category_spot_checks() {
 
     // Class → Declaration
     assert_eq!(
-        NodeKind::Class { name: "Foo".to_string(), parents: vec![], body: Box::new(block_node()) }
-            .category(),
+        NodeKind::Class {
+            name: "Foo".to_string(),
+            name_span: None,
+            parents: vec![],
+            body: Box::new(block_node())
+        }
+        .category(),
         NodeKindCategory::Declaration
     );
 

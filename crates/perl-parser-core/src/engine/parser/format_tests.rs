@@ -23,7 +23,7 @@ $test
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "STDOUT");
                 assert!(body.contains("Test: @<<<"));
                 assert!(body.contains("$test"));
@@ -49,7 +49,7 @@ $val
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "");
                 assert!(body.contains("Anon: @>>>"));
             }
@@ -70,7 +70,7 @@ $val
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "FOO");
                 // The lexer captures the newline before the dot
                 assert_eq!(body, "\n");

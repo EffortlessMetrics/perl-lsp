@@ -595,7 +595,7 @@ impl Node {
                 format!("(named_parameter {})", variable.to_sexp())
             }
 
-            NodeKind::Method { name: _, signature, attributes, body } => {
+            NodeKind::Method { name: _, name_span: _, signature, attributes, body } => {
                 let block_contents = match &body.kind {
                     NodeKind::Block { statements } => {
                         statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ")
@@ -786,7 +786,7 @@ impl Node {
                 }
             }
 
-            NodeKind::Class { name, parents, body } => {
+            NodeKind::Class { name, name_span: _, parents, body } => {
                 if parents.is_empty() {
                     format!("(class {} {})", name, body.to_sexp())
                 } else {
@@ -794,7 +794,7 @@ impl Node {
                 }
             }
 
-            NodeKind::Format { name, body } => {
+            NodeKind::Format { name, name_span: _, body } => {
                 format!("(format {} {:?})", name, body)
             }
 
@@ -2004,6 +2004,8 @@ pub enum NodeKind {
     Method {
         /// Method name
         name: String,
+        /// Source location span of the method name
+        name_span: Option<SourceLocation>,
         /// Optional signature
         signature: Option<Box<Node>>,
         /// Method attributes (e.g., `:lvalue`)
@@ -2188,6 +2190,8 @@ pub enum NodeKind {
     Class {
         /// Class name
         name: String,
+        /// Source location span of the class name
+        name_span: Option<SourceLocation>,
         /// Parent class names from `:isa(Parent)` attributes
         parents: Vec<String>,
         /// Class body containing methods and attributes
@@ -2198,6 +2202,8 @@ pub enum NodeKind {
     Format {
         /// Format name (defaults to filehandle name)
         name: String,
+        /// Source location span of the format name
+        name_span: Option<SourceLocation>,
         /// Format specification body
         body: String,
     },
@@ -2690,6 +2696,7 @@ mod tests {
             NodeKind::NamedParameter { variable: Box::new(dummy_node()) },
             NodeKind::Method {
                 name: String::new(),
+                name_span: None,
                 signature: None,
                 attributes: vec![],
                 body: Box::new(dummy_node()),
@@ -2745,8 +2752,13 @@ mod tests {
                 block: Box::new(dummy_node()),
             },
             NodeKind::DataSection { marker: String::new(), body: None },
-            NodeKind::Class { name: String::new(), parents: vec![], body: Box::new(dummy_node()) },
-            NodeKind::Format { name: String::new(), body: String::new() },
+            NodeKind::Class {
+                name: String::new(),
+                name_span: None,
+                parents: vec![],
+                body: Box::new(dummy_node()),
+            },
+            NodeKind::Format { name: String::new(), name_span: None, body: String::new() },
             NodeKind::Identifier { name: String::new() },
             NodeKind::Error {
                 message: String::new(),

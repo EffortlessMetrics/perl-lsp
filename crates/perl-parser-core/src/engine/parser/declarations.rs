@@ -343,7 +343,7 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'class'
 
-        let (name, _) = self.parse_qualified_name(false)?;
+        let (name, name_span) = self.parse_qualified_name(false)?;
 
         // Consume optional version: `1.23` (Number) or `v1.2.3` (VString).
         // An Identifier starting with `v` followed by digits is also a v-string
@@ -403,7 +403,7 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Class { name, parents, body: Box::new(body) },
+            NodeKind::Class { name, name_span: Some(name_span), parents, body: Box::new(body) },
             SourceLocation { start, end },
         ))
     }
@@ -415,6 +415,10 @@ impl<'a> Parser<'a> {
 
         let name_token = self.expect(TokenKind::Identifier)?;
         let name = name_token.text.to_string();
+        let name_span = Some(SourceLocation {
+            start: name_token.start,
+            end: name_token.end,
+        });
 
         let mut attributes = self.parse_declaration_attributes()?;
 
@@ -441,7 +445,7 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Method { name, signature, attributes, body: Box::new(body) },
+            NodeKind::Method { name, name_span, signature, attributes, body: Box::new(body) },
             SourceLocation { start, end },
         ))
     }
@@ -457,6 +461,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Method {
                 name: "ADJUST".to_string(),
+                name_span: None,
                 signature: None,
                 attributes: Vec::new(),
                 body: Box::new(body),
@@ -471,13 +476,17 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'format'
 
         // Parse format name (optional - can be anonymous)
-        let name = if self.peek_kind() == Some(TokenKind::Assign) {
+        let (name, name_span) = if self.peek_kind() == Some(TokenKind::Assign) {
             // Anonymous format
-            String::new()
+            (String::new(), None)
         } else {
             // Named format
             let name_token = self.expect(TokenKind::Identifier)?;
-            name_token.text.to_string()
+            let span = SourceLocation {
+                start: name_token.start,
+                end: name_token.end,
+            };
+            (name_token.text.to_string(), Some(span))
         };
 
         // Expect =
@@ -499,7 +508,7 @@ impl<'a> Parser<'a> {
         };
 
         let end = self.previous_position();
-        Ok(Node::new(NodeKind::Format { name, body }, SourceLocation { start, end }))
+        Ok(Node::new(NodeKind::Format { name, name_span, body }, SourceLocation { start, end }))
     }
 
     /// Parse package declaration

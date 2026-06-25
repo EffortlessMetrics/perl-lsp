@@ -116,14 +116,14 @@ fn class_with_parent_and_method_signature_has_expected_ast_shape() -> Result<(),
     assert_eq!(statements.len(), 1);
 
     match &statements[0].kind {
-        NodeKind::Class { name, parents, body } => {
+        NodeKind::Class { name, name_span: _, parents, body } => {
             assert_eq!(name, "Local::Widget");
             assert_eq!(parents, &["Local::Base".to_string()]);
 
             let body_statements = block_statements(body)?;
             assert_eq!(body_statements.len(), 1);
             match &body_statements[0].kind {
-                NodeKind::Method { name, signature, attributes, body } => {
+                NodeKind::Method { name, name_span: _, signature, attributes, body } => {
                     assert_eq!(name, "render");
                     assert!(attributes.is_empty());
                     assert!(matches!(body.kind, NodeKind::Block { .. }));

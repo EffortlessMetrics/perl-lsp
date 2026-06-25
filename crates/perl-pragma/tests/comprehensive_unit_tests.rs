@@ -1884,6 +1884,7 @@ fn method_node(body_node: Node, start: usize, end: usize) -> Node {
     Node {
         kind: NodeKind::Method {
             name: "foo".to_string(),
+            name_span: None,
             signature: None,
             attributes: vec![],
             body: Box::new(body_node),
@@ -1896,6 +1897,7 @@ fn class_node(body_node: Node, start: usize, end: usize) -> Node {
     Node {
         kind: NodeKind::Class {
             name: "Foo".to_string(),
+            name_span: None,
             parents: vec![],
             body: Box::new(body_node),
         },

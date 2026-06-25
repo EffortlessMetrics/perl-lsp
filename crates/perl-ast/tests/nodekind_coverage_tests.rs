@@ -340,6 +340,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             Node::new(
                 NodeKind::Method {
                     name: "run".to_string(),
+                    name_span: None,
                     signature: Some(Box::new(Node::new(
                         NodeKind::Signature { parameters: vec![] },
                         loc(),
@@ -513,6 +514,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             Node::new(
                 NodeKind::Class {
                     name: "Example".to_string(),
+                    name_span: None,
                     parents: vec![],
                     body: Box::new(leaf("body")),
                 },
@@ -523,7 +525,11 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         ),
         (
             Node::new(
-                NodeKind::Format { name: "STDOUT".to_string(), body: "body".to_string() },
+                NodeKind::Format {
+                    name: "STDOUT".to_string(),
+                    name_span: None,
+                    body: "body".to_string(),
+                },
                 loc(),
             ),
             "Format",
