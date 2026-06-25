@@ -406,18 +406,18 @@ fn escape_markdown_link_text(text: &str) -> String {
 fn extract_link_display(link: &str) -> String {
     // L<text|target> — explicit display text before the pipe
     if let Some(pipe_pos) = link.find('|') {
-        let display = escape_markdown_link_text(&strip_pod_formatting(&link[..pipe_pos]));
+        let display = escape_markdown_link_text(&strip_pod_formatting(link[..pipe_pos].trim()));
         let target = encode_pod_link_target(link[pipe_pos + 1..].trim());
         return format!("[{display}](perl-module://{target})");
     }
     // L<Module/section> — module + section, display is just the module part
     if let Some(slash_pos) = link.find('/') {
-        let module = escape_markdown_link_text(&strip_pod_formatting(&link[..slash_pos]));
+        let module = escape_markdown_link_text(&strip_pod_formatting(link[..slash_pos].trim()));
         let target = encode_pod_link_target(link.trim());
         return format!("[{module}](perl-module://{target})");
     }
     // L<Module::Name> — simple module reference
-    let display = escape_markdown_link_text(&strip_pod_formatting(link));
+    let display = escape_markdown_link_text(&strip_pod_formatting(link.trim()));
     let target = encode_pod_link_target(link.trim());
     format!("[{display}](perl-module://{target})")
 }
@@ -550,6 +550,35 @@ mod tests {
         assert_eq!(
             strip_pod_formatting("L<< display text|File::Find/The wanted function >>"),
             "[display text](perl-module://File::Find/The%20wanted%20function)"
+        );
+    }
+
+    // ── L<> display-text trimming (issues #2480, #2482, #2485) ───────────────
+
+    #[test]
+    fn link_pipe_form_trims_display_and_target() {
+        // L<text|target> — leading/trailing whitespace on both sides is trimmed
+        // so neither the display text nor the target leaks padding (#2480).
+        assert_eq!(strip_pod_formatting("L<  text  |  target  >"), "[text](perl-module://target)");
+    }
+
+    #[test]
+    fn link_slash_form_trims_module_display() {
+        // L<Module/section> — the module display part is trimmed so no trailing
+        // space leaks into the rendered link text (#2482).
+        assert_eq!(
+            strip_pod_formatting("L<Module / Section>"),
+            "[Module](perl-module://Module%20/%20Section)"
+        );
+    }
+
+    #[test]
+    fn link_simple_form_trims_display() {
+        // L<Module::Name> — surrounding whitespace is trimmed from the display
+        // text (#2485).
+        assert_eq!(
+            strip_pod_formatting("L< Module::Name >"),
+            "[Module::Name](perl-module://Module::Name)"
         );
     }
 
