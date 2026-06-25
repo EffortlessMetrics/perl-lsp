@@ -223,7 +223,7 @@ workspace:
     schemes:
       - perldoc
   workspaceFolders:
-    changeNotifications: false
+    changeNotifications: true
     supported: false
 workspaceSymbolProvider:
   resolveProvider: true

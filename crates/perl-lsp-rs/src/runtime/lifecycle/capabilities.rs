@@ -605,7 +605,7 @@ impl LspServer {
         capabilities["workspace"] = json!({
             "workspaceFolders": {
                 "supported": workspace_folders_support,
-                "changeNotifications": workspace_folders_support
+                "changeNotifications": true
             },
             "fileOperations": {
                 "willCreate": { "filters": [
@@ -967,12 +967,39 @@ mod tests {
         let change_notifications = response
             .pointer("/capabilities/workspace/workspaceFolders/changeNotifications")
             .and_then(|v| v.as_bool())
-            .unwrap_or(true);
+            .unwrap_or(false);
 
         assert!(!workspace_folders, "server must not advertise unsupported workspace folders");
         assert!(
-            !change_notifications,
-            "server must not advertise workspace folder change notifications when unsupported"
+            change_notifications,
+            "server must always advertise workspace folder change notifications (per LSP spec)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn initialize_always_advertises_workspace_folder_change_notifications_per_lsp_spec()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "workspaceFolders": true
+                }
+            }
+        });
+
+        let response =
+            server.handle_initialize(Some(params))?.ok_or("initialize should return payload")?;
+
+        let change_notifications = response
+            .pointer("/capabilities/workspace/workspaceFolders/changeNotifications")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        assert!(
+            change_notifications,
+            "server must always advertise workspace folder change notifications (per LSP spec)"
         );
         Ok(())
     }
