@@ -22,7 +22,10 @@ fn spawn_child(
     args: &[&str],
     stdin: Option<&[u8]>,
 ) -> Result<Child, SubprocessError> {
-    let (resolved_program, resolved_args) = resolve_command_invocation(program, args);
+    // Fail closed: if the program cannot be resolved to a safe absolute path
+    // (Windows CWD-planting RCE defense), error out rather than spawning a bare
+    // name that CreateProcess would resolve against the current directory.
+    let (resolved_program, resolved_args) = resolve_command_invocation(program, args)?;
     let mut cmd = Command::new(&resolved_program);
     cmd.args(resolved_args.iter().map(String::as_str));
     if stdin.is_some() {

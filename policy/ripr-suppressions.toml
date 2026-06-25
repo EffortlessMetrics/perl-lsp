@@ -1227,3 +1227,81 @@ reason = "PR #991 adds two test surfaces that diff-scoped RIPR 0.9.0 misclassifi
 created = "2026-06-20"
 review_after = "2026-07-20"
 expires = "2026-09-30"
+
+# =============================================================================
+# Windows CWD-planting RCE fix (#2764): windows.rs platform-gated code.
+#
+# PR #2967 (fix/windows-bare-tool-cwd-rce) tightens the Windows subprocess
+# invocation chain: resolve_windows_program now fails closed when the tool is
+# not on any absolute PATH directory, and resolve_cmd_exe refuses the bare
+# "cmd.exe" name.  The implementation lives in
+# crates/perl-subprocess-runtime/src/os_runtime/windows.rs, which is gated
+# on #[cfg(windows)].
+#
+# On Linux CI runners, the entire windows.rs module is excluded from
+# compilation by the platform cfg-guard.  RIPR has no test call paths to
+# reach any of its functions (resolve_windows_program, path_dirs_from_env,
+# pathext_from_env, resolve_cmd_exe, windows_program_priority) — so every
+# changed line is classified no_static_path or weakly_exposed with
+# reach=no, observe=no.  This is the same structural limitation as
+# ripr#1429 (cfg-guard tracing): the code is correct and its security
+# invariants are proven by Windows-only tests that run on the dedicated
+# Windows CI runner (ripr+ on CX43 / GitHub Hosted Windows), but the Linux
+# diff-scoped pass cannot observe those call paths.
+#
+# The cross-platform security logic was extracted into path_selection.rs
+# (select_path_candidate, candidate_priority) precisely so it CAN be
+# tested on Linux CI — that file has full reach/observe/infect evidence.
+# windows.rs retains only the Windows-specific orchestration (PATH/PATHEXT
+# env lookup, is_file probing, cmd.exe resolution) that requires a Windows
+# runner.
+#
+# Suppression is narrow (single production file). Remove when ripr adds
+# cross-platform cfg-guard simulation or when targeted mutation covers
+# the Windows-only orchestration path on a non-Linux runner.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-windows-subprocess-platform-guard-2764"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-subprocess-runtime/src/os_runtime/windows.rs"]
+classification = ["no_static_path", "weakly_exposed", "static_unknown", "infection_unknown", "propagation_unknown"]
+owner = "proof-lane"
+issue = "#2764"
+reason = "PR #2967 hardens the Windows subprocess invocation chain (resolve_windows_program fail-closed, resolve_cmd_exe absolute-only). windows.rs is gated on #[cfg(windows)] — on Linux CI the entire module is not compiled, so RIPR finds no static call paths (no_static_path, reach=no) to any changed line. The security invariants are covered by dedicated Windows-only tests (test_resolve_command_invocation_fails_closed_when_tool_not_on_path, test_resolve_cmd_exe_returns_absolute_path_never_bare, test_run_command_does_not_execute_planted_cwd_binary) that run on the Windows CI runner. The cross-platform selection logic was extracted into path_selection.rs and IS exercised on Linux CI. This is the same ripr#1429 cfg-guard class as ripr-suppress-uri-file-path-helpers and related suppressions. Remove when ripr supports cross-platform cfg-guard simulation."
+created = "2026-06-25"
+review_after = "2026-09-25"
+expires = "2026-12-31"
+
+# =============================================================================
+# Windows CWD-planting RCE fix (#2764): path_selection.rs match arm guards.
+#
+# path_selection.rs is the cross-platform extraction of select_path_candidate
+# and candidate_priority, introduced in PR #2967 so the security-critical
+# CWD-exclusion invariants can be tested on Linux CI.  The function is fully
+# reached and observed by tests (reach=yes, observe=yes) but RIPR classifies
+# the match arm guard conditions (lines 15-18: `if ext == "exe"`, `"com"`,
+# `"cmd"`, `"bat"`) as weakly_exposed with discriminate=weak because the
+# static guard predicates are not individually mutation-tested at the guard
+# boundary (the test asserts the returned priority value, but the string
+# literal in the guard itself is ripr#1429-class: RIPR cannot trace through
+# the match arm dispatch to confirm the exact guard condition is killed).
+#
+# All four priority tiers are exercised by test_candidate_priority_ordering_all_tiers
+# (exact u8 assertions for each extension) and test_candidate_priority_case_insensitive
+# (case normalization), providing strong evidence the dispatch is correct.
+# The seam class is identical to ripr-suppress-phase-block-description-match-arms
+# where match arm dispatch on string literals is not statically traced by
+# RIPR 0.9.x.  Remove when ripr gains match-guard discrimination or targeted
+# mutation is scheduled post-review.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-path-selection-match-arm-guards-2764"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-subprocess-runtime/src/os_runtime/path_selection.rs"]
+classification = ["weakly_exposed"]
+owner = "proof-lane"
+issue = "#2764"
+reason = "path_selection.rs candidate_priority match arm guards (lines 15-18: `if ext == \"exe\" => 5`, `\"com\" => 4`, `\"cmd\" => 3`, `\"bat\" => 2`) are ripr#1429-class weakly_exposed seams. The function has reach=yes, observe=yes, infect=weak — the priority values are asserted by test_candidate_priority_ordering_all_tiers and test_candidate_priority_case_insensitive, but RIPR cannot statically trace that the guard predicate itself (the exact string literal `\"exe\"` etc.) is the discriminating condition rather than the arm body. This is identical to ripr-suppress-phase-block-description-match-arms (string dispatch arms). All security properties are verified: the full select_path_candidate pipeline is exercised by 15+ cross-platform tests including CWD-exclusion, relative-candidate rejection, extension-priority ordering, and the planted-binary regression. Remove when ripr#1429 is fixed upstream."
+created = "2026-06-25"
+review_after = "2026-09-25"
+expires = "2026-12-31"
