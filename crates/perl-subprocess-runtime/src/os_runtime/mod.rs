@@ -27,6 +27,15 @@ pub(crate) use path_selection::candidate_priority as windows_program_priority;
 #[cfg(all(windows, test))]
 pub(crate) use windows::{resolve_cmd_exe, windows_quote_for_cmd};
 
+/// Re-export of [`windows::resolve_windows_program`] for use by
+/// [`crate::resolve_program`].  The inner function is `pub(crate)`; this
+/// wrapper lifts it to `pub(super)` so `lib.rs` can call it without making
+/// the Windows-specific internals part of the public API.
+#[cfg(windows)]
+pub(super) fn resolve_windows_program_pub(program: &str) -> Option<String> {
+    windows::resolve_windows_program(program)
+}
+
 /// Default implementation using `std::process::Command`.
 pub struct OsSubprocessRuntime {
     timeout_secs: Option<u64>,

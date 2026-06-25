@@ -660,3 +660,81 @@ fn test_resolve_command_invocation_absolute_separator_path_passes_through() {
     ));
     assert_eq!(program, r"C:\tools\perltidy.exe");
 }
+
+// --- Call-observation tests for resolve_program public API ---
+//
+// ripr requires call-observation tests that drive `resolve_program` directly.
+// The selector and command-invocation tests above use inner functions; these
+// tests target the public entry point so the seam is gripped end-to-end.
+
+/// On non-Windows, `resolve_program` is a pass-through: it returns
+/// `Ok(program.to_string())` unchanged so callers can use it unconditionally
+/// without `#[cfg(windows)]` guards.
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
+#[test]
+fn test_resolve_program_non_windows_pass_through() {
+    // Any name is returned verbatim on non-Windows — the OS PATH search happens
+    // later at Command::new time, not in resolve_program.
+    let result = crate::resolve_program("perl");
+    assert!(result.is_ok(), "resolve_program must succeed on non-Windows; got: {result:?}");
+    assert_eq!(
+        result.expect("non-windows passthrough"),
+        "perl",
+        "non-Windows: resolve_program must return the name unchanged"
+    );
+}
+
+/// On non-Windows, `resolve_program` passes through even a nonexistent tool
+/// name — it defers to the OS rather than pre-searching PATH.
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
+#[test]
+fn test_resolve_program_non_windows_pass_through_nonexistent_name() {
+    let result = crate::resolve_program("definitely_not_a_real_tool_zzz_3028");
+    assert!(
+        result.is_ok(),
+        "non-Windows resolve_program must pass through even unknown names; got: {result:?}"
+    );
+    let resolved = result.expect("non-windows passthrough");
+    assert_eq!(
+        resolved, "definitely_not_a_real_tool_zzz_3028",
+        "non-Windows: resolve_program must return the name unchanged"
+    );
+}
+
+/// On Windows, `resolve_program` must return `Err` for a tool name that does
+/// not exist on any absolute PATH directory — failing closed rather than
+/// returning a bare name that CreateProcess would resolve against the CWD.
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+#[test]
+fn test_resolve_program_windows_fails_closed_for_unknown_tool() {
+    let result = crate::resolve_program("definitely_not_a_real_tool_zzz_3028");
+    assert!(
+        result.is_err(),
+        "Windows resolve_program must fail closed for an unknown tool; got: {result:?}"
+    );
+    let err = result.expect_err("must be Err");
+    assert!(
+        err.message.contains("current directory excluded"),
+        "error must mention CWD exclusion; got: {}",
+        err.message
+    );
+}
+
+/// On Windows, `resolve_program` must return an absolute path for a tool that
+/// genuinely exists on PATH (e.g. `cmd.exe` is always present on Windows CI).
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+#[test]
+fn test_resolve_program_windows_returns_absolute_path_for_real_tool() {
+    // `cmd.exe` is guaranteed present on any Windows CI runner.
+    let result = crate::resolve_program("cmd");
+    assert!(result.is_ok(), "Windows resolve_program must find cmd on PATH; got: {result:?}");
+    let resolved = result.expect("cmd must resolve");
+    assert!(
+        std::path::Path::new(&resolved).is_absolute(),
+        "Windows resolve_program must return an absolute path; got: {resolved}"
+    );
+    assert!(
+        resolved.to_ascii_lowercase().ends_with("cmd.exe"),
+        "resolved path must end with cmd.exe; got: {resolved}"
+    );
+}

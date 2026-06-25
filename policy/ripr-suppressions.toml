@@ -1305,3 +1305,74 @@ reason = "path_selection.rs candidate_priority match arm guards (lines 15-18: `i
 created = "2026-06-25"
 review_after = "2026-09-25"
 expires = "2026-12-31"
+
+# =============================================================================
+# Windows CWD-planting RCE second front (#3028): windows.rs platform guard.
+#
+# PR #3032 (fix/3028-perl-lsp-rs-command-rce) closes the second RCE front:
+# resolve_perl_path in perl-lsp-rs-core now skips empty/relative PATH entries,
+# and command_exists / run_test_command in execute_command/provider.rs route
+# through perl_subprocess_runtime::resolve_program instead of bare Command::new.
+#
+# crates/perl-subprocess-runtime/src/os_runtime/windows.rs is gated on
+# #[cfg(windows)] — on Linux CI the module is not compiled, so RIPR cannot
+# find any static call paths (no_static_path, reach=no) to any changed line.
+# All 25 no_static_path findings in this file are a direct consequence of the
+# platform cfg-guard: the code is correct and tested by Windows-only tests on
+# the dedicated Windows runner, but the Linux diff-scoped pass cannot observe
+# those call paths.  Same structural class as ripr#1429 (cfg-guard tracing).
+#
+# Suppression is narrow (single production file). Remove when ripr adds
+# cross-platform cfg-guard simulation.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-windows-subprocess-platform-guard-3028"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-subprocess-runtime/src/os_runtime/windows.rs"]
+classification = ["no_static_path", "weakly_exposed", "static_unknown", "infection_unknown", "propagation_unknown"]
+owner = "proof-lane"
+issue = "#3028"
+reason = "PR #3032 routes execute_command/provider.rs and resolve_perl_path through the hardened resolve_program path; the underlying Windows dispatcher lives in windows.rs which is #[cfg(windows)]-gated. On Linux CI the entire module is excluded from compilation, so RIPR finds no static call path to any changed line (no_static_path, reach=no). The security invariants are exercised by Windows-only tests (test_resolve_program_windows_fails_closed_for_unknown_tool, test_resolve_program_windows_returns_absolute_path_for_real_tool) on the Windows runner. Same ripr#1429 cfg-guard class as ripr-suppress-windows-subprocess-platform-guard-2764 (companion PR #2967). Remove when ripr supports cross-platform cfg-guard simulation."
+created = "2026-06-25"
+review_after = "2026-09-25"
+expires = "2026-12-31"
+
+# =============================================================================
+# Windows CWD-planting RCE second front (#3028): platform.rs test setup and
+# lib.rs Windows branch.
+#
+# PR #3032 adds two tests to perl-lsp-rs-core/src/platform.rs:
+#   (A) resolve_perl_path_skips_empty_path_entry
+#   (B) resolve_perl_path_skips_empty_entry_but_finds_real_perl
+#
+# Test (B) uses match-arm setup code (`Ok(p) => p` at line 325, `Some(d) =>
+# d.to_path_buf()` at line 329) to extract the real perl path and its parent
+# before mutating PATH.  RIPR's diff-scoped analysis flags these match arms
+# as new production seams with discriminate=weak (relational oracle — the test
+# checks `result.is_ok()` and `found.is_absolute()` rather than exact path
+# equality).  These are test setup arms in an #[cfg(test)] function body, not
+# production behavior seams — the same ripr#1428 class as
+# ripr-suppress-multi-root-workspace-symbol-test-surface and
+# ripr-suppress-dap-transport-framing-and-lifecycle-test-surface.
+#
+# Additionally, lib.rs line 68 (`))` closing the ok_or_else error construction)
+# is inside the `#[cfg(windows)]` branch of resolve_program — unreachable on
+# Linux CI for the same reason as windows.rs above (ripr#1429 cfg-guard class).
+#
+# Suppressions are minimal (two production files, test-only and cfg-gated code
+# only). Remove when ripr#1428 and ripr#1429 are fixed upstream.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-platform-test-setup-and-lib-windows-branch-3028"
+kind = "predicate_infection_untraceable"
+paths = [
+  "crates/perl-lsp-rs-core/src/platform.rs",
+  "crates/perl-subprocess-runtime/src/lib.rs",
+]
+classification = ["weakly_exposed"]
+owner = "proof-lane"
+issue = "#3028"
+reason = "PR #3032 adds two test seams flagged by diff-scoped RIPR: (A) platform.rs lines 325 and 329 are match-arm setup code inside the #[cfg(test)] test body resolve_perl_path_skips_empty_entry_but_finds_real_perl — `Ok(p) => p` and `Some(d) => d.to_path_buf()` are test infrastructure that extracts the real perl path before PATH mutation; RIPR misclassifies these as production seams with discriminate=weak (ripr#1428 class: test body code treated as new production seam). (B) lib.rs line 68 is the closing `))` of an ok_or_else error in the `#[cfg(windows)]` branch of resolve_program, which is not compiled on Linux CI (ripr#1429 cfg-guard class). The production behavior of resolve_perl_path (empty-entry skip, absolute-path-only) is proven by resolve_perl_path_skips_empty_path_entry (Err on empty PATH) and resolve_perl_path_skips_empty_entry_but_finds_real_perl (Ok with absolute path when perl exists). The Windows resolve_program path is proven by Windows-only tests. Suppression is minimal (two production files, test setup and cfg-gated code only). Remove when ripr#1428/#1429 are fixed upstream."
+created = "2026-06-25"
+review_after = "2026-09-25"
+expires = "2026-12-31"
