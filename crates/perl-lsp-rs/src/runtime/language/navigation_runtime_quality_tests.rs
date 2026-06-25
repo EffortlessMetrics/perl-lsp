@@ -215,18 +215,20 @@ fn navigation_provider_decision_replays_definition_and_references_traces()
         Some(u64::try_from(location_count(references_result.as_ref()))?)
     );
     assert_trace_only_navigation_receipt(references_receipt);
-    // The test workspace uses a simple function-call fixture that cannot reach the
-    // SemanticSourceBacked tier, so source_backed must be false and confidence "low".
-    // Assert here (not in the shared helper) because these values are now tier-dependent.
+    // The test server creates a real IndexCoordinator that indexes opened documents, so the
+    // LIVE_REFS fixture (a bare `target()` call-site in a known package) is resolved by
+    // live_source_backed_reference_locations — reaching the SemanticSourceBacked tier.
+    // source_backed and confidence are therefore tier-accurate values, not fixed sentinel values.
+    // Assert here (not in the shared helper) because these values are tier-dependent.
     assert_eq!(
         references_receipt.get("source_backed").and_then(Value::as_bool),
-        Some(false),
-        "references receipt must not be source_backed in a non-compiler-backed test workspace"
+        Some(true),
+        "references receipt must be source_backed when the SemanticSourceBacked tier answers"
     );
     assert_eq!(
         references_receipt.get("confidence").and_then(Value::as_str),
-        Some("low"),
-        "references receipt confidence must be \"low\" when not source_backed"
+        Some("high"),
+        "references receipt confidence must be \"high\" when source_backed"
     );
     assert_eq!(
         references_receipt.get("claim_boundary").and_then(Value::as_str),
