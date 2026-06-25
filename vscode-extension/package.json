@@ -1166,7 +1166,7 @@
     "@types/node": "^25.x",
     "@types/tar": "^7.0.87",
     "@types/vscode": "1.120.0",
-    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.1",
     "@typescript-eslint/parser": "^8.59.4",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
