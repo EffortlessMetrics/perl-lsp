@@ -55,9 +55,18 @@ impl PositionTracker {
     /// Convert byte offset to position with UTF-16 support
     fn byte_to_position(&self, byte_offset: usize) -> Position {
         let (line, character) = self.line_cache.offset_to_position(&self.source, byte_offset);
-        // LineStartsCache returns 0-based line numbers, but Position expects 1-based
-        Position::new(byte_offset, line + 1, character + 1)
+        // LineStartsCache returns 0-based line/column, but Position expects 1-based.
+        let (line, column) = zero_based_to_one_based(line, character);
+        Position::new(byte_offset, line, column)
     }
+}
+
+/// Convert a 0-based `(line, column)` pair into the 1-based form `Position` expects.
+///
+/// Uses [`u32::saturating_add`] so a `u32::MAX`-adjacent line or column saturates at
+/// `u32::MAX` instead of panicking in debug builds or wrapping to `0` in release builds.
+fn zero_based_to_one_based(line: u32, column: u32) -> (u32, u32) {
+    (line.saturating_add(1), column.saturating_add(1))
 }
 
 impl ParserContext {
@@ -392,6 +401,24 @@ mod tests {
 
         assert!(ctx.tokens.is_empty());
         assert!(ctx.is_eof());
+    }
+
+    #[test]
+    fn test_zero_based_to_one_based_saturates_at_u32_max() {
+        // Regression for the unchecked `line + 1` / `character + 1` in
+        // PositionTracker::byte_to_position: a u32::MAX-adjacent line/column must
+        // saturate at u32::MAX rather than panic (debug) or wrap to 0 (release).
+        assert_eq!(zero_based_to_one_based(u32::MAX, u32::MAX), (u32::MAX, u32::MAX));
+        assert_eq!(zero_based_to_one_based(u32::MAX - 1, u32::MAX - 1), (u32::MAX, u32::MAX));
+        // A single increment short of the boundary still increments normally.
+        assert_eq!(
+            zero_based_to_one_based(u32::MAX - 2, u32::MAX - 2),
+            (u32::MAX - 1, u32::MAX - 1)
+        );
+
+        // The happy path remains a plain 1-based increment.
+        assert_eq!(zero_based_to_one_based(0, 0), (1, 1));
+        assert_eq!(zero_based_to_one_based(41, 7), (42, 8));
     }
 
     #[test]
