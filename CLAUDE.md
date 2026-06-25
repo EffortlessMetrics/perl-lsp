@@ -10,7 +10,17 @@ perl-lsp's orchestration is an *Octopus Cluster* — see [docs/reference/OCTOPUS
 >
 > For the operating contract a maintainer-agent follows when making consequential PR decisions — work PR by PR, verify from primary artifacts, never destructively batch, choose the workflow from current repo state, and override stale instructions out loud — see [docs/reference/MAINTAINER_AGENT_DOCTRINE.md](docs/reference/MAINTAINER_AGENT_DOCTRINE.md).
 
-The orchestrator routes work to agents, never writes code directly.
+The orchestrator routes work to agents, and writes code directly only by exception (see *Operating doctrine* below).
+
+### Operating doctrine (2026-06)
+
+The gate/agent pipeline below encodes **intent**, not a fixed agent-per-stage relay. Long-running warm agents + compaction + ultracode have made consolidation the default: prefer **one long-running builder + one consolidated review/verify pass** over the full granular scout→red→build→green→review→deep chain — keeping each gate's *intent* (independent judgment, adversarial verification) while collapsing the agent count. Use the granular relay where independence is genuinely load-bearing. "The orchestrator never writes code" is the strong default, not a ban: the orchestrator writes/verifies directly when salvaging a stalled agent's artifact or making a focused full-context fix — and **always routes an independent adversarial pass before merge**. See [docs/forensics/2026-06-25-closure-gap-the-recurring-defect.md](docs/forensics/2026-06-25-closure-gap-the-recurring-defect.md).
+
+**Closure discipline — component-proved ≠ system-proved.** A passing component test never proves the system; the gap hides in the seam the author didn't build (the caller, the reachability edge, the last-mile handoff). Before "done"/"merge"/"live", verify the full production chain: the live caller, reachability from a real request, the durable artifact on `origin`, and the externally observable effect — bound to the current repo identity + HEAD SHA. Track completion on independent axes (Implemented · Merged · Reachable · Correct · Measured · Promoted · Consolidated), not one "done" flag; any gap on Reachable/Promoted/Consolidated is **inventory, not product**. Attach a **closure receipt** to security/correctness/"live" claims: `repo, base+head SHA, production_entrypoint, call_chain_verified, independent_expected_behavior, remote_head_confirmed, user_visible_effect, fallback_remaining, uncertainty`.
+
+**Adversarial review is seam-anchored.** A cold/oppositional pass walks one level outward in both directions (*what feeds this? what consumes this? what on None/Err/empty?*), not the changed function. Its value is the different **direction**, not clean context — "independent" means independent *direction*, not a separate body. Re-aim a warm agent across successive angles rather than spinning up a panel; **change agents when the context FOCUS changes, re-aim within a focus**. Closure is attested by a different direction than the producer.
+
+**The control plane is the binding constraint.** Codegen is cheap; the CI/merge control plane (ripr, Codecov-patch, the serial fmt/clippy meta-gate, main-green) is the bottleneck — and the bottleneck **migrates upward** (codegen → compile → CI → merge → API → reconciliation → reviewer). Treat infra (cached builds, idempotent bulk ops, current-main preflight, durable agent receipts, API-aware write queues) as product velocity, not support work.
 
 ### Gates and Agents
 
@@ -24,7 +34,7 @@ The pipeline is organized into **7 gates** (coarse stages) with multiple agents 
 | **4. Review/improve** | Right thing × what codebase needs × right way | reviewer, maintainer-pr, refactor-planner, green-refactor, reviewer-deep, diff-auditor |
 | **5. CI green** | Live CI actually green (not just a label) | green-ci, pr-responder |
 | **6. Merge** | Land it | ops |
-| **7. Learn** | Consolidate captured learning into durable artifacts | wisdom, memory-recalibrator |
+| **7. Learn** | Consolidate captured learning into durable artifacts | wisdom, memory-recalibrator, learning-scribe |
 
 **Sequencing within a gate** is preferred when agents build on each other's output, but is not strict — parallel agents within a gate are fine when they don't depend on each other.
 
@@ -35,6 +45,8 @@ The pipeline is organized into **7 gates** (coarse stages) with multiple agents 
 **Gate-7 capture loop**: Every deep-review fix or observable incident => one  entry (YAML frontmatter with tags + search_terms, links the PR# and the  pattern) + a spec/contract follow-up in  or  if the class is recurring.
 
 See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for the full gate model: skip criteria, within-gate ordering, three-axis triangulation in Gate 4, and worked examples.
+
+The tables above name the load-bearing gate agents; for the full roster — including the pipeline **leads** (`lead-discovery`, `lead-build`, `lead-review`) and the **Issue Discovery Desk** scouts (`scout-find-*`) — see [.claude/agents/AGENT_CATALOG.md](.claude/agents/AGENT_CATALOG.md).
 
 ### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
 
@@ -213,6 +225,8 @@ gh pr list --search "label:merge-ready"              # ready to merge
 - **Research** -> explore agent: `Agent(subagent_type: "Explore", prompt: "...")`
 - **Multiple changes** -> parallel worktree agents, one per crate. Microcrate architecture prevents conflicts.
   - Reserve 10 agent slots for late-cycle routing. Use SendMessage to repurpose idle agents.
+- **Idle warm agent** -> re-task it, don't let it expire (~5-min agent cache TTL vs ~1-hr orchestrator). Re-aim across adversarial angles / verification / cleanup *within the same focus*; spawn a fresh agent only when the focus changes. Cache is a discount, not a reason to manufacture low-value work.
+- **Independent verification** -> a different *direction* on the seam, not necessarily a fresh agent. Background subagents must **self-post** findings via SendMessage **and write them to a durable file** — verify the durable artifact, not the agent's word (background agents reliably drop reports otherwise).
 
 ### Merge Queue Protocol
 
