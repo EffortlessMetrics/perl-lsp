@@ -638,16 +638,223 @@ fn binary_literal() -> R {
 }
 
 #[test]
-fn prefixed_number_with_underscores_only_falls_back_to_zero() -> R {
+fn prefixed_number_with_underscores_only_emits_error() -> R {
     for input in ["0x_", "0x__", "0b_", "0b___", "0o_", "0o__"] {
         let toks = significant(input);
-        assert!(matches!(toks.first().map(|t| &t.token_type), Some(TokenType::Number(_))));
-        assert_eq!(toks.first().map(|t| t.text.as_ref()), Some("0"), "input: {input}");
         assert!(
-            matches!(toks.get(1).map(|t| &t.token_type), Some(TokenType::Identifier(_))),
-            "expected identifier after fallback for input: {input}, got {toks:?}"
+            matches!(toks.first().map(|t| &t.token_type), Some(TokenType::Error(_))),
+            "input: {input} should emit Error token, got {toks:?}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn malformed_hex_binary_octal_literals_emit_error() -> R {
+    // Test case: 0x with no hex digits should emit Error, not fall back to 0
+    let toks = significant("0x_");
+    assert!(
+        matches!(toks.first().map(|t| &t.token_type), Some(TokenType::Error(_))),
+        "0x_ should emit Error token, got {toks:?}"
+    );
+
+    // Test case: 0x followed by invalid character should emit Error
+    let toks = significant("0xG");
+    assert!(
+        matches!(toks.first().map(|t| &t.token_type), Some(TokenType::Error(_))),
+        "0xG should emit Error token, got {toks:?}"
+    );
+
+    // Test case: 0b followed by invalid binary digit should emit Error
+    let toks = significant("0b2");
+    assert!(
+        matches!(toks.first().map(|t| &t.token_type), Some(TokenType::Error(_))),
+        "0b2 should emit Error token, got {toks:?}"
+    );
+
+    // Test case: 0o followed by invalid octal digit should emit Error
+    let toks = significant("0o8");
+    assert!(
+        matches!(toks.first().map(|t| &t.token_type), Some(TokenType::Error(_))),
+        "0o8 should emit Error token, got {toks:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hex_error_branch_emits_specific_message() -> R {
+    // Each case exercises the hexadecimal error branch in try_number and asserts the
+    // exact error message.  The test is non-vacuous: reverting the PR so that the
+    // fallback-to-zero behaviour is restored would cause these assertions to fail
+    // because TokenType::Number would be returned instead of TokenType::Error with
+    // this specific message.
+    let expected_msg = "No digits found for hexadecimal literal";
+
+    // lowercase 0x prefix — no digits, leading underscore only
+    let toks = significant("0x_");
+    let first = toks.first().ok_or("no token for 0x_")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0x_: wrong error message"
+        ),
+        other => return Err(format!("0x_: expected Error, got {other:?}").into()),
+    }
+
+    // lowercase 0x prefix — no digits, immediately invalid char
+    let toks = significant("0xG");
+    let first = toks.first().ok_or("no token for 0xG")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0xG: wrong error message"
+        ),
+        other => return Err(format!("0xG: expected Error, got {other:?}").into()),
+    }
+
+    // uppercase 0X prefix — no digits at all (EOF after prefix)
+    let toks = significant("0X");
+    let first = toks.first().ok_or("no token for 0X")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0X: wrong error message"
+        ),
+        other => return Err(format!("0X: expected Error, got {other:?}").into()),
+    }
+
+    // uppercase 0X prefix — underscore only
+    let toks = significant("0X_");
+    let first = toks.first().ok_or("no token for 0X_")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0X_: wrong error message"
+        ),
+        other => return Err(format!("0X_: expected Error, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn binary_error_branch_emits_specific_message() -> R {
+    // Each case exercises the binary error branch in try_number and asserts the
+    // exact error message.  Non-vacuous: reverting the PR's fix would produce
+    // TokenType::Number("0") rather than this specific TokenType::Error.
+    let expected_msg = "No digits found for binary literal";
+
+    // lowercase 0b prefix — invalid digit (2 is not 0 or 1)
+    let toks = significant("0b2");
+    let first = toks.first().ok_or("no token for 0b2")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0b2: wrong error message"
+        ),
+        other => return Err(format!("0b2: expected Error, got {other:?}").into()),
+    }
+
+    // lowercase 0b prefix — underscore only (no real bit digits)
+    let toks = significant("0b_");
+    let first = toks.first().ok_or("no token for 0b_")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0b_: wrong error message"
+        ),
+        other => return Err(format!("0b_: expected Error, got {other:?}").into()),
+    }
+
+    // uppercase 0B prefix — no digits at all (EOF after prefix)
+    let toks = significant("0B");
+    let first = toks.first().ok_or("no token for 0B")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0B: wrong error message"
+        ),
+        other => return Err(format!("0B: expected Error, got {other:?}").into()),
+    }
+
+    // uppercase 0B prefix — underscore only
+    let toks = significant("0B_");
+    let first = toks.first().ok_or("no token for 0B_")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0B_: wrong error message"
+        ),
+        other => return Err(format!("0B_: expected Error, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn octal_error_branch_emits_specific_message() -> R {
+    // Each case exercises the octal error branch in try_number and asserts the
+    // exact error message.  Non-vacuous: reverting the PR's fix would produce
+    // TokenType::Number("0") rather than this specific TokenType::Error.
+    let expected_msg = "No digits found for octal literal";
+
+    // lowercase 0o prefix — digit 8 is not a valid octal digit
+    let toks = significant("0o8");
+    let first = toks.first().ok_or("no token for 0o8")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0o8: wrong error message"
+        ),
+        other => return Err(format!("0o8: expected Error, got {other:?}").into()),
+    }
+
+    // lowercase 0o prefix — underscore only (no real octal digits)
+    let toks = significant("0o_");
+    let first = toks.first().ok_or("no token for 0o_")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0o_: wrong error message"
+        ),
+        other => return Err(format!("0o_: expected Error, got {other:?}").into()),
+    }
+
+    // uppercase 0O prefix — no digits at all (EOF after prefix)
+    let toks = significant("0O");
+    let first = toks.first().ok_or("no token for 0O")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0O: wrong error message"
+        ),
+        other => return Err(format!("0O: expected Error, got {other:?}").into()),
+    }
+
+    // uppercase 0O prefix — underscore only
+    let toks = significant("0O_");
+    let first = toks.first().ok_or("no token for 0O_")?;
+    match &first.token_type {
+        TokenType::Error(msg) => assert_eq!(
+            msg.as_ref(),
+            expected_msg,
+            "0O_: wrong error message"
+        ),
+        other => return Err(format!("0O_: expected Error, got {other:?}").into()),
+    }
+
     Ok(())
 }
 

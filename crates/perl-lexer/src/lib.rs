@@ -907,7 +907,16 @@ impl<'a> PerlLexer<'a> {
                         end: self.position,
                     });
                 }
-                // No hex digits after 0x - fall through to parse '0' as decimal
+                // No hex digits after 0x - emit error
+                self.position = pos;
+                return Some(Token {
+                    token_type: TokenType::Error(Arc::from(
+                        "No digits found for hexadecimal literal",
+                    )),
+                    text: Arc::from(&self.input[start..pos]),
+                    start,
+                    end: pos,
+                });
             } else if prefix_byte == b'b' || prefix_byte == b'B' {
                 // Binary: 0b[01_]+
                 pos += 2; // consume '0b'
@@ -930,7 +939,14 @@ impl<'a> PerlLexer<'a> {
                         end: self.position,
                     });
                 }
-                // No binary digits after 0b - fall through to parse '0' as decimal
+                // No binary digits after 0b - emit error
+                self.position = pos;
+                return Some(Token {
+                    token_type: TokenType::Error(Arc::from("No digits found for binary literal")),
+                    text: Arc::from(&self.input[start..pos]),
+                    start,
+                    end: pos,
+                });
             } else if prefix_byte == b'o' || prefix_byte == b'O' {
                 // Octal (explicit): 0o[0-7_]+
                 pos += 2; // consume '0o'
@@ -953,7 +969,14 @@ impl<'a> PerlLexer<'a> {
                         end: self.position,
                     });
                 }
-                // No octal digits after 0o - fall through to parse '0' as decimal
+                // No octal digits after 0o - emit error
+                self.position = pos;
+                return Some(Token {
+                    token_type: TokenType::Error(Arc::from("No digits found for octal literal")),
+                    text: Arc::from(&self.input[start..pos]),
+                    start,
+                    end: pos,
+                });
             }
         }
 
