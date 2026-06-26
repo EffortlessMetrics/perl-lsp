@@ -503,13 +503,17 @@ impl BodyLowerer {
                 if let Some(range) = range {
                     let anchor = self.make_body_anchor(range);
                     let op = match storage {
-                        DeclStorageClass::Our => PirOperation::StashWrite {
-                            symbol: SymbolName {
-                                sigil: sigil_str(sigil),
-                                name: name.clone(),
-                                package: None, // package context not yet threaded into body arena
-                            },
-                        },
+                        // `our` binds a package/stash symbol; `local` dynamically
+                        // scopes a package/global slot. Both are stash writes.
+                        DeclStorageClass::Our | DeclStorageClass::Local => {
+                            PirOperation::StashWrite {
+                                symbol: SymbolName {
+                                    sigil: sigil_str(sigil),
+                                    name: name.clone(),
+                                    package: None, // package context not yet threaded into body arena
+                                },
+                            }
+                        }
                         // my / state / any other declarator → lexical write
                         _ => PirOperation::LexicalWrite {
                             name: LexicalName { sigil: sigil_str(sigil), name: name.clone() },

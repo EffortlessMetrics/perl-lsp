@@ -25,6 +25,10 @@
 //!  18. `lower_hir_bodies_with_identity` threads source_identity to receipt
 //!  19. Unary Read (`-$x`) — lowers operand as a Read, no Modify
 //!  20. `foo($x)` in body — Call node is unsupported, $x produces a Read (not Write)
+//!  21. Array sigil `@arr` — sigil_str emits `@`, not `$`
+//!  22. Hash sigil `%h` — sigil_str emits `%`
+//!  23. Opaque function call counted in unsupported receipt
+//!  24. `local $x;` → StashWrite, 0 LexicalWrite (regression guard for #2612)
 
 use perl_parser_core::Parser;
 use perl_parser_core::SourceLocation;
@@ -655,6 +659,50 @@ fn pir_a_hash_var_sigil_is_percent() {
                 name.sigil, "%",
                 "LexicalWrite for %h must have sigil `%`, got `{}`",
                 name.sigil
+            );
+        }
+    }
+}
+
+// ── 24. `local $x;` — lowers to StashWrite, 0 LexicalWrite (#2612) ───────────
+// Regression guard for the PIR-A body path: `local` dynamically scopes a
+// package/global slot, so `local $x` must lower to StashWrite (not LexicalWrite).
+// The flat-items path (`lower_hir`) handled this correctly; the body-arena path
+// (`lower_hir_bodies`) had `DeclStorageClass::Local` falling into the `_` arm
+// (→ LexicalWrite) before this fix.
+
+#[test]
+fn pir_a_local_declaration_is_stash_write() {
+    let graph = parse_and_lower("local $x;");
+
+    // Must produce at least one StashWrite for $x.
+    let stash_write = graph.nodes.iter().find(
+        |n| matches!(&n.operation, PirOperation::StashWrite { symbol } if symbol.name == "x"),
+    );
+    assert!(
+        stash_write.is_some(),
+        "`local $x` must lower to StashWrite in the PIR-A body path; got ops: {:?}",
+        graph.nodes.iter().map(|n| n.operation.name()).collect::<Vec<_>>()
+    );
+
+    // Must produce 0 LexicalWrite nodes for $x (regression guard).
+    let lex_write_count = graph
+        .nodes
+        .iter()
+        .filter(|n| matches!(&n.operation, PirOperation::LexicalWrite { name } if name.name == "x"))
+        .count();
+    assert_eq!(
+        lex_write_count, 0,
+        "`local $x` must NOT produce any LexicalWrite for $x; got {lex_write_count}"
+    );
+
+    // Sigil must be `$`.
+    if let Some(node) = stash_write {
+        if let PirOperation::StashWrite { symbol } = &node.operation {
+            assert_eq!(
+                symbol.sigil, "$",
+                "StashWrite for local $x must carry sigil `$`, got `{}`",
+                symbol.sigil
             );
         }
     }
