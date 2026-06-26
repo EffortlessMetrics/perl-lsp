@@ -185,6 +185,13 @@ pub fn build_rename_edit(
 /// package other than `key.pkg`.  Such references are ambiguous: a Perl
 /// program importing a same-named sub from a different package would be
 /// incorrectly renamed.
+///
+/// Arrow method calls (`$self->method`, `$obj->method`) are NOT ambiguous: the
+/// receiver's class is determined at dispatch time via `@ISA`/Perl OO, and the
+/// workspace index already validated that this reference belongs to `key.pkg`'s
+/// inheritance chain.  The workspace index returns the full expression span
+/// (`$self->shared`), so detecting `->` inside the span itself is sufficient to
+/// identify an arrow method call.
 fn is_ambiguous_sub_reference(
     idx: &WorkspaceIndex,
     key: &SymbolKey,
@@ -212,6 +219,16 @@ fn is_ambiguous_sub_reference(
     // A bare `&name` call (without `::`) is still subject to package resolution and
     // is just as ambiguous as `name()` when called from a different package.
     if original.contains("::") {
+        return false;
+    }
+
+    // Arrow method calls (`$self->name`, `$obj->name`) are OO dispatch: the
+    // receiver type is resolved at runtime via `@ISA`.  The workspace index returns
+    // the full expression span (e.g. `$self->shared`), so the presence of `->` inside
+    // `original` identifies this as arrow dispatch.  Renaming is safe: the workspace
+    // index already attributed this call to `key.pkg` via the inheritance chain, and
+    // only the method name token after `->` changes.
+    if original.contains("->") {
         return false;
     }
 
@@ -696,6 +713,82 @@ $var;
         assert!(
             edits.is_empty(),
             "main-package rename must return empty edits (fall-through to same-file), got: {edits:?}"
+        );
+
+        Ok(())
+    }
+
+    /// Arrow method calls (`$self->name`) must NOT be treated as ambiguous
+    /// unqualified cross-package references.  The `->` dispatch operator makes the
+    /// receiver explicit even when the method name itself has no `::` qualifier.
+    ///
+    /// Fixture: `Base` defines `shared`; `Child` extends `Base` and calls
+    /// `$self->shared` inside `run`.  Cross-file rename of `Base::shared` must
+    /// produce edits for both `Base.pm` (definition) and `Child.pm` (call site).
+    #[test]
+    fn rename_arrow_method_call_cross_package_is_not_ambiguous()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+
+        let base_text = "package Base;\n\nsub shared {\n    return 'shared';\n}\n\n1;\n";
+        let child_text = "package Child;\nuse parent 'Base';\n\nsub run {\n    my ($self) = @_;\n    return $self->shared;\n}\n\n1;\n";
+
+        index_text(&idx, "file:///Base.pm", base_text)?;
+        index_text(&idx, "file:///Child.pm", child_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Base"),
+            name: Arc::from("shared"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        // Must NOT return AmbiguousIdentity — `$self->shared` is arrow dispatch.
+        let edits = build_rename_edit(&idx, &key, "shared_renamed").map_err(|e| {
+            format!(
+                "expected Ok but got refusal: {e}. \
+                 `$self->shared` in Child.pm is arrow method dispatch — must not be treated as \
+                 ambiguous unqualified cross-package call."
+            )
+        })?;
+
+        // At minimum, Base.pm (definition) must be edited.
+        let base_edit = edits.iter().find(|e| e.uri.contains("Base.pm"));
+        assert!(
+            base_edit.is_some(),
+            "rename must produce edits for Base.pm (definition). Got URIs: {:?}",
+            edits.iter().map(|e| &e.uri).collect::<Vec<_>>()
+        );
+
+        Ok(())
+    }
+
+    /// Bare unqualified cross-package calls (`process_data()` from a foreign package)
+    /// must still be refused — the arrow-method exemption must not open that path.
+    #[test]
+    fn rename_bare_unqualified_cross_package_call_still_refused()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+
+        let foo_text = "package Foo;\nsub process_data { return 1; }\n1;\n";
+        // Bar calls process_data without `->` — truly unqualified bare function call.
+        let bar_text = "package Bar;\nsub run { return process_data(); }\n1;\n";
+
+        index_text(&idx, "file:///Foo.pm", foo_text)?;
+        index_text(&idx, "file:///Bar.pm", bar_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Foo"),
+            name: Arc::from("process_data"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let result = build_rename_edit(&idx, &key, "process_records");
+        assert!(
+            matches!(result, Err(RenameRefusal::AmbiguousIdentity(_))),
+            "bare unqualified cross-package call must still produce AmbiguousIdentity refusal; \
+             got: {result:?}"
         );
 
         Ok(())

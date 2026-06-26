@@ -297,16 +297,12 @@ fn scenario_21_rename_shared_in_base_pm() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Known gap — rename `shared` in Base.pm returns JSON-RPC error -32602.
+/// Cross-file rename of inherited method `shared` in Base.pm must succeed.
 ///
-/// Observed FAIL on current main:
-///   "Workspace rename refused: ambiguous symbol identity
-///    (unqualified `shared` reference outside package `RealBaseline::Base`)"
-///
-/// The rename provider refuses cross-file renames of inherited method names.
-/// Tracking: see issue filed as part of dogfood sweep.
+/// Fixed by: detecting `->` immediately before the method name span in
+/// `is_ambiguous_sub_reference` — arrow method calls are OO dispatch, not
+/// unqualified bare function calls.  See issue #3084 + PR #3086.
 #[test]
-#[ignore = "real gap — cross-file rename refuses with -32602 ambiguous symbol identity (see issue #3084)"]
 fn scenario_21_rename_shared_in_base_pm_hard_assert() -> anyhow::Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_21: perl-lsp binary not found");
