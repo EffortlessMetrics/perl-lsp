@@ -394,6 +394,69 @@ fn scenario_20_goto_definition_inherited_method_shared_resolves_to_base_pm() -> 
     Ok(())
 }
 
+/// Regression lock — goto-definition on `$self->shared` in App.pm MUST resolve to
+/// Base.pm (inherited method in `use parent` parent class).
+///
+/// This hard-assertion test was added after the dogfood audit (#3059) found that
+/// the soft-failure version was masking real product behavior: the test passed as
+/// a "known gap" even when the behavior was actually working. A failure here means
+/// cross-file inherited-method goto-definition has regressed.
+///
+/// ## Test case
+/// In `App.pm`: `alias($self->shared);` — `$self` is `RealBaseline::App`,
+/// `shared` is defined in `RealBaseline::Base` (via `use parent 'RealBaseline::Base'`).
+/// goto-def on `shared` must navigate to `sub shared` in `Base.pm`.
+#[test]
+fn scenario_20_goto_definition_inherited_method_shared_base_pm_hard_assert() -> anyhow::Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_20: perl-lsp binary not found");
+        return Ok(());
+    }
+
+    let harness = create_harness()?;
+    harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
+    harness.open_file("lib/RealBaseline/Base.pm", BASE_PM)?;
+
+    // Line 15 (0-indexed): `    alias($self->shared);`
+    // cursor at col 18, inside `shared`.
+    // Receiver: $self is RealBaseline::App; `shared` is inherited from RealBaseline::Base.
+    let defs = harness.definition_with_retry(
+        "lib/RealBaseline/App.pm",
+        15,
+        18,
+        5,
+        Duration::from_millis(200),
+    )?;
+
+    // Every returned entry must be a valid LSP Location or LocationLink.
+    for entry in &defs {
+        assert!(
+            is_lsp_location_shape(entry),
+            "definition entry must be a Location or LocationLink: {entry:?}"
+        );
+    }
+
+    // Hard assert — must return at least one result.
+    assert!(
+        !defs.is_empty(),
+        "regression: goto-def on inherited `$self->shared` in App.pm returned empty. \
+         Expected navigation to Base.pm::shared (dogfood audit #3059)."
+    );
+
+    // Hard assert — the result must point to Base.pm.
+    let points_to_base =
+        defs.iter().any(|e| entry_uri(e).map(|u| u.ends_with("Base.pm")).unwrap_or(false));
+    assert!(
+        points_to_base,
+        "regression: goto-def on inherited `$self->shared` returned results but none point \
+         to Base.pm. Got: {defs:?}. Expected Base.pm::shared (dogfood audit #3059)."
+    );
+
+    eprintln!("status: goto-def/inherited-shared-hard-assert: locked — resolved to Base.pm");
+    harness.assert_no_crash();
+    Ok(())
+}
+
 /// works — goto-definition on `helper` import in App.pm should resolve to
 /// Util.pm (imported sub definition).
 #[test]
