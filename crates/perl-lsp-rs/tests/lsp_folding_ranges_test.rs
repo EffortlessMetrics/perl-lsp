@@ -463,3 +463,162 @@ fn test_folding_range_ast_boundary_lsp_end_line_gt_start_line() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn test_folding_range_region_markers_single() -> TestResult {
+    let content = r#"# region Setup
+my $x = 1;
+my $y = 2;
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-single.pl", content)?;
+
+    // Should have at least one region marker fold
+    let region_fold = ranges.iter().find(|range| {
+        range.get("kind").and_then(|k| k.as_str()) == Some("region")
+            && range_lines(range).is_some_and(|(start, end)| start == 0 && end == 3)
+    });
+
+    assert!(region_fold.is_some(), "Should detect single #region/#endregion pair: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_multiple_non_nested() -> TestResult {
+    let content = r#"# region Helpers
+sub helper1 {
+    print "Helper 1\n";
+}
+# endregion
+
+# region Main Logic
+sub main {
+    helper1();
+}
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-multi.pl", content)?;
+
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|range| range.get("kind").and_then(|k| k.as_str()) == Some("region"))
+        .filter(|range| {
+            // Only count the explicit #region/#endregion folds, not subroutine folds
+            let (start, end) = match range_lines(range) {
+                Some((s, e)) => (s, e),
+                None => return false,
+            };
+            // Region markers should be on lines 0-5 and 7-11
+            (start == 0 || start == 7) && end > start
+        })
+        .collect();
+
+    assert!(region_folds.len() >= 2, "Should detect multiple #region/#endregion pairs: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_nested() -> TestResult {
+    let content = r#"# region Outer
+# region Inner
+my $nested = 1;
+# endregion
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-nested.pl", content)?;
+
+    // Should handle nested regions correctly
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|range| range.get("kind").and_then(|k| k.as_str()) == Some("region"))
+        .collect();
+
+    assert!(!region_folds.is_empty(), "Should detect nested #region/#endregion pairs: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_with_names() -> TestResult {
+    let content = r#"# region Initialization Block
+my $config = load_config();
+# endregion
+
+# region Processing
+process_data($config);
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-named.pl", content)?;
+
+    // Should support region names (optional)
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|range| range.get("kind").and_then(|k| k.as_str()) == Some("region"))
+        .collect();
+
+    assert!(!region_folds.is_empty(), "Should detect #region with names: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_unmatched_no_fold() -> TestResult {
+    let content = r#"# region Unclosed
+my $x = 1;
+my $y = 2;
+# This is a regular comment
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-unmatched.pl", content)?;
+
+    // Unmatched #region should not produce a fold (no corresponding #endregion)
+    let unmatched_fold = ranges.iter().find(|range| {
+        range.get("kind").and_then(|k| k.as_str()) == Some("region")
+            && range_lines(range).is_some_and(|(start, _)| start == 0)
+    });
+
+    assert!(unmatched_fold.is_none(), "Unmatched #region should not produce a fold: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_mixed_with_code() -> TestResult {
+    let content = r#"sub header {
+    print "Header\n";
+}
+
+# region Helpers
+sub helper {
+    print "Helper\n";
+}
+
+sub another_helper {
+    print "Another\n";
+}
+# endregion
+
+# region Main
+my $result = helper();
+print $result;
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-mixed.pl", content)?;
+
+    // Should have both subroutine folds and region marker folds
+    let has_subs = ranges.iter().any(|r| {
+        // At least one subroutine should fold (the ones inside and outside regions)
+        range_lines(r).is_some_and(|(s, e)| e > s + 1)
+    });
+
+    assert!(has_subs, "Should fold code blocks alongside region markers: {ranges:?}");
+
+    Ok(())
+}

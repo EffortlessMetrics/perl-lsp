@@ -102,6 +102,67 @@ impl FoldingRangeExtractor {
         ranges
     }
 
+    /// Extract #region/#endregion folding ranges from source text.
+    ///
+    /// Scans for lines matching `^\s*#\s*region\b` and `^\s*#\s*endregion\b`,
+    /// matching them by nesting depth to handle nested regions correctly.
+    /// Unmatched markers are ignored (no fold generated).
+    pub fn extract_region_markers(text: &str) -> Vec<FoldingRange> {
+        let mut ranges = Vec::new();
+        let mut stack: Vec<(usize, usize)> = Vec::new(); // Stack of (start_line_byte_offset, depth)
+        let mut depth = 0usize;
+        let mut current_offset = 0usize;
+
+        for line in text.lines() {
+            let line_start_offset = current_offset;
+            let line_end_offset = current_offset + line.len();
+            let trimmed = line.trim_start();
+
+            // Check for #region marker
+            if trimmed.starts_with('#') {
+                let after_hash = trimmed.strip_prefix('#').unwrap_or("").trim_start();
+                if after_hash.starts_with("region") {
+                    // Verify it's a word boundary (not part of another word)
+                    let after_region = after_hash.strip_prefix("region").unwrap_or("");
+                    if after_region.is_empty()
+                        || !after_region.chars().next().unwrap_or(' ').is_alphanumeric()
+                    {
+                        stack.push((line_start_offset, depth));
+                        depth += 1;
+                    }
+                }
+            }
+
+            // Check for #endregion marker
+            if trimmed.starts_with('#') {
+                let after_hash = trimmed.strip_prefix('#').unwrap_or("").trim_start();
+                if after_hash.starts_with("endregion") {
+                    // Verify it's a word boundary
+                    let after_endregion = after_hash.strip_prefix("endregion").unwrap_or("");
+                    if after_endregion.is_empty()
+                        || !after_endregion.chars().next().unwrap_or(' ').is_alphanumeric()
+                    {
+                        if depth > 0 {
+                            depth -= 1;
+                            if let Some((start_offset, _)) = stack.pop() {
+                                ranges.push(FoldingRange {
+                                    start_offset,
+                                    end_offset: line_end_offset,
+                                    kind: Some(FoldingRangeKind::Region),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Move to next line (account for newline character)
+            current_offset = line_end_offset + 1; // +1 for the newline
+        }
+
+        ranges
+    }
+
     /// Visit a node and extract folding ranges
     fn visit_node(&mut self, node: &Node) {
         match &node.kind {
@@ -566,5 +627,70 @@ mod tests {
         assert!(!body.contains("<<"));
 
         Ok(())
+    }
+
+    #[test]
+    fn extract_region_markers_empty_text() {
+        let source = "";
+        let ranges = FoldingRangeExtractor::extract_region_markers(source);
+        assert_eq!(ranges.len(), 0);
+    }
+
+    #[test]
+    fn extract_region_markers_single_region() {
+        let source = "# region Setup\nmy $x = 1;\n# endregion\n";
+        let ranges = FoldingRangeExtractor::extract_region_markers(source);
+        assert_eq!(ranges.len(), 1);
+        assert!(matches!(ranges[0].kind, Some(FoldingRangeKind::Region)));
+    }
+
+    #[test]
+    fn extract_region_markers_multiple_non_nested() {
+        let source = "# region First\ncode\n# endregion\n\n# region Second\nmore\n# endregion\n";
+        let ranges = FoldingRangeExtractor::extract_region_markers(source);
+        assert_eq!(ranges.len(), 2);
+        assert!(ranges.iter().all(|r| matches!(r.kind, Some(FoldingRangeKind::Region))));
+    }
+
+    #[test]
+    fn extract_region_markers_nested() {
+        let source = "# region Outer\n# region Inner\nnested\n# endregion\n# endregion\n";
+        let ranges = FoldingRangeExtractor::extract_region_markers(source);
+        assert_eq!(ranges.len(), 2);
+    }
+
+    #[test]
+    fn extract_region_markers_with_names() {
+        let source = "# region Helpers\nhelper()\n# endregion\n";
+        let ranges = FoldingRangeExtractor::extract_region_markers(source);
+        assert_eq!(ranges.len(), 1);
+    }
+
+    #[test]
+    fn extract_region_markers_unmatched_region() {
+        let source = "# region Unclosed\ncode\nmore code\n";
+        let ranges = FoldingRangeExtractor::extract_region_markers(source);
+        assert_eq!(ranges.len(), 0, "Unmatched #region should not produce a fold");
+    }
+
+    #[test]
+    fn extract_region_markers_unmatched_endregion() {
+        let source = "# endregion\ncode\n";
+        let ranges = FoldingRangeExtractor::extract_region_markers(source);
+        assert_eq!(ranges.len(), 0, "Unmatched #endregion should be ignored");
+    }
+
+    #[test]
+    fn extract_region_markers_word_boundary() {
+        let source = "# regioncode\n# endregionmore\ncode\n";
+        let ranges = FoldingRangeExtractor::extract_region_markers(source);
+        assert_eq!(ranges.len(), 0, "Should not match region/endregion without word boundary");
+    }
+
+    #[test]
+    fn extract_region_markers_indented() {
+        let source = "    # region Indented\n    code\n    # endregion\n";
+        let ranges = FoldingRangeExtractor::extract_region_markers(source);
+        assert_eq!(ranges.len(), 1, "Should support indented region markers");
     }
 }
