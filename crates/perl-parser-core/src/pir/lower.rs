@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use crate::hir::{
-    AccessMode, AssignMode, CallForm, DeclStorageClass, DynamicBoundaryKind,
+    AccessMode, AssignMode, BranchShell, CallForm, DeclStorageClass, DynamicBoundaryKind,
     HIR_BODY_MODEL_VERSION, HirBody, HirBodyId, HirExpr, HirExprId, HirFile, HirItem, HirKind,
     HirScopeId, HirStmt, Sigil, UnaryMode, VariableKind,
 };
@@ -93,6 +93,7 @@ impl Lowerer {
                     boundary.reason.clone(),
                 );
             }
+            HirKind::BranchShell(branch) => self.lower_branch(item, branch),
             // Construct families PIR v0 does not yet lower. They remain visible
             // in the receipt instead of being silently dropped.
             other => {
@@ -192,6 +193,28 @@ impl Lowerer {
             self.pending_dynamic_callee = Some(id);
         }
         id
+    }
+
+    fn lower_branch(&mut self, item: &HirItem, _branch: &BranchShell) {
+        // Source anchor: explicit, backed by the BranchShell HIR item's range.
+        let anchor = PirSourceAnchor::explicit(item.range, item.id);
+
+        // `condition` is None: PIR v0 does not yet lower the condition
+        // expression to a separate PIR node. Condition-expression lowering is a
+        // named follow-up (see PLSP-SPEC-0025 §Control-Flow Model).
+        let operation = PirOperation::Branch { condition: None };
+
+        // Void context: an `if`/`unless` statement is a control-flow fork that
+        // yields no value at statement level. Using Unknown here would over-
+        // approximate; Scalar/List would misrepresent the node's role. The
+        // condition sub-expression evaluates in scalar context, but that is the
+        // condition's context — not the BranchShell node's context, which is the
+        // whole statement.
+        //
+        // Arm-edge modeling (PirEdgeKind::Branch for then/else arms) is deferred
+        // to a follow-up pass; this slice records the branch node and its
+        // fallthrough without silently dropping it.
+        self.push_node(item, anchor, operation, PirContext::Void, None);
     }
 
     fn push_node(
@@ -1065,9 +1088,13 @@ mod tests {
     }
 
     #[test]
-    fn branch_shell_counted_in_receipt() {
+    fn branch_shell_lowers_to_branch_operation() {
+        // Since #8196, BranchShell lowers to PirOperation::Branch.
         let graph = lower("if (1) { 1 }");
-        assert_eq!(graph.receipt.unsupported_construct_counts.get("BranchShell"), Some(&1));
+        // BranchShell is now lowered — not in unsupported_construct_counts.
+        assert_eq!(graph.receipt.unsupported_construct_counts.get("BranchShell"), None);
+        // The Branch operation must appear in operation_counts.
+        assert_eq!(graph.receipt.operation_counts.get("Branch"), Some(&1));
     }
 
     #[test]
@@ -1101,7 +1128,10 @@ sub f { return 1; }
 $x = 1 if $y;
 "#,
         );
-        assert_eq!(graph.receipt.unsupported_construct_counts.get("BranchShell"), Some(&1));
+        // BranchShell now lowers to Branch (#8196) — not in unsupported.
+        assert_eq!(graph.receipt.unsupported_construct_counts.get("BranchShell"), None);
+        assert_eq!(graph.receipt.operation_counts.get("Branch"), Some(&1));
+        // Remaining control-flow families are still unsupported.
         assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), Some(&1));
         assert_eq!(graph.receipt.unsupported_construct_counts.get("ControlTransfer"), Some(&2));
         assert_eq!(
