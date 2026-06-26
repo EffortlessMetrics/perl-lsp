@@ -262,7 +262,12 @@ fn default_config_values() {
 
 #[test]
 fn custom_config() {
-    let cfg = LexerConfig { parse_interpolation: false, track_positions: false, max_lookahead: 64 };
+    let cfg = LexerConfig {
+        parse_interpolation: false,
+        track_positions: false,
+        max_lookahead: 64,
+        symbol_table: None,
+    };
     assert!(!cfg.parse_interpolation);
     assert!(!cfg.track_positions);
     assert_eq!(cfg.max_lookahead, 64);

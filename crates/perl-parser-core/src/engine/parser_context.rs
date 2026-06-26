@@ -75,8 +75,16 @@ impl ParserContext {
         let mut tokens = VecDeque::new();
         let position_tracker = PositionTracker::new(source.clone());
 
+        // Build a file-local symbol table so the lexer can treat known subs as
+        // term-introducing, enabling correct bareword/regex disambiguation (#1353).
+        let symbol_table = perl_lexer::LocalSymbolTable::scan_subs(&source);
+        let lexer_config = perl_lexer::LexerConfig {
+            symbol_table: Some(symbol_table),
+            ..perl_lexer::LexerConfig::default()
+        };
+
         // Tokenize the source using mode-aware lexer
-        let mut lexer = perl_lexer::PerlLexer::new(&source);
+        let mut lexer = perl_lexer::PerlLexer::with_config(&source, lexer_config);
         loop {
             match lexer.next_token() {
                 Some(token) => {
