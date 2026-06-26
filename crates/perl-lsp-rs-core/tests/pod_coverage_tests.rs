@@ -233,8 +233,8 @@ sub check { 1 }
 
 #[test]
 fn given_typeglob_alias_in_export_ok_then_no_pl304_false_positive() {
-    // Regression: #3071 — `*alias = \&helper` was triggering PL304 for `alias`
-    // even though the typeglob is a valid sub alias (not a missing definition).
+    // Regression guard for #3071: `*alias = \&helper` must not trigger PL304 for `alias`.
+    // Typeglob assignments are legitimate symbol-table aliases, not missing sub definitions.
     let source = r#"package RealBaseline::Util;
 use strict;
 use warnings;
@@ -256,5 +256,57 @@ sub helper {
     assert!(
         !diags.iter().any(|d| d.message.contains("alias")),
         "PL304 must not fire for typeglob alias `*alias = \\&helper`: {diags:?}"
+    );
+}
+
+#[test]
+fn given_use_constant_in_export_ok_then_no_pl304_false_positive() {
+    // `use constant FOO => 1` creates a sub named FOO but has no `sub FOO {}` AST node.
+    // PL304 must not fire for constants listed in @EXPORT_OK — they are real exports.
+    let source = r#"package MyModule;
+use Exporter 'import';
+use constant FOO => 42;
+our @EXPORT_OK = qw(FOO);
+"#;
+    let diags = pod_diags(source);
+    assert!(
+        !diags.iter().any(|d| d.message.contains("FOO")),
+        "PL304 must not fire for `use constant FOO` exported via EXPORT_OK: {diags:?}"
+    );
+}
+
+#[test]
+fn given_use_constant_hash_form_in_export_ok_then_no_pl304_false_positive() {
+    // `use constant { FOO => 1, BAR => 2 }` — hash form defining multiple constants.
+    let source = r#"package MyModule;
+use Exporter 'import';
+use constant { FOO => 1, BAR => 2 };
+our @EXPORT_OK = qw(FOO BAR);
+"#;
+    let diags = pod_diags(source);
+    assert!(
+        !diags.iter().any(|d| d.message.contains("FOO") || d.message.contains("BAR")),
+        "PL304 must not fire for hash-form `use constant` exported via EXPORT_OK: {diags:?}"
+    );
+}
+
+#[test]
+fn given_regular_sub_still_fires_pl304_after_exemptions() {
+    // Regression guard: exemptions must not suppress PL304 for genuinely undocumented subs.
+    let source = r#"package MyModule;
+use Exporter 'import';
+use constant FOO => 1;
+our @EXPORT_OK = qw(FOO helper);
+sub helper { 1 }
+"#;
+    let diags = pod_diags(source);
+    // FOO is exempt (constant); helper is not documented — PL304 must fire for helper.
+    assert!(
+        diags.iter().any(|d| d.message.contains("helper")),
+        "PL304 must still fire for undocumented sub `helper` even with constant exemption: {diags:?}"
+    );
+    assert!(
+        !diags.iter().any(|d| d.message.contains("FOO")),
+        "PL304 must NOT fire for constant FOO: {diags:?}"
     );
 }

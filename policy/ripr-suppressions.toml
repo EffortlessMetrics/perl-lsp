@@ -1407,3 +1407,58 @@ reason = "PR #1919 (issue #1694) wires additionalTextEdits auto-import into work
 created = "2026-06-25"
 review_after = "2026-07-25"
 expires = "2026-09-30"
+
+# =============================================================================
+# PL304 use-constant NodeKind blind-spot fix (PR #3078, issue #3071):
+# ripr#1429-class: RIPR 0.9.x cannot mutation-trace let-chain match-condition
+# seams in collect_constant_names() in pod_coverage.rs.
+#
+# PR #3078 adds collect_constant_names() which walks NodeKind::Use nodes to
+# detect `use constant FOO => ...` and `use constant { FOO => ... }` exports
+# so PL304 MissingPodCoverage no longer fires false-positives for them.
+#
+# RIPR 0.9.x flags 3 seams as activation_unknown:
+#   pod_coverage.rs:167  — `module == "constant"` let-chain string compare
+#   pod_coverage.rs:168  — `!args.is_empty()` guard in the same let-chain
+#   pod_coverage.rs:171  — `args.first().map(String::as_str) == Some("{")` branch
+#
+# These are predicate_boundary seams inside a Rust let-chain
+# (`if let NodeKind::Use { module, args, .. } = &n.kind && module == "constant"
+# && !args.is_empty()`). RIPR's static tracer cannot follow the boolean
+# short-circuit through the let-binding into the string-compare conditions —
+# a known ripr#1428/1429 limitation for let-chain match predicates.
+#
+# Call-observation fix was attempted first (per gap-closure playbook): two
+# discriminator unit tests were added that explicitly drive both the true and
+# false branches of every predicate:
+#   collect_constant_names_boundary_discriminator — drives module != "constant"
+#     (Use { module: "strict" }) and both hash_form branches (single: "TIMEOUT",
+#     hash: "HOST","PORT")
+#   is_valid_identifier_boundary_discriminator — drives leading '_', alphabetic,
+#     non-word first char, tail variants
+# These tests pass (20/20 --lib tests green) but the ripr seams persisted in
+# the post-discriminator fresh run — confirming this is the static-tracer class.
+#
+# Behavioral coverage for all 3 seams:
+#   Line 167/168 (module == "constant" + !args.is_empty()):
+#     given_use_constant_in_export_ok_then_no_pl304_false_positive (integration)
+#     collect_constant_names_single_form_push (lib unit)
+#     collect_constant_names_boundary_discriminator (lib unit, non-constant Use)
+#   Line 171 (hash_form branch):
+#     given_use_constant_hash_form_in_export_ok_then_no_pl304_false_positive
+#     collect_constant_names_boundary_discriminator (lib unit, both branches)
+#
+# Suppression is narrow: single production file, 3 seams. Remove when
+# ripr#1429 is fixed upstream or when ripr can trace let-chain predicates.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-pod-coverage-use-constant-let-chain"
+kind = "activation_unknown"
+paths = ["crates/perl-lsp-rs-core/src/providers/diagnostics/lints/pod_coverage.rs"]
+classification = ["predicate_boundary", "activation_unknown", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3078 (issue #3071) adds collect_constant_names() to fix PL304 false-positives on `use constant` exports. RIPR 0.9.x flags 3 activation_unknown seams (pod_coverage.rs:167 module==\"constant\" string compare, :168 !args.is_empty() guard, :171 args.first().map()==Some(\"{\") hash-form branch) because its static tracer cannot follow boolean short-circuits through Rust let-chain predicates (`if let NodeKind::Use { .. } = &n.kind && module == \"constant\" && !args.is_empty()`). Call-observation discriminator tests were attempted first per gap-closure playbook: collect_constant_names_boundary_discriminator drives module!=\"constant\" false branch (Use{module:\"strict\"}) and both hash_form branches; is_valid_identifier_boundary_discriminator drives all leading-char and tail-char predicate seams. Both tests pass (20/20 --lib green) but seams persisted in post-discriminator ripr run, confirming this is the ripr#1429 static-tracer-limitation class for let-chain match predicates. Behavioral coverage: given_use_constant_in_export_ok_then_no_pl304_false_positive and given_use_constant_hash_form_in_export_ok_then_no_pl304_false_positive (integration), collect_constant_names_single_form_push and collect_constant_names_boundary_discriminator (lib unit). Suppression is narrow: single production file, 3 seams. Remove when ripr#1429 is fixed upstream or ripr can trace let-chain predicates."
+created = "2026-06-26"
+review_after = "2026-09-26"
+expires = "2026-12-31"
