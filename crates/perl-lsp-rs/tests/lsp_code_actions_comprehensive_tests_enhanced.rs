@@ -317,6 +317,7 @@ fn test_enhanced_extract_variable_refactoring() -> Result<(), Box<dyn std::error
 // ======================== AC3: Enhanced Import Organization ========================
 
 #[test]
+#[ignore = "real gap — organize imports code action not yet implemented (see issue #3080)"]
 // AC3:codeActions - Enhanced organize imports with correct action kind validation
 fn test_enhanced_organize_imports_refactoring() -> Result<(), Box<dyn std::error::Error>> {
     let (mut harness, workspace) = create_enhanced_code_actions_server()?;
@@ -351,37 +352,19 @@ fn test_enhanced_organize_imports_refactoring() -> Result<(), Box<dyn std::error
             .unwrap_or(false)
     });
 
-    if let Some(action) = organize_imports_action {
-        // AC3: Critical fix - validate correct action kind
-        let action_kind = action["kind"].as_str();
+    // Hard assert: organize imports must be implemented and return a valid action.
+    // Previously this test silently passed when no matching action was found (#3057 fake scoreboard).
+    let action = organize_imports_action
+        .ok_or("Organize imports code action must be returned for a file with missing imports; not yet implemented — see issue #3080")?;
 
-        // The test was failing because it expected "source.organizeImports" but got "quickfix"
-        // This suggests the server is returning the wrong kind
-        assert!(
-            action_kind == Some("source.organizeImports"),
-            "Organize imports action should have kind 'source.organizeImports', got: {:?}",
-            action_kind
-        );
+    let action_kind = action["kind"].as_str();
+    assert!(
+        action_kind == Some("source.organizeImports"),
+        "Organize imports action should have kind 'source.organizeImports', got: {:?}",
+        action_kind
+    );
 
-        assert!(action.get("edit").is_some(), "Organize imports should have text edits");
-    } else {
-        // Check if any actions were returned with wrong kind
-        for action in actions {
-            if let Some(title) = action["title"].as_str() {
-                if title.to_lowercase().contains("import") {
-                    eprintln!(
-                        "Found import-related action '{}' with kind: {:?} (expected: source.organizeImports)",
-                        title,
-                        action["kind"].as_str()
-                    );
-                }
-            }
-        }
-
-        eprintln!(
-            "Note: Organize imports not yet implemented or not matching expected title pattern"
-        );
-    }
+    assert!(action.get("edit").is_some(), "Organize imports should have text edits");
 
     Ok(())
 }

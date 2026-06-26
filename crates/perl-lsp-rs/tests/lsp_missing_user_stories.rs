@@ -917,53 +917,6 @@ sub inefficient_function {
 
 // ==================== TEST RUNNER ====================
 
-#[test]
-fn test_missing_user_stories_summary() -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n🎯 MISSING USER STORIES TEST SUMMARY");
-    println!("=====================================");
-
-    println!("✅ Multi-File Project Navigation");
-    println!("   - Cross-file go to definition");
-    println!("   - References across modules");
-    println!("   - Workspace symbol search");
-    println!("   - Import completion");
-
-    println!("✅ Test Integration Workflow");
-    println!("   - Test discovery (Test::More, Test2)");
-    println!("   - Single test execution");
-    println!("   - Test file execution");
-    println!("   - Test coverage integration");
-    println!("   - Failed test diagnostics");
-
-    println!("✅ Advanced Refactoring Operations");
-    println!("   - Extract variable/method");
-    println!("   - Inline variable");
-    println!("   - Change function signature");
-    println!("   - Move method to module");
-
-    println!("✅ Regular Expression Support");
-    println!("   - Regex explanation on hover");
-    println!("   - Syntax validation");
-    println!("   - Regex testing");
-    println!("   - Refactoring suggestions");
-    println!("   - Named capture completion");
-
-    println!("✅ Performance Monitoring");
-    println!("   - Large file handling");
-    println!("   - Many open files");
-    println!("   - Performance diagnostics");
-    println!("   - Memory usage monitoring");
-
-    println!("\n🚀 IMPLEMENTATION PRIORITY:");
-    println!("1. Multi-file navigation (CRITICAL)");
-    println!("2. Test integration (HIGH VALUE)");
-    println!("3. Refactoring operations (HIGH VALUE)");
-    println!("4. Regex support (PERL-SPECIFIC)");
-    println!("5. Performance monitoring (SCALABILITY)");
-
-    println!("\n📊 Coverage Impact:");
-    println!("Current: ~40% of LSP user stories");
-    println!("With these tests: ~75% coverage");
-    println!("Remaining gaps: CPAN integration, POD support, debugging");
-    Ok(())
-}
+// test_missing_user_stories_summary was a no-assert summary test (fake scoreboard, #3057).
+// Removed: a test that only prints and always passes is not a test.
+// The individual test_user_story_* tests above are the real assertions.
