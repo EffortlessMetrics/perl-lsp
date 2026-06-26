@@ -26,7 +26,10 @@ pub(super) fn handle_variable_declaration<'a>(
     let (sigil, var_name_part) = extracted.parts();
 
     let is_our = declarator == "our";
-    let is_initialized = initializer.is_some();
+    // `state` variables are implicitly initialized to `undef` on first call (Perl semantics).
+    // A bare `state $x;` without an explicit initializer is NOT uninitialized — it is safe
+    // to read (yields undef) and must not trigger UninitializedVariable diagnostics.
+    let is_initialized = declarator == "state" || initializer.is_some();
 
     // `local` of a builtin special variable (e.g. `local $/`, `local $,`) temporarily
     // modifies the global; it does not create a new lexical binding.  Declaring it in
@@ -107,7 +110,9 @@ pub(super) fn handle_variable_list_declaration<'a>(
     context: &AnalysisContext<'a>,
 ) {
     let is_our = declarator == "our";
-    let is_initialized = initializer.is_some();
+    // `state` variables are implicitly initialized to `undef` on first call (Perl semantics).
+    // A bare `state ($x, $y);` list without an explicit initializer is NOT uninitialized.
+    let is_initialized = declarator == "state" || initializer.is_some();
 
     // Analyze initializer first
     if let Some(init) = initializer {

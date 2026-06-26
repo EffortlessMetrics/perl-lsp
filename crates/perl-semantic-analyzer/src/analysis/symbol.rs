@@ -3686,6 +3686,44 @@ sub foo () {
         );
     }
 
+    /// ripr call-observation discriminator for declarations.rs:32 seam d51d31bfd1a67960.
+    ///
+    /// The changed expression is `is_initialized = declarator == "state" || initializer.is_some()`.
+    /// If the `|| initializer.is_some()` call were deleted (call_deletion probe), a `my $x = 42`
+    /// declaration (declarator="my", initializer=Some(_)) would be treated as uninitialized,
+    /// causing a false UninitializedVariable diagnostic.  This test would then fail,
+    /// discriminating the mutation.
+    #[test]
+    fn handle_variable_declaration_call_presence_observer() {
+        use crate::analysis::scope_analyzer::{IssueKind, ScopeAnalyzer};
+
+        let code = r#"
+sub example {
+    my $value = 99;
+    print $value;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let analyzer = ScopeAnalyzer::new();
+        let issues = analyzer.analyze(&ast, code, &[]);
+
+        let uninit_count = issues
+            .iter()
+            .filter(|i| {
+                i.kind == IssueKind::UninitializedVariable && i.variable_name.contains("value")
+            })
+            .count();
+        assert_eq!(
+            uninit_count,
+            0,
+            "my $value = 99 supplies initializer=Some(_); \
+             initializer.is_some() must return true so is_initialized is true \
+             and no UninitializedVariable is emitted. Got: {:?}",
+            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        );
+    }
+
     #[test]
     fn test_hash_slurpy_param_in_symbol_table() {
         // Edge case: hash slurpy `%opts` — sigil % maps to SymbolKind::hash()

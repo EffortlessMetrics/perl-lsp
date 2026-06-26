@@ -1757,6 +1757,45 @@ mod tests {
         })
     }
 
+    /// ripr call-observation discriminator for declarations.rs:115 seam 17a147a3996aad54.
+    ///
+    /// The changed expression is `is_initialized = declarator == "state" || initializer.is_some()`
+    /// inside `handle_variable_list_declaration`.  If `|| initializer.is_some()` were deleted
+    /// (call_deletion probe), a `my ($x, $y) = (1, 2)` list declaration (declarator="my",
+    /// initializer=Some(_)) would be treated as uninitialized, causing false diagnostics.
+    /// This test would then fail, discriminating the mutation.
+    #[test]
+    fn handle_variable_list_declaration_call_presence_observer() {
+        use crate::analysis::scope_analyzer::{IssueKind, ScopeAnalyzer};
+
+        let code = r#"
+sub example {
+    my ($left, $right) = (1, 2);
+    print $left, $right;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let analyzer = ScopeAnalyzer::new();
+        let issues = analyzer.analyze(&ast, code, &[]);
+
+        let uninit_count = issues
+            .iter()
+            .filter(|i| {
+                i.kind == IssueKind::UninitializedVariable
+                    && (i.variable_name.contains("left") || i.variable_name.contains("right"))
+            })
+            .count();
+        assert_eq!(
+            uninit_count,
+            0,
+            "my ($left, $right) = (1, 2) supplies initializer=Some(_); \
+             initializer.is_some() must return true so both variables are initialized \
+             and no UninitializedVariable is emitted. Got: {:?}",
+            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        );
+    }
+
     #[test]
     fn basic_moo_class() {
         let models = build_models(
