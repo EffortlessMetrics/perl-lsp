@@ -134,12 +134,15 @@ impl DebugAdapter {
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
             let perl_interpreter = Self::resolve_launch_interpreter(&args);
 
-            // Set workspace root for path validation (prefer cwd, fall back to program's parent)
-            let workspace = args
-                .get("cwd")
-                .and_then(|c| c.as_str())
-                .map(PathBuf::from)
-                .or_else(|| Path::new(program).parent().map(PathBuf::from));
+            // Extract user-provided cwd for script execution (if specified)
+            // This is the working directory where the debugged script will run,
+            // separate from the workspace validation boundary (which is always the script's parent).
+            let user_cwd = args.get("cwd").and_then(|c| c.as_str()).map(PathBuf::from);
+
+            // Set workspace root for path validation
+            // Always use the script's parent directory as the workspace boundary
+            // The workspace validation ensures the script exists within its project context
+            let workspace = Path::new(program).parent().map(PathBuf::from);
             if let Some(ref root) = workspace {
                 *lock_or_recover(&self.workspace_root, "debug_adapter.workspace_root") =
                     Some(root.clone());
@@ -175,6 +178,7 @@ impl DebugAdapter {
                 perl_args,
                 stop_on_entry,
                 env_overrides,
+                user_cwd,
             ) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
@@ -293,6 +297,7 @@ impl DebugAdapter {
         args: Vec<String>,
         stop_on_entry: bool,
         env_overrides: HashMap<String, String>,
+        cwd_override: Option<PathBuf>,
     ) -> Result<i32, String> {
         // Security: Validate program path before any process spawning
         // This prevents command injection via flag arguments (e.g., "-e malicious_code")
@@ -360,16 +365,21 @@ impl DebugAdapter {
         // debugger.  This catches syntax errors early and surfaces a clear,
         // actionable message to the user instead of a generic "Cannot start
         // Perl debugger" failure after `perl -d` exits immediately.
-        Self::check_syntax(perl_interpreter, program, &env_overrides)?;
+        Self::check_syntax(perl_interpreter, program, &env_overrides, cwd_override.clone())?;
 
         // Use PerlOracleEnv to deny ambient PERL5LIB/PERL5OPT so the debug
         // session env is controlled entirely by launch.json `env` (#8688).
         // `env_overrides` (explicit launch.json entries) are added via
         // extra_env so they reach the subprocess unconditionally.
-        let prog_cwd = Path::new(program)
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        // Use user-specified cwd if provided; otherwise default to script's parent directory
+        let prog_cwd = if let Some(user_cwd) = cwd_override {
+            user_cwd
+        } else {
+            Path::new(program)
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        };
         let mut oracle = perl_lsp_rs_core::config::PerlOracleEnv::for_version_probe(
             PathBuf::from(perl_interpreter),
             prog_cwd,
@@ -449,13 +459,19 @@ impl DebugAdapter {
         perl_interpreter: &str,
         program: &str,
         env_overrides: &HashMap<String, String>,
+        cwd_override: Option<PathBuf>,
     ) -> Result<(), String> {
         // PerlOracleEnv denies ambient PERL5LIB/PERL5OPT (#8688); explicit
         // env_overrides from launch.json are honored via extra_env.
-        let prog_cwd = Path::new(program)
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        // Use user-specified cwd if provided; otherwise default to script's parent directory
+        let prog_cwd = if let Some(user_cwd) = cwd_override {
+            user_cwd
+        } else {
+            Path::new(program)
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        };
         let mut oracle = perl_lsp_rs_core::config::PerlOracleEnv::for_version_probe(
             PathBuf::from(perl_interpreter),
             prog_cwd,

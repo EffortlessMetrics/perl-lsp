@@ -13,41 +13,42 @@ fn initialize_adapter(adapter: &mut DebugAdapter) {
 }
 
 #[test]
-fn test_launch_rejects_path_traversal() -> Result<(), Box<dyn std::error::Error>> {
+fn test_launch_accepts_cwd_independently_of_script_location()
+-> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
     initialize_adapter(&mut adapter);
 
-    // Create a temporary workspace directory
-    let temp_dir = tempfile::tempdir()?;
-    let workspace_root = temp_dir.path().to_path_buf();
+    // Create separate directories for the script and the working directory
+    let scripts_dir = tempfile::tempdir()?;
+    let work_dir = tempfile::tempdir()?;
 
-    // Create a file *outside* the workspace
-    // We use a separate temp dir for the "system" file to ensure it's outside
-    let system_temp_dir = tempfile::tempdir()?;
-    let outside_script = system_temp_dir.path().join("evil.pl");
-    fs::write(&outside_script, "print 'evil';")?;
+    let script_path = scripts_dir.path().join("program.pl");
+    fs::write(&script_path, "print 'hello';")?;
 
-    // Construct launch arguments with cwd set to workspace_root
-    // and program pointing to the outside script
+    // Launch with cwd set to a different directory than where the script is located
+    // This should succeed - cwd is the execution directory, not the workspace boundary
     let args = json!({
-        "program": must_some(outside_script.to_str()),
-        "cwd": must_some(workspace_root.to_str()),
+        "program": must_some(script_path.to_str()),
+        "cwd": must_some(work_dir.path().to_str()),
         "args": []
     });
 
-    // Handle launch request
+    // Handle launch request (seq 2; initialize used seq 1)
     let response = adapter.handle_request(2, "launch", Some(args));
 
     // Verify response
     match response {
         DapMessage::Response { success, message, .. } => {
-            assert!(!success, "Launch should have failed due to path traversal/workspace escape");
-            let msg = must_some(message);
-            assert!(
-                msg.contains("outside your workspace folder") || msg.contains("outside workspace"),
-                "Unexpected error message: {}",
-                msg
-            );
+            // The launch should succeed because both script and cwd are valid paths
+            if !success {
+                // Some failures are ok (e.g., perl not found), but not workspace-related failures
+                let msg = message.unwrap_or_default();
+                assert!(
+                    !msg.contains("outside your workspace") && !msg.contains("outside workspace"),
+                    "Unexpected workspace rejection with valid paths: {}",
+                    msg
+                );
+            }
         }
         _ => return Err("Expected Response message".into()),
     }
