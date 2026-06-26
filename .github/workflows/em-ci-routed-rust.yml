@@ -195,7 +195,7 @@ jobs:
         shell: bash
         run: |
           # ripr.yml (and any other Docker-on-CX job) may leave root-owned files
-          # in the workspace target/ dir. actions/checkout@v6 cannot clean them
+          # in the workspace target/ dir. actions/checkout@v7 cannot clean them
           # (EACCES). Use Docker (running as root) to chown back and then delete
           # the stale workspace target/ so it cannot cause `mkdir target` failures
           # on the next run. Fall back to a host-side rm -rf in case the Docker
@@ -211,7 +211,7 @@ jobs:
           # Belt-and-suspenders: host-side rm in case Docker was unavailable above.
           rm -rf "$GITHUB_WORKSPACE/target" || true
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -352,7 +352,7 @@ jobs:
         shell: bash
         run: |
           # ripr.yml (and any other Docker-on-CX job) may leave root-owned files
-          # in the workspace target/ dir. actions/checkout@v6 cannot clean them
+          # in the workspace target/ dir. actions/checkout@v7 cannot clean them
           # (EACCES). Use Docker (running as root) to chown back and then delete
           # the stale workspace target/ so it cannot cause `mkdir target` failures
           # on the next run. Fall back to a host-side rm -rf in case the Docker
@@ -368,7 +368,7 @@ jobs:
           # Belt-and-suspenders: host-side rm in case Docker was unavailable above.
           rm -rf "$GITHUB_WORKSPACE/target" || true
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -493,7 +493,7 @@ jobs:
       CARGO_INCREMENTAL: "0"
       RUST_TEST_THREADS: "2"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -561,7 +561,7 @@ jobs:
             echo "\`em-ci-rust:1.95\` image on the failing runner."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
