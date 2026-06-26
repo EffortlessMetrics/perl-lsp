@@ -6,6 +6,42 @@
 > published release state must be verified against GitHub Releases;
 > current capability truth is taken from [`../../features.toml`](../../features.toml).
 
+## Current Focus (2026-06-26): UX/Usability + Reliability
+
+### Cross-file correctness lane: COMPLETE
+
+The cross-file CORRECTNESS lane is done. ~19 providers now serve index-backed
+answers; ux_scenario_20/21/22 all pass. The compiler bet (#2674 / PIR-A) is
+consciously **paused, not dropped** — it resumes after the reliability foundation
+is solid.
+
+### Active lane: reliability/UX
+
+The next user-visible risk is the first 30 seconds of workspace open. A real
+workspace spends time in `IndexState::Building`, and during that window providers
+must not return misleading empty/success.
+
+Priority sequence this weekend:
+
+| # | Issue | Description |
+|---|-------|-------------|
+| 1 | #3097 | Point-query index-readiness wait (7 providers) — **merge first** |
+| 2 | #3099 | Readiness CONTRACT as a shared substrate (policy enum + shared API) |
+| 3 | #3096 | `$/progress` indexing UX (turns the wait from "is it frozen?" to "it's working") |
+| 4 | #3080 | Diagnostics quick-fixes / `source.organizeImports` code action |
+| 5 | latency receipt | Measure hot-path latency AFTER readiness + crash-safety land |
+
+Strategic second priority: gate-tax relief / ripr convergence (#3067 — stop
+compiling the full xtask on every ripr+ gate run; CX43 disk pressure is the
+dominant CI wall-clock bottleneck).
+
+Scoreboard work (#3056) and the compiler bet (#2674) are **next** after the
+reliability lane closes.
+
+See [docs/reference/PROVIDER_READINESS_CONTRACT.md](../reference/PROVIDER_READINESS_CONTRACT.md)
+for the reliability doctrine and [docs/reference/CI_GATE_PLAYBOOK.md](../reference/CI_GATE_PLAYBOOK.md)
+for the contributor gate playbook.
+
 ## Current Framing
 
 ## Active Swarm Roadmap: Multi-Lane Trust Hardening
