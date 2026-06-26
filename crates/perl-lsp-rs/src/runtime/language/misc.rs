@@ -1070,6 +1070,11 @@ impl LspServer {
     ) {
         #[cfg(feature = "workspace")]
         {
+            // Wait for the workspace index to finish building before querying it.
+            // Without this, an inlineCompletion request while the index is in Building
+            // state routes to Partial and fewer workspace module completions are returned.
+            // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
+            self.wait_for_index_ready_if_building();
             let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
                 return;
             };

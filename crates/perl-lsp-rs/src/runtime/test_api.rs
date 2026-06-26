@@ -667,4 +667,14 @@ impl LspServer {
         let _ = self;
         super::workspace::set_index_ready_wait_entered_observer(sender);
     }
+
+    /// Enable `callHierarchy` in the server's advertised features.
+    ///
+    /// Test-only helper used by coverage tests that need to reach the
+    /// `handle_prepare_call_hierarchy` workspace wait path.  The feature gate
+    /// in that handler returns early (method-not-advertised) unless this flag
+    /// is set, so the wait line is unreachable without enabling it.
+    pub fn test_enable_call_hierarchy(&self) {
+        self.advertised_features.lock().call_hierarchy = true;
+    }
 }

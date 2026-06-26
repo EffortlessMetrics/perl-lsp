@@ -324,6 +324,15 @@ impl LspServer {
                     #[cfg(not(feature = "workspace"))]
                     let index_state: &'static str = "none";
 
+                    // Wait for the workspace index to finish building before querying it.
+                    // Without this, a references request while the index is in Building state
+                    // routes to Partial and misses cross-file usages in non-open files.
+                    // The text-search fallback masks this in tests (open files are scanned),
+                    // but production users on large workspaces see empty cross-file results.
+                    // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
+                    #[cfg(feature = "workspace")]
+                    self.wait_for_index_ready_if_building();
+
                     // Check index state and use appropriate search strategy
                     #[cfg(feature = "workspace")]
                     {

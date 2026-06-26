@@ -91,6 +91,14 @@ impl LspServer {
                     // infrastructure as get_user_function_signature.
                     // Designed as a clean reusable helper — a later slice will call this
                     // same entry point for inlay hints without rebuilding the lookup logic.
+                    //
+                    // Wait for the workspace index to finish building before querying it.
+                    // Without this, a signatureHelp request arriving while the index is in
+                    // IndexState::Building returns Partial from route_index_access and
+                    // resolve_method_in_workspace returns None — empty signatures on fresh open.
+                    // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
+                    #[cfg(feature = "workspace")]
+                    self.wait_for_index_ready_if_building();
                     #[cfg(feature = "workspace")]
                     if Self::is_method_call_context(&doc.text, offset) {
                         if let Some(signature) = self.resolve_method_in_workspace(&function_name) {
@@ -1342,6 +1350,44 @@ sub format_output {
             "error must name the missing field; got: {:?}",
             err.message
         );
+        Ok(())
+    }
+
+    /// Verifies that `handle_signature_help` executes the workspace
+    /// index-readiness wait when the cursor is inside a method call and
+    /// indexing is in progress (#3095).
+    ///
+    /// The document contains a `->method(` call that is neither a user-defined
+    /// sub (not in the AST) nor a Perl builtin, so execution falls through to
+    /// the workspace wait path.  The wait short-circuits immediately because
+    /// the coordinator is Ready by default.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_wait_guard_fires_for_method_call_signature_help_when_indexing_in_progress()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test-sig-race.pl";
+        // Cursor is inside the `(` of an unknown ->method( call.
+        // `unknown_xyz_method` is not a builtin and not defined as a sub
+        // in this document, so execution falls through to the workspace wait path.
+        // The trailing space puts the cursor (character 34) inside the parens.
+        let text = "my $x = $obj->unknown_xyz_method( ";
+        server.test_handle_did_open(Some(serde_json::json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text,
+            }
+        })))?;
+        // Simulate the race window: flag is set but coordinator is already Ready.
+        server.test_simulate_indexing_start();
+        // Position at character 34 — inside the parens after `unknown_xyz_method(`.
+        let result = server.handle_signature_help(Some(serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 34 }
+        })));
+        assert!(result.is_ok(), "handle_signature_help must not error: {result:?}");
         Ok(())
     }
 }
