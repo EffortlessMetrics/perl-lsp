@@ -5,6 +5,7 @@
 //! proof data without changing LSP provider behavior.
 
 mod body;
+pub mod disposition;
 mod lower;
 mod model;
 

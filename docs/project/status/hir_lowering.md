@@ -10,9 +10,9 @@ This status tracks parser AST construct coverage for the crate-local HIR baselin
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | `lowered` | 25 | Emits one or more HIR items today. |
-| `dynamic_boundary` | 3 | Emits an explicit dynamic-boundary HIR item for unsupported static truth. |
-| `intentionally_skipped` | 19 | Traversal, metadata, or recovery placeholder; no standalone HIR item expected. |
-| `not_yet_modeled` | 23 | Parser AST construct exists, but HIR has no shell yet. |
+| `dynamic_boundary` | 4 | Emits an explicit dynamic-boundary HIR item for unsupported static truth. |
+| `intentionally_skipped` | 20 | Traversal, metadata, or recovery placeholder; no standalone HIR item expected. |
+| `not_yet_modeled` | 21 | Parser AST construct exists, but HIR has no shell yet. |
 
 AST kinds tracked: `70`. HIR construct kinds tracked: `17`.
 
@@ -24,13 +24,13 @@ AST kinds tracked: `70`. HIR construct kinds tracked: `17`.
 | `ExpressionStatement` | `intentionally_skipped` | - | Statement wrapper is traversal-only. |
 | `VariableDeclaration` | `lowered` | `VariableDecl` | Lowered as single variable declaration shell and records ScopeGraph bindings. |
 | `VariableListDeclaration` | `lowered` | `VariableDecl` | Lowered as list variable declaration shell and records ScopeGraph bindings. |
-| `NestedVariableList` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `NestedVariableList` | `not_yet_modeled` | - | No explicit visit() arm; falls to visit_children. Parent declaration handles list entries. |
 | `Variable` | `intentionally_skipped` | - | Consumed by declaration lowering or recorded as ScopeGraph references. |
 | `VariableWithAttributes` | `intentionally_skipped` | - | Consumed by declaration lowering or recorded as ScopeGraph references. |
 | `Assignment` | `dynamic_boundary` | `DynamicBoundary` | Typeglob assignment with a non-static RHS emits `DynamicBoundary`; other assignments traverse. |
 | `Binary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Ternary` | `lowered` | `BranchShell` | Ternary expression lowered as a branch shell with both arms present. |
-| `Unary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Unary` | `dynamic_boundary` | `DynamicBoundary` | Symbolic reference dereference under no-strict-refs emits `DynamicBoundary`; operand always traversed. |
 | `Diamond` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Ellipsis` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Undef` | `lowered` | `LiteralExpr` | Lowered as undef literal shell. |
@@ -40,8 +40,8 @@ AST kinds tracked: `70`. HIR construct kinds tracked: `17`.
 | `Number` | `lowered` | `LiteralExpr` | Lowered as numeric literal shell. |
 | `String` | `lowered` | `LiteralExpr` | Lowered as string literal shell. |
 | `Heredoc` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `ArrayLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell. |
-| `HashLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell. |
+| `ArrayLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell; children (elements) are traversed. |
+| `HashLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell; pairs are traversed. |
 | `Block` | `lowered` | `BlockShell` | Lowered as block shell and contributes a ScopeGraph block frame. |
 | `Eval` | `dynamic_boundary` | `DynamicBoundary` | Expression `eval` emits `DynamicBoundary`; block bodies traverse. |
 | `Do` | `dynamic_boundary` | `DynamicBoundary` | Non-block `do` forms emit `DynamicBoundary`; block bodies traverse. |
@@ -58,11 +58,11 @@ AST kinds tracked: `70`. HIR construct kinds tracked: `17`.
 | `When` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Default` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `StatementModifier` | `lowered` | `StatementModifierShell` | Postfix statement modifiers lowered as modifier shells with a condition anchor. |
-| `Subroutine` | `lowered` | `SubDecl` | Lowered as sub declaration shell and contributes a subroutine scope frame. |
+| `Subroutine` | `lowered` | `SubDecl` | Lowered as sub declaration shell; AUTOLOAD may also emit DynamicBoundary. |
 | `Prototype` | `intentionally_skipped` | - | Captured as declaration metadata. |
 | `Signature` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
 | `MandatoryParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
-| `OptionalParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
+| `OptionalParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; default-value child is visited. |
 | `SlurpyParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
 | `NamedParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
 | `Method` | `lowered` | `MethodDecl` | Lowered as method declaration shell and contributes a method scope frame. |
@@ -82,8 +82,8 @@ AST kinds tracked: `70`. HIR construct kinds tracked: `17`.
 | `PhaseBlock` | `intentionally_skipped` | - | Phase blocks record CompileEnvironment phase facts and contribute a ScopeGraph phase frame. |
 | `DataSection` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Class` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Format` | `not_yet_modeled` | - | No HIR shell yet; format declarations contribute a ScopeGraph format frame. |
-| `Identifier` | `lowered` | `BarewordExpr` | Lowered as bareword expression shell. |
+| `Format` | `intentionally_skipped` | - | Explicitly handled: records a ScopeGraph format frame and stash slot; no HIR item yet. |
+| `Identifier` | `lowered` | `BarewordExpr` | Lowered as bareword expression shell; records bareword fact. |
 | `Error` | `intentionally_skipped` | - | Recovered partials are traversed; raw error nodes emit no HIR. |
 | `MissingExpression` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
 | `MissingStatement` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |

@@ -1439,6 +1439,7 @@ status-update subsystem="":
 # Verify docs/project/status/ subsystem files are up-to-date
 status-check:
     @cargo run -p xtask -- update-status --check
+    @cargo xtask metrics hir-coverage --check
 
 # ============================================================================
 # Corpus Audit Commands
