@@ -259,6 +259,10 @@ sub helper {
     );
 }
 
+// ---------------------------------------------------------------------------
+// #3078 — use constant exemption
+// ---------------------------------------------------------------------------
+
 #[test]
 fn given_use_constant_in_export_ok_then_no_pl304_false_positive() {
     // `use constant FOO => 1` creates a sub named FOO but has no `sub FOO {}` AST node.
@@ -308,5 +312,72 @@ sub helper { 1 }
     assert!(
         !diags.iter().any(|d| d.message.contains("FOO")),
         "PL304 must NOT fire for constant FOO: {diags:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// #3081 — re-exported parent-class (inherited) subs must not fire PL304
+// ---------------------------------------------------------------------------
+
+#[test]
+fn given_use_parent_and_export_ok_with_no_local_sub_then_no_pl304_false_positive() {
+    // Regression: #3081 — `use parent 'BaseUtil'; @EXPORT_OK = qw(helper)` where
+    // `helper` is defined in BaseUtil (not locally) was triggering PL304 because
+    // the lint only walks local Subroutine nodes.
+    //
+    // When the module has parent classes (via `use parent`/`use base`), an exported
+    // name with no local `sub` definition may be inherited — PL304 must NOT fire.
+    let source = r#"package MyUtil;
+use parent 'BaseUtil';
+use Exporter 'import';
+
+our @EXPORT_OK = qw(inherited_method);
+
+1;
+"#;
+    let diags = pod_diags(source);
+    assert!(
+        !diags.iter().any(|d| d.message.contains("inherited_method")),
+        "PL304 must not fire for `inherited_method` re-exported from a parent class: {diags:?}"
+    );
+}
+
+#[test]
+fn given_use_base_and_export_ok_with_no_local_sub_then_no_pl304_false_positive() {
+    // Variant of #3081 using `use base` instead of `use parent`.
+    let source = r#"package MyUtil;
+use base 'BaseUtil';
+use Exporter 'import';
+
+our @EXPORT_OK = qw(helper);
+
+1;
+"#;
+    let diags = pod_diags(source);
+    assert!(
+        !diags.iter().any(|d| d.message.contains("helper")),
+        "PL304 must not fire for `helper` re-exported from a `use base` parent: {diags:?}"
+    );
+}
+
+#[test]
+fn given_use_parent_but_locally_defined_sub_then_pl304_still_fires() {
+    // Regression guard: `use parent` presence must NOT suppress PL304 for subs
+    // that ARE locally defined but lack POD documentation.
+    let source = r#"package MyUtil;
+use parent 'BaseUtil';
+use Exporter 'import';
+
+our @EXPORT_OK = qw(local_sub);
+
+sub local_sub { 1 }
+
+1;
+"#;
+    let diags = pod_diags(source);
+    assert_eq!(
+        diags.iter().filter(|d| d.message.contains("local_sub")).count(),
+        1,
+        "PL304 MUST still fire for locally-defined `local_sub` that lacks POD: {diags:?}"
     );
 }

@@ -23,11 +23,16 @@ use perl_diagnostics::codes::DiagnosticSeverity;
 /// subroutine definitions, then scans the source text for `=head2` / `=item`
 /// POD sections that document each exported name.
 ///
-/// Two classes of legitimate exported names are exempt from PL304:
+/// Three classes of legitimate exported names are exempt from PL304:
 /// - Names created via typeglob assignment (`*alias = \&helper`): valid
 ///   symbol-table aliases, not missing subroutine definitions.
 /// - Names defined via `use constant` (`use constant FOO => 1`): constants
 ///   are implemented as zero-argument subs, but have no `sub FOO {}` AST node.
+/// - Names with no local `sub` definition that belong to a module with parent
+///   classes (`use parent`/`use base`): the sub may be inherited from a parent
+///   class and re-exported. Without workspace-level resolution the lint cannot
+///   confirm the definition exists in an ancestor, so it suppresses rather than
+///   producing a false positive (issue #3081).
 pub fn check_pod_coverage(node: &Node, source: &str, diagnostics: &mut Vec<Diagnostic>) {
     let exported_names = collect_exported_names(node, source);
     if exported_names.is_empty() {
@@ -37,6 +42,10 @@ pub fn check_pod_coverage(node: &Node, source: &str, diagnostics: &mut Vec<Diagn
     let documented_names = collect_documented_names(source);
     let typeglob_names = collect_typeglob_names(node);
     let constant_names = collect_constant_names(node);
+    // Parent package names declared via `use parent`/`use base`. An exported
+    // name with no local `sub` definition may be inherited from one of these
+    // packages; we suppress PL304 in that case to avoid false positives.
+    let parent_packages = collect_parent_package_names(node);
 
     let mut sub_locations: Vec<(String, usize, usize)> = Vec::new();
     walk_node(node, &mut |n| {
@@ -62,9 +71,18 @@ pub fn check_pod_coverage(node: &Node, source: &str, diagnostics: &mut Vec<Diagn
             continue;
         }
 
-        let (range_start, range_end) = if let Some((_, start, end)) =
-            sub_locations.iter().find(|(n, _, _)| n == export_name)
-        {
+        let local_sub = sub_locations.iter().find(|(n, _, _)| n == export_name);
+
+        // If the name has no local `sub` definition but the module declares
+        // parent classes, the sub may be inherited and re-exported. We cannot
+        // verify cross-file inheritance here (no workspace index in pure-AST
+        // mode), so we conservatively skip PL304 rather than fire a false
+        // positive (issue #3081).
+        if local_sub.is_none() && !parent_packages.is_empty() {
+            continue;
+        }
+
+        let (range_start, range_end) = if let Some((_, start, end)) = local_sub {
             (*start, *end)
         } else {
             (*_export_start, *_export_end)
@@ -206,6 +224,28 @@ fn is_valid_identifier(s: &str) -> bool {
         }
         _ => false,
     }
+}
+
+/// Collect parent class names declared via `use parent 'Foo'` or `use base 'Foo'`.
+///
+/// When at least one parent class is present, an exported name with no local
+/// `sub` definition may be inherited from a parent — PL304 suppression applies
+/// to avoid false positives (issue #3081).
+fn collect_parent_package_names(node: &Node) -> Vec<String> {
+    let mut parents = Vec::new();
+    walk_node(node, &mut |n| {
+        if let NodeKind::Use { module, args, .. } = &n.kind
+            && (module == "parent" || module == "base")
+        {
+            for arg in args {
+                // Skip pragma flags like `-norequire`
+                if !arg.starts_with('-') {
+                    parents.push(arg.clone());
+                }
+            }
+        }
+    });
+    parents
 }
 
 fn collect_names_from_expr(node: &Node, names: &mut Vec<(String, usize, usize)>) {
@@ -848,13 +888,13 @@ our @EXPORT_OK = qw(FOO BAR);
             NodeKind::FunctionCall { name: "qw".to_string(), args: vec![arg] },
             SourceLocation { start: 10, end: 24 },
         );
-        let mut names: Vec<(String, usize, usize)> = Vec::new();
+        let mut names = Vec::new();
         collect_names_from_expr(&call_node, &mut names);
         assert_eq!(names, vec![("run".to_string(), 20, 23)]);
 
         // Unknown/unmatched node kind — must be silently ignored (the `_ => {}` arm).
         let unknown = make_use("SomeModule", 0, 20);
-        let mut names2: Vec<(String, usize, usize)> = Vec::new();
+        let mut names2 = Vec::new();
         collect_names_from_expr(&unknown, &mut names2);
         assert!(names2.is_empty(), "unknown node kind must be ignored");
     }
@@ -965,5 +1005,120 @@ our @EXPORT_OK = qw(FOO BAR);
         assert!(is_valid_identifier("foo2"), "digit in tail must be accepted");
         assert!(!is_valid_identifier("foo!"), "non-word tail char must be rejected");
         assert!(!is_valid_identifier("foo bar"), "space in tail must be rejected");
+    }
+
+    // ── #3081: inherited sub exemption ──
+
+    fn make_use_with_args(module: &str, args: Vec<&str>, start: usize, end: usize) -> Node {
+        Node::new(
+            NodeKind::Use {
+                module: module.to_string(),
+                args: args.iter().map(|s| s.to_string()).collect(),
+                has_filter_risk: false,
+            },
+            SourceLocation { start, end },
+        )
+    }
+
+    #[test]
+    fn collect_parent_package_names_from_use_parent() {
+        let ast = make_program(vec![
+            make_use_with_args("parent", vec!["BaseUtil"], 0, 20),
+            make_use("Exporter", 21, 40),
+        ]);
+        let parents = collect_parent_package_names(&ast);
+        assert_eq!(parents, vec!["BaseUtil"]);
+    }
+
+    #[test]
+    fn collect_parent_package_names_from_use_base() {
+        let ast = make_program(vec![make_use_with_args("base", vec!["BaseUtil"], 0, 20)]);
+        let parents = collect_parent_package_names(&ast);
+        assert_eq!(parents, vec!["BaseUtil"]);
+    }
+
+    #[test]
+    fn collect_parent_package_names_excludes_pragma_flags() {
+        // `use parent -norequire, 'Foo'` — flags start with '-' and must be skipped
+        let ast =
+            make_program(vec![make_use_with_args("parent", vec!["-norequire", "Foo"], 0, 30)]);
+        let parents = collect_parent_package_names(&ast);
+        assert_eq!(parents, vec!["Foo"]);
+    }
+
+    #[test]
+    fn collect_parent_package_names_empty_when_no_use_parent() {
+        let ast = make_program(vec![make_use("Exporter", 0, 20)]);
+        let parents = collect_parent_package_names(&ast);
+        assert!(parents.is_empty());
+    }
+
+    #[test]
+    fn given_use_parent_and_inherited_export_then_no_pl304_false_positive() {
+        // #3081: `use parent 'BaseUtil'` + `@EXPORT_OK = qw(inherited_method)` with
+        // no local `sub inherited_method`. PL304 must NOT fire — the sub may be inherited.
+        let source = r#"package MyUtil;
+use parent 'BaseUtil';
+use Exporter 'import';
+our @EXPORT_OK = qw(inherited_method);
+1;
+"#;
+        let ast = make_program(vec![
+            make_use_with_args("parent", vec!["BaseUtil"], 16, 37),
+            make_use("Exporter", 38, 57),
+            make_var_decl(
+                "our",
+                "@",
+                "EXPORT_OK",
+                Some(make_array_literal(
+                    vec![make_string_node("inherited_method", 72, 88)],
+                    68,
+                    89,
+                )),
+                58,
+                90,
+            ),
+        ]);
+
+        let mut diagnostics = Vec::new();
+        check_pod_coverage(&ast, source, &mut diagnostics);
+        assert!(
+            !diagnostics.iter().any(|d| d.message.contains("inherited_method")),
+            "PL304 must not fire for re-exported inherited sub: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn given_use_parent_but_local_sub_defined_then_pl304_still_fires() {
+        // Regression guard: `use parent` must NOT suppress PL304 when the sub IS locally
+        // defined and merely lacks POD. The suppression only applies to subs with no local
+        // definition at all (potential inherited methods).
+        let source = r#"package MyUtil;
+use parent 'BaseUtil';
+use Exporter 'import';
+our @EXPORT_OK = qw(local_sub);
+sub local_sub { 1 }
+1;
+"#;
+        let ast = make_program(vec![
+            make_use_with_args("parent", vec!["BaseUtil"], 16, 37),
+            make_use("Exporter", 38, 57),
+            make_var_decl(
+                "our",
+                "@",
+                "EXPORT_OK",
+                Some(make_array_literal(vec![make_string_node("local_sub", 72, 81)], 68, 82)),
+                58,
+                83,
+            ),
+            make_sub("local_sub", 84, 103),
+        ]);
+
+        let mut diagnostics = Vec::new();
+        check_pod_coverage(&ast, source, &mut diagnostics);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("local_sub")),
+            "PL304 MUST fire for locally-defined `local_sub` that lacks POD: {diagnostics:?}"
+        );
     }
 }
