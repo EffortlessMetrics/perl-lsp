@@ -230,3 +230,31 @@ sub check { 1 }
     );
     assert!(diags[0].suggestion.is_some(), "should have a suggestion");
 }
+
+#[test]
+fn given_typeglob_alias_in_export_ok_then_no_pl304_false_positive() {
+    // Regression: #3071 — `*alias = \&helper` was triggering PL304 for `alias`
+    // even though the typeglob is a valid sub alias (not a missing definition).
+    let source = r#"package RealBaseline::Util;
+use strict;
+use warnings;
+use Exporter 'import';
+
+our @EXPORT_OK = qw(helper alias);
+
+sub helper {
+    return shift;
+}
+
+*alias = \&helper;
+
+1;
+"#;
+    let diags = pod_diags(source);
+    // `helper` is exported without POD, so PL304 is expected there.
+    // `alias` is created via typeglob, so PL304 must NOT fire for it.
+    assert!(
+        !diags.iter().any(|d| d.message.contains("alias")),
+        "PL304 must not fire for typeglob alias `*alias = \\&helper`: {diags:?}"
+    );
+}

@@ -1450,7 +1450,6 @@ fn scenario_20_diagnostics_missing_module_fires_pl701_hard_assert() -> anyhow::R
 /// Hard assertion written; test is ignored until the gap is fixed.
 /// Tracking: https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3071
 #[test]
-#[ignore = "real gap — PL304 false positive fires for typeglob alias; server does not recognize *alias = \\&helper as a valid sub (tracking #3071)"]
 fn scenario_20_diagnostics_typeglob_alias_no_false_positive_hard_assert() -> anyhow::Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_20: perl-lsp binary not found");

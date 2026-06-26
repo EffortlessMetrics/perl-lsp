@@ -22,6 +22,9 @@ use perl_diagnostics::codes::DiagnosticSeverity;
 /// Walks the AST to find `our @EXPORT` / `our @EXPORT_OK` declarations and
 /// subroutine definitions, then scans the source text for `=head2` / `=item`
 /// POD sections that document each exported name.
+///
+/// Names created via typeglob assignment (`*alias = \&helper`) are exempt:
+/// they are valid symbol-table aliases, not missing subroutine definitions.
 pub fn check_pod_coverage(node: &Node, source: &str, diagnostics: &mut Vec<Diagnostic>) {
     let exported_names = collect_exported_names(node, source);
     if exported_names.is_empty() {
@@ -29,6 +32,7 @@ pub fn check_pod_coverage(node: &Node, source: &str, diagnostics: &mut Vec<Diagn
     }
 
     let documented_names = collect_documented_names(source);
+    let typeglob_names = collect_typeglob_names(node);
 
     let mut sub_locations: Vec<(String, usize, usize)> = Vec::new();
     walk_node(node, &mut |n| {
@@ -39,6 +43,12 @@ pub fn check_pod_coverage(node: &Node, source: &str, diagnostics: &mut Vec<Diagn
 
     for (export_name, _export_start, _export_end) in &exported_names {
         if documented_names.iter().any(|doc| doc == export_name) {
+            continue;
+        }
+
+        // Typeglob assignments (*alias = \&helper) create valid symbol-table
+        // entries — they are not missing subroutine definitions.
+        if typeglob_names.contains(export_name) {
             continue;
         }
 
@@ -117,6 +127,22 @@ fn is_export_variable(node: &Node) -> bool {
     } else {
         false
     }
+}
+
+/// Collect names that are assigned via typeglob (`*name = \&sub` or `*name = \$var`).
+///
+/// These are legitimate symbol-table aliases, not missing subroutine definitions,
+/// so they should not trigger PL304 even if listed in `@EXPORT`/`@EXPORT_OK`.
+fn collect_typeglob_names(node: &Node) -> Vec<String> {
+    let mut names = Vec::new();
+    walk_node(node, &mut |n| {
+        if let NodeKind::Assignment { lhs, .. } = &n.kind {
+            if let NodeKind::Typeglob { name } = &lhs.kind {
+                names.push(name.clone());
+            }
+        }
+    });
+    names
 }
 
 fn collect_names_from_expr(node: &Node, names: &mut Vec<(String, usize, usize)>) {
@@ -559,6 +585,74 @@ sub something { 1 }
         check_pod_coverage(&ast, source, &mut diagnostics);
 
         assert!(diagnostics.is_empty(), "variable exports should be ignored");
+    }
+
+    fn make_typeglob(name: &str, start: usize, end: usize) -> Node {
+        Node::new(NodeKind::Typeglob { name: name.to_string() }, SourceLocation { start, end })
+    }
+
+    fn make_assignment(lhs: Node, rhs: Node, start: usize, end: usize) -> Node {
+        Node::new(
+            NodeKind::Assignment { lhs: Box::new(lhs), rhs: Box::new(rhs), op: "=".to_string() },
+            SourceLocation { start, end },
+        )
+    }
+
+    #[test]
+    fn given_typeglob_alias_in_export_then_no_false_positive() {
+        // Reproduces the scenario from #3071:
+        //   our @EXPORT_OK = qw(helper alias);
+        //   sub helper { ... }
+        //   *alias = \&helper;   <- typeglob, NOT a `sub alias { ... }`
+        // PL304 must NOT fire for `alias`.
+        let source = r#"package RealBaseline::Util;
+use strict;
+use warnings;
+use Exporter 'import';
+
+our @EXPORT_OK = qw(helper alias);
+
+sub helper {
+    return shift;
+}
+
+*alias = \&helper;
+
+1;
+"#;
+
+        let ast = make_program(vec![
+            make_use("Exporter", 52, 71),
+            make_var_decl(
+                "our",
+                "@",
+                "EXPORT_OK",
+                Some(make_array_literal(
+                    vec![make_string_node("helper", 90, 96), make_string_node("alias", 97, 102)],
+                    86,
+                    103,
+                )),
+                73,
+                104,
+            ),
+            make_sub("helper", 106, 130),
+            make_assignment(
+                make_typeglob("alias", 132, 138),
+                make_var("&", "helper", 141, 148),
+                132,
+                149,
+            ),
+        ]);
+
+        let mut diagnostics = Vec::new();
+        check_pod_coverage(&ast, source, &mut diagnostics);
+
+        // `helper` has no POD, so it should still fire.
+        // `alias` is a typeglob alias, so it must NOT fire.
+        assert!(
+            !diagnostics.iter().any(|d| d.message.contains("alias")),
+            "PL304 must not fire for typeglob alias `*alias = \\&helper`: {diagnostics:?}"
+        );
     }
 
     #[test]
