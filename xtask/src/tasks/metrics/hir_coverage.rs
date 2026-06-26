@@ -18,9 +18,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use perl_parser::NodeKind;
-use perl_parser_core::hir::{disposition, HirKind};
+use perl_parser_core::hir::{HirKind, disposition};
 use serde::Serialize;
 
 use crate::utils::project_root;
