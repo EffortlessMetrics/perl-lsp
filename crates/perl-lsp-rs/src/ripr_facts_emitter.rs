@@ -79,6 +79,8 @@ pub(crate) fn emit_tests_and_oracles(root: &str) -> (Vec<Value>, Vec<Value>) {
                     "strength": oracle_strength,
                     "target_owner_id": null,
                     "expression": format!("{func_name}(...)"),
+                    "observed_sink": null,
+                    "expected_expression": null,
                     "range": {"start_line": 1, "start_column": 1, "end_line": 1, "end_column": 1},
                     "confidence": "medium",
                     "provenance_refs": []
@@ -123,9 +125,20 @@ fn collect_t_files(t_dir: &std::path::Path) -> Vec<(String, String, String)> {
 /// Returns the serde-expected wire string matching ripr's `TestFramework`
 /// enum (`#[serde(rename = "Test::More")]` etc.). M1 contract convergence
 /// (Campaign 31): the producer and consumer must use the SAME vocabulary.
+///
+/// Order matters: check the most specific Test2 bundles first, because
+/// `use Test2::V0` is a substring-prefix hazard only at the token level
+/// (not here, since we match the full `use Test2::VX;` form), but V0 vs V1
+/// vs Suite must each return its own wire name. Early Campaign 31 builds
+/// collapsed V0 and Suite into a single `"Test2::V0"` return — that was a
+/// contract bug; each bundle is distinct.
 fn detect_framework(content: &str) -> &'static str {
-    if content.contains("use Test2::V0") || content.contains("use Test2::Suite") {
+    if content.contains("use Test2::V1") {
+        "Test2::V1"
+    } else if content.contains("use Test2::V0") {
         "Test2::V0"
+    } else if content.contains("use Test2::Suite") {
+        "Test2::Suite"
     } else if content.contains("use Test::Exception") {
         "Test::Exception"
     } else if content.contains("use Test::Fatal") {
@@ -672,6 +685,20 @@ mod tests {
     }
 
     #[test]
+    fn detect_test2_v1_framework() {
+        // Campaign 31 contract freeze: Test2::V1 must be recognized and emit
+        // its own wire name (early builds did not detect it at all).
+        assert_eq!(detect_framework("use Test2::V1;\nok(1);"), "Test2::V1");
+    }
+
+    #[test]
+    fn detect_test2_suite_returns_suite_not_v0() {
+        // Regression guard: early builds collapsed Suite into "Test2::V0".
+        // The schema (post-freeze) treats each bundle as a distinct wire name.
+        assert_eq!(detect_framework("use Test2::Suite;\nok(1);"), "Test2::Suite");
+    }
+
+    #[test]
     fn detect_unknown_framework() {
         assert_eq!(detect_framework("use strict;\nprint 1;"), "unknown");
     }
@@ -961,6 +988,49 @@ mod tests {
             changes[0]["missing_discriminator"].as_str().unwrap_or("").contains("$amount"),
             "return discriminator must contain the return expression"
         );
+        // Contract-freeze parity (Campaign 31 step 2): the change MUST carry
+        // `changed_observable` and `missing_discriminator` — both declared in
+        // the v1 schema. The producer derives both from the diff; a future
+        // emitter that drops them would fail this and break the consumer's
+        // canonical-gap construction.
+        assert!(
+            changes[0].get("changed_observable").is_some(),
+            "change must carry changed_observable (schema contract)"
+        );
+        assert!(
+            changes[0].get("missing_discriminator").is_some(),
+            "change must carry missing_discriminator (schema contract)"
+        );
+    }
+
+    #[test]
+    fn oracle_facts_carry_observed_sink_and_expected_expression_fields() {
+        // Contract-freeze parity (Campaign 31 step 2): the schema declares
+        // observed_sink + expected_expression on oracle (nullable). The emitter
+        // must write both keys — null when not yet derived — so ripr's
+        // deserializer sees them. This test runs the test/oracle emitter and
+        // asserts every oracle carries both keys.
+        let temp = std::env::temp_dir().join("ripr_facts_oracle_contract_test");
+        let t_dir = temp.join("t");
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(
+            t_dir.join("app.t"),
+            "use Test::More;\nis(disco(100), 50, 'half');\nok(1);\n",
+        )
+        .unwrap();
+        let (_tests, oracles) = emit_tests_and_oracles(temp.to_str().unwrap());
+        let _ = std::fs::remove_dir_all(&temp);
+        assert!(!oracles.is_empty(), "expected at least one oracle fact");
+        for oracle in &oracles {
+            assert!(
+                oracle.get("observed_sink").is_some(),
+                "oracle must carry observed_sink (schema contract): {oracle}"
+            );
+            assert!(
+                oracle.get("expected_expression").is_some(),
+                "oracle must carry expected_expression (schema contract): {oracle}"
+            );
+        }
     }
 
     #[test]

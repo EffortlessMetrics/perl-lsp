@@ -198,6 +198,8 @@
           ]
         },
         "changed_text_digest": { "type": "string" },
+        "changed_observable": { "type": ["string", "null"] },
+        "missing_discriminator": { "type": ["string", "null"] },
         "provenance_refs": {
           "type": "array",
           "items": { "type": "string" }
@@ -213,7 +215,7 @@
         "file_id": { "type": "string" },
         "framework": {
           "type": "string",
-          "enum": ["test_more", "test2_v0", "test2_suite", "test_exception", "test_fatal", "unknown"]
+          "enum": ["Test::More", "Test2::V0", "Test2::V1", "Test2::Suite", "Test::Exception", "Test::Fatal", "unknown"]
         },
         "name": { "type": "string" },
         "range": { "$ref": "#/$defs/range" },
@@ -259,6 +261,8 @@
         },
         "target_owner_id": { "type": ["string", "null"] },
         "expression": { "type": ["string", "null"] },
+        "observed_sink": { "type": ["string", "null"] },
+        "expected_expression": { "type": ["string", "null"] },
         "range": { "$ref": "#/$defs/range" },
         "confidence": { "type": "string", "enum": ["medium", "high"] },
         "provenance_refs": {
