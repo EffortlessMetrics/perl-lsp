@@ -1010,13 +1010,20 @@ fn scenario_20_completion_module_prefix_surfaces_real_baseline_app_hard_assert()
     Ok(())
 }
 
-/// Known gap — completion for imported symbol `helper` does not surface in App.pm.
+/// Regression lock — completion at a call site for imported symbol `helper` in App.pm
+/// returns a label containing "helper" from the workspace index.
 ///
-/// Observed FAIL on current main: cross-file imported symbol completion not implemented.
-/// Hard assertion written; test is ignored until the gap is fixed.
-/// Tracking: https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3069
+/// Root cause of the original gap: completion arrived while the workspace index was still
+/// in `IndexState::Building`, so `route_index_access` returned `Partial` instead of `Full`
+/// and workspace symbols were suppressed.  Fixed in hover.rs-parallel by adding
+/// `wait_for_index_ready_if_building()` at the top of both completion handlers,
+/// matching the pattern already used by `handle_workspace_symbols_v2` (issue #1514).
+///
+/// `helper` is defined in Util.pm and imported via `use RealBaseline::Util qw(helper alias)`,
+/// so the import_map boosts it to tier 2 ("imported from RealBaseline::Util").
+///
+/// Closes #3069.
 #[test]
-#[ignore = "real gap — cross-file imported symbol completion not implemented (tracking #3069)"]
 fn scenario_20_completion_imported_symbol_helper_hard_assert() -> anyhow::Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_20: perl-lsp binary not found");
@@ -1027,7 +1034,9 @@ fn scenario_20_completion_imported_symbol_helper_hard_assert() -> anyhow::Result
     harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
     harness.open_file("lib/RealBaseline/Util.pm", UTIL_PM)?;
 
-    // Line 13 (0-indexed): `    helper($self->name);` — cursor at col 7 after `help`.
+    // Line 13 (0-indexed): `    helper($self->name);` — cursor at col 7, prefix "hel".
+    // `helper` from Util.pm must appear; the workspace-index wait ensures the index is
+    // Ready before routing, so workspace symbols are served on the first request.
     let labels = harness.completion_labels("lib/RealBaseline/App.pm", 13, 7)?;
 
     assert!(

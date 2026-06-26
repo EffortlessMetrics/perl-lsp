@@ -834,6 +834,12 @@ impl LspServer {
                 params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
+            // Wait for workspace index to be Ready before routing, matching the
+            // workspace/symbol handler (issue #1514 race, extended to completion).
+            // The wait is bounded (2 s) and a no-op when the index is already ready.
+            #[cfg(feature = "workspace")]
+            self.wait_for_index_ready_if_building();
+
             // Use routing to determine workspace index access mode
             let workspace_mode = route_index_access(self.coordinator());
 
@@ -1046,6 +1052,12 @@ impl LspServer {
             let req_version =
                 params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
+
+            // Wait for workspace index to be Ready before routing, matching the
+            // workspace/symbol handler (issue #1514 race, extended to completion).
+            // The wait is bounded (2 s) and a no-op when the index is already ready.
+            #[cfg(feature = "workspace")]
+            self.wait_for_index_ready_if_building();
 
             // Use routing to determine workspace index access mode
             let workspace_mode = route_index_access(self.coordinator());
