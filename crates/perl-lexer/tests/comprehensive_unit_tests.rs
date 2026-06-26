@@ -695,11 +695,7 @@ fn hex_error_branch_emits_specific_message() -> R {
     let toks = significant("0x_");
     let first = toks.first().ok_or("no token for 0x_")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0x_: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0x_: wrong error message"),
         other => return Err(format!("0x_: expected Error, got {other:?}").into()),
     }
 
@@ -707,11 +703,7 @@ fn hex_error_branch_emits_specific_message() -> R {
     let toks = significant("0xG");
     let first = toks.first().ok_or("no token for 0xG")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0xG: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0xG: wrong error message"),
         other => return Err(format!("0xG: expected Error, got {other:?}").into()),
     }
 
@@ -719,11 +711,7 @@ fn hex_error_branch_emits_specific_message() -> R {
     let toks = significant("0X");
     let first = toks.first().ok_or("no token for 0X")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0X: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0X: wrong error message"),
         other => return Err(format!("0X: expected Error, got {other:?}").into()),
     }
 
@@ -731,11 +719,7 @@ fn hex_error_branch_emits_specific_message() -> R {
     let toks = significant("0X_");
     let first = toks.first().ok_or("no token for 0X_")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0X_: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0X_: wrong error message"),
         other => return Err(format!("0X_: expected Error, got {other:?}").into()),
     }
 
@@ -753,11 +737,7 @@ fn binary_error_branch_emits_specific_message() -> R {
     let toks = significant("0b2");
     let first = toks.first().ok_or("no token for 0b2")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0b2: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0b2: wrong error message"),
         other => return Err(format!("0b2: expected Error, got {other:?}").into()),
     }
 
@@ -765,11 +745,7 @@ fn binary_error_branch_emits_specific_message() -> R {
     let toks = significant("0b_");
     let first = toks.first().ok_or("no token for 0b_")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0b_: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0b_: wrong error message"),
         other => return Err(format!("0b_: expected Error, got {other:?}").into()),
     }
 
@@ -777,11 +753,7 @@ fn binary_error_branch_emits_specific_message() -> R {
     let toks = significant("0B");
     let first = toks.first().ok_or("no token for 0B")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0B: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0B: wrong error message"),
         other => return Err(format!("0B: expected Error, got {other:?}").into()),
     }
 
@@ -789,11 +761,7 @@ fn binary_error_branch_emits_specific_message() -> R {
     let toks = significant("0B_");
     let first = toks.first().ok_or("no token for 0B_")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0B_: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0B_: wrong error message"),
         other => return Err(format!("0B_: expected Error, got {other:?}").into()),
     }
 
@@ -811,11 +779,7 @@ fn octal_error_branch_emits_specific_message() -> R {
     let toks = significant("0o8");
     let first = toks.first().ok_or("no token for 0o8")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0o8: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0o8: wrong error message"),
         other => return Err(format!("0o8: expected Error, got {other:?}").into()),
     }
 
@@ -823,11 +787,7 @@ fn octal_error_branch_emits_specific_message() -> R {
     let toks = significant("0o_");
     let first = toks.first().ok_or("no token for 0o_")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0o_: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0o_: wrong error message"),
         other => return Err(format!("0o_: expected Error, got {other:?}").into()),
     }
 
@@ -835,11 +795,7 @@ fn octal_error_branch_emits_specific_message() -> R {
     let toks = significant("0O");
     let first = toks.first().ok_or("no token for 0O")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0O: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0O: wrong error message"),
         other => return Err(format!("0O: expected Error, got {other:?}").into()),
     }
 
@@ -847,11 +803,7 @@ fn octal_error_branch_emits_specific_message() -> R {
     let toks = significant("0O_");
     let first = toks.first().ok_or("no token for 0O_")?;
     match &first.token_type {
-        TokenType::Error(msg) => assert_eq!(
-            msg.as_ref(),
-            expected_msg,
-            "0O_: wrong error message"
-        ),
+        TokenType::Error(msg) => assert_eq!(msg.as_ref(), expected_msg, "0O_: wrong error message"),
         other => return Err(format!("0O_: expected Error, got {other:?}").into()),
     }
 
