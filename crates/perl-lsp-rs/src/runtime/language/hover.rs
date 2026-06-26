@@ -198,7 +198,34 @@ impl LspServer {
             ));
         }
 
-        if let Some(symbol_info) = analyzer.find_definition(offset) {
+        // Detect early when the cursor is on a `->method` call: if find_definition
+        // returns the ENCLOSING subroutine (not the callee) because the semantic
+        // analyzer registers subs with their full body span, skip the in-file hover
+        // and let the inherited-method path below handle it.  The guard is conservative:
+        // it only fires when the token at the cursor does NOT match the returned
+        // symbol name AND an arrow receiver exists at the cursor position.
+        let symbol_at_cursor = analyzer.find_definition(offset).filter(|sym| {
+            let token = Self::get_token_at_position_static(text, offset);
+            // If the token matches the symbol name this IS a direct hover on that
+            // symbol (e.g. hovering on `sub run` where cursor is on `run`).
+            // If the token differs AND an arrow receiver exists, the cursor is on a
+            // method call inside the sub body — defer to the inherited-method path.
+            if token == sym.name || token.is_empty() {
+                return true; // keep — cursor is directly on the symbol
+            }
+            #[cfg(feature = "workspace")]
+            {
+                if matches!(
+                    sym.kind,
+                    crate::symbol::SymbolKind::Subroutine | crate::symbol::SymbolKind::Method
+                ) && Self::extract_arrow_receiver(text, offset).is_some()
+                {
+                    return false; // discard — cursor is on a method call inside a sub body
+                }
+            }
+            true
+        });
+        if let Some(symbol_info) = symbol_at_cursor {
             // Detect Moo/Moose attribute accessors (declaration == "has") early and
             // render a dedicated card that shows the attribute metadata clearly,
             // instead of the generic "Subroutine" label which is misleading for accessors.
@@ -1154,7 +1181,7 @@ impl LspServer {
         &self,
         receiver_pkg: &str,
         method_name: &str,
-        _doc_uri: &str,
+        doc_uri: &str,
     ) -> Option<Value> {
         use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -1211,50 +1238,62 @@ impl LspServer {
         // Inner closure: enqueue parent and role packages not yet visited.
         // Mirrors the logic in `inherited_method_definition_location` (navigation.rs)
         // but also includes model.roles so that composed roles are traversed.
-        let mut enqueue_related =
-            |package_name: &str, queue: &mut VecDeque<String>, visited: &HashSet<String>| {
-                let related = related_package_cache
-                    .entry(package_name.to_string())
-                    .or_insert_with(|| {
-                        use crate::semantic::SemanticAnalyzer;
-                        let Some(package_location) = workspace_index.find_definition(package_name)
-                        else {
-                            return Vec::new();
-                        };
-                        let Some(text) = super::navigation::workspace_document_text(
-                            workspace_index,
-                            &package_location.uri,
-                        ) else {
-                            return Vec::new();
-                        };
+        let mut enqueue_related = |package_name: &str,
+                                   queue: &mut VecDeque<String>,
+                                   visited: &HashSet<String>| {
+            let related = related_package_cache
+                .entry(package_name.to_string())
+                .or_insert_with(|| {
+                    use crate::semantic::SemanticAnalyzer;
+                    // Resolve the document text for this package. When the workspace
+                    // index hasn't settled yet (async background indexer), `find_definition`
+                    // returns None for the receiver package — but the file is already open
+                    // in the document store because the user is hovering on it right now.
+                    // Fall back to `doc_uri` so hover is deterministic even before the
+                    // index is fully populated.
+                    let text = if let Some(loc) = workspace_index.find_definition(package_name) {
+                        match super::navigation::workspace_document_text(workspace_index, &loc.uri)
+                        {
+                            Some(t) => t,
+                            None => return Vec::new(),
+                        }
+                    } else if package_name == receiver_pkg {
+                        // Index hasn't settled; read the open document directly.
+                        match super::navigation::workspace_document_text(workspace_index, doc_uri) {
+                            Some(t) => t,
+                            None => return Vec::new(),
+                        }
+                    } else {
+                        return Vec::new();
+                    };
 
-                        let mut parser = crate::Parser::new(&text);
-                        let Ok(ast) = parser.parse() else {
-                            return Vec::new();
-                        };
+                    let mut parser = crate::Parser::new(&text);
+                    let Ok(ast) = parser.parse() else {
+                        return Vec::new();
+                    };
 
-                        SemanticAnalyzer::analyze_with_source(&ast, &text)
-                            .class_models
-                            .into_iter()
-                            .find(|model| model.name == package_name)
-                            .map(|model| {
-                                model
-                                    .parents
-                                    .iter()
-                                    .chain(model.roles.iter())
-                                    .cloned()
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_default()
-                    })
-                    .clone();
+                    SemanticAnalyzer::analyze_with_source(&ast, &text)
+                        .class_models
+                        .into_iter()
+                        .find(|model| model.name == package_name)
+                        .map(|model| {
+                            model
+                                .parents
+                                .iter()
+                                .chain(model.roles.iter())
+                                .cloned()
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                })
+                .clone();
 
-                for pkg in related {
-                    if !visited.contains(&pkg) {
-                        queue.push_back(pkg);
-                    }
+            for pkg in related {
+                if !visited.contains(&pkg) {
+                    queue.push_back(pkg);
                 }
-            };
+            }
+        };
 
         enqueue_related(receiver_pkg, &mut queue, &visited);
 

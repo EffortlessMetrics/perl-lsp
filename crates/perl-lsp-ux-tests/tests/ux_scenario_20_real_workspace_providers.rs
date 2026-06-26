@@ -699,9 +699,9 @@ fn scenario_20_hover_inherited_method_call_in_app_pm() -> anyhow::Result<()> {
     harness.open_file("lib/RealBaseline/Base.pm", BASE_PM)?;
     std::thread::sleep(Duration::from_millis(300));
 
-    // Line 16 (0-indexed): `    return $self->shared;`
+    // Line 15 (0-indexed): `    return $self->shared;`
     // cursor at col 18, inside `shared`.
-    let result = harness.hover("lib/RealBaseline/App.pm", 16, 18);
+    let result = harness.hover("lib/RealBaseline/App.pm", 15, 18);
     assert!(
         result.is_ok(),
         "hover on inherited method call must not return JSON-RPC error: {result:?}"
@@ -1300,13 +1300,12 @@ fn scenario_20_hover_module_import_in_app_pm_hard_assert() -> anyhow::Result<()>
     Ok(())
 }
 
-/// Known gap — hover on inherited method call `$self->shared` in App.pm returns null.
+/// Regression lock — hover on inherited method call `$self->shared` in App.pm MUST return
+/// a non-null result and the hover content MUST mention the method name or its source package.
 ///
-/// Observed FAIL on current main: receiver type inference not yet implemented.
-/// Hard assertion written; test is ignored until the gap is fixed.
-/// Tracking: https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3070
+/// Fixed by #3070: `build_inherited_method_hover` now falls back to the open document store
+/// when `find_definition` returns None (index not yet settled), so hover is deterministic.
 #[test]
-#[ignore = "real gap — hover on inherited method call returns null; receiver type inference not implemented (tracking #3070)"]
 fn scenario_20_hover_inherited_method_call_hard_assert() -> anyhow::Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_20: perl-lsp binary not found");
@@ -1318,8 +1317,8 @@ fn scenario_20_hover_inherited_method_call_hard_assert() -> anyhow::Result<()> {
     harness.open_file("lib/RealBaseline/Base.pm", BASE_PM)?;
     std::thread::sleep(Duration::from_millis(300));
 
-    // Line 16 (0-indexed): `    return $self->shared;` — col 18 inside `shared`.
-    let result = harness.hover("lib/RealBaseline/App.pm", 16, 18);
+    // Line 15 (0-indexed): `    return $self->shared;` — col 18 inside `shared`.
+    let result = harness.hover("lib/RealBaseline/App.pm", 15, 18);
 
     assert!(
         result.is_ok(),
@@ -1328,7 +1327,15 @@ fn scenario_20_hover_inherited_method_call_hard_assert() -> anyhow::Result<()> {
 
     let hov = result?
         .expect("hover on `$self->shared` must return a non-null result with hover contents");
-    assert!(hov.get("contents").is_some(), "hover result must have `contents` field: {hov:?}");
+
+    // Provenance check: the hover text must mention the method name or its source package.
+    // This guards against a vacuous non-null (e.g. a generic "unknown" response).
+    let contents_value =
+        hov.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    assert!(
+        contents_value.contains("shared") || contents_value.contains("Base"),
+        "hover contents must mention `shared` or its source `Base` package; got: {hov:?}"
+    );
 
     harness.assert_no_crash();
     Ok(())
