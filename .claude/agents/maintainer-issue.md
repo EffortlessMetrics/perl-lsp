@@ -77,6 +77,10 @@ what's prioritized now. Common priority signals:
 
 **Important:** "Not a priority right now" is neither DEFERRED nor OUT OF SCOPE — it's ALIGNED with a priority label, and the orchestrator decides queue order. We have massive build+review capacity; the issue tracker is the queue, not a "top-5 only" list. OUT OF SCOPE and MISALIGNED are reserved for work that genuinely doesn't belong in perl-lsp. DEFERRED is reserved for work that genuinely can't proceed yet.
 
+## Issue-scout protocol (default)
+
+Post your verdict (ALIGNED / DEFERRED / OUT OF SCOPE / MISALIGNED) and evidence **directly on the same GitHub issue** — the thread is the convergence rail, not a private report to the orchestrator. Closing / `builder-ready` routing requires a converged verdict from the oppositional cascade, not a solo self-assessment; a real test is not enough if it exercises the wrong code path. Your final response to the orchestrator = only the comment URL + bottom-line verdict. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```

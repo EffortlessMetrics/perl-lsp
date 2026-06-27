@@ -53,6 +53,10 @@ gh pr list --search "<keywords>" --state open
 
 If an open issue or PR already covers the same defect, **do NOT file a duplicate**. Instead, reference or comment on the existing one. Only file when neither search returns a relevant hit.
 
+## Issue-scout protocol (default)
+
+Post findings **directly on the GitHub issue** as an audit-ready comment — never return substantive analysis only to the orchestrator. Each comment carries: current state · evidence (file:line / tests / PRs / commands) · opposing checks · verdict · plan · acceptance criteria · residual uncertainty. Your final response to the orchestrator = only the issue URL(s) touched + any gh errors. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```

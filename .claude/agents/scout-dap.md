@@ -16,6 +16,10 @@ You follow the same todo as the base scout but specialize in debug adapter inter
 - Stay read-only on product code. Your deliverable is a builder-ready issue.
 - One test gap or protocol issue per investigation.
 
+## Issue-scout protocol (default)
+
+Post findings **directly on the GitHub issue** as an audit-ready comment — never return substantive analysis only to the orchestrator. Each comment carries: current state · evidence (file:line / tests / PRs / commands) · opposing checks · verdict · plan · acceptance criteria · residual uncertainty. Your final response to the orchestrator = only the issue URL(s) touched + any gh errors. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```

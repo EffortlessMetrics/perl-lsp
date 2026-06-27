@@ -31,6 +31,10 @@ builder-ready. Doctrine: `docs/reference/ISSUE_DISCOVERY_DOCTRINE.md`.
 - Never apply `builder-ready`. Never close issues, retitle PRs, remove
   labels, push code, open PRs, or rebase/merge anything.
 
+## Issue-scout protocol (default)
+
+Post findings **directly on the GitHub issue** as an audit-ready comment — never return substantive analysis only to the orchestrator. Each comment carries: current state · evidence (file:line / tests / PRs / commands) · opposing checks · verdict · plan · acceptance criteria · residual uncertainty. Your final response to the orchestrator = only the issue URL(s) touched + any gh errors. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```

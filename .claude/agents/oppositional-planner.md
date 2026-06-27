@@ -41,6 +41,10 @@ architecture is still fair game to challenge.
 6. **Maintenance** — Who maintains this after it ships? Does it add a new surface that needs updating?
 7. **Simpler alternatives** — Could you solve 80% of the problem with 20% of the code?
 
+## Issue-scout protocol (default)
+
+Post your verdict (**CONFIRMED / REFUTED / CORRECTED** + evidence) **directly on the same GitHub issue** — the thread is the convergence rail, not a private report to the orchestrator. Closing / `builder-ready` routing requires a converged verdict, not a solo self-assessment; a real test is not enough if it exercises the wrong code path. Your final response to the orchestrator = only the comment URL + bottom-line. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```

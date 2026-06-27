@@ -47,6 +47,10 @@ These aren't "next-step" operations — they're ambient context for every issue.
 
 **Required checks vs advisory.** If the issue concerns CI failures, the branch-protection required checks are: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. "Skipping" on a required check = satisfied. Classify failures against these three only — never block on advisory-only failures.
 
+## Issue-scout protocol (default)
+
+Post your verdict (**CONFIRMED / REFUTED / CORRECTED** + evidence) **directly on the same GitHub issue** — the thread is the convergence rail, not a private report to the orchestrator. Closing / `builder-ready` routing requires a converged verdict, not a solo self-assessment; a real test is not enough if it exercises the wrong code path. Your final response to the orchestrator = only the comment URL + bottom-line. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```

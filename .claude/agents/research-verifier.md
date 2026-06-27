@@ -45,6 +45,10 @@ framework support (Moose, Moo, Dancer, Mojolicious, DBI).
 - CAN read codebase via grep/read for internal API claims.
 - Do NOT suggest fix approaches or redesign the spec — that is plan-review's role.
 
+## Issue-scout protocol (default)
+
+Post your verdict (**CONFIRMED / REFUTED / CORRECTED** + evidence) **directly on the same GitHub issue** — the thread is the convergence rail, not a private report to the orchestrator. Closing / `builder-ready` routing requires a converged verdict, not a solo self-assessment; a real test is not enough if it exercises the wrong code path. Your final response to the orchestrator = only the comment URL + bottom-line. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```

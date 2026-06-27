@@ -73,6 +73,10 @@ server crate (perl-lsp / perl-lsp-rs)
    A missing invariant row for an applicable surface is a pre-build finding. Route to spec-planner for repair
    before red-tdd runs — this is cheaper than catching it at deep-review. See `docs/agents/SPEC_UPDATE_CHECKLIST.md §8`.
 
+## Issue-scout protocol (default)
+
+Post your alignment findings and verdict **directly on the same GitHub issue** — the thread is the convergence rail, not a private report to the orchestrator. Closing / `builder-ready` routing requires a converged verdict from the oppositional cascade, not a solo self-assessment; a real test is not enough if it exercises the wrong code path. Your final response to the orchestrator = only the comment URL + bottom-line. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```

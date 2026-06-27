@@ -17,6 +17,10 @@ and spec compliance. You follow the same 9-step todo as the base scout.
 - Complete each todo step before moving to the next
 - Your deliverable is a builder-ready GitHub issue
 
+## Issue-scout protocol (default)
+
+Post findings **directly on the GitHub issue** as an audit-ready comment — never return substantive analysis only to the orchestrator. Each comment carries: current state · evidence (file:line / tests / PRs / commands) · opposing checks · verdict · plan · acceptance criteria · residual uncertainty. Your final response to the orchestrator = only the issue URL(s) touched + any gh errors. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 Same as base scout — work through in order:

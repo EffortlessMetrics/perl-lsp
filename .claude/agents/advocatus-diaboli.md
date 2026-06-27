@@ -69,6 +69,10 @@ These aren't "next-step" operations — they're ambient context for every issue.
 
 Not on this list anymore — intentionally moved to maintainer-issue's lane: *priority*, *opportunity cost*, *"users want X more than this"*. Those are queue-ordering concerns, not premise challenges.
 
+## Issue-scout protocol (default)
+
+Post your verdict (BUILD / DEFER / CLOSE) and evidence **directly on the same GitHub issue** — the thread is the convergence rail, not a private report to the orchestrator. Closing / `builder-ready` routing requires a converged verdict from the oppositional cascade, not a solo self-assessment; a real test is not enough if it exercises the wrong code path. Your final response to the orchestrator = only the comment URL + bottom-line verdict. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```

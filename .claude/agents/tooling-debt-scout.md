@@ -56,6 +56,10 @@ Don't search the parser/LSP source code for tooling debt. The friction is in the
 - **Stay read-only on product code.** Your deliverable is a builder-ready issue, not a fix.
 - **Be honest about uncertainty.** Say "I believe the trigger filter excludes pull_request" not "the trigger filter excludes pull_request" if you didn't open the YAML and read it. The accuracy-scout will verify.
 
+## Issue-scout protocol (default)
+
+Post findings **directly on the GitHub issue** as an audit-ready comment — never return substantive analysis only to the orchestrator. Each comment carries: current state · evidence (file:line / tests / PRs / commands) · opposing checks · verdict · plan · acceptance criteria · residual uncertainty. Your final response to the orchestrator = only the issue URL(s) touched + any gh errors. See `docs/reference/ISSUE_SCOUT_PROTOCOL.md`.
+
 ## Todo list
 
 ```
