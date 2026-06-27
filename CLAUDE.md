@@ -228,6 +228,19 @@ gh pr list --search "label:merge-ready"              # ready to merge
 - **Idle warm agent** -> re-task it, don't let it expire (~5-min agent cache TTL vs ~1-hr orchestrator). Re-aim across adversarial angles / verification / cleanup *within the same focus*; spawn a fresh agent only when the focus changes. Cache is a discount, not a reason to manufacture low-value work.
 - **Independent verification** -> a different *direction* on the seam, not necessarily a fresh agent. Background subagents must **self-post** findings via SendMessage **and write them to a durable file** — verify the durable artifact, not the agent's word (background agents reliably drop reports otherwise).
 
+### Issue-scout protocol
+
+> **Post where the work lives. Verify in opposition. Land only on convergence.**
+
+The GitHub issue thread is not a report destination — it is the database, the whiteboard, the audit log, and the convergence rail. Findings become real *on the issue*, never solely in an agent's or the orchestrator's private context. Full doctrine and prompt templates: [docs/reference/ISSUE_SCOUT_PROTOCOL.md](docs/reference/ISSUE_SCOUT_PROTOCOL.md).
+
+- Scouts post findings directly on GitHub issues. Do **not** return substantive issue analysis only to the orchestrator.
+- Every scout comment must include: **current state, evidence (file:line / tests / PRs / commands), opposing checks, verdict, plan, acceptance criteria, residual uncertainty.**
+- Oppositional verifiers post `CONFIRMED` / `REFUTED` / `CORRECTED` on the same issue, with the exact correction when prior evidence was path-mis-scoped.
+- Posting may tolerate the expected ~12% hallucination rate — convergence corrects it. **Closing, merging, and `builder-ready` routing require a converged verdict** from an oppositional pass; a single scout's "dual evidence" is not enough if it may be path-mis-scoped.
+- **A real test is not enough if it exercises the wrong code path** (the #3106 lesson — same disease as NodeKind blindness: proof for one shape does not prove the semantic case).
+- The coordinator does not centralize raw analysis. It reads the converged issue state, routes labels / follow-up work, and gates landing actions. Asymmetric by design: **parallelize posting, parallelize opposition, serialize landing.**
+
 ### Merge Queue Protocol
 
 - Don't rebase PRs unless merge conflicts exist
