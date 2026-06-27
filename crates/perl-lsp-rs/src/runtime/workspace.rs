@@ -2007,7 +2007,10 @@ impl LspServer {
                     continue;
                 };
 
-                let discovery = super::file_discovery::discover_perl_files(&root);
+                let discovery = super::file_discovery::discover_perl_files_with_include_paths(
+                    &root,
+                    &folder_state.effective_workspace_config.include_paths,
+                );
 
                 for path in discovery.files {
                     files.push(path);
