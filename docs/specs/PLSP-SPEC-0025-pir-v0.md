@@ -49,11 +49,21 @@ implemented (PR #8196): a `BranchShell` HIR item lowers to a
 `PirOperation::Branch { condition: None }` node in `PirContext::Void`. The
 condition expression and then/else arm edges (`PirEdgeKind::Branch`) are named
 follow-ups; the node records that a branch exists and anchors it.
-Loop/return operation lowering, condition-expression lowering, branch arm edges,
-read-side (`LexicalRead`/`StashRead`) lowering, retained PIR caches, and any
-provider cutover remain out of scope and are tracked separately (provider cutover
-stays gated by [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197)).
-The `PirOperation` contract reserves the `Loop`, `Return`, `LexicalRead`, and
+
+Loop lowering from HIR `LoopShell` (`while`/`until`/C-style `for`/`foreach`) is
+now implemented (PR #8196): a `LoopShell` HIR item lowers to a
+`PirOperation::Loop { condition: None }` node in `PirContext::Void`. All four
+`LoopKind` surface forms (While, Until, CStyleFor, Foreach) emit one Loop node
+each; they are all statements and never expressions, so `Void` is correct for all
+of them. Condition-expression lowering and loop back-edges (`PirEdgeKind::Loop`)
+are named follow-ups; the node records that a loop exists and anchors it.
+
+Return/ControlTransfer lowering, condition-expression lowering, branch arm edges,
+loop back-edges, read-side (`LexicalRead`/`StashRead`) lowering, retained PIR
+caches, and any provider cutover remain out of scope and are tracked separately
+(provider cutover stays gated by
+[#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197)).
+The `PirOperation` contract reserves the `Return`, `LexicalRead`, and
 `StashRead` families so later passes populate them without a model break; the
 receipt makes the current gap visible rather than guessing.
 

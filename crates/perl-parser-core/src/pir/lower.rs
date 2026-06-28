@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use crate::hir::{
     AccessMode, AssignMode, BranchShell, CallForm, DeclStorageClass, DynamicBoundaryKind,
     HIR_BODY_MODEL_VERSION, HirBody, HirBodyId, HirExpr, HirExprId, HirFile, HirItem, HirKind,
-    HirScopeId, HirStmt, Sigil, UnaryMode, VariableKind,
+    HirScopeId, HirStmt, LoopShell, Sigil, UnaryMode, VariableKind,
 };
 
 use super::model::{
@@ -94,6 +94,7 @@ impl Lowerer {
                 );
             }
             HirKind::BranchShell(branch) => self.lower_branch(item, branch),
+            HirKind::LoopShell(loop_shell) => self.lower_loop(item, loop_shell),
             // Construct families PIR v0 does not yet lower. They remain visible
             // in the receipt instead of being silently dropped.
             other => {
@@ -214,6 +215,28 @@ impl Lowerer {
         // Arm-edge modeling (PirEdgeKind::Branch for then/else arms) is deferred
         // to a follow-up pass; this slice records the branch node and its
         // fallthrough without silently dropping it.
+        self.push_node(item, anchor, operation, PirContext::Void, None);
+    }
+
+    fn lower_loop(&mut self, item: &HirItem, _loop_shell: &LoopShell) {
+        // Source anchor: explicit, backed by the LoopShell HIR item's range.
+        let anchor = PirSourceAnchor::explicit(item.range, item.id);
+
+        // `condition` is None: PIR v0 does not yet lower the condition
+        // expression to a separate PIR node. Condition-expression lowering is a
+        // named follow-up (see PLSP-SPEC-0025 §Control-Flow Model), mirroring
+        // the same deferral in lower_branch.
+        let operation = PirOperation::Loop { condition: None };
+
+        // Void context: a while/until/for/foreach statement is a control-flow
+        // construct that yields no value at statement level. All LoopShell
+        // surface forms (While, Until, CStyleFor, Foreach) are statements —
+        // unlike BranchShell (which can cover value-producing ternaries), loops
+        // are never expressions in Perl, so Void is correct for all of them.
+        //
+        // Loop back-edges (PirEdgeKind::Loop) are deferred to a follow-up pass;
+        // this slice records the loop node and its conservative fallthrough
+        // without silently dropping it.
         self.push_node(item, anchor, operation, PirContext::Void, None);
     }
 
@@ -352,10 +375,12 @@ fn hir_kind_name(kind: &HirKind) -> &'static str {
         HirKind::BarewordExpr(_) => "BarewordExpr",
         HirKind::LiteralExpr(_) => "LiteralExpr",
         HirKind::BlockShell(_) => "BlockShell",
-        // Control-flow variants added by #1902. PIR v0 does not yet lower
-        // branch/loop/return — they fall through to unsupported_construct_counts
-        // where the gap is visible in every receipt, consistent with the PR's
-        // stated scope ("Branch/Loop/Return reserved but not yet populated").
+        // Control-flow variants: BranchShell lowered by #8196 (Branch op),
+        // LoopShell lowered by #8196 (Loop op); ControlTransfer and
+        // StatementModifierShell remain in unsupported_construct_counts.
+        // These arms are retained for completeness (hir_kind_name is also used
+        // by the BodyLowerer unsupported path) even though BranchShell and
+        // LoopShell will not reach the fallback from the Lowerer match above.
         HirKind::BranchShell(_) => "BranchShell",
         HirKind::LoopShell(_) => "LoopShell",
         HirKind::ControlTransfer(_) => "ControlTransfer",
@@ -1098,9 +1123,13 @@ mod tests {
     }
 
     #[test]
-    fn loop_shell_counted_in_receipt() {
+    fn loop_shell_lowers_to_loop_operation() {
+        // Since #8196, LoopShell lowers to PirOperation::Loop.
         let graph = lower("while (1) { last; }");
-        assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), Some(&1));
+        // LoopShell is now lowered — not in unsupported_construct_counts.
+        assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), None);
+        // The Loop operation must appear in operation_counts.
+        assert_eq!(graph.receipt.operation_counts.get("Loop"), Some(&1));
     }
 
     #[test]
@@ -1131,8 +1160,10 @@ $x = 1 if $y;
         // BranchShell now lowers to Branch (#8196) — not in unsupported.
         assert_eq!(graph.receipt.unsupported_construct_counts.get("BranchShell"), None);
         assert_eq!(graph.receipt.operation_counts.get("Branch"), Some(&1));
+        // LoopShell now lowers to Loop (#8196) — not in unsupported.
+        assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), None);
+        assert_eq!(graph.receipt.operation_counts.get("Loop"), Some(&1));
         // Remaining control-flow families are still unsupported.
-        assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), Some(&1));
         assert_eq!(graph.receipt.unsupported_construct_counts.get("ControlTransfer"), Some(&2));
         assert_eq!(
             graph.receipt.unsupported_construct_counts.get("StatementModifierShell"),

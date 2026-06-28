@@ -419,11 +419,16 @@ fn control_flow_branch_shell_is_now_lowered_to_branch() {
 }
 
 #[test]
-fn control_flow_loop_shell_is_counted_not_dropped() {
-    // PIR v0 reserves but does not yet lower LoopShell (while/for/foreach).
+fn control_flow_loop_shell_lowers_to_loop_operation() {
+    // Since #8196, LoopShell lowers to PirOperation::Loop instead of being
+    // counted as an unsupported construct.
     let graph = lower("while (1) { last; }");
-    assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), Some(&1));
-    assert!(graph.is_empty());
+    // LoopShell is now lowered — not in unsupported counts.
+    assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), None);
+    // The Loop operation must be counted.
+    assert_eq!(graph.receipt.operation_counts.get("Loop"), Some(&1));
+    // The graph is no longer empty — a Loop node was produced.
+    assert!(!graph.is_empty());
 }
 
 #[test]
@@ -449,11 +454,12 @@ fn all_four_control_flow_kinds_in_same_fixture() {
     // (BranchShell, LoopShell, ControlTransfer, StatementModifierShell)
     // correctly reflects the current lowering state:
     // - BranchShell now lowers to PirOperation::Branch (#8196)
-    // - LoopShell, ControlTransfer, StatementModifierShell remain unsupported in v0
+    // - LoopShell now lowers to PirOperation::Loop (#8196)
+    // - ControlTransfer, StatementModifierShell remain unsupported in v0
     let graph = lower(
         r#"
 if (1) { 1 }                    # BranchShell — now lowers to Branch
-while (1) { last; }             # LoopShell + ControlTransfer (in last)
+while (1) { last; }             # LoopShell (now lowers to Loop) + ControlTransfer (in last)
 sub f { return 1; }             # ControlTransfer (in return)
 $x = 1 if $y;                   # StatementModifierShell
 "#,
@@ -471,12 +477,18 @@ $x = 1 if $y;                   # StatementModifierShell
         "Branch operation count mismatch"
     );
 
-    // Remaining control-flow families are still unsupported.
+    // LoopShell now lowers to a Loop operation — NOT in unsupported counts.
     assert_eq!(
         graph.receipt.unsupported_construct_counts.get("LoopShell"),
-        Some(&1),
-        "LoopShell count mismatch"
+        None,
+        "LoopShell must not be unsupported — it now lowers to Loop"
     );
+    assert_eq!(
+        graph.receipt.operation_counts.get("Loop"),
+        Some(&1),
+        "Loop operation count mismatch"
+    );
+
     // Two ControlTransfers: one from `return 1;` in sub f, one from `last;` in while.
     assert_eq!(
         graph.receipt.unsupported_construct_counts.get("ControlTransfer"),
@@ -489,8 +501,8 @@ $x = 1 if $y;                   # StatementModifierShell
         "StatementModifierShell count mismatch"
     );
 
-    // Graph is no longer empty — at least the Branch node was produced.
-    assert!(!graph.is_empty(), "graph must have at least the Branch node");
+    // Graph is no longer empty — Branch and Loop nodes were produced.
+    assert!(!graph.is_empty(), "graph must have at least the Branch and Loop nodes");
 }
 
 #[test]
@@ -507,11 +519,15 @@ fn unless_block_lowers_to_branch_not_statement_modifier() {
 }
 
 #[test]
-fn foreach_loop_is_loop_shell() {
-    // `for my $x (LIST)` and `foreach` forms lower to LoopShell.
+fn foreach_loop_lowers_to_loop_operation() {
+    // `for my $x (LIST)` and `foreach` forms lower to LoopShell, which since
+    // #8196 further lowers to PirOperation::Loop.
     let graph = lower("for my $x (1..10) { next; }");
-    assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), Some(&1));
-    // `next` is a ControlTransfer.
+    // LoopShell is now lowered — not in unsupported counts.
+    assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), None);
+    // The Loop operation must be present.
+    assert_eq!(graph.receipt.operation_counts.get("Loop"), Some(&1));
+    // `next` is a ControlTransfer — still unsupported.
     assert_eq!(graph.receipt.unsupported_construct_counts.get("ControlTransfer"), Some(&1));
 }
 
