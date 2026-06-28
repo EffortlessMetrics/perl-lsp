@@ -211,7 +211,8 @@ pub fn collect_inline_values_with_runtime(
 /// Legacy: Collect inline values for scalar variables within a line range.
 ///
 /// Lines and columns are 1-based to match the DAP defaults.
-/// Kept for backward compatibility with `DapDispatcher`.
+/// Scalar-only counterpart to [`collect_inline_values_with_runtime`] that emits
+/// `= ?` placeholders; retained as part of the public inline-values API.
 pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Vec<InlineValueText> {
     let lines: Vec<&str> = source.lines().collect();
     if lines.is_empty() {

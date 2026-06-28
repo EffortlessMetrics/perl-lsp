@@ -377,8 +377,6 @@ pub mod variables;
 // Phase 2 modules (AC5-AC12) - IN PROGRESS
 /// Breakpoint storage and management for the DAP adapter.
 pub mod breakpoints;
-/// Message dispatcher for routing incoming DAP requests to handlers.
-pub mod dispatcher;
 /// Inline value extraction for DAP `inlineValues` requests.
 pub mod inline_values;
 /// DAP protocol types following the JSON-RPC 2.0 message format.
@@ -415,8 +413,6 @@ pub use server::{DapConfig, DapMode, DapServer};
 
 // Re-export Phase 2 public types
 pub use breakpoints::{BreakpointRecord, BreakpointStore, interpolate_logpoint_message};
-#[allow(deprecated)]
-pub use dispatcher::{DapDispatcher, DispatchResult};
 pub use protocol::{
     AttachRequestArguments, Breakpoint, BreakpointLocation, BreakpointLocationsArguments,
     BreakpointLocationsResponseBody, CancelArguments, Capabilities, CompletionItem,
