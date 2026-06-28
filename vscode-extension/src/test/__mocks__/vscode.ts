@@ -22,6 +22,12 @@ export enum StatusBarAlignment {
   Right = 2,
 }
 
+export enum ExtensionMode {
+  Production = 1,
+  Development = 2,
+  Test = 3,
+}
+
 export enum QuickPickItemKind {
   Separator = -1,
   Default = 0,
@@ -147,10 +153,12 @@ export const workspace = {
     onDidDelete: jest.fn(),
     dispose: jest.fn(),
   })),
-  onDidOpenTextDocument: jest.fn(),
-  onDidChangeTextDocument: jest.fn(),
-  onWillSaveTextDocument: jest.fn(),
-  onDidChangeConfiguration: jest.fn(),
+  onDidOpenTextDocument: jest.fn(() => ({ dispose: jest.fn() })),
+  onDidChangeTextDocument: jest.fn(() => ({ dispose: jest.fn() })),
+  onDidSaveTextDocument: jest.fn(() => ({ dispose: jest.fn() })),
+  onDidCreateFiles: jest.fn(() => ({ dispose: jest.fn() })),
+  onWillSaveTextDocument: jest.fn(() => ({ dispose: jest.fn() })),
+  onDidChangeConfiguration: jest.fn(() => ({ dispose: jest.fn() })),
   textDocuments: [],
   findFiles: jest.fn(async () => []),
   openTextDocument: jest.fn(async (value: any) => ({

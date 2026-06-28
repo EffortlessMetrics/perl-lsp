@@ -1742,6 +1742,28 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
     }
 
+    startLanguageClientAfterActivation(context, whatsNewManager);
+}
+
+export async function deactivate() {
+    await disposeLanguageClient();
+}
+
+function startLanguageClientAfterActivation(
+    context: vscode.ExtensionContext,
+    whatsNewManager: WhatsNewManager,
+): void {
+    finishStartupAfterActivation(context, whatsNewManager).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`[startup] Background startup failed: ${msg}`);
+        healthWidget?.onStateChange(ClientState.Stopped);
+    });
+}
+
+async function finishStartupAfterActivation(
+    context: vscode.ExtensionContext,
+    whatsNewManager: WhatsNewManager,
+): Promise<void> {
     await initializeLanguageClient(context);
     await validateIncludePaths(context);
     await suggestDiscoveredIncludePaths(context);
@@ -1756,10 +1778,10 @@ export async function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine(`[update-check] Error: ${msg}`);
     });
 
-    // First-run onboarding: show welcome notification once per installation
+    // First-run onboarding: show welcome notification once per installation.
     const onboarding = new OnboardingManager(context, outputChannel);
     if (onboarding.shouldShowWelcome()) {
-        // Fire-and-forget; failures must not block extension startup
+        // Fire-and-forget; failures must not block extension startup.
         onboarding.showWelcomeNotification(currentServerPath).catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             outputChannel.appendLine(`[onboarding] Error showing welcome: ${msg}`);
@@ -1780,10 +1802,6 @@ export async function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`[whats-new] Error showing What's New: ${msg}`);
         });
     }
-}
-
-export async function deactivate() {
-    await disposeLanguageClient();
 }
 
 /**
