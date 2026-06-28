@@ -1115,7 +1115,7 @@ impl LspServer {
     }
 
     #[cfg(feature = "workspace")]
-    fn wait_for_rename_index_ready(&self) {
+    pub(super) fn wait_for_rename_index_ready(&self) {
         use perl_parser::workspace_index::IndexState;
         use std::sync::atomic::Ordering;
         use std::time::{Duration, Instant};
