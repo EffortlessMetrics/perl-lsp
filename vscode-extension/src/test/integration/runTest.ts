@@ -25,7 +25,10 @@ async function main(): Promise<void> {
   const extensionDevelopmentPath = path.resolve(__dirname, '../../..');
   const repoRoot = path.resolve(extensionDevelopmentPath, '..');
   const extensionTestsPath = path.resolve(__dirname, './suite');
-  const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-vscode-smoke-workspace-'));
+  const configuredWorkspace = process.env.PERL_LSP_SMOKE_WORKSPACE;
+  const workspacePath = configuredWorkspace
+    ? path.resolve(configuredWorkspace)
+    : fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-vscode-smoke-workspace-'));
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-vscode-smoke-user-'));
   const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-vscode-smoke-extensions-'));
   const grep = getGrepArg(process.argv.slice(2));
@@ -33,14 +36,31 @@ async function main(): Promise<void> {
     || path.join(repoRoot, 'target', 'receipts', 'vscode-smoke');
   fs.mkdirSync(receiptsRoot, { recursive: true });
 
-  fs.writeFileSync(path.join(workspacePath, 'smoke.pl'), "use strict;\nuse warnings;\nprint \"ok\\n\";\n");
+  if (!configuredWorkspace) {
+    fs.writeFileSync(path.join(workspacePath, 'smoke.pl'), "use strict;\nuse warnings;\nprint \"ok\\n\";\n");
+  }
+
+  const configuredServerPath = process.env.PERL_LSP_FIRST_HOUR_SERVER_PATH;
+  if (configuredServerPath) {
+    const settingsDir = path.join(userDataDir, 'User');
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(settingsDir, 'settings.json'),
+      JSON.stringify({
+        'perl-lsp.autoDownload': false,
+        'perl-lsp.perlcritic.enabled': false,
+        'perl-lsp.serverPath': path.resolve(configuredServerPath),
+      }, null, 2),
+    );
+  }
 
   await runTests({
     extensionDevelopmentPath,
     extensionTestsPath,
     extensionTestsEnv: {
       ...process.env,
-      PERL_LSP_EXTENSION_TEST_SKIP_STARTUP: '1',
+      PERL_LSP_EXTENSION_TEST_SKIP_STARTUP:
+        process.env.PERL_LSP_EXTENSION_TEST_SKIP_STARTUP ?? '1',
       PERL_LSP_SMOKE_RECEIPTS_DIR: receiptsRoot,
       PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || 'integration',
       VSCODE_TEST_GREP: grep ?? '',
