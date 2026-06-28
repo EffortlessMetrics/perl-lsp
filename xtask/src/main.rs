@@ -14,6 +14,8 @@ use std::path::PathBuf;
 mod allocation_tracker;
 mod cli;
 mod tasks;
+#[cfg(test)]
+mod test_support;
 mod types;
 mod utils;
 use tasks::check_test_wiring;

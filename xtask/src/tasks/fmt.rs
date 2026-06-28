@@ -257,6 +257,8 @@ mod tests {
         format_failure_report, parse_unformatted_files,
     };
     use color_eyre::eyre::Result;
+    use std::fs;
+    use std::path::Path;
 
     fn sample_metadata() -> CargoMetadata {
         CargoMetadata {
@@ -422,5 +424,50 @@ mod tests {
         assert!(report.contains("cargo fmt failed"));
         assert!(report.contains("crates/foo/Cargo.toml"));
         assert!(report.contains("rustfmt not found"));
+    }
+
+    #[test]
+    fn xtask_tasks_do_not_shell_out_to_workspace_wide_cargo_fmt_all() -> Result<()> {
+        let xtask_tasks = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("tasks");
+        let mut offenders = Vec::new();
+        collect_workspace_fmt_all_offenders(&xtask_tasks, &mut offenders)?;
+
+        assert!(
+            offenders.is_empty(),
+            "repo-owned xtask gates must route formatting through fmt::run, not raw workspace fmt: {offenders:?}"
+        );
+        Ok(())
+    }
+
+    fn collect_workspace_fmt_all_offenders(dir: &Path, offenders: &mut Vec<String>) -> Result<()> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                collect_workspace_fmt_all_offenders(&path, offenders)?;
+                continue;
+            }
+
+            if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
+                continue;
+            }
+
+            let source = fs::read_to_string(&path)?;
+            if path.file_name().and_then(|name| name.to_str()) == Some("fmt.rs") {
+                continue;
+            }
+
+            let argv_pattern = ["\"fmt\"", ", \"--all\""].concat();
+            let shell_pattern = ["cargo fmt", " --all"].concat();
+            let args_pattern = ["args([\"fmt\"", ", \"--all\""].concat();
+            if source.contains(&argv_pattern)
+                || source.contains(&shell_pattern)
+                || source.contains(&args_pattern)
+            {
+                offenders.push(path.display().to_string());
+            }
+        }
+
+        Ok(())
     }
 }

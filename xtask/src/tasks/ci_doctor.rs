@@ -16,8 +16,9 @@
 
 use color_eyre::eyre::{Result, bail};
 use serde::Deserialize;
-use std::{env, fs, path::Path, process::Command};
+use std::{env, fs, io, path::Path, process::Command};
 
+use crate::tasks::fmt as fmt_task;
 use crate::utils::project_root;
 
 // ── output helpers ────────────────────────────────────────────────────────────
@@ -171,35 +172,62 @@ fn check_git_state(warnings: &mut usize) {
 }
 
 fn check_fmt_drift(root: &Path, warnings: &mut usize) {
+    let _ = check_fmt_drift_with(root, warnings, || {
+        fmt_result_to_run_outcome(fmt_task::run(true, None))
+    });
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum FmtDriftOutcome {
+    Clean,
+    DriftDetected(String),
+    RootUnavailable(io::ErrorKind),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum FmtRunOutcome {
+    Clean,
+    Failed(String),
+}
+
+fn fmt_result_to_run_outcome(result: Result<()>) -> FmtRunOutcome {
+    match result {
+        Ok(()) => FmtRunOutcome::Clean,
+        Err(error) => FmtRunOutcome::Failed(error.to_string()),
+    }
+}
+
+fn check_fmt_drift_with<F>(root: &Path, warnings: &mut usize, run_fmt: F) -> FmtDriftOutcome
+where
+    F: FnOnce() -> FmtRunOutcome,
+{
     section("Format drift (advisory)");
 
-    // Run `cargo xtask fmt --check` from the workspace root.
+    // Run the same package-scoped formatter used by `cargo xtask fmt --check`.
     // This is advisory: we warn but do not fail ci-doctor.
-    let current_exe = env::current_exe().ok();
-    let xtask_bin = current_exe.as_deref().unwrap_or(Path::new("cargo-xtask"));
+    let previous_dir = env::current_dir().ok();
+    if let Err(error) = env::set_current_dir(root) {
+        warn(&format!(
+            "could not enter workspace root; skipping fmt drift check ({})",
+            error.kind()
+        ));
+        return FmtDriftOutcome::RootUnavailable(error.kind());
+    }
 
-    let status = Command::new(xtask_bin).current_dir(root).args(["fmt", "--check"]).status();
+    let fmt_result = run_fmt();
+    if let Some(dir) = previous_dir {
+        let _ = env::set_current_dir(dir);
+    }
 
-    match status {
-        Ok(s) if s.success() => pass("no fmt drift"),
-        Ok(_) => {
+    match fmt_result {
+        FmtRunOutcome::Clean => {
+            pass("no fmt drift");
+            FmtDriftOutcome::Clean
+        }
+        FmtRunOutcome::Failed(error) => {
             warn("fmt drift detected — fix: cargo xtask fmt");
             *warnings += 1;
-        }
-        Err(_) => {
-            // Fall back to plain cargo fmt --check
-            let fallback = Command::new("cargo")
-                .current_dir(root)
-                .args(["fmt", "--all", "--", "--check"])
-                .status();
-            match fallback {
-                Ok(s) if s.success() => pass("no fmt drift"),
-                Ok(_) => {
-                    warn("fmt drift detected — fix: cargo fmt --all");
-                    *warnings += 1;
-                }
-                Err(_) => warn("cargo fmt unavailable; skipping drift check"),
-            }
+            FmtDriftOutcome::DriftDetected(error)
         }
     }
 }
@@ -335,7 +363,10 @@ pub fn run() -> Result<()> {
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::Mutex;
     use tempfile::tempdir;
+
+    static CURRENT_DIR_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn ci_doctor_read_pinned_channel_parses_valid_toml() {
@@ -394,5 +425,96 @@ mod tests {
     fn ci_doctor_summarize_returns_err_when_failures() {
         assert!(summarize(1, 0).is_err());
         assert!(summarize(2, 1).is_err());
+    }
+
+    #[test]
+    fn ci_doctor_fmt_drift_runs_package_formatter_from_workspace_root() -> Result<()> {
+        let _guard = CURRENT_DIR_LOCK
+            .lock()
+            .map_err(|_| color_eyre::eyre::eyre!("current-dir test lock poisoned"))?;
+        let start_dir = env::current_dir()?;
+        let dir = tempdir()?;
+        let mut warnings = 0usize;
+        let mut observed_dir = None;
+
+        let outcome =
+            check_fmt_drift_with(dir.path(), &mut warnings, || match env::current_dir() {
+                Ok(dir) => {
+                    observed_dir = Some(dir);
+                    FmtRunOutcome::Clean
+                }
+                Err(error) => FmtRunOutcome::Failed(error.to_string()),
+            });
+
+        assert_eq!(outcome, FmtDriftOutcome::Clean);
+        assert_eq!(warnings, 0);
+        assert_eq!(observed_dir.as_deref(), Some(dir.path()));
+        assert_eq!(env::current_dir()?, start_dir);
+        Ok(())
+    }
+
+    #[test]
+    fn ci_doctor_fmt_drift_warns_when_package_formatter_fails() -> Result<()> {
+        let _guard = CURRENT_DIR_LOCK
+            .lock()
+            .map_err(|_| color_eyre::eyre::eyre!("current-dir test lock poisoned"))?;
+        let start_dir = env::current_dir()?;
+        let dir = tempdir()?;
+        let mut warnings = 0usize;
+
+        let outcome = check_fmt_drift_with(dir.path(), &mut warnings, || {
+            FmtRunOutcome::Failed("format drift".to_string())
+        });
+
+        assert_eq!(outcome, FmtDriftOutcome::DriftDetected("format drift".to_string()));
+        assert_eq!(warnings, 1);
+        assert_eq!(env::current_dir()?, start_dir);
+        Ok(())
+    }
+
+    #[test]
+    fn ci_doctor_fmt_drift_skips_when_workspace_root_is_unavailable() -> Result<()> {
+        let _guard = CURRENT_DIR_LOCK
+            .lock()
+            .map_err(|_| color_eyre::eyre::eyre!("current-dir test lock poisoned"))?;
+        let start_dir = env::current_dir()?;
+        let dir = tempdir()?;
+        let missing_root = dir.path().join("missing");
+        let mut warnings = 0usize;
+        let mut called = false;
+
+        let outcome = check_fmt_drift_with(&missing_root, &mut warnings, || {
+            called = true;
+            FmtRunOutcome::Clean
+        });
+
+        assert_eq!(outcome, FmtDriftOutcome::RootUnavailable(io::ErrorKind::NotFound));
+        assert_eq!(warnings, 0);
+        assert!(!called);
+        assert_eq!(env::current_dir()?, start_dir);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ci_doctor_fmt_drift_routes_to_package_formatter() -> Result<()> {
+        let _guard = CURRENT_DIR_LOCK
+            .lock()
+            .map_err(|_| color_eyre::eyre::eyre!("current-dir test lock poisoned"))?;
+        let fake_cargo = crate::test_support::FakeCargo::install()?;
+        let start_dir = env::current_dir()?;
+        let dir = tempdir()?;
+        let mut warnings = 0usize;
+
+        check_fmt_drift(dir.path(), &mut warnings);
+
+        let invocations = fake_cargo.invocations();
+        assert_eq!(warnings, 0);
+        assert!(invocations.iter().any(|line| line == "metadata --format-version 1 --no-deps"));
+        assert!(invocations.iter().any(|line| {
+            line.starts_with("fmt --manifest-path ") && line.ends_with(" -- --check")
+        }));
+        assert_eq!(env::current_dir()?, start_dir);
+        Ok(())
     }
 }
