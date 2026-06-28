@@ -377,9 +377,8 @@ pub enum ReferencesPirPromoteOutcome {
     /// extractor. Do NOT union with the legacy result.
     ///
     /// Invariants: ranges are sorted (line, character, end) and deduplicated.
-    /// The set is never empty — an empty compiler set produces
-    /// [`LegacyFallback { reason: NoExactFacts }`](Self::LegacyFallback)
-    /// instead.
+    /// The set may be empty when the binding resolved and all facts were
+    /// intentionally filtered by [`ReferenceOptions`].
     Exact(Vec<lsp_types::Range>),
 
     /// Compiler path refused or not taken for the stated reason.
@@ -406,7 +405,7 @@ fn range_sort_key(r: &lsp_types::Range) -> (u32, u32, u32, u32) {
 ///
 /// Private helper shared by [`references_pir_promote`] for the `Shadow` and
 /// `PromoteExact` modes. Returns the sorted, deduplicated set of compiler
-/// ranges, or a refusal reason if no ranges matched.
+/// ranges, or a refusal reason if no binding facts matched.
 ///
 /// `target_sigil` and `target_name` together identify the full variable identity
 /// (e.g. `"$"` and `"x"` for `$x`). The `::` check is performed on `target_name`.
@@ -436,11 +435,13 @@ fn evaluate_pir_reference_candidate(
     // `include_declaration` is false, skip the first Write fact for the target
     // (treated as the declaration anchor).
     let mut declaration_skipped = false;
+    let mut matched_binding = false;
     let mut ranges: Vec<lsp_types::Range> = Vec::new();
     for fact in &body.facts {
         if fact.name.sigil != target_sigil || fact.name.name != target_name {
             continue;
         }
+        matched_binding = true;
         // Note: extractor invariant (PR1 #2637) guarantees every emitted fact has
         // `source_anchor.is_anchored() == true` — no dead branch needed here.
         if !include_declaration && !declaration_skipped && fact.role == LexicalRole::Write {
@@ -452,7 +453,7 @@ fn evaluate_pir_reference_candidate(
         }
     }
 
-    if ranges.is_empty() {
+    if !matched_binding {
         return Err(PirShadowRefusalReason::NoExactFacts);
     }
 
@@ -798,6 +799,30 @@ mod promote_tests {
     // ── Ranges are sorted and deduped ──────────────────────────────────────
 
     #[test]
+    fn promote_exact_resolved_empty_post_filter_returns_exact_empty() -> Result<(), String> {
+        // The binding exists and resolves. With include_declaration=false the
+        // only fact is intentionally filtered, so the exact answer is an empty
+        // range set rather than NoExactFacts fallback.
+        let receipt = receipt_for("my $x = 1;\n");
+        let outcome = references_pir_promote(
+            PromotionMode::PromoteExact,
+            "$",
+            "x",
+            &receipt,
+            &[(0, 2)],
+            0,
+            &byte_mapper,
+            ReferenceOptions { include_declaration: false },
+        );
+        match outcome {
+            ReferencesPirPromoteOutcome::Exact(ranges) if ranges.is_empty() => Ok(()),
+            other => Err(format!(
+                "resolved-but-filtered-empty binding must produce Exact([]), got {other:?}"
+            )),
+        }
+    }
+
+    #[test]
     fn promote_exact_ranges_sorted_and_deduped() {
         // Any valid receipt with multiple facts to check ordering.
         let receipt = receipt_for("my $x = 1;\nprint $x;\n");
@@ -883,7 +908,7 @@ mod promote_tests {
     // ── includeDeclaration: false excludes first Write fact ────────────────
 
     #[test]
-    fn include_declaration_false_excludes_first_write_fact() {
+    fn include_declaration_false_excludes_first_write_fact() -> Result<(), String> {
         let receipt = receipt_for("my $a = 1;\nprint $a;\n");
 
         let with_decl = references_pir_promote(
@@ -911,27 +936,18 @@ mod promote_tests {
             (
                 ReferencesPirPromoteOutcome::Exact(with),
                 ReferencesPirPromoteOutcome::Exact(without),
-            ) => {
-                assert!(
-                    with.len() > without.len(),
-                    "include_declaration=true must yield more ranges than false; \
-                     with={with:?}, without={without:?}"
-                );
-            }
-            (ReferencesPirPromoteOutcome::Exact(_), other) => {
-                // include_declaration=false with only 1 fact remaining → NoExactFacts is valid
-                assert!(
-                    matches!(
-                        other,
-                        ReferencesPirPromoteOutcome::LegacyFallback {
-                            reason: PirShadowRefusalReason::NoExactFacts,
-                            ..
-                        }
-                    ),
-                    "unexpected outcome without decl: {other:?}"
-                );
-            }
-            other => panic!("unexpected outcomes: {other:?}"),
+            ) if with.len() > without.len() => Ok(()),
+            (
+                ReferencesPirPromoteOutcome::Exact(with),
+                ReferencesPirPromoteOutcome::Exact(without),
+            ) => Err(format!(
+                "include_declaration=true must yield more ranges than false; \
+                 with={with:?}, without={without:?}"
+            )),
+            (ReferencesPirPromoteOutcome::Exact(_), other) => Err(format!(
+                "include_declaration=false must preserve exact resolved bindings, got {other:?}"
+            )),
+            other => Err(format!("unexpected outcomes: {other:?}")),
         }
     }
 
