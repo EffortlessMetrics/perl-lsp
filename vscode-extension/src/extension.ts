@@ -39,7 +39,7 @@ import type {
 } from './commandResults';
 
 let client: LanguageClient | undefined;
-let outputChannel: vscode.OutputChannel;
+let outputChannel: vscode.LogOutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
 let currentServerPath: string | null = null;
 // Set by getServerPath() when perl-lsp.serverPath is configured but the file
@@ -1047,7 +1047,7 @@ export async function copyProviderDecisionReceiptCommand(
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-    outputChannel = vscode.window.createOutputChannel('Perl Language Server');
+    outputChannel = vscode.window.createOutputChannel('Perl Language Server', { log: true });
     const mcpDisposable = registerMcpSupport(outputChannel);
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'perl-lsp.showStatusMenu';
