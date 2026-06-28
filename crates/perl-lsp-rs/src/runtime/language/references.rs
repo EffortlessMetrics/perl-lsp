@@ -83,9 +83,51 @@ impl ReferencesAnsweringTier {
         }
     }
 
-    /// Returns `true` only when compiler source-backed facts answered this request.
+    /// Returns `true` only when semantic source-backed facts answered this request.
     pub(crate) fn is_source_backed(self) -> bool {
         matches!(self, Self::SemanticSourceBacked)
+    }
+
+    /// Coarse fact-source label for provider-decision receipts.
+    pub(crate) fn fact_source(self) -> &'static str {
+        match self {
+            // Today this tier is backed by canonical semantic facts generated from
+            // AST/index data. It is intentionally not labeled `compiler_fact`;
+            // #3046 tracks the future PIR-A-vs-AST split once compiler facts exist.
+            Self::SemanticSourceBacked => "semantic_fact",
+            Self::WorkspaceExact
+            | Self::WorkspaceMixed
+            | Self::WorkspaceText
+            | Self::PartialIndex
+            | Self::OpenDocumentText
+            | Self::SemanticAnalyzer
+            | Self::Empty => "fallback",
+        }
+    }
+
+    /// Tier-specific source-backed state for provider-decision receipts.
+    pub(crate) fn source_backed_state(self) -> &'static str {
+        match self {
+            Self::SemanticSourceBacked => "semantic_source_backed_ast_index",
+            Self::WorkspaceExact => "workspace_exact_fallback",
+            Self::WorkspaceMixed => "workspace_mixed_fallback",
+            Self::WorkspaceText => "workspace_text_fallback",
+            Self::PartialIndex => "partial_index_fallback",
+            Self::OpenDocumentText => "open_document_text_fallback",
+            Self::SemanticAnalyzer => "semantic_analyzer_fallback",
+            Self::Empty => "no_references_result",
+        }
+    }
+
+    /// Fallback state normalized by the provider-decision receipt model.
+    pub(crate) fn fallback_state(self, result_count: usize) -> &'static str {
+        if result_count == 0 {
+            "no_result"
+        } else if self.is_source_backed() {
+            "live_provider"
+        } else {
+            "legacy_provider"
+        }
     }
 }
 
@@ -203,12 +245,13 @@ impl LspServer {
             return;
         };
         let result_count = lsp_location_count(result);
-        let (decision, reason, fallback_state) = if result_count == 0 {
-            ("fallback", "no_result", "no_result")
+        let (decision, reason) = if result_count == 0 {
+            ("fallback", "no_result")
         } else {
-            ("acted", "live_provider_result", "live_provider")
+            ("acted", "live_provider_result")
         };
-        // confidence is "high" when compiler source-backed facts answered, else "low"
+        let fallback_state = tier.fallback_state(result_count);
+        // Confidence is high only when the semantic source-backed tier answered.
         let confidence = if tier.is_source_backed() { "high" } else { "low" };
         // source_backed_result_count is the total result count only for source-backed answers
         let source_backed_result_count: usize =
@@ -229,11 +272,11 @@ impl LspServer {
                 "index_result_count": index_result_count,
                 "text_result_count": text_result_count,
                 "source_backed_result_count": source_backed_result_count,
-                "fact_source": "navigation_provider",
+                "fact_source": tier.fact_source(),
                 "confidence": confidence,
                 "freshness": "fresh",
                 "source_backed": tier.is_source_backed(),
-                "source_backed_state": "not_proven_by_provider_trace",
+                "source_backed_state": tier.source_backed_state(),
                 "answering_tier": tier.as_str(),
                 "index_state": index_state,
                 "latency_us": latency_us,
@@ -1167,6 +1210,40 @@ mod tests {
         assert!(!ReferencesAnsweringTier::OpenDocumentText.is_source_backed());
         assert!(!ReferencesAnsweringTier::SemanticAnalyzer.is_source_backed());
         assert!(!ReferencesAnsweringTier::Empty.is_source_backed());
+        Ok(())
+    }
+
+    #[test]
+    fn answering_tier_receipt_fact_source_is_tier_accurate() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ReferencesAnsweringTier::SemanticSourceBacked.fact_source(), "semantic_fact");
+        assert_eq!(
+            ReferencesAnsweringTier::SemanticSourceBacked.source_backed_state(),
+            "semantic_source_backed_ast_index"
+        );
+        assert_eq!(
+            ReferencesAnsweringTier::SemanticSourceBacked.fallback_state(1),
+            "live_provider"
+        );
+        assert_eq!(ReferencesAnsweringTier::SemanticSourceBacked.fallback_state(0), "no_result");
+
+        for tier in [
+            ReferencesAnsweringTier::WorkspaceExact,
+            ReferencesAnsweringTier::WorkspaceMixed,
+            ReferencesAnsweringTier::WorkspaceText,
+            ReferencesAnsweringTier::PartialIndex,
+            ReferencesAnsweringTier::OpenDocumentText,
+            ReferencesAnsweringTier::SemanticAnalyzer,
+            ReferencesAnsweringTier::Empty,
+        ] {
+            assert_eq!(tier.fact_source(), "fallback", "{tier:?} must not claim semantic facts");
+            assert!(
+                tier.source_backed_state().ends_with("_fallback")
+                    || tier.source_backed_state() == "no_references_result",
+                "{tier:?} source-backed state must stay fallback-shaped"
+            );
+            assert_eq!(tier.fallback_state(1), "legacy_provider");
+            assert_eq!(tier.fallback_state(0), "no_result");
+        }
         Ok(())
     }
 

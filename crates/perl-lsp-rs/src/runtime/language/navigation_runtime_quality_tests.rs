@@ -142,18 +142,30 @@ fn trace_count(receipt: &Value) -> Result<usize, Box<dyn std::error::Error>> {
     Ok(traces.len())
 }
 
-fn assert_trace_only_navigation_receipt(receipt: &serde_json::Map<String, Value>) {
+fn assert_trace_only_definition_receipt(receipt: &serde_json::Map<String, Value>) {
     assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("live_provider_result"));
     assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("navigation_provider"));
-    // `confidence` and `source_backed` are tier-dependent since the references
-    // scorecard PR: they are `"high"` / `true` when the semantic-source-backed
-    // tier answers, and `"low"` / `false` otherwise.  Do not assert fixed values
-    // here; assert them per-provider in caller code where the tier is known.
     assert_eq!(
         receipt.get("source_backed_state").and_then(Value::as_str),
         Some("not_proven_by_provider_trace")
     );
     assert_eq!(receipt.get("fallback_state").and_then(Value::as_str), Some("live_provider"));
+    assert_eq!(
+        receipt.get("trace_only_no_live_behavior_change").and_then(Value::as_bool),
+        Some(true)
+    );
+}
+
+fn assert_trace_only_source_backed_references_receipt(receipt: &serde_json::Map<String, Value>) {
+    assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("live_provider_result"));
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("semantic_fact"));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("semantic_source_backed_ast_index")
+    );
+    assert_eq!(receipt.get("fallback_state").and_then(Value::as_str), Some("live_provider"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
     assert_eq!(
         receipt.get("trace_only_no_live_behavior_change").and_then(Value::as_bool),
         Some(true)
@@ -186,7 +198,7 @@ fn navigation_provider_decision_replays_definition_and_references_traces()
         definition_receipt.get("result_count").and_then(Value::as_u64),
         Some(u64::try_from(location_count(definition_result.as_ref()))?)
     );
-    assert_trace_only_navigation_receipt(definition_receipt);
+    assert_trace_only_definition_receipt(definition_receipt);
     assert_eq!(
         definition_receipt.get("claim_boundary").and_then(Value::as_str),
         Some("records existing navigation response only; no broader live navigation cutover")
@@ -214,7 +226,7 @@ fn navigation_provider_decision_replays_definition_and_references_traces()
         references_receipt.get("result_count").and_then(Value::as_u64),
         Some(u64::try_from(location_count(references_result.as_ref()))?)
     );
-    assert_trace_only_navigation_receipt(references_receipt);
+    assert_trace_only_source_backed_references_receipt(references_receipt);
     // The test server creates a real IndexCoordinator that indexes opened documents, so the
     // LIVE_REFS fixture (a bare `target()` call-site in a known package) is resolved by
     // live_source_backed_reference_locations — reaching the SemanticSourceBacked tier.
@@ -301,7 +313,7 @@ fn navigation_runtime_quality_definition_receipt_compares_live_and_compiler_path
         request_receipt.get("result_count").and_then(Value::as_u64),
         Some(u64::try_from(location_count(live_result.as_ref()))?)
     );
-    assert_trace_only_navigation_receipt(request_receipt);
+    assert_trace_only_definition_receipt(request_receipt);
     assert_eq!(
         request_receipt.get("claim_boundary").and_then(Value::as_str),
         Some("records existing navigation response only; no broader live navigation cutover")
@@ -375,7 +387,7 @@ fn navigation_runtime_quality_references_receipt_compares_live_and_compiler_path
         request_receipt.get("result_count").and_then(Value::as_u64),
         Some(u64::try_from(location_count(live_result.as_ref()))?)
     );
-    assert_trace_only_navigation_receipt(request_receipt);
+    assert_trace_only_source_backed_references_receipt(request_receipt);
     assert_eq!(
         request_receipt.get("claim_boundary").and_then(Value::as_str),
         Some("records existing references response only; no broader live references cutover")
