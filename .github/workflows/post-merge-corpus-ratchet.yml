@@ -209,6 +209,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full')
     permissions:
       contents: write
+      pull-requests: write
     runs-on: ubuntu-24.04
     # Raised from 45 to 120 minutes to survive a cold seed install.
     # A cold install of 1000 distributions takes ~60-90 min on a fresh runner.
@@ -323,27 +324,40 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-      - name: Commit updated corpus receipts if changed
-        # TODO(#1004): Switch to creating a PR instead of direct push once a
-        # bot token or GitHub App is configured that can bypass branch protection.
-        # For now, the push is best-effort (git push || echo warning) so CI stays green
-        # even when branch protection blocks the direct-to-master push. The warning
-        # annotation remains visible in the Actions UI so the failure is not silent.
-        # The bounded pull_request job remains contents: read; this full ratchet
-        # job holds contents: write but is excluded from pull_request by its
-        # trusted-event job condition.
-        run: |
-          CHANGED_FILES=$(git diff --name-only -- \
-            .ci/cpan-corpus-baseline.json \
-            .ci/cpan-corpus-manifest.txt)
+      # Fix for #1004: a direct `git push` to the protected default branch is
+      # rejected by branch protection, so the former best-effort push (`git push
+      # || echo warning`) never landed — the corpus baseline went stale (~2.5
+      # months / 540 parser commits as of 2026-06-27) and the cpan-corpus-check
+      # gate enforced out-of-date truth. Open a PR instead, via the repo's
+      # established peter-evans/create-pull-request automation pattern (see
+      # version-bump.yml, badge-endpoints.yml). NOTE: a PR created by GITHUB_TOKEN
+      # does not trigger the required checks (GitHub loop-prevention — same as the
+      # *-bump automation PRs), so it merges via admin/ops override; a bot token or
+      # GitHub App for full self-merge is the #1004 follow-up. Either way this is
+      # strictly better than the former push, which branch protection always
+      # rejected. The action is a no-op when there is no diff in the tracked paths,
+      # so no empty PRs are created; a fixed branch updates the existing PR rather
+      # than opening duplicates each run.
+      - name: Open PR with refreshed corpus receipts (if changed)
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: ${{ github.event.repository.default_branch }}
+          branch: automation/corpus-ratchet
+          add-paths: |
+            .ci/cpan-corpus-baseline.json
+            .ci/cpan-corpus-manifest.txt
+          commit-message: "chore(ci): refresh CPAN corpus receipts (#1004)"
+          title: "chore(ci): refresh CPAN corpus receipts (#1004)"
+          labels: ci
+          body: |
+            Automated CPAN corpus receipt refresh from the post-merge ratchet
+            (`post-merge-corpus-ratchet.yml`, `corpus-ratchet-full` job).
 
-          if [ -n "$CHANGED_FILES" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add .ci/cpan-corpus-baseline.json .ci/cpan-corpus-manifest.txt
-            git commit -m "chore(ci): refresh CPAN corpus receipts post-merge [skip ci]"
-            git push || echo "::warning::Direct push to master blocked by branch protection rules -- CPAN corpus receipts not auto-updated. Run 'just cpan-corpus-baseline-update && just cpan-corpus-ratchet' locally and push. See TODO #1004 for proper fix."
-            echo "::notice::Attempted to push updated CPAN corpus receipts."
-          else
-            echo "::notice::CPAN corpus receipts already up to date -- nothing to commit."
-          fi
+            Updates `.ci/cpan-corpus-baseline.json` and `.ci/cpan-corpus-manifest.txt`
+            to the current parser's corpus state.
+
+            Replaces the former best-effort direct-push, which branch protection
+            rejected — leaving the baseline stale and the `cpan-corpus-check` gate
+            enforcing out-of-date truth. See #1004. Merging keeps the corpus
+            baseline and gate truthful.
