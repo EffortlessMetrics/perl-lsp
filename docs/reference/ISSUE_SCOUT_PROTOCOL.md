@@ -111,6 +111,48 @@ CONFIRMED / REFUTED / CORRECTED
 Include evidence and the exact correction if the prior claim was path-mis-scoped.
 ```
 
+## The close-gate (landing a "DONE-OR-MERGED" verdict)
+
+Convergence (above) is the cheap, parallel, error-tolerant half. **Closing** is the
+irreversible half and needs a stricter gate. A scout calling an issue
+done-but-unclosed is *not* sufficient to close it — that judgment is wrong far more
+often than it looks.
+
+**A close requires ALL of:**
+
+1. **A cited MERGED commit/PR that is an ancestor of origin/main.** Verify locally:
+   `git merge-base --is-ancestor <sha> origin/main`. An OPEN or DRAFT PR is **not**
+   done.
+2. **The commit's CONTENT/message addresses the issue's TOPIC — not just its NUMBER.**
+   This is the dominant over-call: a commit that merely *references* the issue number
+   (`Merge pull request #N`, `(#N)`) is **not** evidence. Issue and PR numbers share a
+   namespace; dependabot bumps, refactors, and unrelated merges spuriously carry
+   numbers, and one commit gets cited across many unrelated issues. Compare the commit
+   subject to the issue title/topic; they must actually match.
+3. **Per-criterion for multi-part/umbrella issues** — "infrastructure exists" or "the
+   primary part landed" is `PARTIAL-RESCOPE`, not done, if a named sub-requirement
+   remains.
+
+**The cheap gate is local git, not an agent.** `git merge-base --is-ancestor <sha>
+origin/main` + comparing `git log -1 --format=%s <sha>` to the issue title is **gh-API-free**,
+fast, and reliably catches the number-match over-call (observed ~94% false-DONE in a
+single number-matching batch). Triage a flood of close-candidates **locally first**;
+spend scarce gh-API calls only on the survivors. A heavyweight per-batch opposition
+agent is usually unnecessary for the close-gate — the local-git check is the gate.
+
+**Harvest at scale is gh-API-quota-bound (~5000 points/hr).** Reads + comments +
+closes share that budget; a multi-agent fleet posting a verdict per issue exhausts it
+fast. Run **lean** (1–2 paced agents), **close BARE** (`gh issue close <n> --reason
+completed`, no comment — the verdict is already on the issue; the secondary/burst
+mutation limit is separate and bites comment-mutations), and expect **tens of gated
+closes per hour, not hundreds.** A poorly-gated producer at scale is net-negative: it
+posts false-DONE faster than opposition can correct them.
+
+**The build-gate is symmetric.** Before *building* a "still-valid / builder-ready"
+issue, confirm the gap is **really still broken** on origin/main (grep the
+feature/symbol) — some "still-valid" issues are already-done-but-unclosed, and you'll
+re-implement existing work. Same gate, opposite direction.
+
 ## See also
 
 - [PIPELINE_GATES.md](PIPELINE_GATES.md) — the gate model the convergence cascade
