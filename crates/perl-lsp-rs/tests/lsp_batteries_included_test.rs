@@ -126,9 +126,16 @@ print Dumper($data);
 
     let result = response.result.ok_or("Expected result in code action response")?;
 
-    // Check that we got some response (even if it's an empty array)
-    // The actual implementation of organize imports may vary
-    assert!(result.is_array(), "Expected array result for code actions");
+    let actions = result.as_array().ok_or("Expected array result for code actions")?;
+    let action = actions
+        .iter()
+        .find(|action| action["kind"].as_str() == Some("source.organizeImports"))
+        .ok_or("source.organizeImports action must be returned for a document with imports")?;
+
+    assert!(
+        action.get("edit").is_some(),
+        "source.organizeImports action should include a workspace edit"
+    );
 
     Ok(())
 }
