@@ -61,9 +61,9 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         coverage_job.contains("name: Codecov / Patch 95"),
         "coverage job must have a branch-protection-ready check name"
     );
+    let checkout_ref = must_some(checkout_action_ref(coverage_job));
     assert!(
-        coverage_job.contains("uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd")
-            && coverage_job.contains("persist-credentials: false"),
+        is_full_sha(checkout_ref) && coverage_job.contains("persist-credentials: false"),
         "coverage proof checkout must be pinned and must not persist write credentials"
     );
     assert!(
@@ -324,6 +324,17 @@ fn policy_required_check(policy: &toml::Value, name: &str) -> bool {
             && item.get("enforcement").and_then(toml::Value::as_str)
                 == Some("github-branch-protection")
     })
+}
+
+fn checkout_action_ref(step: &str) -> Option<&str> {
+    step.lines().find_map(|line| {
+        let trimmed = line.trim_start();
+        trimmed.strip_prefix("- uses: actions/checkout@")?.split_whitespace().next()
+    })
+}
+
+fn is_full_sha(value: &str) -> bool {
+    value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn repo_root() -> PathBuf {

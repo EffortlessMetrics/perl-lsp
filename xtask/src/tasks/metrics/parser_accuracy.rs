@@ -405,6 +405,9 @@ enum LineTag {
     FunctionCall,
     MethodCall,
     Regex,
+    RegexMatch,
+    Division,
+    DefinedOr,
     QuoteLike,
     HeredocOpener,
     HeredocBody,
@@ -430,6 +433,9 @@ const LINE_TAG_VOCABULARY: &[LineTag] = &[
     LineTag::FunctionCall,
     LineTag::MethodCall,
     LineTag::Regex,
+    LineTag::RegexMatch,
+    LineTag::Division,
+    LineTag::DefinedOr,
     LineTag::QuoteLike,
     LineTag::HeredocOpener,
     LineTag::HeredocBody,
@@ -1368,7 +1374,11 @@ fn comparable_actual_line_tags(
         return BTreeSet::from([LineTag::ParseError]);
     }
 
-    actual.clone()
+    let mut comparable = actual.clone();
+    if expected.contains(&LineTag::Regex) && comparable.remove(&LineTag::RegexMatch) {
+        comparable.insert(LineTag::Regex);
+    }
+    comparable
 }
 
 fn quote_like_parse_error_location(error: &ParseError) -> Option<usize> {
@@ -1405,9 +1415,11 @@ fn line_tag_for_node(node: &Node) -> Option<LineTag> {
         NodeKind::MethodCall { .. } => Some(LineTag::MethodCall),
         NodeKind::Eval { .. } => Some(LineTag::FunctionCall),
         NodeKind::Regex { .. }
-        | NodeKind::Match { .. }
         | NodeKind::Substitution { .. }
         | NodeKind::Transliteration { .. } => Some(LineTag::Regex),
+        NodeKind::Match { .. } => Some(LineTag::RegexMatch),
+        NodeKind::Binary { op, .. } if op == "/" => Some(LineTag::Division),
+        NodeKind::Binary { op, .. } if op == "//" => Some(LineTag::DefinedOr),
         NodeKind::Heredoc { .. } => Some(LineTag::HeredocOpener),
         NodeKind::Format { .. } => Some(LineTag::FormatDecl),
         NodeKind::Given { .. } | NodeKind::When { .. } | NodeKind::Default { .. } => {
@@ -7653,10 +7665,36 @@ sub dynamic_boundary_case {
 
     #[test]
     fn line_tag_vocabulary_includes_required_contract() {
-        assert_eq!(LINE_TAG_VOCABULARY.len(), 22);
+        assert_eq!(LINE_TAG_VOCABULARY.len(), 25);
         assert!(LINE_TAG_VOCABULARY.contains(&LineTag::PackageDecl));
+        assert!(LINE_TAG_VOCABULARY.contains(&LineTag::RegexMatch));
+        assert!(LINE_TAG_VOCABULARY.contains(&LineTag::Division));
+        assert!(LINE_TAG_VOCABULARY.contains(&LineTag::DefinedOr));
         assert!(LINE_TAG_VOCABULARY.contains(&LineTag::DynamicBoundary));
         assert!(LINE_TAG_VOCABULARY.contains(&LineTag::UnsupportedConstruct));
+    }
+
+    #[test]
+    fn parser_accuracy_manifest_accepts_slash_ambiguity_line_tags() -> Result<()> {
+        let raw =
+            include_str!("../../../../crates/perl-corpus/fixtures/parser_accuracy/manifest.json");
+        let manifest: ParserAccuracyManifest = serde_json::from_str(raw)?;
+        let fixture = manifest
+            .fixtures
+            .iter()
+            .find(|fixture| fixture.id == "slash_ambiguity")
+            .ok_or_else(|| eyre!("slash ambiguity fixture should exist"))?;
+
+        let expected_by_line: BTreeMap<u64, BTreeSet<LineTag>> = fixture
+            .line_expectations
+            .iter()
+            .map(|expectation| (expectation.line, expectation.expected_tags.clone()))
+            .collect();
+
+        assert!(expected_by_line.get(&5).is_some_and(|tags| tags.contains(&LineTag::Division)));
+        assert!(expected_by_line.get(&7).is_some_and(|tags| tags.contains(&LineTag::RegexMatch)));
+        assert!(expected_by_line.get(&8).is_some_and(|tags| tags.contains(&LineTag::DefinedOr)));
+        Ok(())
     }
 
     #[test]
@@ -7671,6 +7709,42 @@ sub dynamic_boundary_case {
         assert_eq!(score.false_positive_count, 1);
         assert_eq!(score.false_negative_count, 1);
         assert_eq!(score.exact_match_count, 0);
+    }
+
+    #[test]
+    fn comparable_line_tags_accept_legacy_regex_expectation_for_regex_match() {
+        let comparable =
+            comparable_actual_line_tags(&tags(&[LineTag::Regex]), &tags(&[LineTag::RegexMatch]));
+
+        assert_eq!(comparable, tags(&[LineTag::Regex]));
+    }
+
+    #[test]
+    fn line_tags_classify_slash_ambiguity_operators() -> Result<()> {
+        let actual_by_line = extract_line_tags(
+            "package Accuracy::SlashAmbiguity;\n\n\
+             sub classify_slashes {\n\
+             my ($total, $count, $line, $maybe) = @_;\n\
+             my $ratio = $total / $count;\n\
+             my @parts = split /,/, $line;\n\
+             my $matched = $line =~ /^ok:/;\n\
+             my $fallback = $maybe // $ratio;\n\
+             }\n",
+        );
+
+        let division_line =
+            actual_by_line.get(&5).ok_or_else(|| eyre!("division line should have parser tags"))?;
+        let match_line = actual_by_line
+            .get(&7)
+            .ok_or_else(|| eyre!("regex match line should have parser tags"))?;
+        let defined_or_line = actual_by_line
+            .get(&8)
+            .ok_or_else(|| eyre!("defined-or line should have parser tags"))?;
+
+        assert!(division_line.contains(&LineTag::Division));
+        assert!(match_line.contains(&LineTag::RegexMatch));
+        assert!(defined_or_line.contains(&LineTag::DefinedOr));
+        Ok(())
     }
 
     #[test]
