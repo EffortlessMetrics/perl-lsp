@@ -1,5 +1,5 @@
 //! Tests for LSP execute command functionality
-use perl_lsp::{JsonRpcError, JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::fs;
 use tempfile::TempDir;
@@ -36,33 +36,6 @@ fn setup_server(root_path: Option<String>) -> LspServer {
 
 fn test_error(message: impl Into<String>) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, message.into())
-}
-
-fn execute_command_error(
-    params: Option<Value>,
-) -> Result<JsonRpcError, Box<dyn std::error::Error>> {
-    let server = setup_server(None);
-    let response = server
-        .handle_request(JsonRpcRequest {
-            _jsonrpc: "2.0".to_string(),
-            method: "workspace/executeCommand".to_string(),
-            params,
-            id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
-        })
-        .ok_or_else(|| test_error("expected executeCommand response"))?;
-
-    response.error.ok_or_else(|| {
-        test_error(format!("expected executeCommand error, got {:?}", response.result)).into()
-    })
-}
-
-fn assert_execute_command_shape_guidance(error: &JsonRpcError, summary: &str) {
-    assert_eq!(error.code, -32602);
-    assert!(error.message.contains(summary), "unexpected message: {}", error.message);
-    assert!(error.message.contains("params.command"), "unexpected message: {}", error.message);
-    assert!(error.message.contains("params.arguments"), "unexpected message: {}", error.message);
-    assert!(error.message.contains("perl.runFile"), "unexpected message: {}", error.message);
-    assert!(error.message.contains("\"arguments\": []"), "unexpected message: {}", error.message);
 }
 
 fn sorted_object_keys_at(
@@ -294,39 +267,6 @@ fn test_execute_command_unknown() -> Result<(), Box<dyn std::error::Error>> {
     assert!(response.is_some());
     let response = response.ok_or("Expected a response for unknown command")?;
     assert!(response.error.is_some());
-
-    Ok(())
-}
-
-#[test]
-fn test_execute_command_request_shape_errors_include_guidance()
--> Result<(), Box<dyn std::error::Error>> {
-    let missing_params = execute_command_error(None)?;
-    assert_execute_command_shape_guidance(
-        &missing_params,
-        "Missing parameters for executeCommand request",
-    );
-
-    let missing_command = execute_command_error(Some(json!({
-        "arguments": []
-    })))?;
-    assert_execute_command_shape_guidance(&missing_command, "Missing required parameter: command");
-
-    let missing_arguments = execute_command_error(Some(json!({
-        "command": "perl.runCritic"
-    })))?;
-    assert_execute_command_shape_guidance(
-        &missing_arguments,
-        "Missing required 'arguments' field in executeCommand request",
-    );
-    assert_eq!(
-        missing_arguments
-            .data
-            .as_ref()
-            .and_then(|data| data.pointer("/command"))
-            .and_then(Value::as_str),
-        Some("perl.runCritic")
-    );
 
     Ok(())
 }
@@ -1274,6 +1214,49 @@ fn test_execute_command_explain_provider_decision_accepts_type_definition()
     assert_eq!(
         result.pointer("/copyable_payload/request_receipt/provider").and_then(Value::as_str),
         Some("type_definition")
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_execute_command_explain_provider_decision_accepts_workspace_trust_report()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server(None);
+
+    let execute_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "workspace/executeCommand".to_string(),
+        params: Some(json!({
+            "command": "perl.explainProviderDecision",
+            "arguments": [{
+                "provider": "workspace_trust_report"
+            }]
+        })),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(4)),
+    };
+
+    let response = server
+        .handle_request(execute_request)
+        .ok_or("No response from explain-provider-decision command")?;
+    let result = response.result.ok_or("No result in explain-provider-decision response")?;
+
+    // The workspace_trust_report surface must preserve the report-only boundary
+    // (PLSP-SPEC-0016): a shadowed receipt that records proof without driving live
+    // behavior, NOT the generic unknown/no_result fallback the wildcard arm gives.
+    assert_eq!(
+        result.get("provider").and_then(|value| value.as_str()),
+        Some("workspace_trust_report")
+    );
+    assert_eq!(result.get("decision").and_then(|value| value.as_str()), Some("shadowed"));
+    assert_eq!(result.get("reason").and_then(|value| value.as_str()), Some("shadow_only"));
+    assert_eq!(
+        result.get("fact_source").and_then(|value| value.as_str()),
+        Some("legacy_workspace")
+    );
+    assert_eq!(
+        result.get("fallback").and_then(|value| value.as_str()),
+        Some("shadow_receipt_only")
     );
 
     Ok(())

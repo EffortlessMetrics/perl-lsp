@@ -145,19 +145,21 @@ fn class_with_qualified_isa_produces_no_parser_errors() {
     );
 }
 
-// ── Guard: unknown sub attributes still warn when used on `sub`, not `class` ──
+// ── Guard: custom sub attributes now parse cleanly per #1361 ──
 
 #[test]
-fn sub_with_isa_attr_still_warns() {
-    // :isa is not a valid subroutine attribute — it should still produce a warning
-    // when used on `sub` (not `class`).
+fn sub_with_isa_attr_parses_cleanly() {
+    // :isa on `sub` is a custom attribute — Perl allows arbitrary attributes via
+    // MODIFY_CODE_ATTRIBUTES. No diagnostic should be emitted (#1361 fix).
     let src = r#"sub foo :isa { }"#;
     let mut parser = Parser::new(src);
     let _ast = must(parser.parse());
     let errors = parser.errors();
-    assert!(!errors.is_empty(), "sub :isa should warn (not valid for subs), but errors was empty");
-    let mentions_isa = errors.iter().any(|e| format!("{e}").contains("isa"));
-    assert!(mentions_isa, "warning should mention 'isa', got: {:?}", errors);
+    assert!(
+        errors.is_empty(),
+        "sub :isa should parse cleanly as a custom attribute (#1361 fix), but got: {:?}",
+        errors
+    );
 }
 
 #[test]

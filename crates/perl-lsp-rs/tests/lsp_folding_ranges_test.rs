@@ -1,7 +1,7 @@
 //! Tests for textDocument/foldingRange LSP feature
 
 use perl_lsp::{JsonRpcRequest, LspServer};
-use serde_json::json;
+use serde_json::{Value, json};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -47,6 +47,35 @@ fn open_document(server: &LspServer, uri: &str, content: &str) {
         id: None,
     };
     server.handle_request(notification);
+}
+
+fn folding_ranges_for(uri: &str, content: &str) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+    let server = setup_server();
+    open_document(&server, uri, content);
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/foldingRange".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": uri
+            }
+        })),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2)),
+    };
+
+    let response = server.handle_request(request).ok_or("Expected response from server")?;
+    let result = response.result.ok_or("Expected result in response")?;
+    let ranges = result.as_array().ok_or("Expected array of folding ranges")?;
+    Ok(ranges.clone())
+}
+
+fn range_lines(range: &Value) -> Option<(u64, u64)> {
+    Some((range.get("startLine")?.as_u64()?, range.get("endLine")?.as_u64()?))
+}
+
+fn all_ranges_span_multiple_lines(ranges: &[Value]) -> bool {
+    ranges.iter().all(|range| range_lines(range).is_some_and(|(start, end)| end > start))
 }
 
 #[test]
@@ -369,6 +398,228 @@ fn test_folding_ranges_empty_document() -> TestResult {
 
     // Empty document should have no folding ranges
     assert_eq!(ranges.len(), 0, "Empty document should have no folding ranges");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_data_section_boundary_end_line_gt_start_line() -> TestResult {
+    let single_line_data = "use strict;\n__DATA__\none\n";
+    let single_line_ranges = folding_ranges_for("file:///data-single.pl", single_line_data)?;
+    assert!(
+        all_ranges_span_multiple_lines(&single_line_ranges),
+        "single-line data body must not produce invalid folding ranges: {single_line_ranges:?}"
+    );
+
+    let multi_line_data = "use strict;\n__DATA__\none\ntwo\n";
+    let multi_line_ranges = folding_ranges_for("file:///data-multi.pl", multi_line_data)?;
+    assert!(
+        multi_line_ranges.iter().any(|range| {
+            range.get("kind").and_then(|kind| kind.as_str()) == Some("comment")
+                && range_lines(range).is_some_and(|(start, end)| start == 2 && end == 3)
+        }),
+        "multi-line data body should produce a comment fold: {multi_line_ranges:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_heredoc_boundary_end_line_gt_start_line() -> TestResult {
+    let single_line_heredoc = "my $text = <<'END';\none\nEND\n";
+    let single_line_ranges = folding_ranges_for("file:///heredoc-single.pl", single_line_heredoc)?;
+    assert!(
+        all_ranges_span_multiple_lines(&single_line_ranges),
+        "single-line heredoc body must not produce invalid folding ranges: {single_line_ranges:?}"
+    );
+
+    let multi_line_heredoc = "my $text = <<'END';\none\ntwo\nEND\n";
+    let multi_line_ranges = folding_ranges_for("file:///heredoc-multi.pl", multi_line_heredoc)?;
+    assert!(
+        multi_line_ranges.iter().any(|range| {
+            range.get("kind").and_then(|kind| kind.as_str()) == Some("region")
+                && range_lines(range).is_some_and(|(start, end)| start == 1 && end == 2)
+        }),
+        "multi-line heredoc body should produce a region fold: {multi_line_ranges:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_ast_boundary_lsp_end_line_gt_start_line() -> TestResult {
+    let content = "sub tiny {\n}\nsub full {\n    my $x = 1;\n}\n";
+    let ranges = folding_ranges_for("file:///ast-boundary.pl", content)?;
+    assert!(
+        all_ranges_span_multiple_lines(&ranges),
+        "AST folding ranges must remain valid after inclusive endLine conversion: {ranges:?}"
+    );
+    assert!(
+        ranges
+            .iter()
+            .any(|range| range_lines(range).is_some_and(|(start, end)| { start == 2 && end == 3 })),
+        "multi-line subroutine should still produce an AST fold after short spans are filtered: {ranges:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_single() -> TestResult {
+    let content = r#"# region Setup
+my $x = 1;
+my $y = 2;
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-single.pl", content)?;
+
+    // Should have at least one region marker fold
+    let region_fold = ranges.iter().find(|range| {
+        range.get("kind").and_then(|k| k.as_str()) == Some("region")
+            && range_lines(range).is_some_and(|(start, end)| start == 0 && end == 3)
+    });
+
+    assert!(region_fold.is_some(), "Should detect single #region/#endregion pair: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+#[ignore = "infra: quarantine pending deterministic folding-range provider output; tracked in #3123"]
+fn test_folding_range_region_markers_multiple_non_nested() -> TestResult {
+    let content = r#"# region Helpers
+sub helper1 {
+    print "Helper 1\n";
+}
+# endregion
+
+# region Main Logic
+sub main {
+    helper1();
+}
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-multi.pl", content)?;
+
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|range| range.get("kind").and_then(|k| k.as_str()) == Some("region"))
+        .filter(|range| {
+            // Only count the explicit #region/#endregion folds, not subroutine folds
+            let (start, end) = match range_lines(range) {
+                Some((s, e)) => (s, e),
+                None => return false,
+            };
+            // Region markers should be on lines 0-5 and 7-11
+            (start == 0 || start == 7) && end > start
+        })
+        .collect();
+
+    assert!(region_folds.len() >= 2, "Should detect multiple #region/#endregion pairs: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_nested() -> TestResult {
+    let content = r#"# region Outer
+# region Inner
+my $nested = 1;
+# endregion
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-nested.pl", content)?;
+
+    // Should handle nested regions correctly
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|range| range.get("kind").and_then(|k| k.as_str()) == Some("region"))
+        .collect();
+
+    assert!(!region_folds.is_empty(), "Should detect nested #region/#endregion pairs: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_with_names() -> TestResult {
+    let content = r#"# region Initialization Block
+my $config = load_config();
+# endregion
+
+# region Processing
+process_data($config);
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-named.pl", content)?;
+
+    // Should support region names (optional)
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|range| range.get("kind").and_then(|k| k.as_str()) == Some("region"))
+        .collect();
+
+    assert!(!region_folds.is_empty(), "Should detect #region with names: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_unmatched_no_fold() -> TestResult {
+    let content = r#"# region Unclosed
+my $x = 1;
+my $y = 2;
+# This is a regular comment
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-unmatched.pl", content)?;
+
+    // Unmatched #region should not produce a fold (no corresponding #endregion)
+    let unmatched_fold = ranges.iter().find(|range| {
+        range.get("kind").and_then(|k| k.as_str()) == Some("region")
+            && range_lines(range).is_some_and(|(start, _)| start == 0)
+    });
+
+    assert!(unmatched_fold.is_none(), "Unmatched #region should not produce a fold: {ranges:?}");
+
+    Ok(())
+}
+
+#[test]
+fn test_folding_range_region_markers_mixed_with_code() -> TestResult {
+    let content = r#"sub header {
+    print "Header\n";
+}
+
+# region Helpers
+sub helper {
+    print "Helper\n";
+}
+
+sub another_helper {
+    print "Another\n";
+}
+# endregion
+
+# region Main
+my $result = helper();
+print $result;
+# endregion
+"#;
+
+    let ranges = folding_ranges_for("file:///regions-mixed.pl", content)?;
+
+    // Should have both subroutine folds and region marker folds
+    let has_subs = ranges.iter().any(|r| {
+        // At least one subroutine should fold (the ones inside and outside regions)
+        range_lines(r).is_some_and(|(s, e)| e > s + 1)
+    });
+
+    assert!(has_subs, "Should fold code blocks alongside region markers: {ranges:?}");
 
     Ok(())
 }

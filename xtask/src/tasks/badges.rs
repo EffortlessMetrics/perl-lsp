@@ -70,26 +70,30 @@ fn ripr_plus_badge(workspace_root: &Path) -> Result<ShieldsEndpointBadge> {
         .arg("--root")
         .arg(workspace_root)
         .arg("--format")
-        .arg("repo-badge-plus-shields")
+        .arg("repo-badge-json")
         .current_dir(workspace_root)
         .output()
-        .with_context(|| format!("running {ripr_bin} for repo-scoped badge evidence"))?;
+        .with_context(|| format!("running {ripr_bin} for repo-scoped ripr+ badge"))?;
 
     if !output.status.success() {
-        return Ok(neutral_unavailable_badge());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(color_eyre::eyre::eyre!("ripr check failed for ripr+ badge: {stderr}"));
     }
 
-    serde_json::from_slice(&output.stdout)
-        .with_context(|| format!("{ripr_bin} emitted invalid Shields endpoint JSON"))
-}
+    let badge_json: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .with_context(|| format!("{ripr_bin} emitted invalid repo-badge-json"))?;
 
-fn neutral_unavailable_badge() -> ShieldsEndpointBadge {
-    ShieldsEndpointBadge {
+    let counts = badge_json.get("counts");
+    let count = |key: &str| counts.and_then(|v| v.get(key)).and_then(|v| v.as_u64()).unwrap_or(0);
+    let unresolved =
+        count("unsuppressed_exposure_gaps") + count("unsuppressed_test_efficiency_findings");
+
+    Ok(ShieldsEndpointBadge {
         schema_version: 1,
         label: "ripr+".to_string(),
-        message: "unavailable".to_string(),
-        color: "lightgrey".to_string(),
-    }
+        message: unresolved.to_string(),
+        color: if unresolved == 0 { "brightgreen".to_string() } else { "yellow".to_string() },
+    })
 }
 
 fn validate_shields_badge(
@@ -179,6 +183,59 @@ mod tests {
         };
 
         assert!(validate_shields_badge(&badge, Some("ripr+")).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_plus_badge_message_is_sum_of_gap_counts() -> Result<()> {
+        // Simulate repo-badge-json output from ripr
+        let badge_json = serde_json::json!({
+            "counts": {
+                "unsuppressed_exposure_gaps": 3,
+                "unsuppressed_test_efficiency_findings": 2,
+                "suppressed_exposure_gaps": 1,
+                "suppressed_test_efficiency_findings": 0
+            }
+        });
+        let counts = badge_json.get("counts");
+        let count =
+            |key: &str| counts.and_then(|v| v.get(key)).and_then(|v| v.as_u64()).unwrap_or(0);
+        let unresolved =
+            count("unsuppressed_exposure_gaps") + count("unsuppressed_test_efficiency_findings");
+        assert_eq!(unresolved, 5);
+
+        let badge = ShieldsEndpointBadge {
+            schema_version: 1,
+            label: "ripr+".to_string(),
+            message: unresolved.to_string(),
+            color: if unresolved == 0 { "brightgreen".to_string() } else { "yellow".to_string() },
+        };
+        assert_eq!(badge.message, "5");
+        assert_eq!(badge.color, "yellow");
+        validate_shields_badge(&badge, Some("ripr+"))
+    }
+
+    #[test]
+    fn ripr_plus_badge_zero_unresolved_is_brightgreen() -> Result<()> {
+        let badge = ShieldsEndpointBadge {
+            schema_version: 1,
+            label: "ripr+".to_string(),
+            message: "0".to_string(),
+            color: "brightgreen".to_string(),
+        };
+        validate_shields_badge(&badge, Some("ripr+"))
+    }
+
+    #[test]
+    fn ripr_plus_badge_missing_counts_defaults_to_zero() -> Result<()> {
+        // repo-badge-json with no counts field: should produce message "0", not panic
+        let badge_json = serde_json::json!({});
+        let counts = badge_json.get("counts");
+        let count =
+            |key: &str| counts.and_then(|v| v.get(key)).and_then(|v| v.as_u64()).unwrap_or(0);
+        let unresolved =
+            count("unsuppressed_exposure_gaps") + count("unsuppressed_test_efficiency_findings");
+        assert_eq!(unresolved, 0);
         Ok(())
     }
 }

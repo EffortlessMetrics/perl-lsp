@@ -12,6 +12,22 @@ use common::{
 /// Comprehensive protocol violation tests
 /// Tests all possible ways the LSP protocol can be violated
 // Run with: cargo test -p perl-lsp-rs --features strict-jsonrpc
+
+fn require_error_response(
+    response: &serde_json::Value,
+    context: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if response["error"].is_object() {
+        return Ok(());
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("Expected {context} error response, got: {response:?}"),
+    )
+    .into())
+}
+
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_missing_jsonrpc_version() {
@@ -248,14 +264,14 @@ fn test_request_before_initialization() {
 }
 
 #[test]
-fn test_double_initialization() {
+fn test_double_initialization() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
 
     // Initialize once
     initialize_lsp(&server);
 
     // Try to initialize again
-    send_request(
+    let response = send_request(
         &server,
         json!({
             "jsonrpc": "2.0",
@@ -269,8 +285,23 @@ fn test_double_initialization() {
         }),
     );
 
-    let response = read_response(&server);
-    assert!(response["error"].is_object());
+    if !response["error"].is_object() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Expected duplicate initialize error response, got: {response:?}"),
+        )
+        .into());
+    }
+
+    if response["error"]["code"].as_i64() != Some(-32600) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Expected duplicate initialize InvalidRequest, got: {response:?}"),
+        )
+        .into());
+    }
+
+    Ok(())
 }
 
 #[test]
@@ -314,12 +345,12 @@ fn test_invalid_method_name_format() {
 }
 
 #[test]
-fn test_params_type_violations() {
+fn test_params_type_violations() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
     initialize_lsp(&server);
 
     // Params should be object or array, not scalar
-    send_request(
+    let response = send_request(
         &server,
         json!({
             "jsonrpc": "2.0",
@@ -328,12 +359,10 @@ fn test_params_type_violations() {
             "params": "string params"  // Invalid
         }),
     );
-
-    let response = read_response(&server);
-    assert!(response["error"].is_object());
+    require_error_response(&response, "string params")?;
 
     // Number params
-    send_request(
+    let response = send_request(
         &server,
         json!({
             "jsonrpc": "2.0",
@@ -342,9 +371,8 @@ fn test_params_type_violations() {
             "params": 123  // Invalid
         }),
     );
-
-    let response = read_response(&server);
-    assert!(response["error"].is_object());
+    require_error_response(&response, "number params")?;
+    Ok(())
 }
 
 #[test]
@@ -404,12 +432,12 @@ fn test_extremely_nested_json() {
 }
 
 #[test]
-fn test_null_values_in_required_fields() {
+fn test_null_values_in_required_fields() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
     initialize_lsp(&server);
 
     // Send nulls where objects are expected
-    send_request(
+    let response = send_request(
         &server,
         json!({
             "jsonrpc": "2.0",
@@ -422,17 +450,16 @@ fn test_null_values_in_required_fields() {
         }),
     );
 
-    let response = read_response(&server);
-    assert!(response["error"].is_object());
+    require_error_response(&response, "null required fields")
 }
 
 #[test]
-fn test_wrong_type_for_position() {
+fn test_wrong_type_for_position() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
     initialize_lsp(&server);
 
     // Position with wrong types
-    send_request(
+    let response = send_request(
         &server,
         json!({
             "jsonrpc": "2.0",
@@ -448,8 +475,7 @@ fn test_wrong_type_for_position() {
         }),
     );
 
-    let response = read_response(&server);
-    assert!(response["error"].is_object());
+    require_error_response(&response, "wrong position type")
 }
 
 #[test]
@@ -620,14 +646,14 @@ fn test_incomplete_message() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn test_mixed_protocol_versions() {
+fn test_mixed_protocol_versions() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
 
     // Initialize with 2.0
     initialize_lsp(&server);
 
     // Then send 1.0 style request
-    send_request(
+    let response = send_request(
         &server,
         json!({
             "jsonrpc": "1.0",
@@ -637,8 +663,7 @@ fn test_mixed_protocol_versions() {
         }),
     );
 
-    let response = read_response(&server);
-    assert!(response["error"].is_object());
+    require_error_response(&response, "mixed protocol version")
 }
 
 #[test]

@@ -23,9 +23,12 @@ import {
   explainDiagnosticCommand,
   explainMissingModuleLookupCommand,
   explainProviderDecisionCommand,
+  openDemoProjectCommand,
   previewPackageRenameCommand,
   previewSafeDeleteCommand,
   showWorkspaceTrustReportCommand,
+  suggestAiCompletionIfSupported,
+  suggestDiscoveredIncludePaths,
   validateIncludePaths,
   runPerlCriticOnActiveFile,
   setPerlCriticSeverity,
@@ -1189,5 +1192,300 @@ describe('extension UX warnings', () => {
     expect(rendered).toContain('Missing::Payload');
     expect(rendered).toContain('workspace includePaths');
     expect(rendered).toContain('Raw lookup JSON');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Discovered include-path suggestion (#1633)
+// ---------------------------------------------------------------------------
+describe('suggestDiscoveredIncludePaths (#1633)', () => {
+  function makeGlobalState() {
+    const store = new Map<string, any>();
+    return {
+      store,
+      get: jest.fn((key: string, defaultValue?: any) => (store.has(key) ? store.get(key) : defaultValue)),
+      update: jest.fn(async (key: string, value: any) => {
+        if (value === undefined) {
+          store.delete(key);
+        } else {
+          store.set(key, value);
+        }
+      }),
+    };
+  }
+
+  function mountWorkspace(dir: string, includePaths: string[]) {
+    const update = jest.fn(async () => undefined);
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn((key: string, defaultValue?: any) =>
+        key === 'includePaths' ? includePaths : defaultValue
+      ),
+      update,
+    }));
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: { fsPath: dir, toString: () => `file://${dir}` },
+      },
+    ];
+    return update;
+  }
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    (vscode.workspace as any).workspaceFolders = undefined;
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn((_key: string, defaultValue?: any) => defaultValue),
+      has: jest.fn(() => false),
+      inspect: jest.fn(),
+      update: jest.fn(),
+    }));
+    (vscode.window.showInformationMessage as jest.Mock).mockImplementation(async () => undefined);
+  });
+
+  test('suggests a discovered module directory not in the include paths', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-discover-'));
+    fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'src', 'MyLib.pm'), 'package MyLib; 1;\n');
+
+    const context: any = { globalState: makeGlobalState() };
+    mountWorkspace(dir, ['lib', 'local/lib/perl5']);
+    (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('Dismiss');
+
+    await suggestDiscoveredIncludePaths(context);
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('"src"'),
+      'Add to Include Paths',
+      'Open Settings',
+      'Dismiss'
+    );
+    expect(context.globalState.update).toHaveBeenCalledWith(
+      expect.stringContaining('perl-lsp.includePathsSuggestion.'),
+      expect.any(String)
+    );
+  });
+
+  test('does not re-prompt once dismissed for the same project structure', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-discover-cache-'));
+    fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'src', 'MyLib.pm'), 'package MyLib; 1;\n');
+
+    const context: any = { globalState: makeGlobalState() };
+    mountWorkspace(dir, ['lib', 'local/lib/perl5']);
+    (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('Dismiss');
+
+    await suggestDiscoveredIncludePaths(context);
+    (vscode.window.showInformationMessage as jest.Mock).mockClear();
+    await suggestDiscoveredIncludePaths(context);
+
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('adds the discovered directory to includePaths when accepted', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-discover-add-'));
+    fs.mkdirSync(path.join(dir, 'vendor'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'vendor', 'Dep.pm'), 'package Dep; 1;\n');
+
+    const context: any = { globalState: makeGlobalState() };
+    const update = mountWorkspace(dir, ['lib', 'local/lib/perl5']);
+    (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('Add to Include Paths');
+
+    await suggestDiscoveredIncludePaths(context);
+
+    expect(update).toHaveBeenCalledWith(
+      'includePaths',
+      expect.arrayContaining(['lib', 'local/lib/perl5', 'vendor']),
+      vscode.ConfigurationTarget.Workspace
+    );
+  });
+
+  test('stays silent when the discovered directory is already covered', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-discover-covered-'));
+    fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'src', 'MyLib.pm'), 'package MyLib; 1;\n');
+
+    const context: any = { globalState: makeGlobalState() };
+    mountWorkspace(dir, ['lib', 'src']);
+
+    await suggestDiscoveredIncludePaths(context);
+
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('stays silent when there are no workspace folders', async () => {
+    const context: any = { globalState: makeGlobalState() };
+    (vscode.workspace as any).workspaceFolders = undefined;
+    await suggestDiscoveredIncludePaths(context);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('stays silent when a sub-path of the candidate is already covered (e.g. local/ covered by local/lib/perl5)', async () => {
+    // Regression: when local/lib/perl5 is in includePaths, the parent directory
+    // "local" candidate should NOT be suggested even if it contains .pm files (it does,
+    // via local/lib/perl5/Foo.pm which is within the walk depth). Without the sub-path
+    // check, the scanner would incorrectly suggest adding "local" as an additional root.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-discover-subpath-'));
+    fs.mkdirSync(path.join(dir, 'local', 'lib', 'perl5'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'local', 'lib', 'perl5', 'Installed.pm'), 'package Installed; 1;\n');
+
+    const context: any = { globalState: makeGlobalState() };
+    // local/lib/perl5 is already in includePaths — "local" should be suppressed
+    mountWorkspace(dir, ['lib', 'local/lib/perl5']);
+
+    await suggestDiscoveredIncludePaths(context);
+
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AI completion discoverability (#1634)
+// ---------------------------------------------------------------------------
+describe('suggestAiCompletionIfSupported (#1634)', () => {
+  function makeWorkspaceState(shown = false) {
+    const store = new Map<string, any>([['perl-lsp.aiCompletion.firstRunNotificationShown', shown]]);
+    return {
+      get: jest.fn((key: string, defaultValue?: any) => (store.has(key) ? store.get(key) : defaultValue)),
+      update: jest.fn(async (key: string, value: any) => {
+        store.set(key, value);
+      }),
+    };
+  }
+
+  function mountConfig(enabled: boolean) {
+    const update = jest.fn(async () => undefined);
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn((key: string, defaultValue?: any) =>
+        key === 'aiCompletion.enabled' ? enabled : defaultValue
+      ),
+      update,
+    }));
+    return update;
+  }
+
+  const clientWithInline: any = {
+    initializeResult: { capabilities: { inlineCompletionProvider: {} } },
+  };
+  const clientWithoutInline: any = {
+    initializeResult: { capabilities: { hoverProvider: true } },
+  };
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    (vscode.window.showInformationMessage as jest.Mock).mockImplementation(async () => undefined);
+  });
+
+  test('prompts once and enables AI completion when accepted', async () => {
+    const update = mountConfig(false);
+    const context: any = { workspaceState: makeWorkspaceState(false) };
+    (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('Enable');
+
+    await suggestAiCompletionIfSupported(context, clientWithInline);
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('AI-powered inline completions'),
+      'Enable',
+      'Learn More',
+      'Dismiss'
+    );
+    expect(update).toHaveBeenCalledWith('aiCompletion.enabled', true, vscode.ConfigurationTarget.Workspace);
+    expect(context.workspaceState.update).toHaveBeenCalledWith(
+      'perl-lsp.aiCompletion.firstRunNotificationShown',
+      true
+    );
+  });
+
+  test('stays silent when the server does not advertise inline completion', async () => {
+    mountConfig(false);
+    const context: any = { workspaceState: makeWorkspaceState(false) };
+    await suggestAiCompletionIfSupported(context, clientWithoutInline);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('stays silent when AI completion is already enabled', async () => {
+    mountConfig(true);
+    const context: any = { workspaceState: makeWorkspaceState(false) };
+    await suggestAiCompletionIfSupported(context, clientWithInline);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('does not prompt twice in the same workspace', async () => {
+    mountConfig(false);
+    const context: any = { workspaceState: makeWorkspaceState(true) };
+    await suggestAiCompletionIfSupported(context, clientWithInline);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('stays silent when there is no client', async () => {
+    mountConfig(false);
+    const context: any = { workspaceState: makeWorkspaceState(false) };
+    await suggestAiCompletionIfSupported(context, undefined);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('stays silent when inlineCompletionProvider is false (server explicitly opt-out)', async () => {
+    mountConfig(false);
+    const context: any = { workspaceState: makeWorkspaceState(false) };
+    const clientExplicitlyOff: any = {
+      initializeResult: { capabilities: { inlineCompletionProvider: false } },
+    };
+    await suggestAiCompletionIfSupported(context, clientExplicitlyOff);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('stays silent when inlineCompletionProvider is null', async () => {
+    mountConfig(false);
+    const context: any = { workspaceState: makeWorkspaceState(false) };
+    const clientNull: any = {
+      initializeResult: { capabilities: { inlineCompletionProvider: null } },
+    };
+    await suggestAiCompletionIfSupported(context, clientNull);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Demo project command (#1635)
+// ---------------------------------------------------------------------------
+describe('openDemoProjectCommand (#1635)', () => {
+  const extRoot = path.resolve(__dirname, '..', '..');
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    (vscode.window.showInformationMessage as jest.Mock).mockImplementation(async () => undefined);
+    (vscode.window.showErrorMessage as jest.Mock).mockImplementation(async () => undefined);
+  });
+
+  test('opens the bundled demo project and records engagement', async () => {
+    const update = jest.fn(async () => undefined);
+    const context: any = { extensionPath: extRoot, globalState: { get: jest.fn(), update } };
+
+    await openDemoProjectCommand(context);
+
+    expect(update).toHaveBeenCalledWith('perl-lsp.demoProjectOpened', true);
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'vscode.openFolder',
+      expect.objectContaining({ fsPath: path.join(extRoot, 'assets', 'demo-project') }),
+      { forceNewWindow: true }
+    );
+    expect(vscode.window.showInformationMessage).toHaveBeenCalled();
+  });
+
+  test('reports an error when the demo project is not bundled', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-nodemo-'));
+    const update = jest.fn(async () => undefined);
+    const context: any = { extensionPath: tmp, globalState: { get: jest.fn(), update } };
+
+    await openDemoProjectCommand(context);
+
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining('demo project is not available')
+    );
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      'vscode.openFolder',
+      expect.anything(),
+      expect.anything()
+    );
   });
 });

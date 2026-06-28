@@ -112,6 +112,8 @@ The current architecture collapsed the old microcrate graph into a smaller publi
 | Measured editor trust | [docs/explanation/MEASURED_PERL_EDITOR_TRUST.md](docs/explanation/MEASURED_PERL_EDITOR_TRUST.md) |
 | Roadmap | [docs/project/ROADMAP.md](docs/project/ROADMAP.md) |
 | Compiler-backed LSP roadmap | [docs/project/COMPILER_BACKED_LSP_ROADMAP.md](docs/project/COMPILER_BACKED_LSP_ROADMAP.md) |
+| Provider readiness contract | [docs/reference/PROVIDER_READINESS_CONTRACT.md](docs/reference/PROVIDER_READINESS_CONTRACT.md) |
+| CI gate playbook | [docs/reference/CI_GATE_PLAYBOOK.md](docs/reference/CI_GATE_PLAYBOOK.md) |
 | Release history | [RELEASE_HISTORY.md](RELEASE_HISTORY.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Agent workflow | [AGENTS.md](AGENTS.md) |

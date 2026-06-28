@@ -28,6 +28,8 @@ pub mod definition_shadow;
 pub mod hover_shadow;
 mod refactor_receipt_helpers;
 mod references;
+/// PIR-A find-references shadow compare and guarded promotion (PR2 #2634, PR3 #2635).
+pub mod references_pir_shadow;
 /// Find-references shadow compare path (semantic migration).
 pub mod references_shadow;
 /// Rename shadow compare and cutover path (semantic migration).
@@ -40,7 +42,11 @@ mod scorecard_gate_fixtures;
 mod type_definition;
 
 // Re-export key types and functions
-pub use self::references::find_references_single_file;
+pub use self::references::{find_references_single_file, find_references_with_pir_shadow};
+pub use self::references_pir_shadow::{
+    DEFAULT_PROMOTION_MODE, PromotionMode, ReferenceOptions, ReferencesPirPromoteOutcome,
+    references_pir_promote,
+};
 pub use self::type_definition::TypeDefinitionProvider;
 pub use crate::providers::document_links::compute_links;
 pub use crate::providers::type_hierarchy::{

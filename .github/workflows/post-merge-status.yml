@@ -1,6 +1,6 @@
 name: Post-Merge Status Regeneration
 
-# Automatically regenerates docs/project/status/*.md after every merge to master.
+# Automatically regenerates docs/project/status/*.md after every merge to main.
 # This eliminates the #1 merge friction point: PRs no longer need to edit CURRENT_STATUS.md
 # themselves, ending the cascade of merge conflicts on that hot shared file.
 #
@@ -13,7 +13,9 @@ name: Post-Merge Status Regeneration
 on:
   push:
     branches:
+      - main
       - master
+  workflow_dispatch: {}
 
 # Only one regeneration at a time; cancel stale runs if a new push lands.
 concurrency:
@@ -33,16 +35,16 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Fetch full history so git can commit cleanly.
           fetch-depth: 0
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
         with:
-          toolchain: 1.92.0
+          toolchain: 1.95.0
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1

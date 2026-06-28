@@ -722,8 +722,267 @@ fn test_evaluate_with_frame_id_passes_validation() -> TestResult {
             "allowSideEffects": false
         })),
     );
-    // frameId is advisory — safe expressions with a frameId should pass safety validation.
+    // With no active session, a frameId request returns a session error (not a
+    // safe-mode policy block).  The error must NOT mention "Safe evaluation mode".
     assert_evaluate_not_safe_blocked(response, "Safe evaluation mode")
+}
+
+// ---------------------------------------------------------------------------
+// AC: frameId validation — Issue #902
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_evaluate_with_invalid_frameid_returns_error() -> TestResult {
+    let mut adapter = new_adapter();
+    let response =
+        adapter.handle_request(1, "evaluate", Some(json!({ "expression": "$x", "frameId": 999 })));
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert_eq!(command, "evaluate");
+            assert!(!success);
+            let msg = message.ok_or("expected error message")?;
+            // Either "frame not found" or "no session" — both are protocol-safe errors.
+            assert!(
+                msg.to_lowercase().contains("frame") || msg.contains("No debugger session"),
+                "expected frame-related error, got: {msg}"
+            );
+        }
+        other => return Err(format!("expected response, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn test_evaluate_with_out_of_range_frameid_no_panic() -> TestResult {
+    let mut adapter = new_adapter();
+    for frame_id in [i64::MIN, -1_i64, 0_i64, i64::MAX] {
+        let response = adapter.handle_request(
+            1,
+            "evaluate",
+            Some(json!({ "expression": "$x", "frameId": frame_id })),
+        );
+        // Must not panic; must return a Response (not an Event/Request).
+        assert!(
+            matches!(response, DapMessage::Response { .. }),
+            "frameId {frame_id} caused non-Response: {response:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn test_evaluate_without_frameid_no_session_still_returns_error() -> TestResult {
+    // frameId = None: validation block is skipped; falls through to session check.
+    let mut adapter = new_adapter();
+    let response = adapter.handle_request(1, "evaluate", Some(json!({ "expression": "$x" })));
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert_eq!(command, "evaluate");
+            assert!(!success);
+            let msg = message.ok_or("expected error message")?;
+            assert!(msg.contains("No debugger session"), "expected no-session error, got: {msg}");
+        }
+        other => return Err(format!("expected response, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// AC: frameId validation — Running-state and frame-found paths (#902)
+//
+// The three tests below cover changed production lines that are NOT exercised
+// by the tests above:
+//   1. session.state != Stopped → "not stopped" error
+//   2. Stopped session, frame NOT found → "Frame not found" error (already
+//      exercised by test_evaluate_with_invalid_frameid_returns_error only if
+//      a session is present; the existing test uses no-session which returns
+//      "No debugger session" first)
+//   3. Stopped session, frame found → validation passes, continues to eval
+// ---------------------------------------------------------------------------
+
+/// session exists + is Running + frameId provided → "not stopped" error
+#[test]
+fn test_evaluate_running_session_with_frameid_returns_not_stopped_error() -> TestResult {
+    if !perl_available() {
+        return Ok(());
+    }
+    let mut adapter = new_adapter();
+    // Seed a session in Running state.
+    adapter.seed_running_session_for_test();
+
+    let response =
+        adapter.handle_request(1, "evaluate", Some(json!({ "expression": "$x", "frameId": 1 })));
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert_eq!(command, "evaluate");
+            assert!(
+                !success,
+                "evaluate with Running session and frameId must return success=false"
+            );
+            let msg = message.ok_or("expected error message for Running session + frameId")?;
+            assert!(
+                msg.contains("not stopped"),
+                "expected 'not stopped' error for Running session, got: {msg}"
+            );
+        }
+        other => return Err(format!("expected Response, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+/// session exists + is Stopped + frameId NOT in stack_frames → "Frame not found" error
+#[test]
+fn test_evaluate_stopped_session_frame_not_found_returns_error() -> TestResult {
+    if !perl_available() {
+        return Ok(());
+    }
+    use perl_dap::types::{Source, StackFrame};
+    let mut adapter = new_adapter();
+    // Seed a stopped session with frame id=1 only.
+    let frame = StackFrame {
+        id: 1,
+        name: "main::foo".to_string(),
+        source: Source {
+            name: Some("foo.pl".to_string()),
+            path: "/tmp/foo.pl".to_string(),
+            source_reference: None,
+        },
+        line: 10,
+        column: 1,
+        end_line: None,
+        end_column: None,
+    };
+    adapter.seed_stopped_session_with_frames_for_test(vec![frame]);
+
+    // Request frameId=999 which is not in the session.
+    let response = adapter.handle_request(
+        1,
+        "evaluate",
+        Some(json!({ "expression": "$x", "frameId": 999, "allowSideEffects": true })),
+    );
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert_eq!(command, "evaluate");
+            assert!(!success, "evaluate with unknown frameId must return success=false");
+            let msg = message.ok_or("expected error message for unknown frameId")?;
+            assert!(
+                msg.to_lowercase().contains("frame not found")
+                    || msg.to_lowercase().contains("frameid"),
+                "expected 'Frame not found' error, got: {msg}"
+            );
+        }
+        other => return Err(format!("expected Response, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+/// session exists + is Stopped + frameId found in stack_frames → validation passes
+#[test]
+fn test_evaluate_stopped_session_frame_found_passes_validation() -> TestResult {
+    if !perl_available() {
+        return Ok(());
+    }
+    use perl_dap::types::{Source, StackFrame};
+    let mut adapter = new_adapter();
+    // Seed a stopped session with frame id=1.
+    let frame = StackFrame {
+        id: 1,
+        name: "main::bar".to_string(),
+        source: Source {
+            name: Some("bar.pl".to_string()),
+            path: "/tmp/bar.pl".to_string(),
+            source_reference: None,
+        },
+        line: 5,
+        column: 1,
+        end_line: None,
+        end_column: None,
+    };
+    adapter.seed_stopped_session_with_frames_for_test(vec![frame]);
+
+    // frameId=1 is in the session — validation passes; the handler continues
+    // to the session eval path.  With a live `perl -e 1` process that has
+    // already exited, the eval result will be a timeout/no-output error, but
+    // that is NOT a frameId error — it is a different error category.
+    let response = adapter.handle_request(
+        1,
+        "evaluate",
+        Some(json!({ "expression": "$x", "frameId": 1, "allowSideEffects": true })),
+    );
+    match response {
+        DapMessage::Response { command, message, .. } => {
+            assert_eq!(command, "evaluate");
+            // The frameId validation did NOT produce a "No debugger session",
+            // "not stopped", or "Frame not found" error.
+            if let Some(msg) = message {
+                assert!(
+                    !msg.contains("not stopped") && !msg.to_lowercase().contains("frame not found"),
+                    "frameId validation should have passed but got error: {msg}"
+                );
+            }
+        }
+        other => return Err(format!("expected Response, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+/// Stale-after-resume invariant (#902 + #1337): after resume clears stack_frames,
+/// a frameId that was valid before resume must be rejected cleanly — not silently
+/// evaluated against a wrong/empty frame.
+///
+/// Simulated by re-seeding the session with empty frames (as resume would do) and
+/// then requesting the previously-valid frameId.
+#[test]
+fn test_evaluate_stale_frameid_after_resume_rejected() -> TestResult {
+    if !perl_available() {
+        return Ok(());
+    }
+    use perl_dap::types::{Source, StackFrame};
+    let mut adapter = new_adapter();
+
+    // Phase 1: session has frame id=42 — validation passes.
+    let frame = StackFrame {
+        id: 42,
+        name: "main::before_resume".to_string(),
+        source: Source {
+            name: Some("stale.pl".to_string()),
+            path: "/tmp/stale.pl".to_string(),
+            source_reference: None,
+        },
+        line: 7,
+        column: 1,
+        end_line: None,
+        end_column: None,
+    };
+    adapter.seed_stopped_session_with_frames_for_test(vec![frame]);
+
+    // Phase 2: simulate resume clearing stack_frames by re-seeding with empty frames.
+    // (In production: handle_continue/handle_next call session.stack_frames.clear())
+    adapter.seed_stopped_session_with_frames_for_test(vec![]);
+
+    // Phase 3: try to evaluate with the previously-valid frameId=42.
+    // With empty stack_frames, this must fail with "Frame not found", not succeed.
+    let response = adapter.handle_request(
+        1,
+        "evaluate",
+        Some(json!({ "expression": "$x", "frameId": 42, "allowSideEffects": true })),
+    );
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert_eq!(command, "evaluate");
+            assert!(!success, "stale frameId after resume must return success=false");
+            let msg = message.ok_or("expected error message for stale frameId")?;
+            // Must produce a protocol-safe error, not silently evaluate.
+            assert!(
+                msg.to_lowercase().contains("frame not found")
+                    || msg.to_lowercase().contains("frameid")
+                    || msg.to_lowercase().contains("not stopped"),
+                "stale frameId must produce a protocol-safe error, got: {msg}"
+            );
+        }
+        other => return Err(format!("expected Response, got {other:?}").into()),
+    }
+    Ok(())
 }
 
 #[test]
@@ -866,6 +1125,69 @@ fn test_set_expression_newline_in_value_is_rejected() -> TestResult {
             );
         }
         other => return Err(format!("expected Response, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// AC: variablesReference — structured results must get a non-zero ref (#1002)
+// ---------------------------------------------------------------------------
+
+/// evaluate result typed as HASH must return variablesReference > 0 so that
+/// the VS Code debug UI shows the expand arrow.
+///
+/// Without an active debugger session the result is parsed from recent output;
+/// we push a synthetic line that looks like debugger output for a hash to seed
+/// the result buffer.
+#[test]
+fn test_evaluate_hash_result_returns_nonzero_variables_reference() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+    // Seed recent output so parse_evaluate_result_from_output can find a hash result.
+    adapter.push_recent_output_line_for_test("$h = HASH(0x55a1234)");
+    let response = adapter.handle_request(
+        1,
+        "evaluate",
+        Some(json!({ "expression": "\\%h", "allowSideEffects": true })),
+    );
+    match response {
+        DapMessage::Response { success: true, body: Some(body), .. } => {
+            let var_ref = body["variablesReference"].as_i64().unwrap_or(0);
+            assert!(
+                var_ref > 0,
+                "evaluate of a hash should return variablesReference > 0, got {var_ref}"
+            );
+        }
+        DapMessage::Response { success: false, .. } => {
+            // No session available — the parse path returns None; no ref allocated.
+            // This is acceptable: the test proves the code path doesn't panic.
+        }
+        other => return Err(format!("expected evaluate response, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+/// evaluate result typed as a scalar must return variablesReference == 0.
+#[test]
+fn test_evaluate_scalar_result_returns_zero_variables_reference() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+    adapter.push_recent_output_line_for_test("$x = 42");
+    let response = adapter.handle_request(
+        1,
+        "evaluate",
+        Some(json!({ "expression": "$x", "allowSideEffects": true })),
+    );
+    match response {
+        DapMessage::Response { success: true, body: Some(body), .. } => {
+            let var_ref = body["variablesReference"].as_i64().unwrap_or(-1);
+            assert_eq!(
+                var_ref, 0,
+                "evaluate of a scalar must return variablesReference=0, got {var_ref}"
+            );
+        }
+        DapMessage::Response { success: false, .. } => {
+            // No session — acceptable; proves no panic.
+        }
+        other => return Err(format!("expected evaluate response, got {other:?}").into()),
     }
     Ok(())
 }

@@ -273,6 +273,7 @@ fn named_parameter_node_is_not_emitted_as_ref() -> Result<()> {
         NodeKind::Subroutine {
             name: Some("process".to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(sig)),
             attributes: vec![],

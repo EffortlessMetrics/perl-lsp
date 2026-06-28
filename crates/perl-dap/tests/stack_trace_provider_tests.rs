@@ -13,6 +13,7 @@
 //! These integration tests focus on the public API behavior.
 
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
+use serde_json;
 
 /// Helper to create a test adapter
 fn create_test_adapter() -> DebugAdapter {
@@ -20,8 +21,9 @@ fn create_test_adapter() -> DebugAdapter {
 }
 
 #[test]
-// AC:8.2.4
-fn test_stack_trace_placeholder_frame() -> Result<(), Box<dyn std::error::Error>> {
+// AC:8.2.4 — No active session returns honest empty list, not a fabricated frame.
+// Regression guard: pre-fix returned main::hello @ /tmp/hello.pl:10.
+fn test_stack_trace_no_session_returns_empty() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = create_test_adapter();
     let response = adapter.handle_request(1, "stackTrace", None);
 
@@ -37,15 +39,8 @@ fn test_stack_trace_placeholder_frame() -> Result<(), Box<dyn std::error::Error>
         .as_array()
         .ok_or("Expected array")?;
 
-    // Should have placeholder frame
-    assert_eq!(frames.len(), 1);
-    let frame = &frames[0];
-    assert_eq!(frame.get("name").and_then(|v| v.as_str()), Some("main::hello"));
-    assert_eq!(frame.get("line").and_then(|v| v.as_i64()), Some(10));
-
-    let source = frame.get("source").ok_or("Expected source")?;
-    let path = source.get("path").and_then(|v| v.as_str()).ok_or("Expected path")?;
-    assert!(path.contains("hello.pl"));
+    // No session must return stackFrames: []
+    assert_eq!(frames.len(), 0, "no session must return stackFrames: []");
 
     Ok(())
 }
@@ -71,7 +66,7 @@ fn test_stack_trace_filtering_logic() -> Result<(), Box<dyn std::error::Error>> 
     // - test_stack_frame_filtering_empty_input
     //
     // This integration test verifies the response format is correct when no
-    // session exists (placeholder mode).
+    // session exists (empty frames — no fabricated placeholder).
 
     let mut adapter = create_test_adapter();
     let response = adapter.handle_request(1, "stackTrace", None);
@@ -87,10 +82,15 @@ fn test_stack_trace_filtering_logic() -> Result<(), Box<dyn std::error::Error>> 
     assert!(body.get("stackFrames").is_some(), "Response must include stackFrames");
     assert!(body.get("totalFrames").is_some(), "Response must include totalFrames");
 
-    // Verify totalFrames matches stackFrames array length
+    // totalFrames must be >= the returned frame count (may be larger when paginating)
     let frames = body.get("stackFrames").and_then(|v| v.as_array()).ok_or("Expected array")?;
     let total = body.get("totalFrames").and_then(|v| v.as_u64()).ok_or("Expected number")?;
-    assert_eq!(frames.len() as u64, total, "totalFrames must match stackFrames.len()");
+    assert!(
+        total >= frames.len() as u64,
+        "totalFrames must be >= stackFrames count (may be larger when paginating); \
+         got totalFrames={total} frames.len()={}",
+        frames.len()
+    );
 
     Ok(())
 }
@@ -142,5 +142,74 @@ fn test_stack_trace_response_sequence_numbers() -> Result<(), Box<dyn std::error
     assert_eq!(resp_req_seq, request_seq, "Response request_seq must match request");
     assert_eq!(command, "stackTrace");
 
+    Ok(())
+}
+
+/// Fix regression: totalFrames previously reported the paginated slice length
+/// rather than the full stack depth (DAP spec §StackTraceResponse: "totalFrames:
+/// The total number of frames available in the stack"). This test locks the
+/// invariant that totalFrames >= the number of frames in the response.
+///
+/// The no-session path returns an empty stackFrames array (per #995; fabricated
+/// placeholder frame support was removed). With 0 frames and levels=1,
+/// totalFrames must also equal 0, satisfying totalFrames >= returned window size.
+#[test]
+// AC:963
+fn test_total_frames_is_not_window_size() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = create_test_adapter();
+
+    // Request only 1 frame (paginated window of 1).
+    let args = serde_json::json!({"threadId": 1, "startFrame": 0, "levels": 1});
+    let response = adapter.handle_request(1, "stackTrace", Some(args));
+
+    let DapMessage::Response { success, body, .. } = response else {
+        return Err("Expected Response".into());
+    };
+    assert!(success);
+    let body = body.ok_or("Expected body")?;
+    let frames =
+        body.get("stackFrames").and_then(|v| v.as_array()).ok_or("Expected stackFrames array")?;
+    let total =
+        body.get("totalFrames").and_then(|v| v.as_u64()).ok_or("Expected totalFrames number")?;
+
+    // The invariant: totalFrames >= returned window size (holds for 0 >= 0).
+    assert!(
+        total >= frames.len() as u64,
+        "totalFrames ({total}) must be >= returned frame count ({})",
+        frames.len()
+    );
+    // No active session means an honest empty list (#995). totalFrames must match.
+    assert_eq!(frames.len(), 0, "no active session must return empty stackFrames");
+    assert_eq!(total, 0, "totalFrames must equal actual frame depth (0 with no session)");
+    Ok(())
+}
+
+/// When levels=0, pagination returns all frames ("return all" per DAP convention).
+/// totalFrames and frame count must be equal (no truncation).
+#[test]
+// AC:963
+fn test_total_frames_levels_zero_means_all() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = create_test_adapter();
+
+    let args = serde_json::json!({"threadId": 1, "startFrame": 0, "levels": 0});
+    let response = adapter.handle_request(2, "stackTrace", Some(args));
+
+    let DapMessage::Response { success, body, .. } = response else {
+        return Err("Expected Response".into());
+    };
+    assert!(success);
+    let body = body.ok_or("Expected body")?;
+    let frames =
+        body.get("stackFrames").and_then(|v| v.as_array()).ok_or("Expected stackFrames array")?;
+    let total =
+        body.get("totalFrames").and_then(|v| v.as_u64()).ok_or("Expected totalFrames number")?;
+
+    // levels=0 means no count limit — totalFrames must equal returned frame count
+    assert_eq!(
+        total,
+        frames.len() as u64,
+        "With levels=0 (no limit), totalFrames ({total}) must equal returned count ({})",
+        frames.len()
+    );
     Ok(())
 }

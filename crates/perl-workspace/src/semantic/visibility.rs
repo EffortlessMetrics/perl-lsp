@@ -335,6 +335,7 @@ fn bare_name(qualified: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::semantic::facts::PRODUCER_SCHEMA_VERSION;
     use perl_parser_core::{Parser, hir::lower_ast};
     use perl_semantic_facts::{
         AnchorFact, AnchorId, Confidence, EntityFact, EntityId, EntityKind, ExportSet, ExportTag,
@@ -347,6 +348,7 @@ mod tests {
             source_uri: "file:///lib/Main.pm".to_string(),
             file_id,
             content_hash: 1,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -380,6 +382,7 @@ mod tests {
             source_uri: "file:///lib/Main.pm".to_string(),
             file_id,
             content_hash: 2,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -413,6 +416,7 @@ mod tests {
             source_uri: "file:///lib/Main.pm".to_string(),
             file_id,
             content_hash: 3,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -446,6 +450,7 @@ mod tests {
             source_uri: "file:///lib/Main.pm".to_string(),
             file_id,
             content_hash: 4,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -478,6 +483,7 @@ mod tests {
             source_uri: "file:///lib/Main.pm".to_string(),
             file_id,
             content_hash: 0,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,

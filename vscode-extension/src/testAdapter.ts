@@ -17,8 +17,6 @@ interface SubtestInfo {
 // Matches: subtest 'name' => sub {   or   subtest "name" => sub {
 // Also matches: subtest 'name', sub {
 const SUBTEST_RE = /^\s*subtest\s+(['"])(.*?)\1\s*(?:=>|,)\s*sub\s*\{/;
-export const PROVE_UNAVAILABLE_GUIDANCE =
-    'Perl test runner "prove" was not found on PATH. Install Test::Harness with cpanm Test::Harness, or add prove to PATH.';
 
 export class PerlTestAdapter implements vscode.Disposable {
     private testController: vscode.TestController;
@@ -259,10 +257,10 @@ export class PerlTestAdapter implements vscode.Disposable {
             proc.on('error', (err: Error) => {
                 killOnCancel.dispose();
                 run.errored(fileItem, new vscode.TestMessage(
-                    `Failed to run prove: ${err.message}. ${PROVE_UNAVAILABLE_GUIDANCE}`
+                    `Failed to run prove: ${err.message}. Is prove installed?`
                 ));
                 for (const st of subtests) {
-                    run.errored(st, new vscode.TestMessage(PROVE_UNAVAILABLE_GUIDANCE));
+                    run.errored(st, new vscode.TestMessage('prove not available'));
                 }
                 resolve();
             });

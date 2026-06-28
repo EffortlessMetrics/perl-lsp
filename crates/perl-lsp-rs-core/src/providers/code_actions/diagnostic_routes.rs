@@ -90,12 +90,8 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
         }
         // PL001: General parse error (stable code)
         // PL002: Syntax error — same quick-fix routing as PL001
-        // PL003: Unexpected end-of-file — routes through the same handler which
-        //        offers "Add missing semicolon" or "Add closing brace" based on
-        //        the diagnostic message text.
         c if c == DiagnosticCode::ParseError.as_str()
-            || c == DiagnosticCode::SyntaxError.as_str()
-            || c == DiagnosticCode::UnexpectedEof.as_str() =>
+            || c == DiagnosticCode::SyntaxError.as_str() =>
         {
             actions.extend(quick_fixes::fix_parse_error(source, &qf_diag, c));
         }
@@ -109,13 +105,13 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
         {
             actions.extend(quick_fixes::fix_unused_parameter(&qf_diag));
         }
-        // PL106: Duplicate parameter
+        // PL107: Duplicate parameter
         c if c == DiagnosticCode::DuplicateParameter.as_str()
             || c == "native.variables.duplicate_parameter" =>
         {
             actions.extend(quick_fixes::fix_duplicate_parameter(&qf_diag));
         }
-        // PL107: Parameter shadows outer/global variable
+        // PL110: Parameter shadows outer/global variable
         c if c == DiagnosticCode::ParameterShadowsGlobal.as_str()
             || c == "native.variables.parameter_shadows_global" =>
         {
@@ -207,14 +203,6 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
             || c == "native.common.printf_format_arity" =>
         {
             actions.extend(quick_fixes::fix_printf_format_arity(source, &qf_diag));
-        }
-        // PL304: Exported subroutine lacks POD documentation
-        c if c == DiagnosticCode::MissingPodCoverage.as_str() => {
-            actions.extend(quick_fixes::fix_missing_pod_coverage(source, &qf_diag));
-        }
-        // PL409: goto statement targets an undefined label
-        c if c == DiagnosticCode::GotoUndefinedLabel.as_str() => {
-            actions.extend(quick_fixes::fix_goto_undefined_label(source, &qf_diag));
         }
         // PL410: loop-control statement targets an undefined label
         c if c == DiagnosticCode::LoopControlUndefinedLabel.as_str() => {

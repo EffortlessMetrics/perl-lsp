@@ -1,0 +1,87 @@
+# ub-review advisory config for perl-lsp-swarm.
+#
+# This file configures the ub-review evidence packet for this repo.
+# It is passed to the action via `config: policy/ub-review.toml`.
+#
+# Status: advisory — see docs/ci/review-gates.md.
+#
+# PR 1 (this file): minimal advisory scaffold.
+# PR 2: add runner-size profiles and tune sensor weights for Rust LSP code.
+# PR 3: add unsafe-review sensor policy and per-tool thresholds.
+#
+# See https://github.com/EffortlessMetrics/ub-review for full config reference.
+
+# Use the bun-ub profile as the closest available preset for Rust repos.
+# A perl-lsp-specific profile is tracked for PR 2.
+# TODO(PR 2): Replace with a perl-lsp profile that reflects the actual
+#             unsafe surface (perl-parser FFI, tree-sitter bindings, etc.)
+review_profile = "bun-ub-v0"
+profile = "gh-runner"
+
+[repo]
+kind = "rust"
+base = "origin/main"
+head = "HEAD"
+
+[review]
+# Advisory: post a grouped PR review on opened/ready_for_review; skip on
+# synchronize to avoid review spam on push storms.
+posting_engine = "review"
+ban_standalone_approval = false
+
+# Keep review bodies concise during the advisory/calibration phase.
+[review_body]
+include_successful_lane_table = false
+include_provider_table = "on_failure"
+include_sensor_table = "on_failure"
+include_execution_summary = "none"
+summary_only_body = "suppress"
+
+# Core sensors: best-effort, advisory, all non-blocking.
+# Required = false means a missing sensor does not fail the gate.
+# TODO(PR 3): Review unsafe-review and ripr thresholds for perl-lsp's
+#             actual unsafe surface area.
+[tools.tokmd]
+enabled = true
+required = false
+
+[tools.cargo-allow]
+enabled = true
+required = false
+
+[tools.ripr]
+enabled = true
+required = false
+
+[tools.unsafe-review]
+enabled = true
+required = false
+
+[tools.ast-grep]
+enabled = true
+required = false
+
+[tools.actionlint]
+enabled = true
+required = false
+
+# Heavy witnesses are off for PR 1; enable via allow-heavy in the workflow
+# when the advisory phase graduates to a proof-required mode.
+[tools.coverage]
+enabled = false
+
+[providers]
+policy = "minimax-only"
+
+[providers.minimax]
+enabled = true
+env = "MINIMAX_API_KEY"
+model = "MiniMax-M3"
+role = "primary"
+prompt_cache = "explicit-anthropic"
+max_concurrency = 6
+
+[providers.opencode]
+enabled = true
+env = "OPENCODE"
+role = "fallback"

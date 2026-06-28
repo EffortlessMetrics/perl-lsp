@@ -201,9 +201,8 @@ export class HealthWidget {
                 const detail = parts.length > 0 ? `: ${parts.join(' | ')}` : '';
                 this.item.text = `$(check) ${label}${detail}`;
                 const versionNote = this._version ? ` v${this._version}` : '';
-                const tooltipDetail = parts.length > 0 ? `: ${parts.join(', ')}` : '';
                 this.item.tooltip =
-                    `Perl Language Server${versionNote} is running${tooltipDetail} (click for options)`;
+                    `Perl Language Server${versionNote} is running (click for options)`;
                 this.item.backgroundColor = undefined;
                 break;
             }

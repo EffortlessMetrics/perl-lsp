@@ -35,6 +35,8 @@ Current generated and human-owned status sources include:
 | [PLSP-ADR-0001](PLSP-ADR-0001-generated-status-is-control-plane.md) | Accepted | 2026-05-13 | Generated Status Is Control Plane | Generated status routes parser and editor-trust work, while specs and plans interpret it without duplicating generated content |
 | [PLSP-ADR-0002](PLSP-ADR-0002-confidence-before-cutover.md) | Accepted | 2026-05-13 | Confidence Before Provider Cutover | Compiler-backed provider behavior requires confidence, freshness, fallback, blocker, and live-comparison receipts before broader cutover |
 | [PLSP-ADR-0003](PLSP-ADR-0003-preview-before-edit.md) | Accepted | 2026-05-19 | Preview Before Edit | Edit-producing providers require preview/no-edit, receipt, rollback, and blocker proof before broader live cutover |
+| [PLSP-ADR-0004](PLSP-ADR-0004-lsp-stack-extraction.md) | Accepted | 2026-05-26 | LSP Stack Extraction Boundary | Future lsp-stack extraction may start only after current-app protocol/runtime hardening; Perl-specific behavior stays in the current app |
+| [PLSP-ADR-0005](PLSP-ADR-0005-hir-body-pir-eir-boundaries.md) | Accepted | 2026-06-21 | HIR-body / PIR-A / EIR Boundaries | Canonical terminology: HIR body items are L0, PIR-A evolves the existing tooling PIR, EIR branches off PIR-A under a separate ADR |
 
 ### Legacy Series (0001–0002)
 

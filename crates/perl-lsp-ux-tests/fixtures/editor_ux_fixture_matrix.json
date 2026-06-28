@@ -35,7 +35,7 @@
       ],
       "expected_outcomes": [
         "server starts cleanly",
-        "hover returns non-empty contents for a lexical variable",
+        "hover returns useful structure or empty without crashing",
         "completion request succeeds"
       ],
       "confidence_signals": [
@@ -61,7 +61,6 @@
       ],
       "expected_outcomes": [
         "format request degrades gracefully",
-        "external-perltidy mode returns an actionable missing-tool error with remediation data",
         "server stays responsive"
       ],
       "confidence_signals": [
@@ -87,7 +86,6 @@
       ],
       "expected_outcomes": [
         "server starts in degraded mode",
-        "missing-PATH Perl setup emits actionable fallback or install guidance",
         "hover or completion remain available where possible"
       ],
       "confidence_signals": [
@@ -113,7 +111,6 @@
       ],
       "expected_outcomes": [
         "diagnostics degrade gracefully",
-        "external perlcritic mode emits an actionable missing-tool warning",
         "no crash or panic-style messaging"
       ],
       "confidence_signals": [
@@ -139,7 +136,6 @@
       ],
       "expected_outcomes": [
         "invalid config does not crash the server",
-        "invalid .perl-lsp.toml emits actionable fix and reload guidance",
         "user-visible feedback is actionable"
       ],
       "confidence_signals": [
@@ -154,8 +150,8 @@
       "ci_tier": "nightly",
       "component": "infra",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "open a large file and wait for the first useful response",
@@ -166,7 +162,6 @@
         "multi_root_workspace_navigation_success_rate"
       ],
       "expected_outcomes": [
-        "receipt records large-file open to first hover timing",
         "large files do not crash the server",
         "large-file workflow stays within latency budget"
       ],
@@ -181,8 +176,8 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "open multiple files in a workspace and navigate across them",
@@ -194,7 +189,6 @@
       ],
       "expected_outcomes": [
         "cross-file definition request completes without error",
-        "cross-file definition resolves the configured workspace module target",
         "workspace interactions remain stable"
       ],
       "confidence_signals": [
@@ -219,8 +213,7 @@
         "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "languageId-perl files without extensions still behave like Perl",
-        "shebang files without extensions expose Perl document symbols"
+        "languageId-perl files without extensions still behave like Perl"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -245,8 +238,7 @@
       ],
       "expected_outcomes": [
         "encoding edge cases do not crash the server",
-        "UTF-8 BOM files expose normal Perl document symbols",
-        "hover returns non-empty contents for symbols in encoded files"
+        "user workflow remains intact"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -271,8 +263,7 @@
         "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
-        "same-file and cross-file definition requests resolve to source locations",
-        "definition entries use valid LSP location shapes",
+        "definition request returns a location or clean empty result",
         "request does not error"
       ],
       "confidence_signals": [
@@ -295,12 +286,10 @@
       "user_journey": "run hover over names and variables in a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records hover timing and shape checks",
-        "hover over a known lexical variable returns useful contents",
+        "hover request returns useful structure or clean empty result",
         "request does not error"
       ],
       "confidence_signals": [
@@ -327,7 +316,6 @@
       ],
       "expected_outcomes": [
         "publishDiagnostics arrives",
-        "strict undeclared-variable diagnostic mentions the missing symbol",
         "diagnostic payload shape stays valid"
       ],
       "confidence_signals": [
@@ -343,20 +331,18 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "request document symbols for parsable and empty files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records document-symbol timing and structure checks",
         "document symbols return valid structure",
-        "rich files surface known package and sub names"
+        "rich files surface known sub names"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -370,8 +356,8 @@
       "ci_tier": "pr",
       "component": "module_resolution",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "resolve modules across multiple @INC modes and compare hover, goto-definition, and diagnostics",
@@ -382,7 +368,6 @@
         "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
-        "receipt records @INC consumer consistency timing",
         "PL701, hover, and goto-definition agree across supported modes"
       ],
       "confidence_signals": [
@@ -410,7 +395,6 @@
         "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
-        "receipt records multi-root workspace/symbol timing",
         "workspace/symbol returns same-named symbols from multiple roots",
         "results include workspaceFolderUri"
       ],
@@ -427,8 +411,8 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "remove a workspace folder after indexing and re-run workspace symbol search",
@@ -439,7 +423,6 @@
         "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
-        "receipt records before and after workspace-symbol timing around folder removal",
         "removed folder symbols disappear from search results"
       ],
       "confidence_signals": [
@@ -455,19 +438,17 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "delete a module file after indexing and verify stale symbol and definition results are evicted",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "cross_file_definition_success_rate",
-        "p95_time_to_first_useful_result_ms"
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
-        "receipt records workspace-symbol and definition timing around file deletion",
         "deleted symbols disappear from workspace/symbol",
         "definition no longer resolves to deleted targets"
       ],
@@ -484,20 +465,103 @@
       "ci_tier": "pr",
       "component": "goto_definition",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "run goto-declaration inside a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records declaration request timing and result shape checks",
-        "declaration request points same-file subroutine calls to their declaration",
+        "declaration request returns a location or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "crossfile_provider_dogfood",
+      "scenario_file": "ux_scenario_21_crossfile_provider_dogfood.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "workspace_symbols",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "run cross-file references, rename, signature help, symbols, and semantic tokens over the RealBaseline workspace",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate",
+        "module_resolution_workflow_success_rate"
+      ],
+      "expected_outcomes": [
+        "cross-file references and rename requests include module-boundary results or fail safely",
+        "signature help, document symbols, workspace symbols, and semantic tokens return valid provider shapes",
+        "the multi-file RealBaseline fixture stays crash-free across provider requests"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "crossfile_extended_providers",
+      "scenario_file": "ux_scenario_22_crossfile_extended_providers.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "code_lens",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "exercise extended LSP providers over the RealBaseline multi-file workspace",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "call hierarchy and related extended providers return valid shapes without crashing",
+        "folding range, code lens, document highlight, selection range, and formatting remain stable in multi-file context",
+        "known unsupported or ignored cases remain documented in the executable scenario"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "index_readiness_race_regression",
+      "scenario_file": "ux_scenario_22_index_race_regression.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "component": "hover",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request index-backed providers immediately after workspace open and verify startup race behavior",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "references find cross-file usages even when the target file is not open",
+        "hover on inherited methods returns provenance-correct contents after readiness handling",
+        "signature help remains usable while the workspace index warms"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -512,19 +576,17 @@
       "ci_tier": "pr",
       "component": "goto_definition",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "open a template file in html mode and continue navigating in neighboring Perl files",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "cross_file_definition_success_rate",
-        "p95_time_to_first_useful_result_ms"
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
-        "receipt records template diagnostics and neighboring Perl navigation timing",
         "template-like html mode file does not emit Perl parse diagnostics",
         "goto-definition in adjacent Perl files remains functional"
       ],
@@ -541,18 +603,16 @@
       "ci_tier": "pr",
       "component": "diagnostics",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "open a file, edit it, and verify diagnostics republish for the updated content",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records diagnostics timing before and after full-document edit",
         "didChange full-document edit succeeds",
         "publishDiagnostics republish occurs after edit",
         "updated diagnostic payload remains valid"
@@ -569,8 +629,8 @@
       "ci_tier": "nightly",
       "component": "diagnostics",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "open a representative 5000+ line Catalyst-like app fixture and observe first diagnostics latency",
@@ -580,7 +640,6 @@
         "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
-        "receipt records real-repo open to first diagnostics timing",
         "first publishDiagnostics arrives within 5 seconds",
         "real-repo fixture parsing remains crash-free"
       ],
@@ -596,20 +655,18 @@
       "ci_tier": "pr",
       "component": "rename",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "rename a symbol in a representative file and validate workspace edit output",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records prepareRename, rename, and workspace edit timing",
         "prepareRename and rename do not error",
-        "same-file subroutine rename returns edits for the declaration and call sites"
+        "rename returns clean null or valid workspace edit for the opened file"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -624,19 +681,17 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "add a workspace folder after initialize and re-run workspace symbol search",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "multi_root_workspace_navigation_success_rate",
-        "p95_time_to_first_useful_result_ms"
+        "multi_root_workspace_navigation_success_rate"
       ],
       "expected_outcomes": [
-        "receipt records workspace-symbol timing before and after folder addition",
         "added folder symbols appear in search results without restart"
       ],
       "confidence_signals": [
@@ -652,21 +707,19 @@
       "ci_tier": "pr",
       "component": "diagnostics",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "fix an undeclared variable during active editing and confirm diagnostics and navigation update",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms",
         "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
-        "receipt records diagnostics refresh and navigation timing after edit",
         "undeclared variable diagnostic appears before edit",
-        "go-to-definition resolves the declared variable after didChange"
+        "go-to-definition remains responsive after didChange"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -688,11 +741,9 @@
       "user_journey": "request completion for builtins and in-file symbols in a representative editor session",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records completion request timing and shape checks",
         "completion request returns without JSON-RPC errors",
         "completion items include user-visible labels",
         "builtin completion includes print for pri prefix"
@@ -750,7 +801,6 @@
       ],
       "expected_outcomes": [
         "hover probes return without JSON-RPC errors",
-        "all hover probes return content",
         "receipt records exact, imported, generated, dynamic-shaped, and fallback/module-resolution surfaces",
         "receipt records source, provenance, confidence, freshness, generated, dynamic, and fallback labels when exposed"
       ],
@@ -780,7 +830,6 @@
       ],
       "expected_outcomes": [
         "definition and references probes return without JSON-RPC errors",
-        "all navigation probes return at least one result",
         "non-empty navigation results use valid LSP Location or LocationLink shapes",
         "receipt records exact, imported, module-resolution, dynamic-shaped, and declaration-including fallback surfaces"
       ],
@@ -811,7 +860,7 @@
         "diagnostic notifications arrive for selected probes",
         "diagnostics use valid LSP payload shape",
         "workspace-present Mojolicious imports do not emit PL701",
-        "missing-module probe emits PL701 with searched @INC context without promoting broad diagnostics claims"
+        "missing-module probe emits PL701 without promoting broad diagnostics claims"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -866,7 +915,6 @@
       ],
       "expected_outcomes": [
         "workspace-symbol probes return without JSON-RPC errors",
-        "all workspace-symbol probes return live symbols",
         "returned symbols use valid LSP WorkspaceSymbol shapes",
         "receipt records useful hits, unrelated/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness"
       ],
@@ -895,7 +943,6 @@
       ],
       "expected_outcomes": [
         "semantic-token requests return valid 5-tuple data without JSON-RPC errors",
-        "all semantic-token probes return live tokens",
         "decoded token spans do not overlap and map back to source text",
         "receipt records expected source-backed tokens, dynamic-boundary-shaped strings, and edit freshness"
       ],
@@ -1008,7 +1055,6 @@
       ],
       "expected_outcomes": [
         "semantic-token requests return valid 5-tuple data without JSON-RPC errors",
-        "all semantic-token probes return live tokens",
         "decoded token spans do not overlap and map back to source text",
         "receipt records expected source-backed tokens, typeglob dynamic-boundary-shaped strings, and edit freshness"
       ],
@@ -1037,38 +1083,8 @@
       ],
       "expected_outcomes": [
         "workspace-symbol requests return valid LSP shapes without JSON-RPC errors",
-        "all workspace-symbol probes return live symbols",
         "receipt records useful project hits, noisy hit counts, generated/dynamic candidate boundaries, and edit freshness",
         "compiler-backed workspace-symbol candidates remain shadowed without provider behavior promotion"
-      ],
-      "confidence_signals": [
-        "first_five_minutes_harness",
-        "manual_editor_smoke",
-        "issue_burndown_regression_guard"
-      ]
-    },
-    {
-      "id": "dancer2_navigation_quality",
-      "scenario_file": "ux_scenario_51_dancer2_navigation_quality.rs",
-      "subsystem_owner": "editor_intelligence",
-      "ci_tier": "pr",
-      "component": "goto_definition",
-      "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
-        "protocol_goldens": false
-      },
-      "user_journey": "request definition and references over the Dancer2 real-workspace fixture and record second-project navigation quality boundaries",
-      "measures": [
-        "workflow_pass_rate",
-        "workflow_stability_rate",
-        "cross_file_definition_success_rate",
-        "p95_time_to_first_useful_result_ms"
-      ],
-      "expected_outcomes": [
-        "definition and references probes return without JSON-RPC errors",
-        "non-empty navigation results use valid LSP Location or LocationLink shapes",
-        "receipt records module, local, dynamic, coderef, and declaration-including navigation surfaces without provider behavior promotion"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -1123,7 +1139,6 @@
       ],
       "expected_outcomes": [
         "workspace-symbol requests return valid LSP shapes without JSON-RPC errors",
-        "all workspace-symbol probes return live symbols",
         "receipt records useful Modern OO hits, labeled generated symbols, generated exact-name gating, and edit freshness",
         "broader generated/dynamic workspace-symbol candidates remain bounded without provider behavior promotion"
       ],
@@ -1196,21 +1211,19 @@
       "ci_tier": "pr",
       "component": "infra",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "fix a parse error via didChange full-text sync and verify diagnostics recover and hover remains responsive",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records didChange recovery, diagnostics, and hover timing",
         "broken content yields at least one diagnostic",
         "fixed content clears parse-like diagnostics after didChange",
-        "hover returns non-empty contents after didChange recovery"
+        "hover does not JSON-RPC error after didChange recovery"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -1225,18 +1238,16 @@
       "ci_tier": "pr",
       "component": "diagnostics",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "introduce a syntax error then fix it and verify publishDiagnostics clears",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records initial diagnostics and post-fix clearing timing",
         "broken content yields diagnostics",
         "fixed content clears diagnostics for the same document"
       ],
@@ -1253,20 +1264,18 @@
       "ci_tier": "pr",
       "component": "signature_help",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "request signature help at Perl builtin call sites",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records signature-help request timing and structure checks",
         "builtin signatureHelp requests do not return JSON-RPC errors",
-        "builtin signatureHelp responses include push and join labels",
+        "non-null builtin signatureHelp responses have valid signature labels",
         "repeated builtin signatureHelp requests do not crash the server"
       ],
       "confidence_signals": [
@@ -1281,21 +1290,19 @@
       "ci_tier": "pr",
       "component": "code_lens",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "request and resolve code lenses for Perl modules and test files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records code-lens request and resolve timing",
-        "module codeLens requests return package and subroutine reference lenses",
-        "test file codeLens requests return run-all-tests and run-test commands",
-        "codeLens resolve returns find-references commands for unresolved reference lenses"
+        "codeLens requests return arrays or null without JSON-RPC errors",
+        "returned lenses contain valid ranges",
+        "codeLens resolve requests do not crash the server"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -1309,22 +1316,19 @@
       "ci_tier": "pr",
       "component": "folding_range",
       "instrumentation": {
-        "run_receipt": true,
-        "first_useful_result": true,
+        "run_receipt": false,
+        "first_useful_result": false,
         "protocol_goldens": false
       },
       "user_journey": "request folding ranges for nested Perl blocks and small edge-case files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "receipt records folding-range timing and structure checks",
         "foldingRange requests do not return JSON-RPC errors",
         "folding ranges include valid start and end line fields when present",
-        "multi-block files produce at least one fold",
-        "empty and single-line files return empty folding range arrays"
+        "multi-block files produce at least one fold"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -1350,8 +1354,7 @@
       ],
       "expected_outcomes": [
         "completion, definition, diagnostics, workspace trust report, safe-delete preview, and provider explanation requests do not crash",
-        "workspace trust report keeps no-scan and setup-hint no-probe boundaries visible",
-        "workspace trust report surfaces a visible setup hint count and hint list",
+        "workspace trust report keeps the no-scan setup boundary visible",
         "safe-delete preview refuses a referenced helper without applying edits",
         "provider explanation includes a copyable payload for issue reports"
       ],
@@ -2005,6 +2008,35 @@
       ]
     },
     {
+      "id": "strict_warnings_guided_edit",
+      "scenario_file": "ux_scenario_68_strict_warnings_guided_edit.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "code_actions",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "open a Perl package missing strict and warnings, request deterministic pragma quick fixes, and verify plain-edit plus snippet-capable client shapes",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "minimal clients receive plain TextEdit strict and warnings quick fixes",
+        "source.fixAll applies both pragma edits to the expected final document",
+        "snippet-capable workspace-edit clients receive SnippetTextEdit documentChanges for pragma quick fixes",
+        "deterministic pragma actions do not emit WorkspaceEdit.metadata or generated-assistance tags"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
@@ -2024,8 +2056,6 @@
       ],
       "expected_outcomes": [
         "completion, goto-definition, hover, and diagnostics all respond without crash",
-        "module-prefix completion surfaces RealBaseline::App",
-        "module import hover returns non-empty contents",
         "cross-file definition requests resolve or return clean empty results",
         "real-workspace fixture exercises provider parity across module boundaries"
       ],

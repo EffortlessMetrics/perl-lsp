@@ -99,6 +99,29 @@ fn render_item(item: &perl_parser_core::hir::HirItem) -> String {
             )
         }
         HirKind::BlockShell(shell) => format!("BlockShell statements={}", shell.statement_count),
+        HirKind::BranchShell(shell) => format!(
+            "BranchShell {:?} elsif={} else={}",
+            shell.keyword, shell.elsif_count, shell.has_else
+        ),
+        HirKind::LoopShell(shell) => format!(
+            "LoopShell {:?} cond={} continue={} iter={} label={}",
+            shell.kind,
+            shell.has_condition,
+            shell.has_continue,
+            shell.declares_iterator,
+            shell.label.as_deref().unwrap_or("<none>")
+        ),
+        HirKind::ControlTransfer(transfer) => format!(
+            "ControlTransfer {:?} label={} value={}",
+            transfer.kind,
+            transfer.label.as_deref().unwrap_or("<none>"),
+            transfer.has_value
+        ),
+        HirKind::StatementModifierShell(shell) => format!(
+            "StatementModifierShell {:?} label={}",
+            shell.modifier,
+            shell.label.as_deref().unwrap_or("<none>")
+        ),
         HirKind::DynamicBoundary(boundary) => {
             format!("DynamicBoundary {:?} reason={}", boundary.kind, boundary.reason)
         }
@@ -1999,6 +2022,7 @@ fn hir_marks_items_lowered_from_error_partials_as_recovered()
         NodeKind::Subroutine {
             name: Some("broken".to_string()),
             name_span: Some(SourceLocation { start: 4, end: 10 }),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: Vec::new(),

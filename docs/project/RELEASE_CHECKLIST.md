@@ -17,6 +17,7 @@ Use `NEW_VERSION` as the target semver string for the release you are preparing.
 - [ ] `CHANGELOG.md` contains a dated `## [NEW_VERSION]` section and leaves `[Unreleased]` empty.
 - [ ] The crates listed in `[workspace.metadata.publish.allow]` report `NEW_VERSION`.
 - [ ] `cargo xtask install-surface-check` passes.
+- [ ] Release archives ship the DAP binary: the release workflow runs `cargo xtask release artifact-check` on the produced `dist/` (see `.github/workflows/release.yml`). To verify a local/downloaded set: `cargo xtask release artifact-check --dist dist --version NEW_VERSION`.
 - [ ] `cargo xtask release-notes --tag vNEW_VERSION --output /tmp/vNEW_VERSION-body.md` produces release notes with the Linux asset chooser:
 
   ```bash
@@ -28,6 +29,29 @@ Use `NEW_VERSION` as the target semver string for the release you are preparing.
 
 - [ ] `gh run list --branch master --limit 5` shows the default branch is green.
 - [ ] No stale `.snap.new` files remain in the worktree.
+
+### Local preflight gotchas (hard-won)
+
+- **Never run `just release-check` / `just pr-fast` while local cargo builders are
+  active.** Contention starves the gate processes and produces FALSE `exit=124`
+  timeouts — even a trivial conflict-marker grep can time out at 180s under load.
+  Run the health gate only when the machine is quiet. If a gate "times out," read
+  `target/receipts/logs/<gate>.log` to distinguish a real failure from a
+  compile-under-contention timeout before believing it.
+- **Main-green is CI(Linux)-authoritative, not local `pr-fast` on Windows.** Local
+  `pr-fast` carries Windows-only false-failures (e.g.
+  `set_root_uri_discovers_workspace_perltidyrc` path-case) that do not affect the
+  Linux-CI release. Treat such Windows-only failures as non-blocking (file a
+  follow-up); the authoritative signal is the required checks passing on CI.
+- **`gh secret list` shows REPO secrets only.** The publish secrets
+  (`CARGO_REGISTRY_TOKEN`, `VSCE_PAT`, `OVSX_PAT`, `DOCKER_USERNAME`,
+  `DOCKER_PASSWORD`) may live at the org level or in the release repo. Confirm they
+  are available **where the cut actually runs** before dispatching the release — a
+  repo-level `gh secret list` showing only `CODECOV_TOKEN` can still be fine.
+- **Verify publish-stage packaging BEFORE the cut, not during it.** e.g.
+  `cd vscode-extension && npm run package` must produce a `.vsix` (vsce 3.x rejects
+  `@types/vscode` newer than `engines.vscode`). Catching publish-stage breaks
+  pre-cut keeps the release dispatch boring.
 
 Use this version check when you need to confirm the release target:
 

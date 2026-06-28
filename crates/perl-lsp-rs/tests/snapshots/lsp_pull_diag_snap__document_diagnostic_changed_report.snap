@@ -38,7 +38,7 @@ items:
               line: 0
           uri: "file:///snapshot-changed.pl"
         message: "ℹ️ The 'use warnings' pragma enables helpful warning messages about questionable constructs, uninitialized values, and deprecated features."
-    severity: 3
+    severity: 2
     source: perl-lsp
   - code: PL102
     data:
@@ -107,11 +107,13 @@ items:
         message: "ℹ️ Under 'use strict', all variables must be declared before use. Use 'my' for lexical scope or 'our' for package variables."
     severity: 1
     source: perl-lsp
-  - code: "TestingAndDebugging::RequireUseWarnings"
+  - code: native.testing.require_use_warnings
     data:
-      category: Other
-      code: "TestingAndDebugging::RequireUseWarnings"
+      category: Syntax
+      code: native.testing.require_use_warnings
+      explanation: Always use warnings to catch potential issues
       fixable: true
+      suppressionKey: native.testing.require_use_warnings
       tags: []
     message: Code does not use warnings
     range:
@@ -122,6 +124,6 @@ items:
         character: 0
         line: 0
     severity: 2
-    source: perl-lsp
+    source: perl-lsp-critic
 kind: full
 resultId: "<stable-result-id>"

@@ -19,14 +19,57 @@ receipts, future differential oracle receipts
 
 ## Current Implementation Status
 
-Tooling PIR is currently planned. The compiler substrate already has HIR,
-scope/pad facts, stash/package facts, compile environment, module resolution,
+PIR v0 is `fixture-backed`. The compiler substrate already has HIR, scope/pad
+facts, stash/package facts, compile environment, module resolution,
 import/export facts, generated-member facts, framework-adapter boundaries, and
-compile-time effect facts. PIR v0 is the next substrate layer that turns those
-facts into a source-anchored tooling IR.
+compile-time effect facts. PIR v0 turns those facts into a source-anchored
+tooling IR.
 
-This spec defines the PIR v0 contract. It does not add PIR code, provider
-behavior, cache behavior, determinism claims, or real-Perl execution.
+The implemented slice lives in `crates/perl-parser-core/src/pir/` and lowers a
+[`HirFile`](../../crates/perl-parser-core/src/hir/mod.rs) into a `PirGraph`:
+
+- the PIR v0 data model from the [Target Code Shape](#target-code-shape)
+  (`PirNode`, `PirId`, `PirContext`, `PirOperation`, `PirCallee`/`PirReceiver`/
+  `PirMethod`, `PirSourceAnchor`, `PirEdge`, `PirReceipt`);
+- HIR-to-PIR lowering for the data-access, call, and dynamic-boundary operation
+  families HIR can prove from source (`LexicalWrite`, `StashWrite`, `Assign`,
+  `Call`, `MethodCall`, `DynamicBoundary`), with every source-derived node
+  anchored and visible `Unknown` context where context is not provable;
+- dynamic-boundary preservation, including the link from a coderef `Call` to the
+  HIR-emitted boundary, plus dynamic-exit CFG edges;
+- a conservative first control-flow graph (intra-scope fallthrough edges and
+  dynamic-boundary exits); and
+- lowering receipts reporting schema version, source identity, mode, node/edge
+  counts, operation/context counts, source-anchor coverage, dynamic-boundary
+  counts, unsupported-construct counts, ambient inputs, and an explicit
+  `provider_behavior_changed = false` assertion.
+
+Branch lowering from HIR `BranchShell` (`if`/`unless`/ternary) is now
+implemented (PR #8196): a `BranchShell` HIR item lowers to a
+`PirOperation::Branch { condition: None }` node in `PirContext::Void`. The
+condition expression and then/else arm edges (`PirEdgeKind::Branch`) are named
+follow-ups; the node records that a branch exists and anchors it.
+
+Loop lowering from HIR `LoopShell` (`while`/`until`/C-style `for`/`foreach`) is
+now implemented (PR #8196): a `LoopShell` HIR item lowers to a
+`PirOperation::Loop { condition: None }` node in `PirContext::Void`. All four
+`LoopKind` surface forms (While, Until, CStyleFor, Foreach) emit one Loop node
+each; they are all statements and never expressions, so `Void` is correct for all
+of them. Condition-expression lowering and loop back-edges (`PirEdgeKind::Loop`)
+are named follow-ups; the node records that a loop exists and anchors it.
+
+Return/ControlTransfer lowering, condition-expression lowering, branch arm edges,
+loop back-edges, read-side (`LexicalRead`/`StashRead`) lowering, retained PIR
+caches, and any provider cutover remain out of scope and are tracked separately
+(provider cutover stays gated by
+[#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197)).
+The `PirOperation` contract reserves the `Return`, `LexicalRead`, and
+`StashRead` families so later passes populate them without a model break; the
+receipt makes the current gap visible rather than guessing.
+
+This spec defines the PIR v0 contract. The data model and lowering above honor
+it without adding provider behavior, retained cache behavior, determinism
+claims, or real-Perl execution.
 
 ## Contract
 

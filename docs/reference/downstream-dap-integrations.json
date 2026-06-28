@@ -1,0 +1,26 @@
+{
+  "_note": "Machine-readable companion to DOWNSTREAM_DAP_INTEGRATIONS.md. Consumed by `cargo xtask release artifact-check` to prove every release archive ships the binaries downstream DAP consumers depend on. Keep this file and release.yml in sync.",
+  "archive_name_pattern": "perllsp-{version}-{triple}{ext}",
+  "consolidated_checksums_file": "SHA256SUMS",
+  "platforms": {
+    "unix": {
+      "required_binaries": ["perllsp", "perl-dap"],
+      "ext": ".tar.gz",
+      "require_executable_bit": true
+    },
+    "windows": {
+      "required_binaries": ["perllsp.exe", "perl-dap.exe"],
+      "ext": ".zip",
+      "require_executable_bit": false
+    }
+  },
+  "targets": [
+    { "triple": "x86_64-unknown-linux-gnu", "platform": "unix" },
+    { "triple": "aarch64-unknown-linux-gnu", "platform": "unix" },
+    { "triple": "x86_64-unknown-linux-musl", "platform": "unix" },
+    { "triple": "aarch64-unknown-linux-musl", "platform": "unix" },
+    { "triple": "x86_64-apple-darwin", "platform": "unix" },
+    { "triple": "aarch64-apple-darwin", "platform": "unix" },
+    { "triple": "x86_64-pc-windows-msvc", "platform": "windows" }
+  ]
+}

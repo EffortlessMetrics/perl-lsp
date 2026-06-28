@@ -6,7 +6,7 @@
 
 use perl_lexer::{PerlLexer, TokenType};
 use perl_parser_core::{Parser, RecoverySalvageProfile};
-use perl_position_tracking::utf16_line_col_to_offset;
+use perl_position_tracking::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 use serde::{Deserialize, Serialize};
 
 pub mod next_edit;
@@ -54,6 +54,17 @@ pub struct PreparedInlineCompletionContext {
 pub struct InlineCompletionEnvironment {
     /// Modules reachable from the current document's effective `@INC`.
     pub available_modules: Vec<String>,
+    /// Methods proven by the workspace index for explicit package receivers.
+    pub package_methods: Vec<InlinePackageMethodFact>,
+}
+
+/// A workspace-index-backed method available for an explicit package receiver.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlinePackageMethodFact {
+    /// Package or class name used as the receiver, for example `My::Service`.
+    pub package: String,
+    /// Method/subroutine name available on the package.
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,6 +79,7 @@ pub(crate) struct SemanticInlineContext {
     pub(crate) imported_modules: Vec<ModuleFact>,
     pub(crate) available_modules: Vec<ModuleFact>,
     pub(crate) current_package_methods: Vec<MethodFact>,
+    pub(crate) indexed_package_methods: Vec<InlinePackageMethodFact>,
     pub(crate) has_done_testing_call: bool,
     pub(crate) file_role: FileRole,
     pub(crate) style: InlineStyleContext,
@@ -442,6 +454,7 @@ impl InlineCandidateMetadata {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InlineCandidateReason {
     CurrentPackageMethod,
+    IndexedPackageMethod,
     DbiReceiverMethod,
     EffectiveIncModule,
     VisibleLexical,
@@ -474,15 +487,16 @@ impl InlineCandidateReason {
     fn stable_rank(self) -> u8 {
         match self {
             Self::CurrentPackageMethod => 0,
-            Self::DbiReceiverMethod => 1,
-            Self::EffectiveIncModule => 2,
-            Self::VisibleLexical => 3,
-            Self::SourceReceiver => 4,
-            Self::SourceModule => 5,
-            Self::SourceSyntax => 6,
-            Self::SourceTest => 7,
-            Self::SourceShebang => 8,
-            Self::SourceContextualFallback => 9,
+            Self::IndexedPackageMethod => 1,
+            Self::DbiReceiverMethod => 2,
+            Self::EffectiveIncModule => 3,
+            Self::VisibleLexical => 4,
+            Self::SourceReceiver => 5,
+            Self::SourceModule => 6,
+            Self::SourceSyntax => 7,
+            Self::SourceTest => 8,
+            Self::SourceShebang => 9,
+            Self::SourceContextualFallback => 10,
         }
     }
 }
@@ -498,6 +512,7 @@ impl InlineCandidateConfidence {
     fn for_reason(reason: InlineCandidateReason) -> Self {
         match reason {
             InlineCandidateReason::CurrentPackageMethod
+            | InlineCandidateReason::IndexedPackageMethod
             | InlineCandidateReason::DbiReceiverMethod
             | InlineCandidateReason::EffectiveIncModule
             | InlineCandidateReason::VisibleLexical
@@ -579,6 +594,10 @@ fn receiver_candidate_reason(
         return InlineCandidateReason::CurrentPackageMethod;
     }
 
+    if indexed_package_method_matches(context, method_name) {
+        return InlineCandidateReason::IndexedPackageMethod;
+    }
+
     if context.dbi_receiver_kind.is_some() {
         return InlineCandidateReason::DbiReceiverMethod;
     }
@@ -595,6 +614,27 @@ fn receiver_targets_current_package(context: &SemanticInlineContext) -> bool {
             .is_some_and(|current_package| package == "__PACKAGE__" || package == current_package),
         _ => false,
     }
+}
+
+fn receiver_indexed_package(context: &SemanticInlineContext) -> Option<&str> {
+    match context.receiver_hint.as_ref() {
+        Some(ReceiverHint::Package(package)) if package != "__PACKAGE__" => Some(package.as_str()),
+        _ => None,
+    }
+}
+
+fn indexed_package_method_matches(context: &SemanticInlineContext, method_name: &str) -> bool {
+    let Some(package) = receiver_indexed_package(context) else {
+        return false;
+    };
+    context
+        .indexed_package_methods
+        .iter()
+        .any(|method| method.package == package && method.name == method_name)
+}
+
+fn indexed_package_has_methods(context: &SemanticInlineContext, package: &str) -> bool {
+    context.indexed_package_methods.iter().any(|method| method.package == package)
 }
 
 fn module_candidate_reason(
@@ -661,6 +701,10 @@ fn receiver_candidate_bonus(item: &InlineCompletionItem, context: &SemanticInlin
     let method_name = item.insert_text.trim_end_matches("()");
     if context.current_package_methods.iter().any(|method| method.name == method_name) {
         return 30;
+    }
+
+    if indexed_package_method_matches(context, method_name) {
+        return 28;
     }
 
     10
@@ -763,33 +807,44 @@ fn parse_damage_for_probe(source: &str) -> ParseDamage {
 }
 
 fn parse_probe_after_item(
-    current_line: &str,
+    text: &str,
     item: &InlineCompletionItem,
     line: u32,
     character: u32,
 ) -> Option<String> {
-    let (start_character, end_character) = item
+    let (start_line, start_character, end_line, end_character) = item
         .range
         .as_ref()
         .map(|range| {
-            if range.start.line != line || range.end.line != line {
+            if range.start.line > range.end.line
+                || (range.start.line == range.end.line
+                    && range.start.character > range.end.character)
+            {
                 return None;
             }
-            Some((range.start.character, range.end.character))
+            Some((range.start.line, range.start.character, range.end.line, range.end.character))
         })
-        .unwrap_or(Some((character, character)))?;
+        .unwrap_or(Some((line, character, line, character)))?;
 
-    let start = utf16_line_col_to_offset(current_line, 0, start_character);
-    let end = utf16_line_col_to_offset(current_line, 0, end_character);
+    let start = utf16_position_to_exact_offset(text, start_line, start_character)?;
+    let end = utf16_position_to_exact_offset(text, end_line, end_character)?;
     if start > end {
         return None;
     }
 
-    let mut probe = String::with_capacity(current_line.len() + item.insert_text.len());
-    probe.push_str(&current_line[..start]);
+    let replaced_len = end.saturating_sub(start);
+    let mut probe = String::with_capacity(
+        text.len().saturating_sub(replaced_len).saturating_add(item.insert_text.len()),
+    );
+    probe.push_str(&text[..start]);
     probe.push_str(item.insert_text.as_str());
-    probe.push_str(&current_line[end..]);
+    probe.push_str(&text[end..]);
     Some(probe)
+}
+
+fn utf16_position_to_exact_offset(text: &str, line: u32, character: u32) -> Option<usize> {
+    let offset = utf16_line_col_to_offset(text, line, character);
+    (offset_to_utf16_line_col(text, offset) == (line, character)).then_some(offset)
 }
 
 #[derive(Debug)]
@@ -909,7 +964,7 @@ impl InlineCompletionProvider {
                 line,
                 character,
             );
-            return self.filter_parse_safe_items(list, &context, line, character);
+            return self.filter_parse_safe_items(list, text, line, character);
         }
 
         InlineCompletionList { items: vec![] }
@@ -952,21 +1007,21 @@ impl InlineCompletionProvider {
     fn filter_parse_safe_items(
         &self,
         list: InlineCompletionList,
-        context: &PreparedInlineCompletionContext,
+        text: &str,
         line: u32,
         character: u32,
     ) -> InlineCompletionList {
-        let baseline = parse_damage_for_probe(context.current_line.as_str());
+        let baseline = parse_damage_for_probe(text);
         let items = list
             .items
             .into_iter()
             .filter(|item| {
-                parse_probe_after_item(context.current_line.as_str(), item, line, character)
+                parse_probe_after_item(text, item, line, character)
                     .map(|probe| {
                         let candidate = parse_damage_for_probe(probe.as_str());
                         !candidate.worse_than(&baseline)
                     })
-                    .unwrap_or(true)
+                    .unwrap_or(false)
             })
             .collect();
 
@@ -1304,6 +1359,7 @@ impl InlineCompletionProvider {
             imported_modules,
             available_modules: Vec::new(),
             current_package_methods: Vec::new(),
+            indexed_package_methods: Vec::new(),
             has_done_testing_call: false,
             file_role: self.file_role(context),
             style: InlineStyleContext::unknown(context),
@@ -1370,6 +1426,7 @@ impl InlineCompletionProvider {
     ) -> SemanticInlineContext {
         let mut semantic_context = self.semantic_context_for_prepared_context(context);
         semantic_context.available_modules = available_module_facts(&environment.available_modules);
+        semantic_context.indexed_package_methods = environment.package_methods.clone();
         semantic_context.file_role = self.file_role_for_source(context, text);
         semantic_context.style = self.style_context_for_source(context, text);
         semantic_context.has_done_testing_call = source_has_done_testing_call(text);
@@ -1782,6 +1839,40 @@ impl InlineCompletionProvider {
             .collect()
     }
 
+    fn indexed_package_method_items(
+        &self,
+        context: &SemanticInlineContext,
+        package: &str,
+        fragment: &str,
+    ) -> Vec<InlineCompletionItem> {
+        let mut seen = Vec::<String>::new();
+        context
+            .indexed_package_methods
+            .iter()
+            .filter(|method| {
+                method.package == package
+                    && completion_matches_fragment(
+                        method.name.as_str(),
+                        &format!("{}()", method.name),
+                        fragment,
+                    )
+            })
+            .filter(|method| {
+                if seen.iter().any(|existing| existing == &method.name) {
+                    return false;
+                }
+                seen.push(method.name.clone());
+                true
+            })
+            .map(|method| InlineCompletionItem {
+                insert_text: format!("{}()", method.name),
+                filter_text: Some(method.name.clone()),
+                range: None,
+                command: None,
+            })
+            .collect()
+    }
+
     fn preferred_test_statement(&self, context: &SemanticInlineContext) -> Option<String> {
         self.preferred_is_assertion_arguments(context)
             .map(|arguments| format!("is({arguments}"))
@@ -1843,6 +1934,31 @@ impl InlineCompletionProvider {
             .then(|| "'test description' => sub {\n    \n};".to_string())
     }
 
+    fn preferred_try_tiny_block(&self, context: &SemanticInlineContext) -> Option<String> {
+        context
+            .imported_modules
+            .iter()
+            .any(|module| module.name == "Try::Tiny")
+            .then(|| "{\n    \n} catch {\n    \n};".to_string())
+    }
+
+    fn preferred_mojolicious_lite_route(&self, context: &SemanticInlineContext) -> Option<String> {
+        context.imported_modules.iter().any(|module| module.name == "Mojolicious::Lite").then(
+            || {
+                "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};"
+                    .to_string()
+            },
+        )
+    }
+
+    fn preferred_dancer_route(&self, context: &SemanticInlineContext) -> Option<String> {
+        context
+            .imported_modules
+            .iter()
+            .any(|module| matches!(module.name.as_str(), "Dancer" | "Dancer2"))
+            .then(|| "'/path' => sub {\n    return 'ok';\n};".to_string())
+    }
+
     fn push_unique(&self, values: &mut Vec<String>, value: String) {
         if values.iter().any(|existing| existing == &value) {
             return;
@@ -1875,6 +1991,34 @@ impl InlineCandidateSource for ReceiverCandidateSource {
             if receiver_targets_current_package(semantic_context) {
                 for method in provider.current_package_method_items(semantic_context, fragment) {
                     sink.push(Self::SOURCE, 0, method);
+                }
+                if let Some(package) = receiver_indexed_package(semantic_context) {
+                    for method in
+                        provider.indexed_package_method_items(semantic_context, package, fragment)
+                    {
+                        sink.push(Self::SOURCE, 0, method);
+                    }
+                }
+            } else if let Some(package) = receiver_indexed_package(semantic_context) {
+                let methods =
+                    provider.indexed_package_method_items(semantic_context, package, fragment);
+                if !methods.is_empty() {
+                    for method in methods {
+                        sink.push(Self::SOURCE, 0, method);
+                    }
+                } else if !indexed_package_has_methods(semantic_context, package)
+                    && completion_matches_fragment("new", "new()", fragment)
+                {
+                    sink.push(
+                        Self::SOURCE,
+                        0,
+                        InlineCompletionItem {
+                            insert_text: "new()".into(),
+                            filter_text: Some("new".into()),
+                            range: None,
+                            command: None,
+                        },
+                    );
                 }
             } else if let Some(kind) = semantic_context.dbi_receiver_kind {
                 for method in dbi_receiver_method_items(kind, fragment) {
@@ -2145,7 +2289,59 @@ impl InlineCandidateSource for SyntaxCandidateSource {
                 },
             );
         }
+
+        if ends_with_keyword(prefix, "try ")
+            && line_suffix_after_prefix(full_line, prefix).trim().is_empty()
+            && let Some(block) = provider.preferred_try_tiny_block(semantic_context)
+        {
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    insert_text: block,
+                    filter_text: Some("try".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "get ")
+            && line_suffix_after_prefix(full_line, prefix).trim().is_empty()
+            && let Some(route) = provider.preferred_mojolicious_lite_route(semantic_context)
+        {
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    insert_text: route,
+                    filter_text: Some("get".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "get ")
+            && line_suffix_after_prefix(full_line, prefix).trim().is_empty()
+            && let Some(route) = provider.preferred_dancer_route(semantic_context)
+        {
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    insert_text: route,
+                    filter_text: Some("get".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
     }
+}
+
+fn line_suffix_after_prefix<'a>(line: &'a str, prefix: &str) -> &'a str {
+    line.strip_prefix(prefix).unwrap_or("")
 }
 
 impl InlineCandidateSource for TestCandidateSource {
@@ -3019,6 +3215,10 @@ fn dbi_receiver_kind_for_source(
     }
 
     let imported_dbi = context.imported_modules.iter().any(|module| module.name == "DBI");
+    if !imported_dbi {
+        return None;
+    }
+
     let assigned_from_dbi_connect = non_comment_code_lines(text)
         .map(code_before_line_comment)
         .any(|line| line_assigns_variable_from_dbi_connect(line, variable.name.as_str()));
@@ -3493,6 +3693,7 @@ fn is_module_fragment_char(ch: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_after_arrow() {
@@ -3526,6 +3727,7 @@ mod tests {
                 "My::App".to_string(),
                 "My::App::Config".to_string(),
             ],
+            package_methods: Vec::new(),
         };
         let completions =
             provider.get_inline_completions_with_environment("use My::", 0, 8, &environment);
@@ -3551,6 +3753,7 @@ mod tests {
         let provider = InlineCompletionProvider::new();
         let environment = InlineCompletionEnvironment {
             available_modules: vec!["My::App".to_string(), "Other::Tool".to_string()],
+            package_methods: Vec::new(),
         };
         let completions =
             provider.get_inline_completions_with_environment("require My::", 0, 12, &environment);
@@ -3608,7 +3811,6 @@ mod tests {
     #[test]
     fn parse_safety_rejects_candidate_that_adds_error() -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
-        let context = provider.prepare_context("", 0, 0).ok_or("expected prepared context")?;
         let list = InlineCompletionList {
             items: vec![
                 InlineCompletionItem {
@@ -3626,7 +3828,7 @@ mod tests {
             ],
         };
 
-        let filtered = provider.filter_parse_safe_items(list, &context, 0, 0);
+        let filtered = provider.filter_parse_safe_items(list, "", 0, 0);
 
         assert!(filtered.items.iter().any(|item| item.insert_text == "my $value = 1;"));
         assert!(filtered.items.iter().all(|item| item.insert_text != "my $value = ;"));
@@ -3637,7 +3839,6 @@ mod tests {
     fn parse_safety_rejects_multiline_candidate_that_adds_error()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
-        let context = provider.prepare_context("", 0, 0).ok_or("expected prepared context")?;
         let list = InlineCompletionList {
             items: vec![
                 InlineCompletionItem {
@@ -3655,7 +3856,7 @@ mod tests {
             ],
         };
 
-        let filtered = provider.filter_parse_safe_items(list, &context, 0, 0);
+        let filtered = provider.filter_parse_safe_items(list, "", 0, 0);
 
         assert!(
             filtered.items.iter().any(|item| item.insert_text == "my $value = 1;\nreturn $value;")
@@ -3667,11 +3868,49 @@ mod tests {
     }
 
     #[test]
+    fn parse_safety_rejects_multiline_range_candidate_that_adds_error()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $value = 1;\nmy $other = 2;";
+        let second_line = source.lines().nth(1).ok_or("expected second source line")?;
+        let second_line_end = u32::try_from(second_line.encode_utf16().count())?;
+        let range = lsp_types::Range {
+            start: lsp_types::Position::new(0, 0),
+            end: lsp_types::Position::new(1, second_line_end),
+        };
+        let list = InlineCompletionList {
+            items: vec![
+                InlineCompletionItem {
+                    insert_text: "my $value = 1;\nmy $other = 2;".into(),
+                    filter_text: Some("$value".into()),
+                    range: Some(range),
+                    command: None,
+                },
+                InlineCompletionItem {
+                    insert_text: "my $value = ;\nmy $other = 2;".into(),
+                    filter_text: Some("$value".into()),
+                    range: Some(range),
+                    command: None,
+                },
+            ],
+        };
+
+        let filtered = provider.filter_parse_safe_items(list, source, 0, 0);
+
+        assert!(
+            filtered.items.iter().any(|item| item.insert_text == "my $value = 1;\nmy $other = 2;")
+        );
+        assert!(
+            filtered.items.iter().all(|item| item.insert_text != "my $value = ;\nmy $other = 2;")
+        );
+        Ok(())
+    }
+
+    #[test]
     fn parse_safety_does_not_drop_incomplete_baseline_improvements()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
         let source = "my $value = ";
-        let context = provider.prepare_context(source, 0, 12).ok_or("expected prepared context")?;
         let list = InlineCompletionList {
             items: vec![InlineCompletionItem {
                 insert_text: "1;".into(),
@@ -3681,7 +3920,7 @@ mod tests {
             }],
         };
 
-        let filtered = provider.filter_parse_safe_items(list, &context, 0, 12);
+        let filtered = provider.filter_parse_safe_items(list, source, 0, 12);
 
         assert!(filtered.items.iter().any(|item| item.insert_text == "1;"));
         Ok(())
@@ -5049,6 +5288,32 @@ mod tests {
     }
 
     #[test]
+    fn constructor_return_context_skips_duplicate_self_boundary_discriminator()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub new {\n    my $self = bless {}, shift;\n    return $\n}\n";
+        let character = "    return $".encode_utf16().count() as u32;
+        let prepared =
+            provider.prepare_context(source, 2, character).ok_or("expected constructor context")?;
+        let semantic_context = provider.semantic_context_for_source(source, &prepared);
+        let mut sink = InlineCandidateSink::new(&semantic_context);
+
+        SyntaxCandidateSource.add_candidates(&provider, &prepared, &semantic_context, &mut sink);
+
+        let items = sink.into_items();
+        assert!(
+            items.iter().any(|ranked| ranked.item.insert_text == "$self;"),
+            "input that hits the boundary: variable.insert_text == \"$self;\""
+        );
+        assert_eq!(
+            items.iter().filter(|ranked| ranked.item.insert_text == "$self;").count(),
+            1,
+            "input that hits the boundary: constructor_self_matches && variable.insert_text == \"$self;\""
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_file_blank_line_suggests_test_more_assertion_from_declared_variables()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
@@ -5194,6 +5459,213 @@ mod tests {
                 .iter()
                 .all(|item| !item.insert_text.starts_with("'test description' => sub")),
             "non-test files should not get subtest block completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn try_tiny_import_suggests_try_catch_block() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\ntry ";
+        let character = "try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "{\n    \n} catch {\n    \n};")
+            .ok_or("expected Try::Tiny try/catch block completion")?;
+
+        assert_eq!(item.filter_text.as_deref(), Some("try"));
+        Ok(())
+    }
+
+    #[test]
+    fn preferred_try_tiny_block_boundary_discriminator() {
+        let provider = InlineCompletionProvider::new();
+        let prepared = must_some(provider.prepare_context("", 0, 0));
+        let mut semantic_context = provider.semantic_context_for_prepared_context(&prepared);
+        semantic_context.imported_modules = vec![ModuleFact { name: "Try::Tiny".into() }];
+
+        assert_eq!(
+            provider.preferred_try_tiny_block(&semantic_context).as_deref(),
+            Some("{\n    \n} catch {\n    \n};"),
+            "input that hits the boundary: module.name == \"Try::Tiny\""
+        );
+    }
+
+    #[test]
+    fn add_candidates_boundary_discriminator() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\ntry ";
+        let character = "try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "{\n    \n} catch {\n    \n};"
+                && item.filter_text.as_deref() == Some("try")),
+            "`try ` prefix with Try::Tiny import must activate the Try::Tiny scaffold: {:?}",
+            completions.items
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn add_candidates_call_presence_observer() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\ntry ";
+        let character = "try ".encode_utf16().count() as u32;
+        let prepared = provider.prepare_context(source, 1, character).ok_or("expected context")?;
+        let semantic_context = provider.semantic_context_for_source(source, &prepared);
+        let mut sink = InlineCandidateSink::new(&semantic_context);
+
+        SyntaxCandidateSource.add_candidates(&provider, &prepared, &semantic_context, &mut sink);
+
+        let items = sink.into_items();
+        assert!(
+            items.iter().any(|ranked| ranked.item.insert_text == "{\n    \n} catch {\n    \n};"
+                && ranked.item.filter_text.as_deref() == Some("try")),
+            "syntax candidate source must push the Try::Tiny scaffold for an imported try prefix: {:?}",
+            items.iter().map(|ranked| &ranked.item).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn try_tiny_block_requires_visible_import() {
+        let provider = InlineCompletionProvider::new();
+        let source = "try ";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "{\n    \n} catch {\n    \n};"),
+            "Try::Tiny scaffold must not appear without an import: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn try_tiny_block_stays_quiet_in_comment() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\n# try ";
+        let character = "# try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        assert!(
+            completions.items.is_empty(),
+            "hard-reject comment context must not return Try::Tiny completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn try_tiny_block_stays_quiet_in_string() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\nmy $text = \"try ";
+        let character = "my $text = \"try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        assert!(
+            completions.items.is_empty(),
+            "hard-reject string context must not return Try::Tiny completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn try_tiny_block_stays_quiet_in_pod() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\n=pod\ntry ";
+        let character = "try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert!(
+            completions.items.is_empty(),
+            "hard-reject POD context must not return Try::Tiny completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn try_tiny_block_requires_keyword_boundary() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\nmy $try = 1;\n$try ";
+        let character = "$try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "{\n    \n} catch {\n    \n};"),
+            "Try::Tiny scaffold must not appear for a visible scalar named try: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+
+        let source = "use Try::Tiny;\ngettry ";
+        let character = "gettry ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "{\n    \n} catch {\n    \n};"),
+            "Try::Tiny scaffold must not appear inside an identifier suffix: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn mojolicious_lite_import_suggests_route_scaffold() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Mojolicious::Lite;\nget ";
+        let character = "get ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        let item = completions.items.iter().find(|item| {
+            item.insert_text
+                == "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};"
+        });
+        assert_eq!(item.and_then(|item| item.filter_text.as_deref()), Some("get"));
+    }
+
+    #[test]
+    fn dancer_import_suggests_route_scaffold() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Dancer;\nget ";
+        let character = "get ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "'/path' => sub {\n    return 'ok';\n};");
+        assert_eq!(item.and_then(|item| item.filter_text.as_deref()), Some("get"));
+    }
+
+    #[test]
+    fn dancer2_import_suggests_route_scaffold() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Dancer2;\nget ";
+        let character = "get ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "'/path' => sub {\n    return 'ok';\n};");
+        assert_eq!(item.and_then(|item| item.filter_text.as_deref()), Some("get"));
+    }
+
+    #[test]
+    fn dancer_route_requires_visible_import() {
+        let provider = InlineCompletionProvider::new();
+        let source = "get ";
+        let character = "get ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(
+            completions
+                .items
+                .iter()
+                .all(|item| item.insert_text != "'/path' => sub {\n    return 'ok';\n};"),
+            "Dancer route scaffold must not appear without Dancer or Dancer2 import: {:?}",
             completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
         );
     }
@@ -5447,6 +5919,17 @@ mod tests {
             completions.items.iter().all(|i| i.insert_text != "strict;"),
             "should not suggest `use strict;` inside an identifier; got {:?}",
             completions.items.iter().map(|i| &i.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn use_trigger_trimmed_prefix_boundary_discriminator() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("use", 0, 3);
+
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "strict;"),
+            "input that hits the boundary: prefix.trim_end() == \"use\""
         );
     }
 
@@ -5861,6 +6344,28 @@ mod tests {
         assert_eq!(receiver_metadata.reason, InlineCandidateReason::CurrentPackageMethod);
         assert_eq!(receiver_metadata.confidence, InlineCandidateConfidence::High);
 
+        let indexed_source = "My::Service->sa";
+        let indexed_character = indexed_source.encode_utf16().count() as u32;
+        let indexed_prepared = provider
+            .prepare_context(indexed_source, 0, indexed_character)
+            .ok_or("expected indexed package receiver context")?;
+        let mut indexed_context = provider.semantic_context_for_prepared_context(&indexed_prepared);
+        indexed_context.indexed_package_methods =
+            vec![InlinePackageMethodFact { package: "My::Service".into(), name: "save".into() }];
+        let indexed_item = InlineCompletionItem {
+            insert_text: "save()".into(),
+            filter_text: Some("save".into()),
+            range: None,
+            command: None,
+        };
+        let indexed_metadata = InlineCandidateMetadata::for_candidate(
+            InlineCandidateSourceKind::Receiver,
+            &indexed_item,
+            &indexed_context,
+        );
+        assert_eq!(indexed_metadata.reason, InlineCandidateReason::IndexedPackageMethod);
+        assert_eq!(indexed_metadata.confidence, InlineCandidateConfidence::High);
+
         Ok(())
     }
 
@@ -5946,6 +6451,7 @@ mod tests {
 
         let reason_ranks: Vec<_> = [
             InlineCandidateReason::CurrentPackageMethod,
+            InlineCandidateReason::IndexedPackageMethod,
             InlineCandidateReason::DbiReceiverMethod,
             InlineCandidateReason::EffectiveIncModule,
             InlineCandidateReason::VisibleLexical,
@@ -5959,7 +6465,7 @@ mod tests {
         .into_iter()
         .map(|reason| reason.stable_rank())
         .collect();
-        assert_eq!(reason_ranks, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(reason_ranks, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
         let confidence_ranks: Vec<_> = [
             InlineCandidateConfidence::High,
@@ -6003,6 +6509,62 @@ mod tests {
         let score = InlineCandidateScore::for_candidate(source, priority, &item, semantic_context);
         let metadata = InlineCandidateMetadata::for_candidate(source, &item, semantic_context);
         RankedCompletionItem { score, order, metadata, item }
+    }
+
+    #[test]
+    fn module_candidate_bonus_context_expected_syntax_not_use_module_boundary_discriminator() {
+        let provider = InlineCompletionProvider::new();
+        let prepared = must_some(provider.prepare_context("", 0, 0));
+        let mut semantic = provider.semantic_context_for_prepared_context(&prepared);
+        semantic.available_modules = vec![ModuleFact { name: "My::App".into() }];
+        let item = InlineCompletionItem {
+            insert_text: "My::App;".into(),
+            filter_text: Some("My::App".into()),
+            range: None,
+            command: None,
+        };
+
+        semantic.expected_syntax = ExpectedSyntax::ReturnExpression;
+        assert_eq!(module_candidate_bonus(&item, &semantic), 0);
+
+        semantic.expected_syntax = ExpectedSyntax::UseModule;
+        assert_eq!(module_candidate_bonus(&item, &semantic), 35);
+    }
+
+    #[test]
+    fn receiver_candidate_bonus_context_expected_syntax_not_method_name_boundary_discriminator() {
+        let provider = InlineCompletionProvider::new();
+        let prepared = must_some(provider.prepare_context("", 0, 0));
+        let mut semantic = provider.semantic_context_for_prepared_context(&prepared);
+        semantic.current_package_methods = vec![MethodFact { name: "save".into() }];
+        let item = InlineCompletionItem {
+            insert_text: "save()".into(),
+            filter_text: Some("save".into()),
+            range: None,
+            command: None,
+        };
+
+        semantic.expected_syntax = ExpectedSyntax::ReturnExpression;
+        assert_eq!(receiver_candidate_bonus(&item, &semantic), 0);
+
+        semantic.expected_syntax = ExpectedSyntax::MethodName;
+        assert_eq!(receiver_candidate_bonus(&item, &semantic), 30);
+    }
+
+    #[test]
+    fn test_candidate_bonus_context_file_role_is_test_boundary_discriminator() {
+        let provider = InlineCompletionProvider::new();
+        let prepared = must_some(provider.prepare_context("", 0, 0));
+        let mut semantic = provider.semantic_context_for_prepared_context(&prepared);
+        semantic.expected_syntax = ExpectedSyntax::Unknown;
+        semantic.file_role = FileRole::Module;
+        assert_eq!(test_candidate_bonus(&semantic), 0);
+
+        semantic.file_role = FileRole::Test;
+        assert_eq!(test_candidate_bonus(&semantic), 20);
+
+        semantic.expected_syntax = ExpectedSyntax::TestAssertionArguments;
+        assert_eq!(test_candidate_bonus(&semantic), 30);
     }
 
     #[test]

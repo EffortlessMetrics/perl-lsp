@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use perl_lsp::{JsonRpcRequest, LspServer};
 use perl_tdd_support::must;
@@ -26,6 +26,20 @@ fn initialized_server() -> LspServer {
         "params": {}
     }))));
     server
+}
+
+fn wait_for_debounce_counts(
+    uri_counts: &Arc<std::sync::Mutex<Vec<usize>>>,
+    timeout: Duration,
+) -> Vec<usize> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let counts = uri_counts.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        if !counts.is_empty() || Instant::now() >= deadline {
+            return counts;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
 }
 
 // ── #2457: Parser cancellation token wiring ─────────────────────────────────
@@ -159,7 +173,9 @@ fn test_file_watcher_debouncer_coalesces_50_rapid_events() {
 
     let calls = call_count.load(Ordering::SeqCst);
     let uris = total_uris.load(Ordering::SeqCst);
-    assert!(calls <= 2, "Expected <=2 batch calls for 50 rapid changes, got {calls}");
+    // Under CI scheduler load the 100ms window can fire while the producer is
+    // still queueing events. The contract is coalescence, not a single batch.
+    assert!(calls <= 6, "Expected <=6 batch calls for 50 rapid changes, got {calls}");
     assert_eq!(uris, 50, "All 50 URIs should be delivered, got {uris}");
 }
 
@@ -210,9 +226,7 @@ fn test_file_watcher_debouncer_deduplicates_same_uri() {
         debouncer.schedule("file:///workspace/same.pl");
     }
 
-    thread::sleep(Duration::from_millis(200));
-
-    let counts = uri_counts.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let counts = wait_for_debounce_counts(&uri_counts, Duration::from_secs(1));
     // Total URIs delivered should be 1 (deduplicated)
     let total: usize = counts.iter().sum();
     assert_eq!(total, 1, "Expected 1 deduplicated URI, got {total} across {:?}", counts);

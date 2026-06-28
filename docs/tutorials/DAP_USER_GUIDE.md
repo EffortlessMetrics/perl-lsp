@@ -7,11 +7,11 @@
 > - **Reference sections**: Configuration specifications and options
 > - **Explanation sections**: Understanding DAP architecture and design
 
-**Status**: Native adapter CLI (launch + attach + stepping + evaluate) + BridgeAdapter guide (Perl::LanguageServer)
-**Version**: 0.12.x
-**Date**: 2026-04-27
+**Status**: Native adapter CLI for launch, attach, stepping, variables, stack frames, and evaluate; BridgeAdapter remains for `Perl::LanguageServer` compatibility.
+**Version**: 0.17.0
+**Date**: 2026-06-28
 
-**Note**: The `perl-dap` CLI runs the native adapter (launch + attach) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.
+**Dependency note**: Native `perl-dap` requires a local Perl interpreter for debug sessions. Its Rust parser-backed runtime (`perl-parser`, `perl-lexer`, and the `perl-dap-*` support crates) is compiled into the shipped binary; users do not install `perl-parser` separately. `Perl::LanguageServer` is only required for legacy bridge-mode workflows (the BridgeAdapter library or `Perl::LanguageServer` DAP directly).
 
 ---
 
@@ -466,8 +466,10 @@ The `perl-dap` CLI uses the native adapter to drive `perl -d` directly. A Bridge
 
 The CLI already uses the native adapter with launch + attach + evaluation support. Remaining roadmap items focus on deeper protocol parity and hardening.
 
+**Already shipped**:
+- AST-based breakpoint validation (`AstBreakpointValidator`, leveraging `perl-parser`) — rejects breakpoints on blank lines, comments, POD regions, and heredoc interiors, and validates conditional-breakpoint expressions. Where source context is unavailable the validator falls back conservatively rather than rejecting.
+
 **Planned Features**:
-- AST-based breakpoint validation (leveraging `perl-parser`)
 - Incremental parsing integration (<1ms breakpoint updates)
 - Workspace navigation for cross-file debugging
 - Enhanced performance (<50ms breakpoint operations)

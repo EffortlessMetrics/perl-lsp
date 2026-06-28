@@ -1,4 +1,4 @@
-//! Mutation-proof boundary tests for four merged parser seams.
+//! Mutation-proof boundary tests for five merged parser seams.
 //!
 //! Each test pins ONE decision boundary so that a single-line mutation of the
 //! guarding sub-condition causes exactly that test to fail.  Expectations were
@@ -20,6 +20,14 @@
 //! Seam 4 — unbraced deref + indirect-call comma (`variables.rs` + `calls.rs`, #725)
 //!   Issue: `$$ref` was parsed as `Variable{sigil:"$",name:"$ref"}` instead of
 //!   a `Unary` deref node; `catfile $$self, $_` lost the second argument.
+//!
+//! Seam 5 — s///e embedded-code marker (`primary.rs` + `quotes.rs`, #975)
+//!   Issue: `has_embedded_code` was derived solely from `analyze_regex_body_for_ast`,
+//!   which only detects `(?{...})` inline code blocks.  The `e`/`ee` modifiers
+//!   evaluate the replacement as Perl code (equivalent to `eval`) but were never
+//!   consulted.  Fix: OR in `modifiers.contains('e')` at both originating sites.
+//!   The `(risk:code)` sexp marker is the discriminating signal — a mutation
+//!   removing `|| modifiers.contains('e')` would make it disappear for s///e.
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
@@ -691,4 +699,114 @@ fn seam4_all_deref_forms_parse_cleanly() {
     assert_clean_parse("my $pid = $$;");
     assert_clean_parse("$ref;");
     assert_clean_parse("catfile $$self, $_;");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEAM 5 — s///e embedded-code marker (`primary.rs` + `quotes.rs`, #975)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// The `e` modifier evaluates the replacement as Perl code (equiv. to `eval`),
+// so the substitution carries embedded code regardless of the pattern body.
+// Fix: `has_embedded_code = analyze_regex_body_for_ast(...) || modifiers.contains('e')`
+// applied at two sites:
+//   primary.rs — s/// as a standalone expression (bound via =~ later)
+//   quotes.rs  — s{}{} quote-operator form (no =~)
+//
+// Discriminating signal: `(risk:code)` marker in the sexp.
+// A mutation that removes `|| modifiers.contains('e')` causes every e-modifier
+// test below to fail — the `(risk:code)` annotation disappears from the sexp.
+//
+// Key sexp shapes:
+//   $s =~ s/a/b/e;   → (substitution (variable $ s) "a" "b" "e" (risk:code))
+//   $s =~ s/a/b/g;   → (substitution (variable $ s) "a" "b" "g")   [no marker]
+//   s{a}{b}e;        → (substitution (identifier $_) "a" "b" "e" (risk:code))
+//   s{a}{b}g;        → (substitution (identifier $_) "a" "b" "g")   [no marker]
+
+// ── BOUNDARY A: Site 1 (primary.rs) — e modifier → risk:code present ─────────
+
+/// `$s =~ s/a/b/e` — single `e` modifier must emit `(risk:code)` in the sexp.
+/// Pinned boundary: `modifiers.contains('e')` true → `has_embedded_code = true`.
+/// A mutation removing `|| modifiers.contains('e')` makes this test fail.
+#[test]
+fn seam5_primary_e_modifier_emits_risk_code_marker() {
+    let s = sexp(r#"$s =~ s/a/b/e;"#);
+    assert!(s.contains("(risk:code)"), "s///e must emit (risk:code) in sexp; got: {s}");
+    assert!(s.contains("(substitution"), "must produce a substitution node; got: {s}");
+}
+
+/// `$s =~ s/a/b/ee` — double-eval form must also emit `(risk:code)`.
+/// Boundary: `'e' in "ee"` is still true for `modifiers.contains('e')`.
+#[test]
+fn seam5_primary_ee_modifier_emits_risk_code_marker() {
+    let s = sexp(r#"$s =~ s/a/b/ee;"#);
+    assert!(s.contains("(risk:code)"), "s///ee must emit (risk:code) in sexp; got: {s}");
+}
+
+// ── BOUNDARY B: Site 1 (primary.rs) — no e modifier → risk:code absent ───────
+
+/// `$s =~ s/a/b/g` — no `e` modifier: `(risk:code)` must NOT appear.
+/// Boundary: `modifiers.contains('e')` false, pattern has no `(?{...})`.
+/// Verifies the guard does not over-trigger.
+#[test]
+fn seam5_primary_no_e_modifier_no_risk_code_marker() {
+    let s = sexp(r#"$s =~ s/a/b/g;"#);
+    assert!(!s.contains("(risk:code)"), "s///g must NOT emit (risk:code) in sexp; got: {s}");
+    assert!(s.contains("(substitution"), "must still produce a substitution node; got: {s}");
+}
+
+// ── BOUNDARY C: Site 2 (quotes.rs) — e modifier → risk:code present ──────────
+
+/// `s{a}{b}e` — brace-delimited form (quotes.rs site) with `e` modifier.
+/// Boundary: quotes.rs `|| modifiers.contains('e')` path must also fire.
+/// Without the fix at the quotes.rs site, this test would fail independently
+/// of the primary.rs fix.
+#[test]
+fn seam5_quotes_e_modifier_emits_risk_code_marker() {
+    let s = sexp(r#"s{a}{b}e;"#);
+    assert!(s.contains("(risk:code)"), "s{{}}{{}}e must emit (risk:code) in sexp; got: {s}");
+    assert!(s.contains("(substitution"), "must produce a substitution node; got: {s}");
+}
+
+/// `s{a}{b}ee` — brace-delimited double-eval form must emit `(risk:code)`.
+#[test]
+fn seam5_quotes_ee_modifier_emits_risk_code_marker() {
+    let s = sexp(r#"s{a}{b}ee;"#);
+    assert!(s.contains("(risk:code)"), "s{{}}{{}}ee must emit (risk:code) in sexp; got: {s}");
+}
+
+// ── BOUNDARY D: Site 2 (quotes.rs) — no e modifier → risk:code absent ────────
+
+/// `s{a}{b}g` — brace-delimited form with no `e` modifier: `(risk:code)` absent.
+/// Verifies the quotes.rs guard does not over-trigger.
+#[test]
+fn seam5_quotes_no_e_modifier_no_risk_code_marker() {
+    let s = sexp(r#"s{a}{b}g;"#);
+    assert!(!s.contains("(risk:code)"), "s{{}}{{}}g must NOT emit (risk:code) in sexp; got: {s}");
+}
+
+// ── BOUNDARY E: pattern-body `(?{...})` path unchanged ───────────────────────
+
+/// `$s =~ s/(?{1+1})/b/g` — embedded code in pattern body, no `e` modifier.
+/// Verifies the original `analyze_regex_body_for_ast` path is not broken.
+/// `(risk:code)` must appear because of the `(?{...})`, not because of `e`.
+#[test]
+fn seam5_pattern_body_embedded_code_unchanged() {
+    let s = sexp(r#"$s =~ s/(?{1+1})/b/g;"#);
+    assert!(
+        s.contains("(risk:code)"),
+        "s///g with (?{{...}}) in pattern must still emit (risk:code); got: {s}"
+    );
+}
+
+// ── Clean-parse guards ────────────────────────────────────────────────────────
+
+#[test]
+fn seam5_all_subst_e_forms_parse_cleanly() {
+    assert_clean_parse(r#"$s =~ s/a/b/e;"#);
+    assert_clean_parse(r#"$s =~ s/a/b/ee;"#);
+    assert_clean_parse(r#"$s =~ s/a/b/ge;"#);
+    assert_clean_parse(r#"$s =~ s/a/b/g;"#);
+    assert_clean_parse(r#"s{a}{b}e;"#);
+    assert_clean_parse(r#"s{a}{b}ee;"#);
+    assert_clean_parse(r#"s{a}{b}g;"#);
 }

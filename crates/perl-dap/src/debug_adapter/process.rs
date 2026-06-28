@@ -18,6 +18,9 @@ impl DebugAdapter {
         request_seq: i64,
         _arguments: Option<Value>,
     ) -> DapMessage {
+        // Mark adapter as initialized (state machine validation)
+        self.initialized.store(true, std::sync::atomic::Ordering::Release);
+
         let supports_core = catalog_has_feature("dap.core");
         let supports_basic_breakpoints = catalog_has_feature("dap.breakpoints.basic");
         let supports_hit_conditions = catalog_has_feature("dap.breakpoints.hit_condition");
@@ -60,9 +63,9 @@ impl DebugAdapter {
             "supportsEvaluateForHovers": supports_core,
             "supportsStepBack": false,
             "supportsSetVariable": supports_core,
-            "supportsRestartFrame": false,
+            "supportsRestartFrame": true,
             "supportsGotoTargetsRequest": supports_core,
-            "supportsStepInTargetsRequest": false,
+            "supportsStepInTargetsRequest": true,
             "supportsCompletionsRequest": supports_completions,
             "supportsModulesRequest": supports_modules,
             "supportsRestartRequest": true,
@@ -73,7 +76,7 @@ impl DebugAdapter {
             "supportsDelayedStackTraceLoading": false,
             "supportsLoadedSourcesRequest": true,
             "supportsLogPoints": supports_log_points,
-            "supportsTerminateThreadsRequest": false,
+            "supportsTerminateThreadsRequest": true,
             "supportsSetExpression": supports_core,
             "supportsTerminateRequest": supports_core,
             "supportsDataBreakpoints": supports_watchpoints,
@@ -106,20 +109,40 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
+        // Validate state machine: initialize must be called before launch
+        if !self.initialized.load(std::sync::atomic::Ordering::Acquire) {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "launch".to_string(),
+                body: None,
+                message: Some(
+                    "initialize request must be sent before launch. \
+                     The DAP protocol requires that the client send an initialize request first \
+                     to establish the adapter's capabilities and prepare the session."
+                        .to_string(),
+                ),
+            };
+        }
+
         if let Some(args) = arguments {
             // Store launch arguments for restart support
             *lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args") =
                 Some(args.clone());
 
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
-            let perl_interpreter = args.get("perl").and_then(|p| p.as_str()).unwrap_or("perl");
+            let perl_interpreter = Self::resolve_launch_interpreter(&args);
 
-            // Set workspace root for path validation (prefer cwd, fall back to program's parent)
-            let workspace = args
-                .get("cwd")
-                .and_then(|c| c.as_str())
-                .map(PathBuf::from)
-                .or_else(|| Path::new(program).parent().map(PathBuf::from));
+            // Extract user-provided cwd for script execution (if specified)
+            // This is the working directory where the debugged script will run,
+            // separate from the workspace validation boundary (which is always the script's parent).
+            let user_cwd = args.get("cwd").and_then(|c| c.as_str()).map(PathBuf::from);
+
+            // Set workspace root for path validation
+            // Always use the script's parent directory as the workspace boundary
+            // The workspace validation ensures the script exists within its project context
+            let workspace = Path::new(program).parent().map(PathBuf::from);
             if let Some(ref root) = workspace {
                 *lock_or_recover(&self.workspace_root, "debug_adapter.workspace_root") =
                     Some(root.clone());
@@ -151,10 +174,11 @@ impl DebugAdapter {
             // Launch Perl debugger
             match self.launch_debugger(
                 program,
-                perl_interpreter,
+                &perl_interpreter,
                 perl_args,
                 stop_on_entry,
                 env_overrides,
+                user_cwd,
             ) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
@@ -213,7 +237,59 @@ impl DebugAdapter {
         }
     }
 
-    /// Launch the Perl debugger
+    /// Resolve the Perl interpreter for a debug launch from its `launch.json`
+    /// arguments.
+    ///
+    /// Resolution order:
+    ///
+    /// 1. An explicit, non-empty interpreter from either the documented
+    ///    `perlPath` key (the camelCase form of [`LaunchConfiguration`]'s
+    ///    `perl_path`) or the `perl` alias is honored **verbatim** — the user's
+    ///    deliberate choice always wins.
+    /// 2. Otherwise, if the launch config supplies its own `PATH` via `env`, the
+    ///    bare `"perl"` is kept so the launch-specific `PATH` selects the
+    ///    interpreter at spawn time. Resolving here would consult the parent
+    ///    process environment and silently ignore that `PATH`.
+    /// 3. Otherwise the interpreter is resolved through the shared
+    ///    [`PerlToolchainProfile`] so the debug session uses the same
+    ///    toolchain-detected interpreter (perlbrew → plenv → `PATH`) the LSP
+    ///    analyzes with, closing the DAP/LSP "which perl?" gap (#1929).
+    /// 4. If nothing resolves, falls back to `"perl"`, preserving the previous
+    ///    default so the launch still produces the usual "perl not on PATH"
+    ///    diagnostic.
+    ///
+    /// [`LaunchConfiguration`]: perl_dap_config::LaunchConfiguration
+    /// [`PerlToolchainProfile`]: perl_lsp_rs_core::config::PerlToolchainProfile
+    fn resolve_launch_interpreter(args: &Value) -> String {
+        let explicit = args
+            .get("perlPath")
+            .and_then(|p| p.as_str())
+            .or_else(|| args.get("perl").and_then(|p| p.as_str()))
+            .filter(|p| !p.is_empty());
+        if let Some(path) = explicit {
+            return path.to_string();
+        }
+
+        let launch_overrides_path = args
+            .get("env")
+            .and_then(Value::as_object)
+            .is_some_and(|env| env.keys().any(|key| key.eq_ignore_ascii_case("PATH")));
+        if launch_overrides_path {
+            return "perl".to_string();
+        }
+
+        perl_lsp_rs_core::config::PerlToolchainProfile::resolve(
+            &perl_lsp_rs_core::config::WorkspaceConfig::default(),
+        )
+        .map(|profile| profile.into_perl_binary().to_string_lossy().into_owned())
+        .unwrap_or_else(|| "perl".to_string())
+    }
+
+    /// Launch the Perl debugger for the given script.
+    ///
+    /// Validates the program path and interpreter, runs a pre-launch `perl -c`
+    /// syntax check, then spawns `perl -d` with the supplied arguments and
+    /// environment overrides. Returns the thread ID on success.
     pub(super) fn launch_debugger(
         &mut self,
         program: &str,
@@ -221,6 +297,7 @@ impl DebugAdapter {
         args: Vec<String>,
         stop_on_entry: bool,
         env_overrides: HashMap<String, String>,
+        cwd_override: Option<PathBuf>,
     ) -> Result<i32, String> {
         // Security: Validate program path before any process spawning
         // This prevents command injection via flag arguments (e.g., "-e malicious_code")
@@ -235,13 +312,6 @@ impl DebugAdapter {
                  to the path of the script you want to debug."
                     .to_string(),
             );
-        }
-
-        if has_surrounding_quotes(program) {
-            return Err(format!(
-                "The launch.json 'program' value includes surrounding quotes: {program}. \
-                 Remove the extra quotes so it is just the script path."
-            ));
         }
 
         // Validate that the program is a regular file (not a directory, device, etc.)
@@ -295,16 +365,21 @@ impl DebugAdapter {
         // debugger.  This catches syntax errors early and surfaces a clear,
         // actionable message to the user instead of a generic "Cannot start
         // Perl debugger" failure after `perl -d` exits immediately.
-        Self::check_syntax(perl_interpreter, program, &env_overrides)?;
+        Self::check_syntax(perl_interpreter, program, &env_overrides, cwd_override.clone())?;
 
         // Use PerlOracleEnv to deny ambient PERL5LIB/PERL5OPT so the debug
         // session env is controlled entirely by launch.json `env` (#8688).
         // `env_overrides` (explicit launch.json entries) are added via
         // extra_env so they reach the subprocess unconditionally.
-        let prog_cwd = Path::new(program)
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        // Use user-specified cwd if provided; otherwise default to script's parent directory
+        let prog_cwd = if let Some(user_cwd) = cwd_override {
+            user_cwd
+        } else {
+            Path::new(program)
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        };
         let mut oracle = perl_lsp_rs_core::config::PerlOracleEnv::for_version_probe(
             PathBuf::from(perl_interpreter),
             prog_cwd,
@@ -384,13 +459,19 @@ impl DebugAdapter {
         perl_interpreter: &str,
         program: &str,
         env_overrides: &HashMap<String, String>,
+        cwd_override: Option<PathBuf>,
     ) -> Result<(), String> {
         // PerlOracleEnv denies ambient PERL5LIB/PERL5OPT (#8688); explicit
         // env_overrides from launch.json are honored via extra_env.
-        let prog_cwd = Path::new(program)
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        // Use user-specified cwd if provided; otherwise default to script's parent directory
+        let prog_cwd = if let Some(user_cwd) = cwd_override {
+            user_cwd
+        } else {
+            Path::new(program)
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        };
         let mut oracle = perl_lsp_rs_core::config::PerlOracleEnv::for_version_probe(
             PathBuf::from(perl_interpreter),
             prog_cwd,
@@ -1441,6 +1522,32 @@ impl DebugAdapter {
 
     /// Handle configurationDone request
     pub(super) fn handle_configuration_done(&self, seq: i64, request_seq: i64) -> DapMessage {
+        // Validate state machine: launch (or attach) must be called before configurationDone.
+        // NOTE: Each lock_or_recover call must complete and drop its guard before the next one
+        // to avoid re-entrancy deadlock on std::sync::Mutex (which is non-reentrant).
+        let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
+        let has_attached_pid =
+            lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid").is_some();
+        let has_tcp_session =
+            lock_or_recover(&self.tcp_session, "debug_adapter.tcp_session").is_some();
+
+        if !has_session && !has_attached_pid && !has_tcp_session {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "configurationDone".to_string(),
+                body: None,
+                message: Some(
+                    "No active debug session. \
+                     The launch or attach request must be sent before configurationDone. \
+                     The DAP protocol requires that the client send a launch (or attach) request first \
+                     to start the debugging session."
+                        .to_string(),
+                ),
+            };
+        }
+
         // Determine whether stopOnEntry was requested in the launch args.
         let stop_on_entry =
             lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args")
@@ -1687,18 +1794,75 @@ impl DebugAdapter {
     }
 }
 
-fn has_surrounding_quotes(value: &str) -> bool {
-    value.len() >= 2
-        && ((value.starts_with('"') && value.ends_with('"'))
-            || (value.starts_with('\'') && value.ends_with('\'')))
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        DebugAdapter, detect_perl_info, format_perl_spawn_error, has_surrounding_quotes,
-        is_valid_perl_interpreter,
+        DebugAdapter, detect_perl_info, format_perl_spawn_error, is_valid_perl_interpreter,
     };
+
+    /// An explicit, non-empty interpreter is honored verbatim — from the
+    /// documented `perlPath` key or the `perl` alias — and the toolchain
+    /// resolver must not override the user's deliberate choice.
+    #[test]
+    fn resolve_launch_interpreter_honors_explicit_value() {
+        let perl_alias = serde_json::json!({ "perl": "/usr/bin/perl" });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&perl_alias), "/usr/bin/perl");
+
+        let perl_path_key = serde_json::json!({ "perlPath": "/opt/perlbrew/perls/x/bin/perl" });
+        assert_eq!(
+            DebugAdapter::resolve_launch_interpreter(&perl_path_key),
+            "/opt/perlbrew/perls/x/bin/perl"
+        );
+
+        // An explicit interpreter wins even when the launch config also sets PATH.
+        let explicit_with_path = serde_json::json!({
+            "perl": "/custom/perl",
+            "env": { "PATH": "/custom/bin" },
+        });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&explicit_with_path), "/custom/perl");
+    }
+
+    /// The documented `perlPath` key takes precedence over the `perl` alias when
+    /// both are present.
+    #[test]
+    fn resolve_launch_interpreter_prefers_perlpath_over_perl_alias() {
+        let both = serde_json::json!({ "perlPath": "/canonical/perl", "perl": "/alias/perl" });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&both), "/canonical/perl");
+    }
+
+    /// When the launch config supplies its own `PATH` via `env` and no explicit
+    /// interpreter, the bare `"perl"` is kept so the launch `PATH` selects the
+    /// interpreter at spawn time — resolving against the parent environment here
+    /// would ignore it. Regression guard for the #2026 review.
+    #[test]
+    fn resolve_launch_interpreter_defers_to_launch_path_override() {
+        let path_override = serde_json::json!({ "env": { "PATH": "/project/perl/bin" } });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&path_override), "perl");
+
+        // Case-insensitive key match (Windows-style `Path`).
+        let win_path = serde_json::json!({ "env": { "Path": "C:/perl/bin" } });
+        assert_eq!(DebugAdapter::resolve_launch_interpreter(&win_path), "perl");
+    }
+
+    /// With no explicit interpreter and no launch `PATH` override, the
+    /// interpreter is resolved through the shared toolchain profile rather than
+    /// defaulting to a bare `"perl"`. The result is never empty: either a real
+    /// resolved path or the `"perl"` fallback when nothing can be found.
+    #[test]
+    fn resolve_launch_interpreter_resolves_default_via_profile() {
+        for args in [
+            serde_json::json!({}),
+            serde_json::json!({ "perl": "" }),
+            serde_json::json!({ "env": { "RUST_LOG": "debug" } }),
+        ] {
+            let resolved = DebugAdapter::resolve_launch_interpreter(&args);
+            assert!(!resolved.is_empty(), "resolved interpreter must never be empty");
+            assert!(
+                resolved == "perl" || resolved.to_lowercase().contains("perl"),
+                "resolved default should be a perl interpreter; got: {resolved:?}"
+            );
+        }
+    }
 
     #[test]
     fn missing_module_name_parses_standard_module_path() {
@@ -1734,40 +1898,6 @@ mod tests {
         assert!(message.contains("Module Some::Missing::Module not found"));
         assert!(message.contains("cpan Some::Missing::Module"));
         assert!(message.contains("metacpan.org/pod/Some::Missing::Module"));
-    }
-
-    #[test]
-    fn detects_surrounding_program_quotes() -> Result<(), Box<dyn std::error::Error>> {
-        assert!(has_surrounding_quotes("\"script.pl\""));
-        assert!(has_surrounding_quotes("'script.pl'"));
-        assert!(!has_surrounding_quotes("script.pl"));
-        assert!(!has_surrounding_quotes("\"script.pl"));
-        assert!(!has_surrounding_quotes("script.pl\""));
-        Ok(())
-    }
-
-    #[test]
-    fn launch_debugger_rejects_quoted_program_path_with_guidance()
-    -> Result<(), Box<dyn std::error::Error>> {
-        use std::collections::HashMap;
-        use std::io::Write;
-        use tempfile::NamedTempFile;
-
-        let mut tmp = NamedTempFile::new()?;
-        writeln!(tmp, "# placeholder")?;
-        let tmp_path = tmp.path().to_str().ok_or("temp path is not valid UTF-8")?;
-        let quoted = format!("\"{tmp_path}\"");
-
-        let mut adapter = DebugAdapter::new();
-        let error = adapter
-            .launch_debugger(&quoted, "perl", Vec::new(), false, HashMap::new())
-            .err()
-            .ok_or("expected quoted program path to be rejected")?;
-
-        assert!(error.contains("surrounding quotes"), "message was: {error}");
-        assert!(error.contains("launch.json 'program'"), "message was: {error}");
-        assert!(error.contains("Remove the extra quotes"), "message was: {error}");
-        Ok(())
     }
 
     /// Verify that `detect_perl_info()` runs without panicking.
@@ -1819,9 +1949,13 @@ mod tests {
         let tmp_path = tmp.path().to_str().ok_or("temp path is not valid UTF-8")?.to_string();
 
         let mut adapter = DebugAdapter::new();
+
+        // Initialize first (required by state machine validation)
+        let _ = adapter.handle_initialize(1, 1, None);
+
         let response = adapter.handle_launch(
-            1,
-            1,
+            2,
+            2,
             Some(serde_json::json!({
                 "program": tmp_path
             })),

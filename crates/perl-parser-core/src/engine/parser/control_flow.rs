@@ -731,6 +731,8 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
 
         while self.peek_kind() != Some(TokenKind::RightBrace) && !self.tokens.is_eof() {
+            self.check_cancelled()?;
+
             match self.peek_kind() {
                 Some(TokenKind::When) => {
                     statements.push(self.parse_when_statement()?);
@@ -738,12 +740,54 @@ impl<'a> Parser<'a> {
                 Some(TokenKind::Default) => {
                     statements.push(self.parse_default_statement()?);
                 }
-                _ => {
-                    return Err(ParseError::syntax(
-                        "Expected 'when' or 'default' in given block",
-                        self.current_position(),
-                    ));
-                }
+                // Perl allows arbitrary statements inside a `given` block, not
+                // just `when`/`default` block constructs. This includes ordinary
+                // statements (e.g. `my $x = 1;`) and statements carrying a
+                // `when`/`default` postfix modifier (e.g.
+                // `print "matched" when $_ == 5;`). Fall back to the general
+                // statement parser, mirroring `parse_block`'s panic-mode recovery
+                // so one malformed statement doesn't abort the whole block.
+                _ => match self.parse_statement() {
+                    Ok(stmt) => {
+                        // Skip empty blocks produced by lone semicolons.
+                        if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty())
+                        {
+                            statements.push(stmt);
+                        }
+                    }
+                    Err(e) => {
+                        // Don't recover from these — propagate immediately.
+                        if matches!(
+                            e,
+                            ParseError::RecursionLimit
+                                | ParseError::NestingTooDeep { .. }
+                                | ParseError::Cancelled
+                        ) {
+                            return Err(e);
+                        }
+
+                        self.errors.push(e.clone());
+                        let error_location = self.current_position();
+                        let error_msg = format!("{}", e);
+                        let peek_display = self
+                            .peek_kind()
+                            .map(|k| k.display_name())
+                            .unwrap_or("end of input");
+                        let error_node = self.recover_from_error(
+                            error_msg,
+                            "statement".to_string(),
+                            peek_display.to_string(),
+                            error_location,
+                        );
+                        statements.push(error_node);
+
+                        // If synchronization fails we stop to prevent an infinite
+                        // loop, matching `parse_block`'s recovery contract.
+                        if !self.synchronize() {
+                            break;
+                        }
+                    }
+                },
             }
         }
 

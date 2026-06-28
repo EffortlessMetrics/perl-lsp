@@ -1,18 +1,8 @@
 //! Moniker request handling and symbol import/export classification
 
 use super::super::*;
-use crate::protocol::invalid_params;
+use crate::protocol::{req_position, req_uri};
 use perl_module::import::resolve_known_export_tag;
-
-fn invalid_moniker_params() -> JsonRpcError {
-    invalid_params(
-        "Missing required parameters: textDocument.uri and position\n\n\
-         textDocument/moniker expects params.textDocument.uri plus params.position.line and \
-         params.position.character to identify the symbol under the cursor.\n\n\
-         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"},\
-         \"position\":{\"line\":10,\"character\":4}}",
-    )
-}
 
 impl LspServer {
     /// Handle textDocument/moniker request
@@ -28,20 +18,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params
-                .pointer("/textDocument/uri")
-                .and_then(|v| v.as_str())
-                .ok_or_else(invalid_moniker_params)?;
-            let line = params
-                .pointer("/position/line")
-                .and_then(|v| v.as_u64())
-                .and_then(|n| u32::try_from(n).ok())
-                .ok_or_else(invalid_moniker_params)?;
-            let character = params
-                .pointer("/position/character")
-                .and_then(|v| v.as_u64())
-                .and_then(|n| u32::try_from(n).ok())
-                .ok_or_else(invalid_moniker_params)?;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -117,8 +95,6 @@ impl LspServer {
                     }
                 }
             }
-        } else {
-            return Err(invalid_moniker_params());
         }
 
         Ok(Some(json!([])))

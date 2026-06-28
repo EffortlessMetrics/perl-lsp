@@ -42,7 +42,7 @@ ${command} 2>&1 | tee '${logFile}'
 pipeline {
     agent {
         docker {
-            image 'rust:1.92-bookworm'
+            image 'rust:1.95-bookworm'
             args '-u root:root'
             reuseNode true
         }

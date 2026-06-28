@@ -1,12 +1,31 @@
 use super::*;
+use crate::providers::file_completion::CWD_LOCK as FILE_COMPLETION_CWD_LOCK;
 use perl_parser_core::Parser;
 use perl_tdd_support::{must, must_some};
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
 use url::Url;
+
+struct CurrentDirGuard {
+    previous: PathBuf,
+}
+
+impl CurrentDirGuard {
+    fn change_to(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let previous = std::env::current_dir()?;
+        std::env::set_current_dir(path)?;
+        Ok(Self { previous })
+    }
+}
+
+impl Drop for CurrentDirGuard {
+    fn drop(&mut self) {
+        let _ = std::env::set_current_dir(&self.previous);
+    }
+}
 
 #[test]
 fn test_variable_completion() {
@@ -802,6 +821,77 @@ isa => 'St
 }
 
 #[test]
+fn test_completion_sorttext_prevents_context_mixing() -> Result<(), Box<dyn std::error::Error>> {
+    let hash_code = "my %config = (host => 'localhost', port => 5432);\n$config{ho";
+    let mut hash_parser = Parser::new(hash_code);
+    let hash_ast = must(hash_parser.parse());
+    let hash_provider = CompletionProvider::new(&hash_ast);
+    let hash_completions = hash_provider.get_completions(hash_code, hash_code.len());
+    let hash_item = must_some(hash_completions.iter().find(|item| item.label == "host"));
+    let hash_sort = must_some(hash_item.sort_text.as_deref());
+
+    let type_code = concat!(
+        "\n",
+        "use MyApp::Types qw(StrFoo);\n",
+        "use Moose;\n",
+        "\n",
+        "has 'id' => (\n",
+        "is => 'ro',\n",
+        "isa => 'S"
+    );
+    let mut type_parser = Parser::new(type_code);
+    let type_ast = must(type_parser.parse());
+    let type_provider = CompletionProvider::new_with_index_and_source(&type_ast, type_code, None);
+    let type_completions = type_provider.get_completions(type_code, type_code.len());
+    let str_item = must_some(type_completions.iter().find(|item| item.label == "Str"));
+    let str_sort = must_some(str_item.sort_text.as_deref());
+    let str_foo_item = must_some(type_completions.iter().find(|item| item.label == "StrFoo"));
+    let str_foo_sort = must_some(str_foo_item.sort_text.as_deref());
+
+    let option_code = r#"
+use Moose;
+
+has 'id' => (
+i"#;
+    let mut option_parser = Parser::new(option_code);
+    let option_ast = must(option_parser.parse());
+    let option_provider =
+        CompletionProvider::new_with_index_and_source(&option_ast, option_code, None);
+    let option_completions = option_provider.get_completions(option_code, option_code.len());
+    let option_item = must_some(option_completions.iter().find(|item| item.label == "is"));
+    let option_sort = must_some(option_item.sort_text.as_deref());
+
+    let field_code = r#"
+use Object::Pad;
+
+class Point {
+field $name :param;
+field $native_name :param;
+}
+
+Point->new(na"#;
+    let mut field_parser = Parser::new(field_code);
+    let field_ast = must(field_parser.parse());
+    let field_provider =
+        CompletionProvider::new_with_index_and_source(&field_ast, field_code, None);
+    let field_completions = field_provider.get_completions(field_code, field_code.len());
+    let field_item = must_some(field_completions.iter().find(|item| item.label == "name"));
+    let field_sort = must_some(field_item.sort_text.as_deref());
+
+    let mut sort_texts = vec![hash_sort, str_sort, str_foo_sort, option_sort, field_sort];
+    sort_texts.sort_unstable();
+
+    let expected = vec!["0f_name", "0h_host", "0o_is", "0t_Str", "0t_StrFoo"];
+    if sort_texts != expected {
+        return Err(
+            format!("expected grouped sortText values {expected:?}, got {sort_texts:?}").into()
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_regex_completion_binding_operator() {
     // Cursor right after the opening slash of a regex
     let code = r#"my $x = "hello"; $x =~ /"#;
@@ -1045,9 +1135,9 @@ fn test_is_not_in_regex_division() {
 }
 
 #[test]
-fn test_regex_completion_preserves_sigil_completions_in_interpolation() {
+fn test_regex_completion_suppresses_sigil_completions_in_patterns() {
     // Cursor is inside the regex body at the end of `$fo` — before the
-    // closing `/`. Variable completions must be offered, not flag completions.
+    // closing `/`. Variable completions are noisy inside regex patterns.
     let code = r#"my $foo = 1; my $bar = qr/^$fo/"#;
     // Position just before the closing '/'
     let pos = code.len() - 1;
@@ -1058,9 +1148,284 @@ fn test_regex_completion_preserves_sigil_completions_in_interpolation() {
     let completions = provider.get_completions(code, pos);
 
     assert!(
-        completions.iter().any(|item| item.label == "$foo"),
-        "expected interpolated regex variables to keep scalar completions"
+        !completions.iter().any(|item| item.label == "$foo"),
+        "expected variable completions to be suppressed inside regex patterns, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn test_regex_completion_suppresses_at_sigil_in_patterns() {
+    let code = r#"my @arr = (1, 2); $str =~ /prefix @ar"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "@arr"),
+        "expected array completions to be suppressed inside regex patterns, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_substitution_replacement_side_still_offers_variables() {
+    // Cursor is in the replacement side of s///, which remains a string-like
+    // expression context rather than a regex pattern.
+    let code = r#"my $baz = "x"; s/old/$ba"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        completions.iter().any(|item| item.label == "$baz"),
+        "expected variable completions on the replacement side of s///, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_regex_pattern_side_suppresses_variables_not_flags() {
+    let code = r#"$x =~ /\d"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        completions.iter().any(|item| item.label == r"\d"),
+        "regex constructs should still be offered for non-sigil prefixes inside regex, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_variables() {
+    let code = r#"my $message = "hi"; my $text = "Hello $me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected scalar variable completions to be suppressed inside strings, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_after_escaped_quote() {
+    let code = r#"my $message = "hi"; my $text = "Hello \" $me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected escaped quotes to keep string-context suppression active, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_in_single_quotes() {
+    let code = r#"my $message = "hi"; my $text = 'Hello $me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected scalar variable completions to be suppressed inside single-quoted strings, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_in_qq_literal() {
+    let code = r#"my $message = "hi"; my $text = qq{Hello $me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected scalar variable completions to be suppressed inside qq literals, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_scalar_in_q_literal() {
+    let code = r#"my $message = "hi"; my $text = q($me"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$message"),
+        "expected scalar variable completions to be suppressed inside q literals, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_function_sigils() {
+    let code = r#"sub helper {} my $text = "call &he"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "&helper"),
+        "expected function completions to be suppressed inside strings, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_after_hash_key_q_stays_in_code_context() {
+    let code = r#"my $name = "hi"; my %h = (q => 1); $h{q}; $na"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        completions.iter().any(|item| item.label == "$name"),
+        "hash-key q must not poison following code as string context, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_after_hash_key_m_still_suppresses_inside_later_string() {
+    let code = r#"my $name = "hi"; my %h = (m => 1); $h{m}; my $text = "Hello $na"#;
+    let pos = code.len();
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| item.label == "$name"),
+        "hash-key m must not hide a later real string context, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_preserves_path_completion() -> Result<(), Box<dyn std::error::Error>> {
+    let _cwd_guard = FILE_COMPLETION_CWD_LOCK.lock()?;
+    let temp = TempDir::new()?;
+    fs::create_dir_all(temp.path().join("src"))?;
+    let _dir_guard = CurrentDirGuard::change_to(temp.path())?;
+
+    let code = r#"my $path = "./""#;
+    let pos = code.len() - 1;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        completions.iter().any(|item| item.label == "src/"),
+        "expected path completion to remain available inside string paths, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_string_completion_suppresses_method_arrow_completions() {
+    let code = r#"my $dbh; my $s = "$dbh->""#;
+    let pos = code.len() - 1;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|item| matches!(item.label.as_str(), "can" | "selectrow_array")),
+        "method completions must stay suppressed inside strings, got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_string_completion_suppresses_multiline_use_qw_structural_completions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/MyUtils.pm")?,
+        "package MyUtils;\nsub helper_one {}\n1;\n".to_string(),
+    )?;
+    let code = "my $text = \"before\nuse MyUtils qw(he";
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions.iter().any(|item| item.label == "helper_one"),
+        "use/qw-looking text inside a multiline string must not trigger import completions; got: {:?}",
+        completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_string_completion_suppresses_multiline_require_structural_completions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+    let code = "my $text = \"before\nrequire Ut";
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions
+            .iter()
+            .any(|item| item.label == "Utils" && item.kind == CompletionItemKind::Module),
+        "require-looking text inside a multiline string must not trigger module completions; got: {:?}",
+        completions.iter().map(|item| (&item.label, &item.kind)).collect::<Vec<_>>()
+    );
+    Ok(())
 }
 
 #[test]
@@ -2322,12 +2687,16 @@ $obj->"#;
     let provider = CompletionProvider::new_with_index(&ast, Some(index));
     let completions = provider.get_completions(code, code.len());
 
-    let bark = completions.iter().find(|c| c.label == "bark");
-    if bark.is_none() {
-        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
-        panic!("fallback should include imported Foo's `bark`; got labels: {labels:?}");
-    }
-    let bark = bark.expect("checked above");
+    let bark = match completions.iter().find(|c| c.label == "bark") {
+        Some(bark) => bark,
+        None => {
+            let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+            return Err(format!(
+                "fallback should include imported Foo's `bark`; got labels: {labels:?}"
+            )
+            .into());
+        }
+    };
     let detail = must_some(bark.detail.as_deref());
     assert!(
         detail.contains("receiver: unknown, low confidence"),
@@ -2719,13 +3088,13 @@ sub mew { }
         .first()
         .copied()
         .and_then(|b| (b as char).to_digit(10).map(|d| d as u8))
-        .expect("exact sort_text must start with a digit");
+        .ok_or("exact sort_text must start with a digit")?;
     let fallback_tier: u8 = mew_sort
         .as_bytes()
         .first()
         .copied()
         .and_then(|b| (b as char).to_digit(10).map(|d| d as u8))
-        .expect("fallback sort_text must start with a digit");
+        .ok_or("fallback sort_text must start with a digit")?;
     assert!(
         exact_tier < fallback_tier,
         "exact tier {exact_tier} must sort above fallback tier {fallback_tier}"
@@ -3159,6 +3528,276 @@ fn test_use_statement_skips_past_module_name_at_qw() -> Result<(), Box<dyn std::
         completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
     );
     Ok(())
+}
+
+// -------------------------------------------------------------------------
+// Auto-import additionalTextEdits for workspace symbol completions (#1694)
+//
+// Completing an unimported workspace subroutine, variable, or constant should
+// attach an `additionalTextEdits` entry inserting the required `use Module;`
+// statement, matching the behavior already provided for method completions.
+// -------------------------------------------------------------------------
+
+/// Find the auto-import edit text on the completion item whose label matches
+/// `label`, if any.
+fn auto_import_edit_text<'a>(completions: &'a [CompletionItem], label: &str) -> Option<&'a str> {
+    completions
+        .iter()
+        .find(|c| c.label == label)?
+        .additional_edits
+        .first()
+        .map(|(_, text)| text.as_str())
+}
+
+#[test]
+fn workspace_subroutine_completion_auto_imports_module() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nsub barker { }\n1;\n".to_string(),
+    )?;
+    let code = "use strict;\nbark";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    // Workspace subroutine completions are labelled by qualified name.
+    let edit = auto_import_edit_text(&completions, "Foo::barker")
+        .ok_or("expected `Foo::barker` workspace subroutine completion with an auto-import edit")?;
+    assert_eq!(edit, "use Foo;\n", "should auto-insert `use Foo;` for unimported subroutine");
+    Ok(())
+}
+
+#[test]
+fn workspace_constant_completion_auto_imports_module() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nuse constant ANSWER => 42;\n1;\n".to_string(),
+    )?;
+    let code = "use strict;\nANSW";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let item = completions
+        .iter()
+        .find(|c| c.label == "ANSWER")
+        .ok_or("expected `ANSWER` constant completion")?;
+    assert_eq!(item.kind, CompletionItemKind::Constant);
+    assert_eq!(
+        item.additional_edits.len(),
+        1,
+        "constant completion must carry exactly one auto-import edit; got {:?}",
+        item.additional_edits
+    );
+    assert_eq!(
+        item.additional_edits[0].1, "use Foo;\n",
+        "constant completion must auto-insert exactly `use Foo;`"
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_completion_suppresses_auto_import_when_already_imported()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nsub barker { }\n1;\n".to_string(),
+    )?;
+    // `Foo` is already imported, so no duplicate `use Foo;` edit should attach.
+    let code = "use strict;\nuse Foo;\nbark";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let item = completions
+        .iter()
+        .find(|c| c.label == "Foo::barker")
+        .ok_or("expected `Foo::barker` workspace completion")?;
+    assert_eq!(
+        item.additional_edits,
+        vec![],
+        "already-imported module must not produce a duplicate auto-import edit; got {:?}",
+        item.additional_edits
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_completion_no_auto_import_for_file_local_symbol()
+-> Result<(), Box<dyn std::error::Error>> {
+    // A symbol with no container module (file-local) must not generate an import.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(Url::parse("file:///main.pl")?, "sub barker { }\nbark\n".to_string())?;
+    let code = "sub barker { }\nbark";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    for item in completions.iter().filter(|c| c.label.contains("barker")) {
+        assert!(
+            item.additional_edits.is_empty(),
+            "file-local symbol must not carry an auto-import edit; got {:?}",
+            item.additional_edits
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn workspace_variable_completion_auto_imports_module() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nour $xylophone = 1;\n1;\n".to_string(),
+    )?;
+    let code = "use strict;\n$Foo::xyl";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let item = completions
+        .iter()
+        .find(|c| c.label == "$xylophone")
+        .ok_or("expected `$xylophone` workspace variable completion")?;
+    assert_eq!(item.kind, CompletionItemKind::Variable);
+    assert_eq!(
+        item.additional_edits.len(),
+        1,
+        "variable completion must carry exactly one auto-import edit; got {:?}",
+        item.additional_edits
+    );
+    assert_eq!(
+        item.additional_edits[0].1, "use Foo;\n",
+        "variable completion from Foo must auto-insert exactly `use Foo;`"
+    );
+    Ok(())
+}
+
+#[test]
+fn qualified_subroutine_completion_auto_imports_module() -> Result<(), Box<dyn std::error::Error>> {
+    // Qualified `Foo::bar` completions are served by add_package_completions
+    // (the `::` path), not add_workspace_symbol_completions. Observe that this
+    // path auto-imports the unimported defining module.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///lib/Foo.pm")?,
+        "package Foo;\nsub barley { }\n1;\n".to_string(),
+    )?;
+    let code = "use strict;\nFoo::bar";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let item = completions
+        .iter()
+        .find(|c| c.label == "barley")
+        .ok_or("expected `barley` qualified subroutine completion")?;
+    assert_eq!(
+        item.additional_edits.len(),
+        1,
+        "qualified subroutine completion must carry exactly one auto-import edit; got {:?}",
+        item.additional_edits
+    );
+    assert_eq!(
+        item.additional_edits[0].1, "use Foo;\n",
+        "qualified subroutine completion must auto-insert exactly `use Foo;`"
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_auto_import_edits_returns_exact_edits_per_branch() {
+    // Direct call-observation with exact assertions on the helper that produces
+    // every workspace completion's `additionalTextEdits`, discriminating each
+    // guard branch (reachable, main, current package, empty, file-local,
+    // already-imported).
+    use super::workspace::workspace_auto_import_edits;
+
+    let source = "use strict;\nmy $x = 1;\n";
+    let after_use = "use strict;\n".len();
+
+    // Reachable, unimported, foreign module -> exactly one edit after the use block.
+    let edits = workspace_auto_import_edits(source, Some("My::App"), "main");
+    assert_eq!(edits.len(), 1, "expected exactly one edit; got {edits:?}");
+    assert_eq!(edits[0].1, "use My::App;\n");
+    assert_eq!(edits[0].0.start, after_use);
+    assert_eq!(edits[0].0.end, after_use);
+
+    // Implicit `main` package must never be auto-imported.
+    assert_eq!(workspace_auto_import_edits(source, Some("main"), "Other"), vec![]);
+    // The document's own current package needs no import.
+    assert_eq!(workspace_auto_import_edits(source, Some("Demo"), "Demo"), vec![]);
+    // Empty module name yields no edit.
+    assert_eq!(workspace_auto_import_edits(source, Some(""), "main"), vec![]);
+    // File-local symbol (no container module) yields no edit.
+    assert_eq!(workspace_auto_import_edits(source, None, "main"), vec![]);
+    // Already-imported module yields no duplicate edit.
+    assert_eq!(
+        workspace_auto_import_edits("use My::App;\nmy $x = 1;\n", Some("My::App"), "main"),
+        vec![]
+    );
+}
+
+#[test]
+fn unknown_receiver_fallback_completion_observes_auto_import_seam()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Drive the unknown-receiver method fallback so its auto-import seam is
+    // observed. `Foo` is already imported, so the fallback completion carries
+    // no duplicate `use Foo;` edit.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        "package Foo;\nsub bark { }\n1;\n".to_string(),
+    )?;
+    let code = "use Foo;\n1;\n$obj->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = completions
+        .iter()
+        .find(|c| c.label == "bark")
+        .ok_or("unknown-receiver fallback should surface Foo::bark")?;
+    assert!(
+        bark.additional_edits.is_empty(),
+        "fallback completion for an already-imported package must not add a use edit; got: {:?}",
+        bark.additional_edits
+    );
+    Ok(())
+}
+
+#[test]
+fn extract_fat_comma_keys_grips_quote_and_bareword_branches() {
+    // Call-observation coverage for the single-quoted, double-quoted, and
+    // bareword key branches in `CompletionProvider::extract_fat_comma_keys`.
+    // These branches are otherwise exercised only by integration tests, which
+    // the coverage job's `--lib` run does not execute.
+    let mut keys: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    CompletionProvider::extract_fat_comma_keys(
+        "'db-host' => 1, \"db.port\" => 2, host => 3",
+        &mut keys,
+        &mut seen,
+    );
+    assert!(
+        keys.contains(&"db-host".to_string()),
+        "single-quoted key should be extracted; got {keys:?}"
+    );
+    assert!(
+        keys.contains(&"db.port".to_string()),
+        "double-quoted key should be extracted; got {keys:?}"
+    );
+    assert!(keys.contains(&"host".to_string()), "bareword key should be extracted; got {keys:?}");
 }
 
 #[test]
@@ -4156,6 +4795,140 @@ fn test_hash_key_completion_unknown_variable_returns_empty_for_that_hash() {
 }
 
 #[test]
+fn test_hash_key_completion_quoted_keys_with_special_characters() {
+    // Test that quoted keys with hyphens, dots, spaces, and other special characters
+    // are included in hash key completions.
+    let code = r#"my %data = ('db-host' => 'localhost', 'api.key' => 'secret', 'api key' => 'value', 'foo_bar' => 'normal');
+$data{db"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // 'db-host' should be suggested (starts with 'db' prefix)
+    assert!(
+        completions.iter().any(|c| c.label == "db-host"),
+        "expected 'db-host' (quoted key with hyphen) in completions for prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // 'api.key' should NOT be suggested (doesn't start with 'db')
+    assert!(
+        !completions.iter().any(|c| c.label == "api.key"),
+        "expected 'api.key' filtered out by prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // 'foo_bar' should NOT be suggested (doesn't start with 'db')
+    assert!(
+        !completions.iter().any(|c| c.label == "foo_bar"),
+        "expected 'foo_bar' filtered out by prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_hash_key_completion_double_quoted_hyphenated_key() {
+    // Mirror of the single-quoted case for double-quoted keys: keys written with
+    // `"..."` and containing special characters must also be completed. This
+    // exercises the double-quote branch of the quote-stripping logic.
+    let code = r#"my %data = ("db-host" => 'localhost', "api.key" => 'secret');
+$data{db"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // 'db-host' (double-quoted key with hyphen) should be suggested for prefix 'db'.
+    assert!(
+        completions.iter().any(|c| c.label == "db-host"),
+        "expected 'db-host' (double-quoted key with hyphen) in completions for prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // 'api.key' should NOT be suggested (doesn't start with 'db').
+    assert!(
+        !completions.iter().any(|c| c.label == "api.key"),
+        "expected 'api.key' filtered out by prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_hash_key_completion_quoted_keys_with_dots_and_spaces() {
+    // Test completion with dot and space separators in keys
+    let code = r#"my %config = ('db.host' => 1, 'api key' => 2);
+$config{api"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // 'api key' should be suggested (starts with 'api' prefix)
+    assert!(
+        completions.iter().any(|c| c.label == "api key"),
+        "expected 'api key' (quoted key with space) in completions for prefix 'api'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // 'db.host' should NOT be suggested (doesn't start with 'api')
+    assert!(
+        !completions.iter().any(|c| c.label == "db.host"),
+        "expected 'db.host' filtered out by prefix 'api'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_hash_key_completion_double_quoted_keys_with_special_characters() {
+    let code = r#"my %config = ("db.host" => 1, "api key" => 2, "bare" => 3);
+$config{api"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "api key"),
+        "expected double-quoted 'api key' in completions for prefix 'api'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    assert!(
+        !completions.iter().any(|c| c.label == "db.host"),
+        "expected double-quoted 'db.host' filtered out by prefix 'api'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_hash_key_completion_unterminated_quoted_key_no_bogus_suggestion() {
+    // Regression: 'db-host (opening quote but no closing quote) must not produce a
+    // completion item with a leading-quote artifact like "'db-host".  Previously the
+    // character-class guard rejected these implicitly; after relaxing it for quoted
+    // keys we must ensure only *fully*-quoted tokens (both delimiters present) are
+    // accepted as special-char keys.
+    let code = "my %cfg = ('db-host' => 1, host => 2);\n$cfg{db";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // The fully-quoted key 'db-host' should be present.
+    assert!(
+        completions.iter().any(|c| c.label == "db-host"),
+        "expected 'db-host' in completions; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // No completion item must carry a leading single-quote from an unterminated literal.
+    assert!(
+        completions.iter().all(|c| !c.label.starts_with('\'')),
+        "no completion label must start with a quote character (unterminated-literal artifact); got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn test_detect_hash_key_context_unicode_non_ident_after_brace_no_panic() {
     let source = "$config{☃ho";
     let result = CompletionProvider::detect_hash_key_context(source, source.len());
@@ -5009,4 +5782,1927 @@ fn test_special_var_count_at_least_40() {
     }
 
     assert!(total >= 40, "expected at least 40 special variables across all sigils, got {total}");
+}
+
+/// Completion is suppressed inside heredoc blocks
+#[test]
+fn test_no_completion_inside_heredoc() {
+    let code = r#"my $text = <<EOF;
+This is a $var literal
+and this is @array
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    // Position inside heredoc (cursor on "var" in "$var literal")
+    let position = must_some(code.find("$var"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "should not complete inside heredoc");
+}
+
+/// Heredoc body text may itself contain `<<` without ending suppression.
+#[test]
+fn test_no_completion_inside_heredoc_with_shift_like_body_text() {
+    let code = r#"my $text = <<EOF;
+my $a = 1;
+$a << $b
+EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$b"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "shift-like text inside a heredoc body must not re-enable completions"
+    );
+}
+
+/// Multiple heredocs opened on one statement suppress through each body.
+#[test]
+fn test_no_completion_inside_second_heredoc_from_same_line() {
+    let code = r#"print <<A, <<B;
+first body
+A
+second body $cursor
+B
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "completion must stay suppressed inside the second heredoc body"
+    );
+}
+
+/// Tilde heredocs suppress completion through an indented body and closing marker.
+#[test]
+fn test_no_completion_inside_tilde_heredoc() {
+    let code = r#"my $text = <<~EOF;
+  literal $cursor
+  EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "completion must stay suppressed inside a <<~ heredoc body");
+}
+
+/// Indented heredocs allow quoted delimiters after horizontal space.
+#[test]
+fn test_no_completion_inside_spaced_quoted_tilde_heredoc() {
+    let code = r#"my $text = <<~ "EOF";
+  literal $cursor
+  EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "completion must stay suppressed inside a spaced quoted <<~ heredoc body"
+    );
+}
+
+/// Backslash heredocs suppress completion inside their bodies.
+#[test]
+fn test_no_completion_inside_backslash_heredoc() {
+    let code = r#"my $text = <<\EOF;
+literal $cursor
+EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "completion must stay suppressed inside a <<\\ heredoc body");
+}
+
+/// Backtick-delimited heredocs suppress completion inside their bodies.
+#[test]
+fn test_no_completion_inside_backtick_heredoc() {
+    let code = r#"my $text = <<`EOF`;
+literal $cursor
+EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "completion must stay suppressed inside a backtick-delimited heredoc body"
+    );
+}
+
+/// Digit-starting heredoc labels suppress completion inside their bodies.
+#[test]
+fn test_no_completion_inside_digit_label_heredoc() {
+    let code = r#"my $text = <<123;
+$cursor
+123
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "digit-starting heredoc labels must suppress inside the body");
+}
+
+/// Backslashed digit-starting heredoc labels suppress inside their bodies.
+#[test]
+fn test_no_completion_inside_backslash_digit_label_heredoc() {
+    let code = r#"my $text = <<\123;
+$cursor
+123
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "backslashed digit-starting heredoc labels must suppress inside the body"
+    );
+}
+
+/// Tilde heredocs also accept backslashed digit-starting labels.
+#[test]
+fn test_no_completion_inside_tilde_backslash_digit_label_heredoc() {
+    let code = r#"my $text = <<~\123;
+    $cursor
+    123
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "tilde backslashed digit-starting heredoc labels must suppress inside the body"
+    );
+}
+
+/// Empty quoted heredoc labels suppress completion until the blank terminator line.
+#[test]
+fn test_no_completion_inside_empty_quoted_label_heredoc() {
+    let code = "my $text = <<\"\";\n$cursor\n\nmy $after = 1;\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "empty quoted heredoc labels must suppress inside the body");
+}
+
+/// A heredoc opener can appear at the start of a statement line.
+#[test]
+fn test_no_completion_inside_start_of_line_heredoc() {
+    let code = r#"<<EOF;
+literal $cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "start-of-line heredocs must suppress inside the body");
+}
+
+/// Escaped quotes inside a quoted heredoc label are part of the terminator.
+#[test]
+fn test_completion_resumes_after_escaped_quote_heredoc_label_closes() {
+    let code = r#"my $text = <<"EO\"F";
+literal $cursor
+EO"F
+my $after = $te"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let body_position = must_some(code.find("$cursor"));
+    let body_completions = provider.get_completions(code, body_position);
+    assert!(
+        body_completions.is_empty(),
+        "escaped-quote heredoc labels must suppress inside the body"
+    );
+
+    let after_completions = provider.get_completions(code, code.len());
+    assert!(
+        after_completions.iter().any(|completion| completion.label == "$text"),
+        "$text should complete after the escaped-quote heredoc closes"
+    );
+}
+
+/// Escaped q-like delimiters keep heredoc-looking text inside the literal.
+#[test]
+fn test_escaped_q_like_delimiter_heredoc_text_does_not_suppress_completion_after() {
+    let code = r#"my $literal = q!escaped \! <<EOF!;
+my $after = $lit"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|completion| completion.label == "$literal"),
+        "escaped q-like delimiters must keep <<EOF as literal text"
+    );
+}
+
+/// Regex-like literal text containing `<<` must not start heredoc suppression.
+#[test]
+fn test_regex_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $regex_marker = qr/<<EOF/;\nmy $after = $regex";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$regex_marker"),
+        "regex literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Regex-like literal text with a punctuation delimiter must not start heredoc suppression.
+#[test]
+fn test_regex_literal_bang_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $regex_marker = qr!<<EOF!;\nmy $after = $regex";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$regex_marker"),
+        "regex literal text containing <<EOF with ! delimiters must not suppress later completions"
+    );
+}
+
+/// Bare slash regex text containing `<<` must not start heredoc suppression.
+#[test]
+fn test_bare_slash_regex_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $subject = 'value';\nif (/<<EOF/) {}\nmy $after = $subject";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$subject"),
+        "bare slash regex text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Bare slash regexes after Perl operators must not start heredoc suppression.
+#[test]
+fn test_operator_bare_regex_heredoc_text_does_not_suppress_completion_after() {
+    let code = r#"my $subject = 'value';
+my @rows = ('x');
+sub matches_subject {
+    return /<<EOF/;
+}
+my $count = grep /<<EOF/, @rows;
+my @parts = split /<<EOF/, $subject;
+my $after = $subject"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$subject"),
+        "operator bare regex text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Substitution replacement text containing `<<` must not start heredoc suppression.
+#[test]
+fn test_substitution_replacement_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $text = 'a';\n$text =~ s/a/<<EOF/;\nmy $after = $text";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "substitution replacement text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Whitespace after `s` still belongs to the substitution operator.
+#[test]
+fn test_spaced_substitution_replacement_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $text = 'a';\n$text =~ s /a/<<EOF/;\nmy $after = $text";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "spaced substitution replacement text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Substitution replacement text with punctuation delimiters must not start heredoc suppression.
+#[test]
+fn test_substitution_bang_replacement_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $text = 'a';\n$text =~ s!a!<<EOF!;\nmy $after = $text";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "substitution replacement text containing <<EOF with ! delimiters must not suppress later completions"
+    );
+}
+
+/// Paired substitution delimiters can span lines and must still hide heredoc-looking text.
+#[test]
+fn test_multiline_paired_substitution_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $text = 'a';\n$text =~ s(a)\n(<<EOF);\nmy $after = $text";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "paired substitution replacement text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Multi-section operators may use a different paired delimiter before a heredoc.
+#[test]
+fn test_mixed_paired_substitution_before_heredoc_opener_on_same_line() {
+    let code = r#"my $value = "old";
+print $value =~ s[old](new), <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "mixed paired substitution delimiters must not hide a later heredoc opener"
+    );
+}
+
+/// A subroutine named like a quote operator must not mask a later heredoc.
+#[test]
+fn test_sub_named_s_does_not_mask_heredoc_opener() {
+    let code = r#"sub s { 1 }
+my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "a sub named s must not be treated as a substitution while scanning later heredocs"
+    );
+}
+
+/// A malformed bare `s(...)` statement should not black out later heredocs.
+#[test]
+fn test_bare_s_statement_recovers_before_later_heredoc_opener() {
+    let code = r#"sub s { 1 }
+s(1);
+my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "scanner recovery after s(...) must still record the later heredoc"
+    );
+}
+
+/// Method and qualified names like `s` must not mask a later heredoc.
+#[test]
+fn test_method_or_qualified_s_does_not_mask_heredoc_opener() {
+    let code = r#"package Foo;
+sub s { 1 }
+package main;
+my $obj = bless {}, 'Foo';
+$obj->s(1);
+Foo::s(1);
+my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "method and qualified names named s must not be treated as substitutions"
+    );
+}
+
+/// Spaced left shifts against bareword constants must not start heredoc suppression.
+#[test]
+fn test_spaced_shift_bareword_does_not_suppress_completion_after() {
+    let code = "use constant EOF => 1;\nmy $shifted = 2 << EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "spaced left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// Unspaced left shifts against bareword constants must not start heredoc suppression.
+#[test]
+fn test_unspaced_shift_bareword_does_not_suppress_completion_after() {
+    let code = "use constant EOF => 1;\nmy $shifted = 2<<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced numeric left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// Unspaced sigiled left shifts must not start heredoc suppression.
+#[test]
+fn test_unspaced_sigiled_shift_bareword_does_not_suppress_completion_after() {
+    let code =
+        "use constant EOF => 1;\nmy $input = 2;\nmy $shifted = $input<<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced sigiled left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// Unspaced bareword constant shifts must not start heredoc suppression.
+#[test]
+fn test_unspaced_bareword_shift_does_not_suppress_completion_after() {
+    let code = "use constant FOO => 2;\nuse constant EOF => 1;\nmy $shifted = FOO<<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced bareword left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// A later bare line matching the right operand does not prove a constant shift is a heredoc.
+#[test]
+fn test_unspaced_bareword_shift_future_label_does_not_suppress_completion_before_label() {
+    let code = "use constant FOO => 2;\nuse constant BAR => 1;\nmy $shifted = FOO<<BAR;\nmy $after = $shift\nBAR\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "a later BAR line must not make a constant left shift look like a heredoc"
+    );
+}
+
+/// Quoted constant declarations still make no-space constant shifts non-heredocs.
+#[test]
+fn test_quoted_constant_shift_future_label_does_not_suppress_completion_before_label() {
+    let code = "use constant \"FOO\" => 2;\nuse constant \"BAR\" => 1;\nmy $shifted = FOO<<BAR;\nmy $after = $shift\nBAR\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "quoted use constant names must not leave constant shifts in heredoc mode"
+    );
+}
+
+/// Lowercase bareword constant shifts must not start heredoc suppression.
+#[test]
+fn test_unspaced_lowercase_bareword_shift_does_not_suppress_completion_after() {
+    let code = "use constant foo => 2;\nuse constant bar => 1;\nmy $shifted = foo<<bar;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced lowercase bareword left shifts must not be treated as heredoc openers"
+    );
+}
+
+/// Unspaced output statements with constant operands must not start heredoc suppression.
+#[test]
+fn test_unspaced_print_bareword_constant_shift_does_not_suppress_completion_after() {
+    let code = "use constant OUT => 4;\nuse constant EOF => 1;\nmy $shifted = print OUT<<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced print constant shifts must not be treated as heredoc openers"
+    );
+}
+
+/// Lowercase bareword constants in output statements are still left shifts without a terminator.
+#[test]
+fn test_unspaced_print_lowercase_constant_shift_does_not_suppress_completion_after() {
+    let code = "use constant out => 4;\nuse constant marker => 1;\nmy $shifted = print out<<marker;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "unspaced print lowercase constant shifts must not be treated as heredoc openers"
+    );
+}
+
+/// Spaced bareword constant shifts must not start heredoc suppression.
+#[test]
+fn test_spaced_bareword_shift_does_not_suppress_completion_after() {
+    let code = "use constant FOO => 2;\nuse constant EOF => 1;\nmy $shifted = FOO <<EOF;\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "spaced bareword left shift text must not be treated as a heredoc opener"
+    );
+}
+
+/// Spaced bareword constant shifts after return must not start heredoc suppression.
+#[test]
+fn test_return_spaced_lowercase_bareword_shift_does_not_suppress_completion_after() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "spaced return-value bareword shifts must not be treated as heredoc openers"
+    );
+}
+
+/// Future delimiter probes do not turn spaced return constant shifts into heredocs.
+#[test]
+fn test_return_spaced_constant_shift_future_label_does_not_suppress_completion_before_label() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $after = $shift\nbar\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "a later bar line must not make a return constant shift look like a heredoc"
+    );
+}
+
+/// Future delimiter probes must ignore matching text inside later literals.
+#[test]
+fn test_return_shift_future_literal_label_does_not_suppress_completion_before_literal() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $after = $shift\nmy $literal = \"\nbar\n\";\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "future close detection must not count delimiter-looking lines inside later literals"
+    );
+}
+
+/// Future delimiter probes must ignore matching text inside later POD blocks.
+#[test]
+fn test_return_shift_future_pod_label_does_not_suppress_completion_after_pod() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\n=pod\nbar\n=cut\nmy $after = $shift";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "future close detection must not count delimiter-looking lines inside later POD"
+    );
+}
+
+/// Future delimiter probes must ignore matching text inside later heredocs.
+#[test]
+fn test_return_shift_future_heredoc_label_keeps_later_heredoc_suppressed() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $h = <<EOF;\nbar\n$cursor\nEOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "future close detection must not count delimiter-looking lines inside later heredoc bodies"
+    );
+}
+
+/// Unspaced shift probes still track later real heredocs before accepting a close.
+#[test]
+fn test_unspaced_shift_future_heredoc_label_keeps_later_heredoc_suppressed() {
+    let code = "use constant foo => 2;\nuse constant bar => 1;\nmy $shifted = foo<<bar;\nmy $h = <<EOF;\nbar\n$cursor\nEOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "unspaced future close detection must not count delimiter-looking lines inside later heredoc bodies"
+    );
+}
+
+/// Future probes still notice a later heredoc opener after a literal closes.
+#[test]
+fn test_return_shift_future_literal_then_heredoc_label_keeps_later_heredoc_suppressed() {
+    let code = "my $shifted = 1;\nuse constant foo => 2;\nuse constant bar => 1;\nsub f { return foo <<bar; }\nmy $literal = \"\ntext\"; my $h = <<EOF;\nbar\n$cursor\nEOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "future close detection must track heredocs opened after a multiline literal closes"
+    );
+}
+
+/// Return-value all-caps bareword calls can take heredoc arguments.
+#[test]
+fn test_no_completion_inside_return_all_caps_bareword_call_heredoc() {
+    let code = r#"sub RENDER { shift }
+sub build {
+    return RENDER <<EOF;
+$cursor
+EOF
+}
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "return all-caps bareword heredocs must suppress inside the body"
+    );
+}
+
+/// No-space print heredocs are still heredocs and suppress inside the body.
+#[test]
+fn test_no_completion_inside_print_heredoc_without_space() {
+    let code = r#"print<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print<<EOF heredocs must still suppress inside the body");
+}
+
+/// No-space call heredocs suppress inside the body.
+#[test]
+fn test_no_completion_inside_no_space_bareword_call_heredoc() {
+    let code = r#"system<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "lowercase no-space call heredocs must suppress inside the body"
+    );
+}
+
+/// All-caps no-space call heredocs suppress inside the body.
+#[test]
+fn test_no_completion_inside_all_caps_no_space_bareword_call_heredoc() {
+    let code = r#"sub RENDER { shift }
+RENDER<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "all-caps no-space call heredocs must suppress inside the body"
+    );
+}
+
+/// Future-close probes for no-space call heredocs treat candidate body text as text.
+#[test]
+fn test_no_completion_inside_no_space_call_heredoc_with_body_heredoc_text() {
+    let code = r#"sub render { shift }
+render<<BAR;
+my $inner = <<EOF;
+$cursor
+BAR
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "heredoc-looking text inside a no-space call heredoc body must not hide the real close"
+    );
+}
+
+/// Print heredocs with bareword filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_print_bareword_filehandle_heredoc() {
+    let code = r#"print OUT <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print OUT <<EOF must suppress inside the body");
+}
+
+/// Sigiled values before `<<` are expressions, not output filehandle heredocs.
+#[test]
+fn test_sigiled_shift_does_not_suppress_completion_after() {
+    let code = "my $fh = 4;\nuse constant EOF => 1;\nmy $shifted = $fh<<EOF;\nmy $after = $sh";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "sigiled left shifts must not be treated as output filehandle heredocs"
+    );
+}
+
+/// Print heredocs with unspaced bareword filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_unspaced_print_bareword_filehandle_heredoc() {
+    let code = r#"print OUT<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print OUT<<EOF must suppress inside the body");
+}
+
+/// Print heredocs with sigiled filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_print_sigiled_filehandle_heredoc() {
+    let code = r#"my $fh;
+print $fh <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print $fh <<EOF must suppress inside the body");
+}
+
+/// Print heredocs with braced filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_print_braced_filehandle_heredoc() {
+    let code = r#"my $fh;
+print {$fh} <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "print {{$fh}} <<EOF must suppress inside the body");
+}
+
+/// Say heredocs with sigiled filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_say_sigiled_filehandle_heredoc() {
+    let code = r#"use feature 'say';
+my $fh;
+say $fh <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "say $fh <<EOF must suppress inside the body");
+}
+
+/// Printf heredocs with sigiled filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_printf_sigiled_filehandle_heredoc() {
+    let code = r#"my $fh;
+printf $fh <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "printf $fh <<EOF must suppress inside the body");
+}
+
+/// Printf heredocs with unspaced bareword filehandles still suppress inside the body.
+#[test]
+fn test_no_completion_inside_unspaced_printf_bareword_filehandle_heredoc() {
+    let code = r#"printf OUT<<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "printf OUT<<EOF must suppress inside the body");
+}
+
+/// Heredocs passed to user-defined calls suppress inside the body.
+#[test]
+fn test_no_completion_inside_bareword_call_heredoc() {
+    let code = r#"render <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "bareword call heredocs must suppress inside the body");
+}
+
+/// Method-result shifts are not heredoc calls without parentheses.
+#[test]
+fn test_method_result_shift_does_not_suppress_completion_before_label() {
+    let code = r#"my $renderer = bless {}, 'Renderer';
+my $shifted = $renderer->mask <<MASK;
+my $after = $shift
+MASK
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$shift\n")) + "$shift".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$shifted"),
+        "arrow-method left shifts must not be treated as heredoc bodies"
+    );
+}
+
+/// Parenthesized method-call heredocs suppress inside the body.
+#[test]
+fn test_no_completion_inside_parenthesized_method_call_heredoc() {
+    let code = r#"my $renderer = bless {}, 'Renderer';
+$renderer->render(<<EOF);
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "parenthesized method-call heredocs must suppress inside the body"
+    );
+}
+
+/// Return-value call heredocs still suppress inside the body.
+#[test]
+fn test_no_completion_inside_return_call_heredoc() {
+    let code = r#"sub render {}
+sub build {
+    return render <<EOF;
+$cursor
+EOF
+}
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "return call heredocs must suppress inside the body");
+}
+
+/// A sigiled variable named `$q` must not be mistaken for a q-like literal.
+#[test]
+fn test_variable_named_q_does_not_mask_heredoc_opener() {
+    let code = r#"my $q = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "$q before a heredoc opener must still record the delimiter");
+}
+
+/// A label with trailing spaces is body text, not the heredoc terminator.
+#[test]
+fn test_trailing_space_label_line_stays_inside_heredoc_body() {
+    let code = "my $text = <<EOF;\nEOF   \n$cursor\nEOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "EOF followed by spaces must not close the heredoc");
+}
+
+/// Tilde heredoc label lines with trailing spaces are body text, not terminators.
+#[test]
+fn test_tilde_heredoc_trailing_space_label_line_stays_inside_body() {
+    let code = "my $text = <<~EOF;\n  EOF   \n  $cursor\n  EOF\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "indented EOF followed by spaces must not close the heredoc");
+}
+
+/// q-like literal text containing `<<` must not start heredoc suppression.
+#[test]
+fn test_q_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q{<<EOF};\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "q-like literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Nested paired q-like delimiters must keep heredoc-looking text inside the literal.
+#[test]
+fn test_nested_q_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q{{} <<EOF };\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "nested q-like literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Fat-comma keys named like q-like operators must not hide heredoc values.
+#[test]
+fn test_fat_comma_q_key_before_heredoc_value_suppresses_inside_body() {
+    let code = r#"my %h = (q => <<EOF);
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "fat-comma q keys must not mask heredoc values");
+}
+
+/// Heredocs after a multiline literal that closes on the same line are still found.
+#[test]
+fn test_literal_closes_before_heredoc_opener_on_same_line() {
+    let code = r#"my $prefix = q{
+literal text
+}; my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "a heredoc opener after a closed multiline literal must suppress inside the body"
+    );
+}
+
+/// q-like literal text with a punctuation delimiter must not start heredoc suppression.
+#[test]
+fn test_q_literal_pipe_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q|<<EOF|;\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "q-like literal text containing <<EOF with | delimiters must not suppress later completions"
+    );
+}
+
+/// Spaced q-like literal text must not start heredoc suppression.
+#[test]
+fn test_spaced_q_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q /<<EOF/;\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "spaced q literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Spaced qq literal text must not start heredoc suppression.
+#[test]
+fn test_spaced_qq_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $qq_marker = qq /<<EOF/;\nmy $after = $qq";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$qq_marker"),
+        "spaced qq literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Newline-separated q delimiters must still keep heredoc-looking text inside the literal.
+#[test]
+fn test_newline_spaced_q_literal_heredoc_text_does_not_suppress_completion_after() {
+    let code = "my $q_marker = q\n{<<EOF};\nmy $after = $q";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$q_marker"),
+        "newline-spaced q literal text containing <<EOF must not suppress later completions"
+    );
+}
+
+/// Newline-separated substitution delimiters must keep POD-looking text inside the literal.
+#[test]
+fn test_newline_spaced_substitution_pod_text_does_not_suppress_completion_after() {
+    let code = r#"my $subject = "value";
+$subject =~ s
+{
+=pod
+}{replacement};
+my $after = $subject"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$subject"),
+        "newline-spaced substitution text containing =pod must not suppress later completions"
+    );
+}
+
+/// Regex-looking heredoc body text must not bypass heredoc suppression.
+#[test]
+fn test_no_regex_completion_inside_heredoc_body() {
+    let code = r#"my $text = <<EOF;
+if ($value =~ /li
+EOF
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("/li")) + "/li".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "regex-looking heredoc body text must not produce regex completions"
+    );
+}
+
+/// Completion is suppressed inside POD blocks
+#[test]
+fn test_no_completion_inside_pod_block() {
+    let code = r#"=pod
+
+This is documentation about a $special variable
+and @array references
+
+=cut
+
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    // Position inside POD block (cursor on "special" in "$special")
+    let position = must_some(code.find("$special"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "should not complete inside POD block");
+}
+
+/// Regex-looking POD text must not bypass POD suppression.
+#[test]
+fn test_no_regex_completion_inside_pod_block() {
+    let code = r#"=pod
+if ($value =~ /li
+=cut
+my $after = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("/li")) + "/li".len();
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "regex-looking POD text must not produce regex completions");
+}
+
+/// Custom POD commands at column zero start POD blocks until `=cut`.
+#[test]
+fn test_no_completion_inside_custom_pod_command_block() {
+    let code = r#"=constructor new
+Documentation mentions a $cursor variable.
+=cut
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "custom column-zero POD commands must suppress completion until =cut"
+    );
+}
+
+/// Custom POD commands that start with `cut` are not the `=cut` terminator.
+#[test]
+fn test_no_completion_inside_cutting_pod_command_block() {
+    let code = r#"=cutting edge
+Documentation mentions a $cursor variable.
+=cut
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "`=cutting` must be treated as a custom POD command, not a terminator"
+    );
+}
+
+/// File-test `-s` operators are not substitution literals and must not mask POD.
+#[test]
+fn test_no_completion_inside_pod_after_file_test_s_operator() {
+    let code = r#"my $file = "README.md";
+my $size = -s $file;
+=pod
+
+$cursor
+=cut
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(completions.is_empty(), "file-test -s must not prevent POD suppression from starting");
+}
+
+/// POD-looking text inside a multiline q-like literal is not a POD block.
+#[test]
+fn test_pod_marker_inside_multiline_q_literal_does_not_suppress_completion_after() {
+    let code = r#"my $text = q{
+=pod
+};
+my $after = $text"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "POD-looking text inside a multiline q literal must not suppress later completions"
+    );
+}
+
+/// POD-looking text inside a multiline slash regex is not a POD block.
+#[test]
+fn test_pod_marker_inside_multiline_slash_regex_does_not_suppress_completion_after() {
+    let code = r#"my $subject = "value";
+if ($subject =~ /
+=pod
+/) {}
+my $after = $subject"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$subject"),
+        "POD-looking text inside a multiline slash regex must not suppress later completions"
+    );
+}
+
+/// Perl-looking POD prose must not make the terminator look like string context.
+#[test]
+fn test_completion_after_pod_prose_with_unmatched_q_literal_text() {
+    let code = r#"=pod
+Documentation mentions q{ as prose, not Perl code.
+=cut
+
+my $real_var = 1;
+$real"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$real_var"),
+        "POD prose containing unmatched q-like text must not suppress after =cut"
+    );
+}
+
+/// Earlier POD prose must not make later POD markers look like literal context.
+#[test]
+fn test_no_completion_inside_later_pod_after_unmatched_q_prose() {
+    let code = r#"=pod
+Documentation mentions q{ as prose, not Perl code.
+=cut
+
+=pod
+Documentation mentions a $cursor variable.
+=cut
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "unmatched q-like text in earlier POD prose must not disable later POD suppression"
+    );
+}
+
+/// Heredoc-looking POD prose must not make the terminator look like heredoc context.
+#[test]
+fn test_completion_after_pod_prose_with_heredoc_like_text() {
+    let code = r#"=pod
+Documentation mentions <<EOF as prose, not Perl code.
+=cut
+
+my $real_var = 1;
+$real"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$real_var"),
+        "POD prose containing heredoc-looking text must not suppress after =cut"
+    );
+}
+
+/// A fake heredoc marker in a comment must not mask a following POD block.
+#[test]
+fn test_no_completion_inside_pod_after_comment_heredoc_text() {
+    let code = r#"# docs mention <<EOF heredocs
+=pod
+
+Documentation mentions a $cursor variable.
+
+=cut
+
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "comment text that mentions <<EOF must not prevent POD suppression"
+    );
+}
+
+/// A fake heredoc marker in a string must not mask a following POD block.
+#[test]
+fn test_no_completion_inside_pod_after_string_heredoc_text() {
+    let code = r#"my $marker = "<<EOF";
+=pod
+
+Documentation mentions a $cursor variable.
+
+=cut
+
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "string text that contains <<EOF must not prevent POD suppression"
+    );
+}
+
+/// Perl-looking heredoc body text must not mask a later real POD block.
+#[test]
+fn test_no_completion_inside_pod_after_heredoc_with_unmatched_q_text() {
+    let code = r#"my $text = <<EOF;
+q{
+EOF
+=pod
+
+Documentation mentions a $cursor variable.
+
+=cut
+
+my $real_var = 1;
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "heredoc body q-like text must not prevent later POD suppression"
+    );
+}
+
+/// POD-looking string text must not disable later heredoc suppression.
+#[test]
+fn test_no_completion_inside_heredoc_after_string_pod_marker() {
+    let code = r#"my $marker = "
+=pod
+";
+my $text = <<EOF;
+$cursor
+EOF
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let position = must_some(code.find("$cursor"));
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.is_empty(),
+        "string text that contains =pod must not prevent heredoc suppression"
+    );
+}
+
+/// POD-looking command-string text must not disable later completion.
+#[test]
+fn test_completion_after_backtick_string_pod_marker() {
+    let code = r#"my $cmd = `
+=pod
+not real POD
+`;
+my $after = $cmd"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$cmd"),
+        "backtick string text that contains =pod must not suppress later completions"
+    );
+}
+
+/// Heredoc-looking command-string text must not suppress later completion.
+#[test]
+fn test_completion_after_same_line_backtick_string_heredoc_marker() {
+    let code = "my $cmd = `printf <<EOF`;\nmy $after = $cmd";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$cmd"),
+        "backtick string text that contains <<EOF must not suppress later completions"
+    );
+}
+
+/// Completion works normally after POD block ends
+#[test]
+fn test_completion_after_pod_block() {
+    let code = r#"=pod
+Documentation here
+=cut
+
+my $real_var = 1;
+$real
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    // Position after POD, at cursor position completing "$real"
+    let completions = provider.get_completions(code, code.len() - 1);
+
+    // Should suggest variables after POD block
+    assert!(
+        completions.iter().any(|c| c.label == "$real_var"),
+        "should complete variables after POD block ends"
+    );
+}
+
+/// Indented `=pod` (leading whitespace) must NOT trigger POD suppression.
+/// Per perlpod, POD commands must appear at column 0.
+#[test]
+fn test_indented_pod_marker_does_not_suppress_completion() {
+    // A hash value that happens to look like `=pod` but is indented — not real POD.
+    let code = "my $x = 1;\n    # this comment mentions =pod but at indent\nmy $cursor = ";
+    let position = code.len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+
+    // $x declared above must appear — suppression must NOT have fired
+    assert!(
+        completions.iter().any(|c| c.label == "$x"),
+        "indented =pod-like content in a comment must not trigger POD suppression; $x should complete"
+    );
+}
+
+/// Heredoc body containing `=pod`-like content must NOT bleed into the POD
+/// state machine after the heredoc closes.
+#[test]
+fn test_heredoc_with_pod_content_does_not_suppress_completion_after() {
+    // The heredoc body contains `=pod` as literal text. After `END`, we are back
+    // in regular Perl code and completion should work normally.
+    let code = "my $text = <<END;\n=pod this is a literal string\nEND\nmy $after = ";
+    let position = code.len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+
+    // $text must appear — POD suppression must NOT bleed out of the heredoc
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "$text should complete after a heredoc whose body contained =pod"
+    );
+}
+
+/// A quoted heredoc terminator that looks like POD is still the terminator, not
+/// the start of a POD block.
+#[test]
+fn test_pod_like_quoted_heredoc_terminator_does_not_suppress_completion_after() {
+    let code = "my $text = <<\"=pod\";\nliteral\n=pod\nmy $after = ";
+    let position = code.len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+
+    assert!(
+        completions.iter().any(|c| c.label == "$text"),
+        "$text should complete after a quoted =pod heredoc terminator"
+    );
+}
+
+/// Completion is suppressed inside a heredoc body (not just at the $ sign).
+/// After the closing delimiter, completion resumes.
+#[test]
+fn test_completion_resumes_after_heredoc_closes() {
+    let code = "my $outer = <<EOF;\nliteral content\nEOF\nmy $after_heredoc = ";
+    let position = code.len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+
+    // $outer must appear — we are after the closing EOF, not inside the heredoc
+    assert!(
+        completions.iter().any(|c| c.label == "$outer"),
+        "$outer should complete after the heredoc closes"
+    );
+}
+
+/// Suppression is exact: a cursor positioned on the heredoc closing delimiter
+/// line itself should NOT be considered inside the heredoc body.
+#[test]
+fn test_heredoc_closing_delimiter_is_not_body() {
+    // Cursor is right before "EOF" on the closing line — not inside body.
+    let code = "my $x = <<EOF;\nliteral\nEOF\n";
+    // Position of the 'E' in the closing EOF line
+    let eof_line_pos = must_some(code.find("\nEOF\n")) + 1;
+    let position = eof_line_pos;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let completions = provider.get_completions(code, position);
+    assert!(
+        completions.iter().any(|c| c.label == "$x"),
+        "cursor on closing delimiter line must not be treated as inside heredoc body"
+    );
+}
+
+// -------------------------------------------------------------------------
+// Package-qualified method completion (issue #1606)
+//
+// When completing `Foo::method`, the completion system should provide
+// inherited methods from @ISA chains, not just direct package members.
+// This ensures parity with arrow-form method completion `Foo->method`.
+// -------------------------------------------------------------------------
+
+#[test]
+fn package_qualified_method_completion_includes_inherited() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Parent.pm")?,
+        r#"package Parent;
+sub inherited_method { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Child.pm")?,
+        r#"package Child;
+our @ISA = ('Parent');
+sub own_method { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "Child::";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    // Both own and inherited methods should appear
+    let own = completions.iter().find(|c| c.label == "own_method");
+    let inherited = completions.iter().find(|c| c.label == "inherited_method");
+
+    assert!(
+        own.is_some(),
+        "Package-qualified method completion for Child:: should include own_method"
+    );
+    assert!(
+        inherited.is_some(),
+        "Package-qualified method completion for Child:: should include inherited_method from Parent"
+    );
+
+    // Own methods should rank higher (tier 2 vs tier 3)
+    let own_sort = own.and_then(|c| c.sort_text.as_deref()).unwrap_or("");
+    let inherited_sort = inherited.and_then(|c| c.sort_text.as_deref()).unwrap_or("");
+    assert!(own_sort.starts_with("2_"), "own method should use tier 2, got {own_sort:?}");
+    assert!(
+        inherited_sort.starts_with("3_"),
+        "inherited method should use tier 3, got {inherited_sort:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn package_qualified_completion_includes_own_constants_and_variables()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Regression test: constants and package variables must still appear when
+    // completing `Foo::` after the @ISA-chain BFS was introduced.  The BFS
+    // (`collect_all_package_members`) filters to Subroutine|Method only;
+    // without the supplemental `get_package_members` call these would silently
+    // vanish.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Config.pm")?,
+        r#"package Config;
+use constant PI => 3.14159;
+use constant MAX_RETRIES => 3;
+our $VERSION = '1.0';
+sub helper { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "Config::";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+    assert!(
+        completions.iter().any(|c| c.label == "PI"),
+        "Package-qualified completion must include own constants; got: {labels:?}"
+    );
+    assert!(
+        completions.iter().any(|c| c.label == "MAX_RETRIES"),
+        "Package-qualified completion must include own constants; got: {labels:?}"
+    );
+    assert!(
+        completions.iter().any(|c| c.label == "helper"),
+        "Package-qualified completion must include own subroutines; got: {labels:?}"
+    );
+
+    // Constants should have Constant kind
+    let pi = completions.iter().find(|c| c.label == "PI").unwrap();
+    assert_eq!(
+        pi.kind,
+        crate::providers::completion_item::CompletionItemKind::Constant,
+        "PI should be offered as a Constant completion item"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn extract_fat_comma_keys_covers_quoted_and_bareword_forms() {
+    // Exercises all three branches of the key-token classification in
+    // `extract_fat_comma_keys`: single-quoted, double-quoted, and bareword,
+    // plus the rejection path for an unquoted token with special characters.
+    fn collect(list_text: &str) -> Vec<String> {
+        let mut keys = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        CompletionProvider::extract_fat_comma_keys(list_text, &mut keys, &mut seen);
+        keys
+    }
+
+    // Bareword key (alphanumeric + underscore) is accepted.
+    assert!(collect("host => 1").iter().any(|k| k == "host"));
+    // Single-quoted key may contain special characters (hyphen).
+    assert!(collect("'db-name' => 1").iter().any(|k| k == "db-name"));
+    // Double-quoted key may contain special characters (dot).
+    assert!(collect("\"x.y\" => 1").iter().any(|k| k == "x.y"));
+    // Unquoted token with a non-word character is rejected (no quoting).
+    assert!(collect("a-b => 1").is_empty());
 }

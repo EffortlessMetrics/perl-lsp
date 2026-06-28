@@ -274,6 +274,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
                 NodeKind::Subroutine {
                     name: Some("helper".to_string()),
                     name_span: Some(loc()),
+                    declarator: None,
                     prototype: Some(Box::new(Node::new(
                         NodeKind::Prototype { content: "$".to_string() },
                         loc(),
@@ -339,6 +340,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             Node::new(
                 NodeKind::Method {
                     name: "run".to_string(),
+                    name_span: None,
                     signature: Some(Box::new(Node::new(
                         NodeKind::Signature { parameters: vec![] },
                         loc(),
@@ -512,6 +514,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             Node::new(
                 NodeKind::Class {
                     name: "Example".to_string(),
+                    name_span: None,
                     parents: vec![],
                     body: Box::new(leaf("body")),
                 },
@@ -522,7 +525,11 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         ),
         (
             Node::new(
-                NodeKind::Format { name: "STDOUT".to_string(), body: "body".to_string() },
+                NodeKind::Format {
+                    name: "STDOUT".to_string(),
+                    name_span: None,
+                    body: "body".to_string(),
+                },
                 loc(),
             ),
             "Format",
@@ -547,6 +554,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         (Node::new(NodeKind::MissingIdentifier, loc()), "MissingIdentifier", 0),
         (Node::new(NodeKind::MissingBlock, loc()), "MissingBlock", 0),
         (Node::new(NodeKind::UnknownRest, loc()), "UnknownRest", 0),
+        (Node::new(NodeKind::NestedVariableList { items: vec![] }, loc()), "NestedVariableList", 0),
     ]
 }
 

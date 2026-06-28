@@ -7,11 +7,11 @@
 # scripts that rely on it to fail silently.
 #
 # Usage:
-#   scripts/safe-pull.sh              # pull from origin/master
+#   scripts/safe-pull.sh              # pull from origin/main
 #   scripts/safe-pull.sh my-branch    # pull from origin/my-branch
 set -euo pipefail
 
-BRANCH="${1:-master}"
+BRANCH="${1:-main}"
 REMOTE="origin"
 
 # Ensure we are inside a git repository

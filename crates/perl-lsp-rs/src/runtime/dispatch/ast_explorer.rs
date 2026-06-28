@@ -20,29 +20,6 @@
 
 use super::super::*;
 
-fn invalid_show_ast_uri_params() -> JsonRpcError {
-    JsonRpcError {
-        code: INVALID_PARAMS,
-        message: "Missing required parameter: uri\n\n\
-                  perl/showAst expects params.uri to identify an open Perl document.\n\n\
-                  Example: {\"uri\":\"file:///workspace/lib/My/Module.pm\"}"
-            .to_string(),
-        data: None,
-    }
-}
-
-fn show_ast_document_not_found(uri: &str) -> JsonRpcError {
-    JsonRpcError {
-        code: INVALID_PARAMS,
-        message: format!(
-            "Document is not open: {uri}\n\n\
-             perl/showAst can only inspect documents opened with textDocument/didOpen. \
-             Send textDocument/didOpen first or use the URI of an already-open document."
-        ),
-        data: None,
-    }
-}
-
 impl LspServer {
     /// Handle the `perl/showAst` custom request.
     ///
@@ -58,11 +35,13 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Extract the `uri` string from params
-        let uri = params
-            .as_ref()
-            .and_then(|p| p.get("uri"))
-            .and_then(|u| u.as_str())
-            .ok_or_else(invalid_show_ast_uri_params)?;
+        let uri = params.as_ref().and_then(|p| p.get("uri")).and_then(|u| u.as_str()).ok_or_else(
+            || JsonRpcError {
+                code: INVALID_PARAMS,
+                message: "Missing required 'uri' parameter".to_string(),
+                data: None,
+            },
+        )?;
 
         let docs = self.documents_guard();
 
@@ -82,7 +61,11 @@ impl LspServer {
                     }
                 }
             }
-            None => Err(show_ast_document_not_found(uri)),
+            None => Err(JsonRpcError {
+                code: INVALID_PARAMS,
+                message: format!("Document not found: {uri}"),
+                data: None,
+            }),
         }
     }
 }

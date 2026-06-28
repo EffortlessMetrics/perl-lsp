@@ -52,10 +52,14 @@ pub fn module_already_imported(source: &str, module: &str) -> bool {
 /// Find the byte offset after the last `use`/`require` statement block.
 ///
 /// Returns the byte offset at the start of the line immediately after the last
-/// `use` or `require` line.  If no such lines exist, returns `0` (insert at
-/// the very beginning of the file).
+/// preamble `use`/`require` line. If the file has no `use` block but does open
+/// with a `package` declaration, returns the offset after that declaration so
+/// the inserted `use` lands *inside* the package (running `import` in the right
+/// namespace) rather than before it. Falls back to `0` only when there is
+/// neither a `use` block nor a leading `package` declaration.
 pub fn find_use_block_end(source: &str) -> usize {
     let mut last_use_line_end: Option<usize> = None;
+    let mut last_package_line_end: Option<usize> = None;
     let mut offset = 0usize;
     let mut in_preamble = true;
 
@@ -64,14 +68,19 @@ pub fn find_use_block_end(source: &str) -> usize {
         let line_byte_len = line.len();
 
         let is_real_use = trimmed.starts_with("use ") || trimmed.starts_with("require ");
+        let is_package_decl = trimmed.starts_with("package ");
         let is_preamble_line = trimmed == "#!/usr/bin/perl"
             || trimmed.starts_with('#')
             || trimmed.is_empty()
-            || trimmed.starts_with("package ");
+            || is_package_decl;
 
         if is_real_use {
             if in_preamble {
                 last_use_line_end = Some(offset + line_byte_len);
+            }
+        } else if is_package_decl {
+            if in_preamble {
+                last_package_line_end = Some(offset + line_byte_len);
             }
         } else if !is_preamble_line {
             in_preamble = false;
@@ -86,9 +95,10 @@ pub fn find_use_block_end(source: &str) -> usize {
         }
     }
 
-    // Return the byte offset right after the last use/require line.
-    // If the file has no `use` block at all, insert at the top.
-    last_use_line_end.unwrap_or(0)
+    // Prefer inserting after the last preamble `use`/`require` line. With no
+    // `use` block, insert after the leading `package` declaration so the import
+    // runs in that package. Otherwise insert at the very top of the file.
+    last_use_line_end.or(last_package_line_end).unwrap_or(0)
 }
 
 /// Build a `(SourceLocation, text)` edit that inserts `use ModuleName;\n`
@@ -247,5 +257,31 @@ mod tests {
         assert!(edit.is_some());
         let (_, text) = edit.unwrap();
         assert_eq!(text, "use JSON::MaybeXS;\n");
+    }
+
+    #[test]
+    fn find_use_block_end_after_package_without_use() {
+        // No `use` block, but a leading `package` declaration: insert *after*
+        // the package line so the import runs in that package, not before it.
+        let src = "package Bar;\nmy $x = 1;\n";
+        assert_eq!(find_use_block_end(src), "package Bar;\n".len());
+    }
+
+    #[test]
+    fn edit_inserts_after_package_decl_when_no_use_block() {
+        // Regression: a bare workspace symbol completed in `package Bar;` with no
+        // existing imports must not insert `use Foo;` before the package
+        // declaration (which would import into `main` and leave the symbol
+        // invisible in Bar).
+        let src = "package Bar;\nsub run { Foo::trimmer(); }\n";
+        let edit = build_auto_import_edit(src, "Foo");
+        assert!(edit.is_some(), "should produce an edit");
+        let (loc, text) = edit.unwrap();
+        assert_eq!(text, "use Foo;\n");
+        let package_len = "package Bar;\n".len();
+        assert_eq!(loc.start, package_len, "insertion must land after the package declaration");
+        assert_eq!(loc.end, package_len);
+        let edited = format!("{}{}{}", &src[..loc.start], text, &src[loc.start..]);
+        assert_eq!(edited, "package Bar;\nuse Foo;\nsub run { Foo::trimmer(); }\n");
     }
 }

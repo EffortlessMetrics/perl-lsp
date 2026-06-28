@@ -27,20 +27,13 @@ function positionBeforeOrEqual(left: PositionLike, right: PositionLike): boolean
         || (left.line === right.line && left.character <= right.character);
 }
 
-function positionBefore(left: PositionLike, right: PositionLike): boolean {
-    return left.line < right.line
-        || (left.line === right.line && left.character < right.character);
-}
-
-function positionEqual(left: PositionLike, right: PositionLike): boolean {
-    return left.line === right.line && left.character === right.character;
+function positionAfterOrEqual(left: PositionLike, right: PositionLike): boolean {
+    return left.line > right.line
+        || (left.line === right.line && left.character >= right.character);
 }
 
 function rangeContains(range: RangeLike, position: PositionLike): boolean {
-    if (positionEqual(range.start, range.end)) {
-        return positionEqual(position, range.start);
-    }
-    return positionBeforeOrEqual(range.start, position) && positionBefore(position, range.end);
+    return positionBeforeOrEqual(range.start, position) && positionAfterOrEqual(range.end, position);
 }
 
 function rangeSpan(range: RangeLike): number {

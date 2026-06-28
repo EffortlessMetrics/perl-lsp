@@ -20,11 +20,9 @@
   "// perl-lsp.versionTag": "v0.8.3",
   
   "//": "Recommended LSP settings for development",
-  "perl-lsp.enableDiagnostics": true,
   "perl-lsp.enableSemanticTokens": true,
   "perl-lsp.enableFormatting": true,
   "perl-lsp.formatOnSave": false,
-  "perl-lsp.enableRefactoring": true,
   "perl-lsp.enableTestIntegration": true,
   "perl-lsp.trace.server": "off",
   

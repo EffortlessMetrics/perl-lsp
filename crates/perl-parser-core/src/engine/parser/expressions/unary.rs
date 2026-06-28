@@ -75,6 +75,10 @@ impl<'a> Parser<'a> {
 
     /// Parse unary expression
     fn parse_unary(&mut self) -> ParseResult<Node> {
+        self.with_recursion_guard(|s| s.parse_unary_inner())
+    }
+
+    fn parse_unary_inner(&mut self) -> ParseResult<Node> {
         if self.peek_kind() == Some(TokenKind::Slash) {
             self.tokens.relex_as_term();
         }
@@ -179,6 +183,30 @@ impl<'a> Parser<'a> {
                                 NodeKind::Unary { op: file_test, operand: Box::new(operand) },
                                 SourceLocation { start, end },
                             ));
+                        }
+                    }
+
+                    // Word-operator keywords (`or`, `and`, `xor`, `not`, `cmp`) cannot be
+                    // parsed as primary expressions, but Perl permits them as bareword hash
+                    // keys when immediately followed by `=>`:
+                    //   -or => 1, -and => 2, -xor => 3
+                    // The fat arrow auto-quotes the combined "-keyword" string.
+                    if self
+                        .tokens
+                        .peek_second()
+                        .is_ok_and(|t| t.kind == TokenKind::FatArrow)
+                    {
+                        if let Some(kw_kind) = self.peek_kind() {
+                            if Self::is_word_op_keyword(kw_kind) {
+                                let kw_token = self.tokens.next()?;
+                                let end = kw_token.end;
+                                return Ok(Node::new(
+                                    NodeKind::Identifier {
+                                        name: format!("-{}", kw_token.text),
+                                    },
+                                    SourceLocation { start, end },
+                                ));
+                            }
                         }
                     }
 
@@ -545,4 +573,17 @@ impl<'a> Parser<'a> {
         self.parse_postfix()
     }
 
+    /// Returns `true` for word-operator token kinds that cannot be parsed as
+    /// primary expressions but are valid as negative bareword hash keys when
+    /// immediately followed by `=>`: `-or => 1`, `-and => 2`, `-xor => 3`.
+    fn is_word_op_keyword(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::WordOr
+                | TokenKind::WordAnd
+                | TokenKind::WordXor
+                | TokenKind::WordNot
+                | TokenKind::StringCompare // cmp
+        )
+    }
 }

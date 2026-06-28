@@ -23,11 +23,19 @@ struct PolicyGate {
     required: bool,
     timeout_seconds: Option<u64>,
     budgets: Option<GateBudgets>,
+    planning: Option<GatePlanning>,
 }
 
 #[derive(Debug, Deserialize)]
 struct GateBudgets {
     max_duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GatePlanning {
+    role: String,
+    #[serde(default)]
+    packages: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,6 +142,83 @@ fn conflict_marker_gate_has_local_runtime_headroom() -> Result<(), Box<dyn std::
             >= 120_000,
         "conflict marker budget must reflect observed local runtime"
     );
+
+    Ok(())
+}
+
+#[test]
+fn routed_integration_test_gate_has_cold_ci_headroom() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let policy_path = root.join(".ci/gate-policy.yaml");
+    let content = fs::read_to_string(policy_path)?;
+    let parsed: GatePolicyDoc = serde_yaml_ng::from_str(&content)?;
+
+    let gate = parsed
+        .gates
+        .into_iter()
+        .find(|gate| gate.name == "unit_routed_full")
+        .ok_or("missing unit_routed_full gate")?;
+
+    assert_eq!(gate.tier, "pr_fast", "unit_routed_full must stay in pr-fast");
+    assert!(gate.required, "unit_routed_full must stay PR-blocking");
+    assert_eq!(
+        gate.planning.as_ref().map(|planning| planning.role.as_str()),
+        Some("rust_scoped"),
+        "unit_routed_full must stay routed to changed Rust packages"
+    );
+    assert!(
+        gate.timeout_seconds.unwrap_or_default() >= 1_500,
+        "unit_routed_full timeout must include cold integration-test build headroom"
+    );
+    assert!(
+        gate.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+            >= 1_320_000,
+        "unit_routed_full duration budget must reflect observed cold PR-fast runtime"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn inline_completion_contract_scope_stays_on_lsp_crates() -> Result<(), Box<dyn std::error::Error>>
+{
+    let root = project_root();
+    let policy_path = root.join(".ci/gate-policy.yaml");
+    let content = fs::read_to_string(policy_path)?;
+    let parsed: GatePolicyDoc = serde_yaml_ng::from_str(&content)?;
+
+    let gates: HashMap<_, _> =
+        parsed.gates.into_iter().map(|gate| (gate.name.clone(), gate)).collect();
+
+    let contract =
+        gates.get("inline_completion_contract").ok_or("missing inline_completion_contract gate")?;
+    let contract_planning =
+        contract.planning.as_ref().ok_or("inline_completion_contract missing planning")?;
+
+    assert_eq!(contract.tier, "pr_fast");
+    assert!(contract.required, "inline_completion_contract must stay PR-blocking");
+    assert!(
+        contract.timeout_seconds.unwrap_or_default() >= 600,
+        "inline_completion_contract timeout must include cold CI compile headroom"
+    );
+    assert!(
+        contract.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+            >= 540_000,
+        "inline_completion_contract duration budget must reflect observed cold PR-fast runtime"
+    );
+    assert_eq!(contract_planning.role, "rust_package_scoped");
+    assert_eq!(contract_planning.packages, vec!["perl-lsp-rs", "perl-lsp-rs-core"]);
+
+    let quality = gates
+        .get("inline_completion_quality_receipt")
+        .ok_or("missing inline_completion_quality_receipt gate")?;
+    let quality_planning =
+        quality.planning.as_ref().ok_or("inline_completion_quality_receipt missing planning")?;
+
+    assert_eq!(quality.tier, "pr_fast");
+    assert!(quality.required, "inline_completion_quality_receipt must stay PR-blocking");
+    assert_eq!(quality_planning.role, "rust_package_scoped");
+    assert_eq!(quality_planning.packages, vec!["perl-lsp-rs-core", "xtask"]);
 
     Ok(())
 }

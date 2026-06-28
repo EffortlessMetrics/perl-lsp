@@ -42,14 +42,41 @@ use std::hash::{Hash, Hasher};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
+/// Build the `additionalTextEdits` auto-import entry for a workspace symbol
+/// completion.
+///
+/// Inserts `use Module;` when the symbol's defining module is known and is not
+/// already imported in `source`. Returns an empty vector for file-local symbols
+/// (no container module) or for modules already present, mirroring the
+/// auto-import behavior already applied to method completions.
+///
+/// No edit is produced for the implicit `main` package or for symbols defined
+/// in the document's own `current_package`, since those need no `use` line.
+pub(super) fn workspace_auto_import_edits(
+    source: &str,
+    module: Option<&str>,
+    current_package: &str,
+) -> Vec<(SourceLocation, String)> {
+    module
+        .filter(|name| !name.is_empty() && *name != "main" && *name != current_package)
+        .and_then(|name| auto_import::build_auto_import_edit(source, name))
+        .map(|edit| vec![edit])
+        .unwrap_or_default()
+}
+
 /// Add workspace symbol completions for functions and variables
 ///
 /// Queries the workspace index to provide completions for symbols from other files.
 /// Uses the `import_map` to promote imported symbols and downrank explicitly
 /// not-imported symbols for import-aware sort ordering.
+///
+/// `source` is the current document text, used to generate `additionalTextEdits`
+/// that auto-insert the required `use Module;` statement when completing an
+/// unimported workspace subroutine, variable, or constant.
 pub fn add_workspace_symbol_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
+    source: &str,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
     import_map: &HashMap<String, HashSet<String>>,
 ) {
@@ -126,7 +153,11 @@ pub fn add_workspace_symbol_completions(
                     kind: CompletionItemKind::Function,
                     detail: Some(detail),
                     documentation: symbol.documentation.clone(),
-                    additional_edits: vec![],
+                    additional_edits: workspace_auto_import_edits(
+                        source,
+                        symbol.container_name.as_deref(),
+                        &context.current_package,
+                    ),
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
                     label_details: None,
@@ -193,7 +224,11 @@ pub fn add_workspace_symbol_completions(
                     insert_text: Some(name.clone()),
                     sort_text: Some(format!("4_{name}")),
                     filter_text: Some(name.clone()),
-                    additional_edits: vec![],
+                    additional_edits: workspace_auto_import_edits(
+                        source,
+                        symbol.container_name.as_deref(),
+                        &context.current_package,
+                    ),
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
                     label_details: None,
@@ -1573,7 +1608,7 @@ pub fn add_workspace_method_completions(
         // fallback (#7929) only for `Unknown` evidence; `Dynamic` stays
         // fail-closed.
         if evidence.is_unknown_fallback_eligible() {
-            add_unknown_receiver_fallback(completions, context, index, used_modules);
+            add_unknown_receiver_fallback(completions, context, source, index, used_modules);
         }
         return;
     };
@@ -1660,6 +1695,7 @@ pub fn add_workspace_method_completions(
 fn add_unknown_receiver_fallback(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
+    source: &str,
     index: &WorkspaceIndex,
     used_modules: &HashSet<String>,
 ) {
@@ -1697,6 +1733,9 @@ fn add_unknown_receiver_fallback(
                 "workspace method — receiver: unknown, low confidence (from {defining_pkg})"
             );
 
+            // Auto-insert `use <defining_pkg>;` when the method comes from a
+            // package other than the current one. Symbols from already-imported,
+            // `main`, or current-package namespaces yield no edit.
             completions.push(CompletionItem {
                 label: symbol.name.clone(),
                 kind: CompletionItemKind::Function,
@@ -1712,7 +1751,11 @@ fn add_unknown_receiver_fallback(
                 // (existing tiers 1–4) and below other tier-5 catch-alls.
                 sort_text: Some(format!("6_{}", symbol.name)),
                 filter_text: Some(symbol.name.clone()),
-                additional_edits: vec![],
+                additional_edits: workspace_auto_import_edits(
+                    source,
+                    Some(defining_pkg),
+                    &context.current_package,
+                ),
                 text_edit_range: Some((context.prefix_start, context.position)),
                 commit_characters: None,
                 label_details: None,
@@ -2001,6 +2044,10 @@ fn semantic_file_id(uri: &str) -> FileId {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_test_module,
+    reason = "policy:#2064: visible-symbol completion tests stay beside their filter seam"
+)]
 mod visible_symbol_completion_tests {
     use super::{VisibleSymbol, VisibleSymbolSource, is_live_visible_completion_candidate};
     use perl_semantic_facts::{Confidence, EntityId};
@@ -2066,7 +2113,10 @@ mod visible_symbol_completion_tests {
 /// approximates but does not exactly match C3 for complex diamond hierarchies.
 /// This is a pre-existing approximation shared with `navigation.rs`. A follow-up
 /// issue should address strict C3 ordering if it becomes important (see issue #3482).
-fn collect_all_package_members(index: &WorkspaceIndex, package_name: &str) -> Vec<WorkspaceSymbol> {
+pub(super) fn collect_all_package_members(
+    index: &WorkspaceIndex,
+    package_name: &str,
+) -> Vec<WorkspaceSymbol> {
     let mut seen_names: HashSet<String> = HashSet::new();
     let mut result: Vec<WorkspaceSymbol> = Vec::new();
 

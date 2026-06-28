@@ -15,6 +15,17 @@ pub struct CiRouteArgs {
     pub changed_files: Vec<String>,
 }
 
+/// Cap on the number of coverage packs that will be selected for a single PR.
+/// Multi-file PRs MUST NOT trigger full-suite expansion - coverage packs are
+/// scoped to changed surfaces only.
+const COVERAGE_PACK_CAP: u64 = 10;
+const TEST_SUPPORT_CRATE_PREFIXES: &[&str] = &[
+    "crates/perl-lsp-ux-tests/",
+    "crates/perl-tdd-support/",
+    "crates/perl-test-generators/",
+    "crates/perl-test-must/",
+];
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 struct CiRouteReceipt {
@@ -30,6 +41,17 @@ struct CiRouteReceipt {
     coverage_pack_selector: Vec<String>,
     coverage_proof_packs: Vec<CoverageProofPackReceipt>,
     estimated_lem: u64,
+    /// routing_skip: no coverable production code changed - valid policy skip (exit 0).
+    /// routing_bug: production code changed but zero packs routed - FAIL LOUD.
+    /// routed: packs were selected and will run.
+    routing_classification: &'static str,
+    /// Maximum number of coverage packs that will be selected for a single PR.
+    coverage_pack_cap: u64,
+    /// Number of coverage packs that were eligible but skipped due to the cap.
+    coverage_packs_skipped: u64,
+    /// Human-readable reason why packs were skipped (empty string if none skipped).
+    #[serde(skip_serializing_if = "str::is_empty")]
+    coverage_pack_skip_reason: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -74,6 +96,7 @@ const NON_LCOV_COVERAGE_SKIP_REASON: &str =
     "non-LCOV CI policy/routing surface; covered by focused CI gates";
 const NON_SOURCE_LCOV_COVERAGE_SKIP_REASON: &str =
     "LCOV coverage pack matched only non-source files; covered by focused CI gates";
+const RUST_FOCUSED_PACK_ID: &str = "patch-coverage-rust-focused";
 
 const PREFLIGHT_PACK: ProofPack = ProofPack {
     id: "preflight",
@@ -111,7 +134,7 @@ const XTASK_SUPPORTED_EDITOR_INLINE_PACK: ProofPack = ProofPack {
 const INLINE_CORE_PACK: ProofPack = ProofPack {
     id: "inline-core",
     commands: &[
-        "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
+        "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
     ],
 };
 
@@ -129,10 +152,29 @@ const XTASK_INLINE_COMPLETION_QUALITY_PACK: ProofPack = ProofPack {
     ],
 };
 
+const XTASK_NATIVE_TOOLING_PACK: ProofPack = ProofPack {
+    id: "xtask-native-tooling",
+    commands: &[
+        "cargo test -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture",
+    ],
+};
+
+const XTASK_GATES_PACK: ProofPack = ProofPack {
+    id: "xtask-gates",
+    commands: &["cargo test -p xtask --bin xtask --profile agent --locked gates -- --nocapture"],
+};
+
+const XTASK_FILE_POLICY_PACK: ProofPack = ProofPack {
+    id: "xtask-file-policy",
+    commands: &[
+        "cargo test -p xtask --bin xtask --profile agent --locked file_policy -- --nocapture",
+    ],
+};
+
 const COMPLETION_CORE_PACK: ProofPack = ProofPack {
     id: "completion-core",
     commands: &[
-        "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
+        "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
     ],
 };
 
@@ -501,10 +543,45 @@ fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> Result<C
         route.coverage_pack_selector.iter().cloned().collect();
     let (coverage_pack_selector, skipped_coverage_packs, coverage_proof_packs) =
         coverage_proof_pack_selection(&requested_coverage_pack_selector, &changed_files)?;
-    for (pack, reason) in skipped_coverage_packs {
-        route.skip(pack, reason);
+    for (pack, reason) in &skipped_coverage_packs {
+        route.skip(pack.clone(), reason.clone());
     }
     let estimated_lem = route.estimated_lem(coverage_pack_selector.len());
+
+    // Determine routing classification:
+    // - routing_skip: no coverable production code changed - valid policy skip (exit 0)
+    // - routing_bug: production code changed but zero coverage packs routed - FAIL LOUD
+    // - routed: packs were selected and will run
+    let has_coverable_production_code = changed_files.iter().any(|file| is_lcov_source_path(file));
+    let routing_classification = if coverage_proof_packs.is_empty() {
+        if has_coverable_production_code {
+            // Production code changed but nothing was routed - this is a routing bug
+            "routing_bug"
+        } else {
+            // No coverable production code - valid policy skip
+            "routing_skip"
+        }
+    } else {
+        "routed"
+    };
+
+    // Enforce pack cap: coverage packs are scoped to changed surfaces only.
+    // Multi-file PRs MUST NOT expand to the full suite.
+    let total_eligible = u64::try_from(coverage_proof_packs.len()).unwrap_or(u64::MAX);
+    let coverage_packs_skipped = total_eligible.saturating_sub(COVERAGE_PACK_CAP);
+    let (coverage_pack_selector, coverage_proof_packs) = if total_eligible > COVERAGE_PACK_CAP {
+        let cap = usize::try_from(COVERAGE_PACK_CAP).unwrap_or(usize::MAX);
+        (coverage_pack_selector[..cap].to_vec(), coverage_proof_packs[..cap].to_vec())
+    } else {
+        (coverage_pack_selector, coverage_proof_packs)
+    };
+    let coverage_pack_skip_reason = if coverage_packs_skipped > 0 {
+        format!(
+            "pack cap {COVERAGE_PACK_CAP} reached; {coverage_packs_skipped} pack(s) skipped to prevent full-suite expansion"
+        )
+    } else {
+        String::new()
+    };
 
     Ok(CiRouteReceipt {
         schema_version: "ci-route.v1",
@@ -526,6 +603,10 @@ fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> Result<C
         coverage_pack_selector,
         coverage_proof_packs,
         estimated_lem,
+        routing_classification,
+        coverage_pack_cap: COVERAGE_PACK_CAP,
+        coverage_packs_skipped,
+        coverage_pack_skip_reason,
     })
 }
 
@@ -573,6 +654,25 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         return;
     }
 
+    if file == "xtask/src/tasks/native_tooling.rs" {
+        route.add_surface("xtask-native-tooling");
+        route.add_pack(XTASK_NATIVE_TOOLING_PACK);
+        route.add_coverage_pack("patch-coverage-xtask-native-tooling");
+        return;
+    }
+
+    if file == "xtask/src/tasks/gates.rs" {
+        route.add_surface("xtask-gates");
+        route.add_pack(XTASK_GATES_PACK);
+        return route.add_coverage_pack("patch-coverage-xtask-gates");
+    }
+
+    if file == "xtask/src/tasks/file_policy.rs" {
+        route.add_surface("xtask-file-policy");
+        route.add_pack(XTASK_FILE_POLICY_PACK);
+        return route.add_coverage_pack("patch-coverage-xtask-file-policy");
+    }
+
     if file.starts_with("crates/perl-lsp-rs-core/src/providers/completion/") {
         route.add_surface("completion-core");
         route.add_pack(COMPLETION_CORE_PACK);
@@ -607,6 +707,8 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
 
     if file == "scripts/ci/route-codecov-packs.py"
         || file == "scripts/ci/test_route_codecov_packs.py"
+        || file == "scripts/ci/generate-coverage-pack-commands.py"
+        || file == "scripts/ci/test_generate_coverage_pack_commands.py"
         || file == "xtask/src/tasks/ci_route.rs"
         || file == "xtask/tests/ci_route_cli.rs"
     {
@@ -1213,6 +1315,180 @@ fn coverage_proof_pack_receipts(selector: &[String]) -> Result<Vec<CoverageProof
     Ok(proof_packs)
 }
 
+/// Build the command list for the rust-focused pack, appending crate-local
+/// coverage runs for every crate that owns a changed source file.
+///
+/// The fallback pack is intentionally crate-scoped. Workspace-wide coverage is
+/// too expensive for Patch 95 and can turn a focused Rust change into a timeout
+/// before a coverage receipt is produced. DAP-style crates (e.g. `perl-dap`)
+/// prove production-code coverage through integration tests in `tests/`, while
+/// ordinary library paths need a registered `--lib` binary.
+///
+/// IMPORTANT (#1282): these commands use `cargo llvm-cov test --no-report`
+/// instead of plain `cargo test`.  Without `--no-report`, cargo-llvm-cov does
+/// NOT register the integration-test binary in its tracking file, so
+/// `cargo llvm-cov report` cannot symbolise the profdata and integration-
+/// test-covered source lines appear uncovered (false-low patch %).
+///
+/// `-- --test-threads=1` forces serial execution within the test binary.
+/// Integration tests in this workspace mutate global/process state (env vars,
+/// auto-ID counters, plenv PATH) without `#[serial]` guards.  Coverage does
+/// not benefit from parallelism — deterministic instrumentation is more
+/// important.
+///
+/// IMPORTANT: these commands are executed NON-FATALLY by
+/// `scripts/ci/generate-coverage-pack-commands.py` (invoked from the
+/// `coverage-proof-routed` justfile recipe).  Assertion failures in integration
+/// tests do NOT abort the coverage lane — the instrumented binary still writes
+/// LLVM coverage data before exiting, so `cargo-llvm-cov` collects coverage
+/// regardless.  The quality-gate verdict is the patch coverage NUMBER, not
+/// test pass/fail.  Pre-existing test-debt (tracked in #1269) can no longer
+/// block PRs by surfacing in this lane.
+fn augment_rust_focused_commands(
+    base_commands: &[String],
+    changed_files: &[String],
+) -> Vec<String> {
+    let mut commands = Vec::new();
+    for command in base_commands {
+        if is_deprecated_rust_focused_command(command) {
+            continue;
+        }
+        push_unique_command(&mut commands, command.clone());
+    }
+    let test_targets_by_crate = changed_integration_test_targets(changed_files);
+    for crate_name in changed_crates(changed_files) {
+        let lib_cmd = format!(
+            "cargo llvm-cov test --no-report -p {crate_name} --lib --profile agent --locked"
+        );
+        push_unique_command(&mut commands, lib_cmd);
+        if let Some(test_targets) = test_targets_by_crate.get(&crate_name) {
+            for target in test_targets {
+                push_unique_command(&mut commands, targeted_test_command(&crate_name, target));
+            }
+        } else {
+            push_unique_command(
+                &mut commands,
+                format!(
+                    "cargo llvm-cov test --no-report -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
+                ),
+            );
+        }
+    }
+    if has_xtask_source_change(changed_files) {
+        push_unique_command(
+            &mut commands,
+            "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked"
+                .to_string(),
+        );
+    }
+    commands
+}
+
+fn push_unique_command(commands: &mut Vec<String>, command: String) {
+    if !commands.contains(&command) {
+        commands.push(command);
+    }
+}
+
+fn is_deprecated_rust_focused_command(command: &str) -> bool {
+    command.starts_with("cargo llvm-cov test --no-report --workspace --lib ")
+        || command.starts_with("cargo check --workspace ")
+}
+
+fn has_xtask_source_change(paths: &[String]) -> bool {
+    paths.iter().any(|path| is_lcov_source_path(path) && path.starts_with("xtask/src/"))
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct IntegrationTestTarget {
+    name: String,
+    features: Vec<String>,
+}
+
+fn changed_integration_test_targets(
+    paths: &[String],
+) -> BTreeMap<String, Vec<IntegrationTestTarget>> {
+    let mut targets: BTreeMap<String, Vec<IntegrationTestTarget>> = BTreeMap::new();
+    let mut seen = BTreeSet::new();
+    for path in paths {
+        let parts: Vec<&str> = path.split('/').collect();
+        if parts.len() != 4 || parts[0] != "crates" || parts[2] != "tests" {
+            continue;
+        }
+        let Some(target) = parts[3].strip_suffix(".rs") else {
+            continue;
+        };
+        let crate_name = parts[1].to_string();
+        let target = target.to_string();
+        if seen.insert((crate_name.clone(), target.clone())) {
+            targets.entry(crate_name).or_default().push(IntegrationTestTarget {
+                name: target,
+                features: required_features_for_test(path),
+            });
+        }
+    }
+    targets
+}
+
+fn required_features_for_test(path: &str) -> Vec<String> {
+    let Some(path) = resolve_changed_file(path) else {
+        return Vec::new();
+    };
+    let Ok(source) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    feature_cfgs_in_source(&source)
+}
+
+fn resolve_changed_file(path: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(path);
+    if path.exists() {
+        return Some(path);
+    }
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| cwd.parent().map(|parent| parent.join(&path)))
+        .filter(|candidate| candidate.exists())
+}
+
+fn feature_cfgs_in_source(source: &str) -> Vec<String> {
+    let mut features = BTreeSet::new();
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("#![cfg(") {
+            continue;
+        }
+        let mut cursor = trimmed;
+        while let Some(index) = cursor.find("feature") {
+            cursor = &cursor[index + "feature".len()..];
+            let Some(after_equals) = cursor.trim_start().strip_prefix('=') else {
+                continue;
+            };
+            let Some(after_quote) = after_equals.trim_start().strip_prefix('"') else {
+                continue;
+            };
+            let Some(end_quote) = after_quote.find('"') else {
+                continue;
+            };
+            features.insert(after_quote[..end_quote].to_string());
+            cursor = &after_quote[end_quote + 1..];
+        }
+    }
+    features.into_iter().collect()
+}
+
+fn targeted_test_command(crate_name: &str, target: &IntegrationTestTarget) -> String {
+    let feature_arg = if target.features.is_empty() {
+        String::new()
+    } else {
+        format!(" --features {}", target.features.join(","))
+    };
+    format!(
+        "cargo llvm-cov test --no-report -p {crate_name}{feature_arg} --test {} --profile agent --locked -- --test-threads=1",
+        target.name
+    )
+}
+
 fn coverage_proof_pack_selection(
     selector: &[String],
     changed_files: &[String],
@@ -1236,10 +1512,15 @@ fn coverage_proof_pack_selection(
             continue;
         }
         selected.push(pack_id.clone());
+        let commands = if pack.id == RUST_FOCUSED_PACK_ID {
+            augment_rust_focused_commands(&pack.commands, changed_files)
+        } else {
+            pack.commands.clone()
+        };
         proof_packs.push(CoverageProofPackReceipt {
             id: pack.id.clone(),
             files: pack.files.clone(),
-            commands: pack.commands.clone(),
+            commands,
             coverage_filters: pack.coverage_filters.clone(),
         });
     }
@@ -1257,7 +1538,37 @@ fn is_lcov_source_path(path: &str) -> bool {
     path.ends_with(".rs")
         && !path.starts_with("xtask/tests/")
         && !path.contains("/tests/")
+        && !is_test_support_crate_path(path)
         && (path.starts_with("xtask/src/") || path.starts_with("crates/"))
+}
+
+fn is_test_support_crate_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    TEST_SUPPORT_CRATE_PREFIXES.iter().any(|prefix| normalized.starts_with(prefix))
+}
+
+/// Extract the crate directory name from a path like `crates/<name>/src/...`.
+/// Returns `None` for non-crate paths (xtask, docs, etc.).
+fn crate_name_from_source_path(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("crates/")?;
+    let slash = rest.find('/')?;
+    Some(&rest[..slash])
+}
+
+/// Collect unique crate names that own changed LCOV source files.
+fn changed_crates(paths: &[String]) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut crates = Vec::new();
+    for path in paths {
+        if is_lcov_source_path(path) {
+            if let Some(name) = crate_name_from_source_path(path) {
+                if seen.insert(name.to_string()) {
+                    crates.push(name.to_string());
+                }
+            }
+        }
+    }
+    crates
 }
 
 fn matches_coverage_pattern(path: &str, pattern: &str) -> bool {
@@ -1289,7 +1600,7 @@ fn parse_coverage_pack_manifest(contents: &str) -> Result<CoveragePackManifest> 
         if pack.files.is_empty() {
             bail!("coverage pack `{}` must list at least one file", pack.id);
         }
-        if pack.commands.is_empty() {
+        if pack.commands.is_empty() && pack.id != RUST_FOCUSED_PACK_ID {
             bail!("coverage pack `{}` must list at least one command", pack.id);
         }
         if pack.coverage_filters.is_empty() {
@@ -2867,6 +3178,21 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_coverage_pack_manifest_allows_dynamic_rust_focused_commands() -> Result<()> {
+        let manifest = parse_coverage_pack_manifest(
+            r#"
+                [[pack]]
+                id = "patch-coverage-rust-focused"
+                files = ["*.rs"]
+                commands = []
+                coverage_filters = ["changed-crate-lib-and-integration"]
+            "#,
+        )?;
+        assert_eq!(1, manifest.pack.len());
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_coverage_pack_manifest_rejects_empty_coverage_filter_list() -> Result<()> {
         let Err(error) = parse_coverage_pack_manifest(
             r#"
@@ -2922,6 +3248,9 @@ mod tests {
                 "patch-coverage-inline-provider-core",
                 "patch-coverage-inline-ux-fixtures",
                 "patch-coverage-xtask-inline-quality",
+                "patch-coverage-xtask-native-tooling",
+                "patch-coverage-xtask-gates",
+                "patch-coverage-xtask-file-policy",
                 "patch-coverage-completion-core",
                 "patch-coverage-ux-scenario",
                 "patch-coverage-ci-policy",
@@ -2987,6 +3316,9 @@ mod tests {
             "patch-coverage-inline-provider-core",
             "patch-coverage-inline-ux-fixtures",
             "patch-coverage-xtask-inline-quality",
+            "patch-coverage-xtask-native-tooling",
+            "patch-coverage-xtask-gates",
+            "patch-coverage-xtask-file-policy",
             "patch-coverage-completion-core",
             "patch-coverage-ux-scenario",
             "patch-coverage-ci-policy",
@@ -3371,7 +3703,7 @@ mod tests {
         assert!(receipt.coverage_proof_packs.iter().flat_map(|pack| pack.commands.iter()).any(
             |command| {
                 command
-                    == "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture"
+                    == "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture"
             }
         ));
         assert!(
@@ -3406,6 +3738,127 @@ mod tests {
             pack.id == "xtask-inline-completion-quality"
                 && pack.commands.iter().any(|command| command.contains("inline-completion-quality"))
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_native_tooling_to_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["xtask/src/tasks/native_tooling.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-native-tooling"]);
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-native-tooling"));
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-native-tooling"]);
+        let coverage_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-xtask-native-tooling")
+            .ok_or_else(|| eyre!("missing native tooling coverage pack"))?;
+        assert_eq!(coverage_pack.coverage_filters, vec!["native_tooling"]);
+        assert!(coverage_pack.files.iter().any(|file| file == "xtask/src/tasks/native_tooling.rs"));
+        assert!(coverage_pack.commands.iter().any(|command| {
+            command
+                == "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture"
+        }));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "xtask-native-tooling"
+                && pack.commands.iter().any(|command| {
+                    command
+                        == "cargo test -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture"
+                })
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_gates_to_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["xtask/src/tasks/gates.rs".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-gates"]);
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-gates"));
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-gates"]);
+        let coverage_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-xtask-gates")
+            .ok_or_else(|| eyre!("missing gates coverage pack"))?;
+        assert_eq!(coverage_pack.coverage_filters, vec!["gates"]);
+        assert!(coverage_pack.files.iter().any(|file| file == "xtask/src/tasks/gates.rs"));
+        assert!(coverage_pack.commands.iter().any(|command| {
+            command
+                == "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked gates -- --nocapture"
+        }));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "xtask-gates"
+                && pack.commands.iter().any(|command| {
+                    command
+                        == "cargo test -p xtask --bin xtask --profile agent --locked gates -- --nocapture"
+                })
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_gates_route_does_not_shadow_file_policy() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["xtask/src/tasks/file_policy.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-file-policy"]);
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-file-policy"]);
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-file-policy"));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_file_policy_to_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["xtask/src/tasks/file_policy.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-file-policy"]);
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-file-policy"));
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-file-policy"]);
+        let coverage_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-xtask-file-policy")
+            .ok_or_else(|| eyre!("missing file policy coverage pack"))?;
+        assert_eq!(coverage_pack.coverage_filters, vec!["file_policy"]);
+        assert!(coverage_pack.files.iter().any(|file| file == "xtask/src/tasks/file_policy.rs"));
+        assert!(coverage_pack.commands.iter().any(|command| {
+            command
+                == "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked file_policy -- --nocapture"
+        }));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "xtask-file-policy"
+                && pack.commands.iter().any(|command| {
+                    command
+                        == "cargo test -p xtask --bin xtask --profile agent --locked file_policy -- --nocapture"
+                })
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_file_policy_route_does_not_shadow_completion_provider() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["crates/perl-lsp-rs-core/src/providers/completion/mod.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["completion-core"]);
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-completion-core"]);
+        assert!(proof_pack_ids(&receipt).contains(&"completion-core"));
         Ok(())
     }
 
@@ -3500,7 +3953,319 @@ mod tests {
         Ok(())
     }
 
+    /// Regression guard for PR #1212 / #1217: DAP-style crates prove their
+    /// patch coverage through integration tests as well as lib tests.  The
+    /// rust-focused pack must include per-crate `--lib` and integration-test
+    /// coverage commands for every crate that owns a changed source file.
+    ///
+    /// The command must also carry `-- --test-threads=1` (fix for #1232 /
+    /// coverage-lane-single-threaded): integration tests in this workspace
+    /// mutate global/process state and race when the coverage lane runs them
+    /// in parallel.  Single-threaded execution is the whole-class fix.
+    #[test]
+    fn ci_route_rust_focused_pack_includes_integration_tests_for_changed_crate() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec![
+                "crates/perl-dap/src/debug_adapter/frames.rs".to_string(),
+                "crates/perl-dap/tests/dap_adapter_tests.rs".to_string(),
+            ],
+        )?;
+
+        let rust_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-rust-focused")
+            .ok_or_else(|| color_eyre::eyre::eyre!("patch-coverage-rust-focused not selected"))?;
+
+        // Must include changed integration-test invocation using cargo-llvm-cov
+        // (fixes #1282: plain `cargo test` doesn't register binaries with
+        // cargo-llvm-cov's tracking file, so `cargo llvm-cov report` silently
+        // drops integration-test profdata → false-low patch %).
+        let integration_cmds: Vec<&String> = rust_pack
+            .commands
+            .iter()
+            .filter(|cmd| {
+                cmd.contains("cargo llvm-cov test --no-report -p perl-dap")
+                    && cmd.contains("--test dap_adapter_tests")
+            })
+            .collect();
+        assert!(
+            !integration_cmds.is_empty(),
+            "expected a `cargo llvm-cov test --no-report -p perl-dap --test dap_adapter_tests` command; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack
+                .commands
+                .iter()
+                .any(|cmd| cmd.contains("cargo llvm-cov test --no-report -p perl-dap --tests")),
+            "source+changed-test route must not run the whole perl-dap integration suite; got: {:?}",
+            rust_pack.commands
+        );
+        for cmd in &integration_cmds {
+            assert!(
+                cmd.contains("--test-threads=1"),
+                "coverage-lane integration test must be single-threaded; got: {cmd}"
+            );
+        }
+
+        // Per-crate lib command must use cargo-llvm-cov so its binary is registered.
+        assert!(
+            rust_pack
+                .commands
+                .iter()
+                .any(|cmd| cmd.contains("cargo llvm-cov test --no-report -p perl-dap")
+                    && cmd.contains("--lib")),
+            "lib command must use cargo llvm-cov test --no-report -p perl-dap; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack
+                .commands
+                .iter()
+                .any(|cmd| cmd.contains("cargo llvm-cov test --no-report --workspace --lib")),
+            "Patch 95 fallback coverage must stay changed-crate scoped; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack.commands.iter().any(|cmd| cmd.starts_with("cargo check --workspace")),
+            "Patch 95 must not carry non-coverage workspace checks; got: {:?}",
+            rust_pack.commands
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_rust_focused_pack_targets_changed_integration_test() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec![
+                "crates/perl-lsp-rs/src/runtime/language/symbols.rs".to_string(),
+                "crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs".to_string(),
+            ],
+        )?;
+
+        let rust_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-rust-focused")
+            .ok_or_else(|| color_eyre::eyre::eyre!("patch-coverage-rust-focused not selected"))?;
+
+        assert!(
+            rust_pack.commands.iter().any(|cmd| {
+                cmd == "cargo llvm-cov test --no-report -p perl-lsp-rs --test lsp_folding_ranges_test --profile agent --locked -- --test-threads=1"
+            }),
+            "expected targeted lsp_folding_ranges_test coverage command; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack.commands.iter().any(|cmd| {
+                cmd == "cargo llvm-cov test --no-report -p perl-lsp-rs --tests --profile agent --locked -- --test-threads=1"
+            }),
+            "changed integration test target should replace the full integration suite for that crate; got: {:?}",
+            rust_pack.commands
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_rust_focused_pack_preserves_changed_test_target_features() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec![
+                "crates/perl-lsp-rs/src/runtime/workspace.rs".to_string(),
+                "crates/perl-lsp-rs/tests/multi_root_workspace_tests.rs".to_string(),
+                "crates/perl-lsp-ux-tests/src/lib.rs".to_string(),
+            ],
+        )?;
+
+        let rust_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-rust-focused")
+            .ok_or_else(|| color_eyre::eyre::eyre!("patch-coverage-rust-focused not selected"))?;
+
+        assert!(
+            rust_pack.commands.iter().any(|cmd| {
+                cmd == "cargo llvm-cov test --no-report -p perl-lsp-rs --features expose_lsp_test_api,workspace --test multi_root_workspace_tests --profile agent --locked -- --test-threads=1"
+            }),
+            "feature-gated changed test target must keep required features; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack.commands.iter().any(|cmd| cmd.contains("-p perl-lsp-ux-tests")),
+            "test-harness crates are not production Patch95 inputs; got: {:?}",
+            rust_pack.commands
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn required_features_for_test_handles_missing_unreadable_and_direct_paths() -> Result<()> {
+        let temp = TempDir::new()?;
+        let feature_file = temp.path().join("feature_target.rs");
+        fs::write(
+            &feature_file,
+            r#"#![cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]"#,
+        )?;
+
+        let feature_file = feature_file.to_string_lossy().into_owned();
+        assert_eq!(
+            required_features_for_test(&feature_file),
+            vec!["expose_lsp_test_api".to_string(), "workspace".to_string()]
+        );
+
+        let missing_file = temp.path().join("missing_target.rs").to_string_lossy().into_owned();
+        assert!(required_features_for_test(&missing_file).is_empty());
+
+        let unreadable_path = temp.path().join("directory_target.rs");
+        fs::create_dir(&unreadable_path)?;
+        let unreadable_path = unreadable_path.to_string_lossy().into_owned();
+        assert!(required_features_for_test(&unreadable_path).is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn feature_cfgs_in_source_ignores_malformed_inner_cfg_feature_fragments() {
+        let features = feature_cfgs_in_source(
+            r#"
+#![cfg(feature)]
+#![cfg(feature = workspace)]
+#![cfg(feature = "unterminated)]
+#![cfg(feature = "lsp")]
+#[cfg(feature = "test-only")]
+#![cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
+"#,
+        );
+
+        assert_eq!(
+            features,
+            vec!["expose_lsp_test_api".to_string(), "lsp".to_string(), "workspace".to_string()]
+        );
+    }
+
+    #[test]
+    fn ci_route_test_support_crate_sources_are_not_lcov_sources() {
+        assert!(!is_lcov_source_path("crates/perl-lsp-ux-tests/src/lib.rs"));
+        assert!(!is_lcov_source_path("crates/perl-tdd-support/src/lib.rs"));
+        assert!(!is_lcov_source_path("crates/perl-test-generators/src/lib.rs"));
+        assert!(!is_lcov_source_path("crates/perl-test-must/src/lib.rs"));
+    }
+
+    /// Only lib-test crates (no integration tests directory, no crates/ source changes)
+    /// should not have spurious `--tests` commands injected.
+    #[test]
+    fn ci_route_rust_focused_pack_lib_only_when_no_src_crate_change() -> Result<()> {
+        // xtask/src/ change — crate_name_from_source_path returns None.
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["xtask/src/tasks/ci_route.rs".to_string()])?;
+
+        // rust-focused pack selected (xtask/src/ is an lcov source path).
+        let rust_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-rust-focused");
+
+        // If selected, xtask gets its bin coverage target but must not have a
+        // spurious `-p <crate> --tests` line (xtask changes don't belong to a
+        // crates/ crate).
+        if let Some(pack) = rust_pack {
+            assert!(
+                pack.commands.iter().any(|cmd| {
+                    cmd == "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked"
+                }),
+                "xtask fallback should cover the xtask bin target; got: {:?}",
+                pack.commands
+            );
+            for cmd in &pack.commands {
+                assert!(
+                    !cmd.contains("-p xtask --tests"),
+                    "xtask is not a crates/ crate; must not inject --tests; got: {cmd}"
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     fn proof_pack_ids(receipt: &CiRouteReceipt) -> Vec<&str> {
         receipt.required_proof_packs.iter().map(|pack| pack.id.as_str()).collect()
+    }
+
+    // ── #1470 routing-classification + pack-cap field tests ────────────────────
+    // These inline lib tests give ripr direct observability of the new struct
+    // fields added in PR #1470 (routing_classification, coverage_pack_cap,
+    // coverage_packs_skipped, coverage_pack_skip_reason). The integration-test
+    // variants in coverage_proof_measure_only_red_tdd.rs exercise the same
+    // behavior through the CLI binary (fixture_opaque to ripr). These lib tests
+    // call route_receipt() directly so ripr can trace the oracle through the
+    // assertion. Resolves the fixture_opaque weakly_exposed seams at
+    // ci_route.rs:561 and ci_route.rs:567 introduced by PR #1470.
+
+    #[test]
+    fn routing_classification_is_routing_skip_for_docs_only_change() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["docs/development/ROADMAP.md".to_string()])?;
+        assert_eq!(
+            receipt.routing_classification, "routing_skip",
+            "docs-only change has no coverable production code — must be routing_skip"
+        );
+        assert_eq!(receipt.coverage_pack_cap, COVERAGE_PACK_CAP);
+        assert_eq!(receipt.coverage_packs_skipped, 0);
+        assert!(receipt.coverage_pack_skip_reason.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn routing_classification_is_routed_for_rust_source_change() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["crates/perl-parser/src/lib.rs".to_string()],
+        )?;
+        assert_eq!(
+            receipt.routing_classification, "routed",
+            "Rust source change with coverage packs must be classified as routed"
+        );
+        assert_eq!(receipt.coverage_pack_cap, COVERAGE_PACK_CAP);
+        assert!(!receipt.coverage_proof_packs.is_empty(), "packs must be selected for Rust source");
+        Ok(())
+    }
+
+    #[test]
+    fn coverage_packs_skipped_is_zero_when_under_cap() -> Result<()> {
+        // A single-file change will select at most one pack — well under the cap.
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["crates/perl-lexer/src/lib.rs".to_string()])?;
+        assert_eq!(
+            receipt.coverage_packs_skipped, 0,
+            "single-file change must not skip any packs (under cap)"
+        );
+        assert!(
+            receipt.coverage_pack_skip_reason.is_empty(),
+            "skip_reason must be empty when no packs are skipped"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn coverage_pack_cap_field_is_always_present_in_receipt() -> Result<()> {
+        // coverage_pack_cap must be present in all routing outcomes (routed, routing_skip).
+        let routed =
+            route_receipt("origin/main", "HEAD", vec!["xtask/src/tasks/ci_route.rs".to_string()])?;
+        assert_eq!(routed.coverage_pack_cap, COVERAGE_PACK_CAP);
+
+        let skip =
+            route_receipt("origin/main", "HEAD", vec!["scripts/install-githooks.sh".to_string()])?;
+        assert_eq!(skip.coverage_pack_cap, COVERAGE_PACK_CAP);
+        Ok(())
     }
 }

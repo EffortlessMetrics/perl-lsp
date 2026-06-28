@@ -9,7 +9,7 @@ This document provides guidelines and instructions for contributors working on t
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Rust**: 1.92+ (stable)
+- **Rust**: 1.95+ (stable)
 - **Cargo**: Latest stable
 
 ### Development Setup

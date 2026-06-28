@@ -13,9 +13,12 @@
 //!
 //! Only fires when the format argument is a static string literal. Skips:
 //! - Variable format strings (e.g. `printf $fmt, @args`)
-//! - `%*d` / `%.*f` width/precision-from-args (counted as one specifier, may
-//!   produce false negatives but never false positives)
 //! - `%1$s` positional specifiers (skip entire call if detected)
+//!
+//! Handles dynamic width and precision correctly:
+//! - `%*d` counts as 2 specifiers (width + value)
+//! - `%.*f` counts as 2 specifiers (precision + value)
+//! - `%*.*s` counts as 3 specifiers (width + precision + value)
 //!
 //! Both `NodeKind::FunctionCall` and `NodeKind::IndirectCall` are handled.
 //! The parser disambiguates: `printf FILEHANDLE FORMAT, LIST` becomes
@@ -100,8 +103,9 @@ fn check_format_args(name: &str, args: &[Node], node: &Node, diagnostics: &mut V
 ///
 /// - `%%` is a literal percent; does NOT consume an argument — skipped.
 /// - `%[flags][width][.precision]specifier` consumes one argument.
-/// - `%*d` / `%.*f` (width/precision from arg via `*`) are counted as one
-///   specifier each; may produce false negatives but not false positives.
+/// - `%*d` counts as 2 specifiers: one for width (*), one for value (d).
+/// - `%.*f` counts as 2 specifiers: one for precision (*), one for value (f).
+/// - `%*.*s` counts as 3 specifiers: one for width (*), one for precision (*), one for value (s).
 fn count_format_specifiers(s: &str) -> usize {
     let bytes = s.as_bytes();
     let mut count = 0;
@@ -129,6 +133,7 @@ fn count_format_specifiers(s: &str) -> usize {
             i += 1;
         }
         if i < bytes.len() && bytes[i] == b'*' {
+            count += 1; // width consumed from argument
             i += 1;
         }
         // Skip optional precision (.digits or .*)
@@ -138,6 +143,7 @@ fn count_format_specifiers(s: &str) -> usize {
                 i += 1;
             }
             if i < bytes.len() && bytes[i] == b'*' {
+                count += 1; // precision consumed from argument
                 i += 1;
             }
         }
@@ -222,6 +228,38 @@ mod tests {
         assert_eq!(count_format_specifiers("%-10s"), 1);
         assert_eq!(count_format_specifiers("%+.2f"), 1);
         assert_eq!(count_format_specifiers("%05d"), 1);
+    }
+
+    #[test]
+    fn dynamic_width_specifier() {
+        // %*s consumes 2 arguments: width and string value
+        assert_eq!(count_format_specifiers("%*s"), 2);
+        assert_eq!(count_format_specifiers("%*d"), 2);
+        assert_eq!(count_format_specifiers("%*f"), 2);
+    }
+
+    #[test]
+    fn dynamic_precision_specifier() {
+        // %.*f consumes 2 arguments: precision and float value
+        assert_eq!(count_format_specifiers("%.*f"), 2);
+        assert_eq!(count_format_specifiers("%.*s"), 2);
+        assert_eq!(count_format_specifiers("%.*d"), 2);
+    }
+
+    #[test]
+    fn dynamic_width_and_precision_specifier() {
+        // %*.*s consumes 3 arguments: width, precision, and string value
+        assert_eq!(count_format_specifiers("%*.*s"), 3);
+        assert_eq!(count_format_specifiers("%*.*f"), 3);
+        assert_eq!(count_format_specifiers("%*.*d"), 3);
+    }
+
+    #[test]
+    fn combined_static_and_dynamic_specifiers() {
+        // Mix of static and dynamic specifiers
+        assert_eq!(count_format_specifiers("%s %*d"), 3); // static string, dynamic width+int
+        assert_eq!(count_format_specifiers("%*s %d"), 3); // dynamic width+string, static int
+        assert_eq!(count_format_specifiers("%d %.*f %s"), 4); // int, dynamic precision+float, string
     }
 
     #[test]

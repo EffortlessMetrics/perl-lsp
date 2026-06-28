@@ -51,6 +51,16 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        // Wait for any in-flight didOpen index tasks to complete before sampling
+        // live provider state.  When tokio-backed async indexing runs on didOpen
+        // (any test that happens to have a tokio runtime), build_rename_edit may
+        // see idx.find_def → None and take the same-file fallback (Ok(vec![]))
+        // instead of the correct AmbiguousIdentity refusal.  Calling this here
+        // makes the index-readiness guarantee explicit for the receipt path so
+        // the live provider state is always deterministic.  (#3131)
+        #[cfg(feature = "workspace")]
+        self.wait_for_rename_index_ready();
+
         let (live_provider_result, live_provider_error) =
             match self.handle_rename_workspace_for_receipt_noise(params.clone()) {
                 Ok(result) => (result, None),
@@ -1635,7 +1645,6 @@ fn rename_package_pilot_ineligible_reason(
     match reason {
         RenamePackagePilotIneligibleReason::EmptyPlan => "empty_plan",
         RenamePackagePilotIneligibleReason::Blocked => "blocked",
-        RenamePackagePilotIneligibleReason::UnsupportedEditCategory => "unsupported_edit_category",
         _ => "unknown",
     }
 }

@@ -45,6 +45,7 @@ fn test_subroutine_produces_symbol_decl() {
         NodeKind::Subroutine {
             name: Some("greet".to_string()),
             name_span: Some(loc(4, 9)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -74,6 +75,7 @@ fn test_anonymous_subroutine_is_skipped() {
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -486,7 +488,12 @@ fn test_class_produces_symbol_decl() {
     // class Point { }
     let body = Node::new(NodeKind::Block { statements: vec![] }, loc(12, 15));
     let class_node = Node::new(
-        NodeKind::Class { name: "Point".to_string(), parents: vec![], body: Box::new(body) },
+        NodeKind::Class {
+            name: "Point".to_string(),
+            name_span: None,
+            parents: vec![],
+            body: Box::new(body),
+        },
         loc(0, 15),
     );
     let program = Node::new(NodeKind::Program { statements: vec![class_node] }, loc(0, 15));
@@ -508,7 +515,7 @@ fn test_format_produces_symbol_decl() {
     // format REPORT =
     // .
     let format_node = Node::new(
-        NodeKind::Format { name: "REPORT".to_string(), body: "@<<<".to_string() },
+        NodeKind::Format { name: "REPORT".to_string(), name_span: None, body: "@<<<".to_string() },
         loc(0, 18),
     );
     let program = Node::new(NodeKind::Program { statements: vec![format_node] }, loc(0, 18));
@@ -532,6 +539,7 @@ fn test_labeled_statement_produces_label_decl_and_walks_inner_statement() -> Res
         NodeKind::Subroutine {
             name: Some("inner".to_string()),
             name_span: Some(loc(10, 15)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -616,6 +624,7 @@ fn test_subroutine_inside_package_has_container() -> Result<(), String> {
         NodeKind::Subroutine {
             name: Some("bar".to_string()),
             name_span: Some(loc(14, 17)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -657,6 +666,7 @@ fn test_subroutine_inside_package_block() -> Result<(), String> {
         NodeKind::Subroutine {
             name: Some("baz".to_string()),
             name_span: Some(loc(16, 19)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -874,6 +884,7 @@ fn test_non_variable_decls_have_no_declarator() {
         NodeKind::Subroutine {
             name: Some("greet".to_string()),
             name_span: Some(loc(4, 9)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -910,4 +921,89 @@ fn test_symbol_decl_derives() {
     let d2 = d.clone();
     assert_eq!(d, d2);
     let _ = format!("{:?}", d);
+}
+
+// ── NestedVariableList in extract_symbol_decls ───────────────────────────────
+
+#[test]
+fn test_nested_varlist_inner_vars_are_extracted() {
+    // Regression test for #1362: variables inside a NestedVariableList (e.g. the
+    // ($b, $c) group in `my ($a, ($b, $c))`) must be registered as SymbolDecls.
+    // Before the fix, variable_decl_from_node returned None for NestedVariableList
+    // items, so $b and $c were silently dropped from the workspace symbol index.
+    let var_a =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() }, loc(4, 6));
+    let var_b =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "b".to_string() }, loc(9, 11));
+    let var_c = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "c".to_string() },
+        loc(13, 15),
+    );
+    let nested = Node::new(NodeKind::NestedVariableList { items: vec![var_b, var_c] }, loc(8, 16));
+    let decl_node = Node::new(
+        NodeKind::VariableListDeclaration {
+            declarator: "my".to_string(),
+            variables: vec![var_a, nested],
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(0, 18),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 18));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    // All three variables must be registered: $a, $b, $c.
+    assert_eq!(
+        decls.len(),
+        3,
+        "expected 3 decls for $a, $b, $c but got {}: {:?}",
+        decls.len(),
+        decls.iter().map(|d| &d.name).collect::<Vec<_>>()
+    );
+    let names: Vec<&str> = decls.iter().map(|d| d.name.as_str()).collect();
+    assert!(names.contains(&"a"), "missing $a in {:?}", names);
+    assert!(names.contains(&"b"), "missing $b in {:?}", names);
+    assert!(names.contains(&"c"), "missing $c in {:?}", names);
+}
+
+#[test]
+fn test_deeply_nested_varlist_vars_are_extracted() {
+    // Three-level nesting: my ($a, ($b, ($c, $d))) -- all four vars must be extracted.
+    let var_c = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "c".to_string() },
+        loc(14, 16),
+    );
+    let var_d = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "d".to_string() },
+        loc(18, 20),
+    );
+    let inner_nested =
+        Node::new(NodeKind::NestedVariableList { items: vec![var_c, var_d] }, loc(13, 21));
+    let var_b =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "b".to_string() }, loc(9, 11));
+    let outer_nested =
+        Node::new(NodeKind::NestedVariableList { items: vec![var_b, inner_nested] }, loc(8, 22));
+    let var_a =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() }, loc(4, 6));
+    let decl_node = Node::new(
+        NodeKind::VariableListDeclaration {
+            declarator: "my".to_string(),
+            variables: vec![var_a, outer_nested],
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(0, 24),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 24));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(
+        decls.len(),
+        4,
+        "expected 4 decls for $a, $b, $c, $d but got {}: {:?}",
+        decls.len(),
+        decls.iter().map(|d| &d.name).collect::<Vec<_>>()
+    );
 }

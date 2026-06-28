@@ -7,6 +7,11 @@ This page tracks the Rust fact layers between parser output and LSP providers.
 It is intentionally separate from provider behavior: a fact layer can be
 fixture-backed before any live LSP feature consumes it.
 
+The durable contract for the layer set, the layering direction, the shared
+provenance/confidence/dynamic-boundary obligations, and the determinism rules is
+[PLSP-SPEC-0030: Compile state layers](../../specs/PLSP-SPEC-0030-compile-state-layers.md).
+This page reports current state; that spec defines what must stay true.
+
 ## Fact Layer Matrix
 
 | Layer | State | Owner | Evidence | Next proof |
@@ -21,7 +26,7 @@ fixture-backed before any live LSP feature consumes it.
 | Compile-time effects | `fixture-backed` | [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207), [#3394](https://github.com/EffortlessMetrics/perl-lsp/issues/3394), [#8293](https://github.com/EffortlessMetrics/perl-lsp/issues/8293), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | `crates/perl-parser-core/tests/hir_tests.rs`, [#8291](https://github.com/EffortlessMetrics/perl-lsp/pull/8291), [#8297](https://github.com/EffortlessMetrics/perl-lsp/pull/8297), [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300) | Keep effect records available for downstream tooling IR and provider proof; provider use remains gated by [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) |
 | Prototype table facts | `fixture-backed` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | `crates/perl-parser-core/tests/hir_tests.rs` | Keep named subroutine prototype content and source ranges available as compiler substrate; no provider, diagnostic, parser-bucket, PIR, or support-tier promotion follows from this row |
 | Bareword classifier facts | `fixture-backed` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | `crates/perl-parser-core/tests/hir_tests.rs` | Keep source-backed syntactic bareword roles available for downstream diagnostic/provider proof; no PL109 suppression, provider behavior, parser-bucket, PIR, determinism, or support-tier promotion follows from this row |
-| Tooling PIR | `planned` | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | Roadmap only | Context-aware PIR lowering fixtures |
+| Tooling PIR | `fixture-backed` | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | `crates/perl-parser-core/src/pir/`, `crates/perl-parser-core/tests/pir_tests.rs` | PIR v0 data model + HIR lowering for data-access, call, and dynamic-boundary families with source anchors, dynamic-boundary links, visible unknown context, conservative fallthrough/dynamic-exit CFG, and lowering receipts; branch/loop/return lowering and provider cutover remain out (gated by [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197)) |
 | Differential real-Perl oracle | `planned / manifest-declared / receipt-schema-declared` | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | [PLSP-SPEC-0027](../../specs/PLSP-SPEC-0027-differential-real-perl-oracle.md); [oracle fixture manifest](../../../crates/perl-corpus/fixtures/differential_oracle/manifest.json); [oracle receipt schema](../../../schemas/oracle_receipt.v1.schema.json); selected compile-effect oracle proof in [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300) | Broader conformance receipts remain planned; real Perl stays a comparison oracle, not an editor-runtime dependency |
 
 ## Boundaries

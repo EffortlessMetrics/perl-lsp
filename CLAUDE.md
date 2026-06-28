@@ -1,16 +1,26 @@
 # CLAUDE.md
 
-**Latest Release**: 0.16.0 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md) | **Implementation agents**: [AGENTS.md](AGENTS.md)
+**Latest Release**: 0.17.0 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md) | **Implementation agents**: [AGENTS.md](AGENTS.md)
 
 ## Orchestration Model
 
-perl-lsp's orchestration is an *Octopus Cluster* — see [docs/reference/OCTOPUS_CLUSTER.md](docs/reference/OCTOPUS_CLUSTER.md) for the umbrella framing.
+perl-lsp's orchestration is **orchestrator-driven**: a long-lived orchestrator routes work to consolidated, long-running warm agents under the closure discipline in *Operating doctrine* below. (The early *Octopus Cluster* framing — [docs/reference/OCTOPUS_CLUSTER.md](docs/reference/OCTOPUS_CLUSTER.md), Feb 2026 — is historical; the model has since consolidated into fewer, longer-lived agents with differently-directed review.)
 
 > For the design rationale and direction behind this orchestration model, see [docs/reference/ORCHESTRATION_DOCTRINE.md](docs/reference/ORCHESTRATION_DOCTRINE.md).
 >
 > For the operating contract a maintainer-agent follows when making consequential PR decisions — work PR by PR, verify from primary artifacts, never destructively batch, choose the workflow from current repo state, and override stale instructions out loud — see [docs/reference/MAINTAINER_AGENT_DOCTRINE.md](docs/reference/MAINTAINER_AGENT_DOCTRINE.md).
 
-The orchestrator routes work to agents, never writes code directly.
+The orchestrator routes work to agents, and writes code directly only by exception (see *Operating doctrine* below).
+
+### Operating doctrine (2026-06)
+
+The gate/agent pipeline below encodes **intent**, not a fixed agent-per-stage relay. Long-running warm agents + compaction + ultracode have made consolidation the default: prefer **one long-running builder + one consolidated review/verify pass** over the full granular scout→red→build→green→review→deep chain — keeping each gate's *intent* (independent judgment, adversarial verification) while collapsing the agent count. The gates are best read as **stages a single long-running agent traverses** (build → self-review → harden → verify) — checkpoints in one agent's lifecycle — not a relay handing off between distinct single-purpose agents. Use the granular relay where independence is genuinely load-bearing. "The orchestrator never writes code" is the strong default, not a ban: the orchestrator writes/verifies directly when salvaging a stalled agent's artifact or making a focused full-context fix — and **always routes an independent adversarial pass before merge**. Orchestration leans on modern Claude Code techniques: **ultracode** (multi-agent Workflows for fan-out + adversarial verification), context **compaction** (sustained long sessions), git **worktrees** (parallel isolated edits), and **long-running steerable agents** re-aimed across angles. See [docs/forensics/2026-06-25-closure-gap-the-recurring-defect.md](docs/forensics/2026-06-25-closure-gap-the-recurring-defect.md).
+
+**Closure discipline — component-proved ≠ system-proved.** A passing component test never proves the system; the gap hides in the seam the author didn't build (the caller, the reachability edge, the last-mile handoff). Before "done"/"merge"/"live", verify the full production chain: the live caller, reachability from a real request, the durable artifact on `origin`, and the externally observable effect — bound to the current repo identity + HEAD SHA. Track completion on independent axes (Implemented · Merged · Reachable · Correct · Measured · Promoted · Consolidated), not one "done" flag; any gap on Reachable/Promoted/Consolidated is **inventory, not product**. Attach a **closure receipt** to security/correctness/"live" claims: `repo, base+head SHA, production_entrypoint, call_chain_verified, independent_expected_behavior, remote_head_confirmed, user_visible_effect, fallback_remaining, uncertainty`.
+
+**Adversarial review is seam-anchored.** A cold/oppositional pass walks one level outward in both directions (*what feeds this? what consumes this? what on None/Err/empty?*), not the changed function. Its value is the different **direction**, not clean context — "independent" means independent *direction*, not a separate body. Re-aim a warm agent across successive angles rather than spinning up a panel; **change agents when the context FOCUS changes, re-aim within a focus**. Closure is attested by a different direction than the producer.
+
+**The control plane is the binding constraint.** Codegen is cheap; the CI/merge control plane (ripr, Codecov-patch, the serial fmt/clippy meta-gate, main-green) is the bottleneck — and the bottleneck **migrates upward** (codegen → compile → CI → merge → API → reconciliation → reviewer). Treat infra (cached builds, idempotent bulk ops, current-main preflight, durable agent receipts, API-aware write queues) as product velocity, not support work.
 
 ### Gates and Agents
 
@@ -24,7 +34,7 @@ The pipeline is organized into **7 gates** (coarse stages) with multiple agents 
 | **4. Review/improve** | Right thing × what codebase needs × right way | reviewer, maintainer-pr, refactor-planner, green-refactor, reviewer-deep, diff-auditor |
 | **5. CI green** | Live CI actually green (not just a label) | green-ci, pr-responder |
 | **6. Merge** | Land it | ops |
-| **7. Learn** | Consolidate captured learning into durable artifacts | wisdom, memory-recalibrator |
+| **7. Learn** | Consolidate captured learning into durable artifacts | wisdom, memory-recalibrator, learning-scribe |
 
 **Sequencing within a gate** is preferred when agents build on each other's output, but is not strict — parallel agents within a gate are fine when they don't depend on each other.
 
@@ -32,7 +42,11 @@ The pipeline is organized into **7 gates** (coarse stages) with multiple agents 
 
 **Learning is captured continuously** by every agent in every gate. Gate 7 is the dedicated consolidation layer — it shapes captured artifacts into durable memory, doctrine, and follow-up work.
 
+**Gate-7 capture loop**: Every deep-review fix or observable incident => one  entry (YAML frontmatter with tags + search_terms, links the PR# and the  pattern) + a spec/contract follow-up in  or  if the class is recurring.
+
 See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for the full gate model: skip criteria, within-gate ordering, three-axis triangulation in Gate 4, and worked examples.
+
+The tables above name the load-bearing gate agents; for the full roster — including the pipeline **leads** (`lead-discovery`, `lead-build`, `lead-review`) and the **Issue Discovery Desk** scouts (`scout-find-*`) — see [.claude/agents/AGENT_CATALOG.md](.claude/agents/AGENT_CATALOG.md).
 
 ### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
 
@@ -211,6 +225,21 @@ gh pr list --search "label:merge-ready"              # ready to merge
 - **Research** -> explore agent: `Agent(subagent_type: "Explore", prompt: "...")`
 - **Multiple changes** -> parallel worktree agents, one per crate. Microcrate architecture prevents conflicts.
   - Reserve 10 agent slots for late-cycle routing. Use SendMessage to repurpose idle agents.
+- **Idle warm agent** -> re-task it, don't let it expire (~5-min agent cache TTL vs ~1-hr orchestrator). Re-aim across adversarial angles / verification / cleanup *within the same focus*; spawn a fresh agent only when the focus changes. Cache is a discount, not a reason to manufacture low-value work.
+- **Independent verification** -> a different *direction* on the seam, not necessarily a fresh agent. Background subagents must **self-post** findings via SendMessage **and write them to a durable file** — verify the durable artifact, not the agent's word (background agents reliably drop reports otherwise).
+
+### Issue-scout protocol
+
+> **Post where the work lives. Verify in opposition. Land only on convergence.**
+
+The GitHub issue thread is not a report destination — it is the database, the whiteboard, the audit log, and the convergence rail. Findings become real *on the issue*, never solely in an agent's or the orchestrator's private context. Full doctrine and prompt templates: [docs/reference/ISSUE_SCOUT_PROTOCOL.md](docs/reference/ISSUE_SCOUT_PROTOCOL.md).
+
+- Scouts post findings directly on GitHub issues. Do **not** return substantive issue analysis only to the orchestrator.
+- Every scout comment must include: **current state, evidence (file:line / tests / PRs / commands), opposing checks, verdict, plan, acceptance criteria, residual uncertainty.**
+- Oppositional verifiers post `CONFIRMED` / `REFUTED` / `CORRECTED` on the same issue, with the exact correction when prior evidence was path-mis-scoped.
+- Posting may tolerate the expected ~12% hallucination rate — convergence corrects it. **Closing, merging, and `builder-ready` routing require a converged verdict** from an oppositional pass; a single scout's "dual evidence" is not enough if it may be path-mis-scoped.
+- **A real test is not enough if it exercises the wrong code path** (the #3106 lesson — same disease as NodeKind blindness: proof for one shape does not prove the semantic case).
+- The coordinator does not centralize raw analysis. It reads the converged issue state, routes labels / follow-up work, and gates landing actions. Asymmetric by design: **parallelize posting, parallelize opposition, serialize landing.**
 
 ### Merge Queue Protocol
 
@@ -218,6 +247,28 @@ gh pr list --search "label:merge-ready"              # ready to merge
 - Merge in batches of 3 (CI cancellation cascade -- rapid merges cancel each other's CI runs)
 - Run `just cpan-corpus-ratchet` after parser fix merges
 - `docs/project/status/*.md` subsystem files are regenerated automatically post-merge (no manual step needed)
+
+**Required CI checks for merge** — exactly three branch-protection required checks:
+- `Perl LSP Rust Small Result`
+- `ripr+ New Gap Gate`
+- `Codecov / Patch 95`
+
+(`CI Gate (Merge-Blocking)` and `PR Smoke` are **not** required — their failure does not block merge.)
+
+**Local preflight before merge** — run per-crate, separately (the combined `-p X -p Y` form glitches with a spurious failure):
+```bash
+cargo fmt --check -p <crate>                             # per-crate, one at a time
+cargo clippy -p <crate> --locked -- -D warnings -A missing_docs  # per-crate
+```
+This catches the #1 recurring failure: fmt/clippy drift landing on main through a PR that looked green.
+
+**Merge with UNSTABLE is OK** when all 3 required checks are green and the red check is non-required. Do not block on a non-required check.
+
+**CI timing** — CX53 self-hosted CI + the separate `ripr` workflow + Codecov upload take ~20-30 min. A sparse rollup (e.g. `EM CI Routed Rust = success` but Codecov/ripr+ still empty) means **RUNNING, not stuck**. Verify via `gh run list --branch <branch>`; don't re-poll faster than the gates complete.
+
+**`Codecov / Patch 95`** measures `--lib` coverage only. Integration-tested production code that lacks a `--lib` unit test will fail this gate. Fix: add a `--lib` unit test, or document a narrow/expiring exception. A SKIPPED-vs-SUCCESS duplicate for the same check (draft→ready transition) can briefly show BLOCKED — it reconciles on its own; do not re-push.
+
+See [docs/reference/CI_GATE_PLAYBOOK.md](docs/reference/CI_GATE_PLAYBOOK.md) for the full playbook.
 
 ## Quick Reference
 
@@ -239,7 +290,7 @@ cargo test --workspace --lib          # Run all tests
 
 ## Crate Structure
 
-134 workspace members across 135 crate directories (see `cargo metadata --no-deps`). Key crates:
+39 workspace members across 38 crate directories under `crates/` plus `xtask/` at the root (see `cargo metadata --no-deps`). The pre-v0.13.0 count of ~135 reflected the original microcrate split; successive collapse waves (D, G1a/G1b, G2, G3, Final-PR-B, H) absorbed those crates into larger units. Key crates:
 
 | Crate | Path | Purpose |
 |-------|------|---------|
@@ -251,7 +302,7 @@ cargo test --workspace --lib          # Run all tests
 | **perl-workspace** | `crates/perl-workspace/` | Workspace symbol indexing |
 | **perl-semantic-analyzer** | `crates/perl-semantic-analyzer/` | Semantic analysis |
 
-Families: `perl-module-*` (module resolution), `perl-lsp-*` (LSP providers), `perl-lsp-feature-*` (feature governance), `perl-dap-*` (DAP), `perl-ts-*` (tree-sitter), `perl-workspace-*` (workspace discovery), core leaf crates (token, AST, quote, regex, heredoc, error).
+Active crate groups: `perl-parser*` (parser family), `perl-lsp-rs*` (LSP server), `perl-semantic-*` (semantic analysis), `perl-tdd-*` / `perl-test-*` (test infrastructure), `tree-sitter-perl-*` (tree-sitter bindings), core leaf crates (`perl-token`, `perl-ast`, `perl-regex`, `perl-lexer`, `perl-pod`, `perl-uri`).
 
 ## Essential Commands
 
@@ -271,7 +322,8 @@ just ci-lsp-def                       # Semantic definition tests
 ### Lint, Format, Quality
 
 ```bash
-cargo xtask fmt                       # Format code (per-crate, Windows-safe)
+cargo fmt --check -p <crate>          # Quick per-crate fmt check (run separately per crate — combined -p X -p Y glitches)
+cargo xtask fmt                       # Full-workspace formatter (heavyweight — cold build is slow; use for workspace-wide fmt, not routine checks)
 cargo clippy --workspace              # Lint all crates
 cargo clippy --workspace --lib        # Lint libraries only (faster)
 just dead-code                        # Dead code report
@@ -365,6 +417,8 @@ Metrics are **computed, not hand-edited**:
 - Test output and CI receipts are evidence for all claims
 - `README.md` must not contain volatile metrics -- link to `docs/project/status/index.md`
 - `.ci/blockers.yaml` is manually maintained — verify counts against `parser-corpus-baseline.json` before trusting `affected_files` values
+- `docs/reference/PARSER_CONTRACTS.md` is the durable contract index for parser behavioral invariants (quote-like, indirect-object, embedded-code, NodeKind classification, recovery nodes, formatting gates)
+- `docs/reference/SEMANTIC_SNAPSHOT_ARCHITECTURE.md` is the umbrella contract for the semantic model substrate (ownership boundary, semantic identity, FileSemanticBundle, SemanticSnapshot, SemanticResult, dynamic boundaries); implemented by #1600 / #1598 / #1601
 
 ## Coding Standards
 
@@ -385,9 +439,15 @@ Invoke `/coding-standards` for full detail.
 
 ## Documentation
 
-[Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [FAILURE_MODES.md](docs/reference/FAILURE_MODES.md) | [CI_ARCHITECTURE.md](docs/reference/CI_ARCHITECTURE.md) | [features.toml](features.toml)
+[Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [FAILURE_MODES.md](docs/reference/FAILURE_MODES.md) | [CI_ARCHITECTURE.md](docs/reference/CI_ARCHITECTURE.md) | [CI_GATE_PLAYBOOK.md](docs/reference/CI_GATE_PLAYBOOK.md) | [PROVIDER_READINESS_CONTRACT.md](docs/reference/PROVIDER_READINESS_CONTRACT.md) | [features.toml](features.toml)
 
-**SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table.
+**Learnings**: [docs/learnings/README.md](docs/learnings/README.md) (repo-specific incidents, greppable by symbol/PR/hazard-class/tag; key 2026-06 incidents: [2026-06-rerunning-broken-gates.md](docs/learnings/2026-06-rerunning-broken-gates.md), [2026-06-agent-claims-vs-ground-truth.md](docs/learnings/2026-06-agent-claims-vs-ground-truth.md), [2026-06-coverage-job-ran-tests.md](docs/learnings/2026-06-coverage-job-ran-tests.md), [2026-06-substrate-self-validation-bootstrap.md](docs/learnings/2026-06-substrate-self-validation-bootstrap.md)) | [docs/concepts/](docs/concepts/) (portable patterns: shift-left-ladder, cache-aware-agent-lanes, hazard-class-invariants, multi-angle-haiku-early-spec, serialize-merges-and-cancellation, re-create-over-untangle, orchestrator-substrate-model, model-conformance, human-corrects-substrate, type-level-id-space-promotion, slow-stochastic-compiler, stochastic-ready-pipelines, verify-the-instrument, gate-names-must-match-failure-classes, triage-as-claim-audit, non-exhaustive-check-silent-drop, enforcement-over-doctrine, doctrine-is-a-hypothesis)
+
+**Spec hazard defaults**: [SUBSYSTEM_HAZARD_DEFAULTS.md](docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md) — per-subsystem hazard rows (DAP, Parser, LSP, Coverage/CI) that spec-planner should seed into `acceptance.md`; extends SPEC_UPDATE_CHECKLIST §8 with subsystem-specific invariants and adversarial test obligations.
+
+**Spec system**: [SPEC_TEMPLATE.md](docs/reference/SPEC_TEMPLATE.md) — canonical `.spec/<issue#>-<slug>/` structure (checklist.md / acceptance.md with §Behavior §Hazards §Contracts §API-Shape §Test-Grid §Blast-Radius / context.md) with three worked shapes (parser-fix, LSP-feature, test-only). The [spec-builder workflow](.claude/workflows/spec-builder.js) populates the rich acceptance.md sections via six parallel haiku angles; spec-planner invokes it for non-trivial issues.
+
+**SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table. | **Campaign narratives**: [docs/writeups/2026-06-agentic-maintenance-field-notes.md](docs/writeups/2026-06-agentic-maintenance-field-notes.md) (field notes from the June 2026 autonomous campaign: concrete incidents, isomorphic failure modes, shift-left evidence, instrument-is-the-bug recursion), [docs/writeups/2026-06-agentic-development-observations.md](docs/writeups/2026-06-agentic-development-observations.md) (central isomorphism: self-report unreliable at code/CI/cognitive layers; economics inversion; branch contamination; observability buggier than logic).
 
 ## Contributing
 
@@ -404,3 +464,5 @@ Start with `/swarm all`. Orchestrator spawns scoped agents from the catalog in w
 **PR lifecycle**: Draft PR -> reviewer agent -> `/pr-ready` -> CI -> ops agent merges.
 
 **Files**: `.ops-perl-lsp/` (metrics), `.claude/agents/` (agent defs and catalog), `.claude/commands/` (step skills and shared ops).
+
+

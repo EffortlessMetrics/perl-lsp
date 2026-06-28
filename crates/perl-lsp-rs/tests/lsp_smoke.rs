@@ -811,28 +811,6 @@ fn smoke_graceful_shutdown() -> Result<(), Box<dyn std::error::Error>> {
 // STRUCTURED OUTPUT TEST
 // =============================================================================
 
-/// Test that produces structured output for CI receipts
-#[test]
-fn smoke_test_summary() {
-    // This test always passes and prints a summary
-    // Useful for CI to confirm smoke tests ran
-    eprintln!();
-    eprintln!("=== LSP SMOKE TEST SUMMARY ===");
-    eprintln!("Tests executed:");
-    eprintln!("  - Server initialization and capabilities");
-    eprintln!("  - Double initialization rejection");
-    eprintln!("  - Document open/change lifecycle");
-    eprintln!("  - Hover response structure");
-    eprintln!("  - Hover on subroutine");
-    eprintln!("  - Completion returns items");
-    eprintln!("  - Completion for builtins");
-    eprintln!("  - Definition returns locations");
-    eprintln!("  - Document symbols");
-    eprintln!("  - Find references");
-    eprintln!("  - Folding ranges");
-    eprintln!("  - Workspace symbols");
-    eprintln!("  - Error handling (unknown method)");
-    eprintln!("  - Non-existent document handling");
-    eprintln!("  - Graceful shutdown");
-    eprintln!("================================");
-}
+// smoke_test_summary was a no-assert summary test (fake scoreboard, #3057).
+// Removed: a test that only prints and always passes is not a test.
+// The individual smoke_* tests above are the real assertions.

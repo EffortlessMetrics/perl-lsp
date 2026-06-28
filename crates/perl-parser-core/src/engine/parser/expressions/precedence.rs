@@ -84,20 +84,22 @@ impl<'a> Parser<'a> {
 
     /// Parse word not expression - handles 'not' operator
     fn parse_word_not_expr(&mut self) -> ParseResult<Node> {
-        if self.peek_kind() == Some(TokenKind::WordNot) {
-            let op_token = self.tokens.next()?;
-            let start = op_token.start;
-            let operand = self.parse_word_not_expr()?;
-            let end = operand.location.end;
+        self.with_recursion_guard(|s| {
+            if s.peek_kind() == Some(TokenKind::WordNot) {
+                let op_token = s.tokens.next()?;
+                let start = op_token.start;
+                let operand = s.parse_word_not_expr()?;
+                let end = operand.location.end;
 
-            return Ok(Node::new(
-                NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
-                SourceLocation { start, end },
-            ));
-        }
+                return Ok(Node::new(
+                    NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
+                    SourceLocation { start, end },
+                ));
+            }
 
-        // The right side of a word operator should be a full expression
-        self.parse_assignment()
+            // The right side of a word operator should be a full expression
+            s.parse_assignment()
+        })
     }
 
     /// Parse assignment expression

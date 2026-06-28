@@ -43,6 +43,8 @@
 //! [`NodeKind`] variants and recurse into child nodes.
 
 pub mod ast;
+/// Static classification metadata for [`NodeKind`] variants: categories and flags.
+pub mod classification;
 
 /// Incremental parsing AST types extracted into a dedicated microcrate.
 pub use perl_ast_v2 as v2;

@@ -18,6 +18,10 @@
   "colorProvider": true,
   "completionProvider": {
     "completionItem": {
+      "insertTextModes": [
+        1,
+        2
+      ],
       "labelDetailsSupport": true
     },
     "resolveProvider": true,

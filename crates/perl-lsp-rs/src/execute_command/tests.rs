@@ -1728,3 +1728,110 @@ fn test_perl_run_subtest_missing_subroutine_arg() -> Result<(), Box<dyn std::err
     );
     Ok(())
 }
+
+// --- Windows binary-planting RCE regression (#3028) ---
+//
+// These tests verify that `run_test_command` and `command_exists` never let a
+// planted binary in the LSP workspace root (CWD) execute.  They serialize CWD
+// mutation with a static Mutex and restore the original CWD after each test
+// regardless of outcome.
+//
+// The chain being guarded: `executeCommand("perl.runTests")` →
+// `run_tests` → `command_exists("yath")` / `command_exists("prove")` /
+// `run_test_command("perl"|"yath"|"prove", …)` → previously `Command::new(bare)`,
+// now `resolve_program(bare)` which excludes the CWD.
+
+/// `command_exists` must return `false` for a tool whose only copy is planted in
+/// the CWD — not `true`, which would then drive `run_test_command` to execute it.
+///
+/// Security invariant: the resolver excludes CWD; a not-on-PATH bare name must
+/// report absent even when a same-named binary sits in the workspace root.
+#[cfg(windows)]
+#[test]
+fn test_command_exists_ignores_planted_cwd_binary() {
+    use std::io::Write as _;
+    use std::sync::Mutex;
+    static CWD_LOCK: Mutex<()> = Mutex::new(());
+    let _guard = CWD_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
+    let unique = format!("rce_exists_{}", std::process::id());
+    let workspace = std::env::temp_dir().join(unique);
+    let _ = std::fs::remove_dir_all(&workspace);
+    std::fs::create_dir_all(&workspace).expect("create temp workspace");
+
+    // Plant a batch file — only copy of this tool; never on PATH.
+    let planted = workspace.join("definitely_not_real_3028.bat");
+    {
+        let mut f = std::fs::File::create(&planted).expect("create planted bat");
+        writeln!(f, "@echo off").expect("write bat");
+        writeln!(f, "echo PWNED").expect("write bat");
+    }
+
+    let original_cwd = std::env::current_dir().expect("capture cwd");
+    std::env::set_current_dir(&workspace).expect("enter temp workspace");
+
+    let provider = ExecuteCommandProvider::new();
+    let exists = provider.command_exists("definitely_not_real_3028.bat");
+
+    std::env::set_current_dir(&original_cwd).expect("restore cwd");
+    let _ = std::fs::remove_dir_all(&workspace);
+
+    assert!(
+        !exists,
+        "SECURITY: command_exists reported true for a tool only present in the CWD — \
+         a planted binary would now be invoked via run_test_command (#3028)"
+    );
+}
+
+/// `run_test_command` must fail closed (return `Err`) when the named tool is not
+/// on PATH — it must not execute a planted binary in the CWD.
+///
+/// We use a tool name that is guaranteed not to be on PATH so the resolver
+/// returns `Err` before any `Command` is spawned.  We verify the planted marker
+/// file was NOT written (i.e., the batch file was not executed).
+#[cfg(windows)]
+#[test]
+fn test_run_test_command_does_not_execute_planted_cwd_binary() {
+    use std::io::Write as _;
+    use std::sync::Mutex;
+    static CWD_LOCK: Mutex<()> = Mutex::new(());
+    let _guard = CWD_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
+    let unique = format!("rce_run_{}", std::process::id());
+    let workspace = std::env::temp_dir().join(&unique);
+    let _ = std::fs::remove_dir_all(&workspace);
+    std::fs::create_dir_all(&workspace).expect("create temp workspace");
+
+    let marker = workspace.join("PWNED_3028.txt");
+    let planted = workspace.join("pwned_3028.bat");
+    {
+        let mut f = std::fs::File::create(&planted).expect("create planted bat");
+        writeln!(f, "@echo off").expect("write bat");
+        writeln!(f, "echo pwned> \"{}\"", marker.display()).expect("write bat");
+    }
+
+    // A dummy test file — content doesn't matter; command resolution fails first.
+    let dummy_t = workspace.join("dummy.t");
+    std::fs::write(&dummy_t, "use Test::More;\ndone_testing;\n").expect("create dummy test");
+
+    let original_cwd = std::env::current_dir().expect("capture cwd");
+    std::env::set_current_dir(&workspace).expect("enter temp workspace");
+
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![workspace.clone()]);
+    // Drive run_test_command with the bare name of the planted batch file.
+    // The resolver must fail closed before spawning anything.
+    let result = provider.run_test_command("pwned_3028.bat", &dummy_t);
+
+    std::env::set_current_dir(&original_cwd).expect("restore cwd");
+    let marker_exists = marker.exists();
+    let _ = std::fs::remove_dir_all(&workspace);
+
+    assert!(
+        result.is_err(),
+        "run_test_command must fail closed for a not-on-PATH bare name; got: {result:?}"
+    );
+    assert!(
+        !marker_exists,
+        "SECURITY: planted CWD batch file was EXECUTED via run_test_command — the RCE is live (#3028)"
+    );
+}

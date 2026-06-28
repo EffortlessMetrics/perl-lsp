@@ -79,15 +79,6 @@ fn show_ast_error(
     response.error
 }
 
-fn expect_error_contains(err: perl_lsp::JsonRpcError, expected: &[&str]) -> Result<(), String> {
-    for text in expected {
-        if !err.message.contains(text) {
-            return Err(format!("expected error message to contain {text:?}; got {err}"));
-        }
-    }
-    Ok(())
-}
-
 // ============================================================================
 // Tests
 // ============================================================================
@@ -174,40 +165,4 @@ fn show_ast_null_params_returns_invalid_params() {
     assert!(err.is_some(), "Should return an error for null params");
     let code = err.unwrap().code;
     assert_eq!(code, -32602, "Expected INVALID_PARAMS (-32602) for null params, got {code}");
-}
-
-#[test]
-fn show_ast_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
-    let server = create_and_init_server();
-
-    let err = show_ast_error(&server, Some(json!({ "other": "value" })))
-        .ok_or_else(|| "expected INVALID_PARAMS".to_string())?;
-    assert_eq!(err.code, -32602);
-    expect_error_contains(
-        err,
-        &[
-            "Missing required parameter: uri",
-            "perl/showAst",
-            "params.uri",
-            "file:///workspace/lib/My/Module.pm",
-        ],
-    )
-}
-
-#[test]
-fn show_ast_unknown_document_error_explains_open_document_requirement() -> Result<(), String> {
-    let server = create_and_init_server();
-
-    let err = show_ast_error(&server, Some(json!({ "uri": "file:///never_opened.pl" })))
-        .ok_or_else(|| "expected INVALID_PARAMS".to_string())?;
-    assert_eq!(err.code, -32602);
-    expect_error_contains(
-        err,
-        &[
-            "Document is not open: file:///never_opened.pl",
-            "perl/showAst",
-            "textDocument/didOpen",
-            "already-open document",
-        ],
-    )
 }

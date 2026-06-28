@@ -32,7 +32,7 @@ impl DebugAdapter {
         } else {
             DataBreakpointInfoResponseBody {
                 data_id: None,
-                description: Self::unwatchable_data_breakpoint_description(),
+                description: "Cannot watch this expression".to_string(),
                 access_types: None,
             }
         };
@@ -45,12 +45,6 @@ impl DebugAdapter {
             body: serde_json::to_value(&body).ok(),
             message: None,
         }
-    }
-
-    fn unwatchable_data_breakpoint_description() -> String {
-        "Cannot watch this expression: data breakpoints require a Perl variable name such as \
-         `$foo`, `@items`, `%hash`, or `$Package::var`."
-            .to_string()
     }
 
     /// Handle setDataBreakpoints request — set watchpoints via Perl debugger `w` command.

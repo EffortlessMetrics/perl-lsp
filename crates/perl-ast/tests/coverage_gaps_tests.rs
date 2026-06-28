@@ -227,6 +227,7 @@ fn sexp_class_with_single_parent() -> Result<(), Box<dyn std::error::Error>> {
     let node = Node::new(
         NodeKind::Class {
             name: "Animal".to_string(),
+            name_span: None,
             parents: vec!["Mammal".to_string()],
             body: Box::new(block_empty()),
         },
@@ -243,6 +244,7 @@ fn sexp_class_with_multiple_parents() -> Result<(), Box<dyn std::error::Error>> 
     let node = Node::new(
         NodeKind::Class {
             name: "Mule".to_string(),
+            name_span: None,
             parents: vec!["Horse".to_string(), "Donkey".to_string()],
             body: Box::new(block_empty()),
         },
@@ -259,6 +261,7 @@ fn sexp_class_without_parents_has_no_isa() -> Result<(), Box<dyn std::error::Err
     let node = Node::new(
         NodeKind::Class {
             name: "Standalone".to_string(),
+            name_span: None,
             parents: vec![],
             body: Box::new(block_empty()),
         },

@@ -84,6 +84,57 @@ impl LspServer {
         self.handle_did_change(Some(params))
     }
 
+    /// Test-only helper that updates an open document snapshot without touching
+    /// the workspace index.
+    ///
+    /// This models the post-edit window where `didChange` has made the document
+    /// current but the asynchronous workspace index update has not completed.
+    /// Production text sync must continue to use the real didChange handler.
+    pub fn test_replace_document_without_index(
+        &self,
+        uri: &str,
+        text: &str,
+        version: i32,
+    ) -> Result<(), String> {
+        let normalized_uri = self.normalize_uri_key(uri);
+        let mut parser = perl_parser::Parser::new(text);
+        let ast = match parser.parse() {
+            Ok(ast) => Some(std::sync::Arc::new(ast)),
+            Err(err) => return Err(format!("Parse error: {err}")),
+        };
+        let errors = parser.errors().to_vec();
+
+        let mut parent_map = perl_parser::declaration::ParentMap::default();
+        if let Some(ref ast) = ast {
+            crate::declaration::DeclarationProvider::build_parent_map(ast, &mut parent_map, None);
+        }
+
+        let rope = ropey::Rope::from_str(text);
+        let line_starts = perl_parser::position::LineStartsCache::new_rope(&rope);
+        let degradation_tier = crate::state::DegradationTier::from_parse_result(&ast, &errors);
+
+        let mut documents = self.documents.lock();
+        let doc = documents
+            .get_mut(&normalized_uri)
+            .ok_or_else(|| format!("document not open: {uri}"))?;
+        doc.rope = rope;
+        doc.text = text.to_string();
+        doc.version = version;
+        doc.ast = ast;
+        doc.parse_errors = errors;
+        doc.parent_map = parent_map;
+        doc.line_starts = line_starts;
+        doc.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        doc.degradation_tier = degradation_tier;
+        #[cfg(feature = "incremental")]
+        {
+            doc.incremental_doc = None;
+            doc.incremental_state = None;
+        }
+
+        Ok(())
+    }
+
     /// Test-only entrypoint for LSP `initialize`.
     pub fn test_handle_initialize_dispatch(
         &self,
@@ -170,6 +221,16 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.references_runtime_quality_receipt(params)
+    }
+
+    /// Test-only entrypoint for LSP `textDocument/rename`.
+    ///
+    /// Exercises the live rename handler without needing an external transport.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or rename is refused.
+    pub fn test_handle_rename(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_rename_workspace(params)
     }
 
     /// Test-only receipt for rename runtime blocker UX proof.
@@ -376,6 +437,33 @@ impl LspServer {
         self.handle_document_diagnostic(params)
     }
 
+    /// Test-only entrypoint for LSP `workspace/diagnostic`.
+    ///
+    /// Exercises the pull-style workspace-diagnostics handler without an
+    /// external transport.  Used by generation-guard tests that need to drive
+    /// both the document and workspace pull paths under controlled conditions.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params (`previousResultIds` array, optional).
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or the handler fails.
+    pub fn test_handle_workspace_diagnostic(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_workspace_diagnostic(params)
+    }
+
+    /// Return the current generation counter for an open document.
+    ///
+    /// Returns `None` when the document is not open.  Used by tests to read
+    /// the generation before and after simulated `didChange` events so they can
+    /// assert that the staleness guard does not false-positive.
+    pub fn test_document_generation(&self, uri: &str) -> Option<u32> {
+        self.document_generation(uri)
+    }
+
     /// Test-only entrypoint for `workspace/didChangeConfiguration`.
     ///
     /// Applies the same configuration-update path as a real client notification.
@@ -563,5 +651,81 @@ impl LspServer {
 
         let url = url::Url::parse(uri).map_err(|e| e.to_string())?;
         coordinator.index().index_file(url, text.to_string())
+    }
+
+    /// Register workspace folder URIs on the server for multi-root workspace tests.
+    ///
+    /// Used by deterministic regression tests (e.g. #1514) that need workspace
+    /// folder matching without going through the full `initialize` handshake.
+    ///
+    /// Each `folder_uri` string becomes a `WorkspaceFolderState` entry and is also
+    /// propagated to the underlying workspace index via `set_workspace_folders`.
+    pub fn test_set_workspace_folder_uris(&self, folder_uris: &[&str]) {
+        use super::workspace_folder::WorkspaceFolderState;
+        let mut folders = self.workspace_folders.lock();
+        folders.clear();
+        for &uri in folder_uris {
+            folders.push(WorkspaceFolderState::new(uri.to_string()));
+        }
+        #[cfg(feature = "workspace")]
+        if let Some(coordinator) = self.index_coordinator.as_ref() {
+            coordinator
+                .index()
+                .set_workspace_folders(folder_uris.iter().map(|u| u.to_string()).collect());
+        }
+    }
+
+    /// Simulate background indexing completion by clearing the `indexing_in_progress`
+    /// flag and transitioning the coordinator to Ready.
+    ///
+    /// In production the background thread does this via RAII `IndexingGuard` drop.
+    /// In tests we call this directly after `test_index_file_in_building_state`.
+    #[cfg(feature = "workspace")]
+    pub fn test_simulate_indexing_complete(&self) {
+        use std::sync::atomic::Ordering;
+        self.indexing_in_progress.store(false, Ordering::Release);
+        if let Some(coordinator) = self.index_coordinator.as_ref() {
+            let file_count = coordinator.index().file_count();
+            let symbol_count = coordinator.index().symbol_count();
+            coordinator.transition_to_ready(file_count, symbol_count);
+        }
+    }
+
+    /// Set `indexing_in_progress` to `true` without spawning a background thread.
+    ///
+    /// Used by regression tests that need to simulate the race window where a
+    /// `workspace/symbol` request arrives while background indexing is still in
+    /// progress (i.e. `indexing_in_progress=true`, coordinator still Building).
+    ///
+    /// Pair with `test_simulate_indexing_complete` — called from a background thread
+    /// or after the LSP handler returns — to release the wait.
+    ///
+    /// In production this flag is set by `start_workspace_indexing` via
+    /// compare-exchange before the background thread is spawned.
+    #[cfg(feature = "workspace")]
+    pub fn test_simulate_indexing_start(&self) {
+        use std::sync::atomic::Ordering;
+        self.indexing_in_progress.store(true, Ordering::Release);
+    }
+
+    /// Notify a test when `workspace/symbol` enters the bounded index-ready wait.
+    ///
+    /// This is intentionally test-only instrumentation for deterministic race
+    /// regressions. The observer is consumed the first time the wait loop sees
+    /// `IndexState::Building`.
+    #[cfg(feature = "workspace")]
+    pub fn test_notify_index_ready_wait_entered(&self, sender: std::sync::mpsc::Sender<()>) {
+        let _ = self;
+        super::workspace::set_index_ready_wait_entered_observer(sender);
+    }
+
+    /// Enable `callHierarchy` in the server's advertised features.
+    ///
+    /// Test-only helper used by coverage tests that need to reach the
+    /// `handle_prepare_call_hierarchy` workspace wait path.  The feature gate
+    /// in that handler returns early (method-not-advertised) unless this flag
+    /// is set, so the wait line is unreachable without enabling it.
+    pub fn test_enable_call_hierarchy(&self) {
+        self.advertised_features.lock().call_hierarchy = true;
     }
 }

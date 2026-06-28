@@ -5114,14 +5114,46 @@ let perltidy_cmd = self.find_perltidy_command();
 
 **Configuration File Support**: `.perltidyrc` is now primarily a compatibility
 input. Native compatibility reports classify common options against native
-support, and explicit external mode can still pass a profile to `perltidy`:
+support, and explicit external mode can still pass a profile to `perltidy`.
 
-```rust
-// Searches in order:
-// 1. Current workspace directory and parents
-// 2. User home directory (~/.perltidyrc)
-// 3. Fallback to built-in settings
+**Automatic profile discovery (initialize-time)**: when `perltidy_profile` is
+not explicitly configured, the server discovers a `.perltidyrc` once during
+`initialize` (in `set_root_uri`) and caches it for the session, so a
+project-local profile applies without any editor configuration. Discovery is
+implemented by `perl_lsp_rs_core::config::discover_perltidy_profile` and follows
+perltidy's conventional search order:
+
+```text
+1. <workspace_root>/.perltidyrc, then <workspace_root>/perltidyrc
+2. The file named by the PERLTIDY environment variable (perltidy's documented
+   override, searched before the home profile)
+3. $HOME/.perltidyrc
+4. None — let the formatter fall back to its own defaults
 ```
+
+An explicitly configured `perltidy_profile` (via `.perl-lsp.toml` or
+`didChangeConfiguration`) always takes precedence over the discovered profile;
+discovery runs at initialize time rather than on every format request.
+
+The discovered profile's **supported scalar options** are parsed at initialize
+(via the shared `classify_perltidy_profile` mapping) and **applied to the server
+config as a layer between the built-in defaults and user configuration**, so a
+project-local `.perltidyrc` shapes formatting in the **default native engine** —
+not only when `external-legacy` mode passes `--profile`. This layering is
+required: the built-in scalar defaults are `Some(..)` (e.g. line width `80`), so
+a per-request `.or()` merge would always short-circuit the profile value; the
+profile must instead be applied before user config so it overrides the defaults
+while user config still overrides it.
+
+Per-field precedence: built-in defaults < discovered profile < explicit user
+config (`perltidy_maximum_line_length`, `perltidy_indent_columns`,
+`perltidy_tabs`, `perltidy_opening_brace_on_new_line`, `perltidy_cuddled_else`,
+`perltidy_space_after_keyword`, `perltidy_add_trailing_commas` via `.perl-lsp.toml`
+or `didChangeConfiguration`). Options that native formatting cannot represent are
+reported by the `native-format perltidy-compat` receipt. (Having an *explicitly
+configured* `perltidy_profile` path also feed its parsed options into the native
+config is tracked as a follow-up, #2028; today an explicit profile still applies
+in `external-legacy` mode via `--profile`.)
 
 #### Error Handling and User Guidance (*Diataxis: How-to*)
 

@@ -58,7 +58,7 @@ fn test_lsp_initialization() -> TestResult {
     );
     assert_eq!(
         capabilities["capabilities"]["completionProvider"]["triggerCharacters"],
-        json!(["$", "@", "%", ">", ":", "-"])
+        json!(["$", "@", "%", "-", ">", ":", "/", "\\", "\"", "'"])
     );
     assert_eq!(capabilities["capabilities"]["hoverProvider"], true);
     // workspaceSymbolProvider can be either bool or object with resolveProvider
@@ -704,11 +704,36 @@ print $var3;
     assert!(tokens["data"].is_array());
     let data = tokens["data"].as_array().ok_or("Expected data array")?;
 
-    // Should only have tokens from lines 1-3, not the print statements
+    // Should only have tokens from the half-open range [line 1, line 3),
+    // not the print statements that start at line 3.
     // Line 1: $var2 declaration
     // Line 2: $var3 declaration
     assert!(!data.is_empty());
-    assert!(data.len() < 30); // Should not include all tokens
+
+    let mut line = 0u64;
+    let mut character = 0u64;
+    let mut token_positions = Vec::new();
+    let mut chunks = data.chunks_exact(5);
+    for chunk in &mut chunks {
+        let delta_line = chunk[0].as_u64().ok_or("semantic token missing deltaLine")?;
+        let delta_start = chunk[1].as_u64().ok_or("semantic token missing deltaStart")?;
+
+        if delta_line == 0 {
+            character = character.saturating_add(delta_start);
+        } else {
+            line = line.saturating_add(delta_line);
+            character = delta_start;
+        }
+        token_positions.push((line, character));
+    }
+    if !chunks.remainder().is_empty() {
+        return Err("semantic token data length was not a multiple of five".into());
+    }
+
+    assert!(
+        token_positions.iter().all(|(line, _)| *line >= 1 && *line < 3),
+        "range tokens must stay within lines 1..3, got {token_positions:?}"
+    );
     Ok(())
 }
 

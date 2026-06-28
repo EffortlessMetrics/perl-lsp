@@ -1,55 +1,6 @@
 use super::LspServer;
-use crate::protocol::JsonRpcError;
 use perl_tdd_support::must_some;
 use serde_json::json;
-
-fn expect_hover_shape_guidance(err: JsonRpcError) -> Result<(), String> {
-    assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
-    for expected in [
-        "Missing required parameters: textDocument.uri and position",
-        "textDocument/hover",
-        "params.textDocument.uri",
-        "params.position.line",
-        "params.position.character",
-        "file:///workspace/lib/My/Module.pm",
-    ] {
-        if !err.message.contains(expected) {
-            return Err(format!("expected error message to contain {expected:?}; got {err}"));
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn hover_missing_params_error_includes_shape_guidance() -> Result<(), String> {
-    let server = LspServer::new();
-    match server.handle_hover(None) {
-        Err(err) => expect_hover_shape_guidance(err),
-        Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
-    }
-}
-
-#[test]
-fn hover_missing_position_error_includes_shape_guidance() -> Result<(), String> {
-    let server = LspServer::new();
-    match server.handle_hover(Some(json!({
-        "textDocument": { "uri": "file:///workspace/lib/My/Module.pm" }
-    }))) {
-        Err(err) => expect_hover_shape_guidance(err),
-        Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
-    }
-}
-
-#[test]
-fn hover_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
-    let server = LspServer::new();
-    match server.handle_hover(Some(json!({
-        "position": { "line": 10, "character": 4 }
-    }))) {
-        Err(err) => expect_hover_shape_guidance(err),
-        Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
-    }
-}
 
 #[test]
 fn test_internal_pl_sv_yes_hover_from_sigiled_token() {
@@ -148,6 +99,60 @@ fn pod_hover_cache_prunes_at_cap_and_evicts_active_document_path()
     );
 
     Ok(())
+}
+
+#[test]
+fn pod_hover_cache_refreshes_after_external_file_edit() -> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("ExternalEdit.pm");
+
+    std::fs::write(
+        &path,
+        "package ExternalEdit;\n\n=head1 NAME\n\nExternalEdit\n\n=head1 DESCRIPTION\n\nOriginal POD.\n\n=cut\n\n1;\n",
+    )?;
+
+    let first_hover = server.format_pod_for_hover(&path);
+    assert!(
+        first_hover.contains("Original POD"),
+        "initial POD hover should be cached: {first_hover}"
+    );
+    let cached_hover = server.format_pod_for_hover(&path);
+    assert_eq!(cached_hover, first_hover, "unchanged POD hover should use the cached document");
+
+    write_after_mtime_tick(
+        &path,
+        "package ExternalEdit;\n\n=head1 NAME\n\nExternalEdit\n\n=head1 DESCRIPTION\n\nUpdated POD.\n\n=cut\n\n1;\n",
+    )?;
+
+    let updated_hover = server.format_pod_for_hover(&path);
+    assert!(
+        updated_hover.contains("Updated POD"),
+        "POD hover should refresh after file mtime changes: {updated_hover}"
+    );
+    assert!(
+        !updated_hover.contains("Original POD"),
+        "stale cached POD should not remain after external file edit: {updated_hover}"
+    );
+
+    Ok(())
+}
+
+fn write_after_mtime_tick(
+    path: &std::path::Path,
+    contents: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let before_modified = std::fs::metadata(path)?.modified()?;
+
+    for _ in 0..30 {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(path, contents)?;
+        if std::fs::metadata(path)?.modified()? != before_modified {
+            return Ok(());
+        }
+    }
+
+    Err("file mtime did not change after rewrite".into())
 }
 
 #[test]
@@ -373,4 +378,344 @@ fn missing_module_search_paths_reports_empty_configuration() {
     let paths = LspServer::format_missing_module_search_paths(&[]);
 
     assert_eq!(paths, "- No include paths configured");
+}
+
+#[test]
+fn hover_token_extraction_works_with_non_ascii_prefix() {
+    // "# café\n" — 'é' (U+00E9) is 2 UTF-8 bytes; line is 9 bytes, 8 chars.
+    // Byte offset of '$' on line 2: "# café\nmy $bar = 2;" -> find('$') = 12.
+    // Bug: using byte offset 12 as char index into Vec<char> would yield the wrong character.
+    let text = "# café\nmy $bar = 2;";
+    let dollar_offset = must_some(text.find('$'));
+    let token = LspServer::get_token_at_position_static(text, dollar_offset);
+    assert_eq!(
+        token, "$bar",
+        "byte offset must not be used as char index in hover token extraction"
+    );
+}
+
+// -- Phase-block hover: strong-oracle unit tests ----------------------------------
+//
+// These tests assert exact content for every match arm in `phase_block_description`
+// and exact Option discriminants for every code path in `find_phase_block_at_offset`,
+// so that ripr static analysis can confirm each seam has an oracle-killing test.
+// The existing integration tests in hover_provider_coverage.rs use broad `contains`
+// checks; these unit tests provide the precise assertions the gap gate requires.
+
+#[test]
+fn phase_block_hover_begin_returns_compile_time_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("BEGIN"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert_eq!(
+        hover["contents"]["kind"].as_str(),
+        Some("markdown"),
+        "phase block hover must be markdown kind"
+    );
+    assert!(
+        value.starts_with("**Phase Block: `BEGIN`**"),
+        "BEGIN hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_Compile-time execution_"),
+        "BEGIN hover must contain exact timing label: {value}"
+    );
+    assert!(
+        value.contains("as soon as the block is fully parsed"),
+        "BEGIN hover must mention compile-time parse order: {value}"
+    );
+    assert!(value.contains("FIFO"), "BEGIN hover must mention FIFO ordering: {value}");
+    assert!(value.contains("perlmod"), "BEGIN hover must link to perlmod: {value}");
+}
+
+#[test]
+fn phase_block_hover_end_returns_program_exit_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("END"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert!(
+        value.starts_with("**Phase Block: `END`**"),
+        "END hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_Program-exit cleanup_"),
+        "END hover must contain exact timing label: {value}"
+    );
+    assert!(value.contains("program exit"), "END hover must mention program exit: {value}");
+    assert!(value.contains("LIFO"), "END hover must mention LIFO ordering: {value}");
+}
+
+#[test]
+fn phase_block_hover_init_returns_post_compile_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("INIT"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert!(
+        value.starts_with("**Phase Block: `INIT`**"),
+        "INIT hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_Post-compile, pre-runtime startup_"),
+        "INIT hover must contain exact timing label: {value}"
+    );
+    assert!(
+        value.contains("start of runtime"),
+        "INIT hover must mention start of runtime: {value}"
+    );
+    assert!(value.contains("FIFO"), "INIT hover must mention FIFO ordering: {value}");
+}
+
+#[test]
+fn phase_block_hover_check_returns_end_of_compilation_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("CHECK"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert!(
+        value.starts_with("**Phase Block: `CHECK`**"),
+        "CHECK hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_End-of-compilation hook_"),
+        "CHECK hover must contain exact timing label: {value}"
+    );
+    assert!(
+        value.contains("end of compilation"),
+        "CHECK hover must mention end of compilation: {value}"
+    );
+    assert!(value.contains("LIFO"), "CHECK hover must mention LIFO ordering: {value}");
+}
+
+#[test]
+fn phase_block_hover_unitcheck_returns_compilation_unit_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("UNITCHECK"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert!(
+        value.starts_with("**Phase Block: `UNITCHECK`**"),
+        "UNITCHECK hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_End-of-compilation-unit hook_"),
+        "UNITCHECK hover must contain exact timing label: {value}"
+    );
+    assert!(
+        value.contains("compilation unit"),
+        "UNITCHECK hover must mention compilation unit: {value}"
+    );
+    assert!(value.contains("LIFO"), "UNITCHECK hover must mention LIFO ordering: {value}");
+}
+
+#[test]
+fn phase_block_hover_unknown_returns_none() {
+    assert_eq!(
+        super::hover_cards::phase_block_hover("UNKNOWN"),
+        None,
+        "unrecognised phase name must return None"
+    );
+    assert_eq!(super::hover_cards::phase_block_hover(""), None, "empty string must return None");
+    assert_eq!(
+        super::hover_cards::phase_block_hover("begin"),
+        None,
+        "lowercase phase name must return None (case-sensitive match)"
+    );
+}
+
+#[test]
+fn find_phase_block_at_offset_returns_none_when_offset_out_of_node_range() {
+    use perl_parser::{Node, NodeKind, SourceLocation};
+
+    // A PhaseBlock node spanning [10, 30].
+    let block =
+        Node::new(NodeKind::Block { statements: vec![] }, SourceLocation { start: 11, end: 29 });
+    let node = Node::new(
+        NodeKind::PhaseBlock {
+            phase: "BEGIN".to_string(),
+            phase_span: None,
+            block: Box::new(block),
+        },
+        SourceLocation { start: 10, end: 30 },
+    );
+
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 9),
+        None,
+        "offset before node span must return None"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 31),
+        None,
+        "offset after node span must return None"
+    );
+}
+
+#[test]
+fn find_phase_block_at_offset_returns_phase_name_when_offset_in_node_and_no_phase_span() {
+    use perl_parser::{Node, NodeKind, SourceLocation};
+
+    // No phase_span: any offset within [10, 30] must return the phase name.
+    let block =
+        Node::new(NodeKind::Block { statements: vec![] }, SourceLocation { start: 11, end: 29 });
+    let node = Node::new(
+        NodeKind::PhaseBlock {
+            phase: "BEGIN".to_string(),
+            phase_span: None,
+            block: Box::new(block),
+        },
+        SourceLocation { start: 10, end: 30 },
+    );
+
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 10).as_deref(),
+        Some("BEGIN"),
+        "offset at node start must return phase name when no phase_span"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 20).as_deref(),
+        Some("BEGIN"),
+        "offset in node middle must return phase name when no phase_span"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 30).as_deref(),
+        Some("BEGIN"),
+        "offset at node end must return phase name when no phase_span"
+    );
+}
+
+#[test]
+fn find_phase_block_at_offset_respects_phase_span_boundary() {
+    use perl_parser::{Node, NodeKind, SourceLocation};
+
+    // phase_span = [10, 14] (just "BEGIN"), whole node = [10, 30].
+    let block =
+        Node::new(NodeKind::Block { statements: vec![] }, SourceLocation { start: 16, end: 29 });
+    let node = Node::new(
+        NodeKind::PhaseBlock {
+            phase: "BEGIN".to_string(),
+            phase_span: Some(SourceLocation { start: 10, end: 14 }),
+            block: Box::new(block),
+        },
+        SourceLocation { start: 10, end: 30 },
+    );
+
+    // Inside phase_span: returns Some.
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 10).as_deref(),
+        Some("BEGIN"),
+        "offset at phase_span start must return phase name"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 14).as_deref(),
+        Some("BEGIN"),
+        "offset at phase_span end must return phase name"
+    );
+    // Outside phase_span but inside node: must return None (phase_span present, not matched).
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 15),
+        None,
+        "offset after phase_span end (but inside node) must return None when phase_span present"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 20),
+        None,
+        "offset in block area must return None when phase_span present and not matched"
+    );
+}
+
+#[test]
+fn find_phase_block_at_offset_recurses_through_program_to_find_phase_block() {
+    use perl_parser::{Node, NodeKind, SourceLocation};
+
+    // Program { statements: [PhaseBlock { "END", [40,50] }] } spanning [0, 60].
+    let block_inner =
+        Node::new(NodeKind::Block { statements: vec![] }, SourceLocation { start: 45, end: 49 });
+    let phase_node = Node::new(
+        NodeKind::PhaseBlock {
+            phase: "END".to_string(),
+            phase_span: None,
+            block: Box::new(block_inner),
+        },
+        SourceLocation { start: 40, end: 50 },
+    );
+    let program = Node::new(
+        NodeKind::Program { statements: vec![phase_node] },
+        SourceLocation { start: 0, end: 60 },
+    );
+
+    // Offset inside the nested phase block: must find it.
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&program, 45).as_deref(),
+        Some("END"),
+        "recursion through Program must find nested PhaseBlock"
+    );
+    // Offset outside the nested phase block but inside program: must return None.
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&program, 35),
+        None,
+        "offset not in any PhaseBlock must return None even when inside Program"
+    );
+}
+
+#[test]
+fn hover_documentation_with_markdown_chars_is_escaped() -> Result<(), Box<dyn std::error::Error>> {
+    // Test that documentation containing markdown special characters is properly escaped
+    // so they render as literal text, not as markdown formatting.
+    let text = r#"
+# This variable tracks *important* data [see docs]
+my $var = 42;
+"#;
+
+    let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+    let uri = "file:///test.pl".to_string();
+    server.did_open(json!({
+        "textDocument": {
+            "uri": uri,
+            "languageId": "perl",
+            "version": 1,
+            "text": text
+        }
+    }))?;
+
+    // Get hover at $var position (line 2, character 4 = inside '$var')
+    let hover = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 2, "character": 4 }
+    })))?;
+
+    let hover = must_some(hover);
+    let value = must_some(hover["contents"]["value"].as_str());
+
+    // The documentation should escape the asterisks and brackets
+    assert!(value.contains(r"\*important\*"), "markdown asterisks should be escaped: {}", value);
+    assert!(value.contains(r"\[see docs\]"), "markdown brackets should be escaped: {}", value);
+    assert!(
+        !value.contains("*important*"),
+        "unescaped asterisks should not be present (they would make bold text): {}",
+        value
+    );
+    assert!(
+        !value.contains("[see docs]"),
+        "unescaped brackets should not be present (they would be treated as links): {}",
+        value
+    );
+
+    Ok(())
+}
+
+#[test]
+fn method_modifier_hover_escapes_doc_markdown() {
+    // Verify that method modifier hover cards escape markdown in the user-supplied
+    // documentation string, while preserving intentional markdown in the hardcoded
+    // kind_label (e.g. the "runs **before** the method" descriptions).
+    let hover = super::hover_cards::method_modifier_hover(
+        "before",
+        "validate_input",
+        "Checks that *all* args are [valid] before calling the real method",
+    );
+    let value = must_some(hover["contents"]["value"].as_str());
+
+    // User-supplied doc should have markdown chars escaped
+    assert!(value.contains(r"\*all\*"), "asterisks in user doc should be escaped: {value}");
+    assert!(value.contains(r"\[valid\]"), "brackets in user doc should be escaped: {value}");
+    // The hardcoded kind_label **before** formatting should remain as-is
+    assert!(
+        value.contains("**before**"),
+        "hardcoded kind_label markdown should be preserved: {value}"
+    );
+    // Method name should appear in backtick span (not escaped — it's code)
+    assert!(value.contains("`validate_input`"), "method name should appear in code span: {value}");
 }

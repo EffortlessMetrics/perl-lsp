@@ -18,6 +18,9 @@ codeLensProvider:
 colorProvider: true
 completionProvider:
   completionItem:
+    insertTextModes:
+      - 1
+      - 2
     labelDetailsSupport: true
   resolveProvider: true
   triggerCharacters:
@@ -220,7 +223,7 @@ workspace:
     schemes:
       - perldoc
   workspaceFolders:
-    changeNotifications: false
+    changeNotifications: true
     supported: false
 workspaceSymbolProvider:
   resolveProvider: true

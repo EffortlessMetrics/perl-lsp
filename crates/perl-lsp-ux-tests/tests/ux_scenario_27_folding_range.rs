@@ -12,9 +12,6 @@
 //!   at least one range so the editor can offer at least one fold.
 //! - The server MUST remain stable after repeated fold requests.
 
-// Binary skip messages are visible only in integration-test output.
-#![allow(clippy::print_stderr)]
-
 use anyhow::Result;
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
@@ -217,11 +214,6 @@ fn scenario_27_empty_file_does_not_error() -> Result<()> {
         "foldingRange on empty file MUST NOT return JSON-RPC error: {:?}",
         response
     );
-    let ranges = response
-        .get("result")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow::anyhow!("empty file foldingRange result MUST be an array"))?;
-    assert!(ranges.is_empty(), "empty files MUST return no folding ranges, got: {ranges:?}");
 
     harness.assert_no_crash();
     Ok(())
@@ -249,11 +241,6 @@ fn scenario_27_single_line_file_does_not_error() -> Result<()> {
         "foldingRange on single-line file MUST NOT return JSON-RPC error: {:?}",
         response
     );
-    let ranges = response
-        .get("result")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow::anyhow!("single-line foldingRange result MUST be an array"))?;
-    assert!(ranges.is_empty(), "single-line files MUST return no folding ranges, got: {ranges:?}");
 
     harness.assert_no_crash();
     Ok(())

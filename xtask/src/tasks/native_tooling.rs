@@ -1,5 +1,7 @@
 //! Native formatter and critic replacement status receipts.
 
+use crate::tasks::git_context::git_stdout_with_worktree_fallback;
+
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{Context, Result, eyre};
 use perl_lsp_rs_core::config::{CriticEngine, FormatterMode, ServerConfig};
@@ -12,9 +14,8 @@ use perl_lsp_rs_core::tooling::perltidy::FormatConfig;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{env, fs};
 use walkdir::WalkDir;
 
 const SCHEMA_VERSION: u32 = 1;
@@ -1515,14 +1516,9 @@ fn bullet_list(items: &[String]) -> String {
 }
 
 fn current_commit() -> String {
-    Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()
+    env::current_dir()
         .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| String::from_utf8(output.stdout).ok())
-        .map(|stdout| stdout.trim().to_string())
-        .filter(|commit| !commit.is_empty())
+        .and_then(|root| git_stdout_with_worktree_fallback(&root, &["rev-parse", "HEAD"]).ok())
         .unwrap_or_else(|| "unknown".to_string())
 }
 

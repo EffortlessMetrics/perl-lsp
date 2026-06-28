@@ -425,9 +425,9 @@ mod tests {
         PlanBlocker::new(reason, Some(AnchorId(anchor_id)), format!("{reason:?} blocker"))
     }
 
-    fn first_trace<'a>(
-        receipt: &'a SemanticShadowCompareReceipt,
-    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+    fn first_trace(
+        receipt: &SemanticShadowCompareReceipt,
+    ) -> Result<&ProviderFactTrace, Box<dyn std::error::Error>> {
         match receipt.fact_source_traces.first() {
             Some(trace) => Ok(trace),
             None => Err("missing fact-source trace".into()),

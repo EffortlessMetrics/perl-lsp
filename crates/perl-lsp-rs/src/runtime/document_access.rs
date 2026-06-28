@@ -86,6 +86,34 @@ impl LspServer {
         Ok(())
     }
 
+    /// Whether the workspace index snapshot for `uri` is older than the open
+    /// document generation.
+    pub(crate) fn workspace_index_stale_for_document(&self, uri: &str) -> bool {
+        #[cfg(feature = "workspace")]
+        {
+            let document_generation = {
+                let documents = self.documents.lock();
+                self.get_document(&documents, uri).map(DocumentState::current_generation)
+            };
+            let Some(document_generation) = document_generation else {
+                return false;
+            };
+            if document_generation == 0 {
+                return false;
+            }
+            let Some(coordinator) = self.coordinator() else {
+                return false;
+            };
+            coordinator.index().is_index_generation_stale(uri, document_generation)
+        }
+
+        #[cfg(not(feature = "workspace"))]
+        {
+            let _ = uri;
+            false
+        }
+    }
+
     /// Offset to position conversion using cached line starts for O(log n) performance
     #[inline]
     pub(crate) fn offset_to_pos16(&self, doc: &DocumentState, offset: usize) -> (u32, u32) {
@@ -158,9 +186,14 @@ impl LspServer {
     }
 
     /// Get buffer text for a URI
+    ///
+    /// Normalizes the URI via `normalize_uri_key` before lookup so that
+    /// client-supplied URIs with e.g. uppercase Windows drive letters resolve
+    /// correctly against the normalized keys used when documents are stored.
     pub(crate) fn buffer_text(&self, uri: &str) -> Option<String> {
         let docs = self.documents.lock();
-        docs.get(uri).map(|d| d.text.clone())
+        let normalized = self.normalize_uri_key(uri);
+        docs.get(&normalized).map(|d| d.text.clone())
     }
 
     /// Current document generation counter for `uri`, if the document is open.
@@ -170,15 +203,23 @@ impl LspServer {
     /// has changed" signal used to detect stale read requests in the
     /// scheduler — distinct from the LSP-supplied `version`, which is
     /// client-controlled.
+    ///
+    /// Normalizes the URI so that stale-read cancellation works even when the
+    /// client supplies a non-canonical URI (e.g. uppercase drive letter on Windows).
     pub(crate) fn document_generation(&self, uri: &str) -> Option<u32> {
         let docs = self.documents.lock();
-        docs.get(uri).map(|d| d.generation.load(std::sync::atomic::Ordering::SeqCst))
+        let normalized = self.normalize_uri_key(uri);
+        docs.get(&normalized).map(|d| d.generation.load(std::sync::atomic::Ordering::SeqCst))
     }
 
     /// Current LSP document version for `uri`, if the document is open.
+    ///
+    /// Normalizes the URI so the lookup aligns with the normalized keys used
+    /// when documents are stored in `text_sync.rs`.
     pub(crate) fn document_version(&self, uri: &str) -> Option<i32> {
         let docs = self.documents.lock();
-        docs.get(uri).map(|d| d.version)
+        let normalized = self.normalize_uri_key(uri);
+        docs.get(&normalized).map(|d| d.version)
     }
 
     /// Iterate over all open buffers (for reference search)
@@ -234,5 +275,62 @@ impl LspServer {
         }
 
         analyzer
+    }
+}
+
+#[cfg(all(test, feature = "workspace"))]
+mod tests {
+    use super::*;
+    use crate::runtime::LspServer;
+
+    #[test]
+    fn workspace_index_stale_for_document_false_when_document_is_not_open() {
+        let server = LspServer::new();
+
+        assert!(
+            !server.workspace_index_stale_for_document("file:///workspace/missing.pl"),
+            "missing open document must not be treated as stale"
+        );
+    }
+
+    #[test]
+    fn workspace_index_stale_for_document_false_when_coordinator_is_absent()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut server = LspServer::new();
+        let uri = "file:///workspace/no-coordinator.pl";
+        let text = "my $value = 1;\n";
+
+        server.test_apply_did_open(uri, text, 1)?;
+        server.test_replace_document_without_index(uri, text, 2).map_err(std::io::Error::other)?;
+        server.index_coordinator = None;
+
+        assert!(
+            !server.workspace_index_stale_for_document(uri),
+            "missing coordinator must fail closed to non-stale rather than blocking local providers"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_index_stale_for_document_boundary_discriminator_document_generation_zero()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///workspace/fresh-open.pl";
+        let text = "my $value = 1;\n";
+
+        server.test_apply_did_open(uri, text, 1)?;
+
+        assert_eq!(
+            server.document_generation(uri),
+            Some(0),
+            "didOpen must start at document_generation == 0 before any didChange"
+        );
+        assert!(
+            !server.workspace_index_stale_for_document(uri),
+            "document_generation == 0 must never be reported as stale"
+        );
+
+        Ok(())
     }
 }

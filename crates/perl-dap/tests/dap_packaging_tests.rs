@@ -75,9 +75,11 @@ mod dap_packaging {
     #[test]
     // AC:19
     fn test_binary_permissions_unix() -> Result<()> {
-        let install_script = repo_root().join("install.sh");
+        // The root install.sh is a thin delegating wrapper; the canonical installer
+        // that actually sets binary permissions is scripts/install.sh (chmod 755).
+        let install_script = repo_root().join("scripts/install.sh");
         let script_text = read(&install_script)?;
-        assert!(script_text.contains("chmod +x"));
+        assert!(script_text.contains("chmod 755"));
         Ok(())
     }
 

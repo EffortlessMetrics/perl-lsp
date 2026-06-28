@@ -184,7 +184,7 @@ fn lint_workflow_file(path: &Path, is_fixture: bool, issues: &mut Vec<LintIssue>
     }
 
     if is_pull_request(&triggers)
-        && has_contents_write_permission(&workflow)
+        && has_contents_write_permission_on_pull_request_job(&workflow)
         && !is_contents_write_allowlisted(&workflow_name)
     {
         issues.push(LintIssue {
@@ -316,7 +316,7 @@ fn has_write_all_permissions(workflow: &Value) -> bool {
     workflow.get("permissions").and_then(Value::as_str).is_some_and(|value| value == "write-all")
 }
 
-fn has_contents_write_permission(workflow: &Value) -> bool {
+fn has_contents_write_permission_on_pull_request_job(workflow: &Value) -> bool {
     if workflow
         .get("permissions")
         .and_then(Value::as_mapping)
@@ -329,14 +329,193 @@ fn has_contents_write_permission(workflow: &Value) -> bool {
 
     workflow.get("jobs").and_then(Value::as_mapping).is_some_and(|jobs| {
         jobs.values().any(|job| {
-            job.as_mapping()
-                .and_then(|mapping| mapping.get(Value::String("permissions".to_string())))
-                .and_then(Value::as_mapping)
-                .and_then(|mapping| mapping.get(Value::String("contents".to_string())))
-                .and_then(Value::as_str)
-                .is_some_and(|value| value == "write")
+            let Some(job) = job.as_mapping() else {
+                return false;
+            };
+            job_has_contents_write_permission(job) && !job_is_statically_excluded_from_pr(job)
         })
     })
+}
+
+fn job_has_contents_write_permission(job: &Mapping) -> bool {
+    job.get(Value::String("permissions".to_string()))
+        .and_then(Value::as_mapping)
+        .and_then(|mapping| mapping.get(Value::String("contents".to_string())))
+        .and_then(Value::as_str)
+        .is_some_and(|value| value == "write")
+}
+
+fn job_is_statically_excluded_from_pr(job: &Mapping) -> bool {
+    let Some(condition) = job.get(Value::String("if".to_string())).and_then(Value::as_str) else {
+        return false;
+    };
+    let condition = condition.trim();
+    let condition = condition
+        .strip_prefix("${{")
+        .and_then(|inner| inner.strip_suffix("}}"))
+        .map(str::trim)
+        .unwrap_or(condition);
+
+    condition_excludes_pull_request(condition)
+}
+
+fn condition_excludes_pull_request(condition: &str) -> bool {
+    let Some(condition) = strip_outer_parentheses(condition) else {
+        return false;
+    };
+    let Some(branches) = split_top_level(condition, "||") else {
+        return false;
+    };
+
+    !branches.is_empty() && branches.iter().all(|branch| branch_has_trusted_event_anchor(branch))
+}
+
+fn branch_has_trusted_event_anchor(branch: &str) -> bool {
+    let Some(branch) = strip_outer_parentheses(branch) else {
+        return false;
+    };
+    let Some(or_branches) = split_top_level(branch, "||") else {
+        return false;
+    };
+    if or_branches.len() > 1 {
+        return or_branches.iter().all(|branch| branch_has_trusted_event_anchor(branch));
+    }
+    let Some(terms) = split_top_level(branch, "&&") else {
+        return false;
+    };
+
+    !terms.is_empty() && terms.iter().any(|term| term_has_trusted_event_anchor(term))
+}
+
+fn term_has_trusted_event_anchor(term: &str) -> bool {
+    if term_is_trusted_event_equality(term) {
+        return true;
+    }
+    let Some(stripped) = strip_outer_parentheses(term) else {
+        return false;
+    };
+    stripped != term && condition_excludes_pull_request(stripped)
+}
+
+fn term_is_trusted_event_equality(term: &str) -> bool {
+    let Some(term) = strip_outer_parentheses(term) else {
+        return false;
+    };
+    let normalized: String = term.chars().filter(|ch| !ch.is_whitespace()).collect();
+    matches!(
+        normalized.as_str(),
+        "github.event_name=='schedule'"
+            | "github.event_name==\"schedule\""
+            | "github.event_name=='workflow_dispatch'"
+            | "github.event_name==\"workflow_dispatch\""
+            | "github.event_name=='push'"
+            | "github.event_name==\"push\""
+    )
+}
+
+fn split_top_level<'a>(condition: &'a str, operator: &str) -> Option<Vec<&'a str>> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut index = 0;
+    let mut paren_depth = 0usize;
+    let mut quote = None;
+
+    while index < condition.len() {
+        let ch = condition[index..].chars().next()?;
+        let ch_len = ch.len_utf8();
+
+        if let Some(active_quote) = quote {
+            if ch == active_quote {
+                quote = None;
+            }
+            index += ch_len;
+            continue;
+        }
+
+        match ch {
+            '\'' | '"' => quote = Some(ch),
+            '(' => paren_depth += 1,
+            ')' => {
+                paren_depth = paren_depth.checked_sub(1)?;
+            }
+            _ => {}
+        }
+
+        if quote.is_none() && paren_depth == 0 && condition[index..].starts_with(operator) {
+            let part = condition[start..index].trim();
+            if part.is_empty() {
+                return None;
+            }
+            parts.push(part);
+            index += operator.len();
+            start = index;
+            continue;
+        }
+
+        index += ch_len;
+    }
+
+    if quote.is_some() || paren_depth != 0 {
+        return None;
+    }
+
+    let part = condition[start..].trim();
+    if part.is_empty() {
+        return None;
+    }
+    parts.push(part);
+    Some(parts)
+}
+
+fn strip_outer_parentheses(mut expression: &str) -> Option<&str> {
+    loop {
+        expression = expression.trim();
+        if expression.is_empty() {
+            return None;
+        }
+        if !expression.starts_with('(') {
+            return Some(expression);
+        }
+        if !expression.ends_with(')') {
+            return Some(expression);
+        }
+        if !outer_parentheses_wrap_expression(expression)? {
+            return Some(expression);
+        }
+        expression = &expression[1..expression.len() - 1];
+    }
+}
+
+fn outer_parentheses_wrap_expression(expression: &str) -> Option<bool> {
+    let mut paren_depth = 0usize;
+    let mut quote = None;
+
+    for (index, ch) in expression.char_indices() {
+        if let Some(active_quote) = quote {
+            if ch == active_quote {
+                quote = None;
+            }
+            continue;
+        }
+
+        match ch {
+            '\'' | '"' => quote = Some(ch),
+            '(' => paren_depth += 1,
+            ')' => {
+                paren_depth = paren_depth.checked_sub(1)?;
+                if paren_depth == 0 {
+                    return Some(index + ch.len_utf8() == expression.len());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if quote.is_some() {
+        return None;
+    }
+
+    Some(false)
 }
 
 fn checks_out_pr_head(workflow: &Value) -> bool {
@@ -870,6 +1049,134 @@ mod tests {
         let mut issues = Vec::new();
         lint_workflow_file(&path, true, &mut issues)?;
         assert!(issues.iter().all(|issue| issue.level != "error"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_pull_request_job_write_fails() -> Result<()> {
+        let path = fixture_path("pull_request_job_write.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().any(|issue| issue.code == "PR_CONTENTS_WRITE"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_pull_request_with_scheduled_write_job_passes() -> Result<()> {
+        let path = fixture_path("pull_request_with_scheduled_write_job.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().all(|issue| issue.code != "PR_CONTENTS_WRITE"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_pull_request_write_job_refined_workflow_dispatch_passes() -> Result<()> {
+        let path = fixture_path("pull_request_write_job_refined_workflow_dispatch.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().all(|issue| issue.code != "PR_CONTENTS_WRITE"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_pull_request_write_job_refined_push_passes() -> Result<()> {
+        let path = fixture_path("pull_request_write_job_refined_push.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().all(|issue| issue.code != "PR_CONTENTS_WRITE"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_pull_request_write_job_parenthesized_trusted_or_passes() -> Result<()> {
+        let path = fixture_path("pull_request_write_job_parenthesized_trusted_or.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().all(|issue| issue.code != "PR_CONTENTS_WRITE"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_pull_request_write_job_parenthesized_trusted_or_refined_passes() -> Result<()> {
+        let path = fixture_path("pull_request_write_job_parenthesized_trusted_or_refined.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().all(|issue| issue.code != "PR_CONTENTS_WRITE"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_pull_request_write_job_event_not_schedule_fails() -> Result<()> {
+        assert_fixture_fails_pr_contents_write("pull_request_write_job_event_not_schedule.yml")
+    }
+
+    #[test]
+    fn fixture_pull_request_write_job_event_or_always_fails() -> Result<()> {
+        assert_fixture_fails_pr_contents_write("pull_request_write_job_event_or_always.yml")
+    }
+
+    #[test]
+    fn fixture_pull_request_write_job_unrelated_or_fails() -> Result<()> {
+        assert_fixture_fails_pr_contents_write("pull_request_write_job_unrelated_or.yml")
+    }
+
+    #[test]
+    fn fixture_pull_request_write_job_interpolated_event_fails() -> Result<()> {
+        assert_fixture_fails_pr_contents_write("pull_request_write_job_interpolated_event.yml")
+    }
+
+    fn assert_fixture_fails_pr_contents_write(name: &str) -> Result<()> {
+        let path = fixture_path(name)?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(
+            issues.iter().any(|issue| issue.code == "PR_CONTENTS_WRITE"),
+            "expected PR_CONTENTS_WRITE for {name}, got: {issues:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn event_name_exclusion_parser_accepts_trusted_event_refinements() -> Result<()> {
+        for condition in [
+            "github.event_name == 'schedule'",
+            "github.event_name == \"schedule\"",
+            "github.event_name == 'workflow_dispatch'",
+            "github.event_name == \"workflow_dispatch\"",
+            "github.event_name == 'push'",
+            "github.event_name == \"push\"",
+            "github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full'",
+            "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full')",
+            "(github.event_name == 'push' && github.repository == 'EffortlessMetrics/perl-lsp-swarm')",
+            "(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')",
+            "(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.repository == 'EffortlessMetrics/perl-lsp-swarm'",
+        ] {
+            assert!(
+                condition_excludes_pull_request(condition),
+                "expected trusted condition to pass: {condition}"
+            );
+        }
+
+        for condition in [
+            "github.event_name != 'schedule'",
+            "github.event_name == 'pull_request'",
+            "github.event_name == format('{0}', 'schedule')",
+            "always()",
+            "github.repository == 'EffortlessMetrics/perl-lsp-swarm'",
+            "github.event_name == 'schedule' || always()",
+            "github.event_name == 'schedule' || github.event_name == 'pull_request'",
+            "(github.event_name == 'schedule' || always()) && github.repository == 'EffortlessMetrics/perl-lsp-swarm'",
+            "(github.event_name == 'schedule' || github.event_name == 'pull_request') && github.repository == 'EffortlessMetrics/perl-lsp-swarm'",
+            "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.repository == 'EffortlessMetrics/perl-lsp-swarm' || github.event_name == 'pull_request')",
+            "github.event_name == 'schedule' ||",
+            "(github.event_name == 'schedule'",
+        ] {
+            assert!(
+                !condition_excludes_pull_request(condition),
+                "expected unsafe condition to fail: {condition}"
+            );
+        }
         Ok(())
     }
 

@@ -14,7 +14,7 @@
 ## Quick Reference
 
 ```bash
-# Check that all committed baselines pass (bootstrap-safe: passes if no receipt)
+# Check that all scorecard floor baselines pass (bootstrap-safe: passes if no receipt)
 just ci-metrics-ratchet
 
 # Check a single subsystem
@@ -68,7 +68,7 @@ defined in `xtask/src/tasks/metrics/ratchet.rs` (`SubsystemBaseline`):
 }
 ```
 
-### Active subsystems
+### Active scorecard subsystems
 
 | File | Subsystem | Floor gate |
 |------|-----------|------------|
@@ -77,6 +77,16 @@ defined in `xtask/src/tasks/metrics/ratchet.rs` (`SubsystemBaseline`):
 | `.ci/metrics/baselines/parser_accuracy.json` | Span / AST correctness | See file |
 | `.ci/metrics/baselines/token.json` | Lexer token health | See file |
 | `.ci/metrics/baselines/editor_ux.json` | Editor UX scorecard | See file |
+
+### Other committed metric baselines
+
+These files live beside the scorecard ratchet baselines but do not use the
+`metrics ratchet-check <subsystem>` schema above.
+
+| File | Contract |
+|------|----------|
+| `.ci/metrics/baselines/parser_accuracy_gold.json` | Parser accuracy gold expectation signatures consumed by parser accuracy tooling |
+| `.ci/metrics/baselines/memory_plateau.json` | Memory plateau baseline consumed by memory plateau receipt validation |
 
 ---
 

@@ -89,6 +89,54 @@ impl DebugAdapter {
             }
         }
 
+        // Validate frameId when provided: the frame must exist in the current session and
+        // the session must be stopped.  frameId = None means "no frame context" — skip.
+        if let Some(requested_frame_id) = args.frame_id {
+            let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            match *session_guard {
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "evaluate".to_string(),
+                        body: None,
+                        message: Some("No debugger session".to_string()),
+                    };
+                }
+                Some(ref session) => {
+                    if session.state != DebugState::Stopped {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "evaluate".to_string(),
+                            body: None,
+                            message: Some(
+                                "Cannot evaluate in frame context: session is not stopped"
+                                    .to_string(),
+                            ),
+                        };
+                    }
+                    let frame_found =
+                        session.stack_frames.iter().any(|f| i64::from(f.id) == requested_frame_id);
+                    if !frame_found {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "evaluate".to_string(),
+                            body: None,
+                            message: Some(format!(
+                                "Frame not found: frameId {requested_frame_id} does not match any \
+                                 current stack frame"
+                            )),
+                        };
+                    }
+                }
+            }
+        }
+
         let expression = &args.expression;
 
         // AC10.3: Get timeout configuration (5s default, 30s hard limit)
@@ -121,7 +169,7 @@ impl DebugAdapter {
                     success: false,
                     command: "evaluate".to_string(),
                     body: None,
-                    message: Some(Self::no_debugger_session_message("evaluate")),
+                    message: Some("No debugger session active".to_string()),
                 };
             }
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
@@ -143,7 +191,7 @@ impl DebugAdapter {
                 success: false,
                 command: "evaluate".to_string(),
                 body: None,
-                message: Some(Self::no_debugger_session_message("evaluate")),
+                message: Some("No debugger session".to_string()),
             };
         };
 
@@ -183,8 +231,10 @@ impl DebugAdapter {
             };
         };
 
+        let variables_reference =
+            self.allocate_evaluate_result_ref(expression, &result, &result_type);
         let eval_body =
-            EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };
+            EvaluateResponseBody { result, type_: Some(result_type), variables_reference };
 
         DapMessage::Response {
             seq,
@@ -302,7 +352,7 @@ impl DebugAdapter {
                     success: false,
                     command: "setExpression".to_string(),
                     body: None,
-                    message: Some(Self::no_debugger_session_message("setExpression")),
+                    message: Some("No debugger session active".to_string()),
                 };
             }
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
@@ -324,7 +374,7 @@ impl DebugAdapter {
                 success: false,
                 command: "setExpression".to_string(),
                 body: None,
-                message: Some(Self::no_debugger_session_message("setExpression")),
+                message: Some("No debugger session".to_string()),
             };
         };
 
@@ -348,10 +398,12 @@ impl DebugAdapter {
             };
         };
 
+        let variables_reference =
+            self.allocate_evaluate_result_ref(expression, &rendered_value, &rendered_type);
         let body = SetExpressionResponseBody {
             value: rendered_value,
             type_: Some(rendered_type),
-            variables_reference: 0,
+            variables_reference,
         };
 
         DapMessage::Response {
@@ -475,58 +527,231 @@ impl DebugAdapter {
             message: None,
         }
     }
+
+    /// Determine whether a type name produced by the Perl debugger refers to a
+    /// structured container (HASH, ARRAY, REF, blessed object, TIED).
+    ///
+    /// Returns `true` when the result can be further expanded via a `variables`
+    /// request; `false` for scalars, integers, and plain strings.
+    fn result_type_is_expandable(type_name: &str) -> bool {
+        matches!(type_name, "HASH" | "ARRAY" | "REF" | "OBJECT" | "TIED")
+            || type_name.contains("HASH")
+            || type_name.contains("ARRAY")
+    }
+
+    /// Allocate a `variablesReference` for a structured evaluate/setExpression/setVariable
+    /// result and cache a placeholder entry so a follow-up `variables` request can expand it.
+    ///
+    /// Returns `0` when the result type is not expandable or when no active session
+    /// is available (the ref cannot be served without a cache).
+    ///
+    /// ## Ref-range non-collision guarantee
+    ///
+    /// Scope refs are `frame_id * 10 + scope_type` (scope_type in {1, 2, 3}).
+    /// A frame_id of 5_000 already produces scope ref 50_001, which would collide
+    /// with a naive 50_000 base offset.  This function uses a 1_000_000 base
+    /// instead: `frame_id` would need to reach 100_000 to collide, which is
+    /// impossible in practice and `saturating_mul` caps well before i32::MAX.
+    pub(super) fn allocate_evaluate_result_ref(
+        &self,
+        expression: &str,
+        result: &str,
+        result_type: &str,
+    ) -> i64 {
+        if !Self::result_type_is_expandable(result_type) {
+            return 0;
+        }
+        if let Some(ref mut session) =
+            *lock_or_recover(&self.session, "debug_adapter.allocate_evaluate_result_ref")
+        {
+            let raw_counter = self.debugger_output_marker.fetch_add(1, Ordering::Relaxed);
+            let counter = Self::i64_to_i32_saturating(raw_counter as i64);
+            let eval_ref = crate::debug_adapter::var_ref::VariableReference::EvalResult { counter }
+                .encode()
+                .unwrap_or(0);
+            let placeholder = Variable {
+                name: expression.to_string(),
+                value: result.to_string(),
+                type_: Some(result_type.to_string()),
+                variables_reference: 0,
+                named_variables: None,
+                indexed_variables: None,
+            };
+            session.variable_cache.upsert(
+                eval_ref,
+                VariableCacheKind::EvaluateResult,
+                vec![placeholder],
+            );
+            i64::from(eval_ref)
+        } else {
+            0
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
+mod evaluate_allocation_tests {
     use super::*;
 
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
+    // -----------------------------------------------------------------------
+    // result_type_is_expandable — cover all arms including contains-HASH/ARRAY
+    // -----------------------------------------------------------------------
 
     #[test]
-    fn evaluate_without_session_guides_recovery() -> TestResult {
-        let mut adapter = DebugAdapter::new();
-
-        let response =
-            adapter.handle_request(1, "evaluate", Some(json!({ "expression": "$valid_var" })));
-
-        match response {
-            DapMessage::Response { success, command, message, .. } => {
-                assert_eq!(command, "evaluate");
-                assert!(!success, "evaluate without a session should fail");
-                let message = message.ok_or("evaluate failure should include guidance")?;
-                assert!(message.contains("No debugger session is active"));
-                assert!(message.contains("Start a launch or attach request"));
-                assert!(message.contains("retry evaluate"));
-            }
-            other => return Err(format!("expected evaluate response, got {other:?}").into()),
+    fn expandable_exact_matches() {
+        for ty in ["HASH", "ARRAY", "REF", "OBJECT", "TIED"] {
+            assert!(DebugAdapter::result_type_is_expandable(ty), "{ty} should be expandable");
         }
-
-        Ok(())
     }
 
     #[test]
-    fn set_expression_without_session_guides_recovery() -> TestResult {
-        let mut adapter = DebugAdapter::new();
+    fn expandable_contains_hash() {
+        // Blessed objects often have type strings like "SomeClass=HASH(0x...)"
+        assert!(DebugAdapter::result_type_is_expandable("SomeClass=HASH(0x1234)"));
+        assert!(DebugAdapter::result_type_is_expandable("My::Module=HASH"));
+    }
 
-        let response = adapter.handle_request(
-            1,
-            "setExpression",
-            Some(json!({ "expression": "$valid_var", "value": "42" })),
-        );
+    #[test]
+    fn expandable_contains_array() {
+        assert!(DebugAdapter::result_type_is_expandable("SomeClass=ARRAY(0x1234)"));
+        assert!(DebugAdapter::result_type_is_expandable("Tied=ARRAY"));
+    }
 
-        match response {
-            DapMessage::Response { success, command, message, .. } => {
-                assert_eq!(command, "setExpression");
-                assert!(!success, "setExpression without a session should fail");
-                let message = message.ok_or("setExpression failure should include guidance")?;
-                assert!(message.contains("No debugger session is active"));
-                assert!(message.contains("Start a launch or attach request"));
-                assert!(message.contains("retry setExpression"));
-            }
-            other => return Err(format!("expected setExpression response, got {other:?}").into()),
+    #[test]
+    fn not_expandable_scalar_types() {
+        for ty in ["SCALAR", "INTEGER", "FLOAT", "STRING", "UNDEF", "CODE", "IO"] {
+            assert!(!DebugAdapter::result_type_is_expandable(ty), "{ty} should not be expandable");
         }
+    }
 
-        Ok(())
+    // -----------------------------------------------------------------------
+    // allocate_evaluate_result_ref — no-session path (else { 0 }) is the key
+    // changed line that needs coverage.  When no session is present, even an
+    // expandable type must return 0.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn allocate_returns_zero_with_no_session_and_expandable_type() {
+        // Without a session the else-branch returns 0 even for expandable types.
+        // This covers the `else { 0 }` arm of allocate_evaluate_result_ref.
+        let adapter = DebugAdapter::new();
+        let ref_val = adapter.allocate_evaluate_result_ref("$h", "HASH(0x1234)", "HASH");
+        assert_eq!(
+            ref_val, 0,
+            "allocate_evaluate_result_ref must return 0 when no session is present"
+        );
+    }
+
+    #[test]
+    fn allocate_returns_zero_for_non_expandable_type() {
+        // Covers the early-return `if !Self::result_type_is_expandable` arm.
+        let adapter = DebugAdapter::new();
+        let ref_val = adapter.allocate_evaluate_result_ref("$x", "42", "SCALAR");
+        assert_eq!(
+            ref_val, 0,
+            "allocate_evaluate_result_ref must return 0 for non-expandable scalar type"
+        );
+    }
+
+    #[test]
+    fn allocate_returns_zero_for_ref_type_no_session() {
+        // Cover REF type (not just HASH/ARRAY) through the no-session path.
+        let adapter = DebugAdapter::new();
+        let ref_val = adapter.allocate_evaluate_result_ref("\\$x", "REF(0xabcd)", "REF");
+        assert_eq!(ref_val, 0, "REF type with no session must return 0");
+    }
+
+    #[test]
+    fn allocate_returns_zero_for_blessed_hash_no_session() {
+        // Cover the contains-HASH arm of result_type_is_expandable through the
+        // no-session path of allocate_evaluate_result_ref.
+        let adapter = DebugAdapter::new();
+        let ref_val =
+            adapter.allocate_evaluate_result_ref("$obj", "SomeClass=HASH(0x1)", "SomeClass=HASH");
+        assert_eq!(ref_val, 0, "blessed HASH type with no session must return 0");
+    }
+
+    #[test]
+    fn allocate_returns_zero_for_blessed_array_no_session() {
+        // Cover the contains-ARRAY arm of result_type_is_expandable through the
+        // no-session path of allocate_evaluate_result_ref.
+        let adapter = DebugAdapter::new();
+        let ref_val =
+            adapter.allocate_evaluate_result_ref("$arr_obj", "Iter=ARRAY(0x1)", "Iter=ARRAY");
+        assert_eq!(ref_val, 0, "blessed ARRAY type with no session must return 0");
+    }
+
+    // -----------------------------------------------------------------------
+    // allocate_evaluate_result_ref — session-present path (lines 511-530).
+    // When a live session is present and the type is expandable, allocate a
+    // non-zero variablesReference in the 1_000_000+ range and cache the entry.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn allocate_returns_nonzero_with_live_session_and_hash_type() {
+        // Covers the session-present branch: raw_counter fetch_add, eval_ref
+        // computation (1_000_000 base), Variable construction, cache upsert.
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+
+        let ref_val = adapter.allocate_evaluate_result_ref("$h", "HASH(0x1234)", "HASH");
+
+        assert!(
+            ref_val >= 1_000_000,
+            "variablesReference must be in the 1_000_000+ range to avoid scope-ref collision; got {ref_val}"
+        );
+        assert_ne!(ref_val, 0, "session-present HASH must return non-zero variablesReference");
+    }
+
+    #[test]
+    fn allocate_returns_nonzero_with_live_session_and_array_type() {
+        // Same session-present coverage path for ARRAY type.
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+
+        let ref_val = adapter.allocate_evaluate_result_ref("@arr", "ARRAY(0xabcd)", "ARRAY");
+
+        assert!(ref_val >= 1_000_000, "ARRAY ref must be in 1_000_000+ range; got {ref_val}");
+        assert_ne!(ref_val, 0, "session-present ARRAY must return non-zero variablesReference");
+    }
+
+    #[test]
+    fn allocate_refs_are_monotonically_increasing() {
+        // Verifies successive allocations increment the counter so refs are
+        // unique — covers the fetch_add path through multiple calls.
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+
+        let ref1 = adapter.allocate_evaluate_result_ref("$a", "HASH(0x1)", "HASH");
+        let ref2 = adapter.allocate_evaluate_result_ref("$b", "HASH(0x2)", "HASH");
+
+        assert!(ref1 >= 1_000_000, "first ref must be in 1_000_000+ range; got {ref1}");
+        assert!(ref2 > ref1, "second ref must be greater than first; got ref1={ref1}, ref2={ref2}");
+    }
+
+    #[test]
+    fn allocate_caches_placeholder_variable_in_session() {
+        // Verifies the allocated ref is retrievable from the session cache via
+        // get_page — proving the upsert call ran and the placeholder was stored.
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+
+        let expression = "$my_hash";
+        let result_val = "HASH(0x5678)";
+        let result_type = "HASH";
+        let ref_val = adapter.allocate_evaluate_result_ref(expression, result_val, result_type);
+
+        assert!(ref_val >= 1_000_000, "ref must be in 1_000_000+ range; got {ref_val}");
+        let ref_i32 = ref_val as i32;
+
+        // Read the placeholder back from the session variable_cache.
+        let mut session_guard =
+            lock_or_recover(&adapter.session, "test_allocate_caches_placeholder");
+        let vars = session_guard.as_mut().and_then(|s| s.variable_cache.get_page(ref_i32, 0, 10));
+        assert!(vars.is_some(), "cache must contain the placeholder variable for ref {ref_val}");
+        let vars = vars.unwrap_or_default();
+        assert_eq!(vars.len(), 1, "exactly one placeholder variable expected; got {}", vars.len());
+        assert_eq!(vars[0].name, expression, "placeholder name must match expression");
+        assert_eq!(vars[0].value, result_val, "placeholder value must match result");
     }
 }

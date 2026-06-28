@@ -324,14 +324,11 @@ mod tests {
         )]);
         let outcome =
             completion_visibility_cutover(vec![], &stub, FileId(1), 0, None, "explicit_import");
-        match &outcome.result {
-            CompletionCutoverResult::Semantic(ranked) => {
-                assert!(!ranked.is_empty(), "should have ranked symbols");
-            }
-            CompletionCutoverResult::LegacyFallback(_) => {
-                panic!("explicit import should not fall back");
-            }
-        }
+        let ranked_len = match &outcome.result {
+            CompletionCutoverResult::Semantic(ranked) => ranked.len(),
+            CompletionCutoverResult::LegacyFallback(_) => 0,
+        };
+        assert!(ranked_len > 0, "explicit import should produce ranked symbols");
         Ok(())
     }
 
@@ -345,14 +342,11 @@ mod tests {
         )]);
         let outcome =
             completion_visibility_cutover(vec![], &stub, FileId(1), 0, None, "default_export");
-        match &outcome.result {
-            CompletionCutoverResult::Semantic(ranked) => {
-                assert!(!ranked.is_empty(), "default export should produce ranked symbols");
-            }
-            CompletionCutoverResult::LegacyFallback(_) => {
-                panic!("default export should not fall back");
-            }
-        }
+        let ranked_len = match &outcome.result {
+            CompletionCutoverResult::Semantic(ranked) => ranked.len(),
+            CompletionCutoverResult::LegacyFallback(_) => 0,
+        };
+        assert!(ranked_len > 0, "default export should produce ranked symbols");
         Ok(())
     }
 
@@ -384,14 +378,11 @@ mod tests {
         ]);
         let outcome =
             completion_visibility_cutover(vec![], &stub, FileId(1), 0, None, "tag_export");
-        match &outcome.result {
-            CompletionCutoverResult::Semantic(ranked) => {
-                assert_eq!(ranked.len(), 2, "tag export should produce 2 ranked symbols");
-            }
-            CompletionCutoverResult::LegacyFallback(_) => {
-                panic!("tag export should not fall back");
-            }
-        }
+        let ranked_len = match &outcome.result {
+            CompletionCutoverResult::Semantic(ranked) => ranked.len(),
+            CompletionCutoverResult::LegacyFallback(_) => 0,
+        };
+        assert_eq!(ranked_len, 2, "tag export should produce 2 ranked symbols");
         Ok(())
     }
 

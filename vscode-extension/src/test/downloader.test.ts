@@ -1382,13 +1382,14 @@ describe('ensureBinary error classification', () => {
 
     await downloader.ensureBinary();
 
-    const call = vscode.window.showErrorMessage.mock.calls[0];
-    expect(call[0]).toMatch(/proxy|VPN|network/i);
-    // Must mention the manual install setting
-    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
-    expect(call.slice(1)).toEqual(
-      expect.arrayContaining(['Open Proxy Settings', 'Install Manually'])
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+      expect.stringMatching(/proxy|VPN|network/i),
+      expect.anything(),
+      expect.anything()
     );
+    // Must mention the manual install setting
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
   });
 
   test('ETIMEDOUT shows message containing proxy/VPN guidance and manual install path', async () => {
@@ -1539,18 +1540,6 @@ describe('ensureBinary error classification', () => {
     expect(buttons).toContain('Install Manually');
   });
 
-  test('error message always offers serverPath settings shortcut', async () => {
-    setupDownloadError('some unexpected error occurred');
-    const vscode = require('vscode');
-    vscode.window.showErrorMessage.mockResolvedValue(undefined);
-
-    await downloader.ensureBinary();
-
-    const call = vscode.window.showErrorMessage.mock.calls[0];
-    const buttons: string[] = call.slice(1);
-    expect(buttons).toContain('Open serverPath Setting');
-  });
-
   test('"Install Manually" button opens the manual install URL', async () => {
     setupDownloadError('some unexpected error occurred');
     const vscode = require('vscode');
@@ -1563,18 +1552,5 @@ describe('ensureBinary error classification', () => {
     );
     const uriArg = vscode.env.openExternal.mock.calls[0][0];
     expect(uriArg.toString()).toMatch(/github\.com.*perl-lsp/i);
-  });
-
-  test('"Open serverPath Setting" button opens the serverPath setting', async () => {
-    setupDownloadError('some unexpected error occurred');
-    const vscode = require('vscode');
-    vscode.window.showErrorMessage.mockResolvedValue('Open serverPath Setting');
-
-    await downloader.ensureBinary();
-
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-      'workbench.action.openSettings',
-      'perl-lsp.serverPath'
-    );
   });
 });

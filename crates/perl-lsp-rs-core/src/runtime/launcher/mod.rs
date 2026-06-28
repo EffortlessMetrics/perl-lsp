@@ -257,6 +257,10 @@ pub struct LspArgs {
     #[arg(long, conflicts_with = "check")]
     pub check_project: Option<Option<String>>,
 
+    /// Explain first-run workspace setup: Perl path, config, and effective @INC roots
+    #[arg(long, conflicts_with_all = ["check", "check_project"])]
+    pub doctor: Option<Option<String>>,
+
     /// Generate shell completions (bash, zsh, fish, powershell, pwsh)
     #[arg(long)]
     pub completion: Option<String>,
@@ -272,6 +276,49 @@ pub struct LspArgs {
     /// Report how a .perlcriticrc profile maps to native critic rules
     #[arg(long, value_name = "PROFILE", conflicts_with = "perltidy_compat_report")]
     pub perlcritic_compat_report: Option<String>,
+
+    /// Export a ripr-perl-facts-v1 fact packet (Campaign 31, ripr-swarm#1379).
+    /// Does NOT start the LSP server or execute Perl.
+    #[arg(
+        long,
+        conflicts_with_all = [
+            "check",
+            "check_project",
+            "doctor",
+            "features_json",
+            "perltidy_compat_report",
+            "perlcritic_compat_report"
+        ]
+    )]
+    pub ripr_facts: bool,
+
+    /// Schema version for --ripr-facts (must be `ripr-perl-facts-v1`).
+    #[arg(long, value_name = "SCHEMA", default_value = "ripr-perl-facts-v1")]
+    pub ripr_schema: String,
+
+    /// Repository root for --ripr-facts (defaults to `.`).
+    #[arg(long, value_name = "ROOT", default_value = ".")]
+    pub ripr_root: String,
+
+    /// Base ref for the diff (e.g. `origin/main`).
+    #[arg(long, value_name = "BASE")]
+    pub ripr_base: Option<String>,
+
+    /// Head ref for the diff (e.g. `HEAD`).
+    #[arg(long, value_name = "HEAD")]
+    pub ripr_head: Option<String>,
+
+    /// Comma-separated fact-class subset (e.g. `owners,changes,tests,oracles`).
+    #[arg(
+        long,
+        value_name = "CLASSES",
+        default_value = "files,owners,changes,tests,oracles,relations,dynamic_boundaries,verify_commands,limitations,provenance"
+    )]
+    pub ripr_fact_classes: String,
+
+    /// Output path for the packet (e.g. `target/ripr/reports/perl-facts.json`).
+    #[arg(long, value_name = "OUT", default_value = "target/ripr/reports/perl-facts.json")]
+    pub ripr_out: String,
 
     /// Set feature profile
     #[arg(long)]
@@ -353,6 +400,11 @@ pub enum LaunchAction {
         /// Directory to scan (defaults to ".").
         dir: String,
     },
+    /// Explain first-run workspace setup for a project directory.
+    Doctor {
+        /// Directory to inspect (defaults to ".").
+        dir: String,
+    },
     /// Generate shell completions for a given shell.
     Completion {
         /// Target shell (bash, zsh, fish, powershell; pwsh aliases to powershell).
@@ -371,6 +423,25 @@ pub enum LaunchAction {
     PerlcriticCompatReport {
         /// Profile path to classify.
         profile: String,
+    },
+    /// Export a `ripr-perl-facts-v1` fact packet for the ripr repair-routing
+    /// lane (Campaign 31, ripr-swarm#1379). This is a batch handoff — it does
+    /// NOT start the LSP server or execute Perl. The emitter body lands across
+    /// PRs 5-8 (perl-lsp-swarm#2592-#2595); this variant is the command
+    /// surface + arg validation + the unavailable-packet fallback.
+    RiprFacts {
+        /// Packet schema version (must be `ripr-perl-facts-v1`).
+        schema: String,
+        /// Repository root (repo-relative, forward-slash; defaults to `.`).
+        root: String,
+        /// Base ref for the diff (e.g. `origin/main`); `None` = working tree.
+        base: Option<String>,
+        /// Head ref for the diff (e.g. `HEAD`); `None` = working tree.
+        head: Option<String>,
+        /// Comma-separated fact-class subset to emit (e.g. `owners,changes,tests,oracles`).
+        fact_classes: String,
+        /// Output path (repo-relative; e.g. `target/ripr/reports/perl-facts.json`).
+        out: String,
     },
     /// Print CLI help output.
     Help,
@@ -553,6 +624,9 @@ where
             } else if let Some(maybe_dir) = parsed_args.check_project {
                 let dir = maybe_dir.unwrap_or_else(|| ".".to_string());
                 LaunchAction::CheckProject { dir }
+            } else if let Some(maybe_dir) = parsed_args.doctor {
+                let dir = maybe_dir.unwrap_or_else(|| ".".to_string());
+                LaunchAction::Doctor { dir }
             } else if let Some(raw_shell) = parsed_args.completion {
                 let shell = normalize_completion_shell(&raw_shell).ok_or_else(|| {
                     LaunchParseError::InvalidShell { raw_shell: raw_shell.clone() }
@@ -564,6 +638,14 @@ where
                 LaunchAction::PerltidyCompatReport { profile }
             } else if let Some(profile) = parsed_args.perlcritic_compat_report {
                 LaunchAction::PerlcriticCompatReport { profile }
+            } else if parsed_args.ripr_facts {
+                let schema = parsed_args.ripr_schema.clone();
+                let root = parsed_args.ripr_root.clone();
+                let base = parsed_args.ripr_base.clone();
+                let head = parsed_args.ripr_head.clone();
+                let fact_classes = parsed_args.ripr_fact_classes.clone();
+                let out = parsed_args.ripr_out.clone();
+                LaunchAction::RiprFacts { schema, root, base, head, fact_classes, out }
             } else {
                 LaunchAction::Run
             };
@@ -686,6 +768,7 @@ pub fn help_text() -> String {
     out.push_str("Usage: perllsp [options]\n");
     out.push_str("       perllsp --check <file.pl> [file2.pm ...]\n");
     out.push_str("       perllsp --check-project [dir]\n");
+    out.push_str("       perllsp --doctor [dir]\n");
     out.push('\n');
     out.push_str("Server options:\n");
     out.push_str("  --stdio, --mcp       Use stdio for communication (default)\n");
@@ -720,6 +803,7 @@ pub fn help_text() -> String {
     out.push_str("Tool options:\n");
     out.push_str("  --check <files...>   Validate Perl files and report parse errors\n");
     out.push_str("  --check-project [dir] Scan project directory for parsability report\n");
+    out.push_str("  --doctor [dir]       Explain Perl path, config, and effective @INC roots\n");
     out.push_str("  --perltidy-compat-report <profile>\n");
     out.push_str("                       Report native formatter compatibility for .perltidyrc\n");
     out.push_str("  --perlcritic-compat-report <profile>\n");
@@ -737,6 +821,7 @@ pub fn help_text() -> String {
     out.push_str("  perllsp --stdio --feature-profile=prod  # production profile\n");
     out.push_str("  perllsp --check lib/MyModule.pm         # syntax check\n");
     out.push_str("  perllsp --check-project lib/             # project scan\n");
+    out.push_str("  perllsp --doctor .                       # first-run setup report\n");
     out.push_str("  perllsp --perltidy-compat-report .perltidyrc\n");
     out.push_str("  perllsp --perlcritic-compat-report .perlcriticrc\n");
     out.push_str("  perllsp --info                          # server information\n");
@@ -791,7 +876,7 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--stdio --mcp --socket --port --log --health --info --check --check-project --version --features-json --perltidy-compat-report --perlcritic-compat-report --feature-profile --completion --help"
+    opts="--stdio --mcp --socket --port --log --health --info --check --check-project --doctor --version --features-json --perltidy-compat-report --perlcritic-compat-report --feature-profile --completion --help"
 
     case "${prev}" in
         --port)
@@ -836,6 +921,7 @@ _perl-lsp() {
         '--info[Show server info]' \
         '--check[Validate Perl files]:file:_files -g "*.{pl,pm,t}"' \
         '--check-project[Scan project directory for parsability report]:dir:_directories' \
+        '--doctor[Explain Perl path, config, and effective @INC roots]:dir:_directories' \
         '--version[Show version information]' \
         '--features-json[Output features catalog as JSON]' \
         '--perltidy-compat-report[Report native formatter compatibility for .perltidyrc]:profile:_files' \
@@ -858,6 +944,7 @@ complete -c perl-lsp -l health -d 'Quick health check'
 complete -c perl-lsp -l info -d 'Show server info'
 complete -c perl-lsp -l check -F -d 'Validate Perl files'
 complete -c perl-lsp -l check-project -d 'Scan project directory for parsability report'
+complete -c perl-lsp -l doctor -d 'Explain Perl path, config, and effective @INC roots'
 complete -c perl-lsp -l version -d 'Show version information'
 complete -c perl-lsp -l features-json -d 'Output features catalog as JSON'
 complete -c perl-lsp -l perltidy-compat-report -F -d 'Report native formatter compatibility for .perltidyrc'
@@ -880,6 +967,7 @@ const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -Comma
         [CompletionResult]::new('--info', '--info', 'ParameterName', 'Show server info')
         [CompletionResult]::new('--check', '--check', 'ParameterName', 'Validate Perl files')
         [CompletionResult]::new('--check-project', '--check-project', 'ParameterName', 'Scan project directory for parsability report')
+        [CompletionResult]::new('--doctor', '--doctor', 'ParameterName', 'Explain Perl path, config, and effective @INC roots')
         [CompletionResult]::new('--version', '--version', 'ParameterName', 'Show version information')
         [CompletionResult]::new('--features-json', '--features-json', 'ParameterName', 'Output features catalog as JSON')
         [CompletionResult]::new('--perltidy-compat-report', '--perltidy-compat-report', 'ParameterName', 'Report native formatter compatibility for .perltidyrc')
@@ -1011,7 +1099,7 @@ mod tests {
         DEFAULT_LSP_PORT, DiagnosticMode, LaunchAction, RuntimeMode, RuntimeTuning, TransportMode,
         parse_args,
     };
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn init_logging_does_not_panic_without_log_file() {
@@ -1084,8 +1172,7 @@ mod tests {
         for (shell, needle) in
             [("bash", "--mcp"), ("zsh", "--mcp"), ("fish", "-l mcp"), ("powershell", "--mcp")]
         {
-            let script = super::shell_completion(shell)
-                .unwrap_or_else(|| panic!("missing completion for {shell}"));
+            let script = must_some(super::shell_completion(shell));
             assert!(script.contains(needle), "{shell} completion is missing {needle}: {script}");
         }
 
@@ -1332,6 +1419,39 @@ mod tests {
         assert!(text.contains("--check-project"));
     }
 
+    // -- --doctor flag -----------------------------------------------
+
+    #[test]
+    fn parse_doctor_no_dir_defaults_to_dot() {
+        let plan = must(parse_args(["perl-lsp", "--doctor"]));
+        assert_eq!(plan.action, LaunchAction::Doctor { dir: ".".to_string() });
+    }
+
+    #[test]
+    fn parse_doctor_with_dir() {
+        let plan = must(parse_args(["perl-lsp", "--doctor", "app/"]));
+        assert_eq!(plan.action, LaunchAction::Doctor { dir: "app/".to_string() });
+    }
+
+    #[test]
+    fn parse_doctor_conflicts_with_check_project() {
+        let result = parse_args(["perl-lsp", "--doctor", "--check-project"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_doctor_conflicts_with_check() {
+        let result = parse_args(["perl-lsp", "--doctor", "--check", "script.pl"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn help_mentions_doctor_flag() {
+        let text = super::help_text();
+        assert!(text.contains("--doctor"));
+        assert!(text.contains("effective @INC roots"));
+    }
+
     // ── InvalidShell error ────────────────────────────────────────
 
     #[test]
@@ -1420,6 +1540,28 @@ mod tests {
         let _guard_cfc = EnvGuard::remove("CLICOLOR_FORCE");
         let _guard = EnvGuard::set("CLICOLOR", "0");
         assert!(!super::should_use_ansi(true), "CLICOLOR=0 must disable ANSI");
+    }
+
+    #[test]
+    fn env_truthy_boundary_discriminator_input_that_hits_the_boundary_normalized_is_empty_or_normalized_equals_0()
+     {
+        {
+            let _guard = EnvGuard::set("PERL_LSP_TEST_TRUTHY", "   ");
+            assert_eq!(
+                super::env_truthy("PERL_LSP_TEST_TRUTHY"),
+                Some(false),
+                "input that hits the boundary: normalized.is_empty() || normalized == \"0\""
+            );
+        }
+
+        {
+            let _guard = EnvGuard::set("PERL_LSP_TEST_TRUTHY", " 0 ");
+            assert_eq!(
+                super::env_truthy("PERL_LSP_TEST_TRUTHY"),
+                Some(false),
+                "input that hits the boundary: normalized.is_empty() || normalized == \"0\""
+            );
+        }
     }
 
     /// Guard: FORCE_COLOR=1 must enable ANSI even without a terminal.

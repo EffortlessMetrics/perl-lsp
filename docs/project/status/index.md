@@ -7,7 +7,7 @@
 
 - **Release posture**: `v0.15.0` shipped 2026-05-22 (JSON-RPC type safety + LSP4IJ file-watcher crash fix). The workspace version line is `v0.15.0`, the published crate surface is 31 crates, and `v0.16.0` is the next planned train.
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
-- **LSP server**: `features.toml` is the canonical capability catalog; 60 user-visible features at 100% coverage (119/119 including plumbing protocol methods and DAP handlers) — see generated [lsp.md](lsp.md) for current numbers
+- **LSP server**: `features.toml` is the canonical capability catalog; 60 user-visible features at 100% coverage (125/125 including plumbing protocol methods and DAP handlers) — see generated [lsp.md](lsp.md) for current numbers
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `cargo xtask ignored-tests` is the tracked-test-debt source
 - **Parser stack**: the default parser path is the native recursive-descent stack backed by the Rust lexer and parser-core crates, with three named coverage lanes: Ubuntu system Perl as the compatibility baseline, CPAN top 1000 as the ecosystem-breadth baseline, and the repo-owned corpus as the deterministic regression baseline
 - **Refactoring engine**: inline and move-code flows exist; broader refactoring hardening is still roadmap work

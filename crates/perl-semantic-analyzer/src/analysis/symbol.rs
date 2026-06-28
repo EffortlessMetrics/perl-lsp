@@ -555,6 +555,7 @@ impl SymbolExtractor {
                 attributes,
                 body,
                 name_span: _,
+                declarator: _,
             } => {
                 let sub_name =
                     name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "<anon>".to_string());
@@ -904,7 +905,7 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Class { name, parents, body } => {
+            NodeKind::Class { name, name_span: _, parents, body } => {
                 let documentation = self.extract_leading_comment(node.location.start);
                 if Self::is_catalyst_controller_package_name(name)
                     || parents.iter().any(|parent| parent == "Catalyst::Controller")
@@ -928,7 +929,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Method { name, signature, attributes, body } => {
+            NodeKind::Method { name, name_span: _, signature, attributes, body } => {
                 let documentation = self.extract_leading_comment(node.location.start);
                 let mut symbol_attributes = Vec::with_capacity(attributes.len() + 1);
                 symbol_attributes.push("method".to_string());
@@ -956,7 +957,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Format { name, body: _ } => {
+            NodeKind::Format { name, body: _, .. } => {
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: format!("{}::{}", self.table.current_package, name),
@@ -3682,6 +3683,44 @@ sub foo () {
             table.symbols.len(),
             1,
             "only 'foo' should be in the symbol table for an empty-signature sub"
+        );
+    }
+
+    /// ripr call-observation discriminator for declarations.rs:32 seam d51d31bfd1a67960.
+    ///
+    /// The changed expression is `is_initialized = declarator == "state" || initializer.is_some()`.
+    /// If the `|| initializer.is_some()` call were deleted (call_deletion probe), a `my $x = 42`
+    /// declaration (declarator="my", initializer=Some(_)) would be treated as uninitialized,
+    /// causing a false UninitializedVariable diagnostic.  This test would then fail,
+    /// discriminating the mutation.
+    #[test]
+    fn handle_variable_declaration_call_presence_observer() {
+        use crate::analysis::scope_analyzer::{IssueKind, ScopeAnalyzer};
+
+        let code = r#"
+sub example {
+    my $value = 99;
+    print $value;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let analyzer = ScopeAnalyzer::new();
+        let issues = analyzer.analyze(&ast, code, &[]);
+
+        let uninit_count = issues
+            .iter()
+            .filter(|i| {
+                i.kind == IssueKind::UninitializedVariable && i.variable_name.contains("value")
+            })
+            .count();
+        assert_eq!(
+            uninit_count,
+            0,
+            "my $value = 99 supplies initializer=Some(_); \
+             initializer.is_some() must return true so is_initialized is true \
+             and no UninitializedVariable is emitted. Got: {:?}",
+            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
         );
     }
 

@@ -666,9 +666,9 @@ mod tests {
         )
     }
 
-    fn first_trace<'a>(
-        receipt: &'a SemanticShadowCompareReceipt,
-    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+    fn first_trace(
+        receipt: &SemanticShadowCompareReceipt,
+    ) -> Result<&ProviderFactTrace, Box<dyn std::error::Error>> {
         match receipt.fact_source_traces.first() {
             Some(trace) => Ok(trace),
             None => Err("missing fact-source trace".into()),
@@ -732,8 +732,8 @@ mod tests {
         assert!(result.legacy_result.is_empty());
         assert_eq!(result.receipt.query, ShadowQueryName::FindReferences);
         // Both paths available with 0 matches → Same.
-        assert_eq!(result.receipt.old_result.available, true);
-        assert_eq!(result.receipt.new_result.available, true);
+        assert!(result.receipt.old_result.available);
+        assert!(result.receipt.new_result.available);
         assert_eq!(result.receipt.old_result.match_count, 0);
         assert_eq!(result.receipt.new_result.match_count, 0);
         assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
@@ -749,9 +749,9 @@ mod tests {
         let result = find_references_shadow(&index, &queries, "Foo::bar", EntityId(20));
 
         assert!(result.legacy_result.is_empty());
-        assert_eq!(result.receipt.old_result.available, true);
+        assert!(result.receipt.old_result.available);
         assert_eq!(result.receipt.old_result.match_count, 0);
-        assert_eq!(result.receipt.new_result.available, true);
+        assert!(result.receipt.new_result.available);
         assert_eq!(result.receipt.new_result.match_count, 1);
         // New has more matches → Improved.
         assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
@@ -800,7 +800,7 @@ mod tests {
         let result = find_references_shadow(&index, &queries, "Foo::bar", EntityId(20));
 
         assert_eq!(result.receipt.new_result.match_count, 3);
-        assert_eq!(result.receipt.new_result.available, true);
+        assert!(result.receipt.new_result.available);
         Ok(())
     }
 

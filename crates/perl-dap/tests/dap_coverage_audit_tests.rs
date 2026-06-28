@@ -327,6 +327,7 @@ fn test_variables_response_body_round_trip() -> Result<(), Box<dyn std::error::E
                 indexed_variables: Some(3),
             },
         ],
+        total_variables: Some(2),
     };
 
     let json = serde_json::to_string(&body)?;
@@ -336,6 +337,7 @@ fn test_variables_response_body_round_trip() -> Result<(), Box<dyn std::error::E
     assert_eq!(deserialized.variables[0].name, "$x");
     assert_eq!(deserialized.variables[0].variables_reference, 0);
     assert_eq!(deserialized.variables[1].indexed_variables, Some(3));
+    assert_eq!(deserialized.total_variables, Some(2));
     Ok(())
 }
 
@@ -383,12 +385,16 @@ fn test_scopes_response_body_round_trip() -> Result<(), Box<dyn std::error::Erro
                 presentation_hint: Some("locals".to_string()),
                 variables_reference: 1,
                 expensive: false,
+                named_variables: None,
+                indexed_variables: None,
             },
             Scope {
                 name: "Globals".to_string(),
                 presentation_hint: Some("globals".to_string()),
                 variables_reference: 2,
                 expensive: true,
+                named_variables: None,
+                indexed_variables: None,
             },
         ],
     };
@@ -1575,5 +1581,45 @@ fn test_goto_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(deserialized.thread_id, 1);
     assert_eq!(deserialized.target_id, 42);
+    Ok(())
+}
+
+#[test]
+fn test_scope_includes_pagination_hints() -> Result<(), Box<dyn std::error::Error>> {
+    let scope = Scope {
+        name: "Locals".to_string(),
+        presentation_hint: Some("locals".to_string()),
+        variables_reference: 1,
+        expensive: false,
+        named_variables: Some(5),
+        indexed_variables: Some(0),
+    };
+
+    let json = serde_json::to_string(&scope)?;
+    let deserialized: Scope = serde_json::from_str(&json)?;
+
+    assert_eq!(deserialized.name, "Locals");
+    assert_eq!(deserialized.named_variables, Some(5));
+    assert_eq!(deserialized.indexed_variables, Some(0));
+
+    // Verify optional fields are skipped when None
+    let scope_without_hints = Scope {
+        name: "Globals".to_string(),
+        presentation_hint: None,
+        variables_reference: 2,
+        expensive: true,
+        named_variables: None,
+        indexed_variables: None,
+    };
+
+    let json_without = serde_json::to_string(&scope_without_hints)?;
+    // Verify the JSON doesn't contain these fields when None
+    assert!(!json_without.contains("namedVariables"));
+    assert!(!json_without.contains("indexedVariables"));
+
+    let deserialized_without: Scope = serde_json::from_str(&json_without)?;
+    assert_eq!(deserialized_without.named_variables, None);
+    assert_eq!(deserialized_without.indexed_variables, None);
+
     Ok(())
 }

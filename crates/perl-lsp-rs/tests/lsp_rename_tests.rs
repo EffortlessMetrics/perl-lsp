@@ -14,30 +14,6 @@ use support::lsp_harness::LspHarness;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
-fn assert_rename_target_guidance(message: &str) {
-    assert!(
-        message.contains("textDocument/rename"),
-        "rename error should name the request, got: {message}"
-    );
-    assert!(message.contains("newName"), "rename error should name newName, got: {message}");
-    assert!(
-        message.contains("valid Perl identifier"),
-        "rename error should explain identifier shape, got: {message}"
-    );
-    assert!(
-        message.contains("renamed_value"),
-        "rename error should include a bare identifier example, got: {message}"
-    );
-    assert!(
-        message.contains("$renamed_value"),
-        "rename error should include a scalar example, got: {message}"
-    );
-    assert!(
-        message.contains("preserves the existing sigil"),
-        "rename error should explain sigil preservation, got: {message}"
-    );
-}
-
 #[derive(Debug, Clone)]
 struct InverseTextEdit {
     start: usize,
@@ -503,7 +479,6 @@ fn test_rename_mismatched_sigil_is_rejected() -> TestResult {
                 msg.contains("sigil") || msg.contains("Invalid") || msg.contains("32602"),
                 "error should mention sigil mismatch or invalid identifier, got: {msg}"
             );
-            assert_rename_target_guidance(&msg);
         }
         Ok(response) => {
             // If it didn't error, the edits must not contain the mismatched sigil.
@@ -554,7 +529,6 @@ print $x;
                 msg.contains("empty") || msg.contains("Invalid") || msg.contains("32602"),
                 "empty newName should error with invalid-identifier, got: {msg}"
             );
-            assert_rename_target_guidance(&msg);
         }
         Ok(response) => {
             // If the server accepted it, the edits must not have empty newText.
@@ -610,7 +584,6 @@ fn test_rename_invalid_identifier_is_rejected() -> TestResult {
                 msg.contains("Invalid") || msg.contains("32602"),
                 "digit-leading identifier should error, got: {msg}"
             );
-            assert_rename_target_guidance(&msg);
         }
         Ok(response) => {
             if let Some(changes) = response.get("changes").and_then(|v| v.as_object()) {

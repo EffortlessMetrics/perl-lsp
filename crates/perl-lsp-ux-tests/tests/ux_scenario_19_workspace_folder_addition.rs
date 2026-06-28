@@ -1,3 +1,6 @@
+// Test infrastructure — allow test-friendly patterns.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 //! Scenario 19 — workspace folder addition lifecycle coverage.
 //!
 //! Combines two BDD coverages for the runtime workspace folder addition flow:
@@ -8,14 +11,12 @@
 //!   reflected in `workspace/symbol` results disambiguated by
 //!   `workspaceFolderUri`.
 
+use anyhow::Result;
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::missing_binary_skip;
-use perl_lsp_ux_tests::{ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario};
+use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
-
-const SCENARIO_FILE: &str = "ux_scenario_19_workspace_folder_addition.rs";
 
 const SERVICE_A: &str = "\
 package ServiceA;\n\
@@ -69,78 +70,76 @@ fn contains_symbol_in_folder(symbols: &[Value], symbol_name: &str, folder_fragme
 
 #[test]
 fn scenario_19_added_workspace_folder_symbols_appear() {
-    run_ux_scenario(
-        "workspace_folder_addition_freshness",
-        SCENARIO_FILE,
-        "scenario_19_added_workspace_folder_symbols_appear",
-        UxCiTier::Pr,
-        Some(UxComponent::WorkspaceSymbols),
-        |recorder| {
-            if !binary_available() {
-                return Err(missing_binary_skip().into());
-            }
+    if !binary_available() {
+        eprintln!("SKIP scenario_19: perl-lsp binary not found");
+        return;
+    }
 
-            let harness = UxHarness::new(
-                ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-                    .env("PERL_LSP_WORKSPACE", "1")
-                    .with_workspace_folder("svc-core", "svc-core")
-                    .with_file("svc-core/lib/CoreModule.pm", CORE_MODULE)
-                    .with_file("svc-ext/lib/ExtModule.pm", EXT_MODULE),
-            )?;
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .env("PERL_LSP_WORKSPACE", "1")
+            .with_workspace_folder("svc-core", "svc-core")
+            .with_file("svc-core/lib/CoreModule.pm", CORE_MODULE)
+            .with_file("svc-ext/lib/ExtModule.pm", EXT_MODULE),
+    )
+    .expect("Failed to create UX harness");
 
-            recorder.mark_request_start("workspace_symbols_before_addition");
-            let before_deadline = Instant::now() + Duration::from_secs(10);
-            let mut symbols_before = Vec::new();
-            while Instant::now() < before_deadline {
-                symbols_before = harness.workspace_symbols("Module")?;
-                if contains_symbol_in_folder(&symbols_before, "CoreModule", "/svc-core/")
-                    && !contains_symbol_in_folder(&symbols_before, "ExtModule", "/svc-ext/")
-                {
-                    recorder.mark_first_useful_result("workspace_symbols_before_addition");
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(200));
-            }
+    let before_deadline = Instant::now() + Duration::from_secs(10);
+    let mut symbols_before = Vec::new();
+    while Instant::now() < before_deadline {
+        symbols_before = harness
+            .workspace_symbols("Module")
+            .expect("workspace/symbol must not error before folder addition");
+        if contains_symbol_in_folder(&symbols_before, "CoreModule", "/svc-core/")
+            && !contains_symbol_in_folder(&symbols_before, "ExtModule", "/svc-ext/")
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
 
-            recorder.check(
-                "workspace/symbol returned initial folder symbol before addition",
-                contains_symbol_in_folder(&symbols_before, "CoreModule", "/svc-core/"),
-            )?;
-            recorder.check(
-                "workspace/symbol kept unadded folder absent before addition",
-                !contains_symbol_in_folder(&symbols_before, "ExtModule", "/svc-ext/"),
-            )?;
-
-            harness.change_workspace_folders(&[("svc-ext", "svc-ext")], &[])?;
-
-            recorder.mark_request_start("workspace_symbols_after_addition");
-            let after_deadline = Instant::now() + Duration::from_secs(10);
-            let mut symbols_after = Vec::new();
-            while Instant::now() < after_deadline {
-                symbols_after = harness.workspace_symbols("Module")?;
-
-                if contains_symbol_in_folder(&symbols_after, "CoreModule", "/svc-core/")
-                    && contains_symbol_in_folder(&symbols_after, "ExtModule", "/svc-ext/")
-                {
-                    recorder.mark_first_useful_result("workspace_symbols_after_addition");
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(200));
-            }
-
-            recorder.check(
-                "workspace/symbol kept initial folder symbol after addition",
-                contains_symbol_in_folder(&symbols_after, "CoreModule", "/svc-core/"),
-            )?;
-            recorder.check(
-                "workspace/symbol returned added folder symbol after addition",
-                contains_symbol_in_folder(&symbols_after, "ExtModule", "/svc-ext/"),
-            )?;
-
-            harness.assert_no_crash();
-            Ok(())
-        },
+    assert!(
+        contains_symbol_in_folder(&symbols_before, "CoreModule", "/svc-core/"),
+        "Expected CoreModule to be present before folder addition, got: {:?}",
+        symbols_before
     );
+    assert!(
+        !contains_symbol_in_folder(&symbols_before, "ExtModule", "/svc-ext/"),
+        "Expected ExtModule to be absent before folder addition, got: {:?}",
+        symbols_before
+    );
+
+    harness
+        .change_workspace_folders(&[("svc-ext", "svc-ext")], &[])
+        .expect("workspace folder addition notification must not fail");
+
+    let after_deadline = Instant::now() + Duration::from_secs(10);
+    let mut symbols_after = Vec::new();
+    while Instant::now() < after_deadline {
+        symbols_after = harness
+            .workspace_symbols("Module")
+            .expect("workspace/symbol must not error after folder addition");
+
+        if contains_symbol_in_folder(&symbols_after, "CoreModule", "/svc-core/")
+            && contains_symbol_in_folder(&symbols_after, "ExtModule", "/svc-ext/")
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
+    assert!(
+        contains_symbol_in_folder(&symbols_after, "CoreModule", "/svc-core/"),
+        "Expected CoreModule to remain after adding svc-ext, got: {:?}",
+        symbols_after
+    );
+    assert!(
+        contains_symbol_in_folder(&symbols_after, "ExtModule", "/svc-ext/"),
+        "Expected ExtModule symbols to appear after adding svc-ext, got: {:?}",
+        symbols_after
+    );
+
+    harness.assert_no_crash();
 }
 
 fn folder_uris_for(symbols: &[Value], symbol_name: &str) -> BTreeSet<String> {
@@ -153,73 +152,67 @@ fn folder_uris_for(symbols: &[Value], symbol_name: &str) -> BTreeSet<String> {
 }
 
 #[test]
-fn scenario_19_workspace_folder_addition_surfaces_new_symbols() {
-    run_ux_scenario(
-        "workspace_folder_addition_freshness",
-        SCENARIO_FILE,
-        "scenario_19_workspace_folder_addition_surfaces_new_symbols",
-        UxCiTier::Pr,
-        Some(UxComponent::WorkspaceSymbols),
-        |recorder| {
-            if !binary_available() {
-                return Err(missing_binary_skip().into());
-            }
+fn scenario_19_workspace_folder_addition_surfaces_new_symbols() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_19: perl-lsp binary not found");
+        return Ok(());
+    }
 
-            let harness = UxHarness::new(
-                ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-                    .env("PERL_LSP_WORKSPACE", "1")
-                    .with_workspace_folder("svc-a", "svc-a")
-                    .with_file("svc-a/lib/ServiceA.pm", SERVICE_A),
-            )?;
+    // Given: a workspace that starts with only svc-a indexed.
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .env("PERL_LSP_WORKSPACE", "1")
+            .with_workspace_folder("svc-a", "svc-a")
+            .with_file("svc-a/lib/ServiceA.pm", SERVICE_A),
+    )?;
 
-            recorder.mark_request_start("shared_symbol_before_addition");
-            let before = harness.wait_for_workspace_symbols(
-                "shared_action_4481",
-                Duration::from_secs(10),
-                Duration::from_millis(200),
-                |symbols| !symbols.is_empty(),
-            )?;
-            recorder.mark_first_useful_result("shared_symbol_before_addition");
-
-            let before_folders = folder_uris_for(&before, "shared_action_4481");
-            recorder.check(
-                "workspace/symbol returned initial shared symbol before addition",
-                before_folders.iter().any(|uri| uri.contains("/svc-a/")),
-            )?;
-            recorder.check(
-                "workspace/symbol kept second shared symbol absent before addition",
-                !before_folders.iter().any(|uri| uri.contains("/svc-b/")),
-            )?;
-
-            harness.workspace.ensure_dir("svc-b")?;
-            harness.workspace.write("svc-b/lib/ServiceB.pm", SERVICE_B)?;
-            harness.change_workspace_folders(&[("svc-b", "svc-b")], &[])?;
-
-            recorder.mark_request_start("shared_symbol_after_addition");
-            let after = harness.wait_for_workspace_symbols(
-                "shared_action_4481",
-                Duration::from_secs(10),
-                Duration::from_millis(200),
-                |symbols| {
-                    let uris = folder_uris_for(symbols, "shared_action_4481");
-                    uris.iter().any(|uri| uri.contains("/svc-a/"))
-                        && uris.iter().any(|uri| uri.contains("/svc-b/"))
-                },
-            )?;
-            recorder.mark_first_useful_result("shared_symbol_after_addition");
-
-            let after_folders = folder_uris_for(&after, "shared_action_4481");
-            recorder.check(
-                "workspace/symbol kept initial shared symbol after addition",
-                after_folders.iter().any(|uri| uri.contains("/svc-a/")),
-            )?;
-            recorder.check(
-                "workspace/symbol returned added shared symbol after addition",
-                after_folders.iter().any(|uri| uri.contains("/svc-b/")),
-            )?;
-
-            harness.assert_no_crash();
-            Ok(())
-        },
+    let before = harness.wait_for_workspace_symbols(
+        "shared_action_4481",
+        Duration::from_secs(10),
+        Duration::from_millis(200),
+        |symbols| !symbols.is_empty(),
+    )?;
+    let before_folders = folder_uris_for(&before, "shared_action_4481");
+    assert!(
+        before_folders.iter().any(|uri| uri.contains("/svc-a/")),
+        "Expected svc-a symbol before folder addition, got: {:?}",
+        before
     );
+    assert!(
+        !before_folders.iter().any(|uri| uri.contains("/svc-b/")),
+        "Did not expect svc-b symbols before folder addition, got: {:?}",
+        before
+    );
+
+    // When: a second workspace folder is added and populated.
+    harness.workspace.ensure_dir("svc-b")?;
+    harness.workspace.write("svc-b/lib/ServiceB.pm", SERVICE_B)?;
+    harness.change_workspace_folders(&[("svc-b", "svc-b")], &[])?;
+
+    // Then: workspace/symbol eventually includes both workspace roots.
+    let after = harness.wait_for_workspace_symbols(
+        "shared_action_4481",
+        Duration::from_secs(10),
+        Duration::from_millis(200),
+        |symbols| {
+            let uris = folder_uris_for(symbols, "shared_action_4481");
+            uris.iter().any(|uri| uri.contains("/svc-a/"))
+                && uris.iter().any(|uri| uri.contains("/svc-b/"))
+        },
+    )?;
+
+    let after_folders = folder_uris_for(&after, "shared_action_4481");
+    assert!(
+        after_folders.iter().any(|uri| uri.contains("/svc-a/")),
+        "Expected svc-a symbol after addition, got: {:?}",
+        after
+    );
+    assert!(
+        after_folders.iter().any(|uri| uri.contains("/svc-b/")),
+        "Expected newly added svc-b symbols after addition, got: {:?}",
+        after
+    );
+
+    harness.assert_no_crash();
+    Ok(())
 }

@@ -245,9 +245,12 @@ impl PositionMapper {
 ///
 /// Extracts line and character fields from a JSON object.
 pub fn json_to_position(pos: &Value) -> Option<Position> {
+    // Bounds-checked narrowing: an LSP position value > u32::MAX is invalid, so
+    // yield None rather than silently truncating to the low 32 bits (which would
+    // map e.g. line 0x1_0000_0000 to a bogus line 0).
     Some(Position {
-        line: pos["line"].as_u64()? as u32,
-        character: pos["character"].as_u64()? as u32,
+        line: u32::try_from(pos["line"].as_u64()?).ok()?,
+        character: u32::try_from(pos["character"].as_u64()?).ok()?,
     })
 }
 
@@ -325,11 +328,15 @@ pub fn newline_count(text: &str) -> usize {
 ///
 /// Returns the byte offset from the last newline to the end of the string.
 pub fn last_line_column_utf8(text: &str) -> u32 {
-    if let Some(last_newline) = text.rfind('\n') {
-        (text.len() - last_newline - 1) as u32
+    // Clamp to u32::MAX on overflow rather than silently truncating to the low
+    // 32 bits. This only matters for a >4GB last line, but a saturating cast
+    // preserves "as large as representable" instead of wrapping to a small value.
+    let column = if let Some(last_newline) = text.rfind('\n') {
+        text.len() - last_newline - 1
     } else {
-        text.len() as u32
-    }
+        text.len()
+    };
+    u32::try_from(column).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]
@@ -672,5 +679,64 @@ mod tests {
         // The byte returned must be within the span of line 0 (bytes 0..6 inclusive,
         // where byte 5 is '\n').  We accept anything in [0, 6].
         assert!(clamped <= 6, "clamped byte {clamped} should not exceed end of line 0 (byte 6)");
+    }
+
+    /// Regression for #2479: a JSON `line` value greater than `u32::MAX` must
+    /// yield `None` rather than silently truncating to the low 32 bits (which
+    /// would map `0x1_0000_0000` to a bogus line `0`).
+    #[test]
+    fn test_json_to_position_line_above_u32_max_returns_none() {
+        // 0x1_0000_0000 == u32::MAX + 1; its low 32 bits are all zero.
+        let over = u64::from(u32::MAX) + 1;
+        let json = serde_json::json!({ "line": over, "character": 0 });
+        assert!(
+            json_to_position(&json).is_none(),
+            "line value above u32::MAX must yield None, not a truncated position"
+        );
+
+        // Same guard on the character field.
+        let json = serde_json::json!({ "line": 0, "character": over });
+        assert!(
+            json_to_position(&json).is_none(),
+            "character value above u32::MAX must yield None, not a truncated position"
+        );
+
+        // A value exactly at u32::MAX is still valid and must round-trip.
+        let json = serde_json::json!({ "line": u32::MAX, "character": u32::MAX });
+        let pos = must_some(json_to_position(&json));
+        assert_eq!(pos.line, u32::MAX);
+        assert_eq!(pos.character, u32::MAX);
+    }
+
+    /// Regression for #2487: `last_line_column_utf8` must saturate to `u32::MAX`
+    /// rather than truncate to the low 32 bits when the last line is longer than
+    /// `u32::MAX` bytes.
+    ///
+    /// Allocating a real >4GB string in a unit test is impractical, so this test
+    /// asserts the saturating-cast invariant directly: any `usize` column above
+    /// `u32::MAX` must map to `u32::MAX`, and the value whose low 32 bits are zero
+    /// (`u32::MAX as usize + 1`) must NOT map to `0`.
+    #[test]
+    fn test_last_line_column_saturating_cast_no_low_bit_truncation() {
+        // The cast used by last_line_column_utf8 for the overflow case.
+        let saturating = |column: usize| -> u32 { u32::try_from(column).unwrap_or(u32::MAX) };
+
+        // Low 32 bits of (u32::MAX + 1) are zero — a naive `as u32` would return 0.
+        let over_by_one = u32::MAX as usize + 1;
+        assert_eq!(
+            saturating(over_by_one),
+            u32::MAX,
+            "a >u32::MAX-length last line must saturate to u32::MAX, not truncate to 0"
+        );
+
+        // Values within range are preserved exactly.
+        assert_eq!(saturating(0), 0);
+        assert_eq!(saturating(42), 42);
+        assert_eq!(saturating(u32::MAX as usize), u32::MAX);
+
+        // And the in-range path of the real function still works.
+        assert_eq!(last_line_column_utf8(""), 0);
+        assert_eq!(last_line_column_utf8("abc"), 3);
+        assert_eq!(last_line_column_utf8("a\nbc"), 2);
     }
 }

@@ -21,5 +21,5 @@ mod impl_inlay_hints;
 
 pub use impl_inlay_hints::{
     InlayHint, InlayHintKind, InlayHintsProvider, extract_param_names, parameter_hints,
-    trivial_type_hints,
+    parameter_hints_with_resolver, trivial_type_hints,
 };

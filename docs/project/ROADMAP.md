@@ -6,6 +6,42 @@
 > published release state must be verified against GitHub Releases;
 > current capability truth is taken from [`../../features.toml`](../../features.toml).
 
+## Current Focus (2026-06-26): UX/Usability + Reliability
+
+### Cross-file correctness lane: COMPLETE
+
+The cross-file CORRECTNESS lane is done. ~19 providers now serve index-backed
+answers; ux_scenario_20/21/22 all pass. The compiler bet (#2674 / PIR-A) is
+consciously **paused, not dropped** — it resumes after the reliability foundation
+is solid.
+
+### Active lane: reliability/UX
+
+The next user-visible risk is the first 30 seconds of workspace open. A real
+workspace spends time in `IndexState::Building`, and during that window providers
+must not return misleading empty/success.
+
+Priority sequence this weekend:
+
+| # | Issue | Description |
+|---|-------|-------------|
+| 1 | #3097 | Point-query index-readiness wait (7 providers) — **merge first** |
+| 2 | #3099 | Readiness CONTRACT as a shared substrate (policy enum + shared API) |
+| 3 | #3096 | `$/progress` indexing UX (turns the wait from "is it frozen?" to "it's working") |
+| 4 | #3080 | Diagnostics quick-fixes / `source.organizeImports` code action |
+| 5 | latency receipt | Measure hot-path latency AFTER readiness + crash-safety land |
+
+Strategic second priority: gate-tax relief / ripr convergence (#3067 — stop
+compiling the full xtask on every ripr+ gate run; CX43 disk pressure is the
+dominant CI wall-clock bottleneck).
+
+Scoreboard work (#3056) and the compiler bet (#2674) are **next** after the
+reliability lane closes.
+
+See [docs/reference/PROVIDER_READINESS_CONTRACT.md](../reference/PROVIDER_READINESS_CONTRACT.md)
+for the reliability doctrine and [docs/reference/CI_GATE_PLAYBOOK.md](../reference/CI_GATE_PLAYBOOK.md)
+for the contributor gate playbook.
+
 ## Current Framing
 
 ## Active Swarm Roadmap: Multi-Lane Trust Hardening
@@ -526,10 +562,10 @@ The LSP compliance table is auto-generated from `features.toml`.
 | debug | 24 | 24 | 100% |
 | notebook | 2 | 2 | 100% |
 | protocol | 9 | 9 | 100% |
-| text_document | 49 | 49 | 100% |
+| text_document | 53 | 53 | 100% |
 | window | 9 | 9 | 100% |
-| workspace | 26 | 26 | 100% |
-| **Overall** | **119** | **119** | **100%** |
+| workspace | 28 | 28 | 100% |
+| **Overall** | **125** | **125** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->
 
 For live capability posture, run `just status-check` or read [CURRENT_STATUS.md](CURRENT_STATUS.md).
@@ -544,4 +580,14 @@ For live capability posture, run `just status-check` or read [CURRENT_STATUS.md]
 | Evidence-backed metrics | [CURRENT_STATUS.md](CURRENT_STATUS.md) |
 | Top-level summary docs | [../../ROADMAP.md](../../ROADMAP.md), [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) |
 
-<!-- Last Updated: 2026-05-19 -->
+## Current Arc (2026-06)
+
+The active execution arc is the convergence-to-release program, documented in
+[docs/project/plans/2026-06-convergence-to-release.md](plans/2026-06-convergence-to-release.md).
+
+The umbrella issue is [#1209](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/1209),
+which defines the four-milestone ladder (M1 trust floor → M2 daily repair loop →
+M3 semantic help → M4 release confidence) and the eight post-convergence product
+lanes in order.
+
+<!-- Last Updated: 2026-06-07 -->

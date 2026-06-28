@@ -502,11 +502,13 @@ fn parser_multi_line_skips_blank_lines() {
 
 #[test]
 fn parser_multi_line_resets_auto_ids() {
-    let mut parser = PerlStackParser::new().with_starting_id(100);
+    // Default starting_id is 1.  After the first parse (which increments next_id),
+    // parse_stack_trace must reset next_id back to starting_id (1) for the second call.
+    let mut parser = PerlStackParser::new();
 
     let _ = parser.parse_stack_trace("$ = a::b() called from file `x.pl' line 1");
 
-    // Second call should reset IDs back to 1
+    // Second call should reset IDs back to 1 (the default starting_id)
     let frames = parser.parse_stack_trace("$ = c::d() called from file `y.pl' line 2");
     assert_eq!(frames[0].id, 1);
 }

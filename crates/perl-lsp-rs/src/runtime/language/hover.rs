@@ -4,7 +4,9 @@
 
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
-use crate::protocol::{invalid_params, req_position, req_uri};
+use crate::documentation_targets::PerlDocumentationTarget;
+use crate::protocol::{req_position, req_uri};
+use crate::util::escape_markdown_text;
 mod hover_cards;
 mod hover_extracted;
 #[cfg(test)]
@@ -14,16 +16,6 @@ mod regex_hover;
 mod signature_help;
 
 use hover_extracted::HoverExtracted;
-
-fn invalid_hover_params() -> JsonRpcError {
-    invalid_params(
-        "Missing required parameters: textDocument.uri and position\n\n\
-         textDocument/hover expects params.textDocument.uri plus params.position.line and \
-         params.position.character to identify the symbol under the cursor.\n\n\
-         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"},\
-         \"position\":{\"line\":10,\"character\":4}}",
-    )
-}
 
 impl LspServer {
     /// Handle textDocument/hover request for symbol information display
@@ -49,20 +41,8 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params
-                .pointer("/textDocument/uri")
-                .and_then(|v| v.as_str())
-                .ok_or_else(invalid_hover_params)?;
-            let line = params
-                .pointer("/position/line")
-                .and_then(|v| v.as_u64())
-                .and_then(|n| u32::try_from(n).ok())
-                .ok_or_else(invalid_hover_params)?;
-            let character = params
-                .pointer("/position/character")
-                .and_then(|v| v.as_u64())
-                .and_then(|n| u32::try_from(n).ok())
-                .ok_or_else(invalid_hover_params)?;
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
 
             // Reject stale requests
             let req_version =
@@ -156,10 +136,17 @@ impl LspServer {
                 }
                 #[cfg(feature = "workspace")]
                 HoverExtracted::InheritedMethod(receiver_pkg, method_name, doc_uri) => {
-                    if let Some(hover_value) =
-                        self.build_inherited_method_hover(&receiver_pkg, &method_name, &doc_uri)
-                    {
-                        return Ok(Some(hover_value));
+                    if !self.workspace_index_stale_for_document(&doc_uri) {
+                        // Wait for the workspace index to finish building before querying it.
+                        // build_inherited_method_hover calls coordinator().index() directly; if the
+                        // index is in IndexState::Building the lookup returns partial/empty results.
+                        // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
+                        self.wait_for_index_ready_if_building();
+                        if let Some(hover_value) =
+                            self.build_inherited_method_hover(&receiver_pkg, &method_name, &doc_uri)
+                        {
+                            return Ok(Some(hover_value));
+                        }
                     }
                 }
                 #[cfg(not(feature = "workspace"))]
@@ -172,8 +159,6 @@ impl LspServer {
                     }
                 }
             }
-        } else {
-            return Err(invalid_hover_params());
         }
 
         Ok(Some(json!(null)))
@@ -194,6 +179,16 @@ impl LspServer {
             return HoverExtracted::Complete(xs_hover);
         }
 
+        // Phase block hover: BEGIN/END/INIT/CHECK/UNITCHECK get phase-specific timing
+        // semantics.  Check BEFORE find_definition because the semantic analyzer
+        // classifies phase block names as Subroutine symbols, which would otherwise
+        // produce the misleading "**Subroutine** `sub BEGIN`" card.
+        if let Some(phase_name) = Self::find_phase_block_at_offset(ast, offset) {
+            if let Some(phase_hover) = hover_cards::phase_block_hover(&phase_name) {
+                return HoverExtracted::Complete(phase_hover);
+            }
+        }
+
         let analyzer = self.get_or_build_analyzer(uri, text, ast);
 
         if let Some(symbol_info) =
@@ -210,7 +205,34 @@ impl LspServer {
             ));
         }
 
-        if let Some(symbol_info) = analyzer.find_definition(offset) {
+        // Detect early when the cursor is on a `->method` call: if find_definition
+        // returns the ENCLOSING subroutine (not the callee) because the semantic
+        // analyzer registers subs with their full body span, skip the in-file hover
+        // and let the inherited-method path below handle it.  The guard is conservative:
+        // it only fires when the token at the cursor does NOT match the returned
+        // symbol name AND an arrow receiver exists at the cursor position.
+        let symbol_at_cursor = analyzer.find_definition(offset).filter(|sym| {
+            let token = Self::get_token_at_position_static(text, offset);
+            // If the token matches the symbol name this IS a direct hover on that
+            // symbol (e.g. hovering on `sub run` where cursor is on `run`).
+            // If the token differs AND an arrow receiver exists, the cursor is on a
+            // method call inside the sub body — defer to the inherited-method path.
+            if token == sym.name || token.is_empty() {
+                return true; // keep — cursor is directly on the symbol
+            }
+            #[cfg(feature = "workspace")]
+            {
+                if matches!(
+                    sym.kind,
+                    crate::symbol::SymbolKind::Subroutine | crate::symbol::SymbolKind::Method
+                ) && Self::extract_arrow_receiver(text, offset).is_some()
+                {
+                    return false; // discard — cursor is on a method call inside a sub body
+                }
+            }
+            true
+        });
+        if let Some(symbol_info) = symbol_at_cursor {
             // Detect Moo/Moose attribute accessors (declaration == "has") early and
             // render a dedicated card that shows the attribute metadata clearly,
             // instead of the generic "Subroutine" label which is misleading for accessors.
@@ -350,7 +372,7 @@ impl LspServer {
             let doc_info = symbol_info
                 .documentation
                 .as_ref()
-                .map(|d| format!("\n\n{}", d))
+                .map(|d| format!("\n\n{}", escape_markdown_text(d)))
                 .unwrap_or_default();
 
             return HoverExtracted::Complete(json!({
@@ -739,29 +761,54 @@ impl LspServer {
     }
 
     /// Get a token using the same simple fallback as rename, without requiring `&self`.
+    ///
+    /// Operates in byte space: `offset` is a byte offset into `content`, and the
+    /// returned string slice is extracted via `content[start..end]` where both
+    /// bounds are also byte offsets. This avoids the byte-as-char-index bug that
+    /// occurs when indexing `Vec<char>` with a value from `pos16_to_offset`.
     fn get_token_at_position_static(content: &str, offset: usize) -> String {
-        let chars: Vec<char> = content.chars().collect();
-        if offset >= chars.len() {
+        if offset > content.len() {
             return String::new();
         }
 
-        let mut start = offset;
-        while start > 0
-            && (chars[start - 1].is_alphanumeric()
-                || chars[start - 1] == '_'
-                || chars[start - 1] == '$'
-                || chars[start - 1] == '@'
-                || chars[start - 1] == '%')
-        {
+        let is_sigil = |ch: char| ch == '$' || ch == '@' || ch == '%';
+        let is_ident = |ch: char| ch.is_alphanumeric() || ch == '_';
+        let is_token_char = |ch: char| is_ident(ch) || is_sigil(ch);
+
+        // Build (byte_offset, char) pairs to navigate in byte space.
+        let pairs: Vec<(usize, char)> = content.char_indices().collect();
+        if pairs.is_empty() {
+            return String::new();
+        }
+
+        // Find the char at or just before the byte offset.
+        let ci = pairs.partition_point(|(b, _)| *b < offset);
+        let ci = ci.min(pairs.len().saturating_sub(1));
+
+        if !is_token_char(pairs[ci].1) {
+            return String::new();
+        }
+
+        // Scan left for the start of the token (sigils included).
+        let mut start = ci;
+        while start > 0 && is_token_char(pairs[start - 1].1) {
             start -= 1;
         }
 
-        let mut end = offset;
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+        // Scan right for the end (ident chars only; sigil at ci.1 is the token head).
+        let mut end = ci;
+        // Include sigil at head
+        if is_sigil(pairs[end].1) {
+            end += 1;
+        }
+        while end < pairs.len() && is_ident(pairs[end].1) {
             end += 1;
         }
 
-        chars[start..end].iter().collect()
+        let start_byte = pairs[start].0;
+        let end_byte = if end < pairs.len() { pairs[end].0 } else { content.len() };
+
+        content[start_byte..end_byte].to_string()
     }
 
     /// Extract a package name at `offset`, spanning `::` separators.
@@ -918,6 +965,49 @@ impl LspServer {
                 if let Some(m) = Self::find_use_module_at_offset(block, offset) {
                     return Some(m);
                 }
+            }
+            _ => {}
+        }
+
+        None
+    }
+
+    /// Walk the AST to find a `PhaseBlock` node whose phase keyword spans `offset`.
+    ///
+    /// Returns the phase name (e.g. `"BEGIN"`) when the cursor is positioned on the
+    /// keyword token of a phase block, or `None` otherwise.
+    fn find_phase_block_at_offset(node: &Node, offset: usize) -> Option<String> {
+        if offset < node.location.start || offset > node.location.end {
+            return None;
+        }
+
+        if let NodeKind::PhaseBlock { phase, phase_span, .. } = &node.kind {
+            // If the parser recorded a precise span for the phase keyword, use it;
+            // fall back to the whole node span so hover still works if phase_span
+            // is absent (e.g. in hand-constructed test ASTs).
+            let in_phase_span =
+                phase_span.as_ref().map(|s| offset >= s.start && offset <= s.end).unwrap_or(true);
+            if in_phase_span {
+                return Some(phase.clone());
+            }
+        }
+
+        // Recurse into container nodes
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    if let Some(p) = Self::find_phase_block_at_offset(stmt, offset) {
+                        return Some(p);
+                    }
+                }
+            }
+            NodeKind::Package { block, .. } => {
+                if let Some(b) = block {
+                    return Self::find_phase_block_at_offset(b, offset);
+                }
+            }
+            NodeKind::PhaseBlock { block, .. } => {
+                return Self::find_phase_block_at_offset(block, offset);
             }
             _ => {}
         }
@@ -1098,7 +1188,7 @@ impl LspServer {
         &self,
         receiver_pkg: &str,
         method_name: &str,
-        _doc_uri: &str,
+        doc_uri: &str,
     ) -> Option<Value> {
         use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -1155,50 +1245,62 @@ impl LspServer {
         // Inner closure: enqueue parent and role packages not yet visited.
         // Mirrors the logic in `inherited_method_definition_location` (navigation.rs)
         // but also includes model.roles so that composed roles are traversed.
-        let mut enqueue_related =
-            |package_name: &str, queue: &mut VecDeque<String>, visited: &HashSet<String>| {
-                let related = related_package_cache
-                    .entry(package_name.to_string())
-                    .or_insert_with(|| {
-                        use crate::semantic::SemanticAnalyzer;
-                        let Some(package_location) = workspace_index.find_definition(package_name)
-                        else {
-                            return Vec::new();
-                        };
-                        let Some(text) = super::navigation::workspace_document_text(
-                            workspace_index,
-                            &package_location.uri,
-                        ) else {
-                            return Vec::new();
-                        };
+        let mut enqueue_related = |package_name: &str,
+                                   queue: &mut VecDeque<String>,
+                                   visited: &HashSet<String>| {
+            let related = related_package_cache
+                .entry(package_name.to_string())
+                .or_insert_with(|| {
+                    use crate::semantic::SemanticAnalyzer;
+                    // Resolve the document text for this package. When the workspace
+                    // index hasn't settled yet (async background indexer), `find_definition`
+                    // returns None for the receiver package — but the file is already open
+                    // in the document store because the user is hovering on it right now.
+                    // Fall back to `doc_uri` so hover is deterministic even before the
+                    // index is fully populated.
+                    let text = if let Some(loc) = workspace_index.find_definition(package_name) {
+                        match super::navigation::workspace_document_text(workspace_index, &loc.uri)
+                        {
+                            Some(t) => t,
+                            None => return Vec::new(),
+                        }
+                    } else if package_name == receiver_pkg {
+                        // Index hasn't settled; read the open document directly.
+                        match super::navigation::workspace_document_text(workspace_index, doc_uri) {
+                            Some(t) => t,
+                            None => return Vec::new(),
+                        }
+                    } else {
+                        return Vec::new();
+                    };
 
-                        let mut parser = crate::Parser::new(&text);
-                        let Ok(ast) = parser.parse() else {
-                            return Vec::new();
-                        };
+                    let mut parser = crate::Parser::new(&text);
+                    let Ok(ast) = parser.parse() else {
+                        return Vec::new();
+                    };
 
-                        SemanticAnalyzer::analyze_with_source(&ast, &text)
-                            .class_models
-                            .into_iter()
-                            .find(|model| model.name == package_name)
-                            .map(|model| {
-                                model
-                                    .parents
-                                    .iter()
-                                    .chain(model.roles.iter())
-                                    .cloned()
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_default()
-                    })
-                    .clone();
+                    SemanticAnalyzer::analyze_with_source(&ast, &text)
+                        .class_models
+                        .into_iter()
+                        .find(|model| model.name == package_name)
+                        .map(|model| {
+                            model
+                                .parents
+                                .iter()
+                                .chain(model.roles.iter())
+                                .cloned()
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                })
+                .clone();
 
-                for pkg in related {
-                    if !visited.contains(&pkg) {
-                        queue.push_back(pkg);
-                    }
+            for pkg in related {
+                if !visited.contains(&pkg) {
+                    queue.push_back(pkg);
                 }
-            };
+            }
+        };
 
         enqueue_related(receiver_pkg, &mut queue, &visited);
 
@@ -1230,9 +1332,15 @@ impl LspServer {
         doc_offset: Option<usize>,
     ) -> Value {
         // MetaCPAN link is included in every branch — compute once up front.
-        let metacpan_link = format!("[View on MetaCPAN](https://metacpan.org/pod/{module_name})");
-        let perldoc_virtual_link = Self::perldoc_virtual_link(module_name);
-        let docs_links = format!("{metacpan_link} \u{2022} {perldoc_virtual_link}");
+        let docs_links = PerlDocumentationTarget::new(module_name)
+            .map(|target| {
+                format!(
+                    "{} \u{2022} {}",
+                    target.metacpan_markdown_link("View on MetaCPAN"),
+                    target.virtual_perldoc_markdown_link()
+                )
+            })
+            .unwrap_or_default();
 
         // Try URI resolution (handles open docs + workspace folders)
         if let Some(uri) = self.resolve_module_to_path_with_doc_at_offset(
@@ -1316,10 +1424,6 @@ Not found in workspace or configured include paths.
         })
     }
 
-    fn perldoc_virtual_link(module_name: &str) -> String {
-        format!("[Open virtual perldoc](perldoc://{module_name})")
-    }
-
     fn format_missing_module_search_paths(include_paths: &[String]) -> String {
         if include_paths.is_empty() {
             return "- No include paths configured".to_string();
@@ -1334,14 +1438,16 @@ Not found in workspace or configured include paths.
     /// documentation, or `None` when it should fall through to regular module resolution.
     fn build_pragma_hover(module_name: &str) -> Option<Value> {
         let doc = crate::semantic::get_pragma_documentation(module_name)?;
+        let documentation_target = PerlDocumentationTarget::new(module_name)?;
 
         let version_line =
             doc.version_required.map(|v| format!("\n\n**Requires**: Perl {v}")).unwrap_or_default();
 
-        let perldoc_web_link =
-            format!("[perldoc {module_name}](https://perldoc.perl.org/{module_name})");
-        let perldoc_virtual_link = Self::perldoc_virtual_link(module_name);
-        let perldoc_links = format!("{perldoc_web_link} | {perldoc_virtual_link}");
+        let perldoc_links = format!(
+            "{} | {}",
+            documentation_target.perl_org_perldoc_markdown_link(),
+            documentation_target.virtual_perldoc_markdown_link()
+        );
 
         Some(json!({
             "contents": {
@@ -1370,10 +1476,15 @@ Not found in workspace or configured include paths.
         const POD_CACHE_SOFT_CAP: usize = 1024;
         const POD_CACHE_PRUNE_TARGET: usize = 512;
 
+        let current_modified =
+            std::fs::metadata(path).and_then(|metadata| metadata.modified()).ok();
+
         let pod = {
             let mut cache = self.pod_cache.lock();
-            if let Some(cached) = cache.get(path) {
-                cached.clone()
+            if let Some(cached) = cache.get(path)
+                && (current_modified.is_none() || cached.modified == current_modified)
+            {
+                cached.doc.clone()
             } else {
                 if cache.len() >= POD_CACHE_SOFT_CAP {
                     let drop_count = cache.len().saturating_sub(POD_CACHE_PRUNE_TARGET);
@@ -1388,7 +1499,10 @@ Not found in workspace or configured include paths.
                     });
                 }
                 let doc = perl_pod::extract_pod_from_file(path).unwrap_or_default();
-                cache.insert(path.to_path_buf(), doc.clone());
+                cache.insert(
+                    path.to_path_buf(),
+                    PodCacheEntry { modified: current_modified, doc: doc.clone() },
+                );
                 doc
             }
         };

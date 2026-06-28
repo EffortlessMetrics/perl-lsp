@@ -156,17 +156,23 @@ fn test_file_package_symbols_nonexistent_package() -> Result<(), Box<dyn std::er
 }
 
 /// Query URIs are normalized through the same path as `file_symbols()`.
+/// Uses a platform-agnostic temp-dir path so this test works on Windows too.
 #[test]
 fn test_file_package_queries_accept_normalized_path_input() -> Result<(), Box<dyn std::error::Error>>
 {
-    let path = "/lib/Normalized.pm";
-    let normalized = Url::from_file_path(path).map_err(|()| "path cannot become URI")?.to_string();
+    // Build a platform-absolute path that Url::from_file_path can convert on
+    // all supported platforms (Linux, macOS, Windows).
+    let mut tmp = std::env::temp_dir();
+    tmp.push("Normalized900.pm");
+    let path_str = tmp.to_str().ok_or("temp path is not valid UTF-8")?;
+
+    let normalized = Url::from_file_path(&tmp).map_err(|()| "path cannot become URI")?.to_string();
     let code = "package Normalized;\nsub seen { 1 }\n";
     let index = index_with_code(&normalized, code)?;
 
-    assert_eq!(index.file_packages(path), vec!["Normalized"]);
+    assert_eq!(index.file_packages(path_str), vec!["Normalized"]);
 
-    let symbols = index.file_package_symbols(path, "Normalized");
+    let symbols = index.file_package_symbols(path_str, "Normalized");
     let names: Vec<&str> = symbols.iter().map(|symbol| symbol.name.as_str()).collect();
     assert!(names.contains(&"seen"), "normalized path lookup should find package symbols");
 

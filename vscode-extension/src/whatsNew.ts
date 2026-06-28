@@ -311,11 +311,6 @@ export function markdownToHtml(md: string): string {
 function inlineMarkdown(text: string): string {
     // Escape HTML first, then apply Markdown inline rules.
     let s = escapeHtml(text);
-    // [label](https://example.com)
-    s = s.replace(
-        /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
-        '<a href="$2" rel="noopener noreferrer">$1</a>',
-    );
     // `code`
     s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
     // **bold**

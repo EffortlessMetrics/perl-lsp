@@ -188,7 +188,11 @@ mod dap_phase2_tests {
             .get("stackFrames")
             .and_then(Value::as_array)
             .ok_or_else(|| anyhow::anyhow!("stackFrames missing"))?;
-        assert!(!stack_frames.is_empty(), "expected at least one stack frame");
+        // No active session: stackTrace returns empty list per DAP spec (no fabricated frame)
+        assert!(
+            stack_frames.is_empty(),
+            "no session: expected empty stack frames, not a fabricated frame"
+        );
 
         let scopes = adapter.handle_request(2, "scopes", Some(json!({ "frameId": 1 })));
         let scope_body = expect_response(scopes, "scopes", true)
@@ -247,22 +251,23 @@ mod dap_phase2_tests {
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac9-execution-control
+    /// Updated for #898: all four handlers return failure without an active session.
     #[tokio::test]
     // AC:9
     async fn test_execution_control_operations() -> Result<()> {
         let mut adapter = DebugAdapter::new();
 
         let cont = adapter.handle_request(1, "continue", Some(json!({ "threadId": 1 })));
-        let _ = expect_response(cont, "continue", true);
+        let _ = expect_response(cont, "continue", false);
 
         let next = adapter.handle_request(2, "next", Some(json!({ "threadId": 1 })));
-        let _ = expect_response(next, "next", true);
+        let _ = expect_response(next, "next", false);
 
         let step_in = adapter.handle_request(3, "stepIn", Some(json!({ "threadId": 1 })));
-        let _ = expect_response(step_in, "stepIn", true);
+        let _ = expect_response(step_in, "stepIn", false);
 
         let step_out = adapter.handle_request(4, "stepOut", Some(json!({ "threadId": 1 })));
-        let _ = expect_response(step_out, "stepOut", true);
+        let _ = expect_response(step_out, "stepOut", false);
 
         Ok(())
     }
@@ -278,7 +283,10 @@ mod dap_phase2_tests {
                 assert_eq!(command, "pause");
                 assert!(!success, "pause should fail when no active debug session exists");
                 let msg = message.ok_or_else(|| anyhow::anyhow!("pause should return message"))?;
-                assert!(msg.contains("Failed to pause debugger"));
+                assert!(
+                    msg.contains("no Perl debug session is active"),
+                    "pause must use no-session message: {msg}"
+                );
             }
             _ => anyhow::bail!("expected pause response"),
         }

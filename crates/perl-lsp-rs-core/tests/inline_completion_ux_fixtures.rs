@@ -9,13 +9,21 @@ use std::error::Error;
 use lsp_types::{Position, Range};
 use perl_lsp_rs_core::providers::inline_completion::{
     InlineCompletionEnvironment, InlineCompletionItem, InlineCompletionList,
-    InlineCompletionProvider,
+    InlineCompletionProvider, InlinePackageMethodFact,
 };
 use perl_parser_core::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
 const CURSOR: &str = "<<CURSOR>>";
+const TRY_TINY_BLOCK: &str = "{\n    \n} catch {\n    \n};";
+const MOJOLICIOUS_LITE_ROUTE: &str =
+    "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};";
+const DANCER_ROUTE: &str = "'/path' => sub {\n    return 'ok';\n};";
+const TEST_MORE_IS_ASSERTION: &str = "is($got, $expected, 'test description');";
+const TEST2_OK_ASSERTION: &str = "ok($result, 'test description');";
+const DBI_PREPARE_METHOD: &str = "prepare()";
+const DBI_FETCHROW_HASHREF_METHOD: &str = "fetchrow_hashref()";
 
 struct InlineCompletionScenario {
     text: String,
@@ -81,6 +89,48 @@ struct AcceptedEditFixture {
     expected_first: &'static str,
     expected_after: &'static str,
 }
+
+struct CompletionPackContract {
+    provider_id: &'static str,
+    insert_text: &'static str,
+    filter_text: &'static str,
+    positive: &'static [CompletionPackPositiveCase],
+    quiet: &'static [CompletionPackQuietCase],
+}
+
+struct CompletionPackPositiveCase {
+    name: &'static str,
+    source: &'static str,
+    expected_replaces: Option<&'static str>,
+    expected_after: &'static str,
+}
+
+struct CompletionPackQuietCase {
+    name: &'static str,
+    category: CompletionPackQuietCategory,
+    source: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CompletionPackQuietCategory {
+    ImportAbsent,
+    CommentContext,
+    StringContext,
+    PodContext,
+    NearMatchToken,
+    VisibleSymbolConflict,
+    ParseDamage,
+}
+
+const REQUIRED_COMPLETION_PACK_QUIET_CATEGORIES: &[CompletionPackQuietCategory] = &[
+    CompletionPackQuietCategory::ImportAbsent,
+    CompletionPackQuietCategory::CommentContext,
+    CompletionPackQuietCategory::StringContext,
+    CompletionPackQuietCategory::PodContext,
+    CompletionPackQuietCategory::NearMatchToken,
+    CompletionPackQuietCategory::VisibleSymbolConflict,
+    CompletionPackQuietCategory::ParseDamage,
+];
 
 #[test]
 fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult {
@@ -272,6 +322,368 @@ fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult 
 }
 
 #[test]
+fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestResult {
+    let try_tiny = CompletionPackContract {
+        provider_id: "try_tiny_block",
+        insert_text: TRY_TINY_BLOCK,
+        filter_text: "try",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_valid_try_keyword",
+            source: "use Try::Tiny;\ntry <<CURSOR>>",
+            expected_replaces: None,
+            expected_after: "use Try::Tiny;\ntry {\n    \n} catch {\n    \n};",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "try <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
+                source: "use Try::Tiny;\n# try <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
+                source: "use Try::Tiny;\nmy $text = \"try <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
+                source: "use Try::Tiny;\n=pod\ntry <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
+                source: "use Try::Tiny;\ngettry <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use Try::Tiny;\nmy $try = 1;\n$try <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_extra_closing_paren",
+                category: CompletionPackQuietCategory::ParseDamage,
+                source: "use Try::Tiny;\ntry <<CURSOR>>)",
+            },
+        ],
+    };
+
+    let mojolicious_lite = CompletionPackContract {
+        provider_id: "mojolicious_lite_route",
+        insert_text: MOJOLICIOUS_LITE_ROUTE,
+        filter_text: "get",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_valid_route_keyword",
+            source: "use Mojolicious::Lite;\nget <<CURSOR>>",
+            expected_replaces: None,
+            expected_after: "use Mojolicious::Lite;\nget '/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
+                source: "use Mojolicious::Lite;\n# get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
+                source: "use Mojolicious::Lite;\nmy $text = \"get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
+                source: "use Mojolicious::Lite;\n=pod\nget <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
+                source: "use Mojolicious::Lite;\nforget <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use Mojolicious::Lite;\nmy $get = 1;\n$get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_extra_closing_paren",
+                category: CompletionPackQuietCategory::ParseDamage,
+                source: "use Mojolicious::Lite;\nget <<CURSOR>>)",
+            },
+        ],
+    };
+
+    let dancer_route = CompletionPackContract {
+        provider_id: "dancer_route",
+        insert_text: DANCER_ROUTE,
+        filter_text: "get",
+        positive: &[
+            CompletionPackPositiveCase {
+                name: "dancer_import_present_valid_route_keyword",
+                source: "use Dancer;\nget <<CURSOR>>",
+                expected_replaces: None,
+                expected_after: "use Dancer;\nget '/path' => sub {\n    return 'ok';\n};",
+            },
+            CompletionPackPositiveCase {
+                name: "dancer2_import_present_valid_route_keyword",
+                source: "use Dancer2;\nget <<CURSOR>>",
+                expected_replaces: None,
+                expected_after: "use Dancer2;\nget '/path' => sub {\n    return 'ok';\n};",
+            },
+        ],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
+                source: "use Dancer2;\n# get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
+                source: "use Dancer2;\nmy $text = \"get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
+                source: "use Dancer2;\n=pod\nget <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
+                source: "use Dancer2;\nforget <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use Dancer2;\nmy $get = 1;\n$get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_extra_closing_paren",
+                category: CompletionPackQuietCategory::ParseDamage,
+                source: "use Dancer2;\nget <<CURSOR>>)",
+            },
+        ],
+    };
+
+    let test_more_assertion = CompletionPackContract {
+        provider_id: "test_more_assertion",
+        insert_text: TEST_MORE_IS_ASSERTION,
+        filter_text: "is",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_visible_actual_expected",
+            source: "use Test::More;\n\nmy $got = compute();\nmy $expected = 42;\n\n<<CURSOR>>",
+            expected_replaces: None,
+            expected_after: "use Test::More;\n\nmy $got = compute();\nmy $expected = 42;\n\nis($got, $expected, 'test description');",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent_visible_actual_expected",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "my $got = compute();\nmy $expected = 42;\n\n<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n# <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nmy $text = \"<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n=pod\n<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nassert <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nmy $is = sub {};\n$is <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_incomplete_declaration",
+                category: CompletionPackQuietCategory::ParseDamage,
+                source: "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nmy <<CURSOR>>",
+            },
+        ],
+    };
+
+    let test2_assertion = CompletionPackContract {
+        provider_id: "test2_assertion",
+        insert_text: TEST2_OK_ASSERTION,
+        filter_text: "ok",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_visible_result",
+            source: "use Test2::V0;\n\nmy $result = compute();\n\n<<CURSOR>>",
+            expected_replaces: None,
+            expected_after: "use Test2::V0;\n\nmy $result = compute();\n\nok($result, 'test description');",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent_visible_result",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "my $result = compute();\n\n<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
+                source: "use Test2::V0;\nmy $result = compute();\n# <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
+                source: "use Test2::V0;\nmy $result = compute();\nmy $text = \"<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
+                source: "use Test2::V0;\nmy $result = compute();\n=pod\n<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                category: CompletionPackQuietCategory::NearMatchToken,
+                source: "use Test2::V0;\nmy $result = compute();\nassert <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use Test2::V0;\nmy $result = compute();\nmy $ok = sub {};\n$ok <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_incomplete_declaration",
+                category: CompletionPackQuietCategory::ParseDamage,
+                source: "use Test2::V0;\nmy $result = compute();\nmy <<CURSOR>>",
+            },
+        ],
+    };
+
+    let dbi_database_handle = CompletionPackContract {
+        provider_id: "dbi_database_handle_methods",
+        insert_text: DBI_PREPARE_METHOD,
+        filter_text: "prepare",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_database_handle_partial_method",
+            source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n$dbh->pr<<CURSOR>>",
+            expected_replaces: Some("pr"),
+            expected_after: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n$dbh->prepare()",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent_database_handle_hint",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "my $dbh = DBI->connect($dsn, $user, $pass);\n$dbh->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n# $dbh->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $text = \"$dbh->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n=pod\n$dbh->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_receiver_syntax",
+                category: CompletionPackQuietCategory::NearMatchToken,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n$dbh=>pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "non_dbi_receiver_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use DBI;\nmy $socket = Client->connect($dsn);\n$socket->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_non_scalar_receiver",
+                category: CompletionPackQuietCategory::ParseDamage,
+                source: "use DBI;\nmy @dbh = DBI->connect($dsn, $user, $pass);\n@dbh->pr<<CURSOR>>",
+            },
+        ],
+    };
+
+    let dbi_statement_handle = CompletionPackContract {
+        provider_id: "dbi_statement_handle_methods",
+        insert_text: DBI_FETCHROW_HASHREF_METHOD,
+        filter_text: "fetchrow_hashref",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_statement_handle_partial_method",
+            source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth->fetch<<CURSOR>>",
+            expected_replaces: Some("fetch"),
+            expected_after: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth->fetchrow_hashref()",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent_statement_handle_hint",
+                category: CompletionPackQuietCategory::ImportAbsent,
+                source: "my $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                category: CompletionPackQuietCategory::CommentContext,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n# $sth->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                category: CompletionPackQuietCategory::StringContext,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\nmy $text = \"$sth->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                category: CompletionPackQuietCategory::PodContext,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n=pod\n$sth->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_receiver_syntax",
+                category: CompletionPackQuietCategory::NearMatchToken,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth=>fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "non_dbi_receiver_conflict",
+                category: CompletionPackQuietCategory::VisibleSymbolConflict,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $query = $builder->prepare($sql);\n$query->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_non_scalar_receiver",
+                category: CompletionPackQuietCategory::ParseDamage,
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy @sth = $dbh->prepare($sql);\n@sth->fetch<<CURSOR>>",
+            },
+        ],
+    };
+
+    assert_completion_pack_contract(try_tiny)?;
+    assert_completion_pack_contract(mojolicious_lite)?;
+    assert_completion_pack_contract(dancer_route)?;
+    assert_completion_pack_contract(test_more_assertion)?;
+    assert_completion_pack_contract(test2_assertion)?;
+    assert_completion_pack_contract(dbi_database_handle)?;
+    assert_completion_pack_contract(dbi_statement_handle)
+}
+
+#[test]
 fn inline_completion_fixture_corpus_uses_request_environment_modules() -> TestResult {
     let scenario = InlineCompletionScenario::from_fixture("use Local::W<<CURSOR>>")?;
     let environment = InlineCompletionEnvironment {
@@ -280,6 +692,7 @@ fn inline_completion_fixture_corpus_uses_request_environment_modules() -> TestRe
             "Local::Widget".to_string(),
             "Local::Worker".to_string(),
         ],
+        package_methods: Vec::new(),
     };
     let completions = scenario.completions_with_environment(&environment);
 
@@ -397,6 +810,102 @@ fn inline_completion_fixture_corpus_stays_silent_in_reject_zones() -> TestResult
 }
 
 #[test]
+fn inline_completion_fixture_corpus_uses_indexed_package_methods_conservatively() -> TestResult {
+    let environment = InlineCompletionEnvironment {
+        available_modules: Vec::new(),
+        package_methods: vec![
+            InlinePackageMethodFact {
+                package: "My::Service".to_string(),
+                name: "save".to_string(),
+            },
+            InlinePackageMethodFact {
+                package: "My::Service".to_string(),
+                name: "search".to_string(),
+            },
+        ],
+    };
+
+    let positive = InlineCompletionScenario::from_fixture("My::Service->sa<<CURSOR>>")?;
+    let completions = positive.completions_with_environment(&environment);
+    let item =
+        completions.items.iter().find(|item| item.insert_text == "save()").ok_or_else(|| {
+            format!(
+                "indexed_package_methods: expected save(), got {:?}",
+                completion_texts(&completions)
+            )
+        })?;
+    if item.filter_text.as_deref() != Some("save") {
+        return Err(format!("indexed_package_methods: unexpected filter text {:?}", item).into());
+    }
+    let range = item.range.as_ref().ok_or("indexed_package_methods: expected replacement range")?;
+    let replaced = slice_for_range(positive.text.as_str(), range)?;
+    if replaced != "sa" {
+        return Err(format!(
+            "indexed_package_methods: expected range to replace sa, got {replaced:?}"
+        )
+        .into());
+    }
+
+    let accepted = apply_inline_completion_item(&positive, item)?;
+    if accepted != "My::Service->save()" {
+        return Err(
+            format!("indexed_package_methods: accepted edit mismatch, got {accepted:?}").into()
+        );
+    }
+
+    let same_package =
+        InlineCompletionScenario::from_fixture("package My::Service;\nMy::Service->se<<CURSOR>>")?;
+    let completions = same_package.completions_with_environment(&environment);
+    let item =
+        completions.items.iter().find(|item| item.insert_text == "search()").ok_or_else(|| {
+            format!(
+                "indexed_package_methods:same_package expected search(), got {:?}",
+                completion_texts(&completions)
+            )
+        })?;
+    let range = item
+        .range
+        .as_ref()
+        .ok_or("indexed_package_methods:same_package expected replacement range")?;
+    let replaced = slice_for_range(same_package.text.as_str(), range)?;
+    if replaced != "se" {
+        return Err(format!(
+            "indexed_package_methods:same_package expected range to replace se, got {replaced:?}"
+        )
+        .into());
+    }
+
+    let quiet_with_environment = [
+        SilentFixture { name: "wrong_package", source: "Other::Service->sa<<CURSOR>>" },
+        SilentFixture {
+            name: "dynamic_variable_receiver",
+            source: "my $service = My::Service->new;\n$service->sa<<CURSOR>>",
+        },
+        SilentFixture { name: "comment_context", source: "# My::Service->sa<<CURSOR>>" },
+        SilentFixture { name: "string_context", source: "my $text = \"My::Service->sa<<CURSOR>>" },
+        SilentFixture { name: "pod_context", source: "=pod\nMy::Service->sa<<CURSOR>>" },
+        SilentFixture { name: "near_match_receiver_syntax", source: "My::Service=>sa<<CURSOR>>" },
+        SilentFixture {
+            name: "parse_damage_non_package_receiver",
+            source: "my @service;\n@service->sa<<CURSOR>>",
+        },
+    ];
+    for fixture in quiet_with_environment {
+        let scenario = InlineCompletionScenario::from_fixture(fixture.source)?;
+        let completions = scenario.completions_with_environment(&environment);
+        assert_completion_absent(fixture.name, &completions, "save()")?;
+        assert_completion_absent(fixture.name, &completions, "search()")?;
+    }
+
+    let missing_facts = InlineCompletionScenario::from_fixture("My::Service->sa<<CURSOR>>")?;
+    let completions = missing_facts.completions();
+    assert_completion_absent("missing_indexed_facts", &completions, "save()")?;
+    assert_completion_absent("missing_indexed_facts", &completions, "search()")?;
+
+    Ok(())
+}
+
+#[test]
 fn inline_completion_fixture_corpus_prefers_workspace_available_modules() -> TestResult {
     let scenario = InlineCompletionScenario::from_fixture("use My::W<<CURSOR>>")?;
     let environment = InlineCompletionEnvironment {
@@ -405,6 +914,7 @@ fn inline_completion_fixture_corpus_prefers_workspace_available_modules() -> Tes
             "My::Worker".to_string(),
             "Other::Widget".to_string(),
         ],
+        package_methods: Vec::new(),
     };
     let completions = scenario.completions_with_environment(&environment);
     let inserts = completion_texts(&completions);
@@ -660,6 +1170,111 @@ fn assert_accepted_edit(fixture: AcceptedEditFixture) -> TestResult {
             fixture.name
         )
         .into());
+    }
+
+    Ok(())
+}
+
+fn assert_completion_pack_contract(contract: CompletionPackContract) -> TestResult {
+    assert_completion_pack_receipt_categories(&contract)?;
+
+    for case in contract.positive {
+        let scenario = InlineCompletionScenario::from_fixture(case.source)?;
+        let completions = scenario.completions();
+        let item = completions.items.iter().find(|item| item.insert_text == contract.insert_text);
+        let Some(item) = item else {
+            return Err(format!(
+                "{}:{} expected completion {}, got {:?}",
+                contract.provider_id,
+                case.name,
+                contract.insert_text,
+                completion_texts(&completions)
+            )
+            .into());
+        };
+
+        if item.filter_text.as_deref() != Some(contract.filter_text) {
+            return Err(format!(
+                "{}:{} expected filter_text {:?}, got {:?}",
+                contract.provider_id, case.name, contract.filter_text, item.filter_text
+            )
+            .into());
+        }
+
+        match (case.expected_replaces, item.range.as_ref()) {
+            (Some(expected), Some(range)) => {
+                let replaced = slice_for_range(scenario.text.as_str(), range)?;
+                if replaced != expected {
+                    return Err(format!(
+                        "{}:{} expected replacement range to cover {:?}, got {:?}",
+                        contract.provider_id, case.name, expected, replaced
+                    )
+                    .into());
+                }
+            }
+            (Some(expected), None) => {
+                return Err(format!(
+                    "{}:{} expected replacement range for {:?}",
+                    contract.provider_id, case.name, expected
+                )
+                .into());
+            }
+            (None, Some(range)) => {
+                return Err(format!(
+                    "{}:{} expected insertion-only candidate, got range {:?}",
+                    contract.provider_id, case.name, range
+                )
+                .into());
+            }
+            (None, None) => {}
+        }
+
+        let accepted = apply_inline_completion_item(&scenario, item)?;
+        if accepted != case.expected_after {
+            return Err(format!(
+                "{}:{} accepted edit produced unexpected text\nexpected:\n{}\nactual:\n{}",
+                contract.provider_id, case.name, case.expected_after, accepted
+            )
+            .into());
+        }
+
+        let before = parser_diagnostic_count(scenario.text.as_str());
+        let after = parser_diagnostic_count(accepted.as_str());
+        if after > before {
+            return Err(format!(
+                "{}:{} accepted edit increased parser diagnostics from {before} to {after}",
+                contract.provider_id, case.name
+            )
+            .into());
+        }
+    }
+
+    for case in contract.quiet {
+        let scenario = InlineCompletionScenario::from_fixture(case.source)?;
+        let completions = scenario.completions();
+        if completions.items.iter().any(|item| item.insert_text == contract.insert_text) {
+            return Err(format!(
+                "{}:{} expected pack to stay quiet, got {:?}",
+                contract.provider_id,
+                case.name,
+                completion_texts(&completions)
+            )
+            .into());
+        }
+    }
+
+    Ok(())
+}
+
+fn assert_completion_pack_receipt_categories(contract: &CompletionPackContract) -> TestResult {
+    for required in REQUIRED_COMPLETION_PACK_QUIET_CATEGORIES {
+        if !contract.quiet.iter().any(|case| case.category == *required) {
+            return Err(format!(
+                "{} missing required quiet-path receipt category {required:?}",
+                contract.provider_id
+            )
+            .into());
+        }
     }
 
     Ok(())

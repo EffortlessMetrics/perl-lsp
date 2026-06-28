@@ -34,6 +34,121 @@ fn info_shows_version_and_features() {
 }
 
 #[test]
+fn doctor_reports_workspace_setup() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    std::fs::create_dir_all(dir.path().join("lib"))?;
+    let config_path = dir.path().join(".perl-lsp.toml");
+    if let Err(error) =
+        std::fs::write(&config_path, "[perl]\ninclude_paths = [\"lib\"]\nuse_perl5lib = false\n")
+    {
+        return Err(format!("doctor fixture config write failed: {error}").into());
+    }
+    assert!(config_path.is_file(), "doctor fixture config was written");
+    let dir_str = dir.path().to_str().ok_or("non-UTF-8 temp path")?;
+
+    let mut cmd = cargo_bin_cmd!("perl-lsp");
+    cmd.env_remove("PERL5LIB");
+    let output = cmd.args(["--doctor", dir_str]).output()?;
+    let stdout = String::from_utf8(output.stdout)?;
+    let stderr = String::from_utf8(output.stderr)?;
+    let workspace = dir.path().canonicalize()?;
+    let lib = workspace.join("lib");
+    let lines: Vec<_> = stdout.lines().collect();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(stderr, "");
+    assert_eq!(lines.first().copied(), Some("perl-lsp doctor"));
+    assert_eq!(lines.get(1).copied(), Some("==============="));
+    assert_eq!(lines.get(3).copied(), Some(format!("Workspace: {}", workspace.display()).as_str()));
+    assert_eq!(lines.get(4).copied(), Some("Project config: loaded .perl-lsp.toml"));
+    assert_eq!(lines.get(7).copied(), Some("PERL5LIB: environment empty"));
+    assert_eq!(lines.get(8).copied(), Some("PERL5LIB precedence: prepend"));
+    assert_eq!(lines.get(10).copied(), Some("Configured includePaths:"));
+    assert_eq!(
+        lines.get(11).copied(),
+        Some(
+            format!("  - {} (.perl-lsp.toml include_paths, exists; raw: lib)", lib.display())
+                .as_str()
+        )
+    );
+    assert_eq!(lines.get(13).copied(), Some("Effective @INC roots:"));
+    assert_eq!(
+        lines.get(14).copied(),
+        Some(
+            format!("  - {} (.perl-lsp.toml include_paths, exists; raw: lib)", lib.display())
+                .as_str()
+        )
+    );
+    assert_eq!(lines.get(16).copied(), Some("System @INC: disabled"));
+    assert_eq!(lines.get(18).copied(), Some("Module lookup example:"));
+    assert_eq!(
+        lines.get(19).copied(),
+        Some("  use Foo::Bar; searches Foo/Bar.pm under the effective roots above, in order.")
+    );
+    assert_eq!(lines.get(21).copied(), Some("Next steps:"));
+    assert_eq!(
+        lines.get(22).copied(),
+        Some("  - Add missing project module roots to .perl-lsp.toml [perl].include_paths.")
+    );
+    assert_eq!(
+        lines.get(23).copied(),
+        Some(
+            "  - Set PERL5LIB or use_perl5lib intentionally; doctor reports whether it participates."
+        )
+    );
+    assert_eq!(
+        lines.get(24).copied(),
+        Some(
+            "  - Fix roots marked unsafe; module resolution ignores relative roots that escape the workspace."
+        )
+    );
+    assert_eq!(
+        lines.get(25).copied(),
+        Some("  - Editor-only settings may still override this CLI report after initialization.")
+    );
+    assert_eq!(lines.get(27).copied(), Some("Claim boundary:"));
+    assert_eq!(
+        lines.get(28).copied(),
+        Some(
+            "  Read-only CLI report. It does not start the LSP, mutate config, scan the workspace, or apply editor-specific settings."
+        )
+    );
+    assert_eq!(stdout.ends_with('\n'), true);
+    assert_eq!(
+        stdout
+            .matches(&format!(
+                "  - {} (.perl-lsp.toml include_paths, exists; raw: lib)",
+                lib.display()
+            ))
+            .count(),
+        2
+    );
+    Ok(())
+}
+
+#[test]
+fn doctor_invalid_project_config_fails() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let config_path = dir.path().join(".perl-lsp.toml");
+    if let Err(error) = std::fs::write(&config_path, "[perl\ninclude_paths = [\"lib\"]") {
+        return Err(format!("invalid doctor fixture config write failed: {error}").into());
+    }
+    assert!(config_path.is_file(), "invalid doctor fixture config was written");
+    let dir_str = dir.path().to_str().ok_or("non-UTF-8 temp path")?;
+
+    let mut cmd = cargo_bin_cmd!("perl-lsp");
+    let output = cmd.args(["--doctor", dir_str]).output()?;
+    let stdout = String::from_utf8(output.stdout)?;
+    let stderr = String::from_utf8(output.stderr)?;
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(stdout, "");
+    assert!(stderr.contains(".perl-lsp.toml"));
+    assert!(stderr.contains("syntax error"));
+    Ok(())
+}
+
+#[test]
 fn check_no_files_exits_with_error() {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
     cmd.arg("--check").assert().failure().stderr(predicates::str::contains("No files specified"));
@@ -57,8 +172,7 @@ fn check_nonexistent_file() {
         .arg("/nonexistent/path/to/file.pl")
         .assert()
         .failure()
-        .stderr(predicates::str::contains("error reading file"))
-        .stderr(predicates::str::contains("help: check the path"));
+        .stderr(predicates::str::contains("error reading file"));
 }
 
 #[test]
@@ -167,6 +281,7 @@ fn help_mentions_new_flags() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("--info"), "help should mention --info");
     assert!(stdout.contains("--check"), "help should mention --check");
+    assert!(stdout.contains("--doctor"), "help should mention --doctor");
     assert!(stdout.contains("--completion"), "help should mention --completion");
     Ok(())
 }

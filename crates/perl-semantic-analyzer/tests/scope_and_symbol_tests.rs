@@ -863,6 +863,138 @@ print $n;
     Ok(())
 }
 
+#[test]
+fn state_variable_without_initializer_not_uninitialized() {
+    // state variables are implicitly initialized to undef on first call,
+    // so they should not trigger UninitializedVariable warnings.
+    let code = r#"
+use feature 'state';
+
+sub test {
+    state $x;
+    print $x;  // Should NOT warn: state is initialized to undef
+}
+"#;
+    let issues = scope_issues(code);
+    let uninitialized: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UninitializedVariable && i.variable_name.contains("x"))
+        .collect();
+    assert!(
+        uninitialized.is_empty(),
+        "state without initializer should not be reported as uninitialized; found: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn my_variable_without_initializer_is_uninitialized() {
+    // my variables without initializers ARE truly uninitialized,
+    // so they SHOULD trigger UninitializedVariable warnings.
+    let code = r#"
+sub test {
+    my $y;
+    print $y;  // SHOULD warn: my is uninitialized
+}
+"#;
+    let issues = scope_issues(code);
+    let uninitialized: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UninitializedVariable && i.variable_name.contains("y"))
+        .collect();
+    assert!(
+        !uninitialized.is_empty(),
+        "my without initializer should be reported as uninitialized"
+    );
+}
+
+#[test]
+fn state_with_initializer_not_uninitialized() {
+    // state variables with explicit initializers should never warn.
+    let code = r#"
+use feature 'state';
+
+sub test {
+    state $x = 42;
+    print $x;  // Should NOT warn: state with initializer
+}
+"#;
+    let issues = scope_issues(code);
+    let uninitialized: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UninitializedVariable && i.variable_name.contains("x"))
+        .collect();
+    assert!(
+        uninitialized.is_empty(),
+        "state with initializer should not be reported as uninitialized"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ripr seam proofs: initializer.is_some() in handle_variable_declaration
+// and handle_variable_list_declaration (declarations.rs:32 and :115).
+//
+// These tests are call-observation discriminators: if `|| initializer.is_some()`
+// were removed from either expression, `my $x = value;` or `my ($x) = (v);`
+// would be treated as uninitialized and the assertions below would fail.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn handle_variable_declaration_initializer_is_some_observer() {
+    // Discriminator for declarations.rs:32 — `initializer.is_some()` branch.
+    // `my $x = 42;` has declarator="my" (not "state") and initializer=Some(_).
+    // If the `|| initializer.is_some()` call were deleted the variable would be
+    // treated as uninitialized and using it would produce UninitializedVariable.
+    let code = r#"
+sub test_init {
+    my $x = 42;
+    print $x;
+}
+"#;
+    let issues = scope_issues(code);
+    let uninit: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UninitializedVariable && i.variable_name.contains("x"))
+        .collect();
+    assert_eq!(
+        uninit.len(),
+        0,
+        "my $x = 42 has an initializer — initializer.is_some() must be true; \
+         UninitializedVariable must NOT fire. Got: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn handle_variable_list_declaration_initializer_is_some_observer() {
+    // Discriminator for declarations.rs:115 — `initializer.is_some()` branch in
+    // handle_variable_list_declaration.
+    // `my ($x, $y) = (1, 2);` has declarator="my" and initializer=Some(_).
+    // If the `|| initializer.is_some()` call were deleted, both $x and $y would be
+    // flagged as uninitialized.
+    let code = r#"
+sub test_list_init {
+    my ($x, $y) = (1, 2);
+    print $x, $y;
+}
+"#;
+    let issues = scope_issues(code);
+    let uninit: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            i.kind == IssueKind::UninitializedVariable
+                && (i.variable_name.contains("x") || i.variable_name.contains("y"))
+        })
+        .collect();
+    assert_eq!(
+        uninit.len(),
+        0,
+        "my ($x, $y) = (1, 2) has an initializer — initializer.is_some() must be true; \
+         UninitializedVariable must NOT fire for either variable. Got: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+}
+
 // ===========================================================================
 // 5. Package-Qualified Symbol Resolution
 // ===========================================================================
@@ -4280,6 +4412,194 @@ print nested_func();
                 && issue.variable_name == "nested_func"
         }),
         "require should be visible to nested import in same program scope"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_no_false_positive_on_arrow_deref_hash_key() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+package My::App;
+sub greeting {
+    my $self = shift;
+    return $self->{name};
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|issue| matches!(issue.kind, IssueKind::UnquotedBareword)
+            && issue.variable_name == "name"),
+        "arrow-deref key $self->{{name}} must not be flagged as bareword; got: {:?}",
+        issues
+            .iter()
+            .filter(|issue| matches!(issue.kind, IssueKind::UnquotedBareword))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_no_false_positive_on_arrow_deref_variants() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+my $ref = {};
+my $a = {};
+my $self = {};
+my $variable = 'runtime';
+my $obj = bless {}, 'Foo';
+my $x = $ref->{key};
+my $y = $a->{b}{c};
+my $z = $obj->method()->{field};
+my $quoted = $self->{'quoted'};
+my $dynamic = $self->{$variable};
+"#;
+    let issues = scope_issues_strict(code);
+    let false_positives: Vec<_> = issues
+        .iter()
+        .filter(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && ["key", "b", "c", "field", "quoted", "variable"]
+                    .contains(&issue.variable_name.as_str())
+        })
+        .collect();
+    assert!(
+        false_positives.is_empty(),
+        "arrow-deref hash keys must not be flagged as barewords; got: {:?}",
+        false_positives
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_no_false_positive_on_postfix_hash_slice_key()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $href = { key => 1 };
+my @slice = $href->%{key};
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "key"
+        }),
+        "postfix hash-slice key $href->%{{key}} must not be flagged as bareword; got: {:?}",
+        issues
+            .iter()
+            .filter(|issue| matches!(issue.kind, IssueKind::UnquotedBareword))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_postfix_hash_slice_keeps_multi_key_bareword_guard()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $href = { good1 => 1, good2 => 2, key1 => 3, key2 => 4 };
+my @qw_slice = $href->%{qw(good1 good2)};
+my @bad_slice = $href->%{key1, key2};
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "key1"
+        }),
+        "postfix hash-slice comma-separated barewords must still be flagged under strict subs; got: {:?}",
+        issues
+    );
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "key2"
+        }),
+        "postfix hash-slice comma-separated barewords must still be flagged under strict subs; got: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && ["good1", "good2"].contains(&issue.variable_name.as_str())
+        }),
+        "postfix hash-slice qw() values must not be treated as strict barewords; got: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_postfix_array_slice_keeps_bareword_index_guard()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $aref = [1, 2];
+my @numeric_slice = $aref->@[0, 1];
+my @qw_slice = $aref->@[qw(a b)];
+my @bad_slice = $aref->@[foo];
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "foo"
+        }),
+        "postfix array-slice bareword index must still be flagged under strict subs; got: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && ["a", "b"].contains(&issue.variable_name.as_str())
+        }),
+        "qw() slice values must not be treated as strict barewords; got: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_still_flags_genuine_barewords_near_arrow_deref()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $ref = {};
+my $x = $ref->{key};
+my $composite = $ref->{FOO + 1};
+my $y = GENUINE_BAREWORD;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "GENUINE_BAREWORD"
+        }),
+        "genuine bareword outside hash-key context must still be flagged"
+    );
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "FOO"
+        }),
+        "bareword inside composite arrow-deref key expression must still be flagged"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_still_flags_qualified_arrow_deref_keys() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $ref = {};
+my $qualified = $ref->{FOO::BAR};
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "FOO::BAR"
+        }),
+        "qualified arrow-deref key must still be flagged under strict subs; got: {:?}",
+        issues
     );
     Ok(())
 }

@@ -48,7 +48,11 @@ use std::collections::VecDeque;
 /// Backing source for the token stream â€” either a live lexer or pre-lexed tokens.
 enum TokenStreamInner<'a> {
     /// Live lexer producing tokens on demand from source text.
-    Lexer(PerlLexer<'a>),
+    ///
+    /// Boxed because `PerlLexer` is substantially larger than the `Buffered`
+    /// variant; without indirection the enum's size is dominated by this one
+    /// arm (clippy::large_enum_variant).
+    Lexer(Box<PerlLexer<'a>>),
     /// Pre-lexed token buffer; used by [`TokenStream::from_vec`].
     Buffered(VecDeque<Token>),
 }
@@ -69,7 +73,7 @@ impl<'a> TokenStream<'a> {
     /// Create a new token stream from source code.
     pub fn new(input: &'a str) -> Self {
         TokenStream {
-            inner: TokenStreamInner::Lexer(PerlLexer::new(input)),
+            inner: TokenStreamInner::Lexer(Box::new(PerlLexer::new(input))),
             buffered_eof_pos: input.len(),
             peeked: None,
             peeked_second: None,

@@ -26,7 +26,7 @@ $left,      $center,  $right
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "REPORT");
                 // Verify picture line format specifiers
                 assert!(body.contains("@<<<<<<<<<"));
@@ -60,7 +60,7 @@ $name, length($name)
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "VALUES");
                 assert!(body.contains("$name"));
                 assert!(body.contains("length($name)"));
@@ -91,7 +91,7 @@ $description
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "MULTILINE");
                 // Verify multiline format specifiers
                 assert!(body.contains("^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"));
@@ -122,7 +122,7 @@ $int,            $float
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "NUMBERS");
                 assert!(body.contains("@####"));
                 assert!(body.contains("@###.##"));
@@ -154,7 +154,7 @@ $num1, $str1, $str2, $str3, $num2, $str4
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "COMPLEX");
                 // Verify complex format specifiers
                 assert!(body.contains("~~^")); // suppress blank lines + multiline
@@ -186,7 +186,7 @@ $ARGV,         $.,       $%
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "SPECIAL");
                 assert!(body.contains("$ARGV"));
                 assert!(body.contains("$."));
@@ -233,14 +233,14 @@ $title
         if let NodeKind::Program { statements } = &ast.kind {
             assert_eq!(statements.len(), 2, "Expected 2 format declarations");
 
-            if let NodeKind::Format { name, body } = &statements[0].kind {
+            if let NodeKind::Format { name, body, .. } = &statements[0].kind {
                 assert_eq!(name, "STDOUT");
                 assert!(body.contains("@<<<"));
             } else {
                 unreachable!("Expected first Format node");
             }
 
-            if let NodeKind::Format { name, body } = &statements[1].kind {
+            if let NodeKind::Format { name, body, .. } = &statements[1].kind {
                 assert_eq!(name, "REPORT");
                 assert!(body.contains("@||||"));
             } else {
@@ -306,7 +306,7 @@ $left,      $center,  $right
         if let NodeKind::Program { statements } = &ast.kind {
             assert_eq!(statements.len(), 2);
 
-            if let NodeKind::Format { name, body } = &statements[0].kind {
+            if let NodeKind::Format { name, body, .. } = &statements[0].kind {
                 assert_eq!(name, "REPORT_TOP");
                 assert!(body.contains("Page @###"));
                 assert!(body.contains("$%")); // Page number variable
@@ -342,7 +342,7 @@ scalar(localtime), $^T
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "EXPR");
                 assert!(body.contains("length($name)"));
                 assert!(body.contains("scalar(localtime)"));
@@ -369,7 +369,7 @@ scalar(localtime), $^T
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::Format { name, body } = &stmt.kind {
+            if let NodeKind::Format { name, body, .. } = &stmt.kind {
                 assert_eq!(name, "MIN");
                 assert_eq!(body.trim(), "");
             } else {

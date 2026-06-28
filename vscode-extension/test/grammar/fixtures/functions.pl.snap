@@ -1,0 +1,95 @@
+>print "hello\n";
+#^^^^^ source.perl support.function.builtin.perl
+#     ^ source.perl
+#      ^ source.perl string.quoted.double.perl
+#       ^^^^^ source.perl string.quoted.double.perl
+#            ^^ source.perl string.quoted.double.perl constant.character.escape.perl
+#              ^ source.perl string.quoted.double.perl
+#               ^^ source.perl
+>my @sorted = sort { $a <=> $b } @list;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^ source.perl variable.other.array.perl
+#          ^ source.perl
+#           ^ source.perl keyword.operator.assignment.perl
+#            ^ source.perl
+#             ^^^^ source.perl support.function.builtin.perl
+#                 ^^^ source.perl
+#                    ^^ source.perl variable.other.scalar.perl
+#                      ^ source.perl
+#                       ^^^ source.perl keyword.operator.comparison.perl
+#                          ^ source.perl
+#                           ^^ source.perl variable.other.scalar.perl
+#                             ^^^ source.perl
+#                                ^^^^^ source.perl variable.other.array.perl
+#                                     ^^ source.perl
+>my @mapped = map { $_ * 2 } @nums;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^ source.perl variable.other.array.perl
+#          ^ source.perl
+#           ^ source.perl keyword.operator.assignment.perl
+#            ^ source.perl
+#             ^^^ source.perl support.function.builtin.perl
+#                ^^^ source.perl
+#                   ^^ source.perl variable.language.perl
+#                     ^ source.perl
+#                      ^ source.perl keyword.operator.arithmetic.perl
+#                       ^ source.perl
+#                        ^ source.perl constant.numeric.integer.perl
+#                         ^^^ source.perl
+#                            ^^^^^ source.perl variable.other.array.perl
+#                                 ^^ source.perl
+>my @kept = grep { $_ > 0 } @vals;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^ source.perl variable.other.array.perl
+#        ^ source.perl
+#         ^ source.perl keyword.operator.assignment.perl
+#          ^ source.perl
+#           ^^^^ source.perl support.function.builtin.perl
+#               ^^^ source.perl
+#                  ^^ source.perl variable.language.perl
+#                    ^ source.perl
+#                     ^ source.perl keyword.operator.comparison.perl
+#                      ^ source.perl
+#                       ^ source.perl constant.numeric.integer.perl
+#                        ^^^ source.perl
+#                           ^^^^^ source.perl variable.other.array.perl
+#                                ^^ source.perl
+>my $len = length($string);
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^ source.perl variable.other.scalar.perl
+#       ^ source.perl
+#        ^ source.perl keyword.operator.assignment.perl
+#         ^ source.perl
+#          ^^ source.perl keyword.operator.comparison.perl
+#            ^ source.perl
+#             ^^ source.perl keyword.operator.comparison.perl
+#               ^^ source.perl
+#                 ^^^^^^^ source.perl variable.other.scalar.perl
+#                        ^^^ source.perl
+>push @stack, $item;
+#^^^^ source.perl support.function.builtin.perl
+#    ^ source.perl
+#     ^^^^^^ source.perl variable.other.array.perl
+#           ^^ source.perl
+#             ^^^^^ source.perl variable.other.scalar.perl
+#                  ^^ source.perl
+>my $joined = join(',', @parts);
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^ source.perl variable.other.scalar.perl
+#          ^ source.perl
+#           ^ source.perl keyword.operator.assignment.perl
+#            ^ source.perl
+#             ^^^^ source.perl support.function.builtin.perl
+#                 ^ source.perl
+#                  ^ source.perl string.quoted.single.perl
+#                   ^ source.perl string.quoted.single.perl
+#                    ^ source.perl string.quoted.single.perl
+#                     ^^ source.perl
+#                       ^^^^^^ source.perl variable.other.array.perl
+#                             ^^^ source.perl
+>

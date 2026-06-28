@@ -2,7 +2,7 @@
 //!
 //! These tests validate the structural outcome of the microcrate collapse:
 //! - All 15 provider crates are removed from crates/ directory
-//! - Published crate count decreases from 74 → 59
+//! - Published crate count stays at or below the G1a post-collapse inventory
 //! - The providers module is registered in perl-lsp-rs-core
 //! - Consumer crates have updated imports
 //!
@@ -77,23 +77,24 @@ fn test_all_15_old_provider_crates_directories_removed() -> Result<(), Box<dyn s
     Ok(())
 }
 
-/// The published crate count must decrease from 74 → 59 after collapse.
-/// This test reads xtask/published-crate-baseline.txt and asserts it contains
-/// exactly the number 59 (which corresponds to 74 − 15 = 59).
+/// The published crate count must stay at or below the G1a post-collapse inventory.
+/// Later collapse waves may reduce the count further, so this guard rejects
+/// regressions without pinning a stale exact total.
 #[test]
-fn test_published_crate_count_is_59_after_collapse() -> Result<(), Box<dyn std::error::Error>> {
+fn test_published_crate_count_stays_at_or_below_g1a_inventory()
+-> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
     let baseline_path = root.join("xtask/published-crate-baseline.txt");
 
     let content = fs::read_to_string(&baseline_path)?;
     let count: u32 = content.trim().parse()?;
 
-    assert_eq!(
-        count, 59,
-        "G1a collapse: published crate count must be exactly 59.\n\
+    assert!(
+        count <= 59,
+        "G1a collapse: published crate count must stay at or below the Wave G1a post-collapse inventory.\n\
          Before G1a: 74 crates (includes 15 providers)\n\
          After G1a:  59 crates (15 providers collapsed into perl-lsp-rs-core)\n\
-         Equation: 74 − 15 = 59\n\
+         Later collapse waves may reduce this further, but must not reintroduce the old inventory.\n\
          Current count in xtask/published-crate-baseline.txt: {}\n\
          See .spec/4500-wave-g1a-providers/acceptance.md line 67",
         count

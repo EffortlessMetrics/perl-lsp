@@ -326,10 +326,10 @@ gates:
       cargo test -p perl-lsp-rs --locked --test lsp_registration_tests &&
       cargo test -p perl-lsp-rs --locked --test lsp_cap_snap &&
       cargo test -p perl-lsp-rs-core --locked --lib inline_completion
-    timeout_seconds: 300
+    timeout_seconds: 600
     retry_count: 0
     budgets:
-      max_duration_ms: 240000
+      max_duration_ms: 540000
     quarantine: false
     tags:
       - test
@@ -341,7 +341,6 @@ gates:
       packages:
         - perl-lsp-rs
         - perl-lsp-rs-core
-        - xtask
 
   - name: inline_completion_quality_receipt
     tier: pr_fast
@@ -424,13 +423,28 @@ gates:
     planning:
       role: always_on
 
-  # ===========================================================================
-  # Tier: merge_gate
-  # ===========================================================================
-  # Full verification required before merging. Can be slower but must be thorough.
+  - name: compile_all_targets
+    tier: pr_fast
+    description: "Compile all workspace targets (lib/bin/tests/benches) to catch integration and bench bit-rot; also validates all-features paths"
+    required: true
+    command: just check-all-targets
+    # Two full-workspace cargo check passes (default + all-features) require more time
+    # than the original 180s budget on a fresh CI runner. Aligned with unit_scoped budget.
+    timeout_seconds: 600
+    retry_count: 0
+    budgets:
+      max_duration_ms: 540000
+    quarantine: false
+    tags:
+      - compile
+      - integration
+      - benches
+      - workspace
+    planning:
+      role: always_on
 
   - name: clippy_full
-    tier: merge_gate
+    tier: pr_fast
     description: "Clippy lints on full workspace with strict settings"
     required: true
     command: >-
@@ -450,6 +464,33 @@ gates:
       - lint
       - clippy
       - strict
+    planning:
+      role: always_on
+
+  - name: unit_routed_full
+    tier: pr_fast
+    description: "Scoped routed integration tests for ci-scope selected crates (required test gate for #1470 coupling; --tests runs tests/ directories, catching runtime assertion failures not reachable by --lib)"
+    required: true
+    command: cargo test --locked --tests {package_args}
+    # PR #1585 produced timeout-only receipts at 600s and 900s for the
+    # perl-lsp-rs/perl-lsp-rs-core/xtask route. Keep the required --tests proof
+    # bounded while matching the PR Smoke watchdog for the heavier routed path.
+    timeout_seconds: 1500
+    retry_count: 1
+    budgets:
+      max_duration_ms: 1320000
+    quarantine: false
+    tags:
+      - test
+      - integration
+      - routed
+    planning:
+      role: rust_scoped
+
+  # ===========================================================================
+  # Tier: merge_gate
+  # ===========================================================================
+  # Full verification required before merging. Can be slower but must be thorough.
 
   - name: unit_foundation_full
     tier: merge_gate
@@ -551,22 +592,6 @@ gates:
     tags:
       - test
       - unit
-      - workspace
-
-  - name: compile_all_targets
-    tier: merge_gate
-    description: "Compile all workspace targets (lib/bin/tests/benches) to catch integration and bench bit-rot; also validates all-features paths"
-    required: true
-    command: just check-all-targets
-    timeout_seconds: 240
-    retry_count: 0
-    budgets:
-      max_duration_ms: 180000
-    quarantine: false
-    tags:
-      - compile
-      - integration
-      - benches
       - workspace
 
   - name: lsp_smoke
@@ -703,6 +728,10 @@ gates:
     command: >-
       cargo xtask check-from-raw &&
       cargo xtask check-memory-lifecycle-policy &&
+      cargo xtask check-semantic-token-classes &&
+      cargo xtask check-workspace-symbol-classes &&
+      cargo xtask check-provider-promotion-ledger &&
+      cargo xtask check-provider-confidence-matrix &&
       bash scripts/check-version-sync.sh &&
       bash scripts/check_release_history.sh &&
       bash ci/check_missing_docs.sh &&

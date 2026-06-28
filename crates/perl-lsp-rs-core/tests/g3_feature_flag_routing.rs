@@ -11,6 +11,8 @@
 use std::fs;
 use std::path::PathBuf;
 
+use perl_tdd_support::must;
+
 fn workspace_root() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     PathBuf::from(manifest_dir).join("..").join("..")
@@ -33,7 +35,7 @@ fn g3_lsp_compat_feature_signal_not_gating() {
     let root = workspace_root();
     let core_toml = root.join("crates/perl-lsp-rs-core/Cargo.toml");
 
-    let content = fs::read_to_string(&core_toml).expect("should read core Cargo.toml");
+    let content = must(fs::read_to_string(&core_toml));
 
     // Check that lsp-compat feature exists (as empty signal, not gating)
     let has_lsp_compat = content.contains("lsp-compat = []");

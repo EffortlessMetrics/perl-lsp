@@ -1,6 +1,6 @@
 //! `cargo xtask freshness-check` — source-tree and binary staleness guard.
 //!
-//! Detects whether the current checkout is behind `origin/master` (or another
+//! Detects whether the current checkout is behind `origin/main` (or another
 //! base ref) and emits a JSON receipt that downstream tools and hooks can
 //! consume.
 //!
@@ -18,7 +18,7 @@
 //! ```json
 //! {
 //!   "schema_version": 1,
-//!   "base_ref": "origin/master",
+//!   "base_ref": "origin/main",
 //!   "head": "abc1234",
 //!   "base_head": "def5678",
 //!   "behind_by": 5,
@@ -66,7 +66,7 @@ impl std::fmt::Display for FreshnessMode {
 
 /// Configuration for the freshness check subcommand.
 pub struct FreshnessCheckConfig {
-    /// Base git reference to compare HEAD against. Default: `origin/master`.
+    /// Base git reference to compare HEAD against. Default: `origin/main`.
     pub base: String,
     /// Operating mode (warn or block).
     pub mode: FreshnessMode,
@@ -100,7 +100,7 @@ pub struct BinaryEntry {
 pub struct FreshnessReceipt {
     /// Always 1 for this schema generation.
     pub schema_version: u32,
-    /// The base git ref used for the comparison (e.g. `origin/master`).
+    /// The base git ref used for the comparison (e.g. `origin/main`).
     pub base_ref: String,
     /// Short SHA of HEAD.
     pub head: String,
@@ -293,7 +293,7 @@ fn git_short_sha(rev: &str) -> Result<String> {
 }
 
 fn fetch_base(base_ref: &str) -> Result<()> {
-    // Extract the remote and branch from e.g. "origin/master".
+    // Extract the remote and branch from e.g. "origin/main".
     let (remote, branch) = if let Some(slash) = base_ref.find('/') {
         (&base_ref[..slash], &base_ref[slash + 1..])
     } else {

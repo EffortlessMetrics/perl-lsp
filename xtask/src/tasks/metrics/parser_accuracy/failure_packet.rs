@@ -321,6 +321,9 @@ fn line_tag_label(tag: LineTag) -> &'static str {
         LineTag::FunctionCall => "function_call",
         LineTag::MethodCall => "method_call",
         LineTag::Regex => "regex",
+        LineTag::RegexMatch => "regex_match",
+        LineTag::Division => "division",
+        LineTag::DefinedOr => "defined_or",
         LineTag::QuoteLike => "quote_like",
         LineTag::HeredocOpener => "heredoc_opener",
         LineTag::HeredocBody => "heredoc_body",
@@ -361,4 +364,18 @@ fn symbol_occurrence_label(occurrence: &SymbolOccurrenceKey) -> String {
 
 fn symbol_edge_label(edge: &SymbolEdgeKey) -> String {
     format!("{} {} -> {}", edge.kind, edge.from, edge.to)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_tag_labels_include_slash_ambiguity_tags() {
+        let tags = BTreeSet::from([LineTag::RegexMatch, LineTag::Division, LineTag::DefinedOr]);
+
+        let labels = line_tag_labels(&tags);
+
+        assert_eq!(labels, vec!["regex_match", "division", "defined_or"]);
+    }
 }

@@ -1,0 +1,425 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics/perl-lsp/schemas/ripr-perl-facts-v1.schema.json",
+  "title": "ripr-perl-facts-v1",
+  "description": "Fact packet contract for the Perl repair-routing lane (RIPR-SPEC-0064, Campaign 31 ripr-swarm#1379). perl-lsp emits; ripr consumes. Closed-vocabulary enums enforce the contract both sides pin against.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "packet_id",
+    "packet_status",
+    "packet_fingerprint",
+    "producer",
+    "root",
+    "input",
+    "files",
+    "owners",
+    "changes",
+    "tests",
+    "oracles",
+    "relations",
+    "dynamic_boundaries",
+    "verify_commands",
+    "limitations",
+    "provenance"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "ripr-perl-facts-v1"
+    },
+    "packet_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "packet_status": {
+      "type": "string",
+      "enum": ["complete", "partial", "unavailable"]
+    },
+    "packet_fingerprint": {
+      "type": ["string", "null"]
+    },
+    "producer": {
+      "$ref": "#/$defs/producer"
+    },
+    "root": {
+      "$ref": "#/$defs/root"
+    },
+    "input": {
+      "$ref": "#/$defs/input"
+    },
+    "files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file" }
+    },
+    "owners": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/owner" }
+    },
+    "changes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/change" }
+    },
+    "tests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/test" }
+    },
+    "oracles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/oracle" }
+    },
+    "relations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/relation" }
+    },
+    "dynamic_boundaries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dynamic_boundary" }
+    },
+    "verify_commands": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/verify_command" }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/limitation" }
+    },
+    "provenance": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/provenance" }
+    }
+  },
+  "$defs": {
+    "producer": {
+      "type": "object",
+      "required": ["name", "version", "capabilities"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "root": {
+      "type": "object",
+      "required": ["repo_relative", "path_style"],
+      "additionalProperties": false,
+      "properties": {
+        "repo_relative": { "type": "string" },
+        "vcs_head": { "type": ["string", "null"] },
+        "path_style": { "type": "string", "enum": ["posix", "windows"] }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": ["requested_fact_classes"],
+      "additionalProperties": false,
+      "properties": {
+        "base": { "type": ["string", "null"] },
+        "head": { "type": ["string", "null"] },
+        "diff_id": { "type": ["string", "null"] },
+        "requested_fact_classes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "required": ["file_id", "path", "role", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "file_id": { "type": "string" },
+        "path": { "type": "string" },
+        "role": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["source", "test", "helper", "generated", "config", "unknown"]
+          }
+        },
+        "digest": { "type": "string" },
+        "package_names": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "provenance_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "owner": {
+      "type": "object",
+      "required": ["owner_id", "file_id", "kind", "range", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "owner_id": { "type": "string" },
+        "file_id": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": ["package", "sub", "method", "script", "module_initializer", "test_sub", "unknown"]
+        },
+        "package": { "type": ["string", "null"] },
+        "name": { "type": ["string", "null"] },
+        "range": { "$ref": "#/$defs/range" },
+        "confidence": { "type": "string", "enum": ["medium", "high"] },
+        "provenance_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "change": {
+      "type": "object",
+      "required": ["change_id", "file_id", "owner_id", "range", "behavior_hint", "changed_text_digest"],
+      "additionalProperties": false,
+      "properties": {
+        "change_id": { "type": "string" },
+        "file_id": { "type": "string" },
+        "owner_id": { "type": "string" },
+        "range": { "$ref": "#/$defs/range" },
+        "behavior_hint": {
+          "type": "string",
+          "enum": [
+            "predicate_boundary",
+            "return_value",
+            "exception_path",
+            "hash_or_object_field",
+            "output_observer",
+            "warn_observer",
+            "log_observer",
+            "call_effect",
+            "unknown"
+          ]
+        },
+        "changed_text_digest": { "type": "string" },
+        "changed_observable": { "type": ["string", "null"] },
+        "missing_discriminator": { "type": ["string", "null"] },
+        "provenance_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "test": {
+      "type": "object",
+      "required": ["test_id", "file_id", "framework", "name", "range", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "test_id": { "type": "string" },
+        "file_id": { "type": "string" },
+        "framework": {
+          "type": "string",
+          "enum": ["Test::More", "Test2::V0", "Test2::V1", "Test2::Suite", "Test::Exception", "Test::Fatal", "unknown"]
+        },
+        "name": { "type": "string" },
+        "range": { "$ref": "#/$defs/range" },
+        "runner_hints": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["prove", "yath", "carton", "dzil", "unknown"] }
+        },
+        "confidence": { "type": "string", "enum": ["medium", "high"] },
+        "provenance_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "oracle": {
+      "type": "object",
+      "required": ["oracle_id", "test_id", "kind", "strength", "range", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "oracle_id": { "type": "string" },
+        "test_id": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "exact_return_assertion",
+            "predicate_boundary_assertion",
+            "exception_observer",
+            "hash_or_object_field_assertion",
+            "output_observer",
+            "warn_observer",
+            "log_observer",
+            "smoke_ok",
+            "mention_only",
+            "dies_only",
+            "unknown_helper",
+            "dynamic_framework_indirection",
+            "unknown"
+          ]
+        },
+        "strength": {
+          "type": "string",
+          "enum": ["strong_exact", "weak_smoke", "weak_broad", "mention_only", "unknown"]
+        },
+        "target_owner_id": { "type": ["string", "null"] },
+        "expression": { "type": ["string", "null"] },
+        "observed_sink": { "type": ["string", "null"] },
+        "expected_expression": { "type": ["string", "null"] },
+        "range": { "$ref": "#/$defs/range" },
+        "confidence": { "type": "string", "enum": ["medium", "high"] },
+        "provenance_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "required": ["relation_id", "change_id", "owner_id", "test_id", "relation_kind", "reachability_hint", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "relation_id": { "type": "string" },
+        "change_id": { "type": "string" },
+        "owner_id": { "type": "string" },
+        "test_id": { "type": "string" },
+        "oracle_id": { "type": ["string", "null"] },
+        "relation_kind": {
+          "type": "string",
+          "enum": [
+            "direct_owner_call",
+            "package_reference",
+            "method_receiver",
+            "test_name_match",
+            "file_proximity",
+            "helper_call",
+            "fixture_setup",
+            "unknown"
+          ]
+        },
+        "reachability_hint": {
+          "type": "string",
+          "enum": ["reachable", "weakly_reachable", "static_unknown"]
+        },
+        "confidence": { "type": "string", "enum": ["medium", "high"] },
+        "provenance_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "dynamic_boundary": {
+      "type": "object",
+      "required": ["boundary_id", "kind", "file_id", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "boundary_id": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "dynamic_dispatch",
+            "module_resolution_unknown",
+            "generated_symbol",
+            "role_composition",
+            "monkeypatch_or_symbol_patch",
+            "eval_or_string_code",
+            "symbol_table_mutation",
+            "framework_indirection",
+            "unknown_helper",
+            "unsupported_syntax",
+            "missing_test_runner",
+            "missing_diff_owner",
+            "packet_incomplete",
+            "unknown"
+          ]
+        },
+        "file_id": { "type": "string" },
+        "owner_id": { "type": ["string", "null"] },
+        "range": { "$ref": "#/$defs/range" },
+        "confidence": { "type": "string", "enum": ["medium", "high"] },
+        "provenance_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "verify_command": {
+      "type": "object",
+      "required": ["command_id", "runner", "argv", "scope", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "command_id": { "type": "string" },
+        "runner": {
+          "type": "string",
+          "enum": ["prove", "yath", "carton", "dzil", "unknown"]
+        },
+        "argv": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["test", "file", "suite", "unknown"]
+        },
+        "test_id": { "type": ["string", "null"] },
+        "confidence": { "type": "string", "enum": ["medium", "high"] },
+        "preconditions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "provenance_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "required": ["limitation_id", "kind", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "limitation_id": { "type": "string" },
+        "kind": { "type": "string" },
+        "message": { "type": "string" },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["provenance_id", "source", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "provenance_id": { "type": "string" },
+        "source": {
+          "type": "string",
+          "enum": [
+            "syntax",
+            "semantic",
+            "workspace",
+            "module_resolution",
+            "test_discovery",
+            "oracle_extraction",
+            "runner_detection",
+            "diff",
+            "operator_config",
+            "unknown"
+          ]
+        },
+        "file_id": { "type": ["string", "null"] },
+        "range": { "type": ["string", "null"] },
+        "confidence": { "type": "string", "enum": ["medium", "high"] }
+      }
+    },
+    "range": {
+      "type": "object",
+      "required": ["start_line", "start_column", "end_line", "end_column"],
+      "additionalProperties": false,
+      "properties": {
+        "start_line": { "type": "integer", "minimum": 0 },
+        "start_column": { "type": "integer", "minimum": 0 },
+        "end_line": { "type": "integer", "minimum": 0 },
+        "end_column": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

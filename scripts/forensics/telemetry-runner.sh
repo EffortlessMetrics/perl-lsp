@@ -142,8 +142,8 @@ Research mode adds:
 Examples:
   $(basename "$0") abc1234 def5678
   $(basename "$0") --quick HEAD~5 HEAD
-  $(basename "$0") --full origin/master HEAD
-  $(basename "$0") --research origin/master HEAD
+  $(basename "$0") --full origin/main HEAD
+  $(basename "$0") --research origin/main HEAD
   $(basename "$0") --pr 123
 EOF
     exit 1

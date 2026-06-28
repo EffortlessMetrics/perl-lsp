@@ -33,6 +33,27 @@ npm run verify:marketplace
 
 `verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates the Marketplace `.vsix` package.
 
+Set `CARGO_TARGET_DIR` when running this from an agent or release-prep
+worktree so Cargo build output stays outside the repository:
+
+```bash
+CARGO_TARGET_DIR=/tmp/perl-lsp-vsix-target npm run verify:marketplace
+```
+
+To smoke the generated VSIX in a clean VS Code profile:
+
+```bash
+PERL_LSP_PUBLISHED_EXTENSION_SOURCE=vsix \
+PERL_LSP_PUBLISHED_VSIX_PATH="$PWD/perl-lsp-rs-<version>.vsix" \
+PERL_LSP_PUBLISHED_EXTENSION_VERSION=<version> \
+PERL_LSP_REQUIRE_STRUCTURED_COMMANDS=1 \
+PERL_LSP_SMOKE_RECEIPTS_DIR=/tmp/perl-lsp-vsix-smoke-receipts \
+npm run test:published
+```
+
+This installs the VSIX, activates the published-extension harness, and writes
+managed-binary smoke receipts under the configured receipts directory.
+
 To validate the Open VSX tooling before publishing:
 
 ```bash

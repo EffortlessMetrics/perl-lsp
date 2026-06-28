@@ -7,6 +7,7 @@ use perl_semantic_facts::{
     PackageEdge, PackageEdgeKind, PlanBlockerReason, PlannedEditCategory, Provenance, RenamePlan,
     SafeDeletePlan,
 };
+use perl_workspace::semantic::facts::PRODUCER_SCHEMA_VERSION;
 use perl_workspace::semantic::imports::ImportExportIndex;
 use perl_workspace::semantic::package_graph::PackageGraphIndex;
 use perl_workspace::semantic::queries::{SemanticQueries, WorkspaceSemanticQueries};
@@ -441,6 +442,7 @@ fn method_candidate_fact_shard() -> FileFactShard {
         source_uri: "file:///semantic/method_candidates.pm".to_string(),
         file_id,
         content_hash: 1,
+        producer_schema_version: PRODUCER_SCHEMA_VERSION,
         anchors_hash: None,
         entities_hash: None,
         occurrences_hash: None,
@@ -740,6 +742,7 @@ fn rename_plan_fact_shard(
         source_uri: source_uri.to_string(),
         file_id,
         content_hash: file_id.0,
+        producer_schema_version: PRODUCER_SCHEMA_VERSION,
         anchors_hash: None,
         entities_hash: None,
         occurrences_hash: None,
@@ -764,6 +767,7 @@ fn empty_fact_shard(source_uri: &str, file_id: FileId) -> FileFactShard {
         source_uri: source_uri.to_string(),
         file_id,
         content_hash: file_id.0,
+        producer_schema_version: PRODUCER_SCHEMA_VERSION,
         anchors_hash: None,
         entities_hash: None,
         occurrences_hash: None,

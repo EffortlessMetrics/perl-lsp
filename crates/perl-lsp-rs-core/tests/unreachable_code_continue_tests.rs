@@ -35,6 +35,7 @@ fn sub_node(name: &str, body: Node) -> Node {
         NodeKind::Subroutine {
             name: Some(name.to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],

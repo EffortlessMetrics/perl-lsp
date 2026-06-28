@@ -585,6 +585,8 @@ fn test_scopes_round_trip() -> Result<()> {
             presentation_hint: Some("locals".to_string()),
             variables_reference: 100,
             expensive: false,
+            named_variables: None,
+            indexed_variables: None,
         }],
     };
     let json = serde_json::to_string(&body)?;
@@ -604,11 +606,13 @@ fn test_variables_round_trip() -> Result<()> {
             named_variables: None,
             indexed_variables: None,
         }],
+        total_variables: Some(1),
     };
     let json = serde_json::to_string(&body)?;
     let rt: VariablesResponseBody = serde_json::from_str(&json)?;
     assert_eq!(rt.variables[0].name, "$x");
     assert_eq!(rt.variables[0].value, "42");
+    assert_eq!(rt.total_variables, Some(1));
     Ok(())
 }
 

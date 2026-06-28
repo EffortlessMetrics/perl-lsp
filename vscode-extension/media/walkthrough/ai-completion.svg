@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <rect width="800" height="450" fill="#111827"/>
+  <rect x="40" y="20" width="720" height="410" rx="6" fill="#1e293b"/>
+  <text x="60" y="55" font-family="monospace" font-size="13" fill="#6b7280">app.pl</text>
+  <text x="60" y="90" font-family="monospace" font-size="14" fill="#f472b6">sub</text>
+  <text x="84" y="90" font-family="monospace" font-size="14" fill="#d1d5db"> fetch_user {</text>
+  <text x="80" y="113" font-family="monospace" font-size="14" fill="#34d399">my</text>
+  <text x="104" y="113" font-family="monospace" font-size="14" fill="#d1d5db"> ($id) = @_;</text>
+  <text x="80" y="136" font-family="monospace" font-size="14" fill="#6b7280" font-style="italic"> # AI suggestion ↓</text>
+  <rect x="80" y="148" width="420" height="28" rx="4" fill="#0f172a" stroke="#7c3aed" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="92" y="167" font-family="monospace" font-size="13" fill="#a78bfa" font-style="italic">return $db-&gt;query("SELECT * FROM users WHERE id = ?", $id);</text>
+  <text x="80" y="200" font-family="monospace" font-size="14" fill="#d1d5db">}</text>
+  <rect x="540" y="80" width="200" height="96" rx="6" fill="#312e81" stroke="#6366f1" stroke-width="1"/>
+  <text x="560" y="112" font-family="sans-serif" font-size="14" fill="#c7d2fe" font-weight="bold">✨ AI Completion</text>
+  <text x="560" y="138" font-family="sans-serif" font-size="12" fill="#a5b4fc">Optional · off by</text>
+  <text x="560" y="156" font-family="sans-serif" font-size="12" fill="#a5b4fc">default · server-gated</text>
+</svg>

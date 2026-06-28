@@ -40,6 +40,26 @@ fn assert_has_unclosed_interpolation_diagnostic(source: &str) -> R {
     Ok(())
 }
 
+fn assert_no_unclosed_interpolation_diagnostic(source: &str) -> R {
+    let mut parser = Parser::new(source);
+    let parsed = parser.parse_with_recovery();
+
+    let has_unclosed = parsed
+        .diagnostics
+        .iter()
+        .map(ToString::to_string)
+        .any(|diag| diag.contains("Unclosed") && diag.contains("interpolated"));
+    if has_unclosed {
+        return Err(format!(
+            "Did not expect unclosed interpolation diagnostics for source:\n{source}\n\nDiagnostics:\n{:?}",
+            parsed.diagnostics
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
 #[test]
 fn double_quote_incomplete_hash_key() -> R {
     let source = r#"my $msg = "Key: $hash{incomplete";"#;
@@ -74,10 +94,52 @@ fn double_quote_incomplete_mixed_array_index() -> R {
 
 #[test]
 fn double_quote_incomplete_arrow_paren_call() -> R {
-    // "$obj->method(arg" — paren-call tail swallowed closing quote before fix
+    // "$obj->method(arg" — method calls are NOT interpolated in Perl strings.
+    // Per fix for #1354: ->method() is literal text, so an unbalanced ( inside it
+    // must NOT produce an "Unclosed ( delimiter in interpolated string" diagnostic.
+    // This test previously asserted the old INCORRECT behavior.
     let source = r#"my $msg = "Call: $obj->method(arg";"#;
     assert_clean_sexp_without_error_nodes(source)?;
+
+    let mut parser = Parser::new(source);
+    let parsed = parser.parse_with_recovery();
+    let has_paren_unclosed = parsed.diagnostics.iter().map(ToString::to_string).any(|diag| {
+        diag.contains("Unclosed") && diag.contains("interpolated") && diag.contains('(')
+    });
+    if has_paren_unclosed {
+        return Err(format!(
+            "Did not expect unclosed-( diagnostic for method call (literal text, not interpolated).\nSource: {source}\nDiagnostics: {:?}",
+            parsed.diagnostics
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn double_quote_dbi_prepare_incomplete_hash_field() -> R {
+    let source = r#"
+my $sth = $dbh->prepare("select * from users where id = $params->{id");
+"#;
+    assert_clean_sexp_without_error_nodes(source)?;
     assert_has_unclosed_interpolation_diagnostic(source)?;
+    Ok(())
+}
+
+#[test]
+fn double_quote_sql_partial_scalar_is_clean() -> R {
+    let source = r#"my $sql = "select * from users where name like $na";"#;
+    assert_clean_sexp_without_error_nodes(source)?;
+    assert_no_unclosed_interpolation_diagnostic(source)?;
+    Ok(())
+}
+
+#[test]
+fn double_quote_partial_arrow_after_scalar_is_literal() -> R {
+    let source = r#"my $msg = "Value: $obj->";"#;
+    assert_clean_sexp_without_error_nodes(source)?;
+    assert_no_unclosed_interpolation_diagnostic(source)?;
     Ok(())
 }
 
@@ -94,21 +156,7 @@ fn double_quote_incomplete_block_deref() -> R {
 fn double_quote_complete_interpolation_cases() -> R {
     let source = r#"my $msg = "Complete: $hash{key} $array[0] $obj->{field}";"#;
     assert_clean_sexp_without_error_nodes(source)?;
-
-    let mut parser = Parser::new(source);
-    let parsed = parser.parse_with_recovery();
-    let has_unclosed = parsed
-        .diagnostics
-        .iter()
-        .map(ToString::to_string)
-        .any(|diag| diag.contains("Unclosed") && diag.contains("interpolated"));
-    if has_unclosed {
-        return Err(format!(
-            "Did not expect unclosed interpolation diagnostics for complete interpolation. Diagnostics: {:?}",
-            parsed.diagnostics
-        )
-        .into());
-    }
+    assert_no_unclosed_interpolation_diagnostic(source)?;
 
     Ok(())
 }

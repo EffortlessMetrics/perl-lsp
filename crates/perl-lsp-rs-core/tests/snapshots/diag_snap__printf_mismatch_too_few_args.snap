@@ -1,0 +1,7 @@
+---
+source: crates/perl-lsp-rs-core/tests/diag_snap.rs
+assertion_line: 203
+expression: snapshot
+---
+PL200 | Warning | (0, 0) | This file has no package declaration. Add 'package MyModule;' to declare the package namespace. | Add 'package MyModule;' at the top of the file
+PL405 | Warning | (26, 48) | `printf` format string has 2 specifiers but 1 argument supplied | Add 2 arguments to match 2 format specifiers, or adjust the format string

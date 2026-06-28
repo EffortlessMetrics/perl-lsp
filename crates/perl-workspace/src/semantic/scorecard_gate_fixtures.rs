@@ -24,6 +24,7 @@
 
 #[cfg(test)]
 mod tests {
+    use crate::semantic::facts::PRODUCER_SCHEMA_VERSION;
     use crate::semantic::imports::ImportExportIndex;
     use crate::semantic::queries::{QueryContext, SemanticQueries, WorkspaceSemanticQueries};
     use crate::semantic::references::ReferenceIndex;
@@ -55,6 +56,7 @@ mod tests {
             source_uri: uri.to_string(),
             file_id,
             content_hash: 0,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,

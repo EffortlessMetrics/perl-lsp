@@ -1,0 +1,21 @@
+name: fixture-pr-write-job-refined-workflow-dispatch
+on:
+  pull_request:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        default: bounded
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: git push

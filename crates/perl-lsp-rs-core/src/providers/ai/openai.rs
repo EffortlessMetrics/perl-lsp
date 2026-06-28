@@ -152,6 +152,10 @@ impl OpenAiProvider {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_test_module,
+    reason = "policy:#2064: OpenAI unit tests stay beside config helpers before backend implementation"
+)]
 mod tests {
     use super::{OpenAiConfig, OpenAiProvider};
     use crate::providers::ai::rate_limiter::RateLimiter;

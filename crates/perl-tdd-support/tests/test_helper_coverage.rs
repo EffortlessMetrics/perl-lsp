@@ -355,6 +355,7 @@ fn test_refactoring_analyzer_exactly_at_param_limit() -> Result<(), Box<dyn std:
         NodeKind::Subroutine {
             name: Some("exact_limit".to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(Node::new(
                 NodeKind::Signature { parameters: params },
@@ -400,6 +401,7 @@ fn test_refactoring_analyzer_one_over_param_limit() -> Result<(), Box<dyn std::e
         NodeKind::Subroutine {
             name: Some("over_limit".to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(Node::new(
                 NodeKind::Signature { parameters: params },
@@ -447,6 +449,7 @@ fn test_refactoring_analyzer_anonymous_sub() -> Result<(), Box<dyn std::error::E
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(Node::new(
                 NodeKind::Signature { parameters: params },
@@ -1190,6 +1193,7 @@ fn test_find_subroutines_in_package() -> Result<(), Box<dyn std::error::Error>> 
                                 NodeKind::Subroutine {
                                     name: Some("inside_package".to_string()),
                                     name_span: None,
+                                    declarator: None,
                                     prototype: None,
                                     signature: None,
                                     attributes: vec![],
@@ -1235,6 +1239,7 @@ fn test_find_subroutines_in_if_branch() -> Result<(), Box<dyn std::error::Error>
                                 NodeKind::Subroutine {
                                     name: Some("in_then".to_string()),
                                     name_span: None,
+                                    declarator: None,
                                     prototype: None,
                                     signature: None,
                                     attributes: vec![],
@@ -1255,6 +1260,7 @@ fn test_find_subroutines_in_if_branch() -> Result<(), Box<dyn std::error::Error>
                                 NodeKind::Subroutine {
                                     name: Some("in_else".to_string()),
                                     name_span: None,
+                                    declarator: None,
                                     prototype: None,
                                     signature: None,
                                     attributes: vec![],

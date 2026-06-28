@@ -14,6 +14,8 @@ use std::path::PathBuf;
 mod allocation_tracker;
 mod cli;
 mod tasks;
+#[cfg(test)]
+mod test_support;
 mod types;
 mod utils;
 use tasks::check_test_wiring;
@@ -89,6 +91,14 @@ enum Commands {
     /// Validate differential real-Perl oracle receipt schema.
     CheckOracleReceiptSchema,
 
+    /// Run differential oracle comparison (PackageSubTable vertical slice).
+    ///
+    /// Loads fixtures from the manifest, runs the PackageSubTable extractor
+    /// against both the Rust HIR and real Perl, and emits comparison receipts
+    /// to target/receipts/oracle/. Requires `perl` on PATH.
+    #[command(name = "check-oracle-compare")]
+    CheckOracleCompare,
+
     /// Validate semantic-token class promotion registry.
     CheckSemanticTokenClasses,
 
@@ -117,6 +127,37 @@ enum Commands {
     Pr {
         #[command(subcommand)]
         command: PrSubcommand,
+    },
+
+    /// Verify merge-base ancestry proof before closing a PR.
+    ///
+    /// Implements CLOSE_PROOF_POLICY.md Rule 1: runs
+    /// `git merge-base --is-ancestor <commit> <canonical-main>` and emits
+    /// a structured receipt.
+    ///
+    /// Exit 0 = reachable (safe to close), exit 2 = not reachable (do not close),
+    /// exit 1 = error (git failed).
+    #[command(name = "pr-close-proof")]
+    PrCloseProof {
+        /// Commit SHA to verify.
+        #[arg(long)]
+        commit: String,
+        /// Canonical main ref (e.g. origin/main).
+        #[arg(long, default_value = "origin/main")]
+        canonical_main: String,
+        /// Optional distinctive string to grep in canonical-main (Rule 3 substance check).
+        #[arg(long)]
+        substance_grep: Option<String>,
+        /// Output format: `human` (default) or `json`.
+        #[arg(long, default_value = "human")]
+        format: String,
+    },
+
+    /// PR reconciliation ledger commands.
+    #[command(name = "pr-ledger")]
+    PrLedger {
+        #[command(subcommand)]
+        command: PrLedgerCommand,
     },
 
     /// Build project with various configurations
@@ -313,7 +354,7 @@ enum Commands {
         #[arg(long, default_value = ".")]
         root: String,
         /// Base revision for the PR diff.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "origin/main")]
         base: String,
         /// Head revision for the PR diff.
         #[arg(long, default_value = "HEAD")]
@@ -345,7 +386,7 @@ enum Commands {
         #[arg(long, default_value = ".")]
         root: String,
         /// Base revision for the PR diff.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "origin/main")]
         base: String,
         /// Head revision for the PR diff.
         #[arg(long, default_value = "HEAD")]
@@ -734,10 +775,10 @@ enum Commands {
     /// **Claim boundary**: dry-run only. GitHub sticky-comment posting is
     /// a follow-up to issue #4825.
     ///
-    /// Example: `cargo xtask ci pr-summary --base origin/master --dry-run`
+    /// Example: `cargo xtask ci pr-summary --base origin/main --dry-run`
     CiPrSummary {
-        /// Base git reference to diff against (e.g. `origin/master`).
-        #[arg(long, default_value = "origin/master")]
+        /// Base git reference to diff against (e.g. `origin/main`).
+        #[arg(long, default_value = "origin/main")]
         base: String,
 
         /// Emit markdown to stdout only; do not post to GitHub.
@@ -784,7 +825,7 @@ enum Commands {
     /// Warn when a diff adds retained-state owner patterns without inventory updates.
     CheckMemoryRetainedOwnerDrift {
         /// Git base ref used for diffing changed files.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "origin/main")]
         base: String,
 
         /// Warn instead of fail when drift appears in existing retained-owner paths.
@@ -1761,15 +1802,15 @@ enum Commands {
         root: Option<PathBuf>,
     },
 
-    /// Check whether the current checkout is behind origin/master.
+    /// Check whether the current checkout is behind origin/main.
     ///
     /// Emits a JSON receipt (schema_version 1) with staleness metadata.
     /// Use --mode block to fail when stale; default is warn (exit 0 always).
     ///
-    /// Example: `cargo xtask freshness-check --base origin/master --mode block`
+    /// Example: `cargo xtask freshness-check --base origin/main --mode block`
     FreshnessCheck {
         /// Base git reference to compare HEAD against.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "origin/main")]
         base: String,
 
         /// Operating mode: warn (default, exit 0) or block (exit 1 when stale).
@@ -1798,6 +1839,36 @@ enum Commands {
         /// are reported but do not cause a non-zero exit.
         #[arg(long)]
         binaries: bool,
+    },
+
+    /// Generate or check deterministic HIR semantic snapshots over a corpus slice.
+    ///
+    /// This command is a SNAPSHOT rail — it proves that lower_ast() is
+    /// deterministic and stable across commits. It does NOT prove correctness.
+    /// Curated-gold assertions (independent human labeling) are a separate,
+    /// future schema and are NOT built here.
+    ///
+    /// KPI: semantic_snapshot_stability_rate (NOT semantic_gold_pass_rate).
+    ///
+    /// Examples:
+    ///   # Generate snapshot manifest
+    ///   cargo xtask generate-semantic-snapshot
+    ///   # Check for HIR drift
+    ///   cargo xtask generate-semantic-snapshot --check
+    #[command(name = "generate-semantic-snapshot")]
+    GenerateSemanticSnapshot {
+        /// Directory containing the corpus fixture `.pl` files.
+        #[arg(long, default_value = "crates/perl-corpus/fixtures/snapshot-slice")]
+        fixture_dir: PathBuf,
+
+        /// Path to write (generate) or read (check) the snapshot manifest JSON.
+        #[arg(long, default_value = "target/receipts/semantic-snapshot.json")]
+        output: PathBuf,
+
+        /// Check mode: compare against the recorded manifest and fail on drift.
+        /// When omitted, generates/overwrites the manifest.
+        #[arg(long)]
+        check: bool,
     },
 }
 
@@ -2176,6 +2247,23 @@ enum ReleaseCommand {
         /// Bundle directory to validate.
         #[arg(long)]
         bundle_dir: Option<PathBuf>,
+    },
+    /// Verify produced release archives ship the binaries downstream DAP
+    /// consumers depend on (`perl-dap` alongside `perllsp`), per
+    /// `docs/reference/downstream-dap-integrations.json`.
+    ArtifactCheck {
+        /// Directory holding the release archives and consolidated `SHA256SUMS`.
+        #[arg(long)]
+        dist: PathBuf,
+        /// Override the contract JSON (defaults to the in-repo file).
+        #[arg(long)]
+        contract: Option<PathBuf>,
+        /// Require every archive name to contain this release version.
+        #[arg(long)]
+        version: Option<String>,
+        /// Permit a dist that does not cover every contract target triple.
+        #[arg(long)]
+        allow_partial: bool,
     },
 }
 
@@ -2581,6 +2669,26 @@ enum PrSubcommand {
 }
 
 #[derive(Subcommand)]
+enum PrLedgerCommand {
+    /// Generate skeleton reconciliation ledger rows from open GitHub PRs.
+    ///
+    /// Shells to `gh pr list --json ...` for each repo, emits skeleton rows
+    /// with classification:"unclassified" and evidence:[] for scout fill-in,
+    /// and writes a combined pr-ledger.md summary table.
+    Generate {
+        /// One or more repositories (owner/name). Repeatable.
+        #[arg(long = "repo", required = true)]
+        repos: Vec<String>,
+        /// Output directory for generated artifacts.
+        #[arg(long, default_value = "target/reconciliation")]
+        out: PathBuf,
+        /// Optional fixture JSON (for testing without live gh).
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum DevexCommand {
     /// Plan the cheapest correct local proof commands for the current diff.
     Plan {
@@ -2689,6 +2797,11 @@ enum AgentCommand {
         #[command(subcommand)]
         command: AgentLeaseCommand,
     },
+    /// Orchestration ledger commands.
+    Ledgers {
+        #[command(subcommand)]
+        command: AgentLedgersCommand,
+    },
     /// Receipt commands.
     Receipt {
         #[command(subcommand)]
@@ -2698,6 +2811,19 @@ enum AgentCommand {
     Worktree {
         #[command(subcommand)]
         command: AgentWorktreeCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentLedgersCommand {
+    /// Validate docs/agents/ledgers/*.jsonl against orchestration role contracts.
+    Validate {
+        /// Override ledger directory (default: docs/agents/ledgers/).
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// Output format: `human` (default) or `json`.
+        #[arg(long, default_value = "human")]
+        format: String,
     },
 }
 
@@ -2778,6 +2904,7 @@ fn main() -> Result<()> {
         Commands::CheckProviderPromotionLedger => provider_promotion_ledger::run(),
         Commands::CheckOracleFixtureManifest => oracle_fixture_manifest::run(),
         Commands::CheckOracleReceiptSchema => oracle_receipt_schema::run(),
+        Commands::CheckOracleCompare => oracle_runner::run(),
         Commands::CheckSemanticTokenClasses => semantic_token_classes::run(),
         Commands::CheckLsp318Claims => lsp_318_claims::run(),
         Commands::GenerateLsp318Matrix { check } => lsp_318_matrix::run(check),
@@ -2805,6 +2932,30 @@ fn main() -> Result<()> {
                     strict,
                     no_gh,
                 })
+            }
+        },
+        Commands::PrCloseProof { commit, canonical_main, substance_grep, format } => {
+            let fmt = if format == "json" {
+                tasks::pr_close_proof::CloseProofFormat::Json
+            } else {
+                tasks::pr_close_proof::CloseProofFormat::Human
+            };
+            let reachable = tasks::pr_close_proof::run(tasks::pr_close_proof::CloseProofConfig {
+                commit,
+                canonical_main,
+                substance_grep,
+                format: fmt,
+            })?;
+            if !reachable {
+                // Exit 2: not ancestor — distinct from 1 (error).
+                // CLOSE_PROOF_POLICY.md: do not close if not reachable.
+                std::process::exit(2);
+            }
+            Ok(())
+        }
+        Commands::PrLedger { command } => match command {
+            PrLedgerCommand::Generate { repos, out, fixture } => {
+                tasks::pr_ledger::generate(tasks::pr_ledger::GenerateConfig { repos, out, fixture })
             }
         },
         Commands::Build { release, features, c_scanner, rust_scanner } => {
@@ -2992,6 +3143,14 @@ fn main() -> Result<()> {
                     PathBuf::from(format!("target/release-evidence/v{version}"))
                 });
                 release_evidence::verify(&version, &effective_bundle_dir, &receipt)
+            }
+            ReleaseCommand::ArtifactCheck { dist, contract, version, allow_partial } => {
+                release_artifact_check::run(release_artifact_check::Config {
+                    dist,
+                    contract,
+                    version,
+                    allow_partial,
+                })
             }
         },
         Commands::ReleaseNotes { tag, output, root } => release_notes::run(tag, output, root),
@@ -3354,6 +3513,19 @@ fn main() -> Result<()> {
                     agent_lease::verify(&lease, &current)
                 }
             },
+            AgentCommand::Ledgers { command } => match command {
+                AgentLedgersCommand::Validate { dir, format } => {
+                    let fmt = if format == "json" {
+                        tasks::agent_ledgers::ValidateFormat::Json
+                    } else {
+                        tasks::agent_ledgers::ValidateFormat::Human
+                    };
+                    tasks::agent_ledgers::validate(tasks::agent_ledgers::ValidateConfig {
+                        ledger_dir: dir,
+                        format: fmt,
+                    })
+                }
+            },
             AgentCommand::Receipt { command } => match command {
                 AgentReceiptCommand::Validate { receipt } => agent_receipt::validate(&receipt),
             },
@@ -3659,6 +3831,15 @@ fn main() -> Result<()> {
                 reason,
                 check_binaries: binaries,
             })
+        }
+        Commands::GenerateSemanticSnapshot { fixture_dir, output, check } => {
+            tasks::generate_semantic_snapshot::run(
+                tasks::generate_semantic_snapshot::GenerateSemanticSnapshotArgs {
+                    fixture_dir,
+                    output,
+                    check,
+                },
+            )
         }
     }
 }

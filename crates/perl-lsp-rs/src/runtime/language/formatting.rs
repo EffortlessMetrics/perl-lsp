@@ -33,28 +33,21 @@ fn document_not_open_error(uri: &str) -> JsonRpcError {
     }
 }
 
-fn ranges_formatting_request_shape_message(summary: &str) -> String {
-    format!(
-        concat!(
-            "{}: textDocument/rangesFormatting expects params.textDocument.uri and ",
-            "params.ranges as an array of LSP Range objects; each range must include ",
-            "start.line, start.character, end.line, and end.character as non-negative integers, ",
-            "for example {{\"textDocument\":{{\"uri\":\"file:///path/to/script.pl\"}},",
-            "\"ranges\":[{{\"start\":{{\"line\":0,\"character\":0}},",
-            "\"end\":{{\"line\":1,\"character\":0}}}}]}}"
-        ),
-        summary
-    )
-}
-
-fn invalid_ranges_formatting_params(summary: &str) -> JsonRpcError {
-    invalid_params(&ranges_formatting_request_shape_message(summary))
-}
-
 impl LspServer {
     /// Build a `PerlTidyConfig` from the current server configuration.
+    ///
+    /// The native scalar fields are read directly from the server config, which
+    /// already reflects the correct precedence: built-in defaults, then the
+    /// discovered `.perltidyrc` options applied at initialize (see
+    /// `set_root_uri`), then user `.perl-lsp.toml` / `didChangeConfiguration`.
+    /// The profile *path* used for the external adapter is the explicitly
+    /// configured `perltidy_profile` when set, else the discovered one.
     fn build_perltidy_config(&self) -> PerlTidyConfig {
         let config = self.config.lock();
+        let profile = config
+            .perltidy_profile
+            .clone()
+            .or_else(|| self.discovered_perltidy_profile.lock().clone());
         PerlTidyConfig {
             maximum_line_length: config.perltidy_maximum_line_length,
             indent_columns: config.perltidy_indent_columns,
@@ -65,7 +58,7 @@ impl LspServer {
             add_trailing_commas: config.perltidy_add_trailing_commas,
             vertical_alignment: config.perltidy_vertical_alignment,
             block_comment_indentation: config.perltidy_block_comment_indentation,
-            profile: config.perltidy_profile.clone(),
+            profile,
             extra_args: config.perltidy_extra_args.clone(),
             timeout_secs: config.perltidy_timeout_secs,
         }
@@ -267,10 +260,10 @@ impl LspServer {
                 });
 
             // Parse ranges array
-            let ranges_array =
-                params.get("ranges").and_then(|r| r.as_array()).ok_or_else(|| {
-                    invalid_ranges_formatting_params("Missing required parameter: ranges")
-                })?;
+            let ranges_array = params
+                .get("ranges")
+                .and_then(|r| r.as_array())
+                .ok_or_else(|| invalid_params("Missing required parameter: ranges"))?;
 
             if ranges_array.is_empty() {
                 return Ok(Some(json!([])));
@@ -289,62 +282,34 @@ impl LspServer {
             for (idx, range_val) in ranges_array.iter().enumerate() {
                 let start_line_u64 =
                     range_val.pointer("/start/line").and_then(|v| v.as_u64()).ok_or_else(|| {
-                        invalid_ranges_formatting_params(&format!(
-                            "Missing ranges[{}].start.line",
-                            idx
-                        ))
+                        invalid_params(&format!("Missing ranges[{}].start.line", idx))
                     })?;
                 let start_line = u32::try_from(start_line_u64).map_err(|_| {
-                    invalid_ranges_formatting_params(&format!(
-                        "ranges[{}].start.line exceeds u32::MAX",
-                        idx
-                    ))
+                    invalid_params(&format!("ranges[{}].start.line exceeds u32::MAX", idx))
                 })?;
 
-                let start_char_u64 = range_val
-                    .pointer("/start/character")
-                    .and_then(|v| v.as_u64())
-                    .ok_or_else(|| {
-                        invalid_ranges_formatting_params(&format!(
-                            "Missing ranges[{}].start.character",
-                            idx
-                        ))
-                    })?;
+                let start_char_u64 =
+                    range_val.pointer("/start/character").and_then(|v| v.as_u64()).ok_or_else(
+                        || invalid_params(&format!("Missing ranges[{}].start.character", idx)),
+                    )?;
                 let start_char = u32::try_from(start_char_u64).map_err(|_| {
-                    invalid_ranges_formatting_params(&format!(
-                        "ranges[{}].start.character exceeds u32::MAX",
-                        idx
-                    ))
+                    invalid_params(&format!("ranges[{}].start.character exceeds u32::MAX", idx))
                 })?;
 
-                let end_line_u64 =
-                    range_val.pointer("/end/line").and_then(|v| v.as_u64()).ok_or_else(|| {
-                        invalid_ranges_formatting_params(&format!(
-                            "Missing ranges[{}].end.line",
-                            idx
-                        ))
-                    })?;
-                let end_line = u32::try_from(end_line_u64).map_err(|_| {
-                    invalid_ranges_formatting_params(&format!(
-                        "ranges[{}].end.line exceeds u32::MAX",
-                        idx
-                    ))
-                })?;
-
-                let end_char_u64 = range_val
-                    .pointer("/end/character")
+                let end_line_u64 = range_val
+                    .pointer("/end/line")
                     .and_then(|v| v.as_u64())
-                    .ok_or_else(|| {
-                        invalid_ranges_formatting_params(&format!(
-                            "Missing ranges[{}].end.character",
-                            idx
-                        ))
-                    })?;
+                    .ok_or_else(|| invalid_params(&format!("Missing ranges[{}].end.line", idx)))?;
+                let end_line = u32::try_from(end_line_u64).map_err(|_| {
+                    invalid_params(&format!("ranges[{}].end.line exceeds u32::MAX", idx))
+                })?;
+
+                let end_char_u64 =
+                    range_val.pointer("/end/character").and_then(|v| v.as_u64()).ok_or_else(
+                        || invalid_params(&format!("Missing ranges[{}].end.character", idx)),
+                    )?;
                 let end_char = u32::try_from(end_char_u64).map_err(|_| {
-                    invalid_ranges_formatting_params(&format!(
-                        "ranges[{}].end.character exceeds u32::MAX",
-                        idx
-                    ))
+                    invalid_params(&format!("ranges[{}].end.character exceeds u32::MAX", idx))
                 })?;
 
                 let range = WireRange::new(
@@ -396,38 +361,7 @@ impl LspServer {
 mod tests {
     use super::*;
     use crate::features::formatting::FormattingError;
-    use perl_tdd_support::{must, must_err, must_some};
-    use serde_json::json;
-
-    fn assert_ranges_formatting_request_shape_guidance(error: &JsonRpcError, summary: &str) {
-        assert_eq!(error.code, -32602);
-        assert!(error.message.contains(summary), "unexpected message: {}", error.message);
-        assert!(
-            error.message.contains("textDocument/rangesFormatting"),
-            "unexpected message: {}",
-            error.message
-        );
-        assert!(
-            error.message.contains("params.textDocument.uri"),
-            "unexpected message: {}",
-            error.message
-        );
-        assert!(error.message.contains("params.ranges"), "unexpected message: {}", error.message);
-        assert!(error.message.contains("start.line"), "unexpected message: {}", error.message);
-        assert!(error.message.contains("start.character"), "unexpected message: {}", error.message);
-        assert!(error.message.contains("end.line"), "unexpected message: {}", error.message);
-        assert!(error.message.contains("end.character"), "unexpected message: {}", error.message);
-        assert!(
-            error.message.contains("non-negative integers"),
-            "unexpected message: {}",
-            error.message
-        );
-        assert!(
-            error.message.contains("file:///path/to/script.pl"),
-            "unexpected message: {}",
-            error.message
-        );
-    }
+    use perl_tdd_support::must_some;
 
     #[test]
     fn formatting_error_to_rpc_not_found_has_data_field() {
@@ -481,54 +415,74 @@ mod tests {
     }
 
     #[test]
+    fn build_perltidy_config_uses_discovered_profile_when_unset() {
+        let server = LspServer::new();
+        server.config.lock().perltidy_profile = None;
+        *server.discovered_perltidy_profile.lock() = Some("/ws/.perltidyrc".to_string());
+
+        let config = server.build_perltidy_config();
+
+        assert_eq!(
+            config.profile.as_deref(),
+            Some("/ws/.perltidyrc"),
+            "discovered profile should be used when none is explicitly configured"
+        );
+    }
+
+    #[test]
+    fn build_perltidy_config_prefers_explicit_profile_over_discovered() {
+        let server = LspServer::new();
+        server.config.lock().perltidy_profile = Some("/explicit/.perltidyrc".to_string());
+        *server.discovered_perltidy_profile.lock() = Some("/ws/.perltidyrc".to_string());
+
+        let config = server.build_perltidy_config();
+
+        assert_eq!(
+            config.profile.as_deref(),
+            Some("/explicit/.perltidyrc"),
+            "explicit configuration must take precedence over discovery"
+        );
+    }
+
+    #[test]
+    fn build_perltidy_config_profile_none_when_unset_and_undiscovered() {
+        let server = LspServer::new();
+        server.config.lock().perltidy_profile = None;
+        *server.discovered_perltidy_profile.lock() = None;
+
+        let config = server.build_perltidy_config();
+
+        assert!(
+            config.profile.is_none(),
+            "profile should be None when neither configured nor discovered"
+        );
+    }
+
+    #[test]
+    fn build_perltidy_config_reads_native_scalars_from_server_config() {
+        // The native scalar fields are read straight from the server config,
+        // which already reflects defaults + discovered-profile + user config.
+        let server = LspServer::new();
+        {
+            let mut config = server.config.lock();
+            config.perltidy_maximum_line_length = Some(123);
+            config.perltidy_indent_columns = Some(3);
+            config.perltidy_tabs = Some(true);
+        }
+
+        let config = server.build_perltidy_config();
+
+        assert_eq!(config.maximum_line_length, Some(123));
+        assert_eq!(config.indent_columns, Some(3));
+        assert_eq!(config.tabs, Some(true));
+    }
+
+    #[test]
     fn document_not_open_error_uses_invalid_request_code() {
         let uri = "file:///tmp/missing.pl";
         let rpc = document_not_open_error(uri);
         assert_eq!(rpc.code, INVALID_REQUEST);
         assert_eq!(rpc.message, format!("Document not open: {uri}"));
         assert!(rpc.data.is_none(), "document-not-open error should not include data");
-    }
-
-    #[test]
-    fn ranges_formatting_request_shape_errors_include_guidance() {
-        let server = LspServer::new();
-        let uri = "file:///range_shape.pl";
-
-        let missing_ranges = must_err(server.handle_ranges_formatting(Some(json!({
-            "textDocument": { "uri": uri },
-            "options": { "tabSize": 4, "insertSpaces": true }
-        }))));
-        assert_ranges_formatting_request_shape_guidance(
-            &missing_ranges,
-            "Missing required parameter: ranges",
-        );
-
-        must(server.test_apply_did_open(uri, "sub messy{my$x=1;return$x;}\n", 1));
-
-        let missing_start_character = must_err(server.handle_ranges_formatting(Some(json!({
-            "textDocument": { "uri": uri },
-            "ranges": [{
-                "start": { "line": 0 },
-                "end": { "line": 0, "character": 28 }
-            }],
-            "options": { "tabSize": 4, "insertSpaces": true }
-        }))));
-        assert_ranges_formatting_request_shape_guidance(
-            &missing_start_character,
-            "Missing ranges[0].start.character",
-        );
-
-        let line_overflow = must_err(server.handle_ranges_formatting(Some(json!({
-            "textDocument": { "uri": uri },
-            "ranges": [{
-                "start": { "line": 4294967296_u64, "character": 0 },
-                "end": { "line": 0, "character": 28 }
-            }],
-            "options": { "tabSize": 4, "insertSpaces": true }
-        }))));
-        assert_ranges_formatting_request_shape_guidance(
-            &line_overflow,
-            "ranges[0].start.line exceeds u32::MAX",
-        );
     }
 }

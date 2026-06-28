@@ -45,7 +45,7 @@ fn actions_for(source: &str, diags: &[Diagnostic]) -> Vec<CodeAction> {
 
 fn apply_action(source: &str, action: &CodeAction) -> String {
     let mut edits = action.edit.changes.clone();
-    edits.sort_by(|a, b| b.location.start.cmp(&a.location.start));
+    edits.sort_by_key(|edit| std::cmp::Reverse(edit.location.start));
     let mut out = source.to_string();
     for edit in edits {
         out.replace_range(edit.location.start..edit.location.end, &edit.new_text);
@@ -53,7 +53,7 @@ fn apply_action(source: &str, action: &CodeAction) -> String {
     out
 }
 
-fn find_import_action<'a>(actions: &'a [CodeAction]) -> Option<&'a CodeAction> {
+fn find_import_action(actions: &[CodeAction]) -> Option<&CodeAction> {
     actions.iter().find(|a| a.title.starts_with("Import '") || a.title.starts_with("Add 'use "))
 }
 

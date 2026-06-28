@@ -2,7 +2,7 @@
 
 ## Language and Toolchain
 - **Language**: Rust (Edition 2024)
-- **MSRV**: 1.92 (pinned in `rust-toolchain.toml`)
+- **MSRV**: 1.95 (pinned in `rust-toolchain.toml`)
 - **Toolchain components**: rustfmt, clippy (minimal profile)
 
 ## Build System
@@ -71,7 +71,7 @@ just quick-ref
 - `use_small_heuristics = "Max"`
 
 ## Clippy Config (clippy.toml)
-- `msrv = "1.92"`
+- `msrv = "1.95"`
 - `too-many-arguments-threshold = 8`
 - `cognitive-complexity-threshold = 50`
 

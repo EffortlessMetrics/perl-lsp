@@ -628,12 +628,14 @@ fn test_completion_details() -> Result<(), Box<dyn std::error::Error>> {
     // Check it has details
     assert!(argv_item["detail"].is_string());
 
+    let expected_doc = "Command-line arguments to the script";
+
     // Documentation may be in a nested structure
     if let Some(doc) = argv_item.get("documentation") {
         if doc.is_string() {
-            assert_eq!(doc, "Command line arguments");
+            assert_eq!(doc, expected_doc);
         } else if let Some(value) = doc.get("value") {
-            assert_eq!(value, "Command line arguments");
+            assert_eq!(value, expected_doc);
         }
     }
 
@@ -986,6 +988,57 @@ fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn test_snippet_completion_includes_filter_text() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
+
+    let uri = "file:///completion_filter_text_snippet.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "fo"
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 0, "character": 2 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let foreach_item = items
+        .iter()
+        .find(|item| item["label"] == "foreach")
+        .ok_or_else(|| format!("expected foreach snippet completion, got: {items:?}"))?;
+
+    assert_eq!(foreach_item["kind"].as_i64(), Some(15));
+    assert_eq!(
+        foreach_item["filterText"].as_str(),
+        Some("foreach"),
+        "snippet completions should expose their trigger as filterText"
+    );
+
+    Ok(())
+}
+
 /// Test array and hash element access completion
 #[test]
 fn test_element_access_completion() -> Result<(), Box<dyn std::error::Error>> {
@@ -1195,8 +1248,11 @@ fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Er
 }
 
 /// Test completion with incremental typing
+///
+/// Verifies that after a `textDocument/didChange` narrows the typed prefix,
+/// the completion provider returns the correct prefix-filtered candidates
+/// drawn from the updated document text.
 #[test]
-#[ignore = "incremental completion returns all completions instead of filtered set; tracked in debt-ledger.yaml"]
 fn test_incremental_completion() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
     initialize_lsp(&server);
@@ -1341,11 +1397,16 @@ $prefi"#
         .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
         .collect::<Result<_, _>>()?;
 
-    // The two `prefi`-prefixed variables remain candidates. Whether the server
-    // pre-filters out `$preliminary` (which does not start with `prefi`) is a
-    // server-design choice; clients filter by prefix per LSP spec.
+    // The two `prefi`-prefixed variables must be present.
     assert!(labels3.contains(&"$prefix".to_string()), "labels: {labels3:?}");
     assert!(labels3.contains(&"$prefixed_var".to_string()), "labels: {labels3:?}");
+    // The server applies prefix filtering: `$preliminary` starts with `prelim`, not
+    // `prefi`, so it must NOT appear in the results after the prefix is narrowed.
+    assert!(
+        !labels3.contains(&"$preliminary".to_string()),
+        "$preliminary must not appear for prefix '$prefi' — server-side prefix filter is broken; \
+         labels: {labels3:?}"
+    );
 
     Ok(())
 }
@@ -1837,6 +1898,186 @@ fn test_completion_list_apply_kind_absent_without_item_defaults()
     assert!(
         response["result"].get("applyKind").is_none(),
         "applyKind must stay absent when there are no item defaults to combine: {response}"
+    );
+
+    Ok(())
+}
+
+/// Test sigil-aware completion: $var should only offer scalar completions
+#[test]
+fn test_scalar_completion_only_offers_scalars() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_scalar_sigil.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"
+my @names = (1, 2, 3);
+my $name = 42;
+my %name_map = ();
+
+my $result = $name
+"#
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 5, "character": 16 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
+
+    // Should suggest $name but NOT @names or %name_map
+    assert!(labels.contains(&"$name".to_string()), "Should suggest $name");
+    assert!(
+        !labels.contains(&"@names".to_string()),
+        "Should NOT suggest @names when using $ sigil"
+    );
+    assert!(
+        !labels.contains(&"%name_map".to_string()),
+        "Should NOT suggest %name_map when using $ sigil"
+    );
+
+    Ok(())
+}
+
+/// Test sigil-aware completion: @var should only offer array completions
+#[test]
+fn test_array_completion_only_offers_arrays() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_array_sigil.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"
+my @names = (1, 2, 3);
+my $name = 42;
+my %name_map = ();
+
+my @result = @name
+"#
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 5, "character": 16 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
+
+    // Should suggest @names but NOT $name or %name_map
+    assert!(labels.contains(&"@names".to_string()), "Should suggest @names");
+    assert!(!labels.contains(&"$name".to_string()), "Should NOT suggest $name when using @ sigil");
+    assert!(
+        !labels.contains(&"%name_map".to_string()),
+        "Should NOT suggest %name_map when using @ sigil"
+    );
+
+    Ok(())
+}
+
+/// Test sigil-aware completion: %var should only offer hash completions
+#[test]
+fn test_hash_completion_only_offers_hashes() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_hash_sigil.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"
+my @names = (1, 2, 3);
+my $name = 42;
+my %name_map = ();
+
+my %result = %name
+"#
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 5, "character": 16 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
+
+    // Should suggest %name_map but NOT $name or @names
+    assert!(labels.contains(&"%name_map".to_string()), "Should suggest %name_map");
+    assert!(!labels.contains(&"$name".to_string()), "Should NOT suggest $name when using % sigil");
+    assert!(
+        !labels.contains(&"@names".to_string()),
+        "Should NOT suggest @names when using % sigil"
     );
 
     Ok(())

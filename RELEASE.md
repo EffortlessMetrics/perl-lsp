@@ -177,6 +177,27 @@ If Docker is available, also run the installer target-selection self-test:
 bash scripts/tests/test-install-target-selection.sh
 ```
 
+### 9. Release-artifact surface check (DAP binary contract)
+
+The release workflow builds and packages both `perllsp` and `perl-dap` into
+every archive, and downstream integrations (VS Code / Open VSX, LSP4IJ) depend
+on `perl-dap` being present. The release workflow gates on this automatically
+(see `.github/workflows/release.yml`), but you can verify a locally-built or
+downloaded set of archives the same way. Point `--dist` at a directory holding
+the `perllsp-<version>-<triple>.{tar.gz,zip}` archives plus the consolidated
+`SHA256SUMS`:
+
+```bash
+cargo xtask release artifact-check --dist dist --version "$VERSION"
+```
+
+The check enforces the contract in
+[`docs/reference/downstream-dap-integrations.json`](docs/reference/downstream-dap-integrations.json):
+each archive contains the required LSP and DAP binaries, Unix binaries carry the
+executable bit, every contract target triple is present, and every archive is
+listed (with a matching digest) in the consolidated `SHA256SUMS`. Pass
+`--allow-partial` when validating an intentionally incomplete set.
+
 ---
 
 ## Triggering the Release Workflow

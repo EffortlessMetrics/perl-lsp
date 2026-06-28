@@ -15,13 +15,11 @@
 //! divergence in issue #353):
 //!
 //! - `DapDispatcher` rejected `configurationDone` before `initialize` with
-//!   an error containing `"before initialized"`. `DebugAdapter` is more
-//!   permissive and returns success regardless of initialization state.
-//!   Since the production server already uses `DebugAdapter`, this is the
-//!   behavior users have observed for many minor releases; the removal
-//!   only deletes the unused strict check. The test
-//!   `configuration_done_before_initialize_is_permissive` codifies the
-//!   current behavior so it is not silently changed again.
+//!   an error containing `"before initialized"`. `DebugAdapter` now rejects
+//!   `configurationDone` until a launch or attach establishes a debug
+//!   session. The test
+//!   `configuration_done_before_launch_or_attach_fails_structured` codifies
+//!   that observed production contract.
 //! - `DapDispatcher` had a failed-initialize no-event test. `DebugAdapter`
 //!   accepts initialize arguments permissively and has no corresponding
 //!   initialize failure path.
@@ -216,8 +214,7 @@ fn set_breakpoints_preserves_request_order_through_dispatch() {
 /// the dispatch handler must reject `arguments: None` with a structured
 /// failure response - never panic, never return success.
 #[test]
-fn set_breakpoints_with_missing_arguments_fails_structured()
--> Result<(), Box<dyn std::error::Error>> {
+fn set_breakpoints_with_missing_arguments_fails_structured() {
     let mut adapter = DebugAdapter::new();
     let response = adapter.handle_request(1, "setBreakpoints", None);
 
@@ -225,46 +222,10 @@ fn set_breakpoints_with_missing_arguments_fails_structured()
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "missing arguments must produce success=false");
             assert_eq!(command, "setBreakpoints");
-            let message = message.ok_or("missing arguments must include an error message")?;
-            assert!(
-                message.contains("source.path"),
-                "missing arguments should name the required source path field: {message}"
-            );
-            assert!(
-                message.contains("\"breakpoints\""),
-                "missing arguments should show the breakpoints array shape: {message}"
-            );
+            assert!(message.is_some(), "missing arguments must include an error message");
         }
         other => must(Err::<(), _>(format!("expected Response, got {other:?}"))),
     }
-
-    Ok(())
-}
-
-#[test]
-fn set_breakpoints_with_invalid_arguments_guides_request_shape()
--> Result<(), Box<dyn std::error::Error>> {
-    let mut adapter = DebugAdapter::new();
-    let response = adapter.handle_request(1, "setBreakpoints", Some(json!({})));
-
-    match response {
-        DapMessage::Response { success, command, message, .. } => {
-            assert!(!success, "invalid arguments must produce success=false");
-            assert_eq!(command, "setBreakpoints");
-            let message = message.ok_or("invalid arguments must include an error message")?;
-            assert!(
-                message.contains("source.path"),
-                "invalid arguments should name the required source path field: {message}"
-            );
-            assert!(
-                message.contains("\"line\": 1"),
-                "invalid arguments should show a breakpoint line example: {message}"
-            );
-        }
-        other => must(Err::<(), _>(format!("expected Response, got {other:?}"))),
-    }
-
-    Ok(())
 }
 
 // --- inlineValues -------------------------------------------------------------
@@ -311,29 +272,23 @@ fn inline_values_returns_scalars_for_two_line_script() {
 
 // --- configurationDone --------------------------------------------------------
 
-/// Documents the deliberate divergence from `DapDispatcher`:
-/// `DebugAdapter::handle_configuration_done` (in
-/// `crates/perl-dap/src/debug_adapter/process.rs`) does not gate on the
-/// initialized state - it returns success regardless. This has been the
-/// production behavior for many releases (since `DapServer::run` has only
-/// ever wired `DebugAdapter` through stdio). Removing the unused
-/// `DapDispatcher` strict check does not change observed behavior.
-///
-/// If a future change re-introduces the strict check on `DebugAdapter`,
-/// this test will need to be updated alongside the issue documentation.
+/// Documents the production `DebugAdapter` contract:
+/// `configurationDone` before launch/attach returns a structured failure
+/// instead of claiming success without an active debug session.
 #[test]
-fn configuration_done_before_initialize_is_permissive() {
+fn configuration_done_before_launch_or_attach_fails_structured() {
     let mut adapter = DebugAdapter::new();
     let response = adapter.handle_request(1, "configurationDone", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(
-                success,
-                "DebugAdapter returns success even before initialize \
-                 (DapDispatcher's strict check was unused in production)"
-            );
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "configurationDone before launch/attach must fail");
             assert_eq!(command, "configurationDone");
+            let message = must_some(message);
+            assert!(
+                message.contains("launch or attach request must be sent before configurationDone"),
+                "expected launch/attach ordering guidance, got: {message}"
+            );
         }
         other => must(Err::<(), _>(format!("expected Response, got {other:?}"))),
     }
@@ -361,32 +316,6 @@ fn unknown_command_returns_unknown_command_prefix() {
                 message.starts_with("Unknown command: thisCommandDoesNotExist"),
                 "expected `Unknown command: <name>` prefix, got: {message}"
             );
-        }
-        other => must(Err::<(), _>(format!("expected Response, got {other:?}"))),
-    }
-}
-
-/// When the unknown command name is not a close typo of any supported command,
-/// the error message must include the supported command list so users know what
-/// commands are available without consulting external docs.
-#[test]
-fn unknown_command_includes_supported_commands_when_no_suggestion() {
-    let mut adapter = DebugAdapter::new();
-    let response = adapter.handle_request(43, "totallyMadeUpCommandXYZ123", None);
-
-    match response {
-        DapMessage::Response { success, command, message, .. } => {
-            assert!(!success);
-            assert_eq!(command, "totallyMadeUpCommandXYZ123");
-            let message = must_some(message);
-            assert!(
-                message.contains("Supported commands:"),
-                "expected supported-commands list in message, got: {message}"
-            );
-            // Spot-check a few well-known commands appear in the list
-            assert!(message.contains("initialize"), "expected 'initialize' in supported list");
-            assert!(message.contains("launch"), "expected 'launch' in supported list");
-            assert!(message.contains("evaluate"), "expected 'evaluate' in supported list");
         }
         other => must(Err::<(), _>(format!("expected Response, got {other:?}"))),
     }

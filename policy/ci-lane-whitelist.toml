@@ -447,7 +447,7 @@ evidence = [
   "target/ripr/review/annotations.txt",
   "target/xtask/impacted-evidence/latest.json",
 ]
-allowed_triggers = ["pull_request", "workflow_dispatch"]
+allowed_triggers = ["pull_request", "merge_group", "workflow_dispatch"]
 labels = ["ripr", "full-ci"]
 expensive = false
 blocking_promotion_allowed = false
@@ -493,11 +493,11 @@ default_pr = false
 runner = "ubuntu_24_04"
 base_lem = 45
 owner = "testing"
-intent = "Measure execution surface."
+intent = "Measure execution surface; also provides the required Codecov / Patch 95 check on merge_group runs."
 failure_mode = "Coverage drops or important code becomes unexecuted."
 proof_obligation = "Run cargo-llvm-cov and upload report."
 evidence = ["lcov.info", "Codecov"]
-allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled"]
+allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled", "merge_group", "pull_request"]
 labels = ["ci:coverage", "coverage", "full-ci"]
 expensive = true
 duplicate_of = []
@@ -966,3 +966,118 @@ expensive = false
 duplicate_of = []
 review_after = "2026-06-07"
 expires = "2026-11-07"
+
+# =============================================================================
+# UB / native-boundary advisory review lanes (PR 1 advisory scaffold)
+# =============================================================================
+
+[[lane]]
+id = "ub_review_router"
+workflow = ".github/workflows/ub-review.yml"
+job = "route-ub-review"
+tier = "frontdoor"
+kind = "control"
+blocking = false
+default_pr = true
+runner = "ubuntu_latest"
+base_lem = 1
+owner = "ci"
+intent = "Route same-repo UB review PRs to CX53, CX43, or GitHub-hosted fallback without exposing self-hosted runners to fork PRs."
+failure_mode = "PRs either do not route to available trusted capacity or expose self-hosted capacity to untrusted forks."
+proof_obligation = "Emit target, reason, and fallback_allowed; fork PRs must be gated by the fork-policy job."
+evidence = ["job output", "step-summary"]
+allowed_triggers = ["pull_request"]
+expensive = false
+duplicate_of = []
+review_after = "2026-09-06"
+expires = "2026-12-06"
+
+[[lane]]
+id = "ub_review_advisory"
+workflow = ".github/workflows/ub-review.yml"
+job = "ub-review-cx53"
+tier = "frontdoor"
+kind = "ub_review"
+blocking = false
+default_pr = true
+runner = "self_hosted_cx53"
+base_lem = 4
+owner = "ci"
+intent = "Build UB/native-boundary evidence packet for changed Rust unsafe code and post one advisory grouped PR review."
+failure_mode = "Unsafe contract gaps or aliasing/lifetime issues in changed unsafe code go without review."
+proof_obligation = "Run ub-review sensors and model lanes; emit evidence packet to target/ub-review/ artifact."
+evidence = [
+  "target/ub-review/running-summary.md",
+  "target/ub-review/review/review.json",
+  "target/ub-review/review/github-review.json",
+]
+allowed_triggers = ["pull_request"]
+labels = ["ub-review", "full-ci"]
+expensive = false
+blocking_promotion_allowed = false
+duplicate_of = ["ripr_advisory"]
+review_after = "2026-09-06"
+expires = "2026-12-06"
+
+[[lane]]
+id = "ub_review_advisory_cx43"
+workflow = ".github/workflows/ub-review.yml"
+job = "ub-review-cx43"
+tier = "frontdoor"
+kind = "ub_review"
+blocking = false
+default_pr = true
+runner = "self_hosted_cx43"
+base_lem = 4
+owner = "ci"
+intent = "CX43 fallback for UB review advisory when CX53 is unavailable."
+failure_mode = "UB evidence packet unavailable on secondary runner path."
+proof_obligation = "Same as ub_review_advisory; runs on CX43."
+evidence = ["target/ub-review/running-summary.md"]
+allowed_triggers = ["pull_request"]
+expensive = false
+duplicate_of = ["ub_review_advisory"]
+review_after = "2026-09-06"
+expires = "2026-12-06"
+
+[[lane]]
+id = "ub_review_advisory_github"
+workflow = ".github/workflows/ub-review.yml"
+job = "ub-review-github"
+tier = "frontdoor"
+kind = "ub_review"
+blocking = false
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 4
+owner = "ci"
+intent = "GitHub-hosted fallback for UB review advisory when no self-hosted runner is available."
+failure_mode = "UB evidence packet unavailable on GitHub-hosted fallback path."
+proof_obligation = "Same as ub_review_advisory; runs on ubuntu-24.04."
+evidence = ["target/ub-review/running-summary.md"]
+allowed_triggers = ["pull_request"]
+expensive = false
+duplicate_of = ["ub_review_advisory"]
+review_after = "2026-09-06"
+expires = "2026-12-06"
+
+[[lane]]
+id = "ub_review_fork_policy"
+workflow = ".github/workflows/ub-review.yml"
+job = "fork-policy"
+tier = "frontdoor"
+kind = "policy"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 1
+owner = "ci"
+intent = "Emit a clear policy record for fork PRs that cannot access org secrets."
+failure_mode = "Fork PRs silently skip advisory review without a policy record."
+proof_obligation = "Emit policy message; job succeeds (advisory skipped, not failed)."
+evidence = ["job output"]
+allowed_triggers = ["pull_request"]
+expensive = false
+duplicate_of = []
+review_after = "2026-09-06"
+expires = "2026-12-06"

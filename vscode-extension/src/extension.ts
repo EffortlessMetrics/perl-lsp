@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 import { execFile } from 'child_process';
 import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node';
 import type { LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
@@ -38,7 +39,7 @@ import type {
 } from './commandResults';
 
 let client: LanguageClient | undefined;
-let outputChannel: vscode.OutputChannel;
+let outputChannel: vscode.LogOutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
 let currentServerPath: string | null = null;
 // Set by getServerPath() when perl-lsp.serverPath is configured but the file
@@ -1046,7 +1047,7 @@ export async function copyProviderDecisionReceiptCommand(
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-    outputChannel = vscode.window.createOutputChannel('Perl Language Server');
+    outputChannel = vscode.window.createOutputChannel('Perl Language Server', { log: true });
     const mcpDisposable = registerMcpSupport(outputChannel);
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'perl-lsp.showStatusMenu';
@@ -1066,6 +1067,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register commands
     const restartCommand = vscode.commands.registerCommand('perl-lsp.restart', async () => {
         await restartServer(context);
+    });
+
+    const openDemoProjectDisposable = vscode.commands.registerCommand('perl-lsp.openDemoProject', async () => {
+        await openDemoProjectCommand(context);
     });
 
     const organizeImportsCommand = vscode.commands.registerCommand('perl-lsp.organizeImports', async () => {
@@ -1685,6 +1690,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         showOutputCommand,
         restartCommand,
+        openDemoProjectDisposable,
         organizeImportsCommand,
         runTestsCommand,
         runPerlCriticCommand,
@@ -1736,8 +1742,31 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
     }
 
+    startLanguageClientAfterActivation(context, whatsNewManager);
+}
+
+export async function deactivate() {
+    await disposeLanguageClient();
+}
+
+function startLanguageClientAfterActivation(
+    context: vscode.ExtensionContext,
+    whatsNewManager: WhatsNewManager,
+): void {
+    finishStartupAfterActivation(context, whatsNewManager).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`[startup] Background startup failed: ${msg}`);
+        healthWidget?.onStateChange(ClientState.Stopped);
+    });
+}
+
+async function finishStartupAfterActivation(
+    context: vscode.ExtensionContext,
+    whatsNewManager: WhatsNewManager,
+): Promise<void> {
     await initializeLanguageClient(context);
     await validateIncludePaths(context);
+    await suggestDiscoveredIncludePaths(context);
     await warnAboutPerlExtensionConflicts(context);
 
     // Background update check — fire-and-forget after startup completes.
@@ -1749,10 +1778,10 @@ export async function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine(`[update-check] Error: ${msg}`);
     });
 
-    // First-run onboarding: show welcome notification once per installation
+    // First-run onboarding: show welcome notification once per installation.
     const onboarding = new OnboardingManager(context, outputChannel);
     if (onboarding.shouldShowWelcome()) {
-        // Fire-and-forget; failures must not block extension startup
+        // Fire-and-forget; failures must not block extension startup.
         onboarding.showWelcomeNotification(currentServerPath).catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             outputChannel.appendLine(`[onboarding] Error showing welcome: ${msg}`);
@@ -1773,10 +1802,6 @@ export async function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`[whats-new] Error showing What's New: ${msg}`);
         });
     }
-}
-
-export async function deactivate() {
-    await disposeLanguageClient();
 }
 
 /**
@@ -1932,18 +1957,21 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         return false;
     }
 
-    client = createLanguageClient(currentServerPath);
-    bindClientState(client);
+    const startedClient = createLanguageClient(currentServerPath);
+    client = startedClient;
+    bindClientState(startedClient);
     try {
-        await client.start();
+        await startedClient.start();
     } catch (startError: unknown) {
         const msg = startError instanceof Error ? startError.message : String(startError);
         outputChannel.appendLine(`[startup] Language client failed to start: ${msg}`);
-        stateChangeDisposable?.dispose();
-        stateChangeDisposable = undefined;
-        try { void client.dispose(); } catch { /* already dead */ }
-        client = undefined;
-        healthWidget?.onStateChange(ClientState.Stopped);
+        if (client === startedClient) {
+            stateChangeDisposable?.dispose();
+            stateChangeDisposable = undefined;
+            client = undefined;
+            healthWidget?.onStateChange(ClientState.Stopped);
+        }
+        try { void startedClient.dispose(); } catch { /* already dead */ }
 
         // Probe the binary to get an actionable OS-level diagnosis (#3280).
         // If the probe result is Unknown (binary gave no useful output), fall
@@ -1983,22 +2011,49 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         }
         return false;
     }
+
+    if (client !== startedClient) {
+        outputChannel.appendLine('[startup] Language client was replaced during startup; skipping stale startup finalization.');
+        try { void startedClient.dispose(); } catch { /* already replaced */ }
+        return client !== undefined;
+    }
+
     // Expose the server version in the widget tooltip once the handshake completes.
-    const serverVersion = client.initializeResult?.serverInfo?.version;
+    const serverVersion = startedClient.initializeResult?.serverInfo?.version;
     if (serverVersion) {
         healthWidget?.setVersion(serverVersion);
     }
 
+    // Offer AI inline completion once if the server advertises support (#1634).
+    // Fire-and-forget; failures must not block startup finalization.
+    suggestAiCompletionIfSupported(context, startedClient).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`[ai-completion] Error suggesting AI completion: ${msg}`);
+    });
+
     await refreshTestAdapter(context);
 
     // Initialize streaming inline completion controller (config-gated)
-    refreshStreamingController(client);
+    refreshStreamingController(startedClient);
 
     // Clear any stale startup diagnosis — the server started successfully so
     // the root cause (e.g. missing Perl) no longer applies.
     lastStartupDiagnosis = undefined;
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
+}
+
+export function buildDisabledFeaturesFromConfig(
+    config: { get<T>(key: string, defaultValue: T): T }
+): string[] {
+    const base = config.get<string[]>('disabledFeatures', []).slice();
+    if (!config.get<boolean>('enableSemanticTokens', true) && !base.includes('lsp.semantic_tokens')) {
+        base.push('lsp.semantic_tokens');
+    }
+    if (!config.get<boolean>('enableFormatting', true) && !base.includes('lsp.formatting')) {
+        base.push('lsp.formatting');
+    }
+    return base;
 }
 
 function createLanguageClient(serverPath: string): LanguageClient {
@@ -2015,8 +2070,9 @@ function createLanguageClient(serverPath: string): LanguageClient {
         }
     };
 
-    const disabledFeatures = vscode.workspace.getConfiguration('perl-lsp')
-        .get<string[]>('disabledFeatures', []);
+    const disabledFeatures = buildDisabledFeaturesFromConfig(
+        vscode.workspace.getConfiguration('perl-lsp')
+    );
 
     const clientOptions: LanguageClientOptions = {
         documentSelector: [
@@ -2563,6 +2619,234 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
     }
 }
 
+/**
+ * Candidate directories that commonly hold Perl modules in non-standard project
+ * layouts. Scanned (shallowly) on activation so first-time users whose modules
+ * live outside the built-in defaults ("lib", "local/lib/perl5") get a one-time
+ * suggestion to add the directory to perl-lsp.includePaths — instead of
+ * silently-broken hover / go-to-definition / completion. See issue #1633.
+ *
+ * Ordered most-specific-first; the first uncovered match drives the prompt copy.
+ */
+const DISCOVERY_CANDIDATE_DIRS = ['src', 'local', 'vendor', 'lib', 't/lib', 'blib/lib', 'modules'];
+
+/**
+ * Returns true if `dir` (already known to exist) contains at least one `.pm`
+ * file within `maxDepth` levels. Bounded walk: a hard entry budget keeps
+ * activation fast even on large trees.
+ */
+function directoryContainsPerlModule(dir: string, maxDepth = 2): boolean {
+    let budget = 200; // hard cap on filesystem entries inspected
+    const walk = (current: string, depth: number): boolean => {
+        if (depth > maxDepth || budget <= 0) {
+            return false;
+        }
+        let entries: fs.Dirent[];
+        try {
+            entries = fs.readdirSync(current, { withFileTypes: true });
+        } catch {
+            return false;
+        }
+        for (const entry of entries) {
+            if (budget-- <= 0) {
+                return false;
+            }
+            if (entry.isFile() && entry.name.endsWith('.pm')) {
+                return true;
+            }
+        }
+        for (const entry of entries) {
+            if (entry.isDirectory() && !entry.name.startsWith('.')) {
+                if (walk(path.join(current, entry.name), depth + 1)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    return walk(dir, 0);
+}
+
+/**
+ * Scan each workspace folder for Perl module directories that exist and hold
+ * `.pm` files but are not part of the effective include paths, then offer a
+ * one-time suggestion to add them. The suggestion is cached by a SHA-256 hash
+ * of the discovered set so it re-appears only when the project structure
+ * changes — never repeatedly for the same layout, and never after Dismiss.
+ * See issue #1633.
+ */
+export async function suggestDiscoveredIncludePaths(context: vscode.ExtensionContext): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        return;
+    }
+
+    for (const folder of workspaceFolders) {
+        const config = vscode.workspace.getConfiguration('perl-lsp', folder.uri);
+        const includePaths: string[] = config.get('includePaths', ['lib', 'local/lib/perl5']);
+        const covered = new Set(includePaths.map(includePath => path.normalize(includePath)));
+        // A candidate is already covered if any configured include path IS the candidate
+        // or is a sub-path of it (e.g. "local/lib/perl5" covers the "local" candidate so
+        // we don't incorrectly suggest adding the parent directory as an additional root).
+        const isCandidateCovered = (candidate: string): boolean => {
+            const candidateNorm = path.normalize(candidate);
+            return covered.has(candidateNorm) ||
+                [...covered].some(c => c === candidateNorm + path.sep || c.startsWith(candidateNorm + path.sep) || c.startsWith(candidateNorm + '/'));
+        };
+
+        const discovered: string[] = [];
+        for (const candidate of DISCOVERY_CANDIDATE_DIRS) {
+            if (isCandidateCovered(candidate)) {
+                continue;
+            }
+            const resolved = path.resolve(folder.uri.fsPath, candidate);
+            try {
+                if (!fs.statSync(resolved).isDirectory()) {
+                    continue;
+                }
+            } catch {
+                continue; // does not exist or not accessible
+            }
+            if (directoryContainsPerlModule(resolved)) {
+                discovered.push(candidate);
+            }
+        }
+
+        if (discovered.length === 0) {
+            continue;
+        }
+
+        const signature = crypto
+            .createHash('sha256')
+            .update(discovered.slice().sort().join('\n'))
+            .digest('hex');
+        const cacheKey = `perl-lsp.includePathsSuggestion.${encodeURIComponent(folder.uri.toString())}`;
+        if (context.globalState.get<string | undefined>(cacheKey) === signature) {
+            continue;
+        }
+
+        const primary = discovered[0];
+        const extra = discovered.length > 1 ? ` (and ${discovered.length - 1} more)` : '';
+        const choice = await vscode.window.showInformationMessage(
+            `Perl LSP: found Perl modules in "${primary}"${extra}, but it is not in your include paths. Add it so hover, go-to-definition, and completion work?`,
+            'Add to Include Paths',
+            'Open Settings',
+            'Dismiss'
+        );
+
+        if (choice === 'Add to Include Paths') {
+            const next = Array.from(new Set([...includePaths, ...discovered]));
+            try {
+                await config.update('includePaths', next, vscode.ConfigurationTarget.Workspace);
+                void vscode.window.showInformationMessage(
+                    `Added ${discovered.join(', ')} to perl-lsp.includePaths.`
+                );
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                void vscode.window.showWarningMessage(`Perl LSP: could not update include paths: ${msg}`);
+            }
+        } else if (choice === 'Open Settings') {
+            void vscode.commands.executeCommand(
+                'workbench.action.openSettings',
+                '@ext:EffortlessMetrics.perl-lsp-rs perl-lsp.includePaths'
+            );
+        }
+
+        // Record the signature regardless of the choice so the same layout
+        // never re-prompts — Dismiss is sticky per unique project structure.
+        await context.globalState.update(cacheKey, signature);
+    }
+}
+
+/**
+ * Detect inline-completion ("AI completion") support advertised by the running
+ * language server and, when the feature is currently disabled, offer a one-time
+ * suggestion to enable it. Gated on the real server capability
+ * (`inlineCompletionProvider`) so the prompt never fires against a server that
+ * cannot deliver completions. Tracked in workspaceState so moving between
+ * projects does not replay the prompt. See issue #1634.
+ */
+export async function suggestAiCompletionIfSupported(
+    context: vscode.ExtensionContext,
+    client: { initializeResult?: { capabilities?: unknown } } | undefined
+): Promise<void> {
+    if (!client) {
+        return;
+    }
+
+    const config = vscode.workspace.getConfiguration('perl-lsp');
+    if (config.get<boolean>('aiCompletion.enabled', false)) {
+        return; // already enabled — nothing to suggest
+    }
+
+    const capabilities = client.initializeResult?.capabilities;
+    // Per LSP 3.18 spec, inlineCompletionProvider is boolean | InlineCompletionOptions.
+    // A value of false or null means the server explicitly does NOT support inline
+    // completion; only a truthy / non-null object value indicates real support.
+    const inlineProvider =
+        !!capabilities && typeof capabilities === 'object'
+            ? (capabilities as Record<string, unknown>).inlineCompletionProvider
+            : undefined;
+    const supportsInline = inlineProvider !== undefined && inlineProvider !== false && inlineProvider !== null;
+    if (!supportsInline) {
+        return; // server cannot deliver inline completions
+    }
+
+    const stateKey = 'perl-lsp.aiCompletion.firstRunNotificationShown';
+    if (context.workspaceState.get<boolean>(stateKey, false)) {
+        return;
+    }
+    await context.workspaceState.update(stateKey, true);
+
+    const choice = await vscode.window.showInformationMessage(
+        'Perl LSP: your language server supports AI-powered inline completions. They are off by default — enable them now?',
+        'Enable',
+        'Learn More',
+        'Dismiss'
+    );
+
+    if (choice === 'Enable') {
+        try {
+            await config.update('aiCompletion.enabled', true, vscode.ConfigurationTarget.Workspace);
+            void vscode.window.showInformationMessage('AI-powered inline completions enabled.');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            void vscode.window.showWarningMessage(`Perl LSP: could not enable AI completions: ${msg}`);
+        }
+    } else if (choice === 'Learn More') {
+        void vscode.commands.executeCommand(
+            'workbench.action.openSettings',
+            '@ext:EffortlessMetrics.perl-lsp-rs perl-lsp.aiCompletion'
+        );
+    }
+}
+
+/**
+ * Open the bundled demo Perl project (`assets/demo-project`) in a new window so
+ * first-time users can try completion, hover, and go-to-definition without
+ * needing a project of their own. Records a global flag so first-run guidance
+ * knows the user engaged with the demo. See issue #1635.
+ */
+export async function openDemoProjectCommand(context: vscode.ExtensionContext): Promise<void> {
+    const demoPath = path.join(context.extensionPath, 'assets', 'demo-project');
+    if (!fs.existsSync(path.join(demoPath, 'main.pl'))) {
+        void vscode.window.showErrorMessage(
+            'Perl LSP: demo project is not available in this installation.'
+        );
+        return;
+    }
+
+    await context.globalState.update('perl-lsp.demoProjectOpened', true);
+    void vscode.window.showInformationMessage(
+        'Opening the Perl demo project. Try code completion (Ctrl+Space) in main.pl, or hover over Utils / Database for go-to-definition.'
+    );
+    await vscode.commands.executeCommand(
+        'vscode.openFolder',
+        vscode.Uri.file(demoPath),
+        { forceNewWindow: true }
+    );
+}
+
 type ExtensionPackage = {
     publisher?: string;
     name?: string;
@@ -2967,9 +3251,7 @@ function bindClientState(languageClient: LanguageClient) {
             lastStartupDiagnosis = {
                 kind: StartupErrorKind.Unknown,
                 hint: 'The Perl Language Server stopped unexpectedly. Check the Output panel for details.',
-                remediation:
-                    'Try restarting the server (Command Palette: "Perl: Restart Server") ' +
-                    'or run "Perl: Run Health Check".',
+                remediation: 'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
             };
         }
     });
@@ -2985,6 +3267,8 @@ function requiresClientRefresh(event: vscode.ConfigurationChangeEvent): boolean 
         'perl-lsp.versionTag',
         'perl-lsp.downloadBaseUrl',
         'perl-lsp.featureProfile',
+        'perl-lsp.enableSemanticTokens',
+        'perl-lsp.enableFormatting',
     ].some(setting => event.affectsConfiguration(setting));
 }
 
@@ -3017,7 +3301,18 @@ async function disposeLanguageClient() {
     if (client) {
         const activeClient = client;
         client = undefined;
-        await activeClient.stop();
-        void activeClient.dispose();
+        try {
+            await activeClient.stop();
+        } catch (stopErr: unknown) {
+            const msg = stopErr instanceof Error ? stopErr.message : String(stopErr);
+            outputChannel.appendLine(`[client] language client stop reported: ${msg}`);
+        } finally {
+            try {
+                void activeClient.dispose();
+            } catch (disposeErr: unknown) {
+                const msg = disposeErr instanceof Error ? disposeErr.message : String(disposeErr);
+                outputChannel.appendLine(`[client] language client dispose reported: ${msg}`);
+            }
+        }
     }
 }

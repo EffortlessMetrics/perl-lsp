@@ -167,7 +167,48 @@ fn coverage_pack_manifest_declares_completion_core_pack() -> Result<()> {
     );
     assert!(commands.iter().filter_map(toml::Value::as_str).any(|value| {
         value
-            == "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture"
+            == "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture"
+    }));
+    Ok(())
+}
+
+#[test]
+fn coverage_pack_manifest_declares_inline_core_pack() -> Result<()> {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("xtask manifest path has no parent"))?
+        .join(".ci/coverage-packs.toml");
+    let manifest: toml::Value = toml::from_str(&fs::read_to_string(manifest_path)?)?;
+    let packs = manifest
+        .get("pack")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack manifest must contain pack array"))?;
+    let pack = packs
+        .iter()
+        .find(|pack| {
+            pack.get("id").and_then(toml::Value::as_str)
+                == Some("patch-coverage-inline-provider-core")
+        })
+        .ok_or_else(|| anyhow!("missing inline core coverage pack"))?;
+    let files = pack
+        .get("files")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack files must be an array"))?;
+    let commands = pack
+        .get("commands")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack commands must be an array"))?;
+
+    assert!(
+        files
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| { value == "crates/perl-lsp-rs-core/src/providers/inline_completion/" })
+    );
+    assert!(commands.iter().filter_map(toml::Value::as_str).any(|value| {
+        value
+            == "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture"
     }));
     Ok(())
 }
@@ -2316,6 +2357,83 @@ fn ci_route_cli_maps_codecov_router_script_to_route_proof_pack() -> Result<()> {
     let summary = fs::read_to_string(summary)?;
     assert!(summary.contains("python -m unittest scripts/ci/test_route_codecov_packs.py"));
     assert!(summary.contains("`patch-coverage-ci-route`: non-LCOV CI policy/routing surface"));
+    Ok(())
+}
+
+#[test]
+fn ci_route_cli_maps_generate_coverage_pack_commands_to_route_proof_pack() -> Result<()> {
+    // Regression guard: generate-coverage-pack-commands.py is part of the
+    // coverage-lane machinery and must route to ci-routing just like
+    // route-codecov-packs.py does.  If this file changes, the ci-route
+    // proof pack must run.
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/ci/generate-coverage-pack-commands.py",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("ci-routing"),
+        "generate-coverage-pack-commands.py must route to the ci-routing surface"
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| { pack.get("id").and_then(Value::as_str) == Some("ci-route-receipt") })),
+        "generate-coverage-pack-commands.py changes must run the focused ci-route proof pack"
+    );
+    Ok(())
+}
+
+#[test]
+fn ci_route_cli_maps_test_generate_coverage_pack_commands_to_route_proof_pack() -> Result<()> {
+    // Test file for generate-coverage-pack-commands.py must also route to ci-routing.
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/ci/test_generate_coverage_pack_commands.py",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("ci-routing"),
+        "test_generate_coverage_pack_commands.py must route to the ci-routing surface"
+    );
     Ok(())
 }
 

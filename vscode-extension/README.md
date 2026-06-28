@@ -55,13 +55,37 @@ for support-tier boundaries, explanations, previews, and copyable receipts.
 - **Inlay Hints** -- Type annotations shown inline in the editor
 - **Code Folding** -- Collapse subs, blocks, POD, and heredocs
 
+### AI Completion
+
+Perl LSP supports **AI-powered inline completions**, surfaced through VS Code's
+inline-suggestion UI. The feature is **off by default** and only available when
+your language server advertises inline-completion support (`inlineCompletionProvider`).
+
+To enable it, set `perl-lsp.aiCompletion.enabled` to `true` (Settings → search
+`perl-lsp.aiCompletion`). Progressive streaming is controlled separately by
+`perl-lsp.aiCompletion.streaming.enabled`. When the running server advertises
+support and the feature is off, the extension also offers a one-time prompt to
+turn it on.
+
+### Quick Start: Demo Project
+
+New to the extension and don't have a Perl project handy? Run
+**Perl: Open Demo Project** from the command palette (or use the "Open a Perl
+Project" step in the Get Started walkthrough). It opens a small bundled project
+with `lib/Utils.pm` and `lib/Database.pm` so you can immediately try completion,
+hover, and go-to-definition.
+
 ### Debugging (via perl-dap)
 - **Breakpoints** -- Set breakpoints with conditional support
 - **Step Debugging** -- Step into, over, and out of function calls
 - **Variable Inspection** -- View variables, watch expressions, and call stack
 - **Attach to Process** -- Debug running Perl processes by PID or TCP
 
-Debugging is optional and uses `perl-dap` as a separate adapter. See the
+Debugging is optional and powered by the managed `perl-dap` adapter shipped
+alongside the `perl-lsp` release artifacts -- the extension downloads it for you,
+there is nothing extra to install. Native debug sessions require a local Perl
+interpreter. The native path does **not** require `Perl::LanguageServer`; that
+module is only needed for legacy bridge-mode workflows. See the
 [debugging guide](../docs/tutorials/DAP_USER_GUIDE.md) for setup steps and
 the required launch configuration.
 
@@ -155,11 +179,9 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 | `perl-lsp.channel` | `"latest"` | Release channel. Use `latest` for the current public-alpha line or `tag` for a pinned public-alpha release |
 | `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.1`) when channel is `tag` |
 | `perl-lsp.linuxLibc` | `"auto"` | Linux libc release asset selection: `auto`, `gnu`, `glibc`, or `musl` |
-| `perl-lsp.enableDiagnostics` | `true` | Enable real-time syntax diagnostics |
-| `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting |
-| `perl-lsp.enableFormatting` | `true` | Enable document formatting (requires `perltidy`) |
+| `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting (requires server restart to apply) |
+| `perl-lsp.enableFormatting` | `true` | Enable document formatting (requires `perltidy`; requires server restart to apply) |
 | `perl-lsp.formatOnSave` | `false` | Format document on save |
-| `perl-lsp.enableRefactoring` | `true` | Enable refactoring code actions |
 | `perl-lsp.enableTestIntegration` | `true` | Enable Test Explorer integration |
 | `perl-lsp.includePaths` | `["lib", "local/lib/perl5"]` | Additional library paths for module resolution |
 | `perl-lsp.perltidyConfig` | `""` | Path to `.perltidyrc` (auto-detected if empty) |
@@ -210,6 +232,7 @@ Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 | Command | Description |
 |---------|-------------|
 | **Perl: Restart Language Server** | Restart the language server |
+| **Perl: Open Demo Project** | Open a bundled demo project to try features immediately |
 | **Perl: Show Server Version** | Display installed perllsp version |
 | **Perl: Reinstall Server Binary** | Re-download the managed binary |
 | **Perl: Organize Use Statements** | Sort and clean `use` statements |
@@ -258,7 +281,7 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
   or setup policy may be involved.
 - For Perl binary, `@INC`, `PERL5LIB`, perldoc, or DAP module-path mismatches,
   see the [Perl setup troubleshooting guide](../docs/how-to/PERL_SETUP_TROUBLESHOOTING.md).
-- Set `perl-lsp.enableDiagnostics` to `false` to disable diagnostics.
+- To suppress false-positive diagnostics, use **Perl LSP: Copy Provider Decision Receipt** and file an issue with the copied receipt so the specific provider can be addressed.
 - File an issue with the copied provider receipt if you see false positives.
 
 ## Known Issues
@@ -267,7 +290,8 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
   structures may appear with placeholder values in some scenarios.
 - The `Format Document` shortcut (`Shift+Alt+F`) is provided by VS Code's
   built-in formatter binding. perl-lsp participates through the registered
-  formatting provider when `perl-lsp.enableFormatting` is enabled.
+  formatting provider. Set `perl-lsp.enableFormatting` to `false` to disable
+  it (requires server restart).
 - On first activation, environments with strict proxies or blocked outbound
   traffic may fail auto-download. Use `perl-lsp.serverPath` or
   `perl-lsp.downloadBaseUrl` for managed/internal deployment.

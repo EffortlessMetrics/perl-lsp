@@ -58,16 +58,6 @@ impl<'a> Parser<'a> {
         Ok((name, SourceLocation { start: name_start, end: name_end }))
     }
 
-    /// Built-in subroutine attributes defined by perlsub / the Perl core.
-    ///
-    /// Attributes not in this list are valid only if the caller has loaded the
-    /// `attributes` pragma or a framework that installs a custom `MODIFY_CODE_ATTRIBUTES`
-    /// handler.  Unknown attributes are warned about (pushed to `self.errors`) but do
-    /// **not** cause a hard parse failure — custom attribute usage is widespread in
-    /// CPAN code (e.g. Moose `:ro`, Catalyst `:Private`).
-    const BUILTIN_SUB_ATTRIBUTES: &'static [&'static str] =
-        &["lvalue", "method", "prototype", "const"];
-
     /// Built-in class-level attributes defined by Perl 5.38+ `use feature 'class'`.
     ///
     /// These are valid on `class` declarations (not subroutines) and must not be
@@ -90,8 +80,8 @@ impl<'a> Parser<'a> {
     /// accepts any token that `can_be_sub_name` covers so that keyword-named attributes
     /// like `:default` do not produce spurious parse errors.
     ///
-    /// Custom attributes are still allowed (via `Attribute::Handlers` etc.) and
-    /// produce a soft warning, not a hard error.
+    /// Custom attributes are allowed (via `Attribute::Handlers` etc.) and
+    /// do not produce any diagnostic.
     const BUILTIN_VAR_ATTRIBUTES: &'static [&'static str] = &[
         "param",
         "reader",
@@ -106,11 +96,6 @@ impl<'a> Parser<'a> {
         "isa",
     ];
 
-    /// Return `true` if `name` is a known built-in subroutine attribute.
-    fn is_builtin_sub_attribute(name: &str) -> bool {
-        Self::BUILTIN_SUB_ATTRIBUTES.contains(&name)
-    }
-
     /// Return `true` if `Attribute::Handlers` has been enabled in this file.
     fn has_attribute_handlers_support(&self) -> bool {
         self.attribute_handlers_enabled
@@ -123,23 +108,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Return `true` if `name` was registered as a custom Attribute::Handlers attribute.
-    fn is_custom_attribute_handler(&self, name: &str) -> bool {
-        self.has_attribute_handlers_support() && self.custom_attribute_handlers.contains(name)
-    }
-
     /// Parse declaration attributes like `:lvalue` or `:prototype($)`.
     ///
-    /// `extra_known` lists additional attribute names that should not trigger the
-    /// "unknown subroutine attribute" warning — used by `parse_class` to whitelist
-    /// class-level attributes such as `:isa(Parent)`.
-    ///
-    /// Unknown attributes produce a soft warning pushed to `self.errors` but
-    /// parsing continues — custom attributes are legal in Perl via the
-    /// `attributes` module or framework hooks.
+    /// `extra_known` is retained for call-site compatibility but is no longer
+    /// used to gate diagnostics — Perl allows arbitrary attributes via
+    /// `MODIFY_CODE_ATTRIBUTES`, so no diagnostic is emitted for unknown names.
+    /// Only genuine syntax errors (unterminated paren, missing name) are reported.
     fn parse_declaration_attributes_with_extras(
         &mut self,
-        extra_known: &[&str],
+        _extra_known: &[&str],
     ) -> ParseResult<Vec<String>> {
         let mut attributes = Vec::new();
 
@@ -169,7 +146,6 @@ impl<'a> Parser<'a> {
                 parsed_any = true;
 
                 let base_name = attr_token.text.to_string();
-                let attr_start = attr_token.start;
                 let mut attr_name = base_name.clone();
 
                 if self.peek_kind() == Some(TokenKind::LeftParen) {
@@ -204,23 +180,13 @@ impl<'a> Parser<'a> {
                     }
                 }
 
-                // Warn (but do not error) if the attribute is not a known built-in
-                // and not an extra-known context-specific attribute.
-                // Custom attributes are valid when `attributes` or a framework hook is
-                // in scope, so a warning is the correct diagnostic level.
-                let is_known = Self::is_builtin_sub_attribute(&base_name)
-                    || extra_known.contains(&base_name.as_str())
-                    || self.is_custom_attribute_handler(&base_name)
-                    || (self.has_attribute_handlers_support() && base_name == "ATTR");
-                if !is_known {
-                    self.errors.push(ParseError::syntax(
-                        format!(
-                            "unknown subroutine attribute ':{base_name}'; \
-                             did you mean one of: lvalue, method, prototype, const?"
-                        ),
-                        attr_start,
-                    ));
-                }
+                // Perl allows arbitrary subroutine attributes via the
+                // `MODIFY_CODE_ATTRIBUTES` hook (see `perldoc attributes`).
+                // Custom attributes are widespread in CPAN frameworks
+                // (e.g., Catalyst `:Path`, Moose `:public`, web frameworks).
+                // Do NOT emit a diagnostic for unknown attribute names —
+                // only genuine syntax errors (unterminated parens, missing
+                // name after colon) should produce errors.
 
                 attributes.push(attr_name);
 
@@ -244,16 +210,15 @@ impl<'a> Parser<'a> {
 
     /// Parse declaration attributes like `:lvalue` or `:prototype($)`.
     ///
-    /// Convenience wrapper for the common subroutine/method case (no extra-known attributes).
+    /// Convenience wrapper for the common subroutine/method case.
     fn parse_declaration_attributes(&mut self) -> ParseResult<Vec<String>> {
         self.parse_declaration_attributes_with_extras(&[])
     }
 
     /// Parse variable declaration attributes (`:shared`, `:param`, `:reader`, etc.).
     ///
-    /// Delegates to `parse_declaration_attributes_with_extras` with the known
-    /// variable/field attributes whitelisted so they do not trigger the
-    /// "unknown subroutine attribute" soft warning.
+    /// Delegates to `parse_declaration_attributes_with_extras` with the standard
+    /// variable/field attribute list (retained for call-site compatibility).
     fn parse_variable_attributes(&mut self) -> ParseResult<Vec<String>> {
         self.parse_declaration_attributes_with_extras(Self::BUILTIN_VAR_ATTRIBUTES)
     }
@@ -350,6 +315,7 @@ impl<'a> Parser<'a> {
             NodeKind::Subroutine {
                 name,
                 name_span,
+                declarator: None,
                 prototype,
                 signature,
                 attributes,
@@ -377,7 +343,7 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'class'
 
-        let (name, _) = self.parse_qualified_name(false)?;
+        let (name, name_span) = self.parse_qualified_name(false)?;
 
         // Consume optional version: `1.23` (Number) or `v1.2.3` (VString).
         // An Identifier starting with `v` followed by digits is also a v-string
@@ -408,8 +374,9 @@ impl<'a> Parser<'a> {
         }
 
         // Parse class-level attributes (e.g. `:isa(Parent)`).
-        // Pass BUILTIN_CLASS_ATTRIBUTES so `:isa` and `:does` don't produce
-        // "unknown subroutine attribute" warnings.
+        // `_extra_known` is ignored since #1361 removed the unknown-attribute
+        // diagnostic entirely — all attribute names are accepted without error.
+        // BUILTIN_CLASS_ATTRIBUTES is retained here for documentation clarity.
         let attributes =
             self.parse_declaration_attributes_with_extras(Self::BUILTIN_CLASS_ATTRIBUTES)?;
 
@@ -436,7 +403,7 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Class { name, parents, body: Box::new(body) },
+            NodeKind::Class { name, name_span: Some(name_span), parents, body: Box::new(body) },
             SourceLocation { start, end },
         ))
     }
@@ -448,6 +415,10 @@ impl<'a> Parser<'a> {
 
         let name_token = self.expect(TokenKind::Identifier)?;
         let name = name_token.text.to_string();
+        let name_span = Some(SourceLocation {
+            start: name_token.start,
+            end: name_token.end,
+        });
 
         let mut attributes = self.parse_declaration_attributes()?;
 
@@ -474,7 +445,7 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Method { name, signature, attributes, body: Box::new(body) },
+            NodeKind::Method { name, name_span, signature, attributes, body: Box::new(body) },
             SourceLocation { start, end },
         ))
     }
@@ -490,6 +461,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new(
             NodeKind::Method {
                 name: "ADJUST".to_string(),
+                name_span: None,
                 signature: None,
                 attributes: Vec::new(),
                 body: Box::new(body),
@@ -504,13 +476,17 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'format'
 
         // Parse format name (optional - can be anonymous)
-        let name = if self.peek_kind() == Some(TokenKind::Assign) {
+        let (name, name_span) = if self.peek_kind() == Some(TokenKind::Assign) {
             // Anonymous format
-            String::new()
+            (String::new(), None)
         } else {
             // Named format
             let name_token = self.expect(TokenKind::Identifier)?;
-            name_token.text.to_string()
+            let span = SourceLocation {
+                start: name_token.start,
+                end: name_token.end,
+            };
+            (name_token.text.to_string(), Some(span))
         };
 
         // Expect =
@@ -532,7 +508,7 @@ impl<'a> Parser<'a> {
         };
 
         let end = self.previous_position();
-        Ok(Node::new(NodeKind::Format { name, body }, SourceLocation { start, end }))
+        Ok(Node::new(NodeKind::Format { name, name_span, body }, SourceLocation { start, end }))
     }
 
     /// Parse package declaration
@@ -1158,6 +1134,7 @@ impl<'a> Parser<'a> {
             NodeKind::Subroutine {
                 name: Some(name),
                 name_span,
+                declarator: None,
                 prototype: None,
                 signature: None,
                 attributes: vec![],

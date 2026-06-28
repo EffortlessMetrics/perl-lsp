@@ -898,7 +898,10 @@ mod module_hover_tests {
             content.contains("Not found"),
             "hover should indicate module not found, got: {content}"
         );
-        assert!(content.contains("Search paths"), "hover should show search paths, got: {content}");
+        assert!(
+            content.contains("Searched paths"),
+            "hover should show search paths, got: {content}"
+        );
         Ok(())
     }
 }

@@ -111,10 +111,19 @@ fn test_minimal_client_initialization() -> TestResult {
         .pointer("/completionProvider/triggerCharacters")
         .and_then(|v| v.as_array())
         .ok_or("triggerCharacters")?;
-    assert_eq!(triggers.len(), 6);
-    assert!(triggers.iter().any(|t| t == "-"));
-    assert!(triggers.iter().any(|t| t == ">"));
-    assert!(triggers.iter().any(|t| t == ":"));
+    let trigger_set: HashSet<_> = triggers.iter().filter_map(|v| v.as_str()).collect();
+    let expected_triggers = ["$", "@", "%", "-", ">", ":", "/", "\\", "\"", "'"];
+    assert_eq!(triggers.len(), expected_triggers.len());
+    for trigger in expected_triggers {
+        assert!(trigger_set.contains(trigger), "missing minimal-client trigger: {trigger}");
+    }
+    for trigger in trigger_set {
+        assert_eq!(
+            trigger.chars().count(),
+            1,
+            "LSP completion trigger must be a single character: {trigger}"
+        );
+    }
 
     Ok(())
 }

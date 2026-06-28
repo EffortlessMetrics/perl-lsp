@@ -6,6 +6,8 @@
 //!
 //! The resulting behavior is intentionally conservative: common non-source directories
 //! are skipped in both modes (`.git`, `.hg`, `.svn`, `target`, `node_modules`, `.cache`).
+//! Explicit include roots can relax that skip only for configured Perl dependency
+//! trees such as `local/lib/perl5`.
 
 use crate::ignore::{is_skipped_dir_name, path_contains_skipped_component};
 use perl_parser_core::source_file::is_perl_source_path;
@@ -48,11 +50,35 @@ pub struct DiscoveryResult {
 /// 2. If git is unavailable or the root is not a repository, use `WalkDir`
 #[must_use]
 pub fn discover_perl_files(root: &Path) -> DiscoveryResult {
+    discover_perl_files_with_allowlist(root, &DiscoveryIncludeAllowlist::default())
+}
+
+/// Discover Perl source files under `root`, honoring explicitly configured include paths.
+///
+/// This preserves the normal skip-by-default behavior for noisy directories,
+/// but allows traversal when a skipped directory is an ancestor of an include
+/// root such as `local/lib/perl5`, `blib`, or `vendor`.
+#[must_use]
+pub fn discover_perl_files_with_include_paths<P>(
+    root: &Path,
+    include_paths: &[P],
+) -> DiscoveryResult
+where
+    P: AsRef<Path>,
+{
+    let allowlist = DiscoveryIncludeAllowlist::from_include_paths(root, include_paths);
+    discover_perl_files_with_allowlist(root, &allowlist)
+}
+
+fn discover_perl_files_with_allowlist(
+    root: &Path,
+    allowlist: &DiscoveryIncludeAllowlist,
+) -> DiscoveryResult {
     let start = Instant::now();
 
-    match try_git_discovery(root, start) {
+    match try_git_discovery(root, start, allowlist) {
         Ok(result) => result,
-        Err(_) => walk_discovery(root, start),
+        Err(_) => walk_discovery_with_allowlist(root, start, allowlist),
     }
 }
 
@@ -75,7 +101,11 @@ pub fn is_perl_discovery_path(path: &Path) -> bool {
         })
 }
 
-fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std::io::Error> {
+fn try_git_discovery(
+    root: &Path,
+    start: Instant,
+    allowlist: &DiscoveryIncludeAllowlist,
+) -> Result<DiscoveryResult, std::io::Error> {
     let output = std::process::Command::new("git")
         .args(GIT_LS_FILES_ARGS)
         .current_dir(root)
@@ -87,7 +117,8 @@ fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std
         return Err(std::io::Error::other("git ls-files failed"));
     }
 
-    let (files, excluded_count) = parse_git_ls_files_output(root, &output.stdout);
+    let (files, excluded_count) =
+        parse_git_ls_files_output_with_allowlist(root, &output.stdout, allowlist);
     let result = DiscoveryResult {
         files,
         method: DiscoveryMethod::Git,
@@ -99,7 +130,16 @@ fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std
     Ok(result)
 }
 
+#[cfg(test)]
 fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize) {
+    parse_git_ls_files_output_with_allowlist(root, stdout, &DiscoveryIncludeAllowlist::default())
+}
+
+fn parse_git_ls_files_output_with_allowlist(
+    root: &Path,
+    stdout: &[u8],
+    allowlist: &DiscoveryIncludeAllowlist,
+) -> (Vec<PathBuf>, usize) {
     let mut files = Vec::new();
     let mut seen = HashSet::new();
     let mut excluded_count: usize = 0;
@@ -115,7 +155,7 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
             excluded_count += 1;
             continue;
         }
-        if path_contains_skipped_component(relative_path) {
+        if allowlist.has_unallowed_skipped_component(relative_path) {
             excluded_count += 1;
             continue;
         }
@@ -161,13 +201,22 @@ fn is_existing_regular_file(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
 }
 
+#[cfg(test)]
 fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
+    walk_discovery_with_allowlist(root, start, &DiscoveryIncludeAllowlist::default())
+}
+
+fn walk_discovery_with_allowlist(
+    root: &Path,
+    start: Instant,
+    allowlist: &DiscoveryIncludeAllowlist,
+) -> DiscoveryResult {
     let mut files = Vec::new();
     let mut excluded_count: usize = 0;
     let mut skipped_dir_count: usize = 0;
 
     for entry in WalkDir::new(root).follow_links(false).into_iter().filter_entry(|entry| {
-        if should_skip_dir(entry) {
+        if should_skip_dir_with_allowlist(root, entry, allowlist) {
             skipped_dir_count += 1;
             return false;
         }
@@ -202,12 +251,32 @@ fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
     result
 }
 
+#[cfg(test)]
 fn should_skip_dir(entry: &DirEntry) -> bool {
+    should_skip_dir_with_allowlist(Path::new(""), entry, &DiscoveryIncludeAllowlist::default())
+}
+
+fn should_skip_dir_with_allowlist(
+    root: &Path,
+    entry: &DirEntry,
+    allowlist: &DiscoveryIncludeAllowlist,
+) -> bool {
     if !entry.file_type().is_dir() {
         return false;
     }
 
-    is_skipped_dir_name(&entry.file_name().to_string_lossy())
+    if !is_skipped_dir_name(&entry.file_name().to_string_lossy()) {
+        return false;
+    }
+
+    let Ok(relative_path) = entry.path().strip_prefix(root) else {
+        return true;
+    };
+    if relative_path.as_os_str().is_empty() {
+        return false;
+    }
+
+    !allowlist.should_traverse_skipped_dir(relative_path)
 }
 
 fn sort_paths_lexically(paths: &mut [PathBuf]) {
@@ -229,11 +298,94 @@ fn log_discovery(result: &DiscoveryResult) {
     );
 }
 
+#[derive(Debug, Default)]
+struct DiscoveryIncludeAllowlist {
+    include_roots: Vec<PathBuf>,
+}
+
+impl DiscoveryIncludeAllowlist {
+    fn from_include_paths<P>(workspace_root: &Path, include_paths: &[P]) -> Self
+    where
+        P: AsRef<Path>,
+    {
+        let mut include_roots = Vec::new();
+        let mut seen = HashSet::new();
+
+        for include_path in include_paths {
+            let Some(relative_path) = normalize_include_path(workspace_root, include_path.as_ref())
+            else {
+                continue;
+            };
+
+            if relative_path.as_os_str().is_empty()
+                || !path_contains_skipped_component(&relative_path)
+            {
+                continue;
+            }
+
+            if seen.insert(relative_path.clone()) {
+                include_roots.push(relative_path);
+            }
+        }
+
+        Self { include_roots }
+    }
+
+    fn has_unallowed_skipped_component(&self, relative_path: &Path) -> bool {
+        if !path_contains_skipped_component(relative_path) {
+            return false;
+        }
+
+        if let Some(remainder) = self.allowed_include_remainder(relative_path) {
+            return path_contains_skipped_component(remainder);
+        }
+
+        true
+    }
+
+    fn should_traverse_skipped_dir(&self, relative_dir: &Path) -> bool {
+        self.include_roots.iter().any(|root| root == relative_dir || root.starts_with(relative_dir))
+    }
+
+    fn allowed_include_remainder<'a>(&self, relative_path: &'a Path) -> Option<&'a Path> {
+        self.include_roots
+            .iter()
+            .filter(|root| relative_path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .and_then(|root| relative_path.strip_prefix(root).ok())
+    }
+}
+
+fn normalize_include_path(workspace_root: &Path, include_path: &Path) -> Option<PathBuf> {
+    let relative_path = if include_path.is_absolute() {
+        include_path.strip_prefix(workspace_root).ok()?
+    } else {
+        include_path
+    };
+
+    normalize_relative_path(relative_path)
+}
+
+fn normalize_relative_path(path: &Path) -> Option<PathBuf> {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::Normal(name) => normalized.push(name),
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+
+    Some(normalized)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        DiscoveryMethod, parse_git_ls_files_output, path_contains_skipped_component,
-        should_skip_dir, walk_discovery,
+        DiscoveryIncludeAllowlist, DiscoveryMethod, parse_git_ls_files_output,
+        parse_git_ls_files_output_with_allowlist, path_contains_skipped_component, should_skip_dir,
+        walk_discovery,
     };
     use std::fs;
     use std::path::Path;
@@ -416,6 +568,23 @@ mod tests {
 
         assert_eq!(files.len(), 0);
         assert_eq!(excluded_count, 6);
+    }
+
+    #[test]
+    fn parse_git_output_allows_configured_local_lib_perl5_only() {
+        let root = Path::new("/tmp/workspace");
+        let include_paths = vec!["local/lib/perl5".to_string()];
+        let allowlist = DiscoveryIncludeAllowlist::from_include_paths(root, &include_paths);
+        let payload = b"lib/Foo.pm\0local/lib/perl5/Remote/Module.pm\0local/Other.pm\0local/lib/perl5/.cache/Skipped.pm\0";
+
+        let (files, excluded_count) =
+            parse_git_ls_files_output_with_allowlist(root, payload, &allowlist);
+
+        assert_eq!(
+            files,
+            vec![root.join("lib/Foo.pm"), root.join("local/lib/perl5/Remote/Module.pm")]
+        );
+        assert_eq!(excluded_count, 2);
     }
 
     #[test]

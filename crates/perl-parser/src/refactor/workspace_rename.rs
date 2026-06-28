@@ -485,13 +485,21 @@ impl WorkspaceRename {
                     break;
                 }
 
-                // Verify this is a word boundary match (not a substring of a larger identifier)
-                let is_word_start =
-                    match_start == 0 || !is_identifier_char(text.as_bytes()[match_start - 1]);
-                let is_word_end =
-                    match_end >= text.len() || !is_identifier_char(text.as_bytes()[match_end]);
+                // Verify this is a word boundary match (not a substring of a larger identifier).
+                // Walk chars (not bytes) so UTF-8 continuation bytes aren't mistaken for
+                // word boundaries (#956).
+                let is_word_start = is_word_boundary_before(text, match_start);
+                let is_word_end = is_word_boundary_after(text, match_end);
 
-                if is_word_start && is_word_end {
+                // Allow the match if it is either in plain code or is an
+                // interpolated variable reference inside a double-quoted string.
+                // The second condition catches `"$var"`, `"${var}"`, `"@arr"` etc.
+                // while correctly skipping bare literal text like `"hello var"`.
+                if is_word_start
+                    && is_word_end
+                    && (is_rename_code_position(text, match_start)
+                        || is_interpolated_in_double_quote(text, match_start))
+                {
                     // AC:AC4 - Scope check: if we have a package context, verify this reference
                     // is in the correct scope
                     let in_scope = if let Some(ref pkg) = scope_package {
@@ -808,9 +816,130 @@ impl WorkspaceRename {
     }
 }
 
-/// Check if a byte is a valid Perl identifier character
-fn is_identifier_char(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
+/// Perl string context at a given byte offset.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum StringContext {
+    /// Executable code (rename allowed).
+    Code,
+    /// Inside a `'...'` single-quoted string (no interpolation).
+    SingleQuoted,
+    /// Inside a `"..."` double-quoted string (interpolation allowed for sigil-preceded names).
+    DoubleQuoted,
+    /// Inside a `# ...` line comment (never rename).
+    LineComment,
+}
+
+/// Scan `text` up to `offset` and return the Perl string context at that position.
+fn scan_string_context(text: &str, offset: usize) -> StringContext {
+    let mut state = StringContext::Code;
+    let mut escaped = false;
+
+    for (idx, byte) in text.bytes().enumerate() {
+        if idx >= offset {
+            return state;
+        }
+
+        match state {
+            StringContext::Code => match byte {
+                b'\'' => state = StringContext::SingleQuoted,
+                b'"' => state = StringContext::DoubleQuoted,
+                b'#' => state = StringContext::LineComment,
+                _ => {}
+            },
+            StringContext::SingleQuoted => {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'\'' {
+                    state = StringContext::Code;
+                }
+            }
+            StringContext::DoubleQuoted => {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'"' {
+                    state = StringContext::Code;
+                }
+            }
+            StringContext::LineComment => {
+                if byte == b'\n' {
+                    state = StringContext::Code;
+                }
+            }
+        }
+    }
+
+    state
+}
+
+/// Check whether a byte offset is in executable Perl code rather than trivia.
+fn is_rename_code_position(text: &str, offset: usize) -> bool {
+    scan_string_context(text, offset) == StringContext::Code
+}
+
+/// Returns `true` when `offset` is inside a double-quoted Perl string AND the
+/// token at `offset` is immediately preceded by a Perl interpolation sigil
+/// (`$`, `@`, `%`) or by `{` that is itself preceded by a sigil (covering
+/// `"${var}"`, `"@{arr}"`, etc.).
+fn is_interpolated_in_double_quote(text: &str, offset: usize) -> bool {
+    if scan_string_context(text, offset) != StringContext::DoubleQuoted {
+        return false;
+    }
+
+    if offset == 0 {
+        return false;
+    }
+
+    let before = &text[..offset];
+    let last_char = match before.chars().next_back() {
+        Some(c) => c,
+        None => return false,
+    };
+
+    if matches!(last_char, '$' | '@' | '%') {
+        return true;
+    }
+
+    if last_char == '{' {
+        let before_brace = &before[..before.len() - 1];
+        let sigil = before_brace.chars().next_back();
+        return matches!(sigil, Some('$') | Some('@') | Some('%'));
+    }
+
+    false
+}
+
+/// Check if a char is a valid Perl identifier character.
+/// Operates on chars (not bytes) so UTF-8 continuation bytes are handled correctly (#956).
+fn is_perl_ident_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// Returns `true` when the position immediately before `byte_offset` in `text`
+/// is a word boundary (no preceding Perl identifier character).
+///
+/// Char-aware replacement for the old byte-level check that treated UTF-8
+/// continuation bytes as boundaries (#956).
+fn is_word_boundary_before(text: &str, byte_offset: usize) -> bool {
+    if byte_offset == 0 {
+        return true;
+    }
+    text[..byte_offset].chars().next_back().is_none_or(|c| !is_perl_ident_char(c))
+}
+
+/// Returns `true` when the position immediately at `byte_offset` in `text`
+/// is a word boundary (no following Perl identifier character).
+///
+/// Char-aware replacement for the old byte-level check that treated UTF-8
+/// lead bytes as boundaries (#956).
+fn is_word_boundary_after(text: &str, byte_offset: usize) -> bool {
+    if byte_offset >= text.len() {
+        return true;
+    }
+    text[byte_offset..].chars().next().is_none_or(|c| !is_perl_ident_char(c))
 }
 
 /// Find the current package scope at a given byte offset in Perl source
@@ -860,14 +989,19 @@ mod tests {
     }
 
     #[test]
-    fn test_is_identifier_char() {
-        assert!(is_identifier_char(b'a'));
-        assert!(is_identifier_char(b'Z'));
-        assert!(is_identifier_char(b'0'));
-        assert!(is_identifier_char(b'_'));
-        assert!(!is_identifier_char(b' '));
-        assert!(!is_identifier_char(b':'));
-        assert!(!is_identifier_char(b';'));
+    fn test_is_perl_ident_char() {
+        assert!(is_perl_ident_char('a'));
+        assert!(is_perl_ident_char('Z'));
+        assert!(is_perl_ident_char('0'));
+        assert!(is_perl_ident_char('_'));
+        assert!(!is_perl_ident_char(' '));
+        assert!(!is_perl_ident_char(':'));
+        assert!(!is_perl_ident_char(';'));
+        // Unicode alphanumerics are valid Perl identifier chars under `use utf8`
+        assert!(is_perl_ident_char('α'));
+        assert!(is_perl_ident_char('変'));
+        // UTF-8 continuation bytes must NOT be treated as ident chars
+        assert!(!is_perl_ident_char('\u{B0}')); // not alphanumeric
     }
 
     #[test]
@@ -876,5 +1010,155 @@ mod tests {
         assert_eq!(find_package_at_offset(text, 20), Some("Foo".to_string()));
         assert_eq!(find_package_at_offset(text, 45), Some("Bar".to_string()));
         assert_eq!(find_package_at_offset(text, 0), None);
+    }
+
+    // -------------------------------------------------------------------------
+    // Char-boundary helpers (#956) - lib-level coverage for Codecov patch gate
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_is_word_boundary_before_ascii() {
+        // At offset 0: always a boundary
+        assert!(is_word_boundary_before("foo", 0));
+        // Preceded by space: boundary
+        assert!(is_word_boundary_before("x foo", 2));
+        // Preceded by ASCII ident char: NOT a boundary
+        assert!(!is_word_boundary_before("xfoo", 1));
+        assert!(!is_word_boundary_before("_foo", 1));
+    }
+
+    #[test]
+    fn test_is_word_boundary_before_unicode() {
+        // "変数foo" — each kanji is 3 bytes; byte offset of 'f' is 6
+        let text = "変数foo";
+        let foo_start = text.find("foo").unwrap();
+        // The char before 'f' is '数' (alphanumeric) — NOT a boundary
+        assert!(!is_word_boundary_before(text, foo_start));
+
+        // "αfoo" — α is 2 bytes (U+03B1); 'f' is at byte 2
+        let text2 = "αfoo";
+        let foo_start2 = text2.find("foo").unwrap();
+        assert!(!is_word_boundary_before(text2, foo_start2));
+
+        // "$foo" — '$' is not alphanumeric — IS a boundary
+        assert!(is_word_boundary_before("$foo", 1));
+    }
+
+    #[test]
+    fn test_is_word_boundary_after_ascii() {
+        let text = "foo bar";
+        // At text.len(): always a boundary
+        assert!(is_word_boundary_after(text, text.len()));
+        // After "foo": next char is space — boundary
+        assert!(is_word_boundary_after(text, 3));
+        // After 'f': next char is 'o' — NOT a boundary
+        assert!(!is_word_boundary_after(text, 1));
+    }
+
+    #[test]
+    fn test_is_word_boundary_after_unicode() {
+        // "fooα" — α is U+03B1 (2 bytes); byte 3 starts α
+        let text = "fooα";
+        // The char at byte 3 is 'α' (alphanumeric) — NOT a boundary
+        assert!(!is_word_boundary_after(text, 3));
+
+        // "foo変" — '変' is 3 bytes; byte 3 starts '変'
+        let text2 = "foo変";
+        assert!(!is_word_boundary_after(text2, 3));
+
+        // "foo " — byte 3 is space — boundary
+        assert!(is_word_boundary_after("foo ", 3));
+    }
+
+    // -------------------------------------------------------------------------
+    // String-interpolation helpers — lib-level coverage for Codecov patch gate
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_scan_string_context_code_positions() {
+        let text = "sub foo { foo(); }\n";
+        let foo_pos = text.find("foo").unwrap_or(0);
+        assert_eq!(scan_string_context(text, foo_pos), StringContext::Code);
+        assert_eq!(scan_string_context(text, text.len()), StringContext::Code);
+    }
+
+    #[test]
+    fn test_scan_string_context_single_quoted() {
+        let text = "my $x = 'hello';";
+        let h_pos = text.find("hello").unwrap_or(0);
+        assert_eq!(scan_string_context(text, h_pos), StringContext::SingleQuoted);
+    }
+
+    #[test]
+    fn test_scan_string_context_double_quoted() {
+        let text = "my $x = \"hello\";";
+        let h_pos = text.find("hello").unwrap_or(0);
+        assert_eq!(scan_string_context(text, h_pos), StringContext::DoubleQuoted);
+    }
+
+    #[test]
+    fn test_scan_string_context_line_comment() {
+        let text = "foo(); # bar in comment\n";
+        let bar_pos = text.find("bar").unwrap_or(0);
+        assert_eq!(scan_string_context(text, bar_pos), StringContext::LineComment);
+    }
+
+    #[test]
+    fn test_is_interpolated_direct_sigils() {
+        let dollar = "\"$var\"";
+        let v_pos = dollar.find("var").unwrap_or(0);
+        assert!(is_interpolated_in_double_quote(dollar, v_pos), "$var must be interpolated");
+
+        let at = "\"@arr\"";
+        let a_pos = at.find("arr").unwrap_or(0);
+        assert!(is_interpolated_in_double_quote(at, a_pos), "@arr must be interpolated");
+
+        let percent = "\"%hash\"";
+        let h_pos = percent.find("hash").unwrap_or(0);
+        assert!(is_interpolated_in_double_quote(percent, h_pos), "%hash must be interpolated");
+    }
+
+    #[test]
+    fn test_is_interpolated_braced_sigils() {
+        let braced_dollar = "\"${var}\"";
+        let v_pos = braced_dollar.find("var").unwrap_or(0);
+        assert!(
+            is_interpolated_in_double_quote(braced_dollar, v_pos),
+            "${{var}} must be interpolated"
+        );
+
+        let braced_at = "\"@{arr}\"";
+        let a_pos = braced_at.find("arr").unwrap_or(0);
+        assert!(is_interpolated_in_double_quote(braced_at, a_pos), "@{{arr}} must be interpolated");
+    }
+
+    #[test]
+    fn test_is_interpolated_bare_text_in_string_not_interpolated() {
+        let text = "\"hello var text\"";
+        let var_pos = text.find("var").unwrap_or(0);
+        assert!(
+            !is_interpolated_in_double_quote(text, var_pos),
+            "bare text in string must NOT be treated as interpolated"
+        );
+    }
+
+    #[test]
+    fn test_is_interpolated_not_in_string_returns_false() {
+        let text = "my $foo = 1;";
+        let foo_pos = text.find("foo").unwrap_or(0);
+        assert!(
+            !is_interpolated_in_double_quote(text, foo_pos),
+            "code position must NOT be treated as interpolated"
+        );
+    }
+
+    #[test]
+    fn test_is_interpolated_single_quoted_returns_false() {
+        let text = "my $x = '$foo';";
+        let foo_pos = text.find("foo").unwrap_or(0);
+        assert!(
+            !is_interpolated_in_double_quote(text, foo_pos),
+            "single-quoted string must never be treated as interpolated"
+        );
     }
 }

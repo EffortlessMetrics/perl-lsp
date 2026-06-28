@@ -123,17 +123,6 @@ known_issues:
       Test is #[ignored] until the parser handles this syntax variant.
     target_version: null
 
-  - name: "test_incremental_completion"
-    added: "2026-04-26"
-    issue: null
-    status: "deferred"
-    category: "correctness"
-    notes: |
-      Incremental completion returns all completions (16) instead of the filtered
-      set (3) matching the current prefix `$p`. Completion filtering by prefix
-      is not yet applied to the incremental code path.
-      Test is #[ignored] until the incremental completion path applies prefix filtering.
-    target_version: null
   # Example entries:
   # - name: "clippy::cognitive_complexity on parser.rs"
   #   added: "2026-01-20"

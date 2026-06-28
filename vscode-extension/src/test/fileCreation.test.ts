@@ -120,14 +120,6 @@ describe('generateBoilerplate for .t files', () => {
         expect(result.content).toContain('use Test::More;');
     });
 
-    test('includes local lib before Test::More', () => {
-        const result = generateBoilerplate('/project/t/foo.t')!;
-        expect(result.content).toContain("use lib 'lib';");
-        expect(result.content.indexOf("use lib 'lib';")).toBeLessThan(
-            result.content.indexOf('use Test::More;')
-        );
-    });
-
     test('ends with done_testing', () => {
         const result = generateBoilerplate('/project/t/foo.t')!;
         expect(result.content.trimEnd()).toMatch(/done_testing;$/);

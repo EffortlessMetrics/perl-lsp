@@ -135,7 +135,7 @@ burn-down closes.
 
 ## Toolchain
 
-`rust-toolchain.toml` pins `1.95.0`. The workflow installs `ripr` `0.5.0` as
+`rust-toolchain.toml` pins `1.95.0`. The workflow installs `ripr` `0.9.0` as
 the current advisory version for this lane.
 
 ---
@@ -143,7 +143,7 @@ the current advisory version for this lane.
 ## Running locally
 
 ```bash
-rtk cargo install ripr --version 0.5.0 --locked
+rtk cargo install ripr --version 0.9.0 --locked
 rtk ripr doctor
 rtk cargo xtask ripr-pr --base origin/HEAD --head HEAD
 rtk cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json

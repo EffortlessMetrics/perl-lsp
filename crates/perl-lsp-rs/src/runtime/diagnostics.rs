@@ -9,7 +9,6 @@ use crate::features::diagnostics::{
     Diagnostic as InternalDiagnostic, DiagnosticTag as InternalDiagnosticTag,
     PullDiagnosticsContext,
 };
-use crate::protocol::invalid_params;
 use perl_diagnostics::codes::DiagnosticCode;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -62,14 +61,6 @@ fn find_workspace_perlcritic_profile(
         dir = current.parent().map(|p| p.to_path_buf());
     }
     None
-}
-
-fn invalid_document_diagnostic_uri_params() -> JsonRpcError {
-    invalid_params(
-        "Missing required parameter: textDocument.uri\n\n\
-         textDocument/diagnostic expects params.textDocument.uri to identify the document to diagnose.\n\n\
-         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"}}",
-    )
 }
 
 /// Orchestrator for pull diagnostics operations.
@@ -959,16 +950,18 @@ impl LspServer {
         use lsp_types::Uri;
 
         if let Some(params) = params {
-            let uri_str = params
-                .pointer("/textDocument/uri")
-                .and_then(Value::as_str)
-                .ok_or_else(invalid_document_diagnostic_uri_params)?;
+            let uri_str = params["textDocument"]["uri"].as_str().unwrap_or("");
             let previous_result_id = params["previousResultId"].as_str().map(|s| s.to_string());
 
             // Parse URI
             let uri: Uri = match uri_str.parse() {
-                Ok(uri) => uri,
-                Err(_) => return Err(invalid_document_diagnostic_uri_params()),
+                Ok(u) => u,
+                Err(_) => {
+                    return Ok(Some(json!({
+                        "kind": "full",
+                        "items": []
+                    })));
+                }
             };
 
             // Syntax-only short-circuit for pull diagnostics. Mirrors the
@@ -976,11 +969,19 @@ impl LspServer {
             if self.runtime_tuning.diagnostic_mode
                 == perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly
             {
+                // Capture the generation Arc alongside the document clone so we can
+                // detect a concurrent didChange that arrives during syntax analysis.
                 let doc_snapshot = {
                     let documents = self.documents.lock();
-                    self.get_document(&documents, uri_str).cloned()
+                    self.get_document(&documents, uri_str).map(|doc| {
+                        (
+                            doc.clone(),
+                            std::sync::Arc::clone(&doc.generation),
+                            doc.generation.load(std::sync::atomic::Ordering::SeqCst),
+                        )
+                    })
                 };
-                if let Some(doc) = doc_snapshot {
+                if let Some((doc, generation, gen_at_snapshot)) = doc_snapshot {
                     let markup_message_support =
                         self.client_capabilities.lock().markup_message_support;
                     let items = Self::syntax_only_lsp_diagnostics(
@@ -990,6 +991,18 @@ impl LspServer {
                         &doc.rope,
                         markup_message_support,
                     );
+                    // Generation-aware staleness guard: discard if a didChange arrived
+                    // while we were analysing the parse errors.
+                    let current_gen = generation.load(std::sync::atomic::Ordering::SeqCst);
+                    if current_gen != gen_at_snapshot {
+                        tracing::debug!(
+                            uri = uri_str,
+                            gen_at_snapshot,
+                            current_gen,
+                            "Skipping stale syntax-only diagnostic (generation advanced during computation)"
+                        );
+                        return Ok(Some(json!({ "kind": "full", "items": [] })));
+                    }
                     return Ok(Some(json!({
                         "kind": "full",
                         "items": items,
@@ -999,13 +1012,20 @@ impl LspServer {
                 return Ok(Some(json!({ "kind": "full", "items": [] })));
             }
 
-            // Snapshot the document
+            // Snapshot the document, capturing a clone of the generation Arc so
+            // we can re-check after computation (mirrors the push-path guard).
             let doc_snapshot = {
                 let documents = self.documents.lock();
-                self.get_document(&documents, uri_str).cloned()
+                self.get_document(&documents, uri_str).map(|doc| {
+                    (
+                        doc.clone(),
+                        std::sync::Arc::clone(&doc.generation),
+                        doc.generation.load(std::sync::atomic::Ordering::SeqCst),
+                    )
+                })
             };
 
-            if let Some(doc) = doc_snapshot {
+            if let Some((doc, generation, gen_at_snapshot)) = doc_snapshot {
                 // Build context from server state
                 let context = self.pull_diagnostics_orchestrator.build_context(self, uri_str);
 
@@ -1028,6 +1048,26 @@ impl LspServer {
                     &mut perlcritic_diags,
                 );
 
+                // Generation-aware staleness guard: if a newer didChange arrived while
+                // diagnostics were being computed, discard this result — the next
+                // diagnostic request will compute from the latest version.  Mirrors the
+                // guard already present in the push path.
+                let current_gen = generation.load(std::sync::atomic::Ordering::SeqCst);
+                if current_gen != gen_at_snapshot {
+                    tracing::debug!(
+                        uri = uri_str,
+                        gen_at_snapshot,
+                        current_gen,
+                        "Skipping stale document diagnostic (generation advanced during computation)"
+                    );
+                    // Return an empty full report with no resultId so the client
+                    // does not cache this stale result and retries on the next request.
+                    return Ok(Some(json!({
+                        "kind": "full",
+                        "items": []
+                    })));
+                }
+
                 // Convert report to JSON
                 return Ok(Some(self.document_report_to_json(
                     &report,
@@ -1036,11 +1076,9 @@ impl LspServer {
                     &perlcritic_diags,
                 )));
             }
-        } else {
-            return Err(invalid_document_diagnostic_uri_params());
         }
 
-        // Return empty diagnostics if document not found.
+        // Return empty diagnostics if document not found
         Ok(Some(json!({
             "kind": "full",
             "items": []
@@ -1317,13 +1355,29 @@ impl LspServer {
         let mut items = Vec::new();
         let markup_message_support = self.client_capabilities.lock().markup_message_support;
 
-        // Collect document snapshots without holding lock
-        let docs_snapshot: Vec<(String, DocumentState)> = {
+        // Collect document snapshots without holding lock.
+        // Also capture each document's generation Arc and the generation value
+        // observed at snapshot time so we can guard against stale results below
+        // (mirrors the guard already present in handle_document_diagnostic and
+        // the push path).
+        let docs_snapshot: Vec<(
+            String,
+            DocumentState,
+            std::sync::Arc<std::sync::atomic::AtomicU32>,
+            u32,
+        )> = {
             let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            documents
+                .iter()
+                .map(|(k, v)| {
+                    let generation_arc = std::sync::Arc::clone(&v.generation);
+                    let gen_val = v.generation.load(std::sync::atomic::Ordering::SeqCst);
+                    (k.clone(), v.clone(), generation_arc, gen_val)
+                })
+                .collect()
         };
 
-        for (i, (uri_str, doc)) in docs_snapshot.iter().enumerate() {
+        for (i, (uri_str, doc, generation, gen_at_snapshot)) in docs_snapshot.iter().enumerate() {
             // Cooperative yield every 8 documents
             if i & 0x7 == 0 {
                 std::thread::yield_now();
@@ -1413,6 +1467,21 @@ impl LspServer {
                             );
                         diagnostics.extend(dead_code_diags);
                     }
+                }
+
+                // Generation-aware staleness guard: if a newer didChange arrived
+                // while diagnostics were being computed, skip this document's
+                // result — the next workspace/diagnostic request will compute
+                // from the latest version.  Mirrors the guard in the push path
+                // and handle_document_diagnostic.
+                if generation.load(std::sync::atomic::Ordering::SeqCst) != *gen_at_snapshot {
+                    tracing::debug!(
+                        uri = uri_str,
+                        gen_at_snapshot,
+                        current_gen = generation.load(std::sync::atomic::Ordering::SeqCst),
+                        "Skipping stale workspace diagnostic (generation advanced during computation)"
+                    );
+                    continue;
                 }
 
                 // Generate result ID
@@ -2031,50 +2100,6 @@ mod tests {
         let server =
             LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
         (server, buf)
-    }
-
-    fn expect_document_diagnostic_uri_guidance(err: JsonRpcError) -> Result<(), String> {
-        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
-        for expected in [
-            "Missing required parameter: textDocument.uri",
-            "textDocument/diagnostic",
-            "params.textDocument.uri",
-            "file:///workspace/lib/My/Module.pm",
-        ] {
-            if !err.message.contains(expected) {
-                return Err(format!("expected error message to contain {expected:?}; got {err}"));
-            }
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn document_diagnostic_missing_params_error_includes_shape_guidance() -> Result<(), String> {
-        let server = LspServer::new();
-        match server.test_handle_document_diagnostic(None) {
-            Err(err) => expect_document_diagnostic_uri_guidance(err),
-            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
-        }
-    }
-
-    #[test]
-    fn document_diagnostic_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
-        let server = LspServer::new();
-        match server.test_handle_document_diagnostic(Some(json!({}))) {
-            Err(err) => expect_document_diagnostic_uri_guidance(err),
-            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
-        }
-    }
-
-    #[test]
-    fn document_diagnostic_invalid_uri_error_includes_shape_guidance() -> Result<(), String> {
-        let server = LspServer::new();
-        match server.test_handle_document_diagnostic(Some(json!({
-            "textDocument": { "uri": "file:// bad uri" }
-        }))) {
-            Err(err) => expect_document_diagnostic_uri_guidance(err),
-            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
-        }
     }
 
     /// Positive case: when no concurrent change arrives during diagnostic computation,

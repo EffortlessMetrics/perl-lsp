@@ -617,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn validation_rejects_duplicate_feature_ids() {
+    fn validation_rejects_duplicate_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
         let mut catalog = sample_catalog();
         catalog.feature.push(Feature {
             id: "lsp.completion".to_string(),
@@ -630,9 +630,10 @@ mod tests {
             description: "duplicate row".to_string(),
         });
 
-        let err = catalog.validate().expect_err("duplicate id must fail validation");
+        let err = catalog.validate().err().ok_or("duplicate id must fail validation")?;
         let message = err.to_string();
         assert!(message.contains("duplicate feature id: lsp.completion"));
+        Ok(())
     }
 
     #[test]

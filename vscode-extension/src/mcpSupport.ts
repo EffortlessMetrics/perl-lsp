@@ -39,17 +39,10 @@ function toMcpDefinition(server: McpServerConfig): vscode.McpStdioServerDefiniti
     return definition;
 }
 
-export function formatMcpUnavailableMessage(configuredServerCount: number): string {
-    const configuredNote = configuredServerCount > 0
-        ? ` ${configuredServerCount} configured MCP server${configuredServerCount === 1 ? '' : 's'} will not be published.`
-        : '';
-    return `[mcp] VS Code MCP API unavailable in this editor build.${configuredNote} Update to a VS Code build with MCP support to use perl-lsp.mcp.servers.`;
-}
-
 export function registerMcpSupport(outputChannel: vscode.OutputChannel): vscode.Disposable | undefined {
     const mcpApi = (vscode as VscodeWithMcp).lm;
     if (!mcpApi?.registerMcpServerDefinitionProvider) {
-        outputChannel.appendLine(formatMcpUnavailableMessage(readConfiguredMcpServers().length));
+        outputChannel.appendLine('[mcp] VS Code MCP API unavailable in this editor build.');
         return undefined;
     }
 

@@ -103,9 +103,7 @@ export function classifyStartupError(output: string): StartupErrorDiagnosis {
     return {
         kind: StartupErrorKind.Unknown,
         hint: 'The LSP binary failed to start. Check the Output panel for details.',
-        remediation:
-            'Run "Perl: Run Health Check" from the Command Palette to diagnose the environment, ' +
-            'or run "Perl: Reinstall Server Binary" to fetch a fresh managed binary.',
+        remediation: 'Try "Run Health Check" to diagnose, or "Reinstall" to fetch a fresh binary.',
     };
 }
 

@@ -1,6 +1,7 @@
 //! OS-backed subprocess runtime.
 
 mod invocation;
+mod path_selection;
 mod process;
 mod validation;
 #[cfg(windows)]
@@ -11,8 +12,29 @@ use process::run_os_command;
 
 use crate::{SubprocessError, SubprocessOutput, SubprocessRuntime};
 
+// `select_path_candidate` and `candidate_priority` are cross-platform so they
+// are exported for test use on all platforms — not just Windows.  This lets
+// the ripr quality gate observe call paths on Linux CI runners.
+#[cfg(test)]
+pub(crate) use path_selection::{candidate_priority, select_path_candidate};
+
+// `windows_program_priority` is the historical name for `candidate_priority`
+// used in Windows-specific tests.  Export it as an alias on Windows so tests
+// that use the old name continue to compile.
 #[cfg(all(windows, test))]
-pub(crate) use windows::{windows_program_priority, windows_quote_for_cmd};
+pub(crate) use path_selection::candidate_priority as windows_program_priority;
+
+#[cfg(all(windows, test))]
+pub(crate) use windows::{resolve_cmd_exe, windows_quote_for_cmd};
+
+/// Re-export of [`windows::resolve_windows_program`] for use by
+/// [`crate::resolve_program`].  The inner function is `pub(crate)`; this
+/// wrapper lifts it to `pub(super)` so `lib.rs` can call it without making
+/// the Windows-specific internals part of the public API.
+#[cfg(windows)]
+pub(super) fn resolve_windows_program_pub(program: &str) -> Option<String> {
+    windows::resolve_windows_program(program)
+}
 
 /// Default implementation using `std::process::Command`.
 pub struct OsSubprocessRuntime {

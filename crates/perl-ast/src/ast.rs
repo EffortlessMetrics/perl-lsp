@@ -106,6 +106,7 @@ pub use perl_position_tracking::SourceLocation;
 // Re-export Token and TokenKind from perl-token for AST error nodes
 pub use perl_token::{Token, TokenKind};
 use std::fmt;
+use strum::VariantNames as _;
 
 /// Core AST node representing any Perl language construct within parsing workflows.
 ///
@@ -262,6 +263,11 @@ impl Node {
                 } else {
                     format!("({}_declaration ({}){})", declarator, vars, attrs_str)
                 }
+            }
+
+            NodeKind::NestedVariableList { items } => {
+                let item_sexps = items.iter().map(|i| i.to_sexp()).collect::<Vec<_>>().join(" ");
+                format!("(nested_variable_list {})", item_sexps)
             }
 
             NodeKind::Variable { sigil, name } => {
@@ -494,7 +500,15 @@ impl Node {
                 )
             }
 
-            NodeKind::Subroutine { name, prototype, signature, attributes, body, name_span: _ } => {
+            NodeKind::Subroutine {
+                name,
+                prototype,
+                signature,
+                attributes,
+                body,
+                name_span: _,
+                declarator: _,
+            } => {
                 if let Some(sub_name) = name {
                     // Named subroutine - bless test expected format: (sub name () block)
                     let mut parts = vec![sub_name.clone()];
@@ -581,7 +595,7 @@ impl Node {
                 format!("(named_parameter {})", variable.to_sexp())
             }
 
-            NodeKind::Method { name: _, signature, attributes, body } => {
+            NodeKind::Method { name: _, name_span: _, signature, attributes, body } => {
                 let block_contents = match &body.kind {
                     NodeKind::Block { statements } => {
                         statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ")
@@ -772,7 +786,7 @@ impl Node {
                 }
             }
 
-            NodeKind::Class { name, parents, body } => {
+            NodeKind::Class { name, name_span: _, parents, body } => {
                 if parents.is_empty() {
                     format!("(class {} {})", name, body.to_sexp())
                 } else {
@@ -780,7 +794,7 @@ impl Node {
                 }
             }
 
-            NodeKind::Format { name, body } => {
+            NodeKind::Format { name, name_span: _, body } => {
                 format!("(format {} {:?})", name, body)
             }
 
@@ -866,6 +880,11 @@ impl Node {
                 }
                 if let Some(init) = initializer {
                     f(init);
+                }
+            }
+            NodeKind::NestedVariableList { items } => {
+                for item in items {
+                    f(item);
                 }
             }
             NodeKind::VariableWithAttributes { variable, .. } => f(variable),
@@ -1116,6 +1135,11 @@ impl Node {
                 }
                 if let Some(init) = initializer {
                     f(init);
+                }
+            }
+            NodeKind::NestedVariableList { items } => {
+                for item in items {
+                    f(item);
                 }
             }
             NodeKind::VariableWithAttributes { variable, .. } => f(variable),
@@ -1552,7 +1576,7 @@ impl Node {
 /// - Vector storage enables efficient bulk operations on child nodes
 /// - Clone operations optimized for concurrent analysis workflows
 /// - Pattern matching performance tuned for common Perl constructs
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, strum::VariantNames)]
 pub enum NodeKind {
     /// Top-level program containing all statements in an Perl script
     ///
@@ -1600,6 +1624,17 @@ pub enum NodeKind {
         attributes: Vec<String>,
         /// Optional initializer for the entire variable list
         initializer: Option<Box<Node>>,
+    },
+
+    /// Nested variable list within a lexical list declaration.
+    ///
+    /// Represents a parenthesised group of variables inside a `my`/`our`/`state`
+    /// list declaration, such as the `($b, $c)` in `my ($a, ($b, $c)) = ...`.
+    /// A nested group with exactly one item is returned unwrapped (as the item
+    /// itself), so this variant only appears for two-or-more-item groups.
+    NestedVariableList {
+        /// The variables or nested lists inside the inner parentheses.
+        items: Vec<Node>,
     },
 
     /// Perl variable reference (scalar, array, hash, etc.) in Perl parsing workflow
@@ -1903,6 +1938,20 @@ pub enum NodeKind {
         /// - Essential for precise editor interactions
         name_span: Option<SourceLocation>,
 
+        /// Optional scope declarator: "my", "our", or "state" for lexical/package-scoped subs
+        ///
+        /// # Lexical Subroutines
+        /// - Perl 5.18+ feature: `my sub helper { ... }`, `our sub global { ... }`, `state sub memo { ... }`
+        /// - Distinguishes lexical scope binding from package-scoped subroutines
+        /// - Essential for scope tracking, renaming, and dead code detection
+        ///
+        /// # Values
+        /// - `None` — package-scoped subroutine (no declarator)
+        /// - `Some("my")` — lexical subroutine with lexical binding
+        /// - `Some("our")` — package-scoped subroutine with explicit package declaration
+        /// - `Some("state")` — persistent lexical subroutine (persistent across invocations)
+        declarator: Option<String>,
+
         /// Optional prototype node (e.g. `($;@)`).
         prototype: Option<Box<Node>>,
         /// Optional signature node (Perl 5.20+ feature).
@@ -1955,6 +2004,8 @@ pub enum NodeKind {
     Method {
         /// Method name
         name: String,
+        /// Source location span of the method name
+        name_span: Option<SourceLocation>,
         /// Optional signature
         signature: Option<Box<Node>>,
         /// Method attributes (e.g., `:lvalue`)
@@ -2047,7 +2098,9 @@ pub enum NodeKind {
         replacement: String,
         /// Substitution modifiers (g, e, r, etc.)
         modifiers: String,
-        /// Whether the regex contains embedded code `(?{...})`
+        /// Whether the substitution contains embedded code — either a `(?{...})` inline
+        /// code block in the pattern, or the `e`/`ee` modifier which evaluates the
+        /// replacement string as Perl code (equivalent to `eval`).
         has_embedded_code: bool,
         /// Whether the binding operator was `!~` (negated match)
         negated: bool,
@@ -2137,6 +2190,8 @@ pub enum NodeKind {
     Class {
         /// Class name
         name: String,
+        /// Source location span of the class name
+        name_span: Option<SourceLocation>,
         /// Parent class names from `:isa(Parent)` attributes
         parents: Vec<String>,
         /// Class body containing methods and attributes
@@ -2147,6 +2202,8 @@ pub enum NodeKind {
     Format {
         /// Format name (defaults to filehandle name)
         name: String,
+        /// Source location span of the format name
+        name_span: Option<SourceLocation>,
         /// Format specification body
         body: String,
     },
@@ -2169,13 +2226,35 @@ pub enum NodeKind {
         partial: Option<Box<Node>>,
     },
 
-    /// Missing expression where one was expected
+    /// Missing expression where one was expected.
+    ///
+    /// Emitted by `recover_missing_infix_rhs` when a binary operator has no
+    /// right-hand-side (e.g. `1 +` at end of input). This is the **only**
+    /// `Missing*` variant currently emitted by the production parser.
     MissingExpression,
-    /// Missing statement where one was expected
+
+    /// RESERVED — not currently emitted by the parser.
+    ///
+    /// Retained for API symmetry and future error-recovery work. If recovery
+    /// starts emitting this variant, add real parser fixture tests before
+    /// shipping. Do not pattern-match on this variant expecting it to appear
+    /// in normal parse output.
     MissingStatement,
-    /// Missing identifier where one was expected
+
+    /// RESERVED — not currently emitted by the parser.
+    ///
+    /// Retained for API symmetry and future error-recovery work. If recovery
+    /// starts emitting this variant, add real parser fixture tests before
+    /// shipping. Do not pattern-match on this variant expecting it to appear
+    /// in normal parse output.
     MissingIdentifier,
-    /// Missing block where one was expected
+
+    /// RESERVED — not currently emitted by the parser.
+    ///
+    /// Retained for API symmetry and future error-recovery work. If recovery
+    /// starts emitting this variant, add real parser fixture tests before
+    /// shipping. Do not pattern-match on this variant expecting it to appear
+    /// in normal parse output.
     MissingBlock,
 
     /// Lexer budget exceeded marker preserving partial parse results
@@ -2206,6 +2285,7 @@ impl NodeKind {
             NodeKind::ExpressionStatement { .. } => "ExpressionStatement",
             NodeKind::VariableDeclaration { .. } => "VariableDeclaration",
             NodeKind::VariableListDeclaration { .. } => "VariableListDeclaration",
+            NodeKind::NestedVariableList { .. } => "NestedVariableList",
             NodeKind::Variable { .. } => "Variable",
             NodeKind::VariableWithAttributes { .. } => "VariableWithAttributes",
             NodeKind::Assignment { .. } => "Assignment",
@@ -2274,81 +2354,14 @@ impl NodeKind {
         }
     }
 
-    /// Canonical list of **all** `kind_name()` strings, in alphabetical order.
+    /// Canonical list of **all** `kind_name()` strings, in declaration order.
+    ///
+    /// Auto-derived from the `NodeKind` enum via `strum::VariantNames` — adding a new
+    /// variant automatically updates this list. No manual maintenance required.
     ///
     /// Every consumer that needs the full set of NodeKind names should reference
     /// this constant instead of maintaining a hand-written copy.
-    pub const ALL_KIND_NAMES: &[&'static str] = &[
-        "ArrayLiteral",
-        "Assignment",
-        "Binary",
-        "Block",
-        "Class",
-        "DataSection",
-        "Default",
-        "Defer",
-        "Diamond",
-        "Do",
-        "Ellipsis",
-        "Error",
-        "Eval",
-        "ExpressionStatement",
-        "For",
-        "Foreach",
-        "Format",
-        "FunctionCall",
-        "Given",
-        "Glob",
-        "Goto",
-        "HashLiteral",
-        "Heredoc",
-        "Identifier",
-        "If",
-        "IndirectCall",
-        "LabeledStatement",
-        "LoopControl",
-        "MandatoryParameter",
-        "Match",
-        "Method",
-        "MethodCall",
-        "MissingBlock",
-        "MissingExpression",
-        "MissingIdentifier",
-        "MissingStatement",
-        "NamedParameter",
-        "No",
-        "Number",
-        "OptionalParameter",
-        "Package",
-        "PhaseBlock",
-        "Program",
-        "Prototype",
-        "Readline",
-        "Regex",
-        "Return",
-        "Signature",
-        "SlurpyParameter",
-        "StatementModifier",
-        "String",
-        "Subroutine",
-        "Substitution",
-        "Ternary",
-        "Tie",
-        "Transliteration",
-        "Try",
-        "Typeglob",
-        "Unary",
-        "Undef",
-        "UnknownRest",
-        "Untie",
-        "Use",
-        "Variable",
-        "VariableDeclaration",
-        "VariableListDeclaration",
-        "VariableWithAttributes",
-        "When",
-        "While",
-    ];
+    pub const ALL_KIND_NAMES: &[&'static str] = NodeKind::VARIANTS;
 
     /// Subset of `ALL_KIND_NAMES` that represent synthetic/recovery nodes.
     ///
@@ -2573,6 +2586,7 @@ mod tests {
                 attributes: vec![],
                 initializer: None,
             },
+            NodeKind::NestedVariableList { items: vec![] },
             NodeKind::Variable { sigil: String::new(), name: String::new() },
             NodeKind::VariableWithAttributes {
                 variable: Box::new(dummy_node()),
@@ -2665,6 +2679,7 @@ mod tests {
             NodeKind::Subroutine {
                 name: None,
                 name_span: None,
+                declarator: None,
                 prototype: None,
                 signature: None,
                 attributes: vec![],
@@ -2681,6 +2696,7 @@ mod tests {
             NodeKind::NamedParameter { variable: Box::new(dummy_node()) },
             NodeKind::Method {
                 name: String::new(),
+                name_span: None,
                 signature: None,
                 attributes: vec![],
                 body: Box::new(dummy_node()),
@@ -2736,8 +2752,13 @@ mod tests {
                 block: Box::new(dummy_node()),
             },
             NodeKind::DataSection { marker: String::new(), body: None },
-            NodeKind::Class { name: String::new(), parents: vec![], body: Box::new(dummy_node()) },
-            NodeKind::Format { name: String::new(), body: String::new() },
+            NodeKind::Class {
+                name: String::new(),
+                name_span: None,
+                parents: vec![],
+                body: Box::new(dummy_node()),
+            },
+            NodeKind::Format { name: String::new(), name_span: None, body: String::new() },
             NodeKind::Identifier { name: String::new() },
             NodeKind::Error {
                 message: String::new(),
@@ -2753,6 +2774,42 @@ mod tests {
         ];
 
         variants.iter().map(|v| v.kind_name()).collect()
+    }
+
+    #[test]
+    fn for_each_child_mut_nested_variable_list() {
+        // Covers lines 876-879: NestedVariableList arm in for_each_child_mut.
+        let loc = SourceLocation { start: 0, end: 10 };
+        let item_a =
+            Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() }, loc);
+        let item_b =
+            Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "b".to_string() }, loc);
+        let mut node = Node::new(NodeKind::NestedVariableList { items: vec![item_a, item_b] }, loc);
+        let mut count = 0;
+        node.for_each_child_mut(|_child| count += 1);
+        assert_eq!(count, 2, "for_each_child_mut should visit both items in NestedVariableList");
+    }
+
+    #[test]
+    fn for_each_child_nested_variable_list() {
+        // Covers lines 1131-1134: NestedVariableList arm in for_each_child.
+        let loc = SourceLocation { start: 0, end: 10 };
+        let item_a =
+            Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc);
+        let item_b =
+            Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "y".to_string() }, loc);
+        let node = Node::new(NodeKind::NestedVariableList { items: vec![item_a, item_b] }, loc);
+        let mut names = Vec::new();
+        node.for_each_child(|child| {
+            if let NodeKind::Variable { name, .. } = &child.kind {
+                names.push(name.clone());
+            }
+        });
+        assert_eq!(
+            names,
+            vec!["x", "y"],
+            "for_each_child should visit all items in NestedVariableList"
+        );
     }
 
     #[test]
@@ -2778,6 +2835,43 @@ mod tests {
         );
     }
 
+    /// Construct recovery variants and return their `kind_name()` strings.
+    ///
+    /// Adding a recovery variant to `NodeKind` without updating `RECOVERY_KIND_NAMES`
+    /// will cause `recovery_kind_names_is_consistent_with_kind_name` to fail.
+    fn recovery_kind_names_from_variants() -> BTreeSet<&'static str> {
+        vec![
+            NodeKind::Error {
+                message: String::new(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            NodeKind::MissingExpression,
+            NodeKind::MissingStatement,
+            NodeKind::MissingIdentifier,
+            NodeKind::MissingBlock,
+            NodeKind::UnknownRest,
+        ]
+        .iter()
+        .map(|v| v.kind_name())
+        .collect()
+    }
+
+    #[test]
+    fn recovery_kind_names_is_consistent_with_kind_name() {
+        let from_enum = recovery_kind_names_from_variants();
+        let from_const: BTreeSet<&str> = NodeKind::RECOVERY_KIND_NAMES.iter().copied().collect();
+        let only_in_enum: Vec<_> = from_enum.difference(&from_const).collect();
+        let only_in_const: Vec<_> = from_const.difference(&from_enum).collect();
+        assert!(
+            only_in_enum.is_empty() && only_in_const.is_empty(),
+            "RECOVERY_KIND_NAMES is out of sync with recovery variants:\n  \
+             in enum but not in RECOVERY_KIND_NAMES: {only_in_enum:?}\n  \
+             in RECOVERY_KIND_NAMES but not in enum: {only_in_const:?}"
+        );
+    }
+
     #[test]
     fn recovery_kind_names_is_subset_of_all() {
         let all: BTreeSet<&str> = NodeKind::ALL_KIND_NAMES.iter().copied().collect();
@@ -2794,6 +2888,99 @@ mod tests {
         assert!(
             not_in_all.is_empty(),
             "RECOVERY_KIND_NAMES contains entries not in ALL_KIND_NAMES: {not_in_all:?}"
+        );
+    }
+
+    #[test]
+    fn all_kind_names_not_empty() {
+        // Regression guard: ALL_KIND_NAMES should always be populated
+        assert!(
+            !NodeKind::ALL_KIND_NAMES.is_empty(),
+            "ALL_KIND_NAMES should not be empty; strum derivation failed"
+        );
+    }
+
+    #[test]
+    fn all_kind_names_no_empty_strings() {
+        // Boundary condition: no entry should be an empty string
+        for (i, name) in NodeKind::ALL_KIND_NAMES.iter().enumerate() {
+            assert!(!name.is_empty(), "ALL_KIND_NAMES[{}] is empty string", i);
+        }
+    }
+
+    #[test]
+    fn all_kind_names_starts_with_program() {
+        // Regression guard: first variant is Program (declaration order invariant)
+        assert_eq!(
+            NodeKind::ALL_KIND_NAMES.first(),
+            Some(&"Program"),
+            "First variant in ALL_KIND_NAMES should be 'Program' (declaration order)"
+        );
+    }
+
+    #[test]
+    fn all_kind_names_ends_with_unknown_rest() {
+        // Regression guard: last variant is UnknownRest (declaration order invariant)
+        assert_eq!(
+            NodeKind::ALL_KIND_NAMES.last(),
+            Some(&"UnknownRest"),
+            "Last variant in ALL_KIND_NAMES should be 'UnknownRest' (declaration order)"
+        );
+    }
+
+    #[test]
+    fn all_kind_names_valid_kind_names() {
+        // Regression guard: every string in ALL_KIND_NAMES is a valid kind_name() output
+        for (i, name) in NodeKind::ALL_KIND_NAMES.iter().enumerate() {
+            let found = all_kind_names_from_variants().contains(name);
+            assert!(
+                found,
+                "ALL_KIND_NAMES[{}] = '{}' is not a valid kind_name() return value",
+                i, name
+            );
+        }
+    }
+
+    #[test]
+    fn all_kind_names_exact_match_with_variants_set() {
+        // Regression guard: ALL_KIND_NAMES contains exactly the same names as all variants
+        let from_enum = all_kind_names_from_variants();
+        let from_const: BTreeSet<&str> = NodeKind::ALL_KIND_NAMES.iter().copied().collect();
+
+        assert_eq!(from_enum, from_const, "ALL_KIND_NAMES set does not match variant kind_names");
+    }
+
+    #[test]
+    fn all_kind_names_no_whitespace_padding() {
+        // Boundary condition: no leading/trailing whitespace in variant names
+        for (i, name) in NodeKind::ALL_KIND_NAMES.iter().enumerate() {
+            assert_eq!(
+                *name,
+                name.trim(),
+                "ALL_KIND_NAMES[{}] = '{}' has leading/trailing whitespace",
+                i,
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn all_kind_names_count_regression_guard() {
+        // Regression guard: ALL_KIND_NAMES must have at least 70 entries.
+        // The previous hand-maintained list had 70 variants (including NestedVariableList
+        // added in #1457). Failing below that count means a variant was deleted or the
+        // strum derivation silently stopped working.
+        //
+        // Note: the previous test `all_kind_names_strum_derived_stability` asserted
+        // `NodeKind::VARIANTS == NodeKind::ALL_KIND_NAMES`, which is trivially true by
+        // definition (ALL_KIND_NAMES = NodeKind::VARIANTS). That assertion was vacuous
+        // and has been replaced with this count guard.
+        assert!(
+            NodeKind::ALL_KIND_NAMES.len() >= 70,
+            "ALL_KIND_NAMES has only {} entries; expected >= 70. \
+             A variant may have been accidentally removed, or strum::VariantNames \
+             is not being applied correctly.",
+            NodeKind::ALL_KIND_NAMES.len()
         );
     }
 }

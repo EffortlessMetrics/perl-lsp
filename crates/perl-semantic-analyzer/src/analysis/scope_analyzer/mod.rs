@@ -1294,6 +1294,7 @@ impl ScopeAnalyzer {
     /// - **Hash subscripts**: `$hash{bareword_key}` or `%hash{bareword_key}`
     /// - **Hash literals**: `{ key => value, another_key => value2 }`
     /// - **Hash slices**: `@hash{key1, key2, key3}` where keys are in an array
+    /// - **Postfix hash slices**: `$ref->%{key}` where the key is auto-quoted
     /// - **Nested hash structures**: Complex nested hash access patterns
     ///
     /// # Performance Characteristics:
@@ -1351,6 +1352,18 @@ impl ScopeAnalyzer {
                         return true;
                     }
                 }
+                // Arrow-deref hash subscript/slice: $ref->{key}, $obj->method()->{key},
+                // $a->{b}{c}, $ref->%{key}
+                // Anchor on `node`, not `current`: only direct simple keys are auto-quoted,
+                // so composite or qualified keys like `$ref->{FOO + 1}` and `$ref->{FOO::BAR}`
+                // must still flag their barewords.
+                NodeKind::Binary { op, left: _, right } if op == "->{}" || op == "->%{}" => {
+                    if std::ptr::eq(right.as_ref(), node)
+                        && Self::is_simple_autoquoted_hash_key(node)
+                    {
+                        return true;
+                    }
+                }
                 NodeKind::HashLiteral { pairs } => {
                     // Check if current node is a key in any of the pairs
                     for (key, _value) in pairs {
@@ -1391,6 +1404,10 @@ impl ScopeAnalyzer {
         }
 
         false
+    }
+
+    fn is_simple_autoquoted_hash_key(node: &Node) -> bool {
+        matches!(&node.kind, NodeKind::Identifier { name } if !name.contains("::"))
     }
 
     /// Return one human-readable fix suggestion per issue.

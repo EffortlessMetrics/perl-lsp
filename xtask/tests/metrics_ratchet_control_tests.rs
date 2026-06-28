@@ -1,13 +1,21 @@
 use std::fs;
 use std::path::PathBuf;
 
+use serde_json::Value;
+
+struct MetricBaseline {
+    subsystem: String,
+    path: String,
+    scorecard_ratchet: bool,
+}
+
 fn project_root() -> PathBuf {
     let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     dir.pop();
     dir
 }
 
-fn committed_metric_baselines() -> Result<Vec<String>, Box<dyn std::error::Error>> {
+fn committed_metric_baselines() -> Result<Vec<MetricBaseline>, Box<dyn std::error::Error>> {
     let root = project_root();
     let baseline_dir = root.join(".ci/metrics/baselines");
     let mut baselines = Vec::new();
@@ -22,10 +30,19 @@ fn committed_metric_baselines() -> Result<Vec<String>, Box<dyn std::error::Error
             .file_stem()
             .and_then(|value| value.to_str())
             .ok_or_else(|| format!("baseline path has non-utf8 file stem: {}", path.display()))?;
-        baselines.push(stem.to_string());
+        let content = fs::read_to_string(&path)?;
+        let value: Value = serde_json::from_str(&content)?;
+        let scorecard_ratchet = value.get("subsystem").and_then(Value::as_str) == Some(stem)
+            && value.get("measured_at").is_some()
+            && value.get("floor_metrics").is_some();
+        baselines.push(MetricBaseline {
+            subsystem: stem.to_string(),
+            path: format!(".ci/metrics/baselines/{stem}.json"),
+            scorecard_ratchet,
+        });
     }
 
-    baselines.sort();
+    baselines.sort_by(|left, right| left.subsystem.cmp(&right.subsystem));
     Ok(baselines)
 }
 
@@ -35,11 +52,15 @@ fn ci_metrics_ratchet_recipe_checks_every_committed_baseline()
     let root = project_root();
     let justfile = fs::read_to_string(root.join("justfile"))?;
 
-    for subsystem in committed_metric_baselines()? {
-        let command = format!("metrics ratchet-check {subsystem}");
+    for baseline in committed_metric_baselines()? {
+        if !baseline.scorecard_ratchet {
+            continue;
+        }
+        let command = format!("metrics ratchet-check {}", baseline.subsystem);
         assert!(
             justfile.contains(&command),
-            "just ci-metrics-ratchet must check committed baseline `{subsystem}`"
+            "just ci-metrics-ratchet must check committed baseline `{}`",
+            baseline.subsystem
         );
     }
 
@@ -51,9 +72,8 @@ fn ratchet_guide_lists_every_committed_baseline() -> Result<(), Box<dyn std::err
     let root = project_root();
     let guide = fs::read_to_string(root.join("docs/project/metrics/RATCHET.md"))?;
 
-    for subsystem in committed_metric_baselines()? {
-        let path = format!(".ci/metrics/baselines/{subsystem}.json");
-        assert!(guide.contains(&path), "RATCHET.md must list `{path}`");
+    for baseline in committed_metric_baselines()? {
+        assert!(guide.contains(&baseline.path), "RATCHET.md must list `{}`", baseline.path);
     }
 
     Ok(())

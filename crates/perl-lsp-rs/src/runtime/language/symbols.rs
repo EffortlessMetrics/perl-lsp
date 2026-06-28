@@ -4,7 +4,7 @@
 
 use super::super::{byte_to_utf16_col, *};
 use crate::fallback::text::folding_ranges_from_text;
-use crate::protocol::{invalid_params, req_uri};
+use crate::protocol::req_uri;
 use crate::state::document_symbol_cap;
 use std::sync::OnceLock;
 
@@ -25,14 +25,6 @@ fn get_package_regex() -> Option<&'static regex::Regex> {
 
 fn get_head_regex() -> Option<&'static regex::Regex> {
     HEAD_REGEX.get_or_init(|| regex::Regex::new(r"^=(head[1-4])\s+(.+)$")).as_ref().ok()
-}
-
-fn invalid_folding_range_uri_params() -> JsonRpcError {
-    invalid_params(
-        "Missing required parameter: textDocument.uri\n\n\
-         textDocument/foldingRange expects params.textDocument.uri to identify the document to fold.\n\n\
-         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"}}",
-    )
 }
 
 /// Scan source text for POD =head1..=head4 directives and return them as document symbols.
@@ -139,10 +131,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = params
-                .pointer("/textDocument/uri")
-                .and_then(Value::as_str)
-                .ok_or_else(invalid_folding_range_uri_params)?;
+            let uri = req_uri(&params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -154,13 +143,9 @@ impl LspServer {
                     let total_lines = doc.text.lines().count();
 
                     // Add fold for data section body if it exists
-                    if marker_line + 1 < total_lines {
-                        lsp_ranges.push(json!({
-                            "startLine": marker_line + 1,
-                            "endLine": total_lines - 1,
-                            "kind": "comment"
-                        }));
-                    }
+                    let start_line = marker_line + 1;
+                    let end_line = total_lines.saturating_sub(1);
+                    push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, "comment");
                 }
 
                 // Add heredoc folding ranges from lexer
@@ -172,13 +157,16 @@ impl LspServer {
                     let (end_line, _) =
                         self.offset_to_pos16(doc, range.end_offset.saturating_sub(1));
 
-                    if start_line <= end_line {
-                        lsp_ranges.push(json!({
-                            "startLine": start_line,
-                            "endLine": end_line,
-                            "kind": "region"
-                        }));
-                    }
+                    push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, "region");
+                }
+
+                // Add #region/#endregion folding ranges
+                let region_ranges =
+                    crate::folding::FoldingRangeExtractor::extract_region_markers(&doc.text);
+                for range in region_ranges {
+                    let start_line = offset_to_line(&doc.text, range.start_offset);
+                    let end_line = offset_to_line(&doc.text, range.end_offset);
+                    push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, "region");
                 }
 
                 if let Some(ref ast) = doc.ast {
@@ -191,11 +179,12 @@ impl LspServer {
                         // Calculate actual line numbers from document content
                         let start_line = offset_to_line(&doc.text, range.start_offset);
                         let end_line = offset_to_line(&doc.text, range.end_offset);
-
-                        if end_line > start_line {
+                        if let Some(lsp_end_line) =
+                            lsp_inclusive_multiline_end_line(start_line, end_line)
+                        {
                             let mut lsp_range = json!({
                                 "startLine": start_line,
-                                "endLine": end_line - 1,  // LSP folding ranges are inclusive
+                                "endLine": lsp_end_line,  // LSP folding ranges are inclusive
                             });
 
                             if let Some(ref kind) = range.kind {
@@ -221,8 +210,6 @@ impl LspServer {
                     return Ok(Some(json!(folding_ranges_from_text(&doc.text, 1000))));
                 }
             }
-        } else {
-            return Err(invalid_folding_range_uri_params());
         }
 
         Ok(Some(json!([])))
@@ -233,10 +220,7 @@ impl LspServer {
         &self,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, JsonRpcError> {
-        let uri = params
-            .pointer("/textDocument/uri")
-            .and_then(|v| v.as_str())
-            .ok_or_else(invalid_folding_range_uri_params)?;
+        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
         let text = self.buffer_text(uri).unwrap_or_default();
         let ranges = folding_ranges_from_text(&text, 128);
         Ok(serde_json::to_value(ranges).unwrap_or(serde_json::json!([])))
@@ -321,6 +305,139 @@ fn document_symbols_to_json(
 /// Helper function to convert offset to line number
 fn offset_to_line(content: &str, offset: usize) -> usize {
     content[..offset.min(content.len())].chars().filter(|&c| c == '\n').count()
+}
+
+fn push_multiline_folding_range<T>(
+    lsp_ranges: &mut Vec<Value>,
+    start_line: T,
+    end_line: T,
+    kind: &str,
+) where
+    T: Copy + Ord + serde::Serialize,
+{
+    if end_line > start_line {
+        lsp_ranges.push(json!({
+            "startLine": start_line,
+            "endLine": end_line,
+            "kind": kind
+        }));
+    }
+}
+
+fn lsp_inclusive_multiline_end_line(start_line: usize, raw_end_line: usize) -> Option<usize> {
+    let lsp_end_line = raw_end_line.saturating_sub(1);
+    (lsp_end_line > start_line).then_some(lsp_end_line)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn push_multiline_folding_range_boundary_discriminator_end_line_gt_start_line_rejects_equal_input()
+     {
+        let mut ranges = Vec::new();
+
+        push_multiline_folding_range(&mut ranges, 4, 4, "region");
+
+        assert!(ranges.is_empty());
+    }
+
+    #[test]
+    fn push_multiline_folding_range_boundary_discriminator_input_that_hits_the_boundary_end_line_gt_start_line_accepts_multiline_input()
+     {
+        let mut ranges = Vec::new();
+
+        push_multiline_folding_range(&mut ranges, 4, 6, "comment");
+
+        assert_eq!(ranges.len(), 1, "input that hits the boundary: end_line > start_line");
+        assert_eq!(ranges[0]["startLine"], json!(4));
+        assert_eq!(ranges[0]["endLine"], json!(6));
+        assert_eq!(ranges[0]["kind"], json!("comment"));
+    }
+
+    #[test]
+    fn lsp_inclusive_multiline_end_line_boundary_discriminator_lsp_end_line_gt_start_line_rejects_short_span()
+     {
+        assert_eq!(lsp_inclusive_multiline_end_line(4, 5), None);
+        assert_eq!(lsp_inclusive_multiline_end_line(4, 0), None);
+    }
+
+    #[test]
+    fn lsp_inclusive_multiline_end_line_boundary_discriminator_input_that_hits_the_boundary_lsp_end_line_gt_start_line_accepts_multiline_span()
+     {
+        assert_eq!(
+            lsp_inclusive_multiline_end_line(4, 6),
+            Some(5),
+            "input that hits the boundary: lsp_end_line > start_line"
+        );
+    }
+
+    fn folding_ranges_for_source(source: &str) -> Result<Vec<Value>, JsonRpcError> {
+        let server = LspServer::new();
+        let uri = "file:///folding-observer.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": source,
+            }
+        })))?;
+
+        let response = server.handle_folding_range(Some(json!({
+            "textDocument": { "uri": uri }
+        })))?;
+
+        Ok(response.and_then(|value| value.as_array().cloned()).unwrap_or_default())
+    }
+
+    #[test]
+    fn handle_folding_range_call_presence_observer_push_multiline_folding_range_data_section_comment()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let ranges = folding_ranges_for_source("print \"ok\\n\";\n__DATA__\nalpha\nbeta\n")?;
+
+        assert!(
+            ranges.iter().any(|range| {
+                range.get("kind") == Some(&json!("comment"))
+                    && range.get("startLine") == Some(&json!(2))
+                    && range.get("endLine") == Some(&json!(3))
+            }),
+            "input that reaches call push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, \"comment\")"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn handle_folding_range_call_presence_observer_push_multiline_folding_range_heredoc_region()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let ranges = folding_ranges_for_source("my $text = <<'TXT';\nalpha\nbeta\nTXT\n")?;
+
+        assert!(
+            ranges.iter().any(|range| {
+                range.get("kind") == Some(&json!("region"))
+                    && range.get("startLine") == Some(&json!(1))
+                    && range.get("endLine") == Some(&json!(2))
+            }),
+            "input that reaches call push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, \"region\")"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn handle_folding_range_call_presence_observer_ast_lsp_end_line_gt_start_line()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let ranges = folding_ranges_for_source("sub full {\n    my $value = 1;\n}\n")?;
+
+        assert!(ranges.iter().any(|range| {
+            range.get("startLine") == Some(&json!(0))
+                && range.get("endLine").and_then(Value::as_u64).is_some_and(|end| end > 0)
+        }));
+
+        Ok(())
+    }
 }
 
 impl LspServer {
@@ -409,52 +526,4 @@ fn document_symbols_empty_compiler_receipt(reason: &str) -> Value {
         "reason": reason,
         "fact_source_traces": [],
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    fn expect_folding_range_uri_guidance(err: JsonRpcError) -> Result<(), String> {
-        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
-        for expected in [
-            "Missing required parameter: textDocument.uri",
-            "textDocument/foldingRange",
-            "params.textDocument.uri",
-            "file:///workspace/lib/My/Module.pm",
-        ] {
-            if !err.message.contains(expected) {
-                return Err(format!("expected error message to contain {expected:?}; got {err}"));
-            }
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn folding_range_missing_params_error_includes_shape_guidance() -> Result<(), String> {
-        let server = LspServer::new();
-        match server.handle_folding_range(None) {
-            Err(err) => expect_folding_range_uri_guidance(err),
-            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
-        }
-    }
-
-    #[test]
-    fn folding_range_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
-        let server = LspServer::new();
-        match server.handle_folding_range(Some(json!({}))) {
-            Err(err) => expect_folding_range_uri_guidance(err),
-            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
-        }
-    }
-
-    #[test]
-    fn folding_range_fallback_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
-        let server = LspServer::new();
-        match server.on_folding_range(json!({})) {
-            Err(err) => expect_folding_range_uri_guidance(err),
-            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
-        }
-    }
 }

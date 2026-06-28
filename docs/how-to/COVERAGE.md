@@ -182,7 +182,11 @@ Set this GitHub Actions secret at the repository or organization level:
 
 - `CODECOV_TOKEN`
 
-The coverage upload uses this token. The proof-lane patch coverage upload is blocking: the `Codecov / Patch 95` job sets `fail_ci_if_error: true`, so a missing token, upload error, or Codecov processing failure prevents the PR from merging without current patch proof.
+The coverage upload uses this token for Codecov telemetry. The blocking patch
+proof is the local `Codecov / Patch 95` quality-gate receipt, not the upload
+step: CI sets `fail_ci_if_error: false`, and `codecov.yml` sets
+`require_ci_to_pass: false` plus patch `if_ci_failed: ignore` so unrelated
+routed test failures remain in test-named gates.
 
 ## Configuration Files
 
@@ -227,14 +231,16 @@ If your shell does not proxy `cargo +nightly` correctly on Windows, use `rustup 
 
 ### Codecov upload fails
 
-The proof-lane patch coverage workflow sets `fail_ci_if_error: true`, so upload failures block PRs until current patch proof is available. Check:
+The proof-lane patch coverage workflow sets `fail_ci_if_error: false`, so
+upload failures are non-fatal telemetry when the local quality-gate receipt has
+already passed. Check:
 
 1. `CODECOV_TOKEN` is configured as a GitHub Actions secret.
 2. `target/lcov.info` exists.
 3. `target/receipts/quality/coverage-baseline.json` exists.
 4. `target/receipts/quality/quality-gate-coverage.json` and `target/receipts/quality/quality-gate-coverage.md` exist.
 5. Codecov service status: https://status.codecov.io/
-6. Workflow logs and the Codecov dashboard show processing details for `Codecov / Patch 95`.
+6. Workflow logs and the Codecov dashboard show processing details for `codecov/patch`.
 
 ### Test Analytics upload fails
 
@@ -325,6 +331,9 @@ Current uploaded suites:
 - `ux-regression-gate` — UX regression gate results (standalone workflow)
 
 This avoids rerunning tests solely to produce JUnit XML and keeps the existing `xtask gates` runner as the source of truth.
+Test Analytics uploads are telemetry only. Their failures or routed test
+failures must surface through test-named gates, not through `Codecov / Patch 95`
+or `codecov/patch`.
 
 ## Bundle Analysis
 

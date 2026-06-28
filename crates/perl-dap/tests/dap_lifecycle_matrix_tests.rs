@@ -14,7 +14,12 @@
 mod common;
 
 use common::{DapWorkflowSession, perl_available, workflow_timeout};
+use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
+use perl_tdd_support::must_some;
+use serde_json::{Value, json};
 use std::fs::write;
+use std::sync::mpsc::{Receiver, channel};
+use std::time::Duration;
 use tempfile::tempdir;
 
 // ─── Fixture ──────────────────────────────────────────────────────────────────────────────
@@ -507,6 +512,446 @@ fn test_lifecycle_variables_non_empty_at_stop() -> TestResult {
     session.continue_exec(frame_info.thread_id)?;
     let _ = session.drain_until_event("terminated");
     session.disconnect()?;
+
+    Ok(())
+}
+
+/// No active session: stackTrace returns honest empty list, not a fabricated frame.
+/// Regression guard: pre-fix returned main::hello @ /tmp/hello.pl:10.
+/// This test requires no `perl` on PATH — pure unit isolation.
+#[test]
+fn test_stacktrace_no_session_returns_empty() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = DebugAdapter::new();
+    let response = adapter.handle_request(1, "stackTrace", Some(json!({"threadId": 1})));
+    let DapMessage::Response { success, command, body, .. } = response else {
+        return Err("Expected Response".into());
+    };
+    assert!(success, "stackTrace should succeed even without a session");
+    assert_eq!(command, "stackTrace");
+    let body = body.ok_or("Expected body")?;
+    let frames =
+        body.get("stackFrames").and_then(|v| v.as_array()).ok_or("Expected stackFrames array")?;
+    assert_eq!(frames.len(), 0, "no session must return stackFrames: [] (not a fabricated frame)");
+    let total = body.get("totalFrames").and_then(|v| v.as_u64()).ok_or("Expected totalFrames")?;
+    assert_eq!(total, 0, "totalFrames must be 0 when stackFrames is empty");
+    Ok(())
+}
+
+// ─── Cleanup/teardown unit-level matrix (C1–C6) ──────────────────────────────
+//
+// These six tests exercise the lifecycle cleanup and teardown contracts at the
+// protocol level — no live Perl process required.  They complement the e2e
+// tests above by covering edge cells (terminate, attach→terminate, disconnect,
+// post-terminate requests, relaunch, restart) that cannot be exercised through
+// `DapWorkflowSession` without a real perl -d.
+//
+// Each test uses `make_adapter_with_rx` + `wait_cleanup_event` (defined below).
+
+fn make_adapter_with_rx() -> (DebugAdapter, Receiver<DapMessage>) {
+    let (tx, rx) = channel();
+    let mut adapter = DebugAdapter::new();
+    adapter.set_event_sender(tx);
+    (adapter, rx)
+}
+
+/// Drain the event channel looking for an event with the given name, up to
+/// `timeout_ms` total. Returns the event body on match.
+fn wait_cleanup_event(rx: &Receiver<DapMessage>, name: &str, timeout_ms: u64) -> Option<Value> {
+    let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
+    while std::time::Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        match rx.recv_timeout(remaining) {
+            Ok(DapMessage::Event { event, body, .. }) if event == name => {
+                return Some(body.unwrap_or(Value::Null));
+            }
+            Ok(_) => continue,
+            Err(_) => break,
+        }
+    }
+    None
+}
+
+fn assert_cleanup_success(response: &DapMessage, expected_command: &str) -> TestResult {
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(
+                *success,
+                "expected success=true for {expected_command}, got message={message:?}"
+            );
+            assert_eq!(command, expected_command, "command field mismatch");
+            Ok(())
+        }
+        other => Err(format!("expected Response for {expected_command}, got {other:?}").into()),
+    }
+}
+
+// ── C1: terminate with breakpoints set ───────────────────────────────────────
+
+/// C1 — terminate with breakpoints set.
+///
+/// BEHAVIOUR LOCK: `clear_active_session_state` does NOT call
+/// `breakpoints.clear_all()`. The `BreakpointStore` persists across terminate
+/// so that IDEs can efficiently restore breakpoints on restart without resending.
+///
+/// Assertions:
+/// - `terminate` returns success.
+/// - A `terminated` event is emitted with the correct `restart` field.
+/// - REPLACE semantics still work after terminate (empty setBreakpoints removes
+///   only the file's registrations, returning 0 breakpoints).
+///
+/// See `docs/reference/DAP_LIFECYCLE_MATRIX.md` "Known limitations §C1".
+#[test]
+fn test_terminate_preserves_breakpoints_but_replace_still_clears() -> TestResult {
+    let (mut adapter, rx) = make_adapter_with_rx();
+
+    // Register a breakpoint before terminate.
+    let bp_response = adapter.handle_request(
+        1,
+        "setBreakpoints",
+        Some(json!({
+            "source": { "path": "/tmp/test_lifecycle_c1.pl" },
+            "breakpoints": [{ "line": 5 }]
+        })),
+    );
+    assert_cleanup_success(&bp_response, "setBreakpoints")?;
+
+    // Terminate the (simulated) session.
+    let term_response = adapter.handle_request(2, "terminate", Some(json!({ "restart": false })));
+    assert_cleanup_success(&term_response, "terminate")?;
+
+    // "terminated" event must be emitted regardless of session state.
+    let event_body = must_some(wait_cleanup_event(&rx, "terminated", 300));
+    let restart_flag = event_body.get("restart").and_then(Value::as_bool);
+    assert_eq!(restart_flag, Some(false), "terminated event must echo restart=false");
+
+    // BEHAVIOUR LOCK: the BreakpointStore is NOT cleared on terminate.
+    // A subsequent setBreakpoints with an empty list (REPLACE semantics) must
+    // return 0 breakpoints, proving REPLACE still functions post-terminate.
+    let recheck = adapter.handle_request(
+        3,
+        "setBreakpoints",
+        Some(json!({
+            "source": { "path": "/tmp/test_lifecycle_c1.pl" },
+            "breakpoints": []
+        })),
+    );
+    match recheck {
+        DapMessage::Response { success: true, body: Some(ref body), .. } => {
+            let bps = body
+                .get("breakpoints")
+                .and_then(Value::as_array)
+                .ok_or("setBreakpoints response must include breakpoints array")?;
+            assert_eq!(
+                bps.len(),
+                0,
+                "REPLACE semantics with empty list must clear stored breakpoints for the file"
+            );
+        }
+        other => return Err(format!("Expected successful setBreakpoints, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+// ── C2: attach then terminate cleanup ────────────────────────────────────────
+
+/// C2 — PID-attach session → terminate → session torn down, no leaked handle.
+///
+/// After terminate the session state is cleared and a "terminated" event is
+/// emitted. Subsequent `threads` calls return an empty list (no leaked attach
+/// thread), confirming the handle was released.
+#[test]
+fn test_attach_then_terminate_cleanup() -> TestResult {
+    let (mut adapter, rx) = make_adapter_with_rx();
+
+    // Attach in PID-signal-control mode (no real process needed).
+    let attach_response = adapter.handle_request(1, "attach", Some(json!({ "processId": 12345 })));
+    assert_cleanup_success(&attach_response, "attach")?;
+
+    // Drain the "stopped" event emitted by attach.
+    let _ = wait_cleanup_event(&rx, "stopped", 200);
+
+    // Terminate the attached session.
+    let term_response = adapter.handle_request(2, "terminate", None);
+    assert_cleanup_success(&term_response, "terminate")?;
+
+    // "terminated" event must arrive.
+    assert!(
+        wait_cleanup_event(&rx, "terminated", 300).is_some(),
+        "terminate after attach must emit a terminated event"
+    );
+
+    // The PID session is torn down — threads must return empty (no leaked handle).
+    let threads_response = adapter.handle_request(3, "threads", None);
+    match threads_response {
+        DapMessage::Response { success: true, body: Some(ref body), .. } => {
+            let threads = body
+                .get("threads")
+                .and_then(Value::as_array)
+                .ok_or("threads body must have threads array")?;
+            assert!(
+                threads.is_empty(),
+                "after terminate, threads must be empty (no leaked PID session), got {threads:?}"
+            );
+        }
+        DapMessage::Response { success: true, body: None, .. } => {
+            // No body implies no threads — acceptable.
+        }
+        other => return Err(format!("Unexpected threads response: {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+// ── C3: disconnect clears active session ─────────────────────────────────────
+
+/// C3 — active session (with breakpoints configured) → disconnect → state
+/// cleared: "terminated" event emitted, subsequent stackTrace/modules return
+/// protocol-safe responses (no panic).
+#[test]
+fn test_disconnect_clears_active_session() -> TestResult {
+    let (mut adapter, rx) = make_adapter_with_rx();
+
+    // Simulate an "active" session: initialize, set breakpoints, configurationDone.
+    let _ = adapter.handle_request(1, "initialize", None);
+    let _ = wait_cleanup_event(&rx, "initialized", 100);
+
+    let _ = adapter.handle_request(
+        2,
+        "setBreakpoints",
+        Some(json!({
+            "source": { "path": "/tmp/test_lifecycle_c3.pl" },
+            "breakpoints": [{ "line": 10 }, { "line": 20 }]
+        })),
+    );
+
+    let _ = adapter.handle_request(3, "configurationDone", None);
+
+    // Disconnect.
+    let dc_response = adapter.handle_request(4, "disconnect", None);
+    assert_cleanup_success(&dc_response, "disconnect")?;
+
+    // "terminated" event must be emitted.
+    assert!(
+        wait_cleanup_event(&rx, "terminated", 300).is_some(),
+        "disconnect must emit a terminated event"
+    );
+
+    // After disconnect, stackTrace must return a valid protocol Response (no panic).
+    let st_response = adapter.handle_request(5, "stackTrace", Some(json!({ "threadId": 1 })));
+    match st_response {
+        DapMessage::Response { command, .. } => {
+            assert_eq!(command, "stackTrace", "stackTrace command must be echoed correctly");
+        }
+        other => {
+            return Err(format!(
+                "stackTrace after disconnect must return a Response, got {other:?}"
+            )
+            .into());
+        }
+    }
+
+    // modules must not panic and must return a valid response.
+    let modules_response = adapter.handle_request(6, "modules", Some(json!({})));
+    match modules_response {
+        DapMessage::Response { .. } => {}
+        other => {
+            return Err(
+                format!("modules after disconnect must return a Response, got {other:?}").into()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// ── C4: post-terminate requests are protocol-safe ─────────────────────────────
+
+/// C4 — after terminate, `variables`, `stackTrace`, and `scopes` return
+/// protocol-safe responses (success with empty body, or descriptive error);
+/// no panic occurs.
+///
+/// Verifies the adapter does not unwrap/expect on a None session reference.
+#[test]
+fn test_post_terminate_requests_protocol_safe() -> TestResult {
+    let (mut adapter, rx) = make_adapter_with_rx();
+
+    // Terminate first (no session — must be idempotent).
+    let term = adapter.handle_request(1, "terminate", None);
+    assert_cleanup_success(&term, "terminate")?;
+    let _ = wait_cleanup_event(&rx, "terminated", 200);
+
+    // variables — must return a Response (not panic).
+    let vars = adapter.handle_request(2, "variables", Some(json!({ "variablesReference": 1 })));
+    match vars {
+        DapMessage::Response { command, .. } => {
+            assert_eq!(command, "variables", "response command must echo variables");
+        }
+        other => {
+            return Err(
+                format!("variables after terminate must be a Response, got {other:?}").into()
+            );
+        }
+    }
+
+    // stackTrace — must return a Response (not panic).
+    let st = adapter.handle_request(3, "stackTrace", Some(json!({ "threadId": 1 })));
+    match st {
+        DapMessage::Response { command, .. } => {
+            assert_eq!(command, "stackTrace", "response command must echo stackTrace");
+        }
+        other => {
+            return Err(
+                format!("stackTrace after terminate must be a Response, got {other:?}").into()
+            );
+        }
+    }
+
+    // scopes — must return a Response (not panic).
+    let scopes = adapter.handle_request(4, "scopes", Some(json!({ "frameId": 1 })));
+    match scopes {
+        DapMessage::Response { command, .. } => {
+            assert_eq!(command, "scopes", "response command must echo scopes");
+        }
+        other => {
+            return Err(format!("scopes after terminate must be a Response, got {other:?}").into());
+        }
+    }
+
+    Ok(())
+}
+
+// ── C5: relaunch after terminate carries no stale state ───────────────────────
+
+/// C5 — terminate → launch again → fresh launch path, no stale state from
+/// pre-terminate breakpoints or session handles.
+///
+/// A non-existent script path is used so the launch fails quickly at the
+/// file-exists validation step (no Perl needed). The failure message must
+/// describe a file/launch error, NOT a stale-session collision.
+#[test]
+fn test_relaunch_after_terminate_no_stale_state() -> TestResult {
+    let (mut adapter, rx) = make_adapter_with_rx();
+
+    // Set some breakpoints (potential stale state after terminate).
+    let _ = adapter.handle_request(
+        1,
+        "setBreakpoints",
+        Some(json!({
+            "source": { "path": "/tmp/test_lifecycle_c5.pl" },
+            "breakpoints": [{ "line": 7 }, { "line": 14 }]
+        })),
+    );
+
+    // Terminate (simulated — no real session).
+    let term = adapter.handle_request(2, "terminate", None);
+    assert_cleanup_success(&term, "terminate")?;
+    let _ = wait_cleanup_event(&rx, "terminated", 200);
+
+    // Attempt a new launch. Non-existent path → fails at file-exists check.
+    let launch = adapter.handle_request(
+        3,
+        "launch",
+        Some(json!({
+            "program": "/nonexistent/path/to/script_lifecycle_c5.pl"
+        })),
+    );
+
+    match launch {
+        DapMessage::Response { success: false, command, message, .. } => {
+            assert_eq!(command, "launch");
+            let msg = message.unwrap_or_default();
+            // Must NOT indicate a stale-session collision.
+            assert!(
+                !msg.contains("already running")
+                    && !msg.contains("active session")
+                    && !msg.contains("previous session")
+                    && !msg.contains("state conflict"),
+                "launch after terminate must not report stale-session collision, got: {msg}"
+            );
+            // Must be a file-not-found, launch error, or protocol-ordering error.
+            // If launch is sent without a prior initialize the adapter rejects it
+            // with a protocol ordering message; that is NOT a stale-session error
+            // and is an equally acceptable failure reason here.
+            assert!(
+                msg.contains("Cannot find")
+                    || msg.contains("not a file")
+                    || msg.contains("not found")
+                    || msg.contains("Failed")
+                    || msg.contains("no launch")
+                    || msg.contains("Perl")
+                    || msg.contains("Cannot start")
+                    || msg.contains("initialize"),
+                "launch failure must describe a file/launch error or protocol-ordering error, got: {msg}"
+            );
+        }
+        DapMessage::Response { success: true, .. } => {
+            // Unexpected success (e.g., Perl spawned somehow) — state isolation still holds.
+        }
+        other => {
+            return Err(
+                format!("launch after terminate must return a Response, got {other:?}").into()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// ── C6: restart without prior launch args → clean protocol error ──────────────
+
+/// C6 — restart without prior launch args → clean protocol error; adapter
+/// remains usable afterwards.
+///
+/// `handle_restart` falls back to `last_launch_args` when no arguments are
+/// provided. Without a prior successful launch, `last_launch_args` is None and
+/// the handler must return a descriptive, non-panicking error. This locks the
+/// error-path behaviour and validates that restart does not crash or produce
+/// an opaque "Unknown command" response.
+#[test]
+fn test_restart_without_prior_launch_fails_gracefully() -> TestResult {
+    let (mut adapter, _rx) = make_adapter_with_rx();
+
+    // Restart without any prior launch → must fail gracefully.
+    let restart = adapter.handle_request(1, "restart", None);
+
+    match restart {
+        DapMessage::Response { success, command, message, .. } => {
+            assert_eq!(command, "restart", "command field must echo restart");
+            assert!(
+                !success,
+                "restart without prior launch must fail (no configuration to replay)"
+            );
+            let msg = message.as_deref().unwrap_or("");
+            assert!(
+                !msg.contains("Unknown command"),
+                "restart must route to its handler, not the unknown-command fallback: {msg}"
+            );
+            assert!(
+                msg.contains("no previous launch")
+                    || msg.contains("Cannot restart")
+                    || msg.contains("no launch configuration"),
+                "restart error must explain missing configuration, got: {msg}"
+            );
+        }
+        other => {
+            return Err(format!("restart must return a Response, got {other:?}").into());
+        }
+    }
+
+    // After the failed restart, subsequent protocol requests must still work.
+    let threads = adapter.handle_request(2, "threads", None);
+    match threads {
+        DapMessage::Response { command, .. } => {
+            assert_eq!(command, "threads", "threads after failed restart must respond");
+        }
+        other => {
+            return Err(format!(
+                "threads after failed restart must return a Response, got {other:?}"
+            )
+            .into());
+        }
+    }
 
     Ok(())
 }

@@ -20,6 +20,7 @@ pub(crate) mod safe_eval;
 mod session;
 mod sync_utils;
 mod transport;
+pub mod var_ref;
 mod variable_cache;
 
 use crate::breakpoint::{AstBreakpointValidator, BreakpointValidator};
@@ -124,6 +125,10 @@ pub struct DebugAdapter {
     next_goto_target_id: Arc<Mutex<i64>>,
     /// Workspace root for path validation (set during launch)
     workspace_root: Arc<Mutex<Option<PathBuf>>>,
+    /// Transport broken flag: set by event handler on persistent write failure
+    transport_broken: Arc<AtomicBool>,
+    /// Tracks whether initialize request has been received (state machine validation)
+    initialized: Arc<AtomicBool>,
 }
 
 /// Represents a DAP message, which can be a request, response, or event.
@@ -201,6 +206,8 @@ impl DebugAdapter {
             goto_targets: Arc::new(Mutex::new(HashMap::new())),
             next_goto_target_id: Arc::new(Mutex::new(1)),
             workspace_root: Arc::new(Mutex::new(None)),
+            transport_broken: Arc::new(AtomicBool::new(false)),
+            initialized: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -398,21 +405,171 @@ impl DebugAdapter {
         })
     }
 
-    #[cfg(test)]
-    fn push_recent_output_line_for_test(&self, line: &str) {
+    /// Push a line into the recent-output buffer for testing parser paths.
+    ///
+    /// Only for use in tests; not part of the public API contract.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn push_recent_output_line_for_test(&self, line: &str) {
         let mut output = lock_or_recover(&self.recent_output, "debug_adapter.push_recent_output");
         Self::append_recent_output_line_locked(&mut output, line);
     }
 
-    /// Shared message for handlers that require an active debugger session.
+    /// Seed a minimal DebugSession in Running state for testing stale-ref guards.
     ///
-    /// Used by evaluate, setExpression, setVariable, and any other handler that
-    /// cannot proceed without a live `launch` or `attach` session.
-    fn no_debugger_session_message(command: &str) -> String {
-        format!(
-            "No debugger session is active. Start a launch or attach request first, wait for the \
-             debugger to stop at a breakpoint, then retry {command}."
-        )
+    /// Creates a `perl -e 1` child process, installs it as the active session, and
+    /// sets the state to `DebugState::Running` so that stale-ref-guard tests can
+    /// verify the "session is not stopped" path without a live debugging scenario.
+    ///
+    /// Only for use in tests; not part of the public API contract.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn seed_running_session_for_test(&self) {
+        use crate::debug_adapter::session::{DebugSession, DebugState, ResumeMode};
+        use crate::debug_adapter::variable_cache::VariableCache;
+        if let Ok(child) = std::process::Command::new("perl")
+            .arg("-e")
+            .arg("1")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+        {
+            if let Ok(mut guard) = self.session.lock() {
+                *guard = Some(DebugSession {
+                    process: child,
+                    state: DebugState::Running,
+                    stack_frames: vec![],
+                    variable_cache: VariableCache::default(),
+                    thread_id: 1,
+                    last_resume_mode: ResumeMode::Continue,
+                });
+            }
+        }
+    }
+
+    /// Seed `attached_pid` with the given PID for testing.
+    ///
+    /// Use a PID that is guaranteed not to exist (e.g. `999_999`) to drive the
+    /// "session present, signal delivery failed" path in `handle_pause`.
+    ///
+    /// Only for use in tests; not part of the public API contract.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn seed_attached_pid_for_test(&self, pid: u32) {
+        if let Ok(mut guard) = self.attached_pid.lock() {
+            *guard = Some(pid);
+        }
+    }
+
+    #[cfg(test)]
+    fn seed_session_for_test(&self) {
+        // Spawn a cheap no-op subprocess so we have a real Child (no unsafe zeroed memory).
+        let child = Self::spawn_noop_child_for_test();
+        let mut session = lock_or_recover(&self.session, "debug_adapter.seed_session");
+        *session = Some(DebugSession {
+            process: child,
+            state: DebugState::Stopped,
+            stack_frames: Vec::new(),
+            variable_cache: VariableCache::default(),
+            thread_id: 1,
+            last_resume_mode: ResumeMode::Unknown,
+        });
+    }
+
+    /// Spawn the cheapest available no-op child process for use in unit tests.
+    /// Tries perl first, then a platform-native no-op.  The test panics if no
+    /// subprocess can be spawned at all — that indicates a broken CI environment.
+    #[cfg(test)]
+    fn spawn_noop_child_for_test() -> std::process::Child {
+        use std::process::{Command, Stdio};
+        // perl -e 1 exits immediately with no output.
+        if let Ok(c) = Command::new("perl")
+            .arg("-e")
+            .arg("1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            return c;
+        }
+        // Platform-native fallback when perl is not on PATH.
+        #[cfg(windows)]
+        let (prog, args): (&str, &[&str]) = ("cmd", &["/c", "exit", "0"]);
+        #[cfg(not(windows))]
+        let (prog, args): (&str, &[&str]) = ("true", &[]);
+        // SAFETY NOTE: no unsafe — uses only std::process::Command.
+        // The panic here is intentional: if *neither* perl nor the OS no-op
+        // binary is available the test environment is fundamentally broken and
+        // proceeding would produce meaningless results.
+        Command::new(prog)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|e| {
+                panic!("seed_session_for_test: cannot spawn any noop subprocess ({prog}): {e}")
+            })
+    }
+
+    #[cfg(test)]
+    fn inject_stack_frames_for_test(&self, frames: Vec<StackFrame>) {
+        let mut session = lock_or_recover(&self.session, "debug_adapter.inject_frames");
+        if let Some(ref mut sess) = *session {
+            sess.stack_frames = frames;
+        }
+    }
+
+    #[cfg(test)]
+    fn stack_frames_snapshot_for_test(&self) -> Vec<StackFrame> {
+        let session = lock_or_recover(&self.session, "debug_adapter.snapshot_frames");
+        session.as_ref().map(|s| s.stack_frames.clone()).unwrap_or_default()
+    }
+
+    /// Seed the active session's variable_cache with an EvalResult entry for testing.
+    ///
+    /// Used by the fix #1338 guard test: a CACHED EvalResult ref must serve its children
+    /// via the cache-hit path, NOT be swallowed by the early-return short-circuit added
+    /// for stale (cache-miss) EvalResult refs.
+    ///
+    /// Only for use in tests; not part of the public API contract.
+    #[cfg(test)]
+    pub fn seed_eval_result_cache_for_test(
+        &self,
+        eval_ref_wire: i32,
+        variables: Vec<crate::types::Variable>,
+    ) {
+        let mut session = lock_or_recover(&self.session, "debug_adapter.seed_eval_result_cache");
+        if let Some(ref mut sess) = *session {
+            sess.variable_cache.upsert(eval_ref_wire, VariableCacheKind::EvaluateResult, variables);
+        }
+    }
+
+    /// Seed a stopped DebugSession with a given set of stack frames for testing
+    /// frameId validation paths in handle_evaluate.
+    ///
+    /// Only for use in tests; not part of the public API contract.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn seed_stopped_session_with_frames_for_test(&self, frames: Vec<crate::types::StackFrame>) {
+        use std::process::{Command, Stdio};
+        let Ok(child) = Command::new("perl")
+            .arg("-e")
+            .arg("1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        else {
+            return;
+        };
+        let mut session = lock_or_recover(&self.session, "debug_adapter.seed_stopped_session");
+        *session = Some(DebugSession {
+            process: child,
+            state: DebugState::Stopped,
+            stack_frames: frames,
+            variable_cache: VariableCache::default(),
+            thread_id: 1,
+            last_resume_mode: ResumeMode::Unknown,
+        });
     }
 }
 #[cfg(test)]
@@ -604,8 +761,16 @@ print "result: $final\n";
             ("supportsCompletionsRequest", crate::feature_catalog::has_feature("dap.completions")),
             ("supportsModulesRequest", crate::feature_catalog::has_feature("dap.modules")),
             ("supportsDataBreakpoints", crate::feature_catalog::has_feature("dap.watchpoints")),
-            ("supportsTerminateThreadsRequest", false),
+            (
+                "supportsTerminateThreadsRequest",
+                crate::feature_catalog::has_feature("dap.terminate_threads"),
+            ),
             ("supportsGotoTargetsRequest", crate::feature_catalog::has_feature("dap.core")),
+            ("supportsRestartFrame", crate::feature_catalog::has_feature("dap.restart_frame")),
+            (
+                "supportsStepInTargetsRequest",
+                crate::feature_catalog::has_feature("dap.step_in_targets"),
+            ),
         ];
 
         for (capability, expected) in expectations {
@@ -698,6 +863,7 @@ print "result: $final\n";
             ("supportsDataBreakpoints", "setDataBreakpoints"),
             ("supportsLoadedSourcesRequest", "loadedSources"),
             ("supportsCancelRequest", "cancel"),
+            ("supportsRestartFrame", "restartFrame"),
             ("supportsStepInTargetsRequest", "stepInTargets"),
             ("supportsGotoTargetsRequest", "gotoTargets"),
             ("supportsTerminateThreadsRequest", "terminateThreads"),
@@ -786,11 +952,13 @@ print "result: $final\n";
             }
         }
 
-        // supportsTerminateThreadsRequest must be false (Perl limitation)
+        // supportsTerminateThreadsRequest matches feature advertising (now enabled)
+        let terminate_threads_expected =
+            crate::feature_catalog::has_feature("dap.terminate_threads");
         assert_eq!(
             capability_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
-            Some(false),
-            "supportsTerminateThreadsRequest must be false — Perl has no thread termination"
+            Some(terminate_threads_expected),
+            "supportsTerminateThreadsRequest must match dap.terminate_threads feature setting"
         );
 
         Ok(())
@@ -1244,7 +1412,8 @@ print "result: $final\n";
     }
 
     #[test]
-    fn test_terminate_threads_capability_is_false() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_terminate_threads_capability_is_advertised_when_feature_enabled()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let init = adapter.handle_request(1, "initialize", None);
         let capabilities = match init {
@@ -1252,10 +1421,11 @@ print "result: $final\n";
             _ => return Err("Expected successful initialize response".into()),
         };
         let cap_map = capabilities.as_object().ok_or("body must be object")?;
+        let expected = crate::feature_catalog::has_feature("dap.terminate_threads");
         assert_eq!(
             cap_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
-            Some(false),
-            "supportsTerminateThreadsRequest must be false"
+            Some(expected),
+            "supportsTerminateThreadsRequest must match dap.terminate_threads feature setting"
         );
         Ok(())
     }
@@ -1632,5 +1802,213 @@ print "result: $final\n";
         // "/path/file.pl:42" should yield file="/path/file.pl", line="42".
         let result = apply_context_re("main::(/path/file.pl:42):");
         assert_eq!(result, Some(("/path/file.pl".to_string(), "42".to_string())));
+    }
+
+    // Helper to create a test stack frame for #964 and #933 tests
+    fn make_test_frame(line_num: i32) -> StackFrame {
+        StackFrame::new(
+            line_num,
+            format!("test_func::{}", line_num),
+            Source::new(format!("/test/file{}.pl", line_num)),
+            line_num,
+        )
+    }
+
+    #[test]
+    fn test_handle_continue_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        // Precondition: frames are present
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            2,
+            "precondition: should have 2 frames before continue"
+        );
+
+        // Call the handler (this should clear stack_frames)
+        let _response = adapter.handle_continue(1, 1, None);
+
+        // Assert: frames are now cleared (FAILS if fix not implemented)
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_continue must clear stack_frames after resume"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_next_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        assert_eq!(adapter.stack_frames_snapshot_for_test().len(), 2);
+        let _response = adapter.handle_next(1, 1, None);
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_next must clear stack_frames after resume"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_step_in_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        assert_eq!(adapter.stack_frames_snapshot_for_test().len(), 2);
+        let _response = adapter.handle_step_in(1, 1, None);
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_step_in must clear stack_frames after resume"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_step_out_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        assert_eq!(adapter.stack_frames_snapshot_for_test().len(), 2);
+        let _response = adapter.handle_step_out(1, 1, None);
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_step_out must clear stack_frames after resume"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_pause_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        assert_eq!(adapter.stack_frames_snapshot_for_test().len(), 2);
+        let _response = adapter.handle_pause(1, 1, None);
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_pause must clear stack_frames after pause"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_goto_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        // #964: handle_goto is the 6th resume handler that must clear stack_frames.
+        // It clears inside the `if let Some(session) && stdin` arm, so a seeded session
+        // and a resolvable goto target are both required to exercise the clear path.
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        // Precondition: stale frames are present
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            2,
+            "precondition: should have 2 frames before goto"
+        );
+
+        // Seed a goto target so handle_goto resolves it (otherwise returns early with
+        // "Unknown goto target" before reaching the clear).
+        {
+            let mut goto_map =
+                lock_or_recover(&adapter.goto_targets, "test.handle_goto_clears_stack_frames");
+            goto_map.insert(1, ("/tmp/test_goto.pl".to_string(), 5));
+        }
+
+        // Call handle_goto -- writes commands to the noop child's stdin (bytes are
+        // discarded by the no-op process); stack_frames.clear() must still fire.
+        let _response = adapter.handle_goto(1, 1, Some(json!({"threadId": 1, "targetId": 1})));
+
+        // Assert: frames cleared (FAILS if handle_goto does not call stack_frames.clear())
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_goto must clear stack_frames after resume"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_configuration_done_without_launch_should_fail() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut adapter = DebugAdapter::new();
+
+        // Call initialize first (correct)
+        let init_response = adapter.handle_request(1, "initialize", None);
+        match init_response {
+            DapMessage::Response { success: true, command, .. } => {
+                assert_eq!(command, "initialize");
+            }
+            _ => return Err("Initialize should succeed".into()),
+        }
+
+        // Call configurationDone WITHOUT calling launch first (incorrect sequence)
+        let config_response = adapter.handle_request(2, "configurationDone", None);
+
+        // This should FAIL because no session exists (launch was never called)
+        match config_response {
+            DapMessage::Response { success: false, command, message, .. } => {
+                assert_eq!(command, "configurationDone");
+                assert!(message.is_some(), "should provide error message");
+                let msg = message.ok_or("Expected error message")?;
+                assert!(
+                    msg.contains("No active debug session")
+                        || msg.contains("launch")
+                        || msg.contains("session"),
+                    "Error message should explain that launch was not called, got: {msg}"
+                );
+                Ok(())
+            }
+            DapMessage::Response { success: true, .. } => {
+                Err("configurationDone should FAIL when no launch has been called".into())
+            }
+            _ => Err("Expected response".into()),
+        }
+    }
+
+    #[test]
+    fn test_launch_before_initialize_should_fail() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+
+        // Try to call launch WITHOUT calling initialize first (incorrect sequence)
+        let launch_response = adapter.handle_request(
+            1,
+            "launch",
+            Some(json!({
+                "program": "/tmp/test.pl"
+            })),
+        );
+
+        // This should FAIL because initialize was never called
+        match launch_response {
+            DapMessage::Response { success: false, command, message, .. } => {
+                assert_eq!(command, "launch");
+                assert!(message.is_some(), "should provide error message");
+                let msg = message.ok_or("Expected error message")?;
+                assert!(
+                    msg.contains("initialize")
+                        || msg.contains("Initialize")
+                        || msg.contains("session"),
+                    "Error message should explain that initialize is required, got: {msg}"
+                );
+                Ok(())
+            }
+            DapMessage::Response { success: true, .. } => {
+                Err("launch should FAIL when initialize has not been called".into())
+            }
+            _ => Err("Expected response".into()),
+        }
     }
 }

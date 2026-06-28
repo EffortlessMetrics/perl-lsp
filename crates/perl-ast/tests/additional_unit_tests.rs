@@ -443,6 +443,7 @@ fn for_each_child_mut_visits_class() {
     let mut node = Node::new(
         NodeKind::Class {
             name: "Point".to_string(),
+            name_span: None,
             parents: vec![],
             body: Box::new(block_node(vec![])),
         },
@@ -459,6 +460,7 @@ fn for_each_child_mut_visits_method_with_signature() {
     let mut node = Node::new(
         NodeKind::Method {
             name: "greet".to_string(),
+            name_span: None,
             signature: Some(Box::new(sig)),
             attributes: vec![],
             body: Box::new(block_node(vec![])),
@@ -597,6 +599,7 @@ fn count_nodes_subroutine_with_signature() {
         NodeKind::Subroutine {
             name: Some("add".to_string()),
             name_span: Some(loc(4, 7)),
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(sig)),
             attributes: vec![],
@@ -948,6 +951,7 @@ fn sexp_method_declaration_with_attributes() {
     let node = Node::new(
         NodeKind::Method {
             name: "greet".to_string(),
+            name_span: None,
             signature: None,
             attributes: vec!["lvalue".to_string()],
             body: Box::new(block_node(vec![])),
@@ -965,6 +969,7 @@ fn sexp_anonymous_subroutine() {
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -982,6 +987,7 @@ fn sexp_anonymous_subroutine_with_attributes() {
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec!["lvalue".to_string()],
@@ -1000,6 +1006,7 @@ fn sexp_named_subroutine_with_attributes() {
         NodeKind::Subroutine {
             name: Some("greet".to_string()),
             name_span: Some(loc(4, 9)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec!["lvalue".to_string()],
@@ -1048,6 +1055,7 @@ fn sexp_inner_keeps_anon_subroutine_wrapped() {
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -1148,16 +1156,18 @@ fn first_child_of_error_without_partial() {
 // ===========================================================================
 
 #[test]
-fn all_kind_names_is_sorted() {
+fn all_kind_names_has_no_duplicates() {
+    // ALL_KIND_NAMES is now auto-derived from the enum via strum::VariantNames
+    // (declaration order, not alphabetical). Verify there are no duplicates.
     let names = NodeKind::ALL_KIND_NAMES;
-    for window in names.windows(2) {
-        assert!(
-            window[0] < window[1],
-            "ALL_KIND_NAMES not sorted: {:?} >= {:?}",
-            window[0],
-            window[1]
-        );
-    }
+    let unique: std::collections::BTreeSet<&str> = names.iter().copied().collect();
+    assert_eq!(
+        names.len(),
+        unique.len(),
+        "ALL_KIND_NAMES contains duplicates: {} entries, {} unique",
+        names.len(),
+        unique.len()
+    );
 }
 
 #[test]

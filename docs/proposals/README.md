@@ -32,6 +32,13 @@ these files but should not copy generated tables or point-in-time counts:
 - [semantic capability dashboard](../project/status/semantic_capability_dashboard.md)
 - [UX capability dashboard](../project/status/ux_capability_dashboard.md)
 
+## Proposal Index
+
+| Proposal | Status | Created | Title |
+|----------|--------|---------|-------|
+| [PLSP-PROP-0001](PLSP-PROP-0001-real-perl-editor-trust.md) | proposed | 2026-05-13 | Real Perl Editor Trust |
+| [PLSP-PROP-0002](PLSP-PROP-0002-compiler-program.md) | proposed | 2026-06-21 | Repo-native compiler-program contracts |
+
 ## Template
 
 ```md

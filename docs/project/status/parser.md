@@ -23,7 +23,7 @@
 | **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 0 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
 <!-- END: PARSER_RELIABILITY_ROW -->
 <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->
-| **Strict-clean subset** | 10/10 (100%) | 10 pinned modules, zero-error gate | `.ci/common-corpus-manifest.txt` |
+| **Strict-clean subset** | insufficient_data | 10 pinned modules; run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |
 <!-- END: PARSER_STRICT_CLEAN_ROW -->
 
 ## Parser Accuracy Observability
