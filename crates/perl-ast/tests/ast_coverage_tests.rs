@@ -16,6 +16,9 @@
 
 use perl_ast::ast::{Node, NodeKind, SourceLocation};
 
+#[path = "helpers.rs"]
+mod helpers;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -159,6 +162,7 @@ fn for_each_child_subroutine_with_all_parts() -> Result<(), Box<dyn std::error::
         NodeKind::Subroutine {
             name: Some("test_fn".to_string()),
             name_span: Some(loc(4, 11)),
+            declarator: None,
             prototype: Some(Box::new(proto)),
             signature: Some(Box::new(sig)),
             attributes: vec!["lvalue".to_string()],
@@ -179,6 +183,7 @@ fn for_each_child_subroutine_body_only() -> Result<(), Box<dyn std::error::Error
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -322,7 +327,11 @@ fn for_each_child_leaf_nodes_visit_nothing() -> Result<(), Box<dyn std::error::E
         Node::new(NodeKind::Prototype { content: "$@".to_string() }, loc(0, 4)),
         Node::new(NodeKind::DataSection { marker: "__DATA__".to_string(), body: None }, loc(0, 8)),
         Node::new(
-            NodeKind::Format { name: "STDOUT".to_string(), body: "fmt".to_string() },
+            NodeKind::Format {
+                name: "STDOUT".to_string(),
+                name_span: None,
+                body: "fmt".to_string(),
+            },
             loc(0, 10),
         ),
         Node::new(NodeKind::LoopControl { op: "next".to_string(), label: None }, loc(0, 4)),
@@ -1076,7 +1085,11 @@ fn sexp_labeled_statement() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_format() -> Result<(), Box<dyn std::error::Error>> {
     let node = Node::new(
-        NodeKind::Format { name: "STDOUT".to_string(), body: "@<<<< @>>>>".to_string() },
+        NodeKind::Format {
+            name: "STDOUT".to_string(),
+            name_span: None,
+            body: "@<<<< @>>>>".to_string(),
+        },
         loc(0, 30),
     );
     let sexp = node.to_sexp();
@@ -1089,6 +1102,7 @@ fn sexp_class() -> Result<(), Box<dyn std::error::Error>> {
     let node = Node::new(
         NodeKind::Class {
             name: "Point".to_string(),
+            name_span: None,
             parents: vec![],
             body: Box::new(block(vec![])),
         },
@@ -1430,194 +1444,14 @@ fn clone_if_is_independent() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn all_kind_names_contains_every_variant() -> Result<(), Box<dyn std::error::Error>> {
-    // Build one instance of every variant and check its kind_name is in ALL_KIND_NAMES
-    let all_variants: Vec<NodeKind> = vec![
-        NodeKind::Program { statements: vec![] },
-        NodeKind::ExpressionStatement { expression: Box::new(num("1")) },
-        NodeKind::VariableDeclaration {
-            declarator: "my".to_string(),
-            variable: Box::new(var("$", "x")),
-            attributes: vec![],
-            initializer: None,
-        },
-        NodeKind::VariableListDeclaration {
-            declarator: "my".to_string(),
-            variables: vec![],
-            attributes: vec![],
-            initializer: None,
-        },
-        NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
-        NodeKind::VariableWithAttributes { variable: Box::new(var("$", "x")), attributes: vec![] },
-        NodeKind::Assignment {
-            lhs: Box::new(var("$", "x")),
-            rhs: Box::new(num("1")),
-            op: "=".to_string(),
-        },
-        NodeKind::Binary {
-            op: "+".to_string(),
-            left: Box::new(num("1")),
-            right: Box::new(num("2")),
-        },
-        NodeKind::Ternary {
-            condition: Box::new(num("1")),
-            then_expr: Box::new(num("2")),
-            else_expr: Box::new(num("3")),
-        },
-        NodeKind::Unary { op: "-".to_string(), operand: Box::new(num("1")) },
-        NodeKind::Diamond,
-        NodeKind::Ellipsis,
-        NodeKind::Undef,
-        NodeKind::Readline { filehandle: None },
-        NodeKind::Glob { pattern: "*.pl".to_string() },
-        NodeKind::Typeglob { name: "foo".to_string() },
-        NodeKind::Number { value: "1".to_string() },
-        NodeKind::String { value: "s".to_string(), interpolated: false },
-        NodeKind::Heredoc {
-            delimiter: "E".to_string(),
-            content: "c".to_string(),
-            interpolated: false,
-            indented: false,
-            command: false,
-            body_span: None,
-        },
-        NodeKind::ArrayLiteral { elements: vec![] },
-        NodeKind::HashLiteral { pairs: vec![] },
-        NodeKind::Block { statements: vec![] },
-        NodeKind::Eval { block: Box::new(num("1")) },
-        NodeKind::Do { block: Box::new(num("1")) },
-        NodeKind::Defer { block: Box::new(num("1")) },
-        NodeKind::Try { body: Box::new(block(vec![])), catch_blocks: vec![], finally_block: None },
-        NodeKind::If {
-            condition: Box::new(num("1")),
-            then_branch: Box::new(block(vec![])),
-            elsif_branches: vec![],
-            else_branch: None,
-            keyword: None,
-        },
-        NodeKind::LabeledStatement { label: "L".to_string(), statement: Box::new(num("1")) },
-        NodeKind::While {
-            condition: Box::new(num("1")),
-            body: Box::new(block(vec![])),
-            continue_block: None,
-            keyword: None,
-        },
-        NodeKind::Tie {
-            variable: Box::new(var("%", "h")),
-            package: Box::new(ident("Pkg")),
-            args: vec![],
-        },
-        NodeKind::Untie { variable: Box::new(var("%", "h")) },
-        NodeKind::For {
-            init: None,
-            condition: None,
-            update: None,
-            body: Box::new(block(vec![])),
-            continue_block: None,
-        },
-        NodeKind::Foreach {
-            variable: Box::new(var("$", "i")),
-            list: Box::new(Node::new(NodeKind::ArrayLiteral { elements: vec![] }, loc(0, 2))),
-            body: Box::new(block(vec![])),
-            continue_block: None,
-        },
-        NodeKind::Given { expr: Box::new(var("$", "x")), body: Box::new(block(vec![])) },
-        NodeKind::When { condition: Box::new(num("1")), body: Box::new(block(vec![])) },
-        NodeKind::Default { body: Box::new(block(vec![])) },
-        NodeKind::StatementModifier {
-            statement: Box::new(num("1")),
-            modifier: "if".to_string(),
-            condition: Box::new(num("1")),
-        },
-        NodeKind::Subroutine {
-            name: None,
-            name_span: None,
-            prototype: None,
-            signature: None,
-            attributes: vec![],
-            body: Box::new(block(vec![])),
-        },
-        NodeKind::Prototype { content: "$".to_string() },
-        NodeKind::Signature { parameters: vec![] },
-        NodeKind::MandatoryParameter { variable: Box::new(var("$", "x")) },
-        NodeKind::OptionalParameter {
-            variable: Box::new(var("$", "x")),
-            default_value: Box::new(num("0")),
-        },
-        NodeKind::SlurpyParameter { variable: Box::new(var("@", "r")) },
-        NodeKind::NamedParameter { variable: Box::new(var("$", "k")) },
-        NodeKind::Method {
-            name: "m".to_string(),
-            signature: None,
-            attributes: vec![],
-            body: Box::new(block(vec![])),
-        },
-        NodeKind::Return { value: None },
-        NodeKind::LoopControl { op: "next".to_string(), label: None },
-        NodeKind::Goto { target: Box::new(ident("L")) },
-        NodeKind::MethodCall {
-            object: Box::new(var("$", "o")),
-            method: "m".to_string(),
-            args: vec![],
-        },
-        NodeKind::FunctionCall { name: "f".to_string(), args: vec![] },
-        NodeKind::IndirectCall {
-            method: "new".to_string(),
-            object: Box::new(ident("C")),
-            args: vec![],
-        },
-        NodeKind::Regex {
-            pattern: "p".to_string(),
-            replacement: None,
-            modifiers: "".to_string(),
-            has_embedded_code: false,
-        },
-        NodeKind::Match {
-            expr: Box::new(var("$", "s")),
-            pattern: "p".to_string(),
-            modifiers: "".to_string(),
-            has_embedded_code: false,
-            negated: false,
-        },
-        NodeKind::Substitution {
-            expr: Box::new(var("$", "s")),
-            pattern: "p".to_string(),
-            replacement: "r".to_string(),
-            modifiers: "".to_string(),
-            has_embedded_code: false,
-            negated: false,
-        },
-        NodeKind::Transliteration {
-            expr: Box::new(var("$", "s")),
-            search: "a".to_string(),
-            replace: "b".to_string(),
-            modifiers: "".to_string(),
-            negated: false,
-        },
-        NodeKind::Package { name: "P".to_string(), name_span: loc(0, 1), block: None },
-        NodeKind::Use { module: "M".to_string(), args: vec![], has_filter_risk: false },
-        NodeKind::No { module: "M".to_string(), args: vec![], has_filter_risk: false },
-        NodeKind::PhaseBlock {
-            phase: "BEGIN".to_string(),
-            phase_span: None,
-            block: Box::new(block(vec![])),
-        },
-        NodeKind::DataSection { marker: "__DATA__".to_string(), body: None },
-        NodeKind::Class { name: "C".to_string(), parents: vec![], body: Box::new(block(vec![])) },
-        NodeKind::Format { name: "F".to_string(), body: "b".to_string() },
-        NodeKind::Identifier { name: "id".to_string() },
-        NodeKind::Error { message: "e".to_string(), expected: vec![], found: None, partial: None },
-        NodeKind::MissingExpression,
-        NodeKind::MissingStatement,
-        NodeKind::MissingIdentifier,
-        NodeKind::MissingBlock,
-        NodeKind::UnknownRest,
-    ];
+    // One representative instance per variant — see tests/helpers.rs (single source of truth).
+    let all_variants = helpers::all_nodekind_instances();
 
     let all_names: std::collections::HashSet<&str> =
         NodeKind::ALL_KIND_NAMES.iter().copied().collect();
 
     for variant in &all_variants {
-        let name = variant.kind_name();
+        let name = variant.kind.kind_name();
         assert!(all_names.contains(name), "kind_name {:?} not found in ALL_KIND_NAMES", name);
     }
 
@@ -1761,6 +1595,7 @@ fn sexp_named_subroutine_with_prototype() -> Result<(), Box<dyn std::error::Erro
         NodeKind::Subroutine {
             name: Some("test_fn".to_string()),
             name_span: Some(loc(4, 11)),
+            declarator: None,
             prototype: Some(Box::new(proto)),
             signature: None,
             attributes: vec![],
@@ -1793,6 +1628,7 @@ fn sexp_anonymous_subroutine_with_signature() -> Result<(), Box<dyn std::error::
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(sig)),
             attributes: vec![],

@@ -4,7 +4,7 @@ Get perl-lsp up and running in 5 minutes!
 
 ## Prerequisites
 
-- Rust toolchain (1.92+)
+- Rust toolchain (1.95+)
 - Perl 5 installation (for testing)
 - Your favorite code editor with LSP support
 

@@ -234,6 +234,8 @@ fn semantic_token_candidate_class_is_approved(candidate: &SemanticTokenShadowCan
                 || candidate.identity.starts_with("token:field_declaration:")
                 || candidate.identity.starts_with("token:lexical_variable_declaration:")
                 || candidate.identity.starts_with("token:lexical_variable_use:")
+                || candidate.identity.starts_with("token:our_variable_declaration:")
+                || candidate.identity.starts_with("token:state_variable_declaration:")
         }
         _ => false,
     }
@@ -1026,6 +1028,80 @@ mod tests {
         assert_eq!(
             result.receipt.new_result.identities,
             vec!["token:lexical_variable_use:$count:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_our_variable_declaration_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:our_variable_declaration:$shared:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(4, 4, 7)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result =
+            semantic_token_source_shadow(Vec::new(), vec![candidate], "our_variable_declaration");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:our_variable_declaration:$shared:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_state_variable_declaration_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:state_variable_declaration:$count:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(3, 6, 6)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result =
+            semantic_token_source_shadow(Vec::new(), vec![candidate], "state_variable_declaration");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:state_variable_declaration:$count:compiler".to_string()]
         );
         assert_eq!(report.candidate_count, 1);
         assert_eq!(report.source_backed_span_count, 1);

@@ -16,7 +16,7 @@ const EXPECTED_LANES: &[&str] = &["trust", "substrate", "reliability"];
 const ALLOWED_WORK_ITEM_STATUSES: &[&str] =
     &["active", "ready", "planned", "completed", "blocked", "deferred"];
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 struct ManifestStats {
     path_references: usize,
     proof_commands: usize,
@@ -56,6 +56,19 @@ fn validate(root: &Path) -> Result<ManifestStats> {
         bail!("{ACTIVE_GOAL_PATH}: expected TOML table");
     };
 
+    let (stats, violations) = validate_manifest_table(root, table);
+    if !violations.is_empty() {
+        eprintln!("active goal manifest violations:");
+        for violation in &violations {
+            eprintln!("  - {violation}");
+        }
+        bail!("active goal manifest check failed with {} violation(s)", violations.len());
+    }
+
+    Ok(stats)
+}
+
+fn validate_manifest_table(root: &Path, table: &Table) -> (ManifestStats, Vec<String>) {
     let mut stats = ManifestStats::default();
     let mut violations = Vec::new();
 
@@ -66,15 +79,7 @@ fn validate(root: &Path) -> Result<ManifestStats> {
     validate_next_queues(table, &lanes, &mut violations);
     validate_work_items(root, table, &lanes, &mut stats, &mut violations);
 
-    if !violations.is_empty() {
-        eprintln!("active goal manifest violations:");
-        for violation in &violations {
-            eprintln!("  - {violation}");
-        }
-        bail!("active goal manifest check failed with {} violation(s)", violations.len());
-    }
-
-    Ok(stats)
+    (stats, violations)
 }
 
 fn validate_top_level(
@@ -457,4 +462,577 @@ fn require_non_empty_string(doc: &str, table: &Table, field: &str, violations: &
 
 fn string_field<'a>(table: &'a Table, field: &str) -> Option<&'a str> {
     table.get(field).and_then(Value::as_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use color_eyre::eyre::ensure;
+    use tempfile::TempDir;
+
+    fn fixture_root(paths: &[&str]) -> Result<TempDir> {
+        let temp = tempfile::tempdir()?;
+        for path in paths {
+            let full_path = temp.path().join(path);
+            if let Some(parent) = full_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(full_path, "fixture")?;
+        }
+        Ok(temp)
+    }
+
+    #[test]
+    fn active_goal_manifest_accepts_current_contract() -> Result<()> {
+        let stats = validate(&project_root()?)?;
+
+        assert_eq!(stats.repo, "perl-lsp-swarm");
+        assert_eq!(stats.lane, "real_perl_editor_trust_v1");
+        assert_eq!(stats.lanes, 3);
+        assert_eq!(stats.active_work_items, 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_reports_top_level_status_and_path_contracts() -> Result<()> {
+        let root = fixture_root(&["docs/proposal.md", "docs/status.md"])?;
+        let mut table = Table::new();
+        for field in REQUIRED_TOP_LEVEL_STRINGS {
+            table.insert((*field).to_owned(), Value::String("present".to_owned()));
+        }
+        table.insert("status".to_owned(), Value::String("paused".to_owned()));
+        table.insert("objective".to_owned(), Value::String(" ".to_owned()));
+        table.insert(
+            "end_state".to_owned(),
+            Value::Array(vec![Value::String(String::new()), Value::Integer(7)]),
+        );
+        table.insert("claim_boundaries".to_owned(), Value::String("not an array".to_owned()));
+        table.insert("proposal".to_owned(), Value::String("docs/proposal.md".to_owned()));
+        table.insert("plan".to_owned(), Value::String("plans/missing.md".to_owned()));
+        table.insert("status_pointer".to_owned(), Value::Integer(1));
+        table.insert("operating_model".to_owned(), Value::String("docs\\operating.md".to_owned()));
+        table.insert(
+            "status_docs".to_owned(),
+            Value::Array(vec![Value::String("docs/status.md".to_owned()), Value::Integer(9)]),
+        );
+        table.insert("specs".to_owned(), Value::Array(Vec::new()));
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_top_level(root.path(), &table, &mut stats, &mut violations);
+
+        ensure!(stats.path_references == 2, "got stats: {stats:?}");
+        for expected in [
+            ".perl-lsp/goals/active.toml: status must be \"active\"",
+            ".perl-lsp/goals/active.toml: objective must not be empty",
+            ".perl-lsp/goals/active.toml: end_state[0] must not be empty",
+            ".perl-lsp/goals/active.toml: end_state[1] must be a string",
+            ".perl-lsp/goals/active.toml: claim_boundaries must be a non-empty array",
+            ".perl-lsp/goals/active.toml: plan points to missing path plans/missing.md",
+            ".perl-lsp/goals/active.toml: status_pointer must be a string path",
+            ".perl-lsp/goals/active.toml: operating_model must be a repo-relative slash path: docs\\operating.md",
+            ".perl-lsp/goals/active.toml: status_docs[1] must be a string",
+            ".perl-lsp/goals/active.toml: specs must not be empty",
+        ] {
+            ensure!(
+                violations.iter().any(|violation| violation == expected),
+                "missing violation {expected:?}; got {violations:?}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_validate_reports_accumulated_violations() -> Result<()> {
+        let root = fixture_root(&[
+            "docs/proposal.md",
+            "docs/plan.md",
+            "docs/status.md",
+            "docs/model.md",
+            "docs/spec.md",
+        ])?;
+        let manifest_dir = root.path().join(".perl-lsp").join("goals");
+        fs::create_dir_all(&manifest_dir)?;
+        fs::write(
+            manifest_dir.join("active.toml"),
+            r#"
+id = "goal"
+title = "Goal"
+status = "paused"
+owner = "owner"
+created = "2026-06-20"
+objective = " "
+end_state = []
+claim_boundaries = ["bounded"]
+proposal = "docs/proposal.md"
+plan = "docs/plan.md"
+status_pointer = "docs/status.md"
+operating_model = "docs/model.md"
+status_docs = ["docs/status.md"]
+specs = ["docs/spec.md"]
+"#,
+        )?;
+
+        let err = validate(root.path())
+            .err()
+            .ok_or_else(|| color_eyre::eyre::eyre!("invalid manifest should fail"))?;
+
+        ensure!(
+            err.to_string().contains("active goal manifest check failed with"),
+            "got error: {err}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_rejects_wrong_current_repo_and_release_lineage() -> Result<()> {
+        let mut table = Table::new();
+        let mut current = Table::new();
+        current.insert("lane".to_owned(), Value::String("lane-a".to_owned()));
+        current.insert("repo".to_owned(), Value::String("wrong-repo".to_owned()));
+        current
+            .insert("release_lineage_repo".to_owned(), Value::String("wrong-lineage".to_owned()));
+        current.insert("status".to_owned(), Value::String("active".to_owned()));
+        table.insert("current".to_owned(), Value::Table(current));
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_current(&table, &mut stats, &mut violations);
+
+        ensure!(stats.repo == "wrong-repo", "got stats: {stats:?}");
+        ensure!(stats.lane == "lane-a", "got stats: {stats:?}");
+        ensure!(
+            violations
+                == vec![
+                    ".perl-lsp/goals/active.toml: [current].repo must be \"perl-lsp-swarm\""
+                        .to_owned(),
+                    ".perl-lsp/goals/active.toml: [current].release_lineage_repo must be \"perl-lsp\""
+                        .to_owned(),
+                ],
+            "got violations: {violations:?}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_reports_lane_identity_and_cap_contracts() -> Result<()> {
+        let limits = BTreeMap::from([
+            ("trust".to_owned(), 1),
+            ("substrate".to_owned(), 2),
+            ("reliability".to_owned(), 3),
+        ]);
+        let mut missing_id = Table::new();
+        missing_id.insert("rule".to_owned(), Value::String("rule".to_owned()));
+        missing_id
+            .insert("owns".to_owned(), Value::Array(vec![Value::String("policy".to_owned())]));
+        missing_id.insert("pr_cap".to_owned(), Value::Integer(1));
+        let mut unknown = Table::new();
+        unknown.insert("id".to_owned(), Value::String("unknown".to_owned()));
+        unknown.insert("rule".to_owned(), Value::String("rule".to_owned()));
+        unknown.insert("owns".to_owned(), Value::Array(vec![Value::String("policy".to_owned())]));
+        unknown.insert("pr_cap".to_owned(), Value::Integer(1));
+        let mut mismatched_trust = Table::new();
+        mismatched_trust.insert("id".to_owned(), Value::String("trust".to_owned()));
+        mismatched_trust.insert("rule".to_owned(), Value::String("rule".to_owned()));
+        mismatched_trust
+            .insert("owns".to_owned(), Value::Array(vec![Value::String("policy".to_owned())]));
+        mismatched_trust.insert("pr_cap".to_owned(), Value::Integer(2));
+        let mut duplicate_trust = Table::new();
+        duplicate_trust.insert("id".to_owned(), Value::String("trust".to_owned()));
+        duplicate_trust.insert("rule".to_owned(), Value::String("rule".to_owned()));
+        duplicate_trust
+            .insert("owns".to_owned(), Value::Array(vec![Value::String("policy".to_owned())]));
+        duplicate_trust.insert("pr_cap".to_owned(), Value::Integer(1));
+        let mut bad_cap = Table::new();
+        bad_cap.insert("id".to_owned(), Value::String("substrate".to_owned()));
+        bad_cap.insert("rule".to_owned(), Value::String("rule".to_owned()));
+        bad_cap.insert("owns".to_owned(), Value::Array(vec![Value::String("policy".to_owned())]));
+        bad_cap.insert("pr_cap".to_owned(), Value::Integer(0));
+        let mut missing_cap = Table::new();
+        missing_cap.insert("id".to_owned(), Value::String("reliability".to_owned()));
+        missing_cap.insert("rule".to_owned(), Value::String("rule".to_owned()));
+        missing_cap
+            .insert("owns".to_owned(), Value::Array(vec![Value::String("policy".to_owned())]));
+        let mut table = Table::new();
+        table.insert(
+            "lanes".to_owned(),
+            Value::Array(vec![
+                Value::Table(missing_id),
+                Value::Table(unknown),
+                Value::Table(mismatched_trust),
+                Value::Table(duplicate_trust),
+                Value::Table(bad_cap),
+                Value::Table(missing_cap),
+            ]),
+        );
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        let lanes = validate_lanes(&table, &limits, &mut stats, &mut violations);
+
+        ensure!(
+            lanes
+                == BTreeSet::from([
+                    "reliability".to_owned(),
+                    "substrate".to_owned(),
+                    "trust".to_owned(),
+                    "unknown".to_owned(),
+                ]),
+            "got lanes: {lanes:?}"
+        );
+        for expected in [
+            ".perl-lsp/goals/active.toml: lanes[0]: id must be a string",
+            ".perl-lsp/goals/active.toml: lanes[1]: unknown lane id \"unknown\"",
+            ".perl-lsp/goals/active.toml: lanes[2]: pr_cap 2 does not match [limits] value 1",
+            ".perl-lsp/goals/active.toml: lanes[3]: duplicate lane id \"trust\"",
+            ".perl-lsp/goals/active.toml: lanes[4]: pr_cap must be positive",
+            ".perl-lsp/goals/active.toml: lanes[5]: pr_cap must be an integer",
+        ] {
+            ensure!(
+                violations.iter().any(|violation| violation == expected),
+                "missing lane violation {expected:?}; got {violations:?}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_reports_limits_lanes_and_next_queue_shape() -> Result<()> {
+        let mut limits_table = Table::new();
+        limits_table.insert("trust_prs".to_owned(), Value::Integer(0));
+        limits_table.insert("substrate_prs".to_owned(), Value::String("two".to_owned()));
+        limits_table.insert("reliability_prs".to_owned(), Value::Integer(4));
+        let mut table = Table::new();
+        table.insert("limits".to_owned(), Value::Table(limits_table));
+
+        let mut violations = Vec::new();
+        let limits = validate_limits(&table, &mut violations);
+
+        ensure!(limits.len() == 1, "got limits: {limits:?}");
+        ensure!(limits.get("reliability") == Some(&4), "got limits: {limits:?}");
+        ensure!(
+            violations
+                == vec![
+                    ".perl-lsp/goals/active.toml: [limits].trust_prs must be positive".to_owned(),
+                    ".perl-lsp/goals/active.toml: [limits].substrate_prs must be an integer"
+                        .to_owned(),
+                ],
+            "got violations: {violations:?}"
+        );
+
+        let mut trust_lane = Table::new();
+        trust_lane.insert("id".to_owned(), Value::String("trust".to_owned()));
+        trust_lane.insert("rule".to_owned(), Value::String("rule".to_owned()));
+        trust_lane
+            .insert("owns".to_owned(), Value::Array(vec![Value::String("policy".to_owned())]));
+        trust_lane.insert("pr_cap".to_owned(), Value::Integer(1));
+        table.insert(
+            "lanes".to_owned(),
+            Value::Array(vec![Value::String("bad".to_owned()), Value::Table(trust_lane)]),
+        );
+        let mut stats = ManifestStats::default();
+        let mut lane_violations = Vec::new();
+
+        let lanes = validate_lanes(&table, &limits, &mut stats, &mut lane_violations);
+
+        ensure!(lanes == BTreeSet::from(["trust".to_owned()]), "got lanes: {lanes:?}");
+        for expected in [
+            ".perl-lsp/goals/active.toml: lanes[0] must be a TOML table",
+            ".perl-lsp/goals/active.toml: missing \"substrate\" lane",
+            ".perl-lsp/goals/active.toml: missing \"reliability\" lane",
+        ] {
+            ensure!(
+                lane_violations.iter().any(|violation| violation == expected),
+                "missing lane violation {expected:?}; got {lane_violations:?}"
+            );
+        }
+
+        let mut next_violations = Vec::new();
+        validate_next_queues(&table, &lanes, &mut next_violations);
+        ensure!(
+            next_violations
+                == vec![".perl-lsp/goals/active.toml: [trust.next] table is required".to_owned()],
+            "got next violations: {next_violations:?}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_reports_collection_shape_contracts() -> Result<()> {
+        let root = fixture_root(&[])?;
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_optional_path_array(
+            root.path(),
+            ".perl-lsp/goals/active.toml: work_item[0]",
+            &Table::new(),
+            "files",
+            &mut stats,
+            &mut violations,
+        );
+        validate_optional_command_array(
+            ".perl-lsp/goals/active.toml: work_item[0]",
+            &Table::new(),
+            "commands",
+            &mut stats,
+            &mut violations,
+        );
+        ensure!(violations.is_empty(), "got violations: {violations:?}");
+
+        let mut path_table = Table::new();
+        path_table.insert("status_docs".to_owned(), Value::String("docs/status.md".to_owned()));
+        validate_path_array(root.path(), &path_table, "status_docs", &mut stats, &mut violations);
+        let mut optional_paths = Table::new();
+        optional_paths.insert("files".to_owned(), Value::String("docs/status.md".to_owned()));
+        validate_optional_path_array(
+            root.path(),
+            ".perl-lsp/goals/active.toml: work_item[0]",
+            &optional_paths,
+            "files",
+            &mut stats,
+            &mut violations,
+        );
+        let mut optional_commands = Table::new();
+        optional_commands.insert("commands".to_owned(), Value::String("rtk cargo test".to_owned()));
+        validate_optional_command_array(
+            ".perl-lsp/goals/active.toml: work_item[0]",
+            &optional_commands,
+            "commands",
+            &mut stats,
+            &mut violations,
+        );
+        validate_relative_existing_path(
+            root.path(),
+            ".perl-lsp/goals/active.toml",
+            "proposal",
+            " ",
+            &mut stats,
+            &mut violations,
+        );
+        let mut text_table = Table::new();
+        text_table.insert("items".to_owned(), Value::Array(Vec::new()));
+        validate_non_empty_string_array("doc", &text_table, "items", &mut violations);
+        require_non_empty_string("doc", &Table::new(), "missing", &mut violations);
+
+        for expected in [
+            ".perl-lsp/goals/active.toml: status_docs must be a non-empty array",
+            ".perl-lsp/goals/active.toml: work_item[0]: files must be an array when present",
+            ".perl-lsp/goals/active.toml: work_item[0]: commands must be an array when present",
+            ".perl-lsp/goals/active.toml: proposal must not be empty",
+            "doc: items must not be empty",
+            "doc: missing must be a string",
+        ] {
+            ensure!(
+                violations.iter().any(|violation| violation == expected),
+                "missing collection violation {expected:?}; got {violations:?}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_reports_optional_path_and_command_entry_contracts() -> Result<()> {
+        let root = fixture_root(&["docs/kept.md"])?;
+        let mut stats = ManifestStats::default();
+        let mut path_violations = Vec::new();
+        let mut path_table = Table::new();
+        path_table.insert(
+            "files".to_owned(),
+            Value::Array(vec![
+                Value::String("docs/kept.md".to_owned()),
+                Value::String("docs/missing.md".to_owned()),
+                Value::Integer(3),
+            ]),
+        );
+
+        validate_optional_path_array(
+            root.path(),
+            ".perl-lsp/goals/active.toml: work_item[0]",
+            &path_table,
+            "files",
+            &mut stats,
+            &mut path_violations,
+        );
+
+        ensure!(stats.path_references == 1, "got stats: {stats:?}");
+        ensure!(
+            path_violations
+                == vec![
+                    ".perl-lsp/goals/active.toml: work_item[0]: files[1] points to missing path docs/missing.md"
+                        .to_owned(),
+                    ".perl-lsp/goals/active.toml: work_item[0]: files[2] must be a string"
+                        .to_owned(),
+                ],
+            "got path violations: {path_violations:?}"
+        );
+
+        let mut command_table = Table::new();
+        command_table.insert(
+            "commands".to_owned(),
+            Value::Array(vec![
+                Value::String("rtk cargo test -p xtask".to_owned()),
+                Value::String(" ".to_owned()),
+                Value::Integer(5),
+            ]),
+        );
+        let mut command_violations = Vec::new();
+
+        validate_optional_command_array(
+            ".perl-lsp/goals/active.toml: work_item[0]",
+            &command_table,
+            "commands",
+            &mut stats,
+            &mut command_violations,
+        );
+
+        ensure!(stats.proof_commands == 1, "got stats: {stats:?}");
+        ensure!(
+            command_violations
+                == vec![
+                    ".perl-lsp/goals/active.toml: work_item[0]: commands[1] must not be empty"
+                        .to_owned(),
+                    ".perl-lsp/goals/active.toml: work_item[0]: commands[2] must be a string"
+                        .to_owned(),
+                ],
+            "got command violations: {command_violations:?}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_reports_non_table_and_duplicate_work_items() -> Result<()> {
+        let root = project_root()?;
+        let lanes = BTreeSet::from(["trust".to_owned()]);
+        let mut unsupported = Table::new();
+        unsupported.insert("id".to_owned(), Value::String("wi-1".to_owned()));
+        unsupported.insert("status".to_owned(), Value::String("surprise".to_owned()));
+        unsupported.insert("lane".to_owned(), Value::String("trust".to_owned()));
+        unsupported.insert("claim_boundary".to_owned(), Value::String("fixture".to_owned()));
+        let mut duplicate = Table::new();
+        duplicate.insert("id".to_owned(), Value::String("wi-1".to_owned()));
+        duplicate.insert("status".to_owned(), Value::String("active".to_owned()));
+        duplicate.insert("lane".to_owned(), Value::String("trust".to_owned()));
+        duplicate.insert("claim_boundary".to_owned(), Value::String("fixture".to_owned()));
+        let mut table = Table::new();
+        table.insert(
+            "work_item".to_owned(),
+            Value::Array(vec![
+                Value::String("not a table".to_owned()),
+                Value::Table(unsupported),
+                Value::Table(duplicate),
+            ]),
+        );
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_work_items(&root, &table, &lanes, &mut stats, &mut violations);
+
+        ensure!(stats.work_items == 2, "got stats: {stats:?}");
+        ensure!(stats.active_work_items == 1, "got stats: {stats:?}");
+        for expected in [
+            ".perl-lsp/goals/active.toml: work_item[0] must be a TOML table",
+            ".perl-lsp/goals/active.toml: work_item[1]: unsupported status \"surprise\"",
+            ".perl-lsp/goals/active.toml: work_item[2]: duplicate work item id \"wi-1\"",
+        ] {
+            ensure!(
+                violations.iter().any(|violation| violation == expected),
+                "missing work item violation {expected:?}; got {violations:?}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_reports_non_rtk_proof_commands() -> Result<()> {
+        let mut table = Table::new();
+        table.insert(
+            "commands".to_owned(),
+            Value::Array(vec![Value::String("cargo test -p xtask".to_owned())]),
+        );
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_optional_command_array(
+            ".perl-lsp/goals/active.toml: work_item[0]",
+            &table,
+            "commands",
+            &mut stats,
+            &mut violations,
+        );
+
+        assert_eq!(stats.proof_commands, 1);
+        assert_eq!(
+            violations,
+            vec![
+                ".perl-lsp/goals/active.toml: work_item[0]: commands[0] must start with \"rtk \""
+                    .to_owned()
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_rejects_non_repo_relative_paths() -> Result<()> {
+        let root = project_root()?;
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_relative_existing_path(
+            &root,
+            ACTIVE_GOAL_PATH,
+            "proposal",
+            "C:/tmp/proposal.md",
+            &mut stats,
+            &mut violations,
+        );
+
+        assert_eq!(
+            violations,
+            vec![
+                ".perl-lsp/goals/active.toml: proposal must be a repo-relative slash path: C:/tmp/proposal.md"
+                    .to_owned()
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_requires_declared_lane_and_active_work() -> Result<()> {
+        let root = project_root()?;
+        let mut table = Table::new();
+        let mut work_item = Table::new();
+        work_item.insert("id".to_owned(), Value::String("wi-1".to_owned()));
+        work_item.insert("status".to_owned(), Value::String("completed".to_owned()));
+        work_item.insert("lane".to_owned(), Value::String("unknown".to_owned()));
+        work_item.insert("claim_boundary".to_owned(), Value::String("fixture".to_owned()));
+        table.insert("work_item".to_owned(), Value::Array(vec![Value::Table(work_item)]));
+        let lanes = BTreeSet::from(["trust".to_owned()]);
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_work_items(&root, &table, &lanes, &mut stats, &mut violations);
+
+        assert_eq!(
+            violations,
+            vec![
+                ".perl-lsp/goals/active.toml: work_item[0]: lane \"unknown\" is not declared in [[lanes]]"
+                    .to_owned(),
+                ".perl-lsp/goals/active.toml: at least one work_item must be active".to_owned(),
+            ]
+        );
+
+        Ok(())
+    }
 }

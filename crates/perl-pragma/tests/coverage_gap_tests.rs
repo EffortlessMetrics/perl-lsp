@@ -15,7 +15,8 @@
 //! - `parse_perl_version` major-only without 'v' prefix
 //! - `normalize_snapshot` propagation of `signatures_strict`
 //! - `builtin_import_names` double-quoted single name
-//! - `conditional_pragma_target` edge cases: empty encoding arg, feature with no args
+//! - `conditional_pragma_target` edge cases: empty encoding arg, feature with no args,
+//!   invalid strict/version/encoding tails, `unless` normalization, and sparse builtin args
 //! - `conditional_target_tail_is_valid` for `builtin` with all-empty args
 
 use perl_ast::SourceLocation;
@@ -636,6 +637,118 @@ fn use_if_encoding_with_empty_arg_is_noop() -> Result<(), Box<dyn std::error::Er
 // ===========================================================================
 // `PerlVersion` ordering
 // ===========================================================================
+
+#[test]
+fn use_if_strict_with_invalid_qw_item_is_noop() -> Result<(), Box<dyn std::error::Error>> {
+    // `use if $cond, strict => qw(vars bogus)` must not partially apply the
+    // valid `vars` item after the conditional target validator rejects the
+    // mixed strict argument list.
+    let ast = program(vec![use_node("if", &["$cond", "strict", "qw(vars bogus)"], 0, 44)]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 20);
+    assert!(!state.strict_vars, "invalid conditional strict args must leave vars disabled");
+    assert!(!state.strict_subs, "invalid conditional strict args must leave subs disabled");
+    assert!(!state.strict_refs, "invalid conditional strict args must leave refs disabled");
+    Ok(())
+}
+
+#[test]
+fn use_if_strict_rejects_extra_following_target_token() -> Result<(), Box<dyn std::error::Error>> {
+    // `warnings` after the strict argument list is not a strict category. The
+    // conditional scanner may continue looking for a later valid target, but it
+    // must not apply a partial `strict vars` update before doing so.
+    let ast = program(vec![use_node("if", &["$cond", "strict", "vars", "warnings"], 0, 42)]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 20);
+    assert!(!state.strict_vars, "invalid strict tail must not partially enable vars");
+    assert!(state.warnings, "later valid warnings target should still be discoverable");
+    Ok(())
+}
+
+#[test]
+fn use_if_version_with_trailing_args_is_noop() -> Result<(), Box<dyn std::error::Error>> {
+    // Version pragmas only accept an empty target tail. Extra args after the
+    // version token must prevent version-implied strict/warnings/features.
+    let ast = program(vec![use_node("if", &["$cond", "v5.36", "extra"], 0, 34)]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 20);
+    assert!(!state.strict_vars, "version target with extra args must not imply strict");
+    assert!(!state.warnings, "version target with extra args must not imply warnings");
+    assert!(
+        !state.has_feature("signatures"),
+        "version target with extra args must not imply features"
+    );
+    Ok(())
+}
+
+#[test]
+fn no_if_version_target_is_noop() -> Result<(), Box<dyn std::error::Error>> {
+    // `no if $cond, v5.36` can be recognized as a conditional target, but the
+    // no-directive path does not disable version-implied semantics. Existing
+    // state from an earlier version pragma must remain intact.
+    let ast =
+        program(vec![use_node("v5.36", &[], 0, 10), no_node("if", &["$cond", "v5.36"], 11, 32)]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 20);
+    assert!(state.strict_vars, "no-if version target must preserve version-implied strict");
+    assert!(state.warnings, "no-if version target must preserve version-implied warnings");
+    assert!(state.has_feature("signatures"), "no-if version target must preserve version features");
+    Ok(())
+}
+
+#[test]
+fn use_if_encoding_with_extra_arg_is_noop() -> Result<(), Box<dyn std::error::Error>> {
+    // `encoding` is valid as a conditional target only with exactly one
+    // non-empty argument. Extra args must prevent accidentally setting an
+    // ambiguous encoding value.
+    let ast = program(vec![use_node("if", &["$cond", "encoding", "UTF-8", "fallback"], 0, 48)]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 24);
+    assert!(state.encoding.is_none(), "encoding with extra args must not set encoding");
+    Ok(())
+}
+
+#[test]
+fn use_unless_locale_with_quoted_scope_is_normalized() -> Result<(), Box<dyn std::error::Error>> {
+    // Conditional `unless` shares target normalization with `if`; quoted locale
+    // scopes should be trimmed before being stored.
+    let ast = program(vec![use_node("unless", &["$cond", "locale", "'not_characters'"], 0, 48)]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 24);
+    assert!(state.locale, "use-unless locale must enable locale tracking");
+    assert_eq!(state.locale_scope.as_deref(), Some("not_characters"));
+    Ok(())
+}
+
+#[test]
+fn no_unless_warnings_qw_disables_each_category() -> Result<(), Box<dyn std::error::Error>> {
+    // Warning category normalization should split qw-lists even on the
+    // conditional no/unless path.
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 13),
+        no_node("unless", &["$cond", "warnings", "qw(uninitialized numeric)"], 14, 68),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.warnings, "category-specific no warnings keeps global warnings enabled");
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(!state.is_warning_active("numeric"));
+    assert!(state.is_warning_active("once"));
+    Ok(())
+}
+
+#[test]
+fn use_if_builtin_ignores_empty_qw_and_imports_later_name() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Builtin target validation should tolerate empty normalized args when a
+    // later arg contains at least one real import name.
+    let ast = program(vec![use_node("if", &["$cond", "builtin", "qw()", "'true'"], 0, 43)]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 24);
+    assert!(state.has_builtin_import("true"), "later valid builtin name must be imported");
+    assert_eq!(state.builtin_imports.len(), 1, "empty qw must not create an empty import");
+    Ok(())
+}
 
 #[test]
 fn perl_version_ordering_is_correct() -> Result<(), Box<dyn std::error::Error>> {

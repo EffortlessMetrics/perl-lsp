@@ -60,10 +60,9 @@ CI hasn't broken since their last look).
 | `merge-gate` | 2 min | Aggregates shard results into the required merge-blocking status |
 | `ux-tests` | 15 min | UX regression suite against live binary |
 | `check-all-targets` | 10 min | `cargo check --workspace --all-targets` (bit-rot guard) |
-| `windows-scope` | 5 min | Diff classifier: decides whether the native Windows canary (and full guardrails) need to run for this PR |
-| `windows-canary` | 15 min | Native Windows runner that proves the Windows-only sandbox dispatch path is wired. Conditional on `windows-scope.required=true` |
-| `windows-required` | 2 min | Ubuntu aggregator consumed by `merge-gate` — succeeds when canary isn't required, fails when canary is required and didn't pass, fails closed if `windows-scope` errored |
-| `windows-full-guardrails` | 35 min | Old broad Windows matrix (compile / module-separator / sandbox). Runs on push to master, manual dispatch, or PRs that change toolchain/lockfile/workflows. **Not** a merge-gate dependency for normal PRs |
+| `lsp-memory-smoke` | 15 min | Memory plateau check against the LSP release binary (advisory, not merge-blocking) |
+
+The `windows-scope`, `windows-canary`, `windows-required`, and `windows-full-guardrails` jobs were removed in #1485 (maintainer directive, 2026-06). See §4.5 — Runner Policy.
 
 **Scoping within Frontdoor Proof**: The pr-smoke job uses `cargo xtask ci-scope` to
 classify the diff and select scoped lanes. This is "scoped-deep" CI — narrow to the blast
@@ -353,6 +352,86 @@ limit. This prevents the "quarantine and forget" failure mode.
 
 ---
 
+## Section 4.5 — Runner Policy
+
+### Linux-only CI by default
+
+CI runs on **self-hosted Ubuntu/Linux runners only** (free pool). There is **no self-hosted Windows or macOS pool** — any Windows/Mac job falls back to **GitHub-hosted runners, which are billed** and are to be avoided.
+
+**Default: all CI runs on Linux.** The codebase is overwhelmingly cross-platform and OS-agnostic. Parser, AST, lexer, LSP, semantic analysis, and DAP are pure logic with no OS-specific divergence. Linux coverage is fully representative for the vast majority of work.
+
+**Windows/macOS runner jobs are reserved for extenuating circumstances:** a genuinely OS-specific code path (`cfg(windows)` / `cfg(target_os = "macos")`) with real, user-impacting risk that *cannot* be exercised on Linux. General or redundant cross-platform re-testing does **not** qualify. Adding a Windows/Mac runner job requires explicit justification naming the OS-specific divergence it guards. Prefer covering OS specifics in the maintainer's local (Windows) dev loop over billed cloud CI.
+
+**Accepted exceptions** (not subject to this policy — they genuinely require the target OS):
+- Release-artifact builds that produce the distributed Windows/macOS binaries on tag (`release.yml`)
+- Scheduled post-publish smoke tests (weekly, not PR-triggered)
+
+**2026-06 incident**: Per #1484/#1485, the per-PR Windows-runner jobs (`windows-canary`, `windows-full-guardrails` + their Ubuntu feeders) were removed from the merge-gate tier because they redundantly re-tested cross-platform logic already covered by Linux gates.
+
+---
+
+## Section 4.6 — Gate Design Principles
+
+Every gate must follow these principles to maintain clarity and reliability:
+
+### 1. One gate = one failure class, named honestly
+
+A gate's name commits to the failure class it detects. `cargo clippy` detects
+lint violations; `cargo xtask fmt` detects formatting; `cargo test --lib`
+detects unit test failures. A gate's failure verdict must match what its name
+claims. For detailed treatment, see [docs/concepts/gate-names-must-match-failure-classes.md](../concepts/gate-names-must-match-failure-classes.md).
+
+### 2. Coverage may run SCOPED tests as instrumentation drivers, but must NOT gate correctness
+
+Coverage instrumentation (`llvm-cov`) runs tests to gather coverage data. This
+is legitimate — coverage needs test execution to measure which lines are
+reachable. However:
+
+- Coverage must NOT be the full-suite correctness gate — that is owned by
+  `cargo test --all`.
+- Coverage must NOT expand routed test runs to unrelated crates or subsystems
+  just to boost coverage numbers.
+- Coverage must NOT report a test failure as a coverage failure. If a test
+  fails during coverage instrumentation, the failure is a test correctness
+  issue, not a coverage measurement issue. Route it to the test/correctness
+  gate, not to coverage-fix developers.
+
+Example: `Codecov / Patch 95` runs a subset of tests to measure coverage on
+changed lines. If a test in that subset fails, the failure is `test_failure`
+(fix the code), not `coverage_shortfall` (add more tests). The gate's name
+must reflect what it is gating on.
+
+### 3. Cheap deterministic checks run on PRs (PR ≡ merge for cheap checks)
+
+The merge gate includes cheap checks that run on every PR: format, clippy, and
+test-suite. The property these checks must satisfy is: **if all cheap checks
+pass on a PR, they will pass on the merged commit to master.** This equality
+is necessary and sufficient to prevent post-merge master breaks.
+
+Heavy checks (mutation, fuzz, benchmarks, full integration matrix) do not run
+on every PR for resource reasons. That's fine — they're advisory. But if a
+cheap check passes on a PR and fails on master, the untested surface exists
+between the check and master. Widen the check, do not add PRs to the untested
+surface.
+
+### 4. Prefer enforcement over prose
+
+When a hazard is real (e.g., "coverage must not drop," "gates must not be
+skipped," "required checks must be stable"), encode the enforcement in a
+compile-time check, lint rule, or gate. Do not rely on prose instructions or
+agent diligence. The instrument is more reliable than the human (or LLM)
+following instructions.
+
+Examples:
+- Compile-time impossible: Use `#[must_use]` to enforce callers handle an error.
+- Lint: Use clippy rules to prevent banned patterns.
+- Gate: Use ripr, LCOV filters, or coverage post-processors to enforce
+  measurement integrity.
+- Hazard-default checklist: Encode acceptance criteria that prevent the hazard
+  from shipping.
+
+---
+
 ## Section 5 — CI Receipts
 
 Every gate run (local or CI) emits a structured receipt to `target/receipts/receipt.json`.
@@ -544,45 +623,18 @@ queue.
 
 ## Section 9 — Windows Guardrails
 
-Windows is treated as a scarce platform canary plus a periodic full-platform soak,
-not a full proof lane on every PR. The merge-blocking path used to wait on the
-entire `windows-guardrails` matrix on `windows-latest`; the 2026-04-25 failure
-catalog showed the sandbox lane had only ~6% headroom over master runtime, so
-that arrangement was reorganized into four jobs.
+Windows CI jobs (`windows-scope`, `windows-canary`, `windows-required`, `windows-full-guardrails`)
+were **removed from `ci.yml` in #1485** (2026-06-14 maintainer directive). CI runs on self-hosted
+Ubuntu/Linux runners only. Windows/macOS runners are billed GitHub-hosted and are reserved for
+genuinely OS-specific necessity — see §4.5 (Runner Policy) for the current policy.
 
-A Linux cross-target compile-shape check (`cargo check --target
-x86_64-pc-windows-msvc`) was considered but dropped: the workspace contains
-build scripts that invoke `cc` for the MSVC target, which require `lib.exe`
-and `cl.exe` and don't cross-compile cleanly from Linux. Generic compile
-bit-rot is covered by `check-all-targets`; Windows-specific compile coverage
-lives in `windows-canary` (small) and `windows-full-guardrails` (full).
+Generic compile bit-rot and cross-platform logic is fully covered by `check-all-targets` on Linux.
+cfg(windows) code paths (DAP platform dispatch, sandbox fail-closed, subprocess invocation) lose
+per-PR runner coverage; this is an accepted trade-off per the runner policy.
 
-**Current shape:**
-
-| Job | Runner | Role | Merge-gate dependency? |
-|-----|--------|------|------------------------|
-| `windows-scope` | ubuntu-24.04 | Diff classifier. Sets `required=true` when the diff touches sandbox/module/workspace/URI code or basenames containing `path`, `uri`, `module`, `workspace-folder`, `file_uri`, `windows`, `separator`, `canonicalize`, `sandbox`. Sets `full=true` on `.github/workflows/`, `.ci/`, root `Cargo.toml`/`Cargo.lock`, `rust-toolchain.toml`, `justfile`, or non-PR events. | (input to others) |
-| `windows-canary` | windows-latest | Tiny native dispatch canary — currently `test_windows_sandbox_fails_closed` via `cargo test --lib`. Runs only when `windows-scope.required=true`. | (covered via aggregator) |
-| `windows-required` | ubuntu-24.04 | Aggregator consumed by `merge-gate`. Skipped together with the rest of CI on draft PRs / superseded SHAs; otherwise succeeds when the canary isn't needed; fails when the canary was required and didn't pass; fails closed if `windows-scope` itself errored. Branch protection points at `ci/merge-gate` (not at this job directly). | Yes |
-| `windows-full-guardrails` | windows-latest | Old broad Windows matrix (`compile`, `module-separator-regressions`, `sandbox-fail-closed`). Runs on push to master, manual dispatch, and PRs flagged `full=true`. (Nightly Windows soak runs are owned by `ci-nightly.yml`.) | No (advisory / risk-triggered) |
-
-**Why this shape:**
-
-- The merge-blocking path now pays for a cheap Ubuntu diff classifier on every
-  PR plus a tiny native canary on Windows-relevant PRs, instead of the full
-  broad Windows matrix on every PR.
-- Linux owns generic compile coverage via `check-all-targets`; Windows owns
-  wiring proof — that the `#[cfg(target_os = "windows")]` branch is actually
-  reached, currently the sandbox fail-closed test.
-- Full Windows coverage still runs, but on master, manual dispatch, and
-  high-risk PRs (toolchain/lockfile/workflow) — not on every normal PR.
-  Nightly Windows soak coverage lives in `ci-nightly.yml`.
-
-**Known failure pattern** (see `feedback_xtask_fmt_false_cascade.md` in MEMORY.md): The
-`Compile + PR Smoke + Windows Full Guardrails (module-separator-regressions)` triple-failure
-pattern is the fingerprint of `xtask fmt` aborting at first failure. This looks like a
-master cascade but is often N independent PR-side format issues. Verify on master before
-declaring cascade.
+**Known failure pattern**: The `Compile + PR Smoke` double-failure pattern is the fingerprint of
+`xtask fmt` aborting at first failure. This looks like a master cascade but is often N independent
+PR-side format issues. Verify on master before declaring cascade.
 
 ---
 
@@ -644,3 +696,6 @@ The JSON receipt classifies the first observed failure and provides reproduction
 | `server_crash` | `crash_fix` | Fix crash before merge |
 | `new_test_bug` | `test_fix` | Fix test logic and rerun |
 | `unknown` | `triage` | Inspect logs and add classifier coverage |
+
+
+

@@ -377,8 +377,6 @@ pub mod variables;
 // Phase 2 modules (AC5-AC12) - IN PROGRESS
 /// Breakpoint storage and management for the DAP adapter.
 pub mod breakpoints;
-/// Message dispatcher for routing incoming DAP requests to handlers.
-pub mod dispatcher;
 /// Inline value extraction for DAP `inlineValues` requests.
 pub mod inline_values;
 /// DAP protocol types following the JSON-RPC 2.0 message format.
@@ -396,6 +394,14 @@ pub mod tcp_attach;
 // See #454: Implement control flow handlers (AC9)
 // See #455: Implement safe evaluation (AC10)
 
+/// Type-safe variablesReference codec — retiring the #1219 ID/ref-space collision class.
+pub mod var_ref {
+    pub use crate::debug_adapter::var_ref::{ScopeKind, VariableReference, VariableReferenceError};
+}
+
+// Re-export codec types at crate root for ergonomic use in tests and consumer crates.
+pub use debug_adapter::var_ref::{ScopeKind, VariableReference, VariableReferenceError};
+
 // Re-export Phase 1 public types
 pub use bridge_adapter::{BridgeAdapter, DapBridgeEnvConfig};
 pub use configuration::{
@@ -406,9 +412,7 @@ pub use debug_adapter::{DapMessage, DebugAdapter};
 pub use server::{DapConfig, DapMode, DapServer};
 
 // Re-export Phase 2 public types
-pub use breakpoints::{BreakpointRecord, BreakpointStore};
-#[allow(deprecated)]
-pub use dispatcher::{DapDispatcher, DispatchResult};
+pub use breakpoints::{BreakpointRecord, BreakpointStore, interpolate_logpoint_message};
 pub use protocol::{
     AttachRequestArguments, Breakpoint, BreakpointLocation, BreakpointLocationsArguments,
     BreakpointLocationsResponseBody, CancelArguments, Capabilities, CompletionItem,

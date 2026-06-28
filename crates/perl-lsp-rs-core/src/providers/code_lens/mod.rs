@@ -133,6 +133,7 @@ impl CodeLensProvider {
                 attributes: _,
                 body,
                 name_span: _,
+                declarator: _,
             } => {
                 if let Some(name) = name {
                     if self.is_test_subroutine(name) {

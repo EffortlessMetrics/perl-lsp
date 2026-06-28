@@ -319,7 +319,7 @@ This rule exists because on 2026-04-11, [PR #4090](https://github.com/Effortless
 
 For code review automation: the `research-verifier` agent should be invoked on any PR whose body references `perlmod`, `perlop`, `LSP 3.`, `DAP`, or a `docs.rs` URL. The `reviewer-deep` agent's definition at `.claude/agents/reviewer-deep.md` will be updated separately to reference this rule (tracked as a follow-up).
 
-For more detail on the CI structure see [docs/project/CI.md](docs/project/CI.md) and [docs/project/CI_TEST_LANES.md](docs/project/CI_TEST_LANES.md).
+For more detail on the CI structure see [docs/project/CI.md](docs/project/CI.md) and [docs/project/CI_TEST_LANES.md](docs/project/CI_TEST_LANES.md). For CI runner policy (Linux-only by default, Windows/macOS for OS-specific necessity), see [docs/reference/CI_ARCHITECTURE.md §4.5](docs/reference/CI_ARCHITECTURE.md#section-45--runner-policy).
 
 ## Coding Standards
 

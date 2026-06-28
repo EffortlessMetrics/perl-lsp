@@ -84,6 +84,10 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_test_module,
+    reason = "policy:#2064: parser helper functions stay below focused parser tests in this legacy module"
+)]
 mod tests {
     use super::{parse_perlcritic_line, parse_perlcritic_output};
     use perl_tdd_support::must_some;

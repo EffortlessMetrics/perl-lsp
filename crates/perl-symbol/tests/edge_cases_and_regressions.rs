@@ -497,6 +497,7 @@ fn edge_case_surface_seed_package_qualifies_top_level_subs() -> Result<()> {
         NodeKind::Subroutine {
             name: Some("greet".to_string()),
             name_span: Some(loc(4, 9)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],

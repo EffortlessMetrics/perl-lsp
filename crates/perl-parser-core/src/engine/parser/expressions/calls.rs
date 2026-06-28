@@ -134,13 +134,18 @@ impl<'a> Parser<'a> {
                     }
 
                     // Allow classic argument starts and sigiled variables ($x, @arr, %hash)
+                    // NOTE: LeftBracket and LeftBrace are intentionally excluded here.
+                    // When the second token is a $-sigiled variable, a following `[` or `{`
+                    // is ALWAYS a subscript of that variable ($var[i] or $var{key}), never
+                    // the start of a separate indirect-object argument. Perl treats both
+                    // `print $hash{key}` and `print $hash {key}` (with a space) identically
+                    // — both are subscripts of $hash, never filehandle + argument.
+                    // Verified via `perl -MO=Terse`. See issue #974.
                     let third_text = &third.text;
                     return matches!(
                         third.kind,
                         TokenKind::String       // print $fh "x"
                         | TokenKind::LeftParen    // print $fh ($x)
-                        | TokenKind::LeftBracket  // print $fh [$x]
-                        | TokenKind::LeftBrace    // print $fh { ... }
                     ) || third_text.starts_with('$')    // print $fh $x
                       || third_text.starts_with('@')    // print $fh @array
                       || third_text.starts_with('%'); // print $fh %hash

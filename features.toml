@@ -5,7 +5,7 @@
 [meta]
 version = "0.16.0"
 lsp_version = "3.18"
-compliance_percent = 100  # 119 total features (88 LSP + 24 DAP + 7 perl-lsp extensions), 118/119 advertised
+compliance_percent = 100  # 125 total features (101 LSP-area + 24 DAP, all GA), 124/125 advertised
 
 # Text Document Features
 
@@ -232,10 +232,11 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = [
+  "crates/perl-lsp-rs-core/src/providers/document_links/mod.rs",
   "crates/perl-lsp-rs/tests/lsp_document_links_test.rs",
   "crates/perl-lsp-rs/tests/lsp_document_links_e2e.rs",
 ]
-description = "Document links to modules and docs"
+description = "Document links to use/require modules, relative files, and POD L<> documentation references"
 
 [[feature]]
 id = "lsp.folding_range"
@@ -758,7 +759,7 @@ area = "debug"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs", "crates/perl-dap/tests/dap_capability_advertising_tests.rs"]
 description = "List callable step-in targets for the current frame (stepInTargets)"
 
 [[feature]]
@@ -788,7 +789,7 @@ area = "debug"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_step_through_tests.rs"]
+tests = ["crates/perl-dap/tests/dap_step_through_tests.rs", "crates/perl-dap/tests/dap_capability_advertising_tests.rs"]
 description = "Restart execution from the beginning of a stack frame (restartFrame)"
 
 [[feature]]
@@ -798,7 +799,7 @@ area = "debug"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_step_through_tests.rs"]
+tests = ["crates/perl-dap/tests/dap_step_through_tests.rs", "crates/perl-dap/tests/dap_capability_advertising_tests.rs"]
 description = "Terminate one or more threads (terminateThreads)"
 
 # Protocol / Lifecycle Features
@@ -1030,7 +1031,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp-rs/tests/lsp_document_link_resolve_tests.rs"]
-description = "Resolve document link target"
+description = "Resolve deferred module, file, URL, and POD section document link targets"
 
 [[feature]]
 id = "lsp.inlay_hint_resolve"
@@ -1255,7 +1256,7 @@ tests = [
   "crates/perl-lsp-rs/tests/lsp_virtual_content_tests.rs",
   "crates/perl-lsp-rs/tests/lsp_text_document_content_tests.rs",
 ]
-description = "workspace/textDocumentContent request for perldoc:// virtual documents, preferring workspace POD for locally resolved modules, exposing bare/labeled POD module links, and falling back to external perldoc (@proposed)"
+description = "workspace/textDocumentContent request for perldoc:// virtual documents, preferring workspace POD for locally resolved modules, exposing bare/labeled POD module and section links, and falling back to external perldoc (@proposed)"
 
 [[feature]]
 id = "lsp.text_document_content_refresh"

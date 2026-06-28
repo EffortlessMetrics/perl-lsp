@@ -241,6 +241,109 @@ fn dry_run_handles_missing_policy_gracefully() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn dry_run_degrades_without_cargo_metadata() -> Result<()> {
+    let work_dir = init_repo_with_commit(false)?;
+    add_change_commit(work_dir.path(), "notes.md", "changed\n")?;
+
+    let mut cmd = cargo_bin_cmd!("xtask");
+    let output = cmd
+        .current_dir(work_dir.path())
+        .args(["ci-pr-summary", "--base", "HEAD~1", "--dry-run"])
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "should exit 0 without cargo metadata; stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let head_line = stdout
+        .lines()
+        .find(|line| line.starts_with("**HEAD**: `"))
+        .ok_or_else(|| anyhow::anyhow!("dry-run output missing HEAD line"))?;
+
+    assert!(!head_line.contains("`unknown`"), "expected discovered HEAD: {stdout}");
+    assert!(
+        stdout.contains("**Diff class**: `prose_only` (1 file(s) changed)"),
+        "expected prose-only diff class: {stdout}"
+    );
+    assert!(
+        stdout.contains("_(no crates directly changed"),
+        "metadata failure should not synthesize changed crates: {stdout}"
+    );
+    assert!(
+        stdout.contains("_(no widening"),
+        "metadata failure should not synthesize widened crates: {stdout}"
+    );
+    for gate in ["`fmt`", "`clippy_scoped`", "`test_scoped`"] {
+        assert!(stdout.contains(gate), "missing fallback gate {gate}: {stdout}");
+    }
+    assert!(!stdout.contains("## Policy"), "unexpected policy section: {stdout}");
+    assert!(
+        stdout.contains("No learned-estimates file found"),
+        "expected missing timing estimate note: {stdout}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn dry_run_maps_minimal_workspace_metadata() -> Result<()> {
+    let work_dir = init_repo_with_commit(false)?;
+    fs::create_dir_all(work_dir.path().join("crates/demo/src"))?;
+    fs::create_dir_all(work_dir.path().join("docs/ci"))?;
+    fs::create_dir_all(work_dir.path().join("policy"))?;
+    fs::write(
+        work_dir.path().join("Cargo.toml"),
+        "[workspace]\nmembers = [\"crates/demo\"]\nresolver = \"2\"\n",
+    )?;
+    fs::write(
+        work_dir.path().join("crates/demo/Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.0.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::write(work_dir.path().join("crates/demo/src/lib.rs"), "pub fn value() -> u8 { 1 }\n")?;
+    fs::write(work_dir.path().join("docs/ci/learned-estimates.md"), "# estimates\n")?;
+    fs::write(work_dir.path().join("policy/ci-budget.toml"), "[budget]\n")?;
+    git_cmd_in(&["add", "."], work_dir.path())?;
+    git_cmd_in(&["commit", "-m", "workspace base"], work_dir.path())?;
+
+    fs::write(work_dir.path().join("crates/demo/src/lib.rs"), "pub fn value() -> u8 { 2 }\n")?;
+    git_cmd_in(&["add", "."], work_dir.path())?;
+    git_cmd_in(&["commit", "-m", "change demo"], work_dir.path())?;
+
+    let mut cmd = cargo_bin_cmd!("xtask");
+    let output = cmd
+        .current_dir(work_dir.path())
+        .args(["ci-pr-summary", "--base", "HEAD~1", "--dry-run"])
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "should exit 0 with minimal workspace metadata; stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(
+        stdout.contains("**Diff class**: `code` (1 file(s) changed)"),
+        "expected code diff class: {stdout}"
+    );
+    assert!(stdout.contains("- `demo` (1 file(s))"), "expected changed crate mapping: {stdout}");
+    assert!(stdout.contains("`fmt`"), "fmt gate should always be selected: {stdout}");
+    assert!(
+        stdout.contains("Policy loaded from `policy/ci-budget.toml`"),
+        "expected policy note: {stdout}"
+    );
+    assert!(
+        stdout.contains("Learned-estimates file present"),
+        "expected timing sentinel note: {stdout}"
+    );
+
+    Ok(())
+}
+
 /// Verify the `--help` flag works and mentions both `--base` and `--dry-run`.
 #[test]
 fn help_shows_base_and_dry_run_flags() -> Result<()> {

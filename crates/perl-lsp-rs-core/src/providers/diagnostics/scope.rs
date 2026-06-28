@@ -935,7 +935,7 @@ mod tests {
                 _: Option<&str>,
             ) -> Option<OccurrenceFact> {
                 // Only cover positions 10..30.
-                if byte_offset >= 10 && byte_offset < 30 {
+                if (10..30).contains(&byte_offset) {
                     Some(OccurrenceFact {
                         id: OccurrenceId(7777),
                         kind: OccurrenceKind::DynamicBoundary,

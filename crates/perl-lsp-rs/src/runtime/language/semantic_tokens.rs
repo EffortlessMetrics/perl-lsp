@@ -27,11 +27,9 @@ impl LspServer {
         if let Some(p) = params {
             let uri = req_uri(&p)?;
             let documents = self.documents_guard();
-            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: INVALID_REQUEST,
-                message: format!("Document not open: {}", uri),
-                data: None,
-            })?;
+            let doc = self
+                .get_document(&documents, uri)
+                .ok_or_else(|| semantic_tokens_document_not_open(uri))?;
             if let Some(ref ast) = doc.ast {
                 let data =
                     crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
@@ -353,6 +351,30 @@ impl LspServer {
                 "scoped compiler lexical-variable use class cutover proof only; lexical variable uses may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
             ));
         }
+        if let Some(candidate) = semantic_token_our_variable_declaration_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "our_variable_declaration",
+                "variable",
+                "matched_existing_live_variable_token",
+                "unmatched_existing_live_variable_token",
+                true,
+                "scoped compiler our-variable declaration class cutover proof only; package-scoped our variable declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
+            ));
+        }
+        if let Some(candidate) = semantic_token_state_variable_declaration_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "state_variable_declaration",
+                "variable",
+                "matched_existing_live_variable_token",
+                "unmatched_existing_live_variable_token",
+                true,
+                "scoped compiler state-variable declaration class cutover proof only; lexical state variable declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
+            ));
+        }
 
         receipts
     }
@@ -422,7 +444,7 @@ impl LspServer {
         use crate::protocol::req_range;
         if let Some(params) = params {
             let uri = req_uri(&params)?;
-            let ((start_line, _start_char), (end_line, _end_char)) = req_range(&params)?;
+            let ((start_line, start_char), (end_line, end_char)) = req_range(&params)?;
 
             tracing::debug!(uri, start_line, end_line, "Getting semantic tokens for range");
 
@@ -433,8 +455,9 @@ impl LspServer {
                         crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
                             self.offset_to_pos16(doc, off)
                         });
-                    let encoded =
-                        filter_encoded_semantic_tokens_by_line(all_tokens, start_line, end_line);
+                    let encoded = filter_encoded_semantic_tokens_by_range(
+                        all_tokens, start_line, start_char, end_line, end_char,
+                    );
 
                     tracing::debug!(count = encoded.len() / 5, "Found semantic tokens in range");
 
@@ -451,10 +474,12 @@ impl LspServer {
     }
 }
 
-fn filter_encoded_semantic_tokens_by_line(
+fn filter_encoded_semantic_tokens_by_range(
     tokens: Vec<crate::semantic_tokens::EncodedToken>,
     start_line: u32,
+    start_char: u32,
     end_line: u32,
+    end_char: u32,
 ) -> Vec<u32> {
     let mut absolute_tokens = Vec::new();
     let mut line = 0u32;
@@ -469,7 +494,11 @@ fn filter_encoded_semantic_tokens_by_line(
             start = delta_start;
         }
 
-        if line >= start_line && line <= end_line {
+        let starts_after_range_start =
+            line > start_line || (line == start_line && start >= start_char);
+        let starts_before_range_end = line < end_line || (line == end_line && start < end_char);
+
+        if starts_after_range_start && starts_before_range_end {
             absolute_tokens.push((line, start, length, token_type, modifiers));
         }
     }
@@ -500,20 +529,72 @@ mod tests {
     }
 
     #[test]
-    fn filter_encoded_semantic_tokens_by_line_reencodes_retained_range()
+    fn our_variable_declaration_candidate_scans_past_non_declaration_marker()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // An earlier non-declaration `our ` (here inside a comment) must not mask
+        // the real source-backed declaration that follows on a later line.
+        let source = "# our $todo\nour $shared = 1;\n$shared++;\n";
+        let candidate = semantic_token_our_variable_declaration_candidate(source)
+            .ok_or("real `our` declaration should be detected past the comment marker")?;
+        assert!(
+            candidate.identity.starts_with("token:our_variable_declaration:$shared:"),
+            "expected the $shared declaration identity, got {}",
+            candidate.identity
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn our_variable_declaration_candidate_requires_a_real_declaration() {
+        // Only a non-declaration `our ` marker is present; the detector must fall
+        // back (no candidate) rather than record a false compiler-token identity.
+        let source = "# our $todo\nmy $x = 1;\n";
+        assert!(semantic_token_our_variable_declaration_candidate(source).is_none());
+    }
+
+    #[test]
+    fn state_variable_declaration_candidate_scans_past_non_declaration_marker()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // An earlier non-declaration `state ` (here inside a comment) must not
+        // mask the real source-backed declaration that follows.
+        let source = "# state $todo\nstate $count = 0;\n$count++;\n";
+        let candidate = semantic_token_state_variable_declaration_candidate(source)
+            .ok_or("real `state` declaration should be detected past the comment marker")?;
+        assert!(
+            candidate.identity.starts_with("token:state_variable_declaration:$count:"),
+            "expected the $count declaration identity, got {}",
+            candidate.identity
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn state_variable_declaration_candidate_requires_a_real_declaration() {
+        // Only a non-declaration `state ` marker is present; the detector must
+        // fall back rather than record a false compiler-token identity.
+        let source = "# state $todo\nmy $x = 1;\n";
+        assert!(semantic_token_state_variable_declaration_candidate(source).is_none());
+    }
+
+    #[test]
+    fn filter_encoded_semantic_tokens_by_range_reencodes_retained_range()
     -> Result<(), Box<dyn std::error::Error>> {
         let tokens: Vec<crate::semantic_tokens::EncodedToken> =
             vec![[0, 0, 5, 1, 0], [1, 2, 3, 2, 0], [0, 5, 4, 3, 1], [1, 1, 2, 4, 0]];
 
         assert_eq!(
-            filter_encoded_semantic_tokens_by_line(tokens.clone(), 1, 1),
+            filter_encoded_semantic_tokens_by_range(tokens.clone(), 1, 0, 2, 0),
             vec![1, 2, 3, 2, 0, 0, 5, 4, 3, 1]
         );
         assert_eq!(
-            filter_encoded_semantic_tokens_by_line(tokens.clone(), 1, 2),
+            filter_encoded_semantic_tokens_by_range(tokens.clone(), 1, 0, 3, 0),
             vec![1, 2, 3, 2, 0, 0, 5, 4, 3, 1, 1, 1, 2, 4, 0]
         );
-        assert!(filter_encoded_semantic_tokens_by_line(tokens, 3, 4).is_empty());
+        assert_eq!(
+            filter_encoded_semantic_tokens_by_range(tokens.clone(), 1, 5, 2, 0),
+            vec![1, 7, 4, 3, 1]
+        );
+        assert!(filter_encoded_semantic_tokens_by_range(tokens, 3, 0, 4, 0).is_empty());
 
         Ok(())
     }
@@ -882,11 +963,77 @@ fn semantic_token_lexical_variable_use_candidate(
     ))
 }
 
+fn semantic_token_our_variable_declaration_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    line_start_variable_declaration_candidate(source, "our ", "our_variable_declaration")
+}
+
+fn semantic_token_state_variable_declaration_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    line_start_variable_declaration_candidate(source, "state ", "state_variable_declaration")
+}
+
+/// Detect a line-leading sigiled variable declaration introduced by `marker`
+/// (`our `, `state `, …) and emit its `token:<token_class>:<name>:compiler`
+/// candidate.
+///
+/// Every marker occurrence is scanned, not just the first: an earlier
+/// non-declaration marker (e.g. a comment or an occurrence inside a string)
+/// must not mask a later real source-backed declaration. Each candidate must
+/// begin its line (after only whitespace) and yield a sigiled variable name;
+/// otherwise we keep scanning and ultimately fall back, preserving the
+/// fail-closed boundary.
+fn line_start_variable_declaration_candidate(
+    source: &str,
+    marker: &str,
+    token_class: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    for (marker_start, _) in source.match_indices(marker) {
+        let line_start = source[..marker_start].rfind('\n').map_or(0, |offset| offset + 1);
+        if !source[line_start..marker_start].chars().all(char::is_whitespace) {
+            continue;
+        }
+
+        let Some((name_start, name_end)) =
+            variable_name_after_marker(source, marker_start + marker.len())
+        else {
+            continue;
+        };
+
+        let name = &source[name_start..name_end];
+        let Some(span) = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+            source, name_start, name_end,
+        ) else {
+            continue;
+        };
+
+        return Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+            format!("token:{token_class}:{name}:compiler"),
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            span,
+        ));
+    }
+
+    None
+}
+
 fn lexical_variable_name_after_my_marker(
     source: &str,
     marker_start: usize,
 ) -> Option<(usize, usize)> {
-    let mut name_start = marker_start + "my ".len();
+    variable_name_after_marker(source, marker_start + "my ".len())
+}
+
+/// Scan the sigiled variable name starting at `name_search_start`, skipping any
+/// leading whitespace. Shared by the `my`/`our` declaration and use detectors so
+/// each compiler-token class extracts the same source-backed span shape.
+fn variable_name_after_marker(source: &str, name_search_start: usize) -> Option<(usize, usize)> {
+    let mut name_start = name_search_start;
 
     while let Some(ch) = source[name_start..].chars().next() {
         if ch.is_whitespace() {
@@ -1111,6 +1258,44 @@ fn semantic_tokens_live_slice_provider_trace(
         return trace;
     }
 
+    let our_variable_declaration_candidate =
+        semantic_token_our_variable_declaration_candidate(source);
+    saw_compiler_token_candidate |= our_variable_declaration_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        our_variable_declaration_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "variable",
+            compiler_token_class: "our_variable_declaration",
+            source_backed_state: "source_backed_our_variable_declaration_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler our-variable declaration live trace because it matched the existing parser/HIR variable token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler our-variable declaration spans that exactly match existing live parser/HIR variable tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader variable classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    let state_variable_declaration_candidate =
+        semantic_token_state_variable_declaration_candidate(source);
+    saw_compiler_token_candidate |= state_variable_declaration_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        state_variable_declaration_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "variable",
+            compiler_token_class: "state_variable_declaration",
+            source_backed_state: "source_backed_state_variable_declaration_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler state-variable declaration live trace because it matched the existing parser/HIR variable token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler state-variable declaration spans that exactly match existing live parser/HIR variable tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader variable classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
     if !saw_compiler_token_candidate {
         return semantic_tokens_fallback_provider_trace(
             provider_action,
@@ -1282,4 +1467,66 @@ fn provider_fallback_state_label(state: ProviderFallbackState) -> &'static str {
 
 fn is_subroutine_name_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_' || ch == ':'
+}
+
+/// Build an actionable INVALID_REQUEST error for semantic-token requests on
+/// documents that have not been opened/synchronized yet.
+///
+/// The expanded message guides the editor developer to send
+/// `textDocument/didOpen` before requesting tokens.
+///
+/// Ported from EffortlessMetrics/perl-lsp#9868.
+fn semantic_tokens_document_not_open(uri: &str) -> JsonRpcError {
+    JsonRpcError {
+        code: INVALID_REQUEST,
+        message: format!(
+            "Document not open: {uri}. \
+             textDocument/semanticTokens/full requires the editor to send \
+             textDocument/didOpen before requesting tokens; \
+             resend after the document is open and synchronized."
+        ),
+        data: None,
+    }
+}
+
+#[cfg(test)]
+mod semantic_tokens_guidance_tests {
+    use super::*;
+    use perl_tdd_support::must_err;
+    use serde_json::json;
+
+    /// A semantic-token request on an un-opened document must return an
+    /// INVALID_REQUEST error whose message contains sync-guidance strings.
+    ///
+    /// Ported from EffortlessMetrics/perl-lsp#9868.
+    #[test]
+    fn semantic_tokens_closed_document_error_includes_sync_guidance()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///workspace/lib/Missing.pm";
+
+        let error = must_err(server.handle_semantic_tokens(Some(json!({
+            "textDocument": {
+                "uri": uri,
+            },
+        }))));
+
+        assert_eq!(error.code, INVALID_REQUEST);
+        assert!(error.data.is_none());
+        for expected in [
+            "Document not open",
+            uri,
+            "textDocument/semanticTokens/full",
+            "textDocument/didOpen",
+            "open and synchronized",
+        ] {
+            assert!(
+                error.message.contains(expected),
+                "error message must mention {expected:?}; got {:?}",
+                error.message
+            );
+        }
+
+        Ok(())
+    }
 }

@@ -93,6 +93,14 @@ fragments = [
 ]
 description = "When orchestrator executes directly (no sub-agents) — covers wave-design taxonomy, multi-axis scaling design, policy elicitation timing, and cheap finisher patterns."
 
+[dispatch.session-start]
+fragments = [
+  "docs/forensics/2026-06-26-ai-orchestrated-work-shape.md",
+  "docs/forensics/2026-06-25-orchestration-at-throughput.md",
+  "docs/forensics/2026-06-25-closure-gap-the-recurring-defect.md",
+]
+description = "At the start of a multi-session arc — covers the four new scarce resources (honest signal, forcing function, second instrument, producer-verifier protocol), why gate fights are protocol mismatches not correctness failures, horizontal learning gaps, and integrity-as-architecture."
+
 # ============================================================================
 # Event situations — when investigating or handling a specific event class
 # ============================================================================

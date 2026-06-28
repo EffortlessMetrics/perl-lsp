@@ -651,6 +651,7 @@ mod tests {
             NodeKind::Subroutine {
                 name: Some("multiply".to_string()),
                 name_span: Some(SourceLocation { start: 4, end: 12 }),
+                declarator: None,
                 signature: None,
                 body: Box::new(Node::new(
                     NodeKind::Block { statements: vec![] },
@@ -730,6 +731,7 @@ mod tests {
             NodeKind::Subroutine {
                 name: Some("complex_function".to_string()),
                 name_span: Some(SourceLocation { start: 4, end: 20 }),
+                declarator: None,
                 signature: Some(Box::new(Node::new(
                     NodeKind::Signature { parameters },
                     SourceLocation { start: 0, end: 0 },

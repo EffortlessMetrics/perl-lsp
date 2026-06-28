@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+# scripts/swarm-clean
+#
+# DRY-RUN BY DEFAULT. Classifies each worktree into exactly one of four buckets
+# and only ever deletes the first, and only under --apply.
+#
+# Buckets:
+#   active         — git lock present AND lock-reason pid exists in /proc
+#                    → NEVER touch
+#   clean-finished — branch merged to main/master AND git status clean
+#                    AND no open PR → eligible for --apply deletion
+#   dirty          — git status --porcelain non-empty
+#                    → report only, NEVER delete
+#   ambiguous      — locked but pid not in /proc, OR unmerged with no PR
+#                    → report only, human decides
+#
+# Usage:
+#   bash scripts/swarm-clean                    # dry-run: classify all worktrees
+#   bash scripts/swarm-clean --apply            # actually remove clean-finished
+#   bash scripts/swarm-clean --apply --tmp      # also clean /tmp targets
+#   bash scripts/swarm-clean --tmp              # dry-run including /tmp report
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Allow REPO_ROOT override for testing.
+REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+# ── Argument parsing ───────────────────────────────────────────────────────────────────────────────
+
+APPLY=0
+CLEAN_TMP=0
+for arg in "$@"; do
+    case "$arg" in
+        --apply)    APPLY=1 ;;
+        --tmp)      CLEAN_TMP=1 ;;
+        --dry-run)  APPLY=0 ;;
+        --help|-h)
+            grep '^#' "$0" | grep -v '#!/' | sed 's/^# //' | sed 's/^#//'
+            exit 0
+            ;;
+        *)
+            echo "Unknown flag: $arg" >&2
+            echo "Usage: $0 [--apply] [--tmp] [--dry-run]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# ── Helpers ───────────────────────────────────────────────────────────────────────────────────
+
+# Check if a PID is alive in /proc.
+pid_alive() {
+    local pid="$1"
+    [[ -n "$pid" ]] && [[ "$pid" =~ ^[0-9]+$ ]] && [[ -d "/proc/$pid" ]]
+}
+
+# Extract a PID from a git worktree lock reason string.
+# Lock reason convention: "claude agent <id> (pid NNN start ...)"
+extract_pid_from_lock_reason() {
+    local reason="$1"
+    if [[ "$reason" =~ \(pid[[:space:]]+([0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return
+    fi
+    echo ""
+}
+
+# Check if branch is merged into main/master.
+branch_merged() {
+    local repo_root="$1" branch="$2"
+    local main_branch
+
+    if git -C "$repo_root" rev-parse --verify main >/dev/null 2>&1; then
+        main_branch="main"
+    elif git -C "$repo_root" rev-parse --verify master >/dev/null 2>&1; then
+        main_branch="master"
+    else
+        return 1
+    fi
+
+    git -C "$repo_root" branch --merged "$main_branch" 2>/dev/null | grep -qw "$branch"
+}
+
+# Determine open-PR status for a branch as a TRI-STATE:
+#   "open"    — an open PR exists for this branch
+#   "none"    — gh queried successfully and reported no open PR
+#   "unknown" — gh is absent or the query failed (status could not be determined)
+#
+# "unknown" must NOT be treated as "none": doing so would let a worktree with a
+# live PR be classified clean-finished and deleted under --apply on machines
+# without gh (minimal containers, non-GitHub CI). The classifier requires an
+# affirmative "none" before a worktree is eligible for deletion.
+branch_pr_status() {
+    local branch="$1"
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "unknown"
+        return
+    fi
+    local pr_number
+    if ! pr_number="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null)"; then
+        # gh present but the query itself failed (auth, network, rate limit).
+        echo "unknown"
+        return
+    fi
+    if [[ -n "$pr_number" ]]; then
+        echo "open"
+    else
+        echo "none"
+    fi
+}
+
+# Remove a worktree. Uses git worktree remove (no --force) so git's own dirty-check
+# remains as a second safety net even though we've already classified the worktree clean.
+# Never falls back to raw rm -rf (spec requirement).
+remove_worktree() {
+    local wt_path="$1" branch="$2"
+
+    # git worktree remove (without --force) lets git validate the worktree is clean
+    # before removing it. This is belt-and-suspenders: the classifier already confirmed
+    # clean status, but we keep git's own safety check active.
+    if git -C "$REPO_ROOT" worktree remove "$wt_path" 2>/dev/null; then
+        # Also clean up the local branch if it still exists.
+        git -C "$REPO_ROOT" branch -D "$branch" 2>/dev/null || true
+        # Prune metadata for any already-gone paths.
+        git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
+        return 0
+    fi
+
+    # Removal failed — git refused (worktree may have become dirty or re-locked
+    # between classification and removal, which is the correct safe behaviour).
+    echo "    -> WARNING: git worktree remove refused for $wt_path — leaving in place" >&2
+    return 1
+}
+
+# ── Classify and report ───────────────────────────────────────────────────────────────────────────────
+
+echo "=== swarm-clean $([ "$APPLY" -eq 1 ] && echo "(APPLY MODE)" || echo "(DRY-RUN — pass --apply to delete)") ==="
+echo ""
+
+# Prune already-deleted worktree paths before iterating.
+git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
+
+# Gather worktree data via --porcelain.
+declare -a ALL_WTS=()
+wt_path="" wt_branch="" is_locked=0 lock_reason="" is_bare=0 wt_head=""
+
+while IFS= read -r line; do
+    case "$line" in
+        "worktree "*)
+            # Flush previous entry.
+            if [[ -n "$wt_path" ]]; then
+                ALL_WTS+=("${wt_path}|${wt_branch}|${is_locked}|${lock_reason}|${is_bare}")
+            fi
+            wt_path="${line#worktree }"
+            wt_branch=""
+            wt_head=""
+            is_locked=0
+            lock_reason=""
+            is_bare=0
+            ;;
+        "HEAD "*)
+            wt_head="${line#HEAD }"
+            ;;
+        "branch "*)
+            wt_branch="${line#branch }"
+            wt_branch="${wt_branch#refs/heads/}"
+            ;;
+        "bare")
+            is_bare=1
+            ;;
+        "locked"*)
+            is_locked=1
+            lock_reason="${line#locked}"
+            lock_reason="${lock_reason# }"
+            ;;
+        "detached")
+            wt_branch="(detached:${wt_head:0:8})"
+            ;;
+    esac
+done < <(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null || true)
+
+# Flush last entry.
+if [[ -n "$wt_path" ]]; then
+    ALL_WTS+=("${wt_path}|${wt_branch}|${is_locked}|${lock_reason}|${is_bare}")
+fi
+
+# Counts per bucket.
+COUNT_ACTIVE=0
+COUNT_CLEAN_FINISHED=0
+COUNT_DIRTY=0
+COUNT_AMBIGUOUS=0
+COUNT_REMOVED=0
+
+# Current branch — never classify ourselves for deletion.
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+
+printf "%-55s %-30s %-15s %s\n" "WORKTREE" "BRANCH" "BUCKET" "ACTION"
+printf "%-55s %-30s %-15s %s\n" "--------" "------" "------" "------"
+
+for entry in "${ALL_WTS[@]}"; do
+    IFS='|' read -r wt_path wt_branch is_locked lock_reason is_bare <<< "$entry"
+
+    local_name="$(basename "$wt_path")"
+
+    # Skip bare repos.
+    if [[ "$is_bare" -eq 1 ]]; then
+        printf "%-55s %-30s %-15s %s\n" "$local_name" "${wt_branch:0:29}" "skip-bare" "SKIP"
+        continue
+    fi
+
+    # Skip main checkout (not a sub-worktree).
+    if [[ "$wt_path" == "$REPO_ROOT" ]]; then
+        printf "%-55s %-30s %-15s %s\n" "$local_name" "${wt_branch:0:29}" "main-checkout" "SKIP"
+        continue
+    fi
+
+    # Skip ourselves (current worktree running this script).
+    if [[ "$wt_branch" == "$CURRENT_BRANCH" ]] && [[ -n "$CURRENT_BRANCH" ]]; then
+        printf "%-55s %-30s %-15s %s\n" "$local_name" "${wt_branch:0:29}" "self" "SKIP"
+        continue
+    fi
+
+    # ── Step 1: Check dirty status ────────────────────────────────────────────────────────────────────────────
+    dirty_status=""
+    is_dirty=0
+    if [[ -d "$wt_path" ]]; then
+        dirty_status="$(git -C "$wt_path" status --porcelain 2>/dev/null || echo "")"
+        [[ -n "$dirty_status" ]] && is_dirty=1
+    fi
+
+    # ── Step 2: Check lock and PID ────────────────────────────────────────────────────────────────────────────
+    lock_pid=""
+    pid_status="n/a"
+    if [[ "$is_locked" -eq 1 ]]; then
+        lock_pid="$(extract_pid_from_lock_reason "$lock_reason")"
+        if pid_alive "$lock_pid"; then
+            pid_status="alive"
+        else
+            pid_status="dead"
+        fi
+    fi
+
+    # ── Classify into exactly one bucket ───────────────────────────────────────────────────────────────────────────
+
+    bucket=""
+    action=""
+
+    if [[ "$is_locked" -eq 1 ]] && [[ "$pid_status" == "alive" ]]; then
+        # ACTIVE: locked + live pid → never touch
+        bucket="active"
+        action="SKIP (live pid:${lock_pid})"
+        COUNT_ACTIVE=$((COUNT_ACTIVE + 1))
+
+    elif [[ "$is_dirty" -eq 1 ]]; then
+        # DIRTY: uncommitted changes → report only, never delete
+        dirty_count="$(echo "$dirty_status" | wc -l | tr -d ' ')"
+        bucket="dirty"
+        action="REPORT-ONLY (${dirty_count} file(s) changed)"
+        COUNT_DIRTY=$((COUNT_DIRTY + 1))
+
+    elif [[ "$is_locked" -eq 1 ]] && [[ "$pid_status" == "dead" ]]; then
+        # AMBIGUOUS: locked but pid dead → human decides
+        bucket="ambiguous"
+        action="REPORT-ONLY (stale lock pid:${lock_pid:-?})"
+        COUNT_AMBIGUOUS=$((COUNT_AMBIGUOUS + 1))
+
+    else
+        # Neither active nor dirty nor stale-lock.
+        # Eligible for clean-finished ONLY when merged AND we can affirmatively
+        # confirm there is no open PR. PR status is tri-state; "unknown" (gh
+        # absent or query failed) is treated as NOT-safe and falls to ambiguous.
+        is_merged=0
+        pr_status="unknown"
+
+        if branch_merged "$REPO_ROOT" "$wt_branch" 2>/dev/null; then
+            is_merged=1
+        fi
+
+        pr_status="$(branch_pr_status "$wt_branch")"
+
+        if [[ "$is_merged" -eq 1 ]] && [[ "$pr_status" == "none" ]]; then
+            bucket="clean-finished"
+            if [[ "$APPLY" -eq 1 ]]; then
+                action="REMOVE"
+            else
+                action="dry-run: would remove"
+            fi
+            COUNT_CLEAN_FINISHED=$((COUNT_CLEAN_FINISHED + 1))
+        else
+            # Not eligible for deletion → ambiguous (report only, human decides).
+            bucket="ambiguous"
+            if [[ "$pr_status" == "open" ]]; then
+                action="REPORT-ONLY (open PR exists)"
+            elif [[ "$pr_status" == "unknown" ]]; then
+                action="REPORT-ONLY (PR status unknown — gh unavailable; not safe to delete)"
+            elif [[ "$is_merged" -eq 0 ]]; then
+                action="REPORT-ONLY (unmerged, no PR — human decides)"
+            else
+                action="REPORT-ONLY (human decides)"
+            fi
+            COUNT_AMBIGUOUS=$((COUNT_AMBIGUOUS + 1))
+        fi
+    fi
+
+    printf "%-55s %-30s %-15s %s\n" "$local_name" "${wt_branch:0:29}" "$bucket" "$action"
+
+    # ── Execute removal for clean-finished under --apply ─────────────────────────────────────────────
+    if [[ "$bucket" == "clean-finished" ]] && [[ "$APPLY" -eq 1 ]]; then
+        if remove_worktree "$wt_path" "$wt_branch"; then
+            COUNT_REMOVED=$((COUNT_REMOVED + 1))
+            echo "    -> removed: $wt_path"
+        else
+            echo "    -> WARNING: removal failed for $wt_path" >&2
+        fi
+    fi
+done
+
+echo ""
+echo "=== summary ==="
+echo "  active:         ${COUNT_ACTIVE}  (never touched)"
+echo "  clean-finished: ${COUNT_CLEAN_FINISHED}  ($([ "$APPLY" -eq 1 ] && echo "removed: ${COUNT_REMOVED}" || echo "dry-run: would remove"))"
+echo "  dirty:          ${COUNT_DIRTY}  (report only)"
+echo "  ambiguous:      ${COUNT_AMBIGUOUS}  (report only, human decides)"
+
+# ── /tmp target cleanup — delegate to clean-tmp-targets.sh ─────────────────────────────────────────────
+
+if [[ "$CLEAN_TMP" -eq 1 ]]; then
+    echo ""
+    echo "=== /tmp target cleanup (delegating to clean-tmp-targets.sh) ==="
+    if [[ -x "$SCRIPT_DIR/clean-tmp-targets.sh" ]]; then
+        if [[ "$APPLY" -eq 1 ]]; then
+            "$SCRIPT_DIR/clean-tmp-targets.sh" --prune
+        else
+            "$SCRIPT_DIR/clean-tmp-targets.sh" --dry-run
+        fi
+    else
+        echo "WARNING: $SCRIPT_DIR/clean-tmp-targets.sh not found or not executable" >&2
+    fi
+fi
+
+echo ""
+[[ "$APPLY" -eq 0 ]] && echo "(Dry-run. Re-run with --apply to execute removals.)"
+
+exit 0

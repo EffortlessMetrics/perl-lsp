@@ -4,7 +4,7 @@ use super::*;
 
 impl DebugAdapter {
     /// Handle variables request
-    pub(super) fn handle_variables(
+    pub fn handle_variables(
         &self,
         seq: i64,
         request_seq: i64,
@@ -47,19 +47,52 @@ impl DebugAdapter {
             };
         }
 
-        let variables_ref = args.variables_reference as i32;
-        let start = args.start.unwrap_or(0) as usize;
-        let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);
-
-        if variables_ref == 0 {
+        // Clamp i64 → i32 safely: values outside [1, i32::MAX] cannot encode a valid scope ref
+        // (scope encoding is frame_id * 10 + {1,2,3}, all positive). Negative, zero, or
+        // out-of-i32-range refs return protocol-safe empty per DAP spec — success=true, variables=[].
+        // We check the raw i64 first to catch huge positive overflow before saturation would
+        // hide it (i64::MAX saturates to i32::MAX, which is a non-zero i32 and would pass
+        // a simple `== 0` check — wrong). Refs in (0, i32::MAX] are passed to i64_to_i32_saturating.
+        let variables_ref_raw = args.variables_reference;
+        if variables_ref_raw <= 0 || variables_ref_raw > i32::MAX as i64 {
+            // Out-of-range: return protocol-safe empty response immediately.
+            // totalVariables is omitted (not 0) — DAP spec says omit optional fields
+            // when the value is not meaningful (invalid ref has no defined total).
             return DapMessage::Response {
                 seq,
                 request_seq,
-                success: false,
+                success: true,
                 command: "variables".to_string(),
-                body: None,
-                message: Some("Missing variablesReference".to_string()),
+                body: Some(json!({ "variables": [] })),
+                message: None,
             };
+        }
+        let variables_ref = Self::i64_to_i32_saturating(variables_ref_raw);
+
+        let start = args.start.unwrap_or(0) as usize;
+        let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);
+
+        // Stale-ref guard: if a session exists but the debugger is not stopped, the cache
+        // has been cleared (variable_cache.clear() is called on every continue/step). Any
+        // variablesReference the client holds from the previous stop is stale. Querying
+        // the debugger while it is running would hang or produce garbage. Return the
+        // protocol-safe honest empty immediately.
+        {
+            let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            if let Some(ref session) = *session_guard {
+                if session.state != DebugState::Stopped {
+                    // Not stopped: variable refs are stale. Omit totalVariables —
+                    // we have no meaningful count when not paused.
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: true,
+                        command: "variables".to_string(),
+                        body: Some(json!({ "variables": [] })),
+                        message: None,
+                    };
+                }
+            }
         }
 
         // AC8.4: Render scalars/arrays/hashes with lazy child expansion.
@@ -67,30 +100,60 @@ impl DebugAdapter {
         let mut parsed_child_cache = HashMap::new();
         let mut parsed_full_roots = Vec::new();
         let mut used_session_cache = false;
+        // Total count from cache (populated on cache-hit path when full count is known).
+        let mut cached_total: Option<usize> = None;
 
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
             // Serve requested pages from cache for stable references and cheap repeated expansion.
             if let Some(vars) = session.variable_cache.get_page(variables_ref, start, count) {
                 used_session_cache = true;
+                // Capture the full count from the cache entry so totalVariables is correct
+                // even on subsequent (paged) requests where parsed_full_roots is not repopulated.
+                cached_total = session.variable_cache.root_count(variables_ref);
                 parsed_from_output = vars;
             } else {
                 let mut framed_scope_lines = None;
 
                 // Request fresh scope output from Perl debugger for scope roots only.
                 //
-                // Scope encoding: variables_ref % 10 indicates the scope kind:
-                //   1 = Locals  (lexical `my` variables in the current frame)
-                //   2 = Package (package/`our` variables, fully-qualified names)
-                //   3 = Globals (Perl built-in global variables)
+                // Decode the variablesReference using the VariableReference codec.
+                // Scope variants map to their kind (Locals/Package/Globals) and frame_id.
+                // Non-Scope variants and invalid refs skip the framed output fetch;
+                // EvalResult cache hits were already served above.
+                use crate::debug_adapter::var_ref::{ScopeKind, VariableReference};
+
+                // Short-circuit: stale EvalResult ref (cache miss after resume).
                 //
-                // Frame index (variables_ref / 10) is used only for Package/Globals
-                // lookups where `V <pkg>` is appropriate.  For Locals, the `V` command
-                // is unsuitable because it only shows package-symbol-table entries —
-                // `my` lexicals are NOT in the symbol table.  Instead, we use a
-                // B-module eval that walks the current pad directly.
-                let frame_id = variables_ref / 10;
-                match variables_ref % 10 {
-                    1 => {
+                // On resume (continue/next/step), variable_cache.clear() runs, making
+                // any eval_ref the client holds from the previous stop stale. A stale
+                // eval_ref is in the EvalResult band ([1_000_000, 1_999_999_999]) but is
+                // absent from the cache. Querying the debugger for a bogus scope or waiting
+                // for output that will never arrive is wasteful and semantically wrong.
+                //
+                // Protocol contract: return honest empty (success=true, variables=[])
+                // immediately. This matches the DAP spec — a ref that is no longer valid
+                // after a resume simply has no children.
+                if matches!(
+                    VariableReference::decode(variables_ref),
+                    Some(VariableReference::EvalResult { .. })
+                ) {
+                    // Stale eval ref after resume — omit totalVariables; no meaningful count.
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: true,
+                        command: "variables".to_string(),
+                        body: Some(json!({ "variables": [] })),
+                        message: None,
+                    };
+                }
+
+                let (scope_frame_id, scope_kind) = match VariableReference::decode(variables_ref) {
+                    Some(VariableReference::Scope { frame_id, kind }) => (frame_id, Some(kind)),
+                    _ => (0, None),
+                };
+                match scope_kind {
+                    Some(ScopeKind::Locals) => {
                         // Locals scope: enumerate lexical `my` variables in the current
                         // executing frame's pad using the B introspection module.
                         //
@@ -149,9 +212,9 @@ impl DebugAdapter {
                             }
                         }
                     }
-                    2 => {
+                    Some(ScopeKind::Package) => {
                         if let Some(stdin) = session.process.stdin.as_mut() {
-                            let commands = vec![format!("V {} ::", frame_id)];
+                            let commands = vec![format!("V {} ::", scope_frame_id)];
                             match self.send_framed_debugger_commands(stdin, &commands) {
                                 Ok((begin, end)) => {
                                     framed_scope_lines = self.capture_framed_debugger_output(
@@ -162,16 +225,16 @@ impl DebugAdapter {
                                 }
                                 Err(error) => {
                                     tracing::warn!(%error, "Failed to send framed variables command, falling back");
-                                    let cmd = format!("V {} ::\n", frame_id);
+                                    let cmd = format!("V {} ::\n", scope_frame_id);
                                     let _ = stdin.write_all(cmd.as_bytes());
                                     let _ = stdin.flush();
                                 }
                             }
                         }
                     }
-                    3 => {
+                    Some(ScopeKind::Globals) => {
                         if let Some(stdin) = session.process.stdin.as_mut() {
-                            let commands = vec![format!("V {} *", frame_id)];
+                            let commands = vec![format!("V {} *", scope_frame_id)];
                             match self.send_framed_debugger_commands(stdin, &commands) {
                                 Ok((begin, end)) => {
                                     framed_scope_lines = self.capture_framed_debugger_output(
@@ -182,14 +245,21 @@ impl DebugAdapter {
                                 }
                                 Err(error) => {
                                     tracing::warn!(%error, "Failed to send framed variables command, falling back");
-                                    let cmd = format!("V {} *\n", frame_id);
+                                    let cmd = format!("V {} *\n", scope_frame_id);
                                     let _ = stdin.write_all(cmd.as_bytes());
                                     let _ = stdin.flush();
                                 }
                             }
                         }
                     }
-                    _ => {}
+                    None => {
+                        // Non-Scope variablesReference — no framed output to fetch.
+                        // Cache hits were already returned via variable_cache above.
+                        // Stale EvalResult refs short-circuit to an empty response
+                        // before reaching this branch (see the early return above).
+                        // A stale Child ref on cache miss silently produces an empty
+                        // list here; that gap is tracked in issue #1445.
+                    }
                 }
 
                 let (full_roots, child_cache) = if let Some(lines) = framed_scope_lines.as_ref() {
@@ -216,6 +286,19 @@ impl DebugAdapter {
             parsed_from_output = slice_variables(&full_roots, start, count);
         }
 
+        // Capture total count before pagination (pre-slice length) for the DAP totalVariables
+        // field. Priority: fresh parse (parsed_full_roots) > cache hit (cached_total) > unknown.
+        // totalVariables is only emitted when we have a reliable full count; it is omitted
+        // (not null) otherwise, per the DAP spec's optional-field semantics.
+        let total_variables: Option<i64> = if !parsed_full_roots.is_empty() {
+            // Fresh parse: total is the full root list length before pagination.
+            Some(parsed_full_roots.len() as i64)
+        } else {
+            // Cache hit (the cache stores the original full list, so root_count is reliable)
+            // maps to Some; the fallback/unknown path stays None and omits the field.
+            cached_total.map(|n| n as i64)
+        };
+
         let variables = if parsed_from_output.is_empty() {
             Self::fallback_scope_variables(variables_ref, start, count)
         } else {
@@ -238,14 +321,21 @@ impl DebugAdapter {
             let _ = session.variable_cache.get_page(variables_ref, start, count);
         }
 
+        // Build response body. totalVariables is optional per DAP spec — omit the field
+        // entirely when the value is not known, rather than emitting `null`.  The json!()
+        // macro serializes Option::None as JSON null (not field-absent), so we build the
+        // body with the field only when we have a reliable count.
+        let mut body = json!({ "variables": variables });
+        if let Some(total) = total_variables {
+            body["totalVariables"] = json!(total);
+        }
+
         DapMessage::Response {
             seq,
             request_seq,
             success: true,
             command: "variables".to_string(),
-            body: Some(json!({
-                "variables": variables
-            })),
+            body: Some(body),
             message: None,
         }
     }
@@ -393,7 +483,7 @@ impl DebugAdapter {
                     success: false,
                     command: "setVariable".to_string(),
                     body: None,
-                    message: Some(Self::no_debugger_session_message("setVariable")),
+                    message: Some("No debugger session active".to_string()),
                 };
             }
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
@@ -415,7 +505,7 @@ impl DebugAdapter {
                 success: false,
                 command: "setVariable".to_string(),
                 body: None,
-                message: Some(Self::no_debugger_session_message("setVariable")),
+                message: Some("No debugger session".to_string()),
             };
         };
 
@@ -439,10 +529,12 @@ impl DebugAdapter {
             };
         };
 
+        let variables_reference =
+            self.allocate_evaluate_result_ref(name, &rendered_value, &rendered_type);
         let set_var_body = SetVariableResponseBody {
             value: rendered_value,
             type_: Some(rendered_type),
-            variables_reference: 0,
+            variables_reference,
         };
 
         DapMessage::Response {
@@ -526,38 +618,266 @@ fn is_numeric_literal(value: &str) -> bool {
     has_digit && allowed_chars && normalized.parse::<f64>().is_ok()
 }
 
+// ---------------------------------------------------------------------------
+// Hazard-class invariant tests (inline lib tests for patch coverage)
+//
+// These cover three hazard classes from SPEC_UPDATE_CHECKLIST §8:
+//   1. Protocol-safety  — invalid/unknown/stale ref → success=true, variables=[]
+//   2. Bounds/overflow  — extreme i64 values → checked, no panic/wrap
+//   3. ID/ref-space     — eval_ref range (1_000_000+, from #1219) passes through
+//                         the invalid-ref guard without being misrouted/rejected
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
-mod tests {
+mod hazard_invariant_tests {
     use super::*;
+    use crate::debug_adapter::DebugAdapter;
+    use serde_json::json;
 
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
+    fn adapter() -> DebugAdapter {
+        DebugAdapter::new()
+    }
 
-    #[test]
-    fn set_variable_without_session_guides_recovery() -> TestResult {
-        let mut adapter = DebugAdapter::new();
-
-        let response = adapter.handle_request(
+    fn variables_body_is_empty(adapter: &mut DebugAdapter, variables_ref: i64) -> bool {
+        let msg = adapter.handle_request(
             1,
-            "setVariable",
-            Some(json!({
-                "variablesReference": 11,
-                "name": "$x",
-                "value": "2"
-            })),
+            "variables",
+            Some(json!({ "variablesReference": variables_ref })),
+        );
+        match msg {
+            DapMessage::Response { success, body, .. } => {
+                if !success {
+                    return false;
+                }
+                let vars = body
+                    .as_ref()
+                    .and_then(|b| b.get("variables"))
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(usize::MAX);
+                vars == 0
+            }
+            _ => false,
+        }
+    }
+
+    fn variables_success(adapter: &mut DebugAdapter, variables_ref: i64) -> bool {
+        match adapter.handle_request(
+            1,
+            "variables",
+            Some(json!({ "variablesReference": variables_ref })),
+        ) {
+            DapMessage::Response { success, .. } => success,
+            _ => false,
+        }
+    }
+
+    // --- Protocol-safety: ref=0 → empty ---
+    #[test]
+    fn ref_zero_is_protocol_safe_empty() {
+        let mut a = adapter();
+        assert!(variables_body_is_empty(&mut a, 0), "ref=0 must return empty variables array");
+    }
+
+    // --- Protocol-safety: ref=-1 → empty (negative refs are invalid) ---
+    #[test]
+    fn ref_negative_is_protocol_safe_empty() {
+        let mut a = adapter();
+        for bad in [-1_i64, -100, i32::MIN as i64, i64::MIN] {
+            assert!(
+                variables_body_is_empty(&mut a, bad),
+                "ref={bad} (negative) must return empty variables array"
+            );
+        }
+    }
+
+    // --- Bounds/overflow: i64::MAX → no panic, returns empty (> i32::MAX rejected) ---
+    #[test]
+    fn ref_i64_max_no_panic_returns_empty() {
+        let mut a = adapter();
+        // i64::MAX saturates to i32::MAX under i64_to_i32_saturating; raw-i64 check rejects it first.
+        assert!(
+            variables_body_is_empty(&mut a, i64::MAX),
+            "ref=i64::MAX must return empty (out-of-i32-range guard)"
+        );
+        // Just above i32::MAX is also rejected.
+        assert!(
+            variables_body_is_empty(&mut a, i32::MAX as i64 + 1),
+            "ref=i32::MAX+1 must return empty (out-of-range)"
+        );
+    }
+
+    // --- Bounds/overflow: i32::MAX is in-range (allowed through, no panic) ---
+    #[test]
+    fn ref_i32_max_no_panic() {
+        let mut a = adapter();
+        // i32::MAX passes the raw-i64 guard and goes through normal path without session.
+        // It must not panic — success=true is required.
+        assert!(
+            variables_success(&mut a, i32::MAX as i64),
+            "ref=i32::MAX must succeed (in-range, no session → honest empty)"
+        );
+    }
+
+    // --- ID/ref-space: eval_ref range (1_000_000+) is NOT rejected by invalid-ref guard ---
+    //
+    // #1219 allocates eval refs starting at 1_000_000 (base 1_000_000 + counter).
+    // Those refs must pass through the invalid-ref check (0 < 1_000_000 <= i32::MAX) and
+    // reach the normal cache-lookup path. Without a session they return honest-empty.
+    // Crucially: they must NOT be misrouted as "invalid" just because they look large.
+    #[test]
+    fn eval_ref_range_passes_invalid_ref_guard() {
+        let mut a = adapter();
+        // These are valid eval refs from #1219 — not rejected, return success=true.
+        for eval_ref in [1_000_000_i64, 1_000_001, 1_000_100, 1_999_999] {
+            assert!(
+                variables_success(&mut a, eval_ref),
+                "eval_ref={eval_ref} (from #1219 range) must not be rejected by invalid-ref guard"
+            );
+        }
+    }
+
+    // --- ID/ref-space: scope refs (frame_id*10 + {1,2,3}) coexist with eval refs ---
+    //
+    // Scope ref range: frame_id in [0, ~200M] * 10 + {1,2,3} — well below 1_000_000 for
+    // reasonable frame counts (< 100_000 frames → refs < 1_000_003). Eval refs start at
+    // 1_000_000. Both ranges must produce success=true without session (honest empty).
+    #[test]
+    fn scope_ref_and_eval_ref_ranges_do_not_collide_for_small_frame_ids() {
+        let mut a = adapter();
+        // Scope refs for frame_id <=99_999 are in [1, 999_993]; eval refs from #1219
+        // start at 1_000_000 — no overlap. Encoding invariant documented in #901/#1219.
+        let max_scope_ref: i64 = 99_999 * 10 + 3; // = 999_993
+        let min_eval_ref: i64 = 1_000_000;
+        // Verify both values PASS the invalid-ref guard ([1, i32::MAX]) and return success.
+        // This tests actual guard behavior — the range-non-collision is a precondition
+        // documented above, not an assertion on the code under test.
+        assert!(
+            variables_success(&mut a, max_scope_ref),
+            "max scope ref ({max_scope_ref}) must pass invalid-ref guard and succeed"
+        );
+        assert!(
+            variables_success(&mut a, min_eval_ref),
+            "min eval ref ({min_eval_ref}) must pass invalid-ref guard and succeed"
+        );
+    }
+
+    // --- Protocol-safety: never-allocated ref (valid range, but unknown to cache) → no crash ---
+    #[test]
+    fn never_allocated_ref_in_valid_range_no_crash() {
+        let mut a = adapter();
+        // A ref that looks like a scope ref but was never actually allocated — no session,
+        // so it goes through the no-session path. Must not panic.
+        for stale in [11_i64, 12, 13, 21, 22, 23, 999] {
+            assert!(
+                variables_success(&mut a, stale),
+                "never-allocated scope ref={stale} must succeed (no crash, honest empty)"
+            );
+        }
+    }
+
+    // --- Fix #1338: stale EvalResult ref with Stopped session -> early short-circuit ---
+    //
+    // This lib test covers the new early-return branch in handle_variables() added by
+    // fix #1338 (cache-miss branch, EvalResult short-circuit in variables.rs).
+    //
+    // Path exercised:
+    //   1. Session IS Stopped -> passes the Running-state guard (lines 73-92 pre-fix)
+    //   2. Cache miss for eval_ref wire -> enters else branch
+    //   3. decode yields EvalResult -> short-circuit, return honest empty immediately
+    //
+    // Without the fix, control falls through to parse_scope_variables_from_output
+    // (75ms detour via wait_for_debugger_output_window) before returning empty via
+    // fallback_scope_variables. The short-circuit removes the delay and bogus routing.
+    //
+    // Skip when perl is not on PATH (seed_stopped_session_with_frames_for_test
+    // spawns perl -e 1 as a no-op child process).
+    #[test]
+    fn fix_1338_stale_eval_ref_stopped_session_short_circuits_to_honest_empty() {
+        // Skip if perl is not available on PATH.
+        if std::process::Command::new("perl").arg("-e").arg("1").output().is_err() {
+            return;
+        }
+        let mut a = adapter();
+        // Seed a Stopped session so the Running-state guard does not trigger.
+        // This exercises the cache-miss path and the new EvalResult short-circuit.
+        a.seed_stopped_session_with_frames_for_test(vec![]);
+
+        // EvalResult band wire values: stale after resume (not in cache).
+        for eval_ref_wire in [1_000_000_i64, 1_000_001, 1_000_003, 1_100_000] {
+            assert!(
+                variables_body_is_empty(&mut a, eval_ref_wire),
+                "fix #1338: stopped session + stale eval_ref={eval_ref_wire} must return honest empty"
+            );
+        }
+    }
+
+    // --- Guard test: cached EvalResult is NOT short-circuited by the fix #1338 early return ---
+    //
+    // This is the scoping guard for the fix: a VALID EvalResult ref that IS in the cache
+    // must be served via the cache-hit path (line 102) and return its children — it must
+    // NOT be swallowed by the early-return short-circuit (which fires only on cache miss).
+    //
+    // Without this guard, a regression could incorrectly apply the early return to ALL
+    // EvalResult refs (cached or not), causing legitimate variable expansion to return
+    // empty. This test would fail immediately in that case.
+    //
+    // Skip when perl is not on PATH.
+    #[test]
+    fn fix_1338_cached_eval_result_is_served_not_short_circuited() {
+        // Skip if perl is not available on PATH.
+        if std::process::Command::new("perl").arg("-e").arg("1").output().is_err() {
+            return;
+        }
+        use crate::debug_adapter::var_ref::VariableReference;
+        use crate::types::Variable;
+
+        let mut a = adapter();
+        a.seed_stopped_session_with_frames_for_test(vec![]);
+
+        // An EvalResult wire value that IS in cache (simulates a fresh evaluate result
+        // before resume — the client holds the ref and sends a variables request while
+        // the session is still stopped at the same breakpoint).
+        let eval_ref_wire: i32 =
+            VariableReference::EvalResult { counter: 42 }.encode().expect("counter=42 is valid");
+        assert!(
+            (1_000_000..=1_999_999_999).contains(&eval_ref_wire),
+            "setup: must be in EvalResult band"
         );
 
-        match response {
-            DapMessage::Response { success, command, message, .. } => {
-                assert_eq!(command, "setVariable");
-                assert!(!success, "setVariable without a session should fail");
-                let message = message.ok_or("setVariable failure should include guidance")?;
-                assert!(message.contains("No debugger session is active"));
-                assert!(message.contains("Start a launch or attach request"));
-                assert!(message.contains("retry setVariable"));
-            }
-            other => return Err(format!("expected setVariable response, got {other:?}").into()),
-        }
+        // Seed a cached entry so the cache-hit path fires.
+        let cached_var = Variable {
+            name: "".to_string(),
+            value: "42".to_string(),
+            type_: Some("SCALAR".to_string()),
+            variables_reference: 0,
+            named_variables: None,
+            indexed_variables: None,
+        };
+        a.seed_eval_result_cache_for_test(eval_ref_wire, vec![cached_var]);
 
-        Ok(())
+        // Must return the cached children (non-empty), NOT the early-return empty.
+        // If the early return incorrectly fired here, this assertion would fail.
+        let msg = a.handle_request(
+            1,
+            "variables",
+            Some(serde_json::json!({ "variablesReference": eval_ref_wire as i64 })),
+        );
+        match msg {
+            DapMessage::Response { success, body, .. } => {
+                assert!(success, "cached EvalResult must succeed");
+                let vars = body
+                    .as_ref()
+                    .and_then(|b| b.get("variables"))
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                assert_eq!(
+                    vars, 1,
+                    "cached EvalResult must return its 1 cached child; got {vars} (early return was applied incorrectly)"
+                );
+            }
+            other => panic!("expected Response, got: {other:?}"),
+        }
     }
 }

@@ -56,7 +56,21 @@ impl Write for OutputCapture {
 }
 
 fn wait_for_method(output: &OutputCapture, method: &str) -> Option<Value> {
-    let deadline = Instant::now() + Duration::from_millis(250);
+    wait_for_method_with_timeout(output, method, Duration::from_millis(250))
+}
+
+/// Poll the captured output for `method` until `timeout`, returning immediately
+/// on first sight. Positive assertions need a generous deadline: the handler
+/// enqueues the notification synchronously, but it is flushed by a separate
+/// outbound writer thread, so it can lag the request response under parallel
+/// test load. 5s is generous under representative parallelism; pathological
+/// full-core saturation can still exceed it (tracked in #2605).
+fn wait_for_method_with_timeout(
+    output: &OutputCapture,
+    method: &str,
+    timeout: Duration,
+) -> Option<Value> {
+    let deadline = Instant::now() + timeout;
     loop {
         if let Some(message) =
             output.messages().into_iter().find(|message| message["method"].as_str() == Some(method))
@@ -65,6 +79,22 @@ fn wait_for_method(output: &OutputCapture, method: &str) -> Option<Value> {
         }
         if Instant::now() >= deadline {
             return None;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+fn wait_for_index_tasks_drained(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        let pending = server.pending_index_tasks();
+        if pending == 0 {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(
+                format!("expected background index tasks to drain, pending={pending}").into()
+            );
         }
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -820,6 +850,8 @@ fn test_will_delete_files_skips_warnings_for_co_deleted_dependents()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+    wait_for_index_tasks_drained(&server)?;
+    output.clear();
 
     let dependent_open = json!({
         "textDocument": {
@@ -830,6 +862,7 @@ fn test_will_delete_files_skips_warnings_for_co_deleted_dependents()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(dependent_open));
+    wait_for_index_tasks_drained(&server)?;
     output.clear();
 
     let params = json!({
@@ -873,6 +906,8 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(first_module_open));
+    wait_for_index_tasks_drained(&server)?;
+    output.clear();
 
     let second_module_open = json!({
         "textDocument": {
@@ -883,6 +918,8 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(second_module_open));
+    wait_for_index_tasks_drained(&server)?;
+    output.clear();
 
     let first_dependent = json!({
         "textDocument": {
@@ -893,6 +930,8 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(first_dependent));
+    wait_for_index_tasks_drained(&server)?;
+    output.clear();
 
     let second_dependent = json!({
         "textDocument": {
@@ -903,6 +942,7 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(second_dependent));
+    wait_for_index_tasks_drained(&server)?;
     output.clear();
 
     let params = json!({
@@ -916,8 +956,9 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
         .ok_or("expected workspace edit response")?;
     assert!(edit.is_object());
 
-    let message = wait_for_method(&output, "window/showMessage")
-        .ok_or("expected aggregated safe-delete warning notification")?;
+    let message =
+        wait_for_method_with_timeout(&output, "window/showMessage", Duration::from_secs(5))
+            .ok_or("expected aggregated safe-delete warning notification")?;
     let message_text =
         message["params"]["message"].as_str().ok_or("expected warning message text")?;
     assert!(
@@ -951,6 +992,8 @@ fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_impor
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(utility_module));
+    let _ = wait_for_method(&output, "perl-lsp/index-ready");
+    output.clear();
 
     let consumer_script = json!({
         "textDocument": {
@@ -961,6 +1004,7 @@ fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_impor
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(consumer_script));
+    let _ = wait_for_method(&output, "perl-lsp/index-ready");
     output.clear();
 
     let params = json!({
@@ -973,8 +1017,9 @@ fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_impor
         .ok_or("expected workspace edit response")?;
     assert!(edit.is_object());
 
-    let message = wait_for_method(&output, "window/showMessage")
-        .ok_or("expected safe-delete warning notification")?;
+    let message =
+        wait_for_method_with_timeout(&output, "window/showMessage", Duration::from_secs(5))
+            .ok_or("expected safe-delete warning notification")?;
     let message_text =
         message["params"]["message"].as_str().ok_or("expected warning message text")?;
     assert!(

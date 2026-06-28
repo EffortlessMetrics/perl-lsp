@@ -1,8 +1,5 @@
 use super::*;
 
-const BREAKPOINT_LOCATIONS_ARGUMENTS_GUIDANCE: &str = "Missing or invalid arguments. Send a \
-    `source.path` and `line`, for example `{ \"source\": { \"path\": \"script.pl\" }, \"line\": 1 }`.";
-
 impl DebugAdapter {
     pub(in crate::debug_adapter) fn handle_breakpoint_locations(
         &self,
@@ -20,7 +17,7 @@ impl DebugAdapter {
                         success: false,
                         command: "breakpointLocations".to_string(),
                         body: None,
-                        message: Some(BREAKPOINT_LOCATIONS_ARGUMENTS_GUIDANCE.to_string()),
+                        message: Some("Missing or invalid arguments".to_string()),
                     };
                 }
             };

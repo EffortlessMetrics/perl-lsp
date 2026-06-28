@@ -226,7 +226,13 @@ impl IndexMetrics {
 
     /// Decrement pending parse count and return the new value.
     pub fn decrement_pending_parses(&self) -> usize {
-        self.pending_parses.fetch_sub(1, Ordering::SeqCst) - 1
+        match self
+            .pending_parses
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| current.checked_sub(1))
+        {
+            Ok(previous) => previous.saturating_sub(1),
+            Err(current) => current,
+        }
     }
 
     /// Determine whether the current pending parse count exceeds the threshold.

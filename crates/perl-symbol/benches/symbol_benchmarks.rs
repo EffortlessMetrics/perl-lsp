@@ -34,6 +34,7 @@ fn subroutine(name: &str, start: usize, end: usize) -> Node {
         NodeKind::Subroutine {
             name: Some(name.to_string()),
             name_span: Some(loc(start + 4, start + 4 + name.len())),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: Vec::new(),

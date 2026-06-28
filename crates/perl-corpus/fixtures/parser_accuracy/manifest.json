@@ -1530,6 +1530,123 @@
       ]
     },
     {
+      "id": "slash_ambiguity",
+      "family": "slash_ambiguity",
+      "label_mode": "full",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/slash_ambiguity.pl",
+      "scored_lines": 6,
+      "scored_symbols": 6,
+      "fully_labeled_regions": 1,
+      "partial_labeled_regions": 0,
+      "unknown_regions": 0,
+      "negative_regions": 1,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 5,
+          "expected_tags": [
+            "division"
+          ]
+        },
+        {
+          "line": 6,
+          "expected_tags": [
+            "regex",
+            "function_call"
+          ]
+        },
+        {
+          "line": 7,
+          "expected_tags": [
+            "regex_match"
+          ]
+        },
+        {
+          "line": 8,
+          "expected_tags": [
+            "defined_or"
+          ]
+        }
+      ],
+      "ast_expectations": [
+        {
+          "id": "slash_ambiguity_package",
+          "kind": "Package",
+          "line": 1,
+          "span_text": "package Accuracy::SlashAmbiguity",
+          "parent_kind": "Program",
+          "depth": 1,
+          "operator": null,
+          "parent_operator": null
+        },
+        {
+          "id": "slash_ambiguity_subroutine",
+          "kind": "Subroutine",
+          "line": 3,
+          "span_text": "sub classify_slashes",
+          "parent_kind": "Program",
+          "depth": 1,
+          "operator": null,
+          "parent_operator": null
+        },
+        {
+          "id": "slash_ambiguity_division",
+          "kind": "Binary",
+          "line": 5,
+          "span_text": "$total / $count",
+          "parent_kind": "VariableDeclaration",
+          "depth": 3,
+          "operator": "/",
+          "parent_operator": null
+        },
+        {
+          "id": "slash_ambiguity_split_regex",
+          "kind": "Regex",
+          "line": 6,
+          "span_text": "/,/",
+          "parent_kind": "FunctionCall",
+          "depth": 4,
+          "operator": null,
+          "parent_operator": null
+        },
+        {
+          "id": "slash_ambiguity_match_regex",
+          "kind": "Match",
+          "line": 7,
+          "span_text": "$line =~ /^ok:/",
+          "parent_kind": "VariableDeclaration",
+          "depth": 3,
+          "operator": "=~",
+          "parent_operator": null
+        },
+        {
+          "id": "slash_ambiguity_defined_or",
+          "kind": "Binary",
+          "line": 8,
+          "span_text": "$maybe // $ratio",
+          "parent_kind": "VariableDeclaration",
+          "depth": 3,
+          "operator": "//",
+          "parent_operator": null
+        }
+      ]
+    },
+    {
       "id": "method_call",
       "family": "method_call",
       "label_mode": "partial",

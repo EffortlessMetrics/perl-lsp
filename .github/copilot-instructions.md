@@ -2,7 +2,7 @@
 
 This file provides guidance to GitHub Copilot when working with code in this repository.
 
-**Latest Release**: 0.12.0
+**Latest Release**: 0.17.0
 **API Stability**: See [docs/reference/STABILITY.md](../docs/reference/STABILITY.md)
 **Metrics**: See [docs/project/CURRENT_STATUS.md](../docs/project/CURRENT_STATUS.md) for computed status
 

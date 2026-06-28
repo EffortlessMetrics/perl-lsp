@@ -24,12 +24,6 @@ use document_state::{empty_state, minimal_state, minimal_state_from_rope};
 use srp_helpers::build_incremental_edit_set;
 use srp_helpers::{is_embedded_template_uri, is_perl_language_id};
 
-fn missing_text_document_uri_params(method: &str) -> JsonRpcError {
-    invalid_params(&format!(
-        "Missing required parameter: textDocument.uri: {method} expects params.textDocument.uri to be a document URI string, for example {{\"textDocument\":{{\"uri\":\"file:///workspace/lib/Foo.pm\"}}}}"
-    ))
-}
-
 impl LspServer {
     /// Handle textDocument/didOpen notification.
     ///
@@ -53,7 +47,7 @@ impl LspServer {
             let uri = params
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| missing_text_document_uri_params("textDocument/didOpen"))?;
+                .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
             let text = params
                 .pointer("/textDocument/text")
                 .and_then(|v| v.as_str())
@@ -290,7 +284,7 @@ impl LspServer {
                                 task_counter.fetch_sub(1, Ordering::SeqCst);
                                 return;
                             }
-                            match workspace_index.index_file(url, text_owned) {
+                            match workspace_index.index_file_with_generation(url, text_owned, 0) {
                                 Ok(()) => {
                                     if matches!(
                                         coordinator_clone.state(),
@@ -381,7 +375,7 @@ impl LspServer {
             let uri = params
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| missing_text_document_uri_params("textDocument/didChange"))?;
+                .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
             let incoming_version_i64 =
                 params.pointer("/textDocument/version").and_then(|v| v.as_i64());
             let incoming_version = incoming_version_i64.and_then(|v| i32::try_from(v).ok());
@@ -842,7 +836,11 @@ impl LspServer {
                                     task_counter.fetch_sub(1, Ordering::SeqCst);
                                     return;
                                 }
-                                if let Err(e) = workspace_index.index_file(url, doc_content) {
+                                if let Err(e) = workspace_index.index_file_with_generation(
+                                    url,
+                                    doc_content,
+                                    expected_generation,
+                                ) {
                                     tracing::warn!("Failed to index file {}: {}", uri_owned, e);
                                 }
                                 coordinator_clone.notify_parse_complete(&uri_owned);

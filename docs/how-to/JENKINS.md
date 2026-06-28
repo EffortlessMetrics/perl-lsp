@@ -12,7 +12,7 @@ Use it as a starting point for a multibranch pipeline or copy it to the reposito
 
 ## What The Template Does
 
-- Runs inside the official `rust:1.93-bookworm` container.
+- Runs inside the official `rust:1.95-bookworm` container.
 - Executes the repository fast path in parallel: formatting, clippy, and library tests.
 - Publishes per-stage JUnit records and log artifacts under `target/jenkins-*`.
 - Keeps the implementation declarative so Jenkins can visualize stage flow cleanly.

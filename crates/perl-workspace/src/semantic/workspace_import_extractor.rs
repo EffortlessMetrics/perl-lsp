@@ -633,32 +633,11 @@ fn is_version_pragma(module: &str) -> bool {
 }
 
 fn parse_qw_content(s: &str) -> Option<&str> {
-    parse_quote_operator_content(s, "qw")
+    perl_parser_core::parse_quote_operator_content(s, "qw")
 }
 
 fn parse_quote_operator_content<'a>(s: &'a str, operator: &str) -> Option<&'a str> {
-    let rest = s.strip_prefix(operator)?;
-    let mut chars = rest.chars();
-    let open = chars.next()?;
-    if open.is_ascii_alphanumeric() || open == '_' {
-        return None;
-    }
-    let close = match open {
-        '(' => ')',
-        '{' => '}',
-        '[' => ']',
-        '<' => '>',
-        other => other,
-    };
-    if !rest.ends_with(close) {
-        return None;
-    }
-    let start = open.len_utf8();
-    let end = rest.len().checked_sub(close.len_utf8())?;
-    if end < start {
-        return None;
-    }
-    Some(&rest[start..end])
+    perl_parser_core::parse_quote_operator_content(s, operator)
 }
 
 fn unquote(s: &str) -> &str {
@@ -841,6 +820,59 @@ mod tests {
         assert_eq!(spec.kind, ImportKind::Use);
         assert_eq!(spec.symbols, ImportSymbols::Default);
         Ok(())
+    }
+
+    /// Regression: `qw` with whitespace before the delimiter (`qw [a b]`) must
+    /// extract the explicit import list the same as the compact form `qw(a b)`.
+    /// Previously the leading space was treated as the delimiter, so no symbols
+    /// were extracted. See `parse_quote_operator_content`.
+    #[test]
+    fn use_explicit_list_qw_space_before_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+        let specs = parse_and_extract("use List::Util qw [first any];");
+        let spec = specs.first().ok_or("expected ImportSpec")?;
+        assert_eq!(spec.module, "List::Util");
+        assert_eq!(spec.kind, ImportKind::UseExplicitList);
+        if let ImportSymbols::Explicit(names) = &spec.symbols {
+            assert!(names.contains(&"first".to_string()), "got {:?}", spec.symbols);
+            assert!(names.contains(&"any".to_string()), "got {:?}", spec.symbols);
+        } else {
+            return Err(format!("expected Explicit, got {:?}", spec.symbols).into());
+        }
+        Ok(())
+    }
+
+    /// Regression: `use lib qw [..]` (space before delimiter) must still emit a
+    /// `UseLibFact` per word.
+    #[test]
+    fn use_lib_extractor_emits_qw_words_space_before_delimiter()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let facts = parse_and_extract_use_lib("use lib qw [lib vendor];")?;
+        let paths: Vec<&str> = facts.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"lib"), "got {paths:?}");
+        assert!(paths.contains(&"vendor"), "got {paths:?}");
+        Ok(())
+    }
+
+    /// `parse_quote_operator_content` unit coverage: leading whitespace before
+    /// the delimiter is tolerated for `qw`, `q`, and `qq`; a word character
+    /// after the operator is still rejected (it is not a delimiter).
+    /// Covers space, tab, and newline — all `trim_start` whitespace variants.
+    #[test]
+    fn parse_quote_operator_content_tolerates_leading_space() {
+        // Space before delimiter.
+        assert_eq!(parse_quote_operator_content("qw [a b]", "qw"), Some("a b"));
+        assert_eq!(parse_quote_operator_content("qw(a b)", "qw"), Some("a b"));
+        assert_eq!(parse_quote_operator_content("q (x)", "q"), Some("x"));
+        assert_eq!(parse_quote_operator_content("qq {y}", "qq"), Some("y"));
+        // Tab before delimiter (`trim_start` trims tabs too).
+        assert_eq!(parse_quote_operator_content("qw\t[a b]", "qw"), Some("a b"));
+        assert_eq!(parse_quote_operator_content("q\t(x)", "q"), Some("x"));
+        // Newline before delimiter (e.g. heredoc-adjacent or multi-line use).
+        assert_eq!(parse_quote_operator_content("qw\n[a b]", "qw"), Some("a b"));
+        // Multiple mixed whitespace before delimiter.
+        assert_eq!(parse_quote_operator_content("qw  \t [a b]", "qw"), Some("a b"));
+        // A word char after the operator is a bareword, not a delimiter.
+        assert_eq!(parse_quote_operator_content("qq foo", "qq"), None);
     }
 
     #[test]

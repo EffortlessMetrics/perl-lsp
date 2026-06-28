@@ -117,7 +117,8 @@ print "Result: $result\n";
 fn test_cross_file_references() -> Result<(), Box<dyn std::error::Error>> {
     let srv = init_server();
 
-    // File 1: defines and uses a function
+    // File 1: defines and uses a uniquely named function so full-suite runs
+    // cannot pick up same-named repo fixture symbols.
     open(
         &srv,
         "file:///lib/Utils.pm",
@@ -125,20 +126,20 @@ fn test_cross_file_references() -> Result<(), Box<dyn std::error::Error>> {
 use strict;
 use warnings;
 
-sub process_data {
+sub process_lsp_cross_file_refs_1531 {
     my ($data) = @_;
     return $data * 2;
 }
 
 sub test_self {
-    return process_data(10);
+    return process_lsp_cross_file_refs_1531(10);
 }
 
 1;
 "#,
     );
 
-    // File 2: uses Utils::process_data
+    // File 2: uses Utils::process_lsp_cross_file_refs_1531
     open(
         &srv,
         "file:///script1.pl",
@@ -147,11 +148,11 @@ use strict;
 use warnings;
 use Utils;
 
-my $result = Utils::process_data(5);
+my $result = Utils::process_lsp_cross_file_refs_1531(5);
 "#,
     );
 
-    // File 3: also uses Utils::process_data
+    // File 3: also uses Utils::process_lsp_cross_file_refs_1531
     open(
         &srv,
         "file:///script2.pl",
@@ -160,13 +161,14 @@ use strict;
 use warnings;
 use Utils;
 
-for (1..10) {
-    print Utils::process_data($_), "\n";
+for my $item (1..10) {
+    my $other = Utils::process_lsp_cross_file_refs_1531($item);
+    print "$other\n";
 }
 "#,
     );
 
-    // Find all references to process_data
+    // Find all references to process_lsp_cross_file_refs_1531
     let refs_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),

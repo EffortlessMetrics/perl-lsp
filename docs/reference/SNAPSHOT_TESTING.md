@@ -54,6 +54,27 @@ The `lsp_cap_snap.rs` tests cover:
   are index-encoded — any reordering is a **breaking change** for connected clients.
 - **Server info name**: The server identity string.
 
+### TextMate Grammar Visual Regression — `vscode-extension/test/grammar/`
+
+The VS Code extension's static syntax highlighting is driven by the TextMate
+grammar `vscode-extension/syntaxes/perl.tmLanguage.json`. These snapshots are the
+**visual regression** layer: they capture the exact scope assigned to every token
+span in a set of Perl fixtures, so any unintended change to highlighting surfaces
+as an explicit diff.
+
+| Fixtures | Snapshots | Coverage |
+|----------|-----------|----------|
+| `test/grammar/fixtures/*.pl` | `test/grammar/fixtures/*.pl.snap` | Comments, POD, strings/interpolation, numbers, variables, keywords/control flow, operators, builtin functions, regex |
+
+Unlike the Rust snapshots above (which use `insta`), this suite uses
+[`vscode-tmgrammar-test`](https://github.com/PanAeon/vscode-tmgrammar-test) in
+snapshot mode. It tokenizes each fixture with the same `vscode-textmate` +
+`vscode-oniguruma` engine VS Code ships, resolving the grammar and `source.perl`
+scope from the extension's own `package.json` contributes (so the test exercises
+the precise grammar-to-language mapping users get). It runs fully offline — no
+network, display, or WASM download. See
+[`vscode-extension/test/grammar/README.md`](../../vscode-extension/test/grammar/README.md).
+
 ## Running Snapshot Tests
 
 ```bash
@@ -66,10 +87,14 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_cap_snap -- --test-thre
 # Workspace symbol snapshots
 cargo test -p perl-lsp-rs --test lsp_workspace_symbol_snap
 
+# TextMate grammar visual regression snapshots
+(cd vscode-extension && npm run test:grammar)
+
 # All snapshot tests (combined)
 cargo test -p perl-parser --test ast_snap
 RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_cap_snap -- --test-threads=2
 cargo test -p perl-lsp-rs --test lsp_workspace_symbol_snap
+(cd vscode-extension && npm run test:grammar)
 ```
 
 ## Updating Snapshots After Intentional Changes
@@ -85,6 +110,9 @@ INSTA_UPDATE=unseen cargo test -p perl-lsp-rs --test lsp_workspace_symbol_snap
 # Or use cargo-insta for interactive review (recommended for large changes)
 cargo install cargo-insta
 cargo insta review
+
+# TextMate grammar snapshots (after an intentional grammar change)
+(cd vscode-extension && npm run test:grammar:update)
 ```
 
 `cargo insta review` launches an interactive UI that shows each pending snapshot

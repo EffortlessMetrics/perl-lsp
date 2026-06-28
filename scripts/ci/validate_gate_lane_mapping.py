@@ -41,6 +41,7 @@ GATE_TO_LANE_MAP: dict[str, dict[str, Any]] = {
     "clippy_scoped": {"lanes": ["pr_smoke"]},
     "unit_scoped": {"lanes": ["pr_smoke"]},
     "check_tests_scoped": {"lanes": ["pr_smoke"]},
+    "unit_routed_full": {"lanes": ["pr_smoke"]},
     "inline_completion_contract": {"lanes": ["pr_smoke"]},
     "inline_completion_quality_receipt": {"lanes": ["pr_smoke"]},
 

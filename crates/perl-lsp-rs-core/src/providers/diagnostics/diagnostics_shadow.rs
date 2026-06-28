@@ -587,9 +587,9 @@ mod tests {
             perl_workspace::semantic_shadow_compare::SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION
         );
         // Legacy warns (1 identity), new also warns (1 identity) -> Same.
-        assert_eq!(result.receipt.old_result.available, true);
+        assert!(result.receipt.old_result.available);
         assert_eq!(result.receipt.old_result.match_count, 1);
-        assert_eq!(result.receipt.new_result.available, true);
+        assert!(result.receipt.new_result.available);
         assert_eq!(result.receipt.new_result.match_count, 1);
         Ok(())
     }

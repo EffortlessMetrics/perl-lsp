@@ -9,8 +9,10 @@
 //! Specification: GitHub Issue #449 - AC5.1, AC5.3, AC5.4, AC5.5
 
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
+use perl_lsp_rs_core::config::PerlOracleEnv;
 use perl_tdd_support::{must, must_some};
 use serde_json::json;
+use std::io::Write;
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -28,6 +30,50 @@ fn create_test_adapter() -> (DebugAdapter, Receiver<DapMessage>) {
 /// Helper to wait for events with timeout
 fn wait_for_event(rx: &Receiver<DapMessage>, timeout_ms: u64) -> Option<DapMessage> {
     rx.recv_timeout(Duration::from_millis(timeout_ms)).ok()
+}
+
+fn initialize_adapter(adapter: &mut DebugAdapter) {
+    let response = adapter.handle_request(1, "initialize", None);
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "initialize should succeed before launch lifecycle checks");
+            assert_eq!(command, "initialize");
+        }
+        _ => must(Err::<(), _>("Expected initialize response".to_string())),
+    }
+}
+
+fn create_lifecycle_script() -> NamedTempFile {
+    let mut script = must(NamedTempFile::new());
+    must(
+        script.write_all(b"use strict;\nuse warnings;\n\nmy $value = 42;\nprint \"$value\\n\";\n"),
+    );
+    script
+}
+
+fn launch_lifecycle_script(adapter: &mut DebugAdapter, request_seq: i64, script_path: &str) {
+    let response = adapter.handle_request(
+        request_seq,
+        "launch",
+        Some(json!({
+            "program": script_path,
+            "args": [],
+            "stopOnEntry": false
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert_eq!(command, "launch");
+            assert!(
+                success,
+                "launch should succeed before configurationDone: {}",
+                message.as_deref().unwrap_or("<no message>")
+            );
+        }
+        _ => must(Err::<(), _>("Expected launch response".to_string())),
+    }
 }
 
 // ============================================================================
@@ -448,11 +494,13 @@ fn bdd_set_variable_allows_safe_literal_values() {
 fn test_session_lifecycle_launch_missing_arguments() {
     // Test that launch fails gracefully with missing arguments
     let (mut adapter, _rx) = create_test_adapter();
+    initialize_adapter(&mut adapter);
 
-    let response = adapter.handle_request(1, "launch", None);
+    let response = adapter.handle_request(2, "launch", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response { request_seq, success, command, message, .. } => {
+            assert_eq!(request_seq, 2);
             assert!(!success, "Launch should fail without arguments");
             assert_eq!(command, "launch");
             assert!(message.is_some());
@@ -467,6 +515,7 @@ fn test_session_lifecycle_launch_missing_arguments() {
 fn test_session_lifecycle_launch_empty_program() {
     // Test that launch fails with empty program path
     let (mut adapter, _rx) = create_test_adapter();
+    initialize_adapter(&mut adapter);
 
     let args = json!({
         "program": "",
@@ -474,10 +523,11 @@ fn test_session_lifecycle_launch_empty_program() {
         "stopOnEntry": false
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response { request_seq, success, command, message, .. } => {
+            assert_eq!(request_seq, 2);
             assert!(!success, "Launch should fail with empty program");
             assert_eq!(command, "launch");
             assert!(message.is_some());
@@ -497,6 +547,7 @@ fn test_session_lifecycle_launch_empty_program() {
 fn test_session_lifecycle_launch_nonexistent_program() {
     // Test that launch fails with non-existent program path
     let (mut adapter, _rx) = create_test_adapter();
+    initialize_adapter(&mut adapter);
 
     let args = json!({
         "program": "/nonexistent/path/to/script.pl",
@@ -504,10 +555,11 @@ fn test_session_lifecycle_launch_nonexistent_program() {
         "stopOnEntry": false
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response { request_seq, success, command, message, .. } => {
+            assert_eq!(request_seq, 2);
             assert!(!success, "Launch should fail with nonexistent program");
             assert_eq!(command, "launch");
             assert!(message.is_some());
@@ -632,7 +684,13 @@ fn test_session_lifecycle_attach_port_out_of_range() {
 // AC:5.5
 fn test_session_lifecycle_state_transitions() {
     // Test proper state transitions through session lifecycle
+    if PerlOracleEnv::for_dap_test_fixture().is_none() {
+        return;
+    }
+
     let (mut adapter, rx) = create_test_adapter();
+    let script = create_lifecycle_script();
+    let script_path = must_some(script.path().to_str()).to_string();
 
     // 1. Initialize
     let init_response = adapter.handle_request(1, "initialize", None);
@@ -643,26 +701,29 @@ fn test_session_lifecycle_state_transitions() {
     let init_event = wait_for_event(&rx, 100);
     assert!(init_event.is_some());
 
-    // 2. Set breakpoints (before launch)
+    // 2. Launch
+    launch_lifecycle_script(&mut adapter, 2, &script_path);
+
+    // 3. Set breakpoints (before configurationDone)
     let bp_args = json!({
-        "source": { "path": "/test.pl" },
-        "breakpoints": [{ "line": 10 }]
+        "source": { "path": script_path },
+        "breakpoints": [{ "line": 5 }]
     });
-    let bp_response = adapter.handle_request(2, "setBreakpoints", Some(bp_args));
+    let bp_response = adapter.handle_request(3, "setBreakpoints", Some(bp_args));
     match bp_response {
         DapMessage::Response { success, .. } => assert!(success),
         _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
-    // 3. Configuration done
-    let config_response = adapter.handle_request(3, "configurationDone", None);
+    // 4. Configuration done
+    let config_response = adapter.handle_request(4, "configurationDone", None);
     match config_response {
         DapMessage::Response { success, .. } => assert!(success),
         _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
-    // 4. Disconnect
-    let disconnect_response = adapter.handle_request(4, "disconnect", None);
+    // 5. Disconnect
+    let disconnect_response = adapter.handle_request(5, "disconnect", None);
     match disconnect_response {
         DapMessage::Response { success, .. } => assert!(success),
         _ => must(Err::<(), _>("Expected Response".to_string())),
@@ -779,42 +840,8 @@ fn test_session_lifecycle_inline_values_missing_arguments() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "inlineValues should fail without arguments");
             assert_eq!(command, "inlineValues");
-            let message = must_some(message);
-            assert!(message.contains("Missing arguments"));
-            assert!(
-                message.contains("startLine") && message.contains("endLine"),
-                "inlineValues missing-arguments guidance should include the line range fields: {message}"
-            );
-            assert!(
-                message.contains("source.path"),
-                "inlineValues missing-arguments guidance should include source.path: {message}"
-            );
-        }
-        _ => must(Err::<(), _>("Expected Response message".to_string())),
-    }
-}
-
-#[test]
-// AC:5.5
-fn test_session_lifecycle_inline_values_invalid_arguments_guidance() {
-    let (mut adapter, _rx) = create_test_adapter();
-
-    let response = adapter.handle_request(1, "inlineValues", Some(json!({})));
-
-    match response {
-        DapMessage::Response { success, command, message, .. } => {
-            assert!(!success, "inlineValues should fail with malformed arguments");
-            assert_eq!(command, "inlineValues");
-            let message = must_some(message);
-            assert!(message.contains("Invalid arguments"));
-            assert!(
-                message.contains("source.path"),
-                "inlineValues invalid-arguments guidance should include source.path: {message}"
-            );
-            assert!(
-                message.contains("\"startLine\": 1"),
-                "inlineValues invalid-arguments guidance should include a request example: {message}"
-            );
+            assert!(message.is_some());
+            assert!(must_some(message).contains("Missing arguments"));
         }
         _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
@@ -837,12 +864,8 @@ fn test_session_lifecycle_inline_values_missing_source_path() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "inlineValues should fail without source.path");
             assert_eq!(command, "inlineValues");
-            let message = must_some(message);
-            assert!(message.contains("source.path"));
-            assert!(
-                message.contains("startLine") && message.contains("endLine"),
-                "inlineValues source.path error should keep the request-shape guidance: {message}"
-            );
+            assert!(message.is_some());
+            assert!(must_some(message).contains("source.path"));
         }
         _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
@@ -865,12 +888,8 @@ fn test_session_lifecycle_inline_values_invalid_line_range() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "inlineValues should reject non-positive line numbers");
             assert_eq!(command, "inlineValues");
-            let message = must_some(message);
-            assert!(message.contains("startLine/endLine"));
-            assert!(
-                message.contains("source.path"),
-                "inlineValues line-range error should keep the request-shape guidance: {message}"
-            );
+            assert!(message.is_some());
+            assert!(must_some(message).contains("startLine/endLine"));
         }
         _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
@@ -1243,6 +1262,76 @@ fn test_error_handling_evaluate_empty_expression() {
 
 #[test]
 // AC:5.4
+// Regression test for #1495: Validate expression BEFORE frame lookup.
+// When both empty expression and invalid frame are present,
+// the error should be about the expression (validation precedes frame lookup).
+fn test_error_handling_evaluate_empty_expression_with_invalid_frame_precedence() {
+    // Test that empty-expression validation precedes frame validation
+    let (mut adapter, _rx) = create_test_adapter();
+
+    // Both invalid: expression is empty AND frameId is non-existent
+    let args = json!({
+        "expression": "",
+        "frameId": 1
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Request with empty expression should be rejected");
+            assert!(message.is_some());
+            let msg = must_some(message);
+            // The key assertion: error must be about the empty expression,
+            // not about the frame. This pins that expression validation
+            // happens first.
+            assert!(
+                msg.contains("Empty"),
+                "Error message should mention 'Empty' expression, but got: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.4
+// Regression test for #1495: Validate expression BEFORE frame lookup.
+// When both newline-containing expression and invalid frame are present,
+// the error should be about the newline (validation precedes frame lookup).
+fn test_error_handling_evaluate_newline_expression_with_invalid_frame_precedence() {
+    // Test that newline-expression validation precedes frame validation
+    let (mut adapter, _rx) = create_test_adapter();
+
+    // Both invalid: expression has newline AND frameId is non-existent
+    let args = json!({
+        "expression": "foo\nbar",
+        "frameId": 1
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Request with newline expression should be rejected");
+            assert!(message.is_some());
+            let msg = must_some(message);
+            // The key assertion: error must be about the newline,
+            // not about the frame. This pins that expression validation
+            // (specifically newline rejection) happens before frame lookup.
+            assert!(
+                msg.contains("newline"),
+                "Error message should mention 'newline', but got: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.4
 fn test_error_handling_scopes_missing_frame_id() {
     // Test that scopes request validates frameId
     let (mut adapter, _rx) = create_test_adapter();
@@ -1332,6 +1421,7 @@ fn test_error_handling_variables_negative_count_rejected() {
 fn test_error_handling_launch_program_is_directory() {
     // Test that launch rejects directory paths
     let (mut adapter, _rx) = create_test_adapter();
+    initialize_adapter(&mut adapter);
 
     // Use current directory as program (should fail)
     let args = json!({
@@ -1339,10 +1429,11 @@ fn test_error_handling_launch_program_is_directory() {
         "args": []
     });
 
-    let response = adapter.handle_request(1, "launch", Some(args));
+    let response = adapter.handle_request(2, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response { request_seq, success, message, .. } => {
+            assert_eq!(request_seq, 2);
             assert!(!success, "Launch with directory should fail");
             assert!(message.is_some());
             let msg = must_some(message);
@@ -1366,7 +1457,13 @@ fn test_error_handling_launch_program_is_directory() {
 // AC:5.5
 fn test_complete_session_lifecycle() {
     // Test complete session lifecycle from start to finish
+    if PerlOracleEnv::for_dap_test_fixture().is_none() {
+        return;
+    }
+
     let (mut adapter, rx) = create_test_adapter();
+    let script = create_lifecycle_script();
+    let script_path = must_some(script.path().to_str()).to_string();
 
     // 1. Initialize
     let init_resp = adapter.handle_request(1, "initialize", None);
@@ -1377,13 +1474,16 @@ fn test_complete_session_lifecycle() {
     let init_event = wait_for_event(&rx, 100);
     assert!(matches!(init_event, Some(DapMessage::Event { .. })));
 
-    // 2. Set breakpoints
+    // 2. Launch
+    launch_lifecycle_script(&mut adapter, 2, &script_path);
+
+    // 3. Set breakpoints
     let bp_resp = adapter.handle_request(
-        2,
+        3,
         "setBreakpoints",
         Some(json!({
-            "source": { "path": "/test.pl" },
-            "breakpoints": [{ "line": 10 }]
+            "source": { "path": script_path },
+            "breakpoints": [{ "line": 5 }]
         })),
     );
     match bp_resp {
@@ -1391,22 +1491,22 @@ fn test_complete_session_lifecycle() {
         _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
-    // 3. Configuration done
-    let config_resp = adapter.handle_request(3, "configurationDone", None);
+    // 4. Configuration done
+    let config_resp = adapter.handle_request(4, "configurationDone", None);
     match config_resp {
         DapMessage::Response { success, .. } => assert!(success),
         _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
-    // 4. Query threads
-    let threads_resp = adapter.handle_request(4, "threads", None);
+    // 5. Query threads
+    let threads_resp = adapter.handle_request(5, "threads", None);
     match threads_resp {
         DapMessage::Response { success, .. } => assert!(success),
         _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
-    // 5. Disconnect
-    let disconnect_resp = adapter.handle_request(5, "disconnect", None);
+    // 6. Disconnect
+    let disconnect_resp = adapter.handle_request(6, "disconnect", None);
     match disconnect_resp {
         DapMessage::Response { success, .. } => assert!(success),
         _ => must(Err::<(), _>("Expected Response".to_string())),

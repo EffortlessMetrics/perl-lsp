@@ -130,7 +130,14 @@ fn extract_bare_bootstrap_target(
 
         let left_ok = start == 0 || !is_module_token_byte(text.as_bytes()[start - 1]);
         let right_ok = end == text.len() || !is_module_token_byte(text.as_bytes()[end]);
-        let qualified = start >= 2 && &text[start - 2..start] == "::";
+        // Use byte-level comparison for "::" (both bytes are ASCII, never span a
+        // UTF-8 multi-byte sequence).  The previous `&text[start-2..start]` string
+        // slice panicked when a multi-byte character (e.g. U+00E9 "é", 2 bytes;
+        // U+20AC "€", 3 bytes) sat immediately before "bootstrap" because
+        // `start - 2` could fall inside the character's encoding, violating the
+        // UTF-8 char-boundary invariant required by `str` indexing.
+        let qualified =
+            start >= 2 && text.as_bytes()[start - 1] == b':' && text.as_bytes()[start - 2] == b':';
         if !left_ok || !right_ok || qualified {
             search_from = end;
             continue;
@@ -189,6 +196,61 @@ pub(super) fn extract_xs_bootstrap_target(
         })
         .or_else(|| extract_bare_bootstrap_target(text, cursor, current_package))
         .or_else(|| extract_qualified_bootstrap_target(text, cursor))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// RED: 2-byte UTF-8 char (é, U+00E9, bytes 0xC3 0xA9) immediately before
+    /// "bootstrap" must not panic.
+    ///
+    /// With `start == 2` (byte index of 'b'), the guard `start >= 2` is satisfied
+    /// but `&text[0..2]` cuts across the 2-byte encoding of é — violating the
+    /// UTF-8 char-boundary invariant and panicking on the unpatched code.
+    ///
+    /// Correct behaviour: é is not "::", so `qualified` is false; é's trailing
+    /// byte is not a module token byte, so `left_ok` is true; the argument
+    /// "MyModule" parses to `Some("MyModule")`.
+    #[test]
+    fn test_extract_bare_bootstrap_target_two_byte_char_before_bootstrap_no_panic() {
+        // "é" (2 bytes: 0xC3 0xA9) immediately precedes "bootstrap"
+        let text = "ébootstrap MyModule";
+        // cursor at byte 3 (inside "bootstrap")
+        let result = extract_bare_bootstrap_target(text, 3, "main");
+        // Must not panic, and the trailing token is a valid module name.
+        assert_eq!(result.as_deref(), Some("MyModule"));
+    }
+
+    /// RED: 3-byte UTF-8 char (€, U+20AC, bytes 0xE2 0x82 0xAC) sits immediately
+    /// before "bootstrap".  With `start == 3`, `start - 2 == 1` falls inside the
+    /// 3-byte encoding → panic on unpatched code.
+    #[test]
+    fn test_extract_bare_bootstrap_target_three_byte_char_before_bootstrap_no_panic() {
+        // "€" (3 bytes: 0xE2 0x82 0xAC) immediately precedes "bootstrap"
+        let text = "€bootstrap MyModule";
+        // cursor at byte 4 (inside "bootstrap")
+        let result = extract_bare_bootstrap_target(text, 4, "main");
+        // Must not panic, and the trailing token is a valid module name.
+        assert_eq!(result.as_deref(), Some("MyModule"));
+    }
+
+    /// Regression guard: well-formed "::" prefix must still suppress the match
+    /// (qualified calls are handled by `extract_qualified_bootstrap_target`).
+    #[test]
+    fn test_extract_bare_bootstrap_target_qualified_prefix_returns_none() {
+        let text = "DynaLoader::bootstrap MyModule";
+        let result = extract_bare_bootstrap_target(text, 12, "main");
+        assert!(result.is_none(), "qualified call should not be matched as bare: {result:?}");
+    }
+
+    /// Regression guard: a plain unqualified call must still return the module.
+    #[test]
+    fn test_extract_bare_bootstrap_target_plain_call_returns_module() {
+        let text = "bootstrap MyModule";
+        let result = extract_bare_bootstrap_target(text, 0, "main");
+        assert_eq!(result.as_deref(), Some("MyModule"));
+    }
 }
 
 fn xs_boot_symbol_name(module_name: &str) -> String {

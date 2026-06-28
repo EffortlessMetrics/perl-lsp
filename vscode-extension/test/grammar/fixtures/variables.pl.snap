@@ -1,0 +1,122 @@
+>my $scalar = 1;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^ source.perl variable.other.scalar.perl
+#          ^ source.perl
+#           ^ source.perl keyword.operator.assignment.perl
+#            ^ source.perl
+#             ^ source.perl constant.numeric.integer.perl
+#              ^^ source.perl
+>our @array = (1, 2, 3);
+#^^^ source.perl keyword.other.perl
+#   ^ source.perl
+#    ^^^^^^ source.perl variable.other.array.perl
+#          ^ source.perl
+#           ^ source.perl keyword.operator.assignment.perl
+#            ^^ source.perl
+#              ^ source.perl constant.numeric.integer.perl
+#               ^^ source.perl
+#                 ^ source.perl constant.numeric.integer.perl
+#                  ^^ source.perl
+#                    ^ source.perl constant.numeric.integer.perl
+#                     ^^^ source.perl
+>my %hash = (key => 'value');
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^ source.perl variable.other.hash.perl
+#        ^ source.perl
+#         ^ source.perl keyword.operator.assignment.perl
+#          ^^^^^^ source.perl
+#                ^ source.perl keyword.operator.assignment.perl
+#                 ^ source.perl keyword.operator.comparison.perl
+#                  ^ source.perl
+#                   ^ source.perl string.quoted.single.perl
+#                    ^^^^^ source.perl string.quoted.single.perl
+#                         ^ source.perl string.quoted.single.perl
+#                          ^^^ source.perl
+>local $_ = 'topic';
+#^^^^^ source.perl keyword.other.perl
+#     ^ source.perl
+#      ^^ source.perl variable.language.perl
+#        ^ source.perl
+#         ^ source.perl keyword.operator.assignment.perl
+#          ^ source.perl
+#           ^ source.perl string.quoted.single.perl
+#            ^^^^^ source.perl string.quoted.single.perl
+#                 ^ source.perl string.quoted.single.perl
+#                  ^^ source.perl
+>my $ref = \$scalar;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^ source.perl variable.other.scalar.perl
+#       ^ source.perl
+#        ^ source.perl keyword.operator.assignment.perl
+#         ^^ source.perl
+#           ^^^^^^^ source.perl variable.other.scalar.perl
+#                  ^^ source.perl
+>my $elem = $array[0];
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^ source.perl variable.other.scalar.perl
+#        ^ source.perl
+#         ^ source.perl keyword.operator.assignment.perl
+#          ^ source.perl
+#           ^^^^^^ source.perl variable.other.scalar.perl
+#                 ^ source.perl
+#                  ^ source.perl constant.numeric.integer.perl
+#                   ^^^ source.perl
+>my $val = $hash{key};
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^ source.perl variable.other.scalar.perl
+#       ^ source.perl
+#        ^ source.perl keyword.operator.assignment.perl
+#         ^ source.perl
+#          ^^^^^ source.perl variable.other.scalar.perl
+#               ^^^^^^^ source.perl
+>my @slice = @array[0, 1];
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^ source.perl variable.other.array.perl
+#         ^ source.perl
+#          ^ source.perl keyword.operator.assignment.perl
+#           ^ source.perl
+#            ^^^^^^ source.perl variable.other.array.perl
+#                  ^ source.perl
+#                   ^ source.perl constant.numeric.integer.perl
+#                    ^^ source.perl
+#                      ^ source.perl constant.numeric.integer.perl
+#                       ^^^ source.perl
+>print $hash{$key}->{nested};
+#^^^^^ source.perl support.function.builtin.perl
+#     ^ source.perl
+#      ^^^^^ source.perl variable.other.scalar.perl
+#           ^ source.perl
+#            ^^^^ source.perl variable.other.scalar.perl
+#                ^ source.perl
+#                 ^ source.perl keyword.operator.arithmetic.perl
+#                  ^ source.perl keyword.operator.comparison.perl
+#                   ^ source.perl
+#                    ^^ source.perl keyword.operator.comparison.perl
+#                      ^^^^^^^ source.perl
+>my $special = $@;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^^ source.perl variable.other.scalar.perl
+#           ^ source.perl
+#            ^ source.perl keyword.operator.assignment.perl
+#             ^ source.perl
+#              ^^ source.perl variable.language.perl
+#                ^^ source.perl
+>my $argv = $ARGV[0];
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^ source.perl variable.other.scalar.perl
+#        ^ source.perl
+#         ^ source.perl keyword.operator.assignment.perl
+#          ^ source.perl
+#           ^^^^^ source.perl variable.other.scalar.perl
+#                ^ source.perl
+#                 ^ source.perl constant.numeric.integer.perl
+#                  ^^^ source.perl
+>

@@ -1,0 +1,7 @@
+# These are committed test fixtures for `cargo xtask release artifact-check`,
+# not build output. Re-include the archive + checksum files that the repo-root
+# .gitignore excludes globally as release artifacts (*.tar.gz, *.zip,
+# SHA256SUMS). They are tiny, deterministic, real-tool-produced archives.
+!*.tar.gz
+!*.zip
+!SHA256SUMS

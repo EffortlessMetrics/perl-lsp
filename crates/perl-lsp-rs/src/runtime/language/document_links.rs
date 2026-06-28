@@ -3,6 +3,7 @@
 //! Keeps document-link feature logic isolated from other language handlers.
 
 use super::super::*;
+use crate::documentation_targets::PerlDocumentationTarget;
 use crate::protocol::req_uri;
 use std::borrow::Cow;
 use std::path::Path;
@@ -77,29 +78,9 @@ fn normalize_document_link_file_path(file_path: &str) -> Cow<'_, str> {
     Cow::Owned(normalized)
 }
 
-fn document_link_resolve_missing_params_message() -> String {
-    "Missing parameters for documentLink/resolve: pass the DocumentLink object returned by textDocument/documentLink; request fresh document links if the link is stale"
-        .to_string()
-}
-
-fn document_link_resolve_data_message(summary: &str) -> String {
-    format!(
-        "{summary}: documentLink/resolve expects a DocumentLink returned by textDocument/documentLink with data.type set to `module`, `file`, or `url`; request fresh document links before retrying"
-    )
-}
-
-fn document_link_resolve_module_data_message() -> String {
-    document_link_resolve_data_message(
-        "Missing module name in data; module links require data.module such as `Data::Dumper`",
-    )
-}
-
-fn document_link_resolve_file_path_message() -> String {
-    document_link_resolve_data_message("Missing file path in data; file links require data.path")
-}
-
-fn document_link_resolve_base_uri_message() -> String {
-    document_link_resolve_data_message("Missing base URI in data; file links require data.baseUri")
+fn is_valid_pod_section_fragment(section: &str) -> bool {
+    !section.is_empty()
+        && section.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | ' '))
 }
 
 impl LspServer {
@@ -167,8 +148,15 @@ impl LspServer {
                             .and_then(|m| m.as_str())
                             .ok_or_else(|| JsonRpcError {
                                 code: INVALID_PARAMS,
-                                message: document_link_resolve_module_data_message(),
+                                message: "Missing module name in data".into(),
                                 data: None,
+                            })?;
+
+                        let documentation_target = PerlDocumentationTarget::new(module_name)
+                            .ok_or_else(|| JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Invalid module name in data".into(),
+                                data: Some(json!({"module": module_name})),
                             })?;
 
                         // Try to resolve module to local file
@@ -176,8 +164,7 @@ impl LspServer {
                             link["target"] = json!(target);
                         } else {
                             // Fallback to MetaCPAN
-                            let target = format!("https://metacpan.org/pod/{}", module_name);
-                            link["target"] = json!(target);
+                            link["target"] = json!(documentation_target.metacpan_pod_uri());
                         }
                     }
                     Some("file") => {
@@ -186,7 +173,7 @@ impl LspServer {
                             data_obj.get("path").and_then(|p| p.as_str()).ok_or_else(|| {
                                 JsonRpcError {
                                     code: INVALID_PARAMS,
-                                    message: document_link_resolve_file_path_message(),
+                                    message: "Missing file path in data".into(),
                                     data: None,
                                 }
                             })?;
@@ -197,7 +184,7 @@ impl LspServer {
                             .and_then(|u| u.as_str())
                             .ok_or_else(|| JsonRpcError {
                                 code: INVALID_PARAMS,
-                                message: document_link_resolve_base_uri_message(),
+                                message: "Missing base URI in data".into(),
                                 data: None,
                             })?;
 
@@ -213,13 +200,45 @@ impl LspServer {
                             link["target"] = json!(url);
                         }
                     }
+                    Some("pod_section") => {
+                        let section =
+                            data_obj.get("section").and_then(|s| s.as_str()).ok_or_else(|| {
+                                JsonRpcError {
+                                    code: INVALID_PARAMS,
+                                    message: "Missing POD section in data".into(),
+                                    data: None,
+                                }
+                            })?;
+                        if !is_valid_pod_section_fragment(section) {
+                            return Err(JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Invalid POD section in data".into(),
+                                data: Some(json!({"section": section})),
+                            });
+                        }
+
+                        let base_uri = data_obj
+                            .get("baseUri")
+                            .and_then(|u| u.as_str())
+                            .ok_or_else(|| JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Missing base URI in data".into(),
+                                data: None,
+                            })?;
+                        let mut target_url =
+                            url::Url::parse(base_uri).map_err(|_| JsonRpcError {
+                                code: INVALID_PARAMS,
+                                message: "Invalid base URI in data".into(),
+                                data: Some(json!({"baseUri": base_uri})),
+                            })?;
+                        target_url.set_fragment(Some(section));
+                        link["target"] = json!(target_url.to_string());
+                    }
                     _ => {
                         // Unknown link type - return error
                         return Err(JsonRpcError {
                             code: INVALID_PARAMS,
-                            message: document_link_resolve_data_message(
-                                "Unknown link type in data field",
-                            ),
+                            message: "Unknown link type in data field".into(),
                             data: Some(json!({"linkType": link_type})),
                         });
                     }
@@ -230,7 +249,7 @@ impl LspServer {
         } else {
             Err(JsonRpcError {
                 code: INVALID_PARAMS,
-                message: document_link_resolve_missing_params_message(),
+                message: "Missing parameters for documentLink/resolve".into(),
                 data: None,
             })
         }
@@ -273,10 +292,7 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::{
-        document_link_resolve_base_uri_message, document_link_resolve_data_message,
-        document_link_resolve_file_path_message, document_link_resolve_missing_params_message,
-        document_link_resolve_module_data_message, normalize_document_link_file_path,
-        resolve_file_link_target,
+        is_valid_pod_section_fragment, normalize_document_link_file_path, resolve_file_link_target,
     };
 
     #[test]
@@ -311,25 +327,11 @@ mod tests {
     }
 
     #[test]
-    fn document_link_resolve_error_messages_include_recovery_guidance() {
-        let missing = document_link_resolve_missing_params_message();
-        assert!(missing.contains("pass the DocumentLink object"));
-        assert!(missing.contains("request fresh document links"));
-
-        let unknown = document_link_resolve_data_message("Unknown link type in data field");
-        assert!(unknown.contains("data.type"));
-        assert!(unknown.contains("module"));
-        assert!(unknown.contains("file"));
-        assert!(unknown.contains("url"));
-
-        let module = document_link_resolve_module_data_message();
-        assert!(module.contains("data.module"));
-        assert!(module.contains("Data::Dumper"));
-
-        let file_path = document_link_resolve_file_path_message();
-        assert!(file_path.contains("data.path"));
-
-        let base_uri = document_link_resolve_base_uri_message();
-        assert!(base_uri.contains("data.baseUri"));
+    fn pod_section_fragments_reject_path_like_targets() {
+        assert!(is_valid_pod_section_fragment("method_name"));
+        assert!(is_valid_pod_section_fragment("method name"));
+        assert!(!is_valid_pod_section_fragment(""));
+        assert!(!is_valid_pod_section_fragment("Other/section"));
+        assert!(!is_valid_pod_section_fragment("Other::section"));
     }
 }

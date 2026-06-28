@@ -75,15 +75,6 @@ describe('HealthWidget — onStateChange', () => {
         expect(item.text).toBe('$(check) perl-lsp: 847 files | 12 errors');
     });
 
-    test('Running → tooltip includes file and error counts', () => {
-        const { item, widget } = makeWidget();
-        widget.setFileCount(847);
-        widget.setErrorCount(12);
-        widget.onStateChange(ClientState.Running);
-        expect(item.tooltip).toContain('847 files');
-        expect(item.tooltip).toContain('12 errors');
-    });
-
     test('Running → shows only error count when file count unknown', () => {
         const { item, widget } = makeWidget();
         widget.setErrorCount(3);

@@ -13,7 +13,8 @@ pub(super) static BRACED_PERL_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
         .ok()
 });
 
-/// Legacy regex for scalar-only matching (used by `DapDispatcher`).
+/// Regex for scalar-only matching (`$`-sigil), used by the legacy
+/// `collect_inline_values` scalar-only path.
 pub(super) static SCALAR_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
     Regex::new(r"\$(?:::)?[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok()
 });

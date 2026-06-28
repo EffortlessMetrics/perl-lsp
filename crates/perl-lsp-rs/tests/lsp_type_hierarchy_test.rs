@@ -326,11 +326,13 @@ fn test_type_hierarchy_capability_advertised() -> Result<(), Box<dyn std::error:
 
     // Type hierarchy should be advertised in non-lock mode
     if !cfg!(feature = "lsp-ga-lock") {
-        assert_eq!(
-            caps["typeHierarchyProvider"],
-            json!(true),
-            "typeHierarchyProvider should be advertised"
-        );
+        let provider = &caps["typeHierarchyProvider"];
+        let advertised = provider.as_bool() == Some(true) || provider.is_object();
+        if !advertised {
+            return Err(
+                format!("typeHierarchyProvider should be advertised, got: {provider:?}").into()
+            );
+        }
     }
 
     Ok(())

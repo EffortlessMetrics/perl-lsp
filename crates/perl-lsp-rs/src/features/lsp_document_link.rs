@@ -4,6 +4,7 @@
 //! - Module names (use/require) -> MetaCPAN
 //! - File paths in require/do -> local files
 
+use crate::documentation_targets::metacpan_pod_uri;
 use lsp_types::{DocumentLink, Position, Range, Uri};
 use std::path::PathBuf;
 use url::Url;
@@ -45,6 +46,11 @@ fn to_range(content: &str, start: usize, end: usize) -> Range {
     Range::new(start_pos, end_pos)
 }
 
+fn metacpan_document_link_target(module_name: &str) -> Option<Uri> {
+    let target = metacpan_pod_uri(module_name)?;
+    Url::parse(&target).ok()?.to_string().parse::<Uri>().ok()
+}
+
 /// Collects clickable document links from Perl source code.
 ///
 /// Scans the document for `use`, `require`, and `do` statements, creating links for:
@@ -76,14 +82,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                 let e = s + name.len();
                 links.push(DocumentLink {
                     range: to_range(text, s, e),
-                    target: Url::parse(&format!("https://metacpan.org/pod/{}", name))
-                        .map_err(|e| {
-                            tracing::debug!(module = %name, error = %e, "document link: failed to build MetaCPAN URL");
-                        })
-                        .ok()
-                        .and_then(|url| url.to_string().parse::<Uri>().map_err(|e| {
-                            tracing::debug!(module = %name, error = %e, "document link: failed to parse MetaCPAN URI");
-                        }).ok()),
+                    target: metacpan_document_link_target(&name),
                     tooltip: Some(format!("Open {} on MetaCPAN", name)),
                     data: None,
                 });
@@ -104,14 +103,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                     let e = s + name.len();
                     links.push(DocumentLink {
                         range: to_range(text, s, e),
-                        target: Url::parse(&format!("https://metacpan.org/pod/{}", name))
-                            .map_err(|e| {
-                                tracing::debug!(module = %name, error = %e, "document link: failed to build MetaCPAN URL");
-                            })
-                            .ok()
-                            .and_then(|url| url.to_string().parse::<Uri>().map_err(|e| {
-                                tracing::debug!(module = %name, error = %e, "document link: failed to parse MetaCPAN URI");
-                            }).ok()),
+                        target: metacpan_document_link_target(&name),
                         tooltip: Some(format!("Open {} on MetaCPAN", name)),
                         data: None,
                     });

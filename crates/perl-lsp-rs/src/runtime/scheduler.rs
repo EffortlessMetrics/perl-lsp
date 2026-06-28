@@ -1428,4 +1428,77 @@ mod tests {
 
         Ok(())
     }
+
+    // =====================================================================
+    // URI normalization regression tests for #965
+    // =====================================================================
+
+    #[test]
+    fn extract_freshness_captures_generation_with_mixed_case_uri() -> Result<(), JsonRpcError> {
+        let server = crate::LspServer::new();
+        // Open with uppercase drive letter — text_sync normalizes to lowercase on store.
+        // document_generation must normalize the query URI too, or it returns None.
+        server.test_apply_did_open("file:///C:/project/foo.pl", "my $a;\n", 1)?;
+        let params = position_params("file:///C:/project/foo.pl");
+        let f = must_some(extract_freshness(
+            &server,
+            "textDocument/hover",
+            Some(&params),
+            RequestPriority::Hover,
+        ));
+        // Before fix: None (raw uppercase key misses normalized lowercase entry)
+        // After fix: Some(0)
+        assert_eq!(
+            f.document_generation,
+            Some(0),
+            "mixed-case URI must resolve to open document generation"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn stale_hover_cancelled_with_mixed_case_uri() -> Result<(), JsonRpcError> {
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///C:/project/bar.pl", "my $a;\n", 1)?;
+        let params = position_params("file:///C:/project/bar.pl");
+        let freshness = must_some(extract_freshness(
+            &server,
+            "textDocument/hover",
+            Some(&params),
+            RequestPriority::Hover,
+        ));
+        server.test_apply_did_change("file:///C:/project/bar.pl", "my $aa;\n", 2)?;
+        let current = server.document_generation("file:///C:/project/bar.pl");
+        assert!(
+            is_read_stale(&freshness, current).is_some(),
+            "hover queued at gen=0 with doc now at gen=1 must be stale (mixed-case URI)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn document_version_resolves_with_mixed_case_uri() -> Result<(), JsonRpcError> {
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///C:/x.pl", "my $a;\n", 7)?;
+        // Before fix: None; After fix: Some(7)
+        assert_eq!(
+            server.document_version("file:///C:/x.pl"),
+            Some(7),
+            "document_version must normalize the URI before lookup"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn buffer_text_resolves_with_mixed_case_uri() -> Result<(), JsonRpcError> {
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///C:/y.pl", "use strict;\n", 1)?;
+        // Before fix: None; After fix: Some("use strict;\n")
+        assert_eq!(
+            server.buffer_text("file:///C:/y.pl"),
+            Some("use strict;\n".to_string()),
+            "buffer_text must normalize the URI before lookup"
+        );
+        Ok(())
+    }
 }

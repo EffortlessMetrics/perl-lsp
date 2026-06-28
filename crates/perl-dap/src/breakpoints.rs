@@ -147,30 +147,6 @@ fn evaluate_hit_condition(raw: Option<&str>, hit_count: u64) -> Option<bool> {
     parse_hit_condition_operand(expr).map(|n| hit_count == n)
 }
 
-fn format_source_read_error(source_path: &str, error: &std::io::Error) -> String {
-    let mut message = format!("Unable to read source file '{source_path}': {error}");
-    if let Some(guidance) = source_read_error_guidance(error) {
-        message.push_str(". ");
-        message.push_str(guidance);
-    }
-    message
-}
-
-fn source_read_error_guidance(error: &std::io::Error) -> Option<&'static str> {
-    match error.kind() {
-        std::io::ErrorKind::NotFound => {
-            Some("Check that the file still exists, then set the breakpoint again.")
-        }
-        std::io::ErrorKind::PermissionDenied => {
-            Some("Check file permissions before setting breakpoints.")
-        }
-        std::io::ErrorKind::IsADirectory => {
-            Some("Breakpoints can only be set in Perl script files.")
-        }
-        _ => None,
-    }
-}
-
 fn file_paths_match(stored: &str, observed: &str) -> bool {
     if stored == observed {
         return true;
@@ -179,6 +155,90 @@ fn file_paths_match(stored: &str, observed: &str) -> bool {
         return true;
     }
     false
+}
+
+/// Interpolate logpoint message template with variable values.
+///
+/// Parses `{expression}` patterns in the message template and substitutes
+/// them with values from the provided variable map.
+///
+/// # Arguments
+///
+/// * `template` - Message template with `{$variable}` expressions
+/// * `variables` - HashMap of variable names to their string values
+///
+/// # Returns
+///
+/// The interpolated message with expressions replaced by variable values.
+/// If a variable is not found, the expression remains as-is.
+///
+/// # Examples
+///
+/// ```
+/// let mut vars = std::collections::HashMap::new();
+/// vars.insert("x".to_string(), "42".to_string());
+/// let result = interpolate_logpoint_message("value: {$x}", &vars);
+/// assert_eq!(result, "value: 42");
+/// ```
+pub fn interpolate_logpoint_message(
+    template: &str,
+    variables: &std::collections::HashMap<String, String>,
+) -> String {
+    // Use a simple regex-based approach to find and replace {$var} patterns
+    // For now, we'll use a manual character-by-character parser to avoid regex dependency
+
+    let mut result = String::new();
+    let mut chars = template.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '{' {
+            // Look ahead for a variable reference like $name
+            let mut expr = String::new();
+            let mut found_close = false;
+
+            // Collect everything until }
+            while let Some(next_ch) = chars.peek() {
+                if *next_ch == '}' {
+                    chars.next(); // consume the }
+                    found_close = true;
+                    break;
+                }
+                expr.push(*next_ch);
+                chars.next();
+            }
+
+            if found_close {
+                // Only scalar variables ($name) are interpolated; @array/%hash and
+                // arithmetic expressions are kept verbatim (full expression evaluation
+                // requires a live debugger context and is deferred to a follow-up).
+                let trimmed = expr.trim();
+                if let Some(var_name) = trimmed.strip_prefix('$') {
+                    if let Some(value) = variables.get(var_name) {
+                        result.push_str(value);
+                    } else {
+                        // Variable not found in caller-supplied map: keep original
+                        // expression so the template remains readable in the output.
+                        result.push('{');
+                        result.push_str(trimmed);
+                        result.push('}');
+                    }
+                } else {
+                    // Non-scalar expression (arithmetic, @array, etc.): keep verbatim.
+                    result.push('{');
+                    result.push_str(&expr);
+                    result.push('}');
+                }
+            } else {
+                // No closing }, keep opening brace
+                result.push('{');
+                result.push_str(&expr);
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+
+    result
 }
 
 /// Thread-safe breakpoint storage
@@ -257,9 +317,10 @@ impl BreakpointStore {
         let source_breakpoints = args.breakpoints.as_deref().unwrap_or(&[]);
 
         // Read source file and parse once for AST validation (AC7).
-        let validator = std::fs::read_to_string(&source_path)
-            .map_err(|error| format_source_read_error(&source_path, &error))
-            .and_then(|content| AstBreakpointValidator::new(&content).map_err(|e| e.to_string()));
+        let source_content = std::fs::read_to_string(&source_path).ok();
+        let validator = source_content
+            .as_ref()
+            .map(|content| AstBreakpointValidator::new(content).map_err(|e| e.to_string()));
         let mut validation_cache: HashMap<(i64, Option<i64>), (bool, i64, Option<String>)> =
             HashMap::new();
 
@@ -354,11 +415,15 @@ impl BreakpointStore {
                     cached.clone()
                 } else {
                     let computed = match &validator {
-                        Ok(v) => {
+                        Some(Ok(v)) => {
                             let result = v.validate_with_column(bp.line, bp.column);
                             (result.verified, result.line, result.message)
                         }
-                        Err(error) => (false, bp.line, Some(error.clone())),
+                        Some(Err(error)) => (false, bp.line, Some(error.clone())),
+                        None => {
+                            // Can't read file - mark as unverified but still create breakpoint.
+                            (false, bp.line, Some("Unable to read source file".to_string()))
+                        }
                     };
                     validation_cache.insert((bp.line, bp.column), computed.clone());
                     computed
@@ -367,7 +432,7 @@ impl BreakpointStore {
             let mut verified = verified;
             let message = if verified
                 && bp.condition.is_some()
-                && let Ok(v) = &validator
+                && let Some(Ok(v)) = &validator
                 && let Some(condition) = bp.condition.as_deref()
             {
                 let condition_validation = v.validate_condition(resolved_line, condition);
@@ -465,6 +530,30 @@ impl BreakpointStore {
     /// This method updates per-breakpoint hit counters and evaluates DAP hit
     /// conditions. For logpoints, execution continues after emitting output.
     pub fn register_breakpoint_hit(&self, source_path: &str, line: i64) -> BreakpointHitOutcome {
+        self.register_breakpoint_hit_with_variables(source_path, line, None)
+    }
+
+    /// Register a breakpoint hit with optional variable interpolation.
+    ///
+    /// Similar to `register_breakpoint_hit`, but accepts optional variable values
+    /// for logpoint message interpolation. If variables are provided, logpoint
+    /// messages with `{$variable}` expressions will be interpolated.
+    ///
+    /// # Arguments
+    ///
+    /// * `source_path` - Path to the source file
+    /// * `line` - Line number where the breakpoint was hit (1-based)
+    /// * `variables` - Optional map of variable names to their string values
+    ///
+    /// # Returns
+    ///
+    /// BreakpointHitOutcome with interpolated log messages if variables provided
+    pub fn register_breakpoint_hit_with_variables(
+        &self,
+        source_path: &str,
+        line: i64,
+        variables: Option<&std::collections::HashMap<String, String>>,
+    ) -> BreakpointHitOutcome {
         let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
         let mut outcome = BreakpointHitOutcome::default();
 
@@ -489,7 +578,13 @@ impl BreakpointStore {
                 }
 
                 if let Some(message) = record.log_message.clone() {
-                    outcome.log_messages.push(message);
+                    // Interpolate message if variables are available
+                    let interpolated = if let Some(vars) = variables {
+                        interpolate_logpoint_message(&message, vars)
+                    } else {
+                        message
+                    };
+                    outcome.log_messages.push(interpolated);
                 } else {
                     outcome.should_stop = true;
                 }
@@ -544,7 +639,7 @@ mod tests {
     use super::*;
     use crate::protocol::{SetBreakpointsArguments, Source, SourceBreakpoint};
     use perl_tdd_support::must;
-    use std::io::{Error as IoError, ErrorKind, Write};
+    use std::io::Write;
     use tempfile::NamedTempFile;
 
     /// Create a temp file with valid Perl code for testing breakpoints.
@@ -1004,6 +1099,207 @@ print "result: $final\n";
     }
 
     #[test]
+    fn test_logpoint_message_interpolation() {
+        // Test basic logpoint message interpolation with {$variable} syntax
+        let (_file, source_path) = create_test_perl_file();
+        let store = BreakpointStore::new();
+
+        let args = SetBreakpointsArguments {
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: Some("x = {$x}".to_string()),
+            }]),
+            source_modified: None,
+        };
+        let responses = store.set_breakpoints(&args);
+        assert_eq!(responses.len(), 1);
+        assert!(responses[0].verified);
+
+        // Register hit and verify interpolation occurs
+        let outcome = store.register_breakpoint_hit(&source_path, 10);
+        assert!(outcome.matched);
+        assert!(!outcome.should_stop); // logpoint doesn't stop
+
+        // Interpolate the message with variable values
+        let mut variables = std::collections::HashMap::new();
+        variables.insert("x".to_string(), "42".to_string());
+
+        let interpolated = interpolate_logpoint_message(&outcome.log_messages[0], &variables);
+        assert_eq!(interpolated, "x = 42");
+    }
+
+    #[test]
+    fn test_register_breakpoint_hit_with_variables_interpolates() {
+        // Test register_breakpoint_hit_with_variables interpolates messages
+        let (_file, source_path) = create_test_perl_file();
+        let store = BreakpointStore::new();
+
+        let args = SetBreakpointsArguments {
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: Some("value: {$x}, count: {$count}".to_string()),
+            }]),
+            source_modified: None,
+        };
+        let responses = store.set_breakpoints(&args);
+        assert!(responses[0].verified);
+
+        // Create variable map
+        let mut variables = std::collections::HashMap::new();
+        variables.insert("x".to_string(), "42".to_string());
+        variables.insert("count".to_string(), "7".to_string());
+
+        // Register hit with variables - should interpolate
+        let outcome =
+            store.register_breakpoint_hit_with_variables(&source_path, 10, Some(&variables));
+        assert!(outcome.matched);
+        assert!(!outcome.should_stop);
+        assert_eq!(outcome.log_messages.len(), 1);
+        assert_eq!(outcome.log_messages[0], "value: 42, count: 7");
+    }
+
+    #[test]
+    fn test_register_breakpoint_hit_without_variables_preserves_template() {
+        // Test that without variables, messages are preserved as-is
+        let (_file, source_path) = create_test_perl_file();
+        let store = BreakpointStore::new();
+
+        let args = SetBreakpointsArguments {
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: Some("x = {$x}".to_string()),
+            }]),
+            source_modified: None,
+        };
+        let responses = store.set_breakpoints(&args);
+        assert!(responses[0].verified);
+
+        // Register hit without variables - should preserve template
+        let outcome = store.register_breakpoint_hit(&source_path, 10);
+        assert!(outcome.matched);
+        assert_eq!(outcome.log_messages.len(), 1);
+        assert_eq!(outcome.log_messages[0], "x = {$x}"); // Template preserved
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_single_variable() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("x".to_string(), "42".to_string());
+
+        assert_eq!(interpolate_logpoint_message("value: {$x}", &vars), "value: 42");
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_multiple_variables() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("x".to_string(), "10".to_string());
+        vars.insert("y".to_string(), "20".to_string());
+
+        assert_eq!(interpolate_logpoint_message("x={$x}, y={$y}", &vars), "x=10, y=20");
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_missing_variable() {
+        let vars = std::collections::HashMap::new();
+        // Variable not in map - expression should remain as-is
+        assert_eq!(interpolate_logpoint_message("value: {$x}", &vars), "value: {$x}");
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_no_substitution() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("x".to_string(), "42".to_string());
+
+        // No variables to interpolate
+        assert_eq!(interpolate_logpoint_message("simple message", &vars), "simple message");
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_non_variable_expression() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("x".to_string(), "42".to_string());
+
+        // Non-variable expressions are left unchanged
+        assert_eq!(
+            interpolate_logpoint_message("expression: {5 + 3}", &vars),
+            "expression: {5 + 3}"
+        );
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_unclosed_brace() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("x".to_string(), "42".to_string());
+
+        // Unclosed brace - keep as-is
+        assert_eq!(interpolate_logpoint_message("value: {$x", &vars), "value: {$x");
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_empty_braces() {
+        let vars = std::collections::HashMap::new();
+        // Empty braces should be kept as-is
+        assert_eq!(interpolate_logpoint_message("value: {}", &vars), "value: {}");
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_repeated_variable() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("count".to_string(), "5".to_string());
+
+        // Same variable multiple times
+        assert_eq!(
+            interpolate_logpoint_message("count is {$count}, repeat {$count}", &vars),
+            "count is 5, repeat 5"
+        );
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_variable_with_spaces_found() {
+        // Braces with whitespace around $var — trimming finds the variable
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("x".to_string(), "99".to_string());
+        // { $x } trims to $x → looks up "x" → found
+        assert_eq!(interpolate_logpoint_message("val: { $x }", &vars), "val: 99");
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_variable_with_spaces_not_found() {
+        // Braces with whitespace around $var — trimming applies before key lookup;
+        // when not found the expression is re-emitted in trimmed form.
+        let vars = std::collections::HashMap::new();
+        // { $y } → trimmed → "$y" → not found → emitted as {$y} (trimmed, no extra spaces)
+        assert_eq!(interpolate_logpoint_message("val: { $y }", &vars), "val: {$y}");
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_bare_dollar_sign() {
+        // {$} — dollar sign with empty name: not found → kept as-is
+        let vars = std::collections::HashMap::new();
+        assert_eq!(interpolate_logpoint_message("{$}", &vars), "{$}");
+    }
+
+    #[test]
+    fn test_interpolate_logpoint_message_array_syntax_kept_verbatim() {
+        // {@arr} — only $scalar is interpolated; @array syntax is not handled and kept as-is
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("arr".to_string(), "should_not_appear".to_string());
+        assert_eq!(interpolate_logpoint_message("{@arr}", &vars), "{@arr}");
+    }
+
+    #[test]
     fn test_validate_breakpoint_line_scenarios() {
         // AC:7.3
         let source = r#"use strict;
@@ -1190,45 +1486,5 @@ EOF
             records[1].message.as_deref().unwrap_or("").contains("newline"),
             "stored record must carry the newline-rejection message"
         );
-    }
-
-    #[test]
-    fn source_read_error_message_keeps_path_error_and_guidance()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let error = IoError::from(ErrorKind::NotFound);
-
-        let message = format_source_read_error("/workspace/missing.pl", &error);
-
-        assert!(
-            message.contains("Unable to read source file '/workspace/missing.pl'"),
-            "expected path in message, got: {message}"
-        );
-        assert!(
-            message.contains("No such file") || message.contains("not found"),
-            "expected OS error detail in message, got: {message}"
-        );
-        assert!(
-            message.contains("file still exists"),
-            "expected recovery guidance in message, got: {message}"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn source_read_error_message_keeps_unknown_errors_unembellished()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let error = IoError::from(ErrorKind::Interrupted);
-
-        let message = format_source_read_error("/workspace/script.pl", &error);
-
-        assert!(
-            message.contains("Unable to read source file '/workspace/script.pl'"),
-            "expected path in message, got: {message}"
-        );
-        assert!(
-            !message.contains("file still exists") && !message.contains("file permissions"),
-            "unexpected guidance for unknown error kind, got: {message}"
-        );
-        Ok(())
     }
 }

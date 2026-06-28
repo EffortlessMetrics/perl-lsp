@@ -54,6 +54,27 @@ fn test_metrics_default_pending_count_is_zero() {
 }
 
 #[test]
+fn test_metrics_decrement_at_zero_stays_zero() {
+    let metrics = IndexMetrics::new();
+
+    assert_eq!(metrics.decrement_pending_parses(), 0);
+    assert_eq!(metrics.pending_count(), 0);
+    assert_eq!(metrics.decrement_pending_parses(), 0);
+    assert_eq!(metrics.pending_count(), 0);
+}
+
+#[test]
+fn test_metrics_decrement_drains_to_zero_once() {
+    let metrics = IndexMetrics::new();
+
+    assert_eq!(metrics.increment_pending_parses(), 1);
+    assert_eq!(metrics.decrement_pending_parses(), 0);
+    assert_eq!(metrics.pending_count(), 0);
+    assert_eq!(metrics.decrement_pending_parses(), 0);
+    assert_eq!(metrics.pending_count(), 0);
+}
+
+#[test]
 fn test_metrics_no_parse_storm_at_threshold() {
     let metrics = IndexMetrics::with_threshold(3);
     metrics.increment_pending_parses();

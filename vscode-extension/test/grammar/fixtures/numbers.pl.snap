@@ -1,0 +1,60 @@
+>my $int = 42;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^ source.perl variable.other.scalar.perl
+#       ^ source.perl
+#        ^ source.perl keyword.operator.assignment.perl
+#         ^ source.perl
+#          ^^ source.perl constant.numeric.integer.perl
+#            ^^ source.perl
+>my $float = 3.14159;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^ source.perl variable.other.scalar.perl
+#         ^ source.perl
+#          ^ source.perl keyword.operator.assignment.perl
+#           ^ source.perl
+#            ^^^^^^^ source.perl constant.numeric.float.perl
+#                   ^^ source.perl
+>my $hex = 0xDEADBEEF;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^ source.perl variable.other.scalar.perl
+#       ^ source.perl
+#        ^ source.perl keyword.operator.assignment.perl
+#         ^ source.perl
+#          ^^^^^^^^^^ source.perl constant.numeric.hex.perl
+#                    ^^ source.perl
+>my $octal = 0o755;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^ source.perl variable.other.scalar.perl
+#         ^ source.perl
+#          ^ source.perl keyword.operator.assignment.perl
+#           ^^^^^^^^ source.perl
+>my $binary = 0b1010;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^ source.perl variable.other.scalar.perl
+#          ^ source.perl
+#           ^ source.perl keyword.operator.assignment.perl
+#            ^ source.perl
+#             ^^^^^^ source.perl constant.numeric.binary.perl
+#                   ^^ source.perl
+>my $underscored = 1_000_000;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^^^^^^ source.perl variable.other.scalar.perl
+#               ^ source.perl
+#                ^ source.perl keyword.operator.assignment.perl
+#                 ^^^^^^^^^^^^ source.perl
+>my $exp = 6.022e23;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^ source.perl variable.other.scalar.perl
+#       ^ source.perl
+#        ^ source.perl keyword.operator.assignment.perl
+#         ^ source.perl
+#          ^^^^^^^^ source.perl constant.numeric.float.perl
+#                  ^^ source.perl
+>

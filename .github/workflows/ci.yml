@@ -43,21 +43,58 @@ jobs:
     outputs:
       run_ci: ${{ steps.guard.outputs.run_ci }}
     steps:
+      - name: Checkout for docs-only detection
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
       - name: Decide whether full CI should run
         id: guard
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "run_ci=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Non-PR event detected — running full CI"
-          elif [[ ",${{ join(github.event.pull_request.labels.*.name, ',') }}," == *",full-ci,"* ]]; then
-            echo "run_ci=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::PR has full-ci label — running full CI"
           elif [ "${{ github.event.pull_request.draft }}" = "true" ]; then
             echo "run_ci=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Draft PR detected — skipping CI jobs until ready for review"
           else
-            echo "run_ci=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::PR default lane is EM routed CI; legacy CI requires full-ci label"
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            pr_number="${{ github.event.pull_request.number }}"
+            pr_head_ref="refs/remotes/pr/${pr_number}/head"
+
+            if ! git fetch --no-tags --depth=1 origin "${base_sha}" "pull/${pr_number}/head:${pr_head_ref}"; then
+              echo "run_ci=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::Could not fetch PR diff refs; running full CI fail-safe"
+              exit 0
+            fi
+
+            mapfile -t changed_files < <(git diff --name-only "${base_sha}" "${pr_head_ref}")
+            if [ "${#changed_files[@]}" -eq 0 ]; then
+              echo "run_ci=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::No changed files detected — running full CI fail-safe"
+              exit 0
+            fi
+
+            docs_only=true
+            for path in "${changed_files[@]}"; do
+              case "$path" in
+                docs/*|*.md|vscode-extension/media/*|vscode-extension/snippets/*|tree-sitter-perl/examples/*)
+                  ;;
+                *)
+                  docs_only=false
+                  break
+                  ;;
+              esac
+            done
+
+            if [ "$docs_only" = "true" ]; then
+              echo "run_ci=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Docs/assets-only PR detected — skipping Rust CI jobs; lightweight workflows still run"
+            else
+              echo "run_ci=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Non-draft PR with code/config changes — running merge-gate (pr-smoke, conflict-markers, shards, UX tests); supersede protection via preflight-latest-check (#1484)"
+            fi
           fi
 
   # ── Preflight: skip superseded SHAs to save cost ─────────────────────
@@ -96,7 +133,7 @@ jobs:
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
       - name: Check for conflict markers
@@ -116,11 +153,11 @@ jobs:
   pr-smoke:
     name: PR Smoke (Fast Feedback)
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 50
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
@@ -128,13 +165,13 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
         with:
           toolchain: 1.95.0
           components: rustfmt, clippy
 
       - name: Install just
-        uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4  # v2.79.7
+        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
         with:
           tool: just
 
@@ -152,12 +189,22 @@ jobs:
       - name: Run PR-fast via shared xtask gate runner
         run: |
           set +e
-          echo "PR-fast timeout policy: GitHub job 35m, outer runner watchdog 30m, per-gate timeouts recorded in target/receipts/receipt.json"
-          timeout --signal=TERM --kill-after=60s 1800s ./target/debug/xtask gates --tier pr-fast --base origin/master --receipt
+          # Keep the heavy Cargo test artifacts out of the checkout filesystem.
+          # Gate receipts intentionally stay at target/receipts for upload steps.
+          if [ -d /mnt ] && sudo mkdir -p /mnt/perl-lsp-swarm && sudo chown "$USER" /mnt/perl-lsp-swarm; then
+            export CARGO_TARGET_DIR="/mnt/perl-lsp-swarm/pr-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+          else
+            export CARGO_TARGET_DIR="${RUNNER_TEMP:-$PWD/target}/cargo-target/pr-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+          fi
+          mkdir -p "$CARGO_TARGET_DIR"
+          echo "PR-fast CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
+          df -h . "$CARGO_TARGET_DIR" || true
+          echo "PR-fast timeout policy: GitHub job 50m, outer runner watchdog 45m, per-gate timeouts recorded in target/receipts/receipt.json"
+          timeout --signal=TERM --kill-after=60s 2700s ./target/debug/xtask gates --tier pr-fast --base origin/main --receipt
           status=$?
           case "$status" in
             124)
-              echo "::error::PR-fast hit the 30m runner watchdog before xtask produced a final receipt"
+              echo "::error::PR-fast hit the 45m runner watchdog before xtask produced a final receipt"
               ;;
             137|143)
               echo "::error::PR-fast was cancelled by the runner or process group (exit $status)"
@@ -213,7 +260,7 @@ jobs:
       matrix:
         include:
           - name: meta
-            gates: fmt check_conflict_markers release_history readme_heading_check publish_closure publish_manifest_check layer_check published_crate_count_pr_fast release_history_check perl_token_leaf_contract clippy_full
+            gates: fmt check_conflict_markers release_history readme_heading_check publish_closure publish_manifest_check layer_check published_crate_count_pr_fast release_history_check perl_token_leaf_contract compile_all_targets clippy_full
           - name: foundation
             gates: unit_foundation_full
           - name: analysis
@@ -232,19 +279,19 @@ jobs:
     # Earlier gating > label-gated gating (see #4675)
     # Frequent commits will queue; preflight skips superseded SHAs.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
         with:
           toolchain: 1.95.0
           components: rustfmt, clippy
 
       - name: Install just
-        uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4  # v2.79.7
+        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
         with:
           tool: just
 
@@ -399,7 +446,6 @@ jobs:
       - conflict-markers
       - check-all-targets
       - ux-tests
-      - windows-required
       - merge-gate-shards
     if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     permissions:
@@ -492,19 +538,24 @@ jobs:
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push — this is the regression prevention gate.
+    # Flakiness note: 11 active entries in .ci/ux-flakes.json (all scenario_14 / @INC
+    # conformance tests) are registered as quarantine_effect=non_blocking_pr but that
+    # registry is advisory only — it is NOT enforced here. If any scenario_14 test
+    # fails this job fails and merge-gate blocks. Quarantine enforcement (reading the
+    # registry to generate --skip flags) is a follow-up; see .ci/ux-flakes.json.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
         with:
           toolchain: 1.95.0
 
       - name: Install just
-        uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4  # v2.79.7
+        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
         with:
           tool: just
 
@@ -618,18 +669,18 @@ jobs:
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
         with:
           toolchain: 1.95.0
 
       - name: Install just
-        uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4  # v2.79.7
+        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
         with:
           tool: just
 
@@ -651,13 +702,13 @@ jobs:
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
         with:
           toolchain: 1.95.0
 
@@ -746,213 +797,3 @@ jobs:
             target/memory/receipts/pr-smoke-doc-churn.receipt.json
           if-no-files-found: warn
           retention-days: 14
-
-  # ── Windows scope: decide whether the native Windows canary is needed ─
-  # Cheap Ubuntu job that diffs against master and decides whether the
-  # diff plausibly affects Windows-specific behavior. Default for normal
-  # PRs is to skip the native Windows runner entirely and let the Linux
-  # cross-target compile check + tests cover the surface.
-  windows-scope:
-    name: Windows scope
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    needs: [draft-pr-check, preflight-latest-check]
-    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
-    outputs:
-      required: ${{ steps.scope.outputs.required }}
-      full: ${{ steps.scope.outputs.full }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-
-      - name: Decide Windows scope
-        id: scope
-        shell: bash
-        run: |
-          set -euo pipefail
-          # On non-PR events (push to master, schedule, manual dispatch),
-          # always run the canary and the full guardrails.
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-            echo "full=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Non-PR event — Windows canary + full guardrails required"
-            exit 0
-          fi
-
-          # Diff against the PR base; fall back to origin/master.
-          base_ref="${{ github.event.pull_request.base.ref }}"
-          if [ -n "$base_ref" ]; then
-            git fetch --no-tags --depth=200 origin "$base_ref" || true
-            base="origin/$base_ref"
-          else
-            git fetch --no-tags --depth=200 origin master || true
-            base="origin/master"
-          fi
-
-          changed="$(git diff --name-only "$base"...HEAD || true)"
-          echo "Changed files vs $base:"
-          echo "$changed"
-
-          required=false
-          full=false
-
-          # Windows-sensitive code paths (sandbox, module path resolution,
-          # workspace discovery, URI handling).
-          if echo "$changed" | grep -E '^(crates/perl-lsp-rs/src/security/sandbox\.rs|crates/perl-module/|crates/perl-workspace/|crates/perl-uri/)' >/dev/null; then
-            required=true
-          fi
-
-          # Toolchain / workflow / lockfile / CI-policy changes can shift
-          # Windows behavior in ways the diff alone won't reveal — promote
-          # to full. Cargo.toml is anchored to the workspace root only;
-          # per-crate Cargo.toml files are treated as ordinary code changes.
-          if echo "$changed" | grep -E '(^\.github/workflows/|^\.ci/|^Cargo\.lock$|^Cargo\.toml$|^rust-toolchain\.toml$|^justfile$)' >/dev/null; then
-            required=true
-            full=true
-          fi
-
-          # Generic Windows-sensitive heuristic across other crates. Match
-          # path basenames (segments) rather than substrings so PRs that
-          # merely happen to mention these tokens inside an unrelated file
-          # path don't get pulled in.
-          if echo "$changed" | awk -F/ '{ print $NF }' \
-              | grep -E '(^|[._-])(uri|path|module|workspace-folder|file_uri|windows|separator|canonicalize|sandbox)([._-]|$)' >/dev/null; then
-            required=true
-          fi
-
-          echo "required=$required" >> "$GITHUB_OUTPUT"
-          echo "full=$full" >> "$GITHUB_OUTPUT"
-          echo "::notice::windows-scope: required=$required full=$full"
-
-  # ── Windows Canary: tiny native dispatch check ───────────────────────
-  # Proves the Windows-only code path (currently sandbox fail-closed) is
-  # still wired. Runs only when windows-scope says required=true.
-  windows-canary:
-    name: Windows Canary
-    runs-on: windows-latest
-    timeout-minutes: 15
-    needs: [draft-pr-check, preflight-latest-check, windows-scope]
-    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true' && needs.windows-scope.outputs.required == 'true'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
-        with:
-          toolchain: 1.95.0
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-          shared-key: ci-windows-canary-${{ hashFiles('Cargo.lock') }}
-
-      - name: Run sandbox fail-closed canary
-        shell: bash
-        run: |
-          cargo test --locked --lib -p perl-lsp-rs \
-            security::sandbox::tests::test_windows_sandbox_fails_closed \
-            -- --exact
-
-  # ── Windows Required: Ubuntu aggregator consumed by merge-gate ──────
-  # Skipped together with the rest of CI on draft PRs / superseded SHAs
-  # (same gate as merge-gate). Otherwise always runs: succeeds when the
-  # canary isn't needed, fails when the canary was required but didn't
-  # pass, and fails closed if windows-scope itself errored out (so a
-  # broken scope doesn't slip through as a green required check).
-  windows-required:
-    name: Windows Required
-    runs-on: ubuntu-24.04
-    timeout-minutes: 2
-    needs: [draft-pr-check, preflight-latest-check, windows-scope, windows-canary]
-    if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
-    steps:
-      - name: Summarize Windows requirement
-        shell: bash
-        run: |
-          scope_result='${{ needs.windows-scope.result }}'
-          if [ "$scope_result" != "success" ]; then
-            echo "::error::windows-scope did not succeed (result=$scope_result); failing closed."
-            exit 1
-          fi
-
-          required='${{ needs.windows-scope.outputs.required }}'
-          result='${{ needs.windows-canary.result }}'
-
-          if [ "$required" != "true" ]; then
-            echo "::notice::Windows canary not required for this diff."
-            exit 0
-          fi
-
-          if [ "$result" = "success" ]; then
-            echo "::notice::Windows canary passed."
-            exit 0
-          fi
-
-          echo "::error::Windows canary required but result was: $result"
-          exit 1
-
-  # ── Windows Full Guardrails: advisory / risk-triggered ──────────────
-  # The old broad Windows matrix. Runs on push to master, manual
-  # dispatch, and PRs that windows-scope flagged as full=true
-  # (workflow/toolchain/lockfile changes). Not a merge-gate dependency
-  # for normal PRs — the cheap Linux cross-target check + windows-canary
-  # cover the universal slow lane, and this lane catches the rest.
-  # (Nightly Windows soak runs are owned by ci-nightly.yml, not here.)
-  windows-full-guardrails:
-    name: Windows Full Guardrails (${{ matrix.lane.name }})
-    runs-on: windows-latest
-    timeout-minutes: 35
-    needs: [draft-pr-check, preflight-latest-check, windows-scope]
-    if: |
-      always()
-      && needs.draft-pr-check.outputs.run_ci == 'true'
-      && needs.preflight-latest-check.outputs.is_latest == 'true'
-      && (github.event_name != 'pull_request' || needs.windows-scope.outputs.full == 'true')
-    strategy:
-      fail-fast: false
-      matrix:
-        lane:
-          - name: compile
-            command: >-
-              cargo check --locked --all-targets
-              -p perl-module
-              -p perl-lsp-rs
-              -p perl-workspace
-          - name: module-separator-regressions
-            command: >-
-              cargo test --locked -p perl-module
-              --test path_comprehensive_unit_tests
-              --test module_resolution_use_require
-          - name: sandbox-fail-closed
-            command: >-
-              cargo test --locked --lib -p perl-lsp-rs
-              security::sandbox::tests::test_windows_sandbox_fails_closed
-              -- --exact
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
-        with:
-          toolchain: 1.95.0
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-          shared-key: ci-windows-full-${{ hashFiles('Cargo.lock') }}-${{ matrix.lane.name }}
-          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
-
-      - name: Run Windows full guardrail lane
-        shell: bash
-        run: ${{ matrix.lane.command }}

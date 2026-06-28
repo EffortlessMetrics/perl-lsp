@@ -260,3 +260,164 @@ bar();
         "@EXPORT_OK symbol should not be visible under bare use MyLib"
     );
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Quote-operator whitespace conformance matrix — perl-semantic-analyzer consumer
+// ──────────────────────────────────────────────────────────────────────────────
+//
+// Shared case matrix (defined once, applied across three consumers):
+//
+//   qw(foo bar)    → Explicit(["foo", "bar"])   compact paren
+//   qw (foo bar)   → Explicit(["foo", "bar"])   space before paren
+//   qw[foo bar]    → Explicit(["foo", "bar"])   compact bracket
+//   qw [foo bar]   → Explicit(["foo", "bar"])   space before bracket
+//   qw/foo bar/    → Explicit(["foo", "bar"])   compact slash
+//   qw /foo bar/   → Explicit(["foo", "bar"])   space before slash
+//   qw{foo bar}    → Explicit(["foo", "bar"])   compact brace
+//   qw {foo bar}   → Explicit(["foo", "bar"])   space before brace
+//   qwfoo          → NOT parsed as qw list (bareword arg, no qw delimiter)
+//
+// The AST-level parser normalizes ALL qw delimiter forms to `qw(...)` before
+// ImportExtractor sees the args, so all qw variants should produce identical
+// ImportSymbols.  This matrix verifies that invariant end-to-end.
+//
+// `q {text}` and `qq [text]` are not valid `use Module ...` import-symbol args
+// in this consumer context; they are omitted here.
+
+use perl_semantic_analyzer::analysis::import_extractor::ImportExtractor;
+use perl_semantic_facts::{FileId, ImportSymbols};
+
+fn parse_and_extract_import_specs(source: &str) -> Vec<perl_semantic_facts::ImportSpec> {
+    let mut parser = perl_semantic_analyzer::Parser::new(source);
+    match parser.parse() {
+        Ok(ast) => ImportExtractor::extract(&ast, FileId(1)),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Extract the symbol list from a single-spec result; returns Err if not found
+/// or if the symbols are not in Explicit form.
+fn extract_explicit_symbols(source: &str) -> Result<Vec<String>, String> {
+    let specs = parse_and_extract_import_specs(source);
+    let spec = specs
+        .into_iter()
+        .find(|s| s.module == "Foo")
+        .ok_or_else(|| format!("expected an ImportSpec for module 'Foo' in {source:?}"))?;
+    match spec.symbols {
+        ImportSymbols::Explicit(names) => Ok(names),
+        other => Err(format!("expected ImportSymbols::Explicit, got {other:?}")),
+    }
+}
+
+#[test]
+fn conformance_matrix_qw_compact_paren_produces_explicit_symbols() -> Result<(), String> {
+    let syms = extract_explicit_symbols("use Foo qw(foo bar);\n")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw(foo bar) must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qw_space_before_paren_produces_explicit_symbols() -> Result<(), String> {
+    let syms = extract_explicit_symbols("use Foo qw (foo bar);\n")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw (foo bar) must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qw_compact_bracket_produces_explicit_symbols() -> Result<(), String> {
+    let syms = extract_explicit_symbols("use Foo qw[foo bar];\n")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw[foo bar] must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qw_space_before_bracket_produces_explicit_symbols() -> Result<(), String> {
+    let syms = extract_explicit_symbols("use Foo qw [foo bar];\n")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw [foo bar] must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qw_compact_slash_produces_explicit_symbols() -> Result<(), String> {
+    let syms = extract_explicit_symbols("use Foo qw/foo bar/;\n")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw/foo bar/ must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qw_space_before_slash_produces_explicit_symbols() -> Result<(), String> {
+    let syms = extract_explicit_symbols("use Foo qw /foo bar/;\n")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw /foo bar/ must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qw_compact_brace_produces_explicit_symbols() -> Result<(), String> {
+    let syms = extract_explicit_symbols("use Foo qw{foo bar};\n")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw{{foo bar}} must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qw_space_before_brace_produces_explicit_symbols() -> Result<(), String> {
+    let syms = extract_explicit_symbols("use Foo qw {foo bar};\n")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw {{foo bar}} must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_space_and_compact_forms_are_identical() -> Result<(), String> {
+    // Parity: compact and space-before-delimiter must produce the same symbol list.
+    let pairs: &[(&str, &str)] = &[
+        ("use Foo qw(foo bar);\n", "use Foo qw (foo bar);\n"),
+        ("use Foo qw[foo bar];\n", "use Foo qw [foo bar];\n"),
+        ("use Foo qw/foo bar/;\n", "use Foo qw /foo bar/;\n"),
+        ("use Foo qw{foo bar};\n", "use Foo qw {foo bar};\n"),
+    ];
+
+    for (compact_src, spaced_src) in pairs {
+        let compact_syms = extract_explicit_symbols(compact_src)?;
+        let spaced_syms = extract_explicit_symbols(spaced_src)?;
+        assert_eq!(
+            compact_syms, spaced_syms,
+            "parity: compact {compact_src:?} vs spaced {spaced_src:?}: \
+             compact={compact_syms:?}, spaced={spaced_syms:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qwfoo_bareword_is_not_parsed_as_qw_list() -> Result<(), String> {
+    // `qwfoo` is NOT a valid qw operator — the lexer treats it as the bare word
+    // `qwfoo`.  The ImportExtractor must NOT split it into qw-content words.
+    // It may appear as a single symbol name "qwfoo" (bareword import arg), but
+    // must never produce ["oo"] or similar qw-parsed fragments.
+    let specs = parse_and_extract_import_specs("use Foo qwfoo;\n");
+    let foo_spec = specs.into_iter().find(|s| s.module == "Foo");
+    if let Some(spec) = foo_spec {
+        // If we got a spec, the symbols must not be Explicit(["oo"]) or any
+        // form that looks like qw-parsed content from "foo" after stripping "qw".
+        match &spec.symbols {
+            ImportSymbols::Explicit(names) => {
+                for name in names {
+                    assert_ne!(
+                        name, "oo",
+                        "qwfoo must not produce 'oo' — 'f' must not be treated as qw delimiter"
+                    );
+                    if name.is_empty() {
+                        return Err("qwfoo must not produce empty symbol names".to_string());
+                    }
+                }
+            }
+            ImportSymbols::Default | ImportSymbols::None => {
+                // Also acceptable — qwfoo treated as no-import or default
+            }
+            other => {
+                return Err(format!("unexpected ImportSymbols variant for qwfoo: {other:?}"));
+            }
+        }
+    }
+    // If no spec found for Foo, that's also acceptable.
+    Ok(())
+}

@@ -413,7 +413,7 @@ check targets, and convenience wrappers. Key recipes:
 ### Nix
 
 The project uses Nix flakes for reproducible development environments. The
-`flake.nix` pins Rust 1.92.0 (the project's MSRV) and provides all CI tools:
+`flake.nix` pins Rust 1.95.0 (the project's MSRV) and provides all CI tools:
 `just`, `cargo-nextest`, `cargo-audit`, `gh`, `jq`, and Python with PyYAML.
 The canonical development command is:
 

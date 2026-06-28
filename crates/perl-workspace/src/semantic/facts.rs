@@ -24,6 +24,15 @@ use perl_symbol::surface::facts::{SymbolDeclSemanticFacts, SymbolRefSemanticFact
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+/// Schema version for facts produced by this module.
+///
+/// Consumers (e.g. snapshot layer in #1601) compare this constant against the
+/// `producer_schema_version` stored on every [`FileFactShard`] to detect that
+/// the snapshot's facts were produced by a compatible schema version.  Bump
+/// this constant whenever the fact format changes in a backward-incompatible
+/// way.
+pub const PRODUCER_SCHEMA_VERSION: u32 = 1;
+
 /// Build a [`FileFactShard`] from canonical semantic fact producers.
 ///
 /// This is the canonical population path that replaces the legacy
@@ -38,11 +47,18 @@ use std::hash::{Hash, Hasher};
 /// * `ref_facts` — Reference facts from `symbol_refs_to_semantic_facts`.
 /// * `imports` — Import specifications extracted from the file.
 /// * `dynamic_boundaries` — Dynamic boundary occurrences (eval, symbolic deref, etc.).
+/// * `synthetic_entities` — Extra [`EntityFact`]s from framework extractors
+///   (e.g. generated member accessors, eval-sub entities).  These are merged
+///   into the entity vector **before** per-category hash computation so that
+///   `entities_hash` covers the complete set.
+/// * `synthetic_anchors` — Extra [`AnchorFact`]s paired with `synthetic_entities`.
+///   Merged before hash computation alongside `synthetic_entities`.
 ///
 /// # Returns
 ///
 /// A fully populated `FileFactShard` with real byte spans, `ExactAst`
-/// provenance, and per-category hashes.
+/// provenance, and per-category hashes that cover **all** facts including
+/// synthetic ones.
 ///
 /// # Note on `use lib` facts
 ///
@@ -56,6 +72,8 @@ pub fn build_canonical_fact_shard(
     ref_facts: &SymbolRefSemanticFacts,
     imports: &[ImportSpec],
     dynamic_boundaries: &[OccurrenceFact],
+    synthetic_entities: &[EntityFact],
+    synthetic_anchors: &[AnchorFact],
 ) -> FileFactShard {
     let file_id = hash_uri_to_file_id(uri);
 
@@ -89,10 +107,23 @@ pub fn build_canonical_fact_shard(
     }
 
     // ── Merge entities ──
-    let entities: Vec<EntityFact> = decl_facts.entities.clone();
+    // Declaration entities come first, then synthetic entities (generated
+    // members, eval-sub entities).  Synthetic facts are merged HERE — before
+    // hash computation — so that `entities_hash` covers the complete set.
+    let mut entities: Vec<EntityFact> =
+        Vec::with_capacity(decl_facts.entities.len() + synthetic_entities.len());
+    entities.extend_from_slice(&decl_facts.entities);
+    entities.extend_from_slice(synthetic_entities);
+
+    // ── Merge synthetic anchors (pre-hash) ──
+    // Synthetic anchors paired with synthetic entities are appended now so
+    // that `anchors_hash` covers them.
+    anchors.extend_from_slice(synthetic_anchors);
 
     // ── Merge occurrences ──
     // Reference occurrences from the adapter, plus dynamic boundary occurrences.
+    // NOTE: eval-sub OccurrenceFacts flow through `dynamic_boundaries`, NOT
+    // through synthetic_entities/synthetic_anchors — do NOT duplicate them.
     let mut occurrences: Vec<OccurrenceFact> =
         Vec::with_capacity(ref_facts.occurrences.len() + dynamic_boundaries.len());
     occurrences.extend_from_slice(&ref_facts.occurrences);
@@ -105,7 +136,10 @@ pub fn build_canonical_fact_shard(
     edges.extend_from_slice(&decl_facts.defines_edges);
     edges.extend_from_slice(&ref_facts.reference_edges);
 
-    // ── Compute per-category hashes ──
+    // ── Compute per-category hashes (over the COMPLETE sets) ──
+    // Hashes are computed after all synthetic facts are merged so that
+    // `entities_hash` and `anchors_hash` cover the full shard.  This is
+    // the "hash last" invariant from #1598.
     let anchors_hash = compute_anchors_hash(&anchors);
     let entities_hash = compute_entities_hash(&entities);
     let occurrences_hash = compute_occurrences_hash(&occurrences);
@@ -115,6 +149,7 @@ pub fn build_canonical_fact_shard(
         source_uri: uri.to_string(),
         file_id,
         content_hash,
+        producer_schema_version: PRODUCER_SCHEMA_VERSION,
         anchors_hash: Some(anchors_hash),
         entities_hash: Some(entities_hash),
         occurrences_hash: Some(occurrences_hash),
@@ -283,6 +318,8 @@ mod tests {
             &sample_ref_facts(),
             &[],
             &[],
+            &[],
+            &[],
         );
 
         // All anchors from the adapters carry ExactAst provenance.
@@ -312,6 +349,8 @@ mod tests {
             &sample_ref_facts(),
             &[],
             &[],
+            &[],
+            &[],
         );
 
         // Declaration anchor has real byte spans (10..20).
@@ -336,6 +375,8 @@ mod tests {
             12345,
             &sample_decl_facts(),
             &sample_ref_facts(),
+            &[],
+            &[],
             &[],
             &[],
         );
@@ -364,6 +405,8 @@ mod tests {
             12345,
             &sample_decl_facts(),
             &sample_ref_facts(),
+            &[],
+            &[],
             &[],
             &[],
         );
@@ -400,6 +443,8 @@ mod tests {
             &sample_ref_facts(),
             &[],
             std::slice::from_ref(&boundary),
+            &[],
+            &[],
         );
 
         let found = shard.occurrences.iter().any(|o| o.id == OccurrenceId(999));
@@ -429,6 +474,8 @@ mod tests {
             &sample_ref_facts(),
             &[import],
             &[],
+            &[],
+            &[],
         );
 
         // Should have decl anchors + ref anchors + 1 import anchor.
@@ -450,10 +497,26 @@ mod tests {
         let decl_facts = sample_decl_facts();
         let ref_facts = sample_ref_facts();
 
-        let shard1 =
-            build_canonical_fact_shard("file:///test.pl", 12345, &decl_facts, &ref_facts, &[], &[]);
-        let shard2 =
-            build_canonical_fact_shard("file:///test.pl", 12345, &decl_facts, &ref_facts, &[], &[]);
+        let shard1 = build_canonical_fact_shard(
+            "file:///test.pl",
+            12345,
+            &decl_facts,
+            &ref_facts,
+            &[],
+            &[],
+            &[],
+            &[],
+        );
+        let shard2 = build_canonical_fact_shard(
+            "file:///test.pl",
+            12345,
+            &decl_facts,
+            &ref_facts,
+            &[],
+            &[],
+            &[],
+            &[],
+        );
 
         assert_eq!(shard1.anchors_hash, shard2.anchors_hash);
         assert_eq!(shard1.entities_hash, shard2.entities_hash);
@@ -470,6 +533,8 @@ mod tests {
             12345,
             &sample_decl_facts(),
             &sample_ref_facts(),
+            &[],
+            &[],
             &[],
             &[],
         );
@@ -781,8 +846,16 @@ mod tests {
             }],
         };
 
-        let shard =
-            build_canonical_fact_shard("file:///test.pl", 12345, &decl_facts, &ref_facts, &[], &[]);
+        let shard = build_canonical_fact_shard(
+            "file:///test.pl",
+            12345,
+            &decl_facts,
+            &ref_facts,
+            &[],
+            &[],
+            &[],
+            &[],
+        );
 
         assert_eq!(shard.edges.len(), 2);
         assert!(shard.edges.iter().any(|e| e.kind == EdgeKind::Defines));

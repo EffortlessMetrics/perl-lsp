@@ -736,3 +736,91 @@ fn parse_context_package_func_paren_format_not_matched() {
     let result = parser.parse_context("My::Mod::handler(lib/My/Mod.pm:42):");
     assert!(result.is_none());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  9. Adversarial: blank/whitespace file in parse_context (#1497 regression)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn parse_context_blank_file_capture_returns_none() {
+    let parser = PerlStackParser::new();
+    // "main:: :42:" — regex matches but file capture is a single space; must reject
+    assert!(parser.parse_context("main:: :42:").is_none());
+    // Tab-only file token
+    assert!(parser.parse_context("main::\t:42:").is_none());
+}
+
+#[test]
+fn parse_context_whitespace_only_file_returns_none() {
+    let parser = PerlStackParser::new();
+    // Multiple spaces where the filename should be
+    assert!(parser.parse_context("main::   :42:").is_none());
+}
+
+#[test]
+fn parse_context_well_formed_paren_format_still_parses() {
+    use perl_tdd_support::must_some;
+    let parser = PerlStackParser::new();
+    // Regression guard: ensure the blank-file guard does not reject valid parens format
+    let (func, file, line) = must_some(parser.parse_context("main::(script.pl):99:"));
+    assert_eq!(func, "main");
+    assert_eq!(file, "script.pl");
+    assert_eq!(line, 99);
+}
+
+#[test]
+fn parse_context_well_formed_no_paren_format_still_parses() {
+    use perl_tdd_support::must_some;
+    let parser = PerlStackParser::new();
+    // Regression guard: "main::file.pl:42:" (no-paren context format) must still parse
+    let (func, file, line) = must_some(parser.parse_context("main::script.pl:42:"));
+    assert_eq!(func, "main");
+    assert_eq!(file, "script.pl");
+    assert_eq!(line, 42);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 10. Adversarial: blank/whitespace file via parse_frame (#1497 regression)
+//     build_frame_from_context must reject blank captures the same way
+//     parse_context does — both code paths share the same regex.
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn parse_frame_blank_file_via_context_path_returns_none() {
+    let mut parser = PerlStackParser::new();
+    // "main:: :42:" goes through the context branch of parse_frame ->
+    // build_frame_from_context; the guard must reject the whitespace file.
+    assert!(parser.parse_frame("main:: :42:", 0).is_none());
+    // Tab-only variant
+    assert!(parser.parse_frame("main::\t:42:", 0).is_none());
+}
+
+#[test]
+fn parse_frame_well_formed_context_format_still_parses() {
+    use perl_tdd_support::must_some;
+    let mut parser = PerlStackParser::new();
+    // Regression guard: the guard in build_frame_from_context must not reject
+    // legitimate frames that happen to go through the context branch.
+    let frame = must_some(parser.parse_frame("main::script.pl:42:", 0));
+    assert_eq!(frame.name, "main");
+    assert_eq!(frame.line, 42);
+    assert_eq!(frame.file_path(), Some("script.pl"));
+}
+
+#[test]
+fn parse_stack_trace_skips_blank_file_context_lines() {
+    let mut parser = PerlStackParser::new();
+    // A multi-line trace where one line is the malformed "main:: :42:" format.
+    // parse_stack_trace calls parse_frame which calls build_frame_from_context;
+    // the blank-file guard must silently drop the malformed line and still
+    // return the surrounding well-formed frames.
+    let output = "\
+$ = main::foo() called from file `script.pl' line 10\n\
+main:: :42:\n\
+$ = main::bar() called from file `other.pl' line 20";
+    let frames = parser.parse_stack_trace(output);
+    // Only the two valid frames should appear; the blank-file line is dropped.
+    assert_eq!(frames.len(), 2);
+    assert_eq!(frames[0].file_path(), Some("script.pl"));
+    assert_eq!(frames[1].file_path(), Some("other.pl"));
+}

@@ -25,6 +25,21 @@ pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
     perl_uri::source_path_from_uri_or_path(uri)
 }
 
+/// Read a `.perltidyrc` profile and extract the native-formatter scalar options
+/// it maps to (line width, indent, tab/brace/else/keyword/trailing-comma).
+///
+/// Returns `None` if the file cannot be read; an unreadable or empty profile
+/// simply contributes no options. Parsing/classification is delegated to the
+/// shared `classify_perltidy_profile` machinery so the editor and the
+/// `native-format perltidy-compat` report agree on the mapping. Shared by
+/// initialize-time discovery and the explicit-profile formatter path.
+pub(super) fn read_perltidy_native_options(
+    path: &str,
+) -> Option<perl_lsp_rs_core::tooling::native_compat::PerltidyNativeConfigSuggestion> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    Some(perl_lsp_rs_core::tooling::native_compat::classify_perltidy_profile(&raw).suggested_config)
+}
+
 pub(super) fn workspace_folder_path(folder: &WorkspaceFolderState) -> Option<PathBuf> {
     folder.path.clone().or_else(|| source_path_from_uri(&folder.uri))
 }

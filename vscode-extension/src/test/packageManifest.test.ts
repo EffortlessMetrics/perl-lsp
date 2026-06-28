@@ -26,3 +26,24 @@ describe('package manifest Perl language registration', () => {
         ]));
     });
 });
+
+describe('package manifest demo project command (#1635)', () => {
+    const extRoot = path.resolve(__dirname, '../..');
+
+    test('contributes the perl-lsp.openDemoProject command', () => {
+        const packageJson = JSON.parse(fs.readFileSync(path.join(extRoot, 'package.json'), 'utf8')) as {
+            contributes?: { commands?: Array<{ command?: string; title?: string; category?: string }> };
+        };
+        const command = packageJson.contributes?.commands?.find(c => c.command === 'perl-lsp.openDemoProject');
+        expect(command).toBeDefined();
+        expect(command?.title).toBe('Open Demo Project');
+        expect(command?.category).toBe('Perl');
+    });
+
+    test('bundles the demo project so the command can open it', () => {
+        const demoRoot = path.join(extRoot, 'assets', 'demo-project');
+        expect(fs.existsSync(path.join(demoRoot, 'main.pl'))).toBe(true);
+        expect(fs.existsSync(path.join(demoRoot, 'lib', 'Utils.pm'))).toBe(true);
+        expect(fs.existsSync(path.join(demoRoot, 'lib', 'Database.pm'))).toBe(true);
+    });
+});

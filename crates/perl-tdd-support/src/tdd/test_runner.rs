@@ -884,6 +884,7 @@ sub test_nested {
             NodeKind::Subroutine {
                 name: Some("test_nested".to_string()),
                 name_span: Some(SourceLocation { start: 20, end: 31 }),
+                declarator: None,
                 prototype: None,
                 signature: None,
                 attributes: vec![],

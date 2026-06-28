@@ -90,6 +90,20 @@ pub fn capabilities_json(build: BuildFlags) -> Value {
         json["inlineCompletionProvider"] = serde_json::json!({});
     }
 
+    // Manually add insertTextModes (LSP 3.17) because lsp-types 0.97 lacks this field.
+    // We advertise PlainText (1) and Snippet (2) modes, which we already support.
+    // Clients can use this to determine if they should rely on server-provided
+    // insertReplaceEdit and insertTextFormat/insertTextMode negotiation.
+    if build.completion {
+        if let Some(comp_provider) = json["completionProvider"].as_object_mut() {
+            if let Some(comp_item) =
+                comp_provider.get_mut("completionItem").and_then(Value::as_object_mut)
+            {
+                comp_item.insert("insertTextModes".to_string(), serde_json::json!([1, 2]));
+            }
+        }
+    }
+
     json
 }
 
@@ -256,6 +270,33 @@ mod tests {
         assert!(
             json.pointer("/experimental/inlineCompletionProvider").is_none(),
             "inlineCompletionProvider must not be advertised under capabilities.experimental"
+        );
+    }
+
+    /// Verify that `completionProvider.completionItem.insertTextModes` is injected
+    /// as `[1, 2]` (PlainText, Snippet) in the JSON capabilities when completion is enabled.
+    /// lsp-types 0.97 lacks this field, so it is manually added in `capabilities_json()`.
+    #[test]
+    fn insert_text_modes_advertised_in_json_when_completion_enabled() {
+        let flags = BuildFlags { completion: true, ..BuildFlags::default() };
+        let json = capabilities_json(flags);
+        assert_eq!(
+            json.pointer("/completionProvider/completionItem/insertTextModes"),
+            Some(&serde_json::json!([1, 2])),
+            "completionProvider.completionItem.insertTextModes must be [1, 2] \
+             when completion is enabled (LSP 3.17)"
+        );
+    }
+
+    /// Verify that `insertTextModes` is NOT injected when completion is disabled.
+    #[test]
+    fn insert_text_modes_absent_when_completion_disabled() {
+        let flags = BuildFlags { completion: false, ..BuildFlags::default() };
+        let json = capabilities_json(flags);
+        assert!(
+            json.pointer("/completionProvider/completionItem/insertTextModes").is_none(),
+            "completionProvider.completionItem.insertTextModes must be absent \
+             when completion is disabled"
         );
     }
 

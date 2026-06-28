@@ -788,6 +788,10 @@ impl DocumentHighlightProvider {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::items_after_test_module,
+    reason = "policy:#2064: focused traversal regression test stays near get_children coverage"
+)]
 mod tests {
     use super::*;
 

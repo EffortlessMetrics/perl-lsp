@@ -5,6 +5,7 @@
 use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
+    workspace::{self, workspace_auto_import_edits},
 };
 use perl_semantic_analyzer::symbol::{
     Symbol as LocalSymbol, SymbolKind as LocalSymbolKind, SymbolTable,
@@ -323,6 +324,7 @@ fn add_local_package_completions(
 pub fn add_package_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
+    source: &str,
     symbol_table: &SymbolTable,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
 ) {
@@ -349,8 +351,32 @@ pub fn add_package_completions(
     // Query workspace index for members of the package (if available)
     let mut workspace_member_count = 0;
     if let Some(index) = workspace_index {
-        let members = index.get_package_members(&package_name);
-        for symbol in members {
+        // Phase 1: collect subroutines and methods from the full @ISA chain so that
+        // inherited methods appear (e.g. Child:: shows methods from Parent).
+        // `collect_all_package_members` intentionally filters to callable kinds; it
+        // does NOT return Constants or Variables.
+        let method_members = workspace::collect_all_package_members(index, &package_name);
+
+        // Phase 2: collect direct (own-package) non-callable members — Constants,
+        // Variables, and Exports — that are not traversed by the BFS above.
+        // Using `get_package_members` for the own package only preserves the
+        // pre-existing behavior for these kinds; we intentionally do NOT inherit
+        // constants/variables through @ISA (that would be surprising UX).
+        let direct_members = index.get_package_members(&package_name);
+
+        let all_members = method_members.into_iter().chain(direct_members);
+
+        // A qualified member completion (`Foo::bar`, `$Foo::x`, `Foo::CONST`)
+        // implies the user wants `Foo` loaded. Prepare the auto-import once;
+        // it is suppressed for `main`, the current package, and already-imported
+        // modules.
+        let auto_import_edits = workspace_auto_import_edits(
+            source,
+            Some(package_name.as_str()),
+            &context.current_package,
+        );
+
+        for symbol in all_members {
             let item_kind = match symbol.kind {
                 WsSymbolKind::Export | WsSymbolKind::Subroutine | WsSymbolKind::Method => {
                     CompletionItemKind::Function
@@ -366,15 +392,26 @@ pub fn add_package_completions(
             let member_name = symbol_member_name(&symbol);
             if member_name.starts_with(member_prefix) && seen_labels.insert(symbol.name.clone()) {
                 workspace_member_count += 1;
+
+                // Determine ranking: own-package methods rank higher than inherited
+                // Use tier 2 for own methods, tier 3 for inherited (consistent with method completion)
+                let defining_pkg =
+                    symbol.container_name.as_deref().unwrap_or(package_name.as_str());
+                let tier = if defining_pkg == package_name { "2" } else { "3" };
+
                 completions.push(CompletionItem {
                     label: symbol.name.clone(),
                     kind: item_kind,
-                    detail: Some(package_name.clone()),
+                    detail: if defining_pkg == package_name {
+                        Some(package_name.clone())
+                    } else {
+                        Some(format!("{package_name} (from {defining_pkg})"))
+                    },
                     documentation: package_member_documentation(&package_name, &symbol),
                     insert_text: Some(qualified_member_name(&package_name, &symbol)),
-                    sort_text: Some(format!("1_{}", symbol.name)),
+                    sort_text: Some(format!("{}_{}", tier, symbol.name)),
                     filter_text: Some(symbol.name.clone()),
-                    additional_edits: vec![],
+                    additional_edits: auto_import_edits.clone(),
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
                     label_details: None,

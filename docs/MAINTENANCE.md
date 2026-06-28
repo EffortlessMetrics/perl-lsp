@@ -649,7 +649,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 
 #### Rust Version
 
-**Current MSRV**: 1.92
+**Current MSRV**: 1.95
 
 **Upgrade Policy**:
 - MSRV increases only in minor releases

@@ -11,6 +11,7 @@ use perl_dap::platform::{
 };
 #[cfg(not(windows))]
 use perl_dap::platform::{detect_perlbrew_perl, detect_plenv_perl};
+use serial_test::serial;
 use std::path::PathBuf;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -348,12 +349,14 @@ fn make_fake_perl(dir: &std::path::Path, name: &str) -> TestResult {
 
 #[cfg(not(windows))]
 #[test]
+#[serial(env_toolchain)]
 fn detect_perlbrew_perl_env_var_points_to_valid_binary() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let bin_dir = tmp.path().join("perls").join("perl-5.38.0").join("bin");
     std::fs::create_dir_all(&bin_dir)?;
     make_fake_perl(&bin_dir, "perl")?;
-    // Safety: test runs single-threaded
+    // Safety: env mutation is safe because #[serial(env_toolchain)] prevents
+    // concurrent access to PERLBREW_ROOT/PERLBREW_PERL/PLENV_ROOT/PLENV_VERSION.
     unsafe {
         std::env::set_var("PERLBREW_ROOT", tmp.path().to_str().unwrap());
         std::env::set_var("PERLBREW_PERL", "perl-5.38.0");
@@ -371,9 +374,11 @@ fn detect_perlbrew_perl_env_var_points_to_valid_binary() -> TestResult {
 
 #[cfg(not(windows))]
 #[test]
+#[serial(env_toolchain)]
 fn detect_perlbrew_perl_env_set_but_binary_missing_returns_none() -> TestResult {
     let tmp = tempfile::tempdir()?;
-    // Safety: test runs single-threaded
+    // Safety: env mutation is safe because #[serial(env_toolchain)] prevents
+    // concurrent access to PERLBREW_ROOT/PERLBREW_PERL/PLENV_ROOT/PLENV_VERSION.
     unsafe {
         std::env::set_var("PERLBREW_ROOT", tmp.path().to_str().unwrap());
         std::env::set_var("PERLBREW_PERL", "perl-nonexistent-9.99.0");
@@ -389,12 +394,14 @@ fn detect_perlbrew_perl_env_set_but_binary_missing_returns_none() -> TestResult 
 
 #[cfg(not(windows))]
 #[test]
+#[serial(env_toolchain)]
 fn detect_plenv_perl_env_var_points_to_valid_binary() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let bin_dir = tmp.path().join("versions").join("5.38.0").join("bin");
     std::fs::create_dir_all(&bin_dir)?;
     make_fake_perl(&bin_dir, "perl")?;
-    // Safety: test runs single-threaded
+    // Safety: env mutation is safe because #[serial(env_toolchain)] prevents
+    // concurrent access to PERLBREW_ROOT/PERLBREW_PERL/PLENV_ROOT/PLENV_VERSION.
     unsafe {
         std::env::set_var("PLENV_ROOT", tmp.path().to_str().unwrap());
         std::env::set_var("PLENV_VERSION", "5.38.0");
@@ -412,9 +419,11 @@ fn detect_plenv_perl_env_var_points_to_valid_binary() -> TestResult {
 
 #[cfg(not(windows))]
 #[test]
+#[serial(env_toolchain)]
 fn detect_plenv_perl_env_set_but_binary_missing_returns_none() -> TestResult {
     let tmp = tempfile::tempdir()?;
-    // Safety: test runs single-threaded
+    // Safety: env mutation is safe because #[serial(env_toolchain)] prevents
+    // concurrent access to PERLBREW_ROOT/PERLBREW_PERL/PLENV_ROOT/PLENV_VERSION.
     unsafe {
         std::env::set_var("PLENV_ROOT", tmp.path().to_str().unwrap());
         std::env::set_var("PLENV_VERSION", "9.99.0");
@@ -430,12 +439,14 @@ fn detect_plenv_perl_env_set_but_binary_missing_returns_none() -> TestResult {
 
 #[cfg(not(windows))]
 #[test]
+#[serial(env_toolchain)]
 fn resolve_perl_path_with_toolchain_prefers_perlbrew_over_path() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let bin_dir = tmp.path().join("perls").join("perl-5.38.0").join("bin");
     std::fs::create_dir_all(&bin_dir)?;
     make_fake_perl(&bin_dir, "perl")?;
-    // Safety: test runs single-threaded
+    // Safety: env mutation is safe because #[serial(env_toolchain)] prevents
+    // concurrent access to PERLBREW_ROOT/PERLBREW_PERL/PLENV_ROOT/PLENV_VERSION.
     unsafe {
         std::env::set_var("PERLBREW_ROOT", tmp.path().to_str().unwrap());
         std::env::set_var("PERLBREW_PERL", "perl-5.38.0");
@@ -455,9 +466,11 @@ fn resolve_perl_path_with_toolchain_prefers_perlbrew_over_path() -> TestResult {
 
 #[cfg(not(windows))]
 #[test]
+#[serial(env_toolchain)]
 fn resolve_perl_path_with_toolchain_prefers_plenv_over_path() -> TestResult {
-    // Ensure perlbrew vars are absent so plenv is tried
-    // Safety: test runs single-threaded
+    // Ensure perlbrew vars are absent so plenv is tried.
+    // Safety: env mutation is safe because #[serial(env_toolchain)] prevents
+    // concurrent access to PERLBREW_ROOT/PERLBREW_PERL/PLENV_ROOT/PLENV_VERSION.
     unsafe {
         std::env::remove_var("PERLBREW_PERL");
         std::env::remove_var("PERLBREW_ROOT");
@@ -481,9 +494,11 @@ fn resolve_perl_path_with_toolchain_prefers_plenv_over_path() -> TestResult {
 }
 
 #[test]
+#[serial(env_toolchain)]
 fn resolve_perl_path_with_toolchain_falls_back_to_path() -> TestResult {
-    // Clear toolchain env vars so PATH fallback is exercised
-    // Safety: test runs single-threaded
+    // Clear toolchain env vars so PATH fallback is exercised.
+    // Safety: env mutation is safe because #[serial(env_toolchain)] prevents
+    // concurrent access to PERLBREW_ROOT/PERLBREW_PERL/PLENV_ROOT/PLENV_VERSION.
     unsafe {
         std::env::remove_var("PERLBREW_PERL");
         std::env::remove_var("PERLBREW_ROOT");

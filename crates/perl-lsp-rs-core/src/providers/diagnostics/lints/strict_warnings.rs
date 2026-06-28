@@ -7,8 +7,8 @@
 //!
 //! | Code | Severity | Description |
 //! |------|----------|-------------|
-//! | `missing-strict` | Information | `use strict` pragma not found |
-//! | `missing-warnings` | Information | `use warnings` pragma not found |
+//! | `missing-strict` | Warning | `use strict` pragma not found |
+//! | `missing-warnings` | Warning | `use warnings` pragma not found |
 //! | `misspelled-pragma` | Warning | Pragma name appears misspelled |
 
 use perl_diagnostics::codes::DiagnosticCode;
@@ -47,7 +47,7 @@ struct PhaseScopedPragmaUse {
 /// Check for common strict/warnings issues
 ///
 /// This function checks if 'use strict' and 'use warnings' pragmas are present
-/// in the code and generates informational diagnostics if they are missing.
+/// in the code and generates warning diagnostics if they are missing.
 /// It also detects misspelled pragma names and provides "Did you mean?" suggestions.
 pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     // Do not suggest strict/warnings for empty, whitespace-only, comment-only,
@@ -110,7 +110,7 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     if !has_strict {
         diagnostics.push(Diagnostic {
             range: (0, 0),
-            severity: DiagnosticSeverity::Information,
+            severity: DiagnosticSeverity::Warning,
             code: Some(DiagnosticCode::MissingStrict.as_str().to_string()),
             message: "Consider adding 'use strict;' for better error checking".to_string(),
             related_information: vec![
@@ -131,7 +131,7 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     if !has_warnings {
         diagnostics.push(Diagnostic {
             range: (0, 0),
-            severity: DiagnosticSeverity::Information,
+            severity: DiagnosticSeverity::Warning,
             code: Some(DiagnosticCode::MissingWarnings.as_str().to_string()),
             message: "Consider adding 'use warnings;' for better error detection".to_string(),
             related_information: vec![
@@ -348,6 +348,22 @@ mod tests {
     }
 
     #[test]
+    fn missing_strict_and_warnings_emit_warning_severity() {
+        let diags = strict_warnings_diags("my $x = 1;\n");
+        let missing_strict = diags.iter().find(|d| d.code.as_deref() == Some("PL100"));
+        let missing_warnings = diags.iter().find(|d| d.code.as_deref() == Some("PL101"));
+
+        assert!(
+            missing_strict.is_some_and(|d| d.severity == DiagnosticSeverity::Warning),
+            "PL100 should emit Warning severity, got {missing_strict:?}"
+        );
+        assert!(
+            missing_warnings.is_some_and(|d| d.severity == DiagnosticSeverity::Warning),
+            "PL101 should emit Warning severity, got {missing_warnings:?}"
+        );
+    }
+
+    #[test]
     fn file_with_strict_and_warnings_no_diagnostic() {
         let diags = strict_warnings_diags("use strict;\nuse warnings;\nmy $x = 1;\n");
         let has_strict_warn =
@@ -543,6 +559,13 @@ mod tests {
             diags.iter().any(|d| d.code.as_deref() == Some("PL502")),
             "BEGIN-scoped strict should emit PL502"
         );
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.code.as_deref() == Some("PL502")
+                    && d.severity == DiagnosticSeverity::Warning),
+            "BEGIN-scoped strict should keep Warning severity"
+        );
     }
 
     #[test]
@@ -560,6 +583,13 @@ mod tests {
         assert!(
             diags.iter().any(|d| d.code.as_deref() == Some("PL503")),
             "END-scoped warnings should emit PL503"
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.code.as_deref() == Some("PL503")
+                    && d.severity == DiagnosticSeverity::Warning),
+            "END-scoped warnings should keep Warning severity"
         );
     }
 

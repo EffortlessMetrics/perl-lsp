@@ -45,7 +45,7 @@ files = [
   "crates/perl-lsp-rs-core/src/providers/inline_completion/",
 ]
 commands = [
-  "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
+  "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
 ]
 coverage_filters = [
   "inline_completion",
@@ -78,12 +78,48 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-xtask-native-tooling"
+files = [
+  "xtask/src/tasks/native_tooling.rs",
+]
+commands = [
+  "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture",
+]
+coverage_filters = [
+  "native_tooling",
+]
+
+[[pack]]
+id = "patch-coverage-xtask-gates"
+files = [
+  "xtask/src/tasks/gates.rs",
+]
+commands = [
+  "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked gates -- --nocapture",
+]
+coverage_filters = [
+  "gates",
+]
+
+[[pack]]
+id = "patch-coverage-xtask-file-policy"
+files = [
+  "xtask/src/tasks/file_policy.rs",
+]
+commands = [
+  "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked file_policy -- --nocapture",
+]
+coverage_filters = [
+  "file_policy",
+]
+
+[[pack]]
 id = "patch-coverage-completion-core"
 files = [
   "crates/perl-lsp-rs-core/src/providers/completion/",
 ]
 commands = [
-  "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
+  "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
 ]
 coverage_filters = [
   "completion::completion",
@@ -885,10 +921,7 @@ id = "patch-coverage-rust-focused"
 files = [
   "*.rs",
 ]
-commands = [
-  "cargo test --workspace --lib --profile agent --locked",
-  "cargo check --workspace --all-targets --profile agent --locked",
-]
+commands = []
 coverage_filters = [
-  "workspace-lib",
+  "changed-crate-lib-and-integration",
 ]

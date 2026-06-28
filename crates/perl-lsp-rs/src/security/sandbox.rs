@@ -67,7 +67,21 @@ impl Sandbox {
         Ok(Self { config, temp_dir })
     }
 
-    /// Execute a command in the sandbox
+    /// Execute a command in the sandbox.
+    ///
+    /// # Security contract for `program`
+    ///
+    /// `program` **must** be a pre-resolved absolute path.  Passing a bare name
+    /// (e.g. `"perl"`) or a relative path here would let `Command::new` trigger
+    /// CreateProcess's CWD-first executable search on Windows (binary-planting
+    /// RCE, #2764/#3028).  All callers of this method are responsible for
+    /// resolving the program via `perl_subprocess_runtime::resolve_program` (or
+    /// an equivalent PATH-only resolver) before passing it to `execute`.
+    ///
+    /// Note: `Sandbox`/`SafeExecutor` are currently only instantiated in tests
+    /// (not reachable from the live LSP runtime), so there is no active exposure
+    /// here.  This comment is a future-consumer guard for when a live call site
+    /// is added.
     pub fn execute(&self, program: &str, args: &[&str]) -> Result<SandboxResult> {
         if !self.config.enabled {
             return self.execute_unsandboxed(program, args);
@@ -96,7 +110,11 @@ impl Sandbox {
         })
     }
 
-    /// Execute without sandboxing (fallback)
+    /// Execute without sandboxing (fallback).
+    ///
+    /// Same security contract as [`Sandbox::execute`]: `program` must be a
+    /// pre-resolved absolute path — bare names and relative paths are unsafe on
+    /// Windows (CWD-first CreateProcess search, #2764/#3028).
     fn execute_unsandboxed(&self, program: &str, args: &[&str]) -> Result<SandboxResult> {
         let mut cmd = Command::new(program);
         cmd.args(args);
@@ -519,7 +537,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "blocked by #5198 — sandbox output capture broken on this env"]
     fn test_unsandboxed_execution() {
         use perl_tdd_support::must;
         let config = SandboxConfig { enabled: false, ..Default::default() };
@@ -533,7 +550,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "blocked by #5198 — sandbox output capture broken on this env"]
     fn test_safe_executor_disabled() {
         use perl_tdd_support::must;
         // Test with sandbox disabled (default config has enabled=true which fails closed without firejail)
@@ -653,7 +669,6 @@ mod tests {
     /// The ${^TAINT} special variable is 1 when perl is invoked with -T and
     /// 0 otherwise — this gives a direct, non-vacuous signal.
     #[test]
-    #[ignore = "blocked by #5198 — sandbox output capture broken on this env"]
     fn test_perl_taint_mode_flag() {
         use perl_tdd_support::must;
         let temp_dir = must(TempDir::new());
@@ -693,7 +708,6 @@ if (${^TAINT}) {
     /// dangerous sink: system(), exec(), open() with shell metacharacters, or
     /// eval(STRING). This test verifies the correct sink: system().
     #[test]
-    #[ignore = "blocked by #5198 — sandbox output capture broken on this env"]
     fn test_perl_taint_mode_blocks_dangerous_ops() {
         use perl_tdd_support::must;
         let temp_dir = must(TempDir::new());

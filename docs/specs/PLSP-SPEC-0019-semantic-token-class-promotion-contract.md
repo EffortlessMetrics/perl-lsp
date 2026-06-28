@@ -33,6 +33,8 @@ method_call
 self_method_call
 lexical_variable_declaration
 lexical_variable_use
+our_variable_declaration
+state_variable_declaration
 ```
 
 Those classes prove identity alignment with existing live tokens. They do not

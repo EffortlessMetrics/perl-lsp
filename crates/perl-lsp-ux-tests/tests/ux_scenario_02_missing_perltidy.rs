@@ -1,7 +1,5 @@
 // Test infrastructure — allow test-friendly patterns.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-// UX receipt scenarios print skip/info markers during `--nocapture` runs.
-#![allow(clippy::print_stderr)]
 
 //! Scenario 02 — Missing perltidy.
 //!
@@ -14,11 +12,8 @@
 //! - No Rust panic traces in error messages.
 //! - The server MUST still be alive after the failed formatting request.
 
-use anyhow::{Result, bail};
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{FormatResult, ScenarioConfig, UxHarness};
-use serde_json::{Value, json};
-use std::time::Duration;
 
 fn config_without_perltidy() -> ScenarioConfig {
     // Exclude only perltidy from PATH, leaving perl and other tools available.
@@ -31,32 +26,6 @@ fn config_without_perltidy() -> ScenarioConfig {
         .map(String::from)
         .collect();
     ScenarioConfig { path_restriction: Some(dirs), ..Default::default() }
-}
-
-fn config_without_any_path_tools() -> ScenarioConfig {
-    ScenarioConfig { path_restriction: Some(Vec::new()), ..Default::default() }
-}
-
-fn send_external_perltidy_config(harness: &UxHarness) -> Result<()> {
-    harness.client.notify(
-        "workspace/didChangeConfiguration",
-        json!({
-            "settings": {
-                "perl": {
-                    "formatting": {
-                        "enabled": true,
-                        "engine": "external-perltidy"
-                    }
-                }
-            }
-        }),
-    )?;
-    std::thread::sleep(Duration::from_millis(200));
-    Ok(())
-}
-
-fn error_message(error: &Value) -> &str {
-    error.get("message").and_then(Value::as_str).unwrap_or_default()
 }
 
 #[test]
@@ -97,44 +66,6 @@ fn scenario_02_formatting_without_perltidy_does_not_crash() {
     }
 
     harness.assert_no_crash();
-}
-
-#[test]
-fn scenario_02_external_perltidy_returns_actionable_error() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_02: perl-lsp binary not found");
-        return Ok(());
-    }
-
-    let source = "sub test{my$x=1;return$x;}\n";
-    let harness = UxHarness::new(config_without_any_path_tools())?;
-    send_external_perltidy_config(&harness)?;
-
-    harness.open_file("external_perltidy_missing.pl", source)?;
-
-    let FormatResult::Error(error) = harness.format_document("external_perltidy_missing.pl")?
-    else {
-        bail!("external perltidy formatting must return a structured missing-tool error");
-    };
-
-    let msg = error_message(&error);
-    assert!(msg.contains("perltidy not found"), "missing-tool error should name perltidy: {msg}");
-    assert!(
-        msg.contains("cpanm Perl::Tidy"),
-        "missing-tool error should include install guidance: {msg}"
-    );
-    assert_eq!(
-        error.pointer("/data/error_kind").and_then(Value::as_str),
-        Some("perltidy_not_found"),
-        "missing-tool error should expose machine-readable remediation data"
-    );
-    assert!(
-        !msg.contains("panicked at") && !msg.contains("SIGABRT"),
-        "missing-tool error should not expose crash text: {msg}"
-    );
-
-    harness.assert_no_crash();
-    Ok(())
 }
 
 #[test]

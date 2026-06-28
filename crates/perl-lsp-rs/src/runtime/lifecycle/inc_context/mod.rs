@@ -213,6 +213,7 @@ mod tests {
         let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
         config.include_paths = vec!["lib".to_string()];
         config.use_system_inc = false;
+        // This fixture asserts lexical + workspace roots only; ambient PERL5LIB would add roots.
         config.use_perl5lib = false;
         config.resolution_timeout_ms = 123;
 

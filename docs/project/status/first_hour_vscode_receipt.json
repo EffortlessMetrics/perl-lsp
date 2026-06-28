@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "issue": 3102,
+  "follow_up_issue": 3159,
+  "generated_at": "2026-06-28T19:01:37.023Z",
+  "result": "completed",
+  "summary": "Real VS Code extension-host validation against a 261-file Perl-Critic workspace now reaches startup, completion, hover, definition, references, and diagnostics after extension activation was decoupled from the LSP startup wait.",
+  "environment": {
+    "platform": "win32",
+    "arch": "x64",
+    "vscode_version": "1.126.0",
+    "extension_id": "EffortlessMetrics.perl-lsp-rs",
+    "extension_version": "0.16.0",
+    "server_version": "perl-lsp 0.17.0",
+    "server_git_tag": "c04e06b8c",
+    "server_path": "target/agent/perl-lsp.exe"
+  },
+  "workspace": {
+    "source": "https://github.com/Perl-Critic/Perl-Critic.git",
+    "git_head": "c437d55",
+    "path": "target/first-hour-workspaces/Perl-Critic",
+    "file_count_sampled": 442,
+    "perl_file_count_sampled": 261,
+    "module_under_probe": "Perl::Critic",
+    "probe_files": [
+      "zz_first_hour_receipt_probe.pl",
+      "zz_first_hour_receipt_bad.pl"
+    ]
+  },
+  "startup": {
+    "extension_activation_status": "ok",
+    "extension_activation_ms": 300,
+    "extension_activated_within_30s": true,
+    "command_registration_ms": 38,
+    "health": {
+      "status": "ok",
+      "duration_ms": 5258,
+      "checks": [
+        {
+          "label": "Perl interpreter",
+          "status": "ok",
+          "detail": "Perl 5.042002 found"
+        },
+        {
+          "label": "perltidy",
+          "status": "ok",
+          "detail": "perltidy found"
+        },
+        {
+          "label": "perlcritic",
+          "status": "ok",
+          "detail": "Perl::Critic is disabled"
+        },
+        {
+          "label": "LSP binary",
+          "status": "ok",
+          "detail": "Binary found: target/agent/perl-lsp.exe"
+        }
+      ]
+    },
+    "indexing_announcement_observed": "not_observable_from_extension_host_public_api"
+  },
+  "moments": {
+    "immediate": {
+      "completion": {
+        "status": "ok",
+        "duration_ms": 123,
+        "item_count": 5,
+        "sample_labels": [
+          "can",
+          "DOES",
+          "isa",
+          "new",
+          "VERSION"
+        ]
+      },
+      "hover": {
+        "status": "ok",
+        "duration_ms": 34,
+        "item_count": 1
+      },
+      "definition": {
+        "status": "ok",
+        "duration_ms": 5,
+        "location_count": 1
+      },
+      "references": {
+        "status": "ok",
+        "duration_ms": 5,
+        "location_count": 1
+      },
+      "diagnostics": {
+        "status": "ok",
+        "count": 1,
+        "max_severity": 0
+      },
+      "elapsed_ms_since_moment_start": 167
+    },
+    "after_30_seconds": {
+      "completion": {
+        "status": "ok",
+        "duration_ms": 3,
+        "item_count": 5,
+        "sample_labels": [
+          "can",
+          "DOES",
+          "isa",
+          "new",
+          "VERSION"
+        ]
+      },
+      "hover": {
+        "status": "ok",
+        "duration_ms": 3,
+        "item_count": 1
+      },
+      "definition": {
+        "status": "ok",
+        "duration_ms": 3,
+        "location_count": 1
+      },
+      "references": {
+        "status": "ok",
+        "duration_ms": 2,
+        "location_count": 1
+      },
+      "diagnostics": {
+        "status": "ok",
+        "count": 1,
+        "max_severity": 0
+      },
+      "elapsed_ms_since_moment_start": 11
+    },
+    "diagnostics_probe": {
+      "file": "zz_first_hour_receipt_bad.pl",
+      "count": 2,
+      "messages": [
+        "Recovered from MissingOperand at InfixRhs (position 32)",
+        "Variable '$x' is declared but never used -- prefix with '_' or remove it"
+      ]
+    },
+    "failures": []
+  },
+  "commands": [
+    {
+      "command": "npm test -- --runTestsByPath src/test/activationStartup.test.ts",
+      "cwd": "vscode-extension",
+      "result": "pass"
+    },
+    {
+      "command": "npm run compile",
+      "cwd": "vscode-extension",
+      "result": "pass"
+    },
+    {
+      "command": "npx tsc -p ./tsconfig.integration.json",
+      "cwd": "vscode-extension",
+      "result": "pass"
+    },
+    {
+      "command": "node ./out/test/integration/runTest.js",
+      "cwd": "vscode-extension",
+      "environment": {
+        "PERL_LSP_FIRST_HOUR_ONLY": "1",
+        "PERL_LSP_FIRST_HOUR_RECEIPT": "1",
+        "PERL_LSP_EXTENSION_TEST_SKIP_STARTUP": "0",
+        "PERL_LSP_FIRST_HOUR_MODULE": "Perl::Critic",
+        "PERL_LSP_SMOKE_SOURCE_LABEL": "first-hour-3159-after"
+      },
+      "result": "fail",
+      "failure": "VS Code test host exited before the test body completed; log included 'Error mutex already exists'. No receipt was written."
+    },
+    {
+      "command": "node ./out/test/integration/runTest.js",
+      "cwd": "vscode-extension",
+      "environment": {
+        "PERL_LSP_FIRST_HOUR_ONLY": "1",
+        "PERL_LSP_FIRST_HOUR_RECEIPT": "1",
+        "PERL_LSP_EXTENSION_TEST_SKIP_STARTUP": "0",
+        "PERL_LSP_FIRST_HOUR_MODULE": "Perl::Critic",
+        "PERL_LSP_SMOKE_SOURCE_LABEL": "first-hour-3159-after-retry"
+      },
+      "result": "pass",
+      "receipt_outcome": "completed"
+    }
+  ],
+  "limitations": [
+    "Automated extension-host run uses real VS Code and the real extension, but does not visually inspect the status bar.",
+    "VS Code extension tests cannot read OutputChannel text through public API, so indexing announcement visibility remains not observable from this harness.",
+    "The first #3159 receipt attempt hit VS Code test-host mutex/runtime noise and wrote no receipt; the retry completed after a specific orphaned test crashpad process was stopped."
+  ],
+  "next_action": "Use this completed receipt as the first-hour baseline, then continue the first-use lane with the next prioritized issue."
+}

@@ -5,6 +5,8 @@ use std::collections::HashMap;
 pub(super) enum VariableCacheKind {
     Root,
     Child,
+    /// Cached result from evaluate/setExpression/setVariable for structured expansion.
+    EvaluateResult,
 }
 
 #[derive(Debug, Clone)]
@@ -53,15 +55,81 @@ impl VariableCache {
         Some(page)
     }
 
+    /// Returns the total number of variables stored for the given reference, or `None` if the
+    /// reference is not in the cache. This is the pre-pagination count, suitable for populating
+    /// the DAP `totalVariables` field.
+    pub(super) fn root_count(&self, reference: i32) -> Option<usize> {
+        self.entries.get(&reference).map(|e| e.full.len())
+    }
+
     pub(super) fn all_variables(&self) -> impl Iterator<Item = &Variable> {
         self.entries
             .values()
             .filter(|entry| entry.kind == VariableCacheKind::Root)
             .chain(self.entries.values().filter(|entry| entry.kind == VariableCacheKind::Child))
+            .chain(
+                self.entries
+                    .values()
+                    .filter(|entry| entry.kind == VariableCacheKind::EvaluateResult),
+            )
             .flat_map(|entry| entry.full.iter())
     }
 }
 
 pub(super) fn slice_variables(variables: &[Variable], start: usize, count: usize) -> Vec<Variable> {
     variables.iter().skip(start).take(count).cloned().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_variable(name: &str) -> Variable {
+        Variable {
+            name: name.to_string(),
+            value: "test".to_string(),
+            type_: None,
+            variables_reference: 0,
+            named_variables: None,
+            indexed_variables: None,
+        }
+    }
+
+    /// all_variables() includes EvaluateResult-kind entries.
+    ///
+    /// Covered changed lines: ~63-66  EvaluateResult chain in all_variables.
+    #[test]
+    fn all_variables_includes_evaluate_result_entries() {
+        let mut cache = VariableCache::default();
+        cache.upsert(1, VariableCacheKind::Root, vec![make_variable("root_var")]);
+        cache.upsert(2, VariableCacheKind::EvaluateResult, vec![make_variable("eval_result")]);
+
+        let names: Vec<&str> = cache.all_variables().map(|v| v.name.as_str()).collect();
+        assert!(
+            names.contains(&"root_var"),
+            "all_variables must include Root entries; got {names:?}"
+        );
+        assert!(
+            names.contains(&"eval_result"),
+            "all_variables must include EvaluateResult entries; got {names:?}"
+        );
+    }
+
+    /// all_variables() with only EvaluateResult entries returns those entries.
+    ///
+    /// Exercises the EvaluateResult chain path when Root/Child are absent.
+    #[test]
+    fn all_variables_evaluate_result_only() {
+        let mut cache = VariableCache::default();
+        cache.upsert(
+            10,
+            VariableCacheKind::EvaluateResult,
+            vec![make_variable("x"), make_variable("y")],
+        );
+
+        let names: Vec<&str> = cache.all_variables().map(|v| v.name.as_str()).collect();
+        assert_eq!(names.len(), 2, "expected 2 EvaluateResult variables; got {names:?}");
+        assert!(names.contains(&"x"), "must contain 'x'");
+        assert!(names.contains(&"y"), "must contain 'y'");
+    }
 }

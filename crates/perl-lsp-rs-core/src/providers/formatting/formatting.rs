@@ -608,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    fn format_document_external_legacy_reports_missing_perltidy() {
+    fn format_document_external_legacy_reports_missing_perltidy() -> Result<()> {
         let provider = FormattingProvider::new(MissingPerltidyRuntime)
             .with_formatter_mode(FormatterMode::ExternalLegacy);
         let options = FormattingOptions {
@@ -619,10 +619,11 @@ mod tests {
             trim_final_newlines: None,
         };
 
-        let error = provider
-            .format_document("my$x=1;\n", &options)
-            .expect_err("explicit external legacy mode must report missing perltidy");
+        let error = provider.format_document("my$x=1;\n", &options).err().ok_or_else(|| {
+            anyhow::anyhow!("explicit external legacy mode must report missing perltidy")
+        })?;
         assert_eq!(error.error_kind(), "perltidy_not_found");
+        Ok(())
     }
 
     #[test]

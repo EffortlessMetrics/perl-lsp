@@ -1,0 +1,40 @@
+>=pod
+#^^^^ source.perl comment.block.documentation.perl keyword.control.pod.perl
+>
+>=head1 NAME
+#^^^^^^^^^^^^ source.perl comment.block.documentation.perl
+>
+>Example - a POD documentation block
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.perl comment.block.documentation.perl
+>
+>=head1 SYNOPSIS
+#^^^^^^^^^^^^^^^^ source.perl comment.block.documentation.perl
+>
+>    use Example;
+#^^^^^^^^^^^^^^^^^ source.perl comment.block.documentation.perl
+>
+>=over 4
+#^^^^^^^^ source.perl comment.block.documentation.perl
+>
+>=item * first
+#^^^^^^^^^^^^^^ source.perl comment.block.documentation.perl
+>
+>=item * second
+#^^^^^^^^^^^^^^^ source.perl comment.block.documentation.perl
+>
+>=back
+#^^^^^^ source.perl comment.block.documentation.perl
+>
+>=cut
+#^^^^ source.perl comment.block.documentation.perl keyword.control.pod.perl
+>
+>my $after_pod = 1;
+#^^ source.perl keyword.other.perl
+#  ^ source.perl
+#   ^^^^^^^^^^ source.perl variable.other.scalar.perl
+#             ^ source.perl
+#              ^ source.perl keyword.operator.assignment.perl
+#               ^ source.perl
+#                ^ source.perl constant.numeric.integer.perl
+#                 ^^ source.perl
+>

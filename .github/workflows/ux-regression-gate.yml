@@ -44,18 +44,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
         with:
-          toolchain: 1.92.0
+          toolchain: 1.95.0
 
       - name: Install just
-        uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4  # v2.79.7
+        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
         with:
           tool: just
 
@@ -395,7 +395,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
@@ -423,17 +423,28 @@ jobs:
         working-directory: vscode-extension
         run: npm run test:ci
 
+      - name: Grammar snapshot tests (visual regression)
+        id: grammar
+        working-directory: vscode-extension
+        run: npm run test:grammar
+
       - name: Report extension Jest result (ci/extension-jest)
         if: always()
         uses: actions/github-script@v9
         with:
           script: |
-            // Blocking gate: the commit status reflects the real jest outcome.
+            // Blocking gate: the commit status reflects the real jest + grammar outcome.
             const jest = '${{ steps.jest.outcome }}';
-            const state = jest === 'success' ? 'success' : 'failure';
-            const description = state === 'success'
-              ? 'extension lint + typecheck + jest all green'
-              : 'extension jest failed — run: cd vscode-extension && npm run test:ci';
+            const grammar = '${{ steps.grammar.outcome }}';
+            const state = (jest === 'success' && grammar === 'success') ? 'success' : 'failure';
+            let description;
+            if (state === 'success') {
+              description = 'extension lint + typecheck + jest + grammar snapshots all green';
+            } else if (jest !== 'success') {
+              description = 'extension jest failed — run: cd vscode-extension && npm run test:ci';
+            } else {
+              description = 'grammar snapshot regression — run: cd vscode-extension && npm run test:grammar';
+            }
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,

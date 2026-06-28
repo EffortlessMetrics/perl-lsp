@@ -401,19 +401,14 @@ fn test_cancellation_check_latency_performance_ac12() -> Result<(), Box<dyn std:
         let _ = token.is_cancelled();
     }
 
-    // Measurement phase
+    // Measurement phase. Collect all samples before enforcing the latency
+    // contract: individual wall-clock samples can include scheduler preemption,
+    // while the AC12 requirement is expressed by the percentile checks below.
     for _ in 0..iterations {
         let start = Instant::now();
         let _ = token.is_cancelled();
         let duration = start.elapsed();
         durations.push(duration);
-
-        // Validate individual check latency against AC12 requirement
-        assert!(
-            duration < Duration::from_micros(500),
-            "Individual cancellation check exceeded 500μs: {}μs",
-            duration.as_micros()
-        );
     }
 
     // Statistical analysis

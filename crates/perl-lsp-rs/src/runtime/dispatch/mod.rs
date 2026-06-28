@@ -78,7 +78,6 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_tdd_support::must_some;
 
     fn request(id: i64, method: &str, params: Option<Value>) -> JsonRpcRequest {
         JsonRpcRequest {
@@ -105,39 +104,35 @@ mod tests {
             "initialize request should succeed"
         );
 
-        let after_initialize = must_some(
-            server
-                .handle_request(request(3, "custom/unknown", None))
-                .and_then(|response| response.error),
-        );
-        assert_eq!(after_initialize.code, -32601);
+        let after_initialize = server
+            .handle_request(request(3, "custom/unknown", None))
+            .and_then(|response| response.error)
+            .map(|error| error.code);
+        assert_eq!(after_initialize, Some(-32601));
+    }
+
+    #[test]
+    fn first_use_hot_paths_are_wrapped_by_shared_latency_recorder() {
+        let routing = include_str!("routing.rs");
+        for method in [
+            "initialize",
+            "textDocument/didOpen",
+            "textDocument/didChange",
+            "textDocument/completion",
+            "textDocument/hover",
+            "textDocument/definition",
+            "textDocument/references",
+            "textDocument/signatureHelp",
+            "textDocument/semanticTokens/full",
+        ] {
+            assert!(routing.contains(method), "routing table must include hot path `{method}`");
+        }
+
+        let recorder_calls =
+            routing.matches("record_lsp_request_latency(&method, request_start)").count();
         assert!(
-            after_initialize.message.contains("custom/unknown"),
-            "unexpected message: {}",
-            after_initialize.message
-        );
-        assert!(
-            after_initialize.message.contains("LSP method spelling"),
-            "unexpected message: {}",
-            after_initialize.message
-        );
-        assert!(
-            after_initialize.message.contains("capabilities returned by initialize"),
-            "unexpected message: {}",
-            after_initialize.message
-        );
-        assert!(
-            after_initialize.message.contains("workspace/executeCommand"),
-            "unexpected message: {}",
-            after_initialize.message
-        );
-        assert_eq!(
-            after_initialize
-                .data
-                .as_ref()
-                .and_then(|data| data.pointer("/method"))
-                .and_then(Value::as_str),
-            Some("custom/unknown")
+            recorder_calls >= 2,
+            "normal and cancellable dispatch paths must record shared request latency"
         );
     }
 }

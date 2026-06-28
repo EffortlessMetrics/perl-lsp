@@ -759,8 +759,8 @@ mod tests {
         // The receipt should reflect the old path as unavailable.
         assert!(result.legacy_result.is_none());
         assert_eq!(result.receipt.query, ShadowQueryName::FindDefinition);
-        assert_eq!(result.receipt.old_result.available, false);
-        assert_eq!(result.receipt.new_result.available, true);
+        assert!(!result.receipt.old_result.available);
+        assert!(result.receipt.new_result.available);
         assert_eq!(result.receipt.new_result.match_count, 0);
         assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Unavailable);
         Ok(())
@@ -778,8 +778,8 @@ mod tests {
         // Legacy unavailable, new has 1 candidate -> Unavailable verdict
         // (because old path is unavailable).
         assert!(result.legacy_result.is_none());
-        assert_eq!(result.receipt.old_result.available, false);
-        assert_eq!(result.receipt.new_result.available, true);
+        assert!(!result.receipt.old_result.available);
+        assert!(result.receipt.new_result.available);
         assert_eq!(result.receipt.new_result.match_count, 1);
         assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Unavailable);
         Ok(())
@@ -892,9 +892,9 @@ mod tests {
         )
     }
 
-    fn first_trace<'a>(
-        receipt: &'a SemanticShadowCompareReceipt,
-    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+    fn first_trace(
+        receipt: &SemanticShadowCompareReceipt,
+    ) -> Result<&ProviderFactTrace, Box<dyn std::error::Error>> {
         match receipt.fact_source_traces.first() {
             Some(trace) => Ok(trace),
             None => Err("missing fact-source trace".into()),

@@ -227,6 +227,7 @@ fn make_test_file_ast() -> Node {
                     NodeKind::Subroutine {
                         name: Some("test_basic".to_string()),
                         name_span: None,
+                        declarator: None,
                         prototype: None,
                         signature: None,
                         attributes: vec![],
@@ -241,6 +242,7 @@ fn make_test_file_ast() -> Node {
                     NodeKind::Subroutine {
                         name: Some("helper".to_string()),
                         name_span: None,
+                        declarator: None,
                         prototype: None,
                         signature: None,
                         attributes: vec![],
@@ -255,6 +257,7 @@ fn make_test_file_ast() -> Node {
                     NodeKind::Subroutine {
                         name: Some("test_another".to_string()),
                         name_span: None,
+                        declarator: None,
                         prototype: None,
                         signature: None,
                         attributes: vec![],
@@ -401,6 +404,7 @@ fn refactoring_analyzer_default() -> Result<(), Box<dyn std::error::Error>> {
                 NodeKind::Subroutine {
                     name: Some("foo".to_string()),
                     name_span: None,
+                    declarator: None,
                     prototype: None,
                     signature: None,
                     attributes: vec![],
@@ -461,6 +465,7 @@ fn make_sub_ast(name: &str) -> Node {
                 NodeKind::Subroutine {
                     name: Some(name.to_string()),
                     name_span: None,
+                    declarator: None,
                     prototype: None,
                     signature: None,
                     attributes: vec![],

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 - **Tier**: 6 (application/executable crate)
 - **Purpose**: Debug Adapter Protocol server for Perl. Provides a native adapter that drives `perl -d` directly, and a `BridgeAdapter` library that proxies DAP messages to Perl::LanguageServer.
-- **Version**: workspace (currently 0.12.3)
+- **Version**: workspace (see root `Cargo.toml` `[workspace.package]` version)
 
 ## Commands
 
@@ -45,7 +45,6 @@ RUST_LOG=debug ./target/release/perl-dap  # Run with debug logging
 | `bridge_adapter.rs` | `BridgeAdapter` | Spawns Perl::LanguageServer in DAP mode, proxies messages via stdio |
 | `protocol.rs` | `Request`, `Response`, `Event`, `Capabilities`, `SourceBreakpoint`, `Breakpoint`, ... | Full DAP protocol type definitions (serde-annotated) |
 | `breakpoints.rs` | `BreakpointStore`, `BreakpointRecord`, `BreakpointHitOutcome` | Breakpoint storage with REPLACE semantics, AST validation |
-| `dispatcher.rs` | `DapDispatcher` (deprecated), `DispatchResult` | Legacy message router; use `DebugAdapter` instead |
 | `configuration.rs` | `LaunchConfiguration`, `AttachConfiguration`, `create_launch_json_snippet()`, `create_attach_json_snippet()` | Launch/attach config structs with validation |
 | `platform.rs` | `resolve_perl_path()`, `normalize_path()`, `setup_environment()` | Cross-platform path resolution and env setup |
 | `security.rs` | `SecurityError`, `validate_path()`, `validate_expression()` | Path traversal prevention, expression sanitization, timeout caps |
@@ -84,7 +83,7 @@ println!("{}", create_launch_json_snippet());
 
 ## Important Notes
 
-- `DapDispatcher` is deprecated; use `DebugAdapter` directly for new code
+- Use `DebugAdapter` directly to route DAP requests and manage protocol state
 - Platform-specific code gated with `cfg(unix)` / `cfg(windows)` for signal handling
 - Security module enforces workspace-boundary path checks and expression sanitization
 - All regex patterns use `OnceLock<Result<Regex, regex::Error>>` or `Lazy<Option<Regex>>` for graceful degradation

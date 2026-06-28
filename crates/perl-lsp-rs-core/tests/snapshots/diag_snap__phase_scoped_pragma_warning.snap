@@ -3,8 +3,8 @@ source: crates/perl-lsp-rs-core/tests/diag_snap.rs
 assertion_line: 174
 expression: snapshot
 ---
-PL100 | Information | (0, 0) | Consider adding 'use strict;' for better error checking | Add 'use strict;' at the top of the file
-PL101 | Information | (0, 0) | Consider adding 'use warnings;' for better error detection | Add 'use warnings;' at the top of the file
+PL100 | Warning | (0, 0) | Consider adding 'use strict;' for better error checking | Add 'use strict;' at the top of the file
+PL101 | Warning | (0, 0) | Consider adding 'use warnings;' for better error detection | Add 'use warnings;' at the top of the file
 PL200 | Warning | (0, 0) | This file has no package declaration. Add 'package MyModule;' to declare the package namespace. | Add 'package MyModule;' at the top of the file
 PL502 | Warning | (12, 22) | `use strict` inside a BEGIN block does not enable strict for the rest of the file | Move `use strict;` to the top of the file
 PL503 | Warning | (28, 40) | `use warnings` inside a BEGIN block does not enable warnings for the rest of the file | Move `use warnings;` to the top of the file

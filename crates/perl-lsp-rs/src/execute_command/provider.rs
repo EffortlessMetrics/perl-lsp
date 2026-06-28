@@ -342,8 +342,20 @@ impl ExecuteCommandProvider {
         }
     }
 
-    fn run_test_command(&self, command: &str, ext_path: &Path) -> Result<Value, String> {
-        let mut cmd = Command::new(command);
+    pub(crate) fn run_test_command(&self, command: &str, ext_path: &Path) -> Result<Value, String> {
+        // Resolve the bare program name to an absolute PATH-searched path before
+        // passing it to Command::new.  On Windows, Command::new(bare_name)
+        // triggers CreateProcess's CWD-first search — a planted perl.exe/yath.exe/
+        // prove.exe in the LSP workspace root would execute instead of the real
+        // tool (binary-planting RCE, #2764/#3028).  resolve_program fails closed
+        // when the tool is not found on any absolute PATH directory.
+        #[cfg(not(target_arch = "wasm32"))]
+        let resolved_command =
+            perl_subprocess_runtime::resolve_program(command).map_err(|e| e.to_string())?;
+        #[cfg(target_arch = "wasm32")]
+        let resolved_command = command.to_string();
+
+        let mut cmd = Command::new(&resolved_command);
         if command == "perl" {
             cmd.arg("--").arg(ext_path.as_os_str());
         } else {
@@ -1034,18 +1046,29 @@ impl ExecuteCommandProvider {
     }
 
     pub(crate) fn command_exists(&self, command: &str) -> bool {
-        let cmd = if cfg!(windows) {
-            let mut cmd = Command::new("where");
-            cmd.arg(command);
-            cmd
-        } else {
+        // On Windows, spawning `Command::new("where")` is itself a bare-name call
+        // subject to the same CWD-first CreateProcess RCE (#3028).  Use the
+        // hardened PATH-only resolver instead — it already answers "is this tool
+        // findable on an absolute PATH directory" without touching the CWD.
+        //
+        // On non-Windows, the resolver is a pass-through (returns Ok unchanged),
+        // so we fall back to the `which` crate for the actual PATH search there.
+        #[cfg(all(windows, not(target_arch = "wasm32")))]
+        {
+            perl_subprocess_runtime::resolve_program(command).is_ok()
+        }
+        #[cfg(all(not(windows), not(target_arch = "wasm32")))]
+        {
             let mut cmd = Command::new("which");
             cmd.arg(command);
-            cmd
-        };
-        crate::util::run_command_with_timeout(cmd, 2)
-            .map(|output| output.status.success())
-            .unwrap_or(false)
+            crate::util::run_command_with_timeout(cmd, 2)
+                .map(|output| output.status.success())
+                .unwrap_or(false)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
     }
 }
 
@@ -1216,6 +1239,20 @@ fn default_provider_decision_explanation(
             ProviderDecisionFallback::None,
             Some("docs/architecture/perl-subprocess-seams.md"),
             Some("perl-oracle-env"),
+        ),
+        ProviderDecisionProvider::WorkspaceTrustReport => (
+            // Report-only boundary (PLSP-SPEC-0016): the trust report aggregates
+            // existing runtime state without driving live provider behavior, so it
+            // is shadowed rather than acted, and must not promote support tiers.
+            ProviderDecisionOutcome::Shadowed,
+            ProviderDecisionReason::ShadowOnly,
+            ProviderDecisionFactSource::LegacyWorkspace,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::NotApplicable,
+            false,
+            ProviderDecisionFallback::ShadowReceiptOnly,
+            Some("docs/project/status/SUPPORT_TIERS.md"),
+            Some("workspace-trust-report-boundary"),
         ),
         ProviderDecisionProvider::Unknown => (
             ProviderDecisionOutcome::Fallback,

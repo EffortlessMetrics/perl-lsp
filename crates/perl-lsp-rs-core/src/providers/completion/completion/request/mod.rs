@@ -18,6 +18,11 @@ pub(super) fn complete(
         return vec![];
     }
 
+    // Whole-block suppressions must run before regex-specific completions.
+    if context::rejects_lexical_block(source, position) {
+        return vec![];
+    }
+
     let mut completions = Vec::new();
     if let Some(regex_completions) =
         context::complete_regex_context(&mut completions, &context, source)

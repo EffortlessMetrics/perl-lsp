@@ -175,3 +175,30 @@ fn snapshot_suspicious_regex_and_tainted_system_call() {
     let snapshot = normalize(diagnostics_for(source));
     assert_snapshot!("suspicious_regex_and_tainted_system_call", snapshot);
 }
+
+#[test]
+fn snapshot_printf_dynamic_width_precision() {
+    let source = concat!(
+        "use strict;\n",
+        "use warnings;\n",
+        "printf(\"%*s\\n\", 10, \"hello\");\n",
+        "printf(\"%.*f\\n\", 2, 3.14);\n",
+        "printf(\"%*.*s\\n\", 10, 5, \"hello\");\n",
+    );
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("printf_dynamic_width_precision", snapshot);
+}
+
+#[test]
+fn snapshot_printf_mismatch_too_many_args() {
+    let source = concat!("use strict;\n", "use warnings;\n", "printf(\"%s\\n\", \"a\", \"b\");\n",);
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("printf_mismatch_too_many_args", snapshot);
+}
+
+#[test]
+fn snapshot_printf_mismatch_too_few_args() {
+    let source = concat!("use strict;\n", "use warnings;\n", "printf(\"%s %d\\n\", \"a\");\n",);
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("printf_mismatch_too_few_args", snapshot);
+}

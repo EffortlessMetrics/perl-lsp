@@ -18,6 +18,20 @@ The orchestrator reads `CLAUDE.md`. This file is for you.
 | `docs/project/FRICTION_LOG.md` | Platform quirks and known workarounds |
 | `docs/articles/CONTINUOUS_REVIEW_PATTERNS.md` | The orchestration pattern used here |
 | `docs/articles/ORCHESTRATION_COUNTERINTUITIONS.md` | Lessons where the obvious rule was wrong |
+| `docs/agents/ORCHESTRATION_ROLES.md` | Role taxonomy: model tier, constraints, output schema per role |
+| `docs/agents/CLOSE_PROOF_POLICY.md` | Mandatory proof artifacts before closing any issue as superseded/landed |
+| `docs/agents/SCOUT_PROMPTS.md` | Ready-to-paste haiku scout prompt templates (7 templates: classify-PR, verify-duplicate, verify-reachability, read-CI-failure, audit-docs-claim, classify-issue, classify-release-blocker) |
+| `docs/agents/BUILDER_BRIEF_TEMPLATE.md` | Sonnet builder brief template with all required fields + known-gotchas appendix |
+| `docs/agents/WORKFLOW_TEMPLATES.md` | Outline-level templates for the six queue-processing workflows (pr-classifier, issue-triage, source-swarm-reconciliation, release-readiness, ci-failure-cluster, ub-review-calibration) |
+| `docs/agents/EVIDENCE_STANDARD.md` | Evidence ban-list and required-artifact table by claim type |
+| `docs/agents/CLEANUP_CHECKLIST.md` | Post-wave cleanup checklist: worktrees, branches, target dirs, stale processes, storage doctor |
+| `docs/agents/pr-ledger.schema.json` | JSON Schema for PR reconciliation ledger rows (used by pr-classifier and source-swarm-reconciliation workflows) |
+| `docs/agents/workflow-outcome.schema.json` | JSON Schema for workflow outcome ledger rows (used by all workflow types to record run outcomes) |
+| `docs/agents/ledgers/workflow-outcomes.jsonl` | Append-only ledger of workflow execution outcomes (seed rows: 2026-06-05–07 convergence) |
+| `docs/agents/ledgers/ub-review-calibration.jsonl` | Append-only ub-review calibration ledger: TP/FP/expected-quiet/infra-excluded rows per PR run |
+| `docs/ci/ub-review-adoption-notes.md` | ub-review adoption log (5 datums), gap-category taxonomy, and PR-3 recommendation (neutral conclusions) |
+| `docs/workflows/release-readiness.md` | What the release-readiness workflow checks, how to invoke it, human-approval boundary, 0.16.0-cycle lessons |
+| `.claude/workflows/release-readiness.js` | Executable adversarial release-readiness workflow (6 phases: ancestry, consistency, receipts, smoke, claims, verdict) |
 
 **Before starting:** check the latest upstream commits so you do not re-implement
 already-merged work.

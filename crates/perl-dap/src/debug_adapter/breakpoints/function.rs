@@ -1,8 +1,5 @@
 use super::*;
 
-const FUNCTION_BREAKPOINT_NAME_GUIDANCE: &str =
-    "Use a Perl subroutine name such as `main::run`, `Foo::bar`, or `My::Package::handler`.";
-
 impl DebugAdapter {
     /// Handle setFunctionBreakpoints request.
     ///
@@ -47,16 +44,12 @@ impl DebugAdapter {
             };
 
             let invalid_reason = if name.is_empty() {
-                Some(format!(
-                    "Function breakpoint name is required. {FUNCTION_BREAKPOINT_NAME_GUIDANCE}"
-                ))
+                Some("Function breakpoint name is required".to_string())
             } else if name.contains('\n') || name.contains('\r') {
-                Some(format!(
-                    "Function breakpoint name cannot contain newlines. {FUNCTION_BREAKPOINT_NAME_GUIDANCE}"
-                ))
+                Some("Function breakpoint name cannot contain newlines".to_string())
             } else if !is_valid_function_breakpoint_name(&name) {
                 Some(format!(
-                    "Invalid function breakpoint name `{name}`. {FUNCTION_BREAKPOINT_NAME_GUIDANCE}"
+                    "Invalid function breakpoint name `{name}` (expected package-qualified Perl symbol)"
                 ))
             } else {
                 None

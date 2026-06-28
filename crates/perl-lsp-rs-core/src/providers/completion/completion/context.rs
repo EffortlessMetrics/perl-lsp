@@ -75,6 +75,8 @@ impl CompletionContext {
         current
     }
 
+    // Completion context is assembled from independent lexical/provider facts.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         symbol_table: &SymbolTable,
         position: usize,

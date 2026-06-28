@@ -19,7 +19,7 @@ DAP-capable editors and tools.
 ## Key pieces
 
 - `DapServer`, `DapConfig`, and `DapMode` wire the server and its launch mode.
-- `DapDispatcher` and `DebugAdapter` handle request routing and protocol state.
+- `DebugAdapter` handles request routing and protocol state.
 - `BridgeAdapter` supports migration from `Perl::LanguageServer`.
 - `TcpAttachConfig` and `BreakpointStore` support socket attach and breakpoint tracking.
 
@@ -46,6 +46,9 @@ perl-dap --bridge
 ## External dependencies
 
 Native launch and TCP attach use the built-in Rust runtime plus a local Perl installation.
+The Rust parser-backed runtime (`perl-parser`, `perl-parser-core`, `perl-lexer`, and the
+`perl-dap-*` support crates) is compiled into the shipped `perl-dap` binary; users do not
+install `perl-parser` or any other internal crate separately.
 
 `--bridge` mode additionally requires the CPAN module `Perl::LanguageServer`.
 Install it with either:

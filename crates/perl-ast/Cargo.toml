@@ -17,6 +17,7 @@ categories = ["parsing", "development-tools"]
 perl-ast-v2 = { workspace = true }
 perl-position-tracking = { workspace = true }
 perl-token = { workspace = true }
+strum = { workspace = true }
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

@@ -1022,5 +1022,10 @@ where
         | NodeKind::MissingIdentifier
         | NodeKind::MissingBlock => {} // No children
         NodeKind::UnknownRest => {} // No children
+        NodeKind::NestedVariableList { items } => {
+            for item in items {
+                find_nodes_recursive(item, predicate, results);
+            }
+        }
     }
 }

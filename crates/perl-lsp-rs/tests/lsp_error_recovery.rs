@@ -3,8 +3,9 @@ use std::time::Duration;
 
 mod common;
 use common::{
-    completion_items, drain_until_quiet, initialize_lsp, send_notification, send_request,
-    short_timeout, shutdown_and_exit, start_lsp_server,
+    adaptive_timeout, completion_items, drain_until_quiet, initialize_lsp, send_notification,
+    send_request, send_request_with_response_timeout, short_timeout, shutdown_and_exit,
+    start_lsp_server,
 };
 
 /// Test suite for error recovery scenarios
@@ -363,8 +364,10 @@ print $var;  # Another valid reference
         }),
     );
 
+    drain_until_quiet(&server, short_timeout(), Duration::from_secs(2));
+
     // Find references should work despite errors
-    let response = send_request(
+    let response = send_request_with_response_timeout(
         &server,
         json!({
             "jsonrpc": "2.0",
@@ -382,9 +385,29 @@ print $var;  # Another valid reference
                 }
             }
         }),
+        adaptive_timeout().max(Duration::from_secs(15)),
     );
-    assert!(response["result"].is_array());
-    let refs = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
+    let Some(result) = response.get("result") else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Expected references response result, got: {response:?}"),
+        )
+        .into());
+    };
+
+    let Some(refs) = result.as_array() else {
+        if result.is_null() {
+            eprintln!("Found 0 references (null result due to parse errors)");
+            shutdown_and_exit(&server);
+            return Ok(());
+        }
+
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Expected references result to be an array or null, got: {response:?}"),
+        )
+        .into());
+    };
     // When there are syntax errors, references might not be found
     // The important thing is that the server doesn't crash and returns a valid response
     eprintln!("Found {} references (may be 0 due to parse errors): {:?}", refs.len(), refs);

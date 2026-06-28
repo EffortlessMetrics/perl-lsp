@@ -90,6 +90,8 @@ pub use perl_lexer::builtins;
 pub mod engine;
 /// Normalized high-level constructs lowered from the parser AST.
 pub mod hir;
+/// Perl Intermediate Representation (PIR) for static analysis and tooling.
+pub mod pir;
 /// Syntax-level types absorbed from Wave D satellite crates.
 pub mod syntax;
 /// Token stream and trivia utilities for the parser.
@@ -123,6 +125,8 @@ pub use syntax::path_security;
 pub use syntax::percentile;
 /// Perl qualified-name parsing, splitting, and validation helpers (previously `perl-qualified-name`).
 pub use syntax::qualified_name;
+/// Canonical qw/q/qq operator content extractor shared across the workspace.
+pub use syntax::quote::{parse_quote_operator_content, parse_qw_words};
 /// Perl source-file classification helpers (previously `perl-source-file`).
 pub use syntax::source_file;
 /// Text-line cursor and boundary helpers (previously `perl-text-line`).

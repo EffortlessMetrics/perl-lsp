@@ -22,6 +22,14 @@ pub struct PodDoc {
     pub description: Option<String>,
     /// Method/function docs keyed by name, from `=head2 method_name`.
     pub methods: HashMap<String, String>,
+    /// Parameters from `=head1 ARGUMENTS`.
+    pub arguments: Option<String>,
+    /// Return value documentation from `=head1 RETURN VALUES`.
+    pub return_values: Option<String>,
+    /// Usage examples from `=head1 EXAMPLES`.
+    pub examples: Option<String>,
+    /// Related modules from `=head1 SEE ALSO`.
+    pub see_also: Option<String>,
 }
 
 impl PodDoc {
@@ -32,6 +40,10 @@ impl PodDoc {
             && self.synopsis.is_none()
             && self.description.is_none()
             && self.methods.is_empty()
+            && self.arguments.is_none()
+            && self.return_values.is_none()
+            && self.examples.is_none()
+            && self.see_also.is_none()
     }
 }
 
@@ -120,12 +132,20 @@ pub fn extract_pod(source: &str) -> PodDoc {
             flush_section(&mut doc, &current_section, &body, false);
             body.clear();
             let heading = heading.trim();
-            current_section = Some(match heading {
-                "NAME" => Section::Name,
-                "SYNOPSIS" => Section::Synopsis,
-                "DESCRIPTION" => Section::Description,
-                _ => Section::Other(()),
-            });
+            if let Some(section) = match heading {
+                "NAME" => Some(Section::Name),
+                "SYNOPSIS" => Some(Section::Synopsis),
+                "DESCRIPTION" => Some(Section::Description),
+                "ARGUMENTS" => Some(Section::Arguments),
+                "RETURN VALUES" => Some(Section::ReturnValues),
+                "EXAMPLES" => Some(Section::Examples),
+                "SEE ALSO" => Some(Section::SeeAlso),
+                _ => None,
+            } {
+                current_section = Some(section);
+            } else {
+                current_section = None;
+            }
             continue;
         }
 
@@ -168,8 +188,11 @@ enum Section {
     Name,
     Synopsis,
     Description,
+    Arguments,
+    ReturnValues,
+    Examples,
+    SeeAlso,
     Method(String),
-    Other(()),
 }
 
 /// Stores accumulated body text into the appropriate `PodDoc` field.
@@ -179,8 +202,11 @@ enum Section {
 /// - `Name` → `PodDoc::name`
 /// - `Synopsis` → `PodDoc::synopsis`
 /// - `Description` → `PodDoc::description` (first paragraph only)
+/// - `Arguments` → `PodDoc::arguments`
+/// - `ReturnValues` → `PodDoc::return_values`
+/// - `Examples` → `PodDoc::examples`
+/// - `SeeAlso` → `PodDoc::see_also`
 /// - `Method(name)` → `PodDoc::methods` entry
-/// - `Other` → ignored
 ///
 /// # Arguments
 ///
@@ -213,11 +239,20 @@ fn flush_section(doc: &mut PodDoc, section: &Option<Section>, body: &str, _in_ov
             let first_para = first_paragraph(&cleaned);
             doc.description = Some(first_para);
         }
+        Section::Arguments => {
+            doc.arguments = Some(cleaned);
+        }
+        Section::ReturnValues => {
+            doc.return_values = Some(cleaned);
+        }
+        Section::Examples => {
+            doc.examples = Some(cleaned);
+        }
+        Section::SeeAlso => {
+            doc.see_also = Some(cleaned);
+        }
         Section::Method(name) => {
             doc.methods.insert(name.clone(), cleaned);
-        }
-        Section::Other(_) => {
-            // Ignore other head1 sections for now
         }
     }
 }
@@ -237,12 +272,35 @@ fn first_paragraph(text: &str) -> String {
     result
 }
 
+/// Maximum nesting depth for POD inline formatting codes.
+///
+/// POD formatting codes (`B<I<...>>`, `L<...>`, etc.) are stripped recursively,
+/// one level per call. Pathological or malicious input with extreme nesting could
+/// otherwise exhaust the stack. Past this cap, inner content is returned verbatim
+/// (with delimiters already removed) rather than recursing further. Real-world POD
+/// never nests anywhere near this deep.
+const MAX_POD_FORMATTING_DEPTH: usize = 100;
+
 /// Strip POD inline formatting codes: `B<bold>`, `I<italic>`, `C<code>`, `L<link>`,
 /// and decode common `E<>` entities.
 ///
 /// Handles simple (non-nested) formatting codes. Nested codes like `B<I<text>>`
 /// are handled by stripping outer codes first.
 fn strip_pod_formatting(text: &str) -> String {
+    strip_pod_formatting_depth(text, 0)
+}
+
+/// Depth-bounded implementation of [`strip_pod_formatting`].
+///
+/// `depth` tracks how many levels of formatting-code recursion have already
+/// occurred. Once it reaches [`MAX_POD_FORMATTING_DEPTH`], inner content is
+/// emitted verbatim instead of recursing, guarding against stack overflow on
+/// adversarially deep input such as `B<I<B<I<...>>>>`.
+fn strip_pod_formatting_depth(text: &str, depth: usize) -> String {
+    if depth >= MAX_POD_FORMATTING_DEPTH {
+        return text.to_string();
+    }
+
     let mut result = String::with_capacity(text.len());
     let chars: Vec<char> = text.chars().collect();
     let len = chars.len();
@@ -298,9 +356,9 @@ fn strip_pod_formatting(text: &str) -> String {
             }
 
             let display = match code_char {
-                'L' => extract_link_display(&inner_str),
+                'L' => extract_link_display(&inner_str, depth + 1),
                 'E' => decode_pod_entity(&inner_str),
-                _ => strip_pod_formatting(&inner_str),
+                _ => strip_pod_formatting_depth(&inner_str, depth + 1),
             };
 
             result.push_str(&display);
@@ -368,21 +426,23 @@ fn escape_markdown_link_text(text: &str) -> String {
 /// - `L<text|Module::Name>` → `[text](perl-module://Module::Name)`
 /// - `L<Module::Name/section>` → `[Module::Name](perl-module://Module::Name/section)`
 /// - `L<text|Module::Name/section>` → `[text](perl-module://Module::Name/section)`
-fn extract_link_display(link: &str) -> String {
+fn extract_link_display(link: &str, depth: usize) -> String {
     // L<text|target> — explicit display text before the pipe
     if let Some(pipe_pos) = link.find('|') {
-        let display = escape_markdown_link_text(&strip_pod_formatting(&link[..pipe_pos]));
+        let display =
+            escape_markdown_link_text(&strip_pod_formatting_depth(link[..pipe_pos].trim(), depth));
         let target = encode_pod_link_target(link[pipe_pos + 1..].trim());
         return format!("[{display}](perl-module://{target})");
     }
     // L<Module/section> — module + section, display is just the module part
     if let Some(slash_pos) = link.find('/') {
-        let module = escape_markdown_link_text(&strip_pod_formatting(&link[..slash_pos]));
+        let module =
+            escape_markdown_link_text(&strip_pod_formatting_depth(link[..slash_pos].trim(), depth));
         let target = encode_pod_link_target(link.trim());
         return format!("[{module}](perl-module://{target})");
     }
     // L<Module::Name> — simple module reference
-    let display = escape_markdown_link_text(&strip_pod_formatting(link));
+    let display = escape_markdown_link_text(&strip_pod_formatting_depth(link.trim(), depth));
     let target = encode_pod_link_target(link.trim());
     format!("[{display}](perl-module://{target})")
 }
@@ -518,11 +578,77 @@ mod tests {
         );
     }
 
+    // ── L<> display-text trimming (issues #2480, #2482, #2485) ───────────────
+
+    #[test]
+    fn link_pipe_form_trims_display_and_target() {
+        // L<text|target> — leading/trailing whitespace on both sides is trimmed
+        // so neither the display text nor the target leaks padding (#2480).
+        assert_eq!(strip_pod_formatting("L<  text  |  target  >"), "[text](perl-module://target)");
+    }
+
+    #[test]
+    fn link_slash_form_trims_module_display() {
+        // L<Module/section> — the module display part is trimmed so no trailing
+        // space leaks into the rendered link text (#2482).
+        assert_eq!(
+            strip_pod_formatting("L<Module / Section>"),
+            "[Module](perl-module://Module%20/%20Section)"
+        );
+    }
+
+    #[test]
+    fn link_simple_form_trims_display() {
+        // L<Module::Name> — surrounding whitespace is trimmed from the display
+        // text (#2485).
+        assert_eq!(
+            strip_pod_formatting("L< Module::Name >"),
+            "[Module::Name](perl-module://Module::Name)"
+        );
+    }
+
     #[test]
     fn strip_pod_formatting_handles_nested_text_and_entities() {
         let text = "Use B<I<strict>> and C<$value E<lt> 10>";
 
         assert_eq!(strip_pod_formatting(text), "Use strict and $value < 10");
+    }
+
+    #[test]
+    fn strip_pod_formatting_deeply_nested_does_not_overflow_stack() {
+        // Regression for unbounded recursion: ~5000 nested B<I<...>> formatting
+        // codes previously blew the stack. With MAX_POD_FORMATTING_DEPTH the call
+        // returns without panicking; content past the cap is emitted verbatim.
+        const NESTING: usize = 5000;
+        let mut text = String::from("core");
+        for _ in 0..NESTING {
+            text = format!("B<I<{text}>>");
+        }
+
+        // Must return normally (no stack overflow / panic).
+        let stripped = strip_pod_formatting(&text);
+
+        // The innermost payload survives the strip.
+        assert!(stripped.contains("core"), "expected innermost content to remain");
+        // Past the depth cap, residual unstripped delimiters may remain, so the
+        // result is not guaranteed to be exactly "core"; the contract here is
+        // simply that the function terminates safely.
+    }
+
+    #[test]
+    fn extract_pod_deeply_nested_head2_does_not_overflow_stack() {
+        // Exercise the public reachability path (=head2 → strip_pod_formatting).
+        const NESTING: usize = 5000;
+        let mut heading = String::from("name");
+        for _ in 0..NESTING {
+            heading = format!("B<I<{heading}>>");
+        }
+        let source = format!("=head2 {heading}\n\nbody text\n\n=cut\n");
+
+        // Must not overflow the stack.
+        let doc = extract_pod(&source);
+
+        assert_eq!(doc.methods.len(), 1, "expected exactly one method section");
     }
 
     // ── encode_pod_link_target ───────────────────────────────────────────────

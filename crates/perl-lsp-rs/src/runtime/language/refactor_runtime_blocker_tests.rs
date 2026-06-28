@@ -987,8 +987,8 @@ fn refactor_runtime_blocker_ux_package_rename_preview_records_imported_call_nois
     );
     assert_eq!(
         preview_result.get("planned_live_provider_edit_count").and_then(Value::as_u64),
-        Some(1),
-        "preview should record the legacy same-file fallback edit count without returning edits: {preview_result}"
+        Some(0),
+        "preview should not count unsafe same-file fallback edits as noise: {preview_result}"
     );
     assert_eq!(
         preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
@@ -1012,14 +1012,17 @@ fn refactor_runtime_blocker_ux_package_rename_preview_records_imported_call_nois
         Some("compiler_missing")
     );
     assert_eq!(fallback_noise.get("compiler_available").and_then(Value::as_bool), Some(false));
-    assert_eq!(fallback_noise.get("live_provider_state").and_then(Value::as_str), Some("edits"));
-    assert_eq!(fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        fallback_noise.get("live_provider_state").and_then(Value::as_str),
+        Some("empty_edit")
+    );
+    assert_eq!(fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
 
     let rollback_receipt =
         preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
     assert_eq!(
         rollback_receipt.get("planned_live_provider_edit_count").and_then(Value::as_u64),
-        Some(1)
+        Some(0)
     );
     assert_eq!(
         rollback_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
@@ -1574,6 +1577,150 @@ sub caller {
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_main_sub_rename_returns_safe_same_file_edits()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let uri = "file:///workspace/rename_flow.pl";
+    let source = r#"use strict;
+use warnings;
+
+sub greet {
+    return "hello";
+}
+
+my $value = greet();
+print greet();
+"#;
+    open_document(&server, uri, source)?;
+
+    let (line, character) = position_of(source, "greet();")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "newName": "welcome"
+        })))?
+        .ok_or("missing main-package same-file rename result")?;
+
+    let edit_count = workspace_edit_change_count(&rename_result)?;
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert!(
+        edit_count >= 2,
+        "main-package same-file rename should edit declaration and call sites: {rename_result}; receipt={request_receipt}"
+    );
+    let texts = workspace_edit_texts_for_uri(&rename_result, uri)?;
+    assert!(
+        texts.iter().filter(|text| **text == "welcome").count() >= 2,
+        "main-package same-file rename should use the requested bare sub name: {rename_result}"
+    );
+
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("same_file_main_sub"));
+    assert_eq!(request_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_rename_scans_open_qualified_call_sites()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let foo_uri = "file:///workspace/lib/Foo.pm";
+    let bar_uri = "file:///workspace/lib/Bar.pm";
+    let main_uri = "file:///workspace/main.pl";
+    let foo_source = r#"package Foo;
+use strict;
+use warnings;
+
+sub process_data {
+    return "foo";
+}
+
+1;
+"#;
+    let bar_source = r#"package Bar;
+use strict;
+use warnings;
+
+sub process_data {
+    return "bar";
+}
+
+1;
+"#;
+    let main_source = r#"use strict;
+use warnings;
+use lib './lib';
+use Foo;
+use Bar;
+
+my $foo = Foo::process_data();
+my $also = Foo::process_data();
+my $bar = Bar::process_data();
+"#;
+    open_document(&server, foo_uri, foo_source)?;
+    open_document(&server, bar_uri, bar_source)?;
+    open_document(&server, main_uri, main_source)?;
+
+    let (line, character) = position_of(foo_source, "process_data {")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": foo_uri},
+            "position": {"line": line, "character": character},
+            "newName": "process_records"
+        })))?
+        .ok_or("missing package-qualified open-document rename result")?;
+
+    let edit_count = workspace_edit_change_count(&rename_result)?;
+    assert!(
+        edit_count >= 3,
+        "package rename should edit the declaration and qualified open-document call sites: {rename_result}"
+    );
+
+    let foo_texts = workspace_edit_texts_for_uri(&rename_result, foo_uri).unwrap_or_default();
+    let main_texts = workspace_edit_texts_for_uri(&rename_result, main_uri).unwrap_or_default();
+    let bar_texts = workspace_edit_texts_for_uri(&rename_result, bar_uri).unwrap_or_default();
+    assert!(
+        foo_texts.iter().any(|text| *text == "process_records"),
+        "Foo declaration edit should carry the new name: {rename_result}"
+    );
+    assert!(
+        main_texts.iter().filter(|text| **text == "process_records").count() >= 2,
+        "main.pl should carry the renamed Foo call-site token: {rename_result}"
+    );
+    assert!(
+        bar_texts.is_empty(),
+        "Bar.pm must not be edited when renaming Foo::process_data: {rename_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("open_document_qualified_workspace_edit")
+    );
+    assert_eq!(
+        request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("current_source")
+    );
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_package_local_live_pilot_blocks_real_workspace_imported_symbol_false_allow()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
@@ -1620,6 +1767,47 @@ fn refactor_runtime_blocker_ux_package_local_live_pilot_blocks_real_workspace_im
         }),
         "rename trace must preserve the package-local claim boundary: {request_receipt}"
     );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_rename_live_pilot_workspace_edit_exact_error_variant_blocked()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+            "position": {"line": helper_line, "character": helper_character},
+            "newName": "renamed_helper_exact_error"
+        })))?
+        .ok_or("missing package live-pilot exact error-variant result")?;
+
+    assert_eq!(
+        workspace_edit_change_count(&rename_result)?,
+        0,
+        "package_rename_live_pilot_workspace_edit Err(Blocked) must surface as a no-edit result: {rename_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("package_local_live_pilot_blocked"),
+        "the exact Err(reason) variant should be recorded as the blocked package live-pilot path"
+    );
+    assert_eq!(request_receipt.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(request_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("helper"));
 
     Ok(())
 }
@@ -1738,21 +1926,94 @@ fn refactor_runtime_blocker_ux_package_local_live_pilot_real_workspace_false_all
 
     let fresh_explanation = explain_provider_decision(&server, "rename")?;
     let fresh_receipt = request_receipt(&fresh_explanation)?;
-    assert_eq!(fresh_receipt.get("reason").and_then(Value::as_str), Some("same_file_semantic"));
-    assert_eq!(fresh_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
-    assert_eq!(
-        fresh_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
-        u64::try_from(fresh_edit_count).ok()
+    let fresh_edit_count_u64 = u64::try_from(fresh_edit_count)?;
+    let fresh_reason = fresh_receipt.get("reason").and_then(Value::as_str);
+    let fresh_fallback_state = fresh_receipt.get("fallback_state").and_then(Value::as_str);
+    assert!(
+        matches!(
+            (fresh_reason, fresh_fallback_state),
+            (Some("same_file_semantic"), Some("none"))
+                | (Some("full_index_workspace_edit"), Some("workspace_index"))
+        ),
+        "fresh rename receipt should use current-source same-file edits or a refreshed workspace index: {fresh_receipt}"
+    );
+    let fresh_receipt_count = fresh_receipt.get("live_provider_edit_count").and_then(Value::as_u64);
+    assert!(
+        fresh_receipt_count.is_some_and(|count| count <= fresh_edit_count_u64),
+        "fresh receipt count should not exceed returned edit count: receipt={fresh_receipt}, result={fresh_live_result}"
     );
     let fresh_copyable_receipt = copyable_request_receipt(&fresh_explanation)?;
-    assert_eq!(
-        fresh_copyable_receipt.get("reason").and_then(Value::as_str),
-        Some("same_file_semantic")
+    let copyable_reason = fresh_copyable_receipt.get("reason").and_then(Value::as_str);
+    let copyable_fallback_state =
+        fresh_copyable_receipt.get("fallback_state").and_then(Value::as_str);
+    assert!(
+        matches!(
+            (copyable_reason, copyable_fallback_state),
+            (Some("same_file_semantic"), Some("none"))
+                | (Some("full_index_workspace_edit"), Some("workspace_index"))
+        ),
+        "copyable fresh rename receipt should preserve the selected fresh path: {fresh_copyable_receipt}"
     );
-    assert_eq!(fresh_copyable_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
+    let fresh_copyable_count =
+        fresh_copyable_receipt.get("live_provider_edit_count").and_then(Value::as_u64);
+    assert!(
+        fresh_copyable_count.is_some_and(|count| count <= fresh_edit_count_u64),
+        "copyable fresh receipt count should not exceed returned edit count: receipt={fresh_copyable_receipt}, result={fresh_live_result}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_inherited_arrow_method_rename_uses_workspace_guard()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (shared_line, shared_character) = position_of(base, "shared {")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+            "position": {"line": shared_line, "character": shared_character},
+            "newName": "renamed_shared"
+        })))?
+        .ok_or("missing inherited arrow-method rename result")?;
+
+    let edit_count = workspace_edit_change_count(&rename_result)?;
+    assert!(
+        edit_count >= 3,
+        "inherited arrow-method rename should edit Base.pm and App.pm call sites: {rename_result}"
+    );
+    let base_texts = workspace_edit_texts_for_uri(&rename_result, REAL_BASELINE_BASE_URI)?;
+    let app_texts = workspace_edit_texts_for_uri(&rename_result, REAL_BASELINE_APP_URI)?;
+    assert!(
+        base_texts.iter().any(|text| *text == "renamed_shared"),
+        "Base.pm declaration edit should carry the new name: {rename_result}"
+    );
+    assert!(
+        app_texts.iter().filter(|text| **text == "renamed_shared").count() >= 2,
+        "App.pm inherited arrow-method call sites should be renamed: {rename_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
     assert_eq!(
-        fresh_copyable_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
-        u64::try_from(fresh_edit_count).ok()
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("full_index_workspace_edit")
+    );
+    assert_eq!(
+        request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("workspace_index")
+    );
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
     );
 
     Ok(())
@@ -2128,12 +2389,12 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_imported_call_fallback_noi
     );
     assert_eq!(
         fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64),
-        Some(1),
-        "imported-call receipt should preserve the legacy same-file fallback edit count as noise: {fallback_noise}"
+        Some(0),
+        "imported-call receipt should not count unsafe same-file fallback edits as noise: {fallback_noise}"
     );
     assert_eq!(
         fallback_noise.get("live_provider_state").and_then(Value::as_str),
-        Some("edits"),
+        Some("empty_edit"),
         "unexpected imported-call live provider state: {fallback_noise}"
     );
     assert!(

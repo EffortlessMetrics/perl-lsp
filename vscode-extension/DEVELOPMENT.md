@@ -69,6 +69,29 @@ This packages the extension and verifies it can compile, bundle the server binar
 npm run verify:marketplace
 ```
 
+To keep Rust build output outside the repository worktree, set
+`CARGO_TARGET_DIR` before running the verification:
+
+```bash
+CARGO_TARGET_DIR=/tmp/perl-lsp-vsix-target npm run verify:marketplace
+```
+
+To test the generated VSIX in a clean VS Code profile:
+
+```bash
+PERL_LSP_PUBLISHED_EXTENSION_SOURCE=vsix \
+PERL_LSP_PUBLISHED_VSIX_PATH="$PWD/perl-lsp-rs-<version>.vsix" \
+PERL_LSP_PUBLISHED_EXTENSION_VERSION=<version> \
+PERL_LSP_REQUIRE_STRUCTURED_COMMANDS=1 \
+PERL_LSP_SMOKE_RECEIPTS_DIR=/tmp/perl-lsp-vsix-smoke-receipts \
+npm run test:published
+```
+
+The published smoke expects matching GitHub release assets for the requested
+server version. For install-plumbing-only checks against an unreleased extension
+version, set `PERL_LSP_PUBLISHED_BINARY_VERSION` to a released server version
+and keep the claim limited to VSIX install behavior.
+
 The `.vsix` file can be installed directly in VS Code via **Extensions → Install from VSIX**.
 
 ## Common tasks

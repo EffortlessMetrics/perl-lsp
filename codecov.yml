@@ -1,6 +1,13 @@
 # Codecov Configuration
 # See: https://docs.codecov.com/docs/codecov-yaml
 
+codecov:
+  # Coverage status must be evaluated from uploaded coverage data, not from
+  # unrelated CI/test gate state. Test failures are owned by test-named gates.
+  require_ci_to_pass: false
+  notify:
+    wait_for_ci: false
+
 coverage:
   precision: 2
   round: down
@@ -11,13 +18,13 @@ coverage:
       default:
         target: 95%           # Final project target, informational during burn-down
         threshold: 2%         # Temporary burn-down window; removed after project reaches target
-        if_ci_failed: error   # Fail if CI failed
+        if_ci_failed: ignore  # Keep project telemetry independent from unrelated CI/test failures
         informational: true   # Patch coverage enforces first; project is promoted later
     patch:
       default:
         target: 95%           # New code must carry its own proof
         threshold: 0%         # No patch coverage regression allowance
-        if_ci_failed: error
+        if_ci_failed: ignore  # Patch status fails on coverage, not routed test correctness
 
 # Files/patterns to exclude from coverage analysis
 ignore:

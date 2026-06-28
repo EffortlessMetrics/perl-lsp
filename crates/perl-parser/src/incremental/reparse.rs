@@ -14,6 +14,16 @@ pub(crate) struct SingleEditReparse {
     pub(crate) token_count: usize,
 }
 
+/// Apply a (possibly negative) `byte_shift` to a token offset without wrapping.
+///
+/// A negative `byte_shift` whose magnitude exceeds `offset` would underflow when
+/// `(offset as isize + byte_shift)` is cast back to `usize`, silently wrapping to
+/// a huge value and corrupting the token stream. Clamp the result to 0 instead so
+/// the shifted offset stays valid (fixes #2471).
+fn shift_offset(offset: usize, byte_shift: isize) -> usize {
+    (offset as isize).saturating_add(byte_shift).max(0) as usize
+}
+
 pub(crate) fn apply_text_edit_to_state(state: &mut IncrementalState, edit: &Edit) -> Result<()> {
     let old_end = edit.old_end_byte.min(state.source.len());
     let start = edit.start_byte.min(state.source.len());
@@ -74,8 +84,8 @@ pub(crate) fn apply_single_edit(
         if token.start >= edit_end_in_new {
             let mut found = false;
             for (off, old_tok) in state.tokens[old_sync_start..].iter().enumerate() {
-                let shifted_start = (old_tok.start as isize + byte_shift) as usize;
-                let shifted_end = (old_tok.end as isize + byte_shift) as usize;
+                let shifted_start = shift_offset(old_tok.start, byte_shift);
+                let shifted_end = shift_offset(old_tok.end, byte_shift);
                 if token.start == shifted_start
                     && token.end == shifted_end
                     && token.token_type == old_tok.token_type
@@ -98,8 +108,8 @@ pub(crate) fn apply_single_edit(
     if synced {
         for old_tok in &state.tokens[sync_old_idx..] {
             let mut adjusted = old_tok.clone();
-            adjusted.start = (adjusted.start as isize + byte_shift) as usize;
-            adjusted.end = (adjusted.end as isize + byte_shift) as usize;
+            adjusted.start = shift_offset(adjusted.start, byte_shift);
+            adjusted.end = shift_offset(adjusted.end, byte_shift);
             last = adjusted.end;
             new_tokens.push(adjusted);
         }
@@ -143,4 +153,65 @@ pub(crate) fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult
         reused_tokens: 0,
         token_count: state.tokens.len(),
     })
+}
+
+#[cfg(test)]
+mod reparse_offset_tests {
+    use super::*;
+    use crate::incremental::IncrementalState;
+    use anyhow::Result;
+
+    #[test]
+    fn shift_offset_clamps_negative_underflow_to_zero() {
+        // A negative `byte_shift` whose magnitude exceeds the offset previously
+        // wrapped to a huge usize via `(offset as isize + byte_shift) as usize`.
+        // It must clamp to 0 instead (regression for #2471).
+        assert_eq!(shift_offset(3, -10), 0);
+        assert_eq!(shift_offset(0, -1), 0);
+        // Exact boundary: shifting to zero is fine, one past zero clamps.
+        assert_eq!(shift_offset(5, -5), 0);
+        assert_eq!(shift_offset(5, -6), 0);
+        // Non-underflowing shifts are unaffected.
+        assert_eq!(shift_offset(5, -2), 3);
+        assert_eq!(shift_offset(5, 0), 5);
+        assert_eq!(shift_offset(5, 4), 9);
+    }
+
+    #[test]
+    fn apply_single_edit_negative_shift_does_not_wrap_token_offsets() -> Result<()> {
+        // Build a document whose tokens near the start sit at small byte offsets,
+        // then delete a large run from the very beginning so `byte_shift` is
+        // negative and larger in magnitude than those token positions. Before the
+        // fix, the reused/sync token offsets wrapped to enormous usize values; now
+        // they must stay bounded by the (much smaller) new source length.
+        let source = "my $a = 1;\nmy $b = 2;\nmy $c = 3;\nmy $d = 4;\n".to_string();
+        let mut state = IncrementalState::new(source.clone());
+
+        // Delete the first statement plus newline (12 bytes) from offset 0.
+        let delete_len = "my $a = 1;\n".len();
+        let edit = Edit {
+            start_byte: 0,
+            old_end_byte: delete_len,
+            new_end_byte: 0,
+            new_text: String::new(),
+        };
+
+        // `apply_single_edit` may legitimately bail (e.g. no usable checkpoint),
+        // in which case the wrapping branch was never reached. The invariant we
+        // assert is: if it succeeds, every resulting token offset is in range.
+        if apply_single_edit(&mut state, &edit).is_ok() {
+            let new_len = state.source.len();
+            for tok in &state.tokens {
+                assert!(
+                    tok.start <= new_len && tok.end <= new_len,
+                    "token offset wrapped: start={}, end={}, source len={}",
+                    tok.start,
+                    tok.end,
+                    new_len,
+                );
+                assert!(tok.start <= tok.end, "token start exceeds end: {tok:?}");
+            }
+        }
+        Ok(())
+    }
 }

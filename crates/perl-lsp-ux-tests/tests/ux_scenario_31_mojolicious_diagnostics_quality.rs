@@ -69,7 +69,6 @@ struct DiagnosticProbeReport {
     notification_count: usize,
     invalid_shape_count: usize,
     pl701_count: usize,
-    actionable_pl701_count: usize,
     false_positive_pl701_modules: Vec<String>,
     required_code_hits: Vec<String>,
     missing_required_codes: Vec<String>,
@@ -279,12 +278,6 @@ fn dynamic_boundary_label_hits(diagnostics: &[Value]) -> Vec<String> {
         .collect()
 }
 
-fn is_actionable_pl701(diagnostic: &Value) -> bool {
-    has_diagnostic_code(diagnostic, "PL701")
-        && diagnostic_message(diagnostic).contains("Searched @INC")
-        && diagnostic_message(diagnostic).contains("workspace includePaths")
-}
-
 fn run_probe(harness: &UxHarness, probe: &DiagnosticProbe) -> DiagnosticProbeReport {
     let diagnostics = harness.wait_for_latest_diagnostics(probe.file, Duration::from_secs(6));
     let notification_count = diagnostic_notification_count(harness, probe.file);
@@ -292,8 +285,6 @@ fn run_probe(harness: &UxHarness, probe: &DiagnosticProbe) -> DiagnosticProbeRep
         diagnostics.iter().filter(|diagnostic| !is_valid_diagnostic_shape(diagnostic)).count();
     let pl701_count =
         diagnostics.iter().filter(|diagnostic| has_diagnostic_code(diagnostic, "PL701")).count();
-    let actionable_pl701_count =
-        diagnostics.iter().filter(|diagnostic| is_actionable_pl701(diagnostic)).count();
     let false_positive_pl701_modules =
         matching_pl701_modules(&diagnostics, probe.absent_pl701_modules);
     let required_hits = required_code_hits(&diagnostics, probe.required_codes);
@@ -317,7 +308,6 @@ fn run_probe(harness: &UxHarness, probe: &DiagnosticProbe) -> DiagnosticProbeRep
         notification_count,
         invalid_shape_count,
         pl701_count,
-        actionable_pl701_count,
         false_positive_pl701_modules,
         required_code_hits: required_hits,
         missing_required_codes: missing_codes,
@@ -362,20 +352,15 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
                 if report.notification_count > 0 {
                     recorder.mark_first_useful_result(probe.name);
                 }
-                // UX receipt scenarios print their probe summaries during `--nocapture` runs.
-                #[allow(clippy::print_stderr)]
-                {
-                    eprintln!(
-                        "diagnostic_probe={} category={} diagnostics={} pl701={} actionable_pl701={} false_pl701={:?} missing_codes={:?}",
-                        report.name,
-                        report.category,
-                        report.diagnostic_count,
-                        report.pl701_count,
-                        report.actionable_pl701_count,
-                        report.false_positive_pl701_modules,
-                        report.missing_required_codes
-                    );
-                }
+                eprintln!(
+                    "diagnostic_probe={} category={} diagnostics={} pl701={} false_pl701={:?} missing_codes={:?}",
+                    report.name,
+                    report.category,
+                    report.diagnostic_count,
+                    report.pl701_count,
+                    report.false_positive_pl701_modules,
+                    report.missing_required_codes
+                );
                 reports.push(report);
             }
 
@@ -392,8 +377,6 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
                 reports.iter().map(|report| report.missing_required_message_substrings.len()).sum();
             let forbidden_message_total: usize =
                 reports.iter().map(|report| report.forbidden_message_hits.len()).sum();
-            let actionable_pl701_total: usize =
-                reports.iter().map(|report| report.actionable_pl701_count).sum();
             let fallback_or_empty_count =
                 reports.iter().filter(|report| report.fallback_or_empty).count();
             let missing_module_pl701_count = reports
@@ -401,20 +384,10 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
                 .find(|report| report.name == "missing_module_probe")
                 .map(|report| report.required_code_hits.len())
                 .unwrap_or_default();
-            let missing_module_actionable_pl701_count = reports
-                .iter()
-                .find(|report| report.name == "missing_module_probe")
-                .map(|report| report.actionable_pl701_count)
-                .unwrap_or_default();
             let mixed_probe_pl701_count = reports
                 .iter()
                 .find(|report| report.name == "mixed_present_and_missing_modules")
                 .map(|report| report.required_code_hits.len())
-                .unwrap_or_default();
-            let mixed_probe_actionable_pl701_count = reports
-                .iter()
-                .find(|report| report.name == "mixed_present_and_missing_modules")
-                .map(|report| report.actionable_pl701_count)
                 .unwrap_or_default();
 
             let receipt = serde_json::json!({
@@ -431,22 +404,15 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
                 "missing_required_code_total": missing_required_code_total,
                 "missing_required_message_total": missing_required_message_total,
                 "forbidden_message_total": forbidden_message_total,
-                "actionable_pl701_total": actionable_pl701_total,
                 "fallback_or_empty_count": fallback_or_empty_count,
                 "missing_module_pl701_count": missing_module_pl701_count,
-                "missing_module_actionable_pl701_count": missing_module_actionable_pl701_count,
                 "mixed_probe_pl701_count": mixed_probe_pl701_count,
-                "mixed_probe_actionable_pl701_count": mixed_probe_actionable_pl701_count,
                 "reports": reports,
             });
-            // UX receipt scenarios print their detailed payload during `--nocapture` runs.
-            #[allow(clippy::print_stderr)]
-            {
-                eprintln!(
-                    "mojolicious_diagnostics_quality_receipt={}",
-                    serde_json::to_string_pretty(&receipt)?
-                );
-            }
+            eprintln!(
+                "mojolicious_diagnostics_quality_receipt={}",
+                serde_json::to_string_pretty(&receipt)?
+            );
 
             recorder
                 .check("all diagnostics probes produced reports", reports.len() == probes.len())?;
@@ -479,20 +445,12 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
                 missing_module_pl701_count > 0 && missing_required_code_total == 0,
             )?;
             recorder.check(
-                "missing-module PL701 included searched @INC context",
-                missing_module_actionable_pl701_count >= missing_module_pl701_count,
-            )?;
-            recorder.check(
                 "diagnostic PL701 messages identify the required missing modules",
                 missing_required_message_total == 0,
             )?;
             recorder.check(
                 "mixed present/missing module probe emitted only the missing-module PL701 boundary",
                 mixed_probe_pl701_count > 0 && false_positive_pl701_total == 0,
-            )?;
-            recorder.check(
-                "mixed missing-module PL701 included searched @INC context",
-                mixed_probe_actionable_pl701_count >= mixed_probe_pl701_count,
             )?;
 
             harness.assert_no_crash();

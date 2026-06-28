@@ -92,7 +92,7 @@ The project pins to a specific MSRV (Minimum Supported Rust Version):
 ```toml
 # rust-toolchain.toml
 [toolchain]
-channel = "1.92.0"
+channel = "1.95.0"
 ```
 
 #### Impact
@@ -109,7 +109,7 @@ rustc --version
 rustup update stable
 
 # Use exact version
-rustup override set 1.92.0
+rustup override set 1.95.0
 
 # Or let repo tooling validate it for you
 just pr-fast

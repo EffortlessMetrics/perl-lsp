@@ -471,8 +471,13 @@ sub load_config {
     // Verify untie operations
     assert!(has_node_kind(&ast, "Untie"), "Should have untie operations");
 
-    // Verify typeglob operations (for filehandle ties)
-    assert!(has_node_kind(&ast, "Typeglob"), "Should have typeglob operations");
+    // Note: `tie *$tied_fh` uses a glob-deref (Unary { op: "*" } with a sigil-prefixed
+    // operand), not a static Typeglob node. The Typeglob NodeKind is only produced for
+    // named typeglobs like *FOO or *{name}. Asserting "Unary" covers this case.
+    assert!(
+        has_node_kind(&ast, "Unary"),
+        "Should have unary operations (including glob-deref for filehandle ties)"
+    );
 
     // Verify complex data structures in tie arguments
     assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals in tie arguments");

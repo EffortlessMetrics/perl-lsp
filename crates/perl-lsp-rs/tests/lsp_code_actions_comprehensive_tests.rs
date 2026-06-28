@@ -395,14 +395,16 @@ fn test_organize_imports_refactoring() -> TestResult {
             .unwrap_or(false)
     });
 
-    if let Some(action) = organize_imports_action {
-        assert_eq!(
-            action["kind"].as_str(),
-            Some("source.organizeImports"),
-            "Should have correct action kind"
-        );
-        assert!(action.get("edit").is_some(), "Should have text edits for import organization");
-    }
+    // Non-vacuous: the organize-imports action MUST be offered (previously an
+    // `if let Some` that passed silently when the action was absent — #3080/#3057).
+    let action = organize_imports_action
+        .ok_or("organize-imports action (source.organizeImports) must be offered")?;
+    assert_eq!(
+        action["kind"].as_str(),
+        Some("source.organizeImports"),
+        "Should have correct action kind"
+    );
+    assert!(action.get("edit").is_some(), "Should have text edits for import organization");
 
     Ok(())
 }

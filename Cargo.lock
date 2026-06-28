@@ -173,7 +173,7 @@ dependencies = [
  "quote",
  "regex",
  "rustc-hash",
- "shlex",
+ "shlex 1.3.0",
  "syn",
 ]
 
@@ -244,12 +244,12 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.2.62"
+version = "1.2.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1dce859f0832a7d088c4f1119888ab94ef4b5d6795d1ce05afb7fe159d79f98"
+checksum = "e228eec9be7c17ccb640b59b36a5cd805ea2a564a4c5e162c2f659fea30d3b96"
 dependencies = [
  "find-msvc-tools",
- "shlex",
+ "shlex 2.0.1",
 ]
 
 [[package]]
@@ -286,9 +286,9 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.44"
+version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c673075a2e0e5f4a1dde27ce9dee1ea4558c7ffe648f576438a20ca1d2acc4b0"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
  "js-sys",
@@ -1095,9 +1095,9 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.47.2"
+version = "1.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b4a6248eb93a4401ed2f37dfe8ea592d3cf05b7cf4f8efa867b6895af7e094e"
+checksum = "86f0f8fee8c926415c58d6ae43a08523a26faccb2323f5e6b644fe7dd4ef6b82"
 dependencies = [
  "console",
  "once_cell",
@@ -1250,9 +1250,9 @@ checksum = "ae960838283323069879657ca3de837e9f7bbb4c7bf6ea7f1b290d5e9476d2e0"
 
 [[package]]
 name = "memchr"
-version = "2.8.0"
+version = "2.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
+checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
 
 [[package]]
 name = "minimal-lexical"
@@ -1462,23 +1462,24 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "perl-ast"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-ast-v2",
  "perl-position-tracking",
  "perl-token",
+ "strum",
 ]
 
 [[package]]
 name = "perl-ast-v2"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-position-tracking",
 ]
 
 [[package]]
 name = "perl-ci-hygiene"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "chrono",
  "clap",
@@ -1491,7 +1492,7 @@ dependencies = [
 
 [[package]]
 name = "perl-corpus"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1511,7 +1512,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1529,6 +1530,7 @@ dependencies = [
  "ropey",
  "serde",
  "serde_json",
+ "serial_test",
  "tempfile",
  "thiserror",
  "tokio",
@@ -1539,7 +1541,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dead-code"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-uri",
  "perl-workspace",
@@ -1549,7 +1551,7 @@ dependencies = [
 
 [[package]]
 name = "perl-diagnostics"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-test-must",
  "serde",
@@ -1558,7 +1560,7 @@ dependencies = [
 
 [[package]]
 name = "perl-incremental-parsing"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "criterion",
  "lsp-types",
@@ -1571,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lexer"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "criterion",
  "memchr",
@@ -1590,14 +1592,14 @@ dependencies = [
 
 [[package]]
 name = "perl-line-index"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "perl-lsp-perltidy"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-parser-core",
  "perl-subprocess-runtime",
@@ -1609,7 +1611,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-rs"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1619,6 +1621,7 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
+ "perl-ast",
  "perl-corpus",
  "perl-dap",
  "perl-diagnostics",
@@ -1654,7 +1657,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-rs-core"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1696,7 +1699,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-ux-tests"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -1709,7 +1712,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-parser-core",
  "perl-tdd-support",
@@ -1721,7 +1724,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1755,7 +1758,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-bench"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-parser",
  "walkdir",
@@ -1763,7 +1766,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-comparison"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-ast",
  "perl-parser-core",
@@ -1776,7 +1779,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-core"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-ast",
  "perl-ast-v2",
@@ -1795,7 +1798,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-pest"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-tdd-support",
  "pest",
@@ -1808,14 +1811,14 @@ dependencies = [
 
 [[package]]
 name = "perl-pod"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "tempfile",
 ]
 
 [[package]]
 name = "perl-position-tracking"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "lsp-types",
  "perl-tdd-support",
@@ -1828,7 +1831,7 @@ dependencies = [
 
 [[package]]
 name = "perl-pragma"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "criterion",
  "perl-ast",
@@ -1837,7 +1840,7 @@ dependencies = [
 
 [[package]]
 name = "perl-refactoring"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-module",
  "perl-parser-core",
@@ -1852,7 +1855,7 @@ dependencies = [
 
 [[package]]
 name = "perl-regex"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "proptest",
  "thiserror",
@@ -1860,7 +1863,7 @@ dependencies = [
 
 [[package]]
 name = "perl-semantic-analyzer"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-module",
  "perl-parser-core",
@@ -1876,7 +1879,7 @@ dependencies = [
 
 [[package]]
 name = "perl-semantic-facts"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "proptest",
  "serde",
@@ -1885,14 +1888,14 @@ dependencies = [
 
 [[package]]
 name = "perl-subprocess-runtime"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-tdd-support",
 ]
 
 [[package]]
 name = "perl-symbol"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1907,7 +1910,7 @@ dependencies = [
 
 [[package]]
 name = "perl-tdd-support"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "lsp-types",
  "perl-parser-core",
@@ -1919,18 +1922,18 @@ dependencies = [
 
 [[package]]
 name = "perl-test-generators"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "perl-test-must"
-version = "0.16.0"
+version = "0.17.0"
 
 [[package]]
 name = "perl-token"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "criterion",
  "perl-lexer",
@@ -1942,7 +1945,7 @@ dependencies = [
 
 [[package]]
 name = "perl-uri"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "percent-encoding",
  "perl-tdd-support",
@@ -1953,7 +1956,7 @@ dependencies = [
 
 [[package]]
 name = "perl-workspace"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1976,7 +1979,7 @@ dependencies = [
 
 [[package]]
 name = "perllsp"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "perl-lsp-rs",
 ]
@@ -2026,9 +2029,9 @@ dependencies = [
 
 [[package]]
 name = "phf"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
+checksum = "010378780309880b08997fae13be7834dba947d36393bd372f2b1556deb2a2f6"
 dependencies = [
  "phf_macros",
  "phf_shared",
@@ -2037,9 +2040,9 @@ dependencies = [
 
 [[package]]
 name = "phf_generator"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "135ace3a761e564ec88c03a77317a7c6b80bb7f7135ef2544dbe054243b89737"
+checksum = "aeb62e0959d5a1bebc965f4d15d9e2b7cea002b6b0f5ba8cde6cc26738467100"
 dependencies = [
  "fastrand",
  "phf_shared",
@@ -2047,9 +2050,9 @@ dependencies = [
 
 [[package]]
 name = "phf_macros"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "812f032b54b1e759ccd5f8b6677695d5268c588701effba24601f6932f8269ef"
+checksum = "5fa8d0ca26d424d27630da600c6624696e7dec8bf7b3b492b383c5dc49e5e085"
 dependencies = [
  "phf_generator",
  "phf_shared",
@@ -2060,9 +2063,9 @@ dependencies = [
 
 [[package]]
 name = "phf_shared"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
+checksum = "c6fd9027e2d9319be6349febd1db4e8d02aa544921200c9b777720ac34a3aa89"
 dependencies = [
  "siphasher",
 ]
@@ -2355,9 +2358,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.12.3"
+version = "1.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e10754a14b9137dd7b1e3e5b0493cc9171fdd105e0ab477f51b72e7f3ac0e276"
+checksum = "f1292b7759ae1cb9ec195452d1390a074f0cd8541ab7a5a8c31cd6db45d4a6ba"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -2378,9 +2381,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "relative-path"
@@ -2544,25 +2547,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "scc"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46e6f046b7fef48e2660c57ed794263155d713de679057f2d0c169bfc6e756cc"
-dependencies = [
- "sdd",
-]
-
-[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
-name = "sdd"
-version = "3.0.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490dcfcbfef26be6800d11870ff2df8774fa6e86d047e3e8c8a76b25655e41ca"
 
 [[package]]
 name = "semver"
@@ -2649,24 +2637,23 @@ dependencies = [
 
 [[package]]
 name = "serial_test"
-version = "3.4.0"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "911bd979bf1070a3f3aa7b691a3b3e9968f339ceeec89e08c280a8a22207a32f"
+checksum = "699f4197115b8a7e7ff19c9a315a4bd6fffec26cc4626ef45ecaea389e081c6d"
 dependencies = [
  "futures-executor",
  "futures-util",
  "log",
  "once_cell",
  "parking_lot",
- "scc",
  "serial_test_derive",
 ]
 
 [[package]]
 name = "serial_test_derive"
-version = "3.4.0"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a7d91949b85b0d2fb687445e448b40d322b6b3e4af6b44a29b21d9a5f33e6d9"
+checksum = "94e153fc76e1c6a068703d6d29c508a0b15c061c4b7e43da59cc097bc342673c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2715,6 +2702,12 @@ name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "shlex"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "sigchld"
@@ -2832,6 +2825,27 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "subtle"
@@ -3168,7 +3182,7 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-perl-c"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "cc",
  "insta",
@@ -3178,7 +3192,7 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-perl-rs"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "insta",
  "perl-ast",
@@ -3308,9 +3322,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.23.1"
+version = "1.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddd74a9687298c6858e9b88ec8935ec45d22e8fd5e6394fa1bd4e99a87789c76"
+checksum = "144d6b123cef80b301b8f72a9e2ca4370ddec21950d0a103dd22c437006d2db7"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
@@ -3482,9 +3496,9 @@ dependencies = [
 
 [[package]]
 name = "which"
-version = "8.0.2"
+version = "8.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81995fafaaaf6ae47a7d0cc83c67caf92aeb7e5331650ae6ff856f7c0c60c459"
+checksum = "48d7cd18d4acb58fb3cdfe9ea54e6cd96a4e7d4cc45c56338b236e82dad47248"
 dependencies = [
  "libc",
 ]
@@ -3856,7 +3870,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3887,6 +3901,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
+ "sha2",
  "similar 3.1.1",
  "tar",
  "tempfile",

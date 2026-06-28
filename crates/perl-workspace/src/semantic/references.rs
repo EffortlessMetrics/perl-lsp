@@ -170,6 +170,7 @@ impl ReferenceIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::semantic::facts::PRODUCER_SCHEMA_VERSION;
     use perl_semantic_facts::{
         AnchorFact, AnchorId, Confidence, EdgeFact, EdgeId, EntityFact, EntityKind, OccurrenceFact,
         OccurrenceId, Provenance, ScopeId,
@@ -188,6 +189,7 @@ mod tests {
             source_uri: "file:///lib/Foo.pm".to_string(),
             file_id,
             content_hash: 999,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -319,6 +321,7 @@ mod tests {
             source_uri: "file:///lib/Defs.pm".to_string(),
             file_id,
             content_hash: 111,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -375,6 +378,7 @@ mod tests {
             source_uri: "file:///lib/Bar.pm".to_string(),
             file_id: file_id_b,
             content_hash: 888,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -444,6 +448,7 @@ mod tests {
             source_uri: "file:///lib/Foo.pm".to_string(),
             file_id,
             content_hash: 1000,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -496,6 +501,7 @@ mod tests {
             source_uri: "file:///lib/Unresolved.pm".to_string(),
             file_id,
             content_hash: 222,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -560,6 +566,7 @@ mod tests {
             source_uri: "file:///lib/Ambiguous.pm".to_string(),
             file_id,
             content_hash: 333,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,

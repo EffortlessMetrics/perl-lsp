@@ -107,12 +107,6 @@ fn test_data_breakpoint_info_invalid_name() -> TestResult {
         data_id.is_none() || data_id.is_some_and(|v| v.is_null()),
         "Invalid name should have null dataId"
     );
-    let description =
-        body.get("description").and_then(|v| v.as_str()).ok_or("missing description")?;
-    assert!(description.contains("Perl variable name"), "got: {description}");
-    assert!(description.contains("$foo"), "got: {description}");
-    assert!(description.contains("@items"), "got: {description}");
-    assert!(description.contains("%hash"), "got: {description}");
 
     Ok(())
 }

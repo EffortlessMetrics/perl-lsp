@@ -33,14 +33,6 @@ interface CachedCandidate {
     isFinal: boolean;
 }
 
-/** Document position that owns the active stream request. */
-interface ActiveStreamContext {
-    uri: string;
-    version: number;
-    line: number;
-    character: number;
-}
-
 /**
  * Progress type marker used with `LanguageClient.onProgress`.
  *
@@ -64,7 +56,6 @@ export class StreamingCompletionController implements vscode.Disposable {
     private cachedCandidate: CachedCandidate | null = null;
     private activeTokenSource: vscode.CancellationTokenSource | null = null;
     private activeProgressToken: string | null = null;
-    private activeStreamContext: ActiveStreamContext | null = null;
     private activeProgressDisposable: vscode.Disposable | null = null;
     private disposables: vscode.Disposable[] = [];
 
@@ -131,10 +122,6 @@ export class StreamingCompletionController implements vscode.Disposable {
             return;
         }
 
-        if (!this.activeStreamContext) {
-            return;
-        }
-
         // Update cached candidate if it's newer
         if (
             this.cachedCandidate &&
@@ -145,10 +132,10 @@ export class StreamingCompletionController implements vscode.Disposable {
         }
 
         this.cachedCandidate = {
-            uri: this.activeStreamContext.uri,
-            version: this.activeStreamContext.version,
-            line: item.range?.start.line ?? this.activeStreamContext.line,
-            character: item.range?.start.character ?? this.activeStreamContext.character,
+            uri: '',
+            version: 0,
+            line: item.range?.start.line ?? 0,
+            character: item.range?.start.character ?? 0,
             text: item.insertText,
             sessionId: value.sessionId,
             sequence: value.sequence,
@@ -177,8 +164,6 @@ export class StreamingCompletionController implements vscode.Disposable {
         // If we have a cached candidate for this position, return it
         if (
             this.cachedCandidate &&
-            this.cachedCandidate.uri === document.uri.toString() &&
-            this.cachedCandidate.version === document.version &&
             this.cachedCandidate.line === position.line &&
             this.cachedCandidate.character === position.character
         ) {
@@ -212,12 +197,6 @@ export class StreamingCompletionController implements vscode.Disposable {
 
         const partialResultToken = `stream-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         this.activeProgressToken = partialResultToken;
-        this.activeStreamContext = {
-            uri: document.uri.toString(),
-            version: document.version,
-            line: position.line,
-            character: position.character,
-        };
 
         // Register progress handler for this specific token
         this.activeProgressDisposable = this.client.onProgress(
@@ -267,7 +246,6 @@ export class StreamingCompletionController implements vscode.Disposable {
             this.activeProgressDisposable = null;
         }
         this.activeProgressToken = null;
-        this.activeStreamContext = null;
         if (this.activeTokenSource) {
             this.activeTokenSource.cancel();
             this.activeTokenSource.dispose();

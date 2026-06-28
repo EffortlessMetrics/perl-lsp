@@ -185,6 +185,13 @@ pub fn build_rename_edit(
 /// package other than `key.pkg`.  Such references are ambiguous: a Perl
 /// program importing a same-named sub from a different package would be
 /// incorrectly renamed.
+///
+/// Arrow method calls (`$self->method`, `$obj->method`) are NOT ambiguous: the
+/// receiver's class is determined at dispatch time via `@ISA`/Perl OO, and the
+/// workspace index already validated that this reference belongs to `key.pkg`'s
+/// inheritance chain.  The workspace index returns the full expression span
+/// (`$self->shared`), so detecting `->` inside the span itself is sufficient to
+/// identify an arrow method call.
 fn is_ambiguous_sub_reference(
     idx: &WorkspaceIndex,
     key: &SymbolKey,
@@ -216,6 +223,16 @@ fn is_ambiguous_sub_reference(
     }
 
     let package_at_line = package_name_for_line(&doc.text, start_line);
+
+    // Arrow method calls (`$self->name`, `$obj->name`) are not bare function calls,
+    // but they are only safe for workspace rename when the caller package is the
+    // defining package or explicitly inherits from it.  Dynamic receiver chains such
+    // as `$self->app->dispatcher->method` must fail closed.
+    if original.contains("->") {
+        return package_at_line != key.pkg.as_ref()
+            && !package_explicitly_inherits(&doc.text, package_at_line, key.pkg.as_ref());
+    }
+
     package_at_line != key.pkg.as_ref()
 }
 
@@ -244,6 +261,67 @@ fn package_name_for_line(text: &str, target_line: u32) -> &str {
     }
 
     current_pkg
+}
+
+fn package_explicitly_inherits(text: &str, package: &str, parent: &str) -> bool {
+    let mut in_target_package = false;
+
+    for raw_line in text.lines() {
+        let trimmed = raw_line.trim_start();
+        if let Some(declared_package) = package_declared_on_line(trimmed) {
+            in_target_package = declared_package == package;
+            continue;
+        }
+
+        if !in_target_package || trimmed.starts_with('#') {
+            continue;
+        }
+
+        if line_declares_parent(trimmed, parent) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn package_declared_on_line(trimmed: &str) -> Option<&str> {
+    if !trimmed.starts_with("package ") {
+        return None;
+    }
+
+    let package_decl = trimmed.trim_start_matches("package ").trim_start();
+    let package_name =
+        package_decl.split(|ch: char| ch.is_whitespace() || ch == ';').next().unwrap_or_default();
+    (!package_name.is_empty()).then_some(package_name)
+}
+
+fn line_declares_parent(trimmed: &str, parent: &str) -> bool {
+    (trimmed.starts_with("use parent ")
+        || trimmed.starts_with("use base ")
+        || trimmed.starts_with("extends ")
+        || trimmed.contains("@ISA"))
+        && contains_module_name(trimmed, parent)
+}
+
+fn contains_module_name(text: &str, module: &str) -> bool {
+    let mut search_from = 0;
+    while let Some(relative_start) = text[search_from..].find(module) {
+        let start = search_from + relative_start;
+        let end = start + module.len();
+        let before_ok = text[..start].chars().next_back().is_none_or(|ch| !is_module_name_char(ch));
+        let after_ok = text[end..].chars().next().is_none_or(|ch| !is_module_name_char(ch));
+        if before_ok && after_ok {
+            return true;
+        }
+        search_from = end;
+    }
+
+    false
+}
+
+fn is_module_name_char(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_' || ch == ':'
 }
 
 fn is_ident_char(ch: char) -> bool {
@@ -696,6 +774,125 @@ $var;
         assert!(
             edits.is_empty(),
             "main-package rename must return empty edits (fall-through to same-file), got: {edits:?}"
+        );
+
+        Ok(())
+    }
+
+    /// Arrow method calls (`$self->name`) must NOT be treated as ambiguous
+    /// unqualified cross-package references.  The `->` dispatch operator makes the
+    /// receiver explicit even when the method name itself has no `::` qualifier.
+    ///
+    /// Fixture: `Base` defines `shared`; `Child` extends `Base` and calls
+    /// `$self->shared` inside `run`.  Cross-file rename of `Base::shared` must
+    /// produce edits for both `Base.pm` (definition) and `Child.pm` (call site).
+    #[test]
+    fn rename_arrow_method_call_cross_package_is_not_ambiguous()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+
+        let base_text = "package Base;\n\nsub shared {\n    return 'shared';\n}\n\n1;\n";
+        let child_text = "package Child;\nuse parent 'Base';\n\nsub run {\n    my ($self) = @_;\n    return $self->shared;\n}\n\n1;\n";
+
+        index_text(&idx, "file:///Base.pm", base_text)?;
+        index_text(&idx, "file:///Child.pm", child_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Base"),
+            name: Arc::from("shared"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        // Must NOT return AmbiguousIdentity — `$self->shared` is arrow dispatch.
+        let edits = build_rename_edit(&idx, &key, "shared_renamed").map_err(|e| {
+            format!(
+                "expected Ok but got refusal: {e}. \
+                 `$self->shared` in Child.pm is arrow method dispatch — must not be treated as \
+                 ambiguous unqualified cross-package call."
+            )
+        })?;
+
+        // Base.pm (definition) and Child.pm (inherited call site) must both be edited.
+        let base_edit = edits.iter().find(|e| e.uri.contains("Base.pm"));
+        assert!(
+            base_edit.is_some(),
+            "rename must produce edits for Base.pm (definition). Got URIs: {:?}",
+            edits.iter().map(|e| &e.uri).collect::<Vec<_>>()
+        );
+        let child_edit = edits.iter().find(|e| e.uri.contains("Child.pm"));
+        assert!(
+            child_edit.is_some(),
+            "rename must produce edits for Child.pm inherited call site. Got URIs: {:?}",
+            edits.iter().map(|e| &e.uri).collect::<Vec<_>>()
+        );
+
+        Ok(())
+    }
+
+    /// Dynamic arrow receiver chains (`$self->app->dispatcher->method`) must fail
+    /// closed unless the caller package explicitly inherits from the target package.
+    #[test]
+    fn rename_dynamic_arrow_receiver_without_inheritance_is_ambiguous()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+
+        let dispatcher_text = "package Catalyst::Dispatcher;\nsub get_action { return 1; }\n1;\n";
+        let controller_text = concat!(
+            "package Catalyst::Controller;\n",
+            "use parent 'Catalyst::Component';\n",
+            "sub action_for {\n",
+            "    my ($self, $action) = @_;\n",
+            "    return $self->_application->dispatcher->get_action($action);\n",
+            "}\n",
+            "1;\n",
+        );
+
+        index_text(&idx, "file:///Dispatcher.pm", dispatcher_text)?;
+        index_text(&idx, "file:///Controller.pm", controller_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Catalyst::Dispatcher"),
+            name: Arc::from("get_action"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let result = build_rename_edit(&idx, &key, "renamed_get_action");
+        assert!(
+            matches!(result, Err(RenameRefusal::AmbiguousIdentity(_))),
+            "dynamic arrow receiver without explicit inheritance must fail closed; got: {result:?}"
+        );
+
+        Ok(())
+    }
+
+    /// Bare unqualified cross-package calls (`process_data()` from a foreign package)
+    /// must still be refused — the arrow-method exemption must not open that path.
+    #[test]
+    fn rename_bare_unqualified_cross_package_call_still_refused()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+
+        let foo_text = "package Foo;\nsub process_data { return 1; }\n1;\n";
+        // Bar calls process_data without `->` — truly unqualified bare function call.
+        let bar_text = "package Bar;\nsub run { return process_data(); }\n1;\n";
+
+        index_text(&idx, "file:///Foo.pm", foo_text)?;
+        index_text(&idx, "file:///Bar.pm", bar_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Foo"),
+            name: Arc::from("process_data"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let result = build_rename_edit(&idx, &key, "process_records");
+        assert!(
+            matches!(result, Err(RenameRefusal::AmbiguousIdentity(_))),
+            "bare unqualified cross-package call must still produce AmbiguousIdentity refusal; \
+             got: {result:?}"
         );
 
         Ok(())

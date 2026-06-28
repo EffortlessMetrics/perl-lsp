@@ -779,12 +779,16 @@ impl LspHarness {
         let start = Instant::now();
         let timeout = Duration::from_millis(timeout_ms);
 
-        // Wait a bit for notifications to arrive
+        // Wait for the requested notification kind to arrive. A filtered drain
+        // must not stop early just because an unrelated notification was queued.
         while start.elapsed() < timeout {
             thread::sleep(Duration::from_millis(10));
 
             let notifications = self.notification_buffer.lock();
-            if !notifications.is_empty() {
+            let matching_notification = method.map_or(!notifications.is_empty(), |filter_method| {
+                notifications.iter().any(|notif| notif["method"].as_str() == Some(filter_method))
+            });
+            if matching_notification {
                 break;
             }
         }
@@ -829,21 +833,6 @@ impl LspHarness {
         let start = Instant::now();
 
         loop {
-            // Pump any pending output into the framer and stash parsed messages.
-            {
-                let mut guard = self.output_buffer.lock();
-                if !guard.is_empty() {
-                    let chunk = std::mem::take(&mut *guard);
-                    self.output_framer.push(&chunk);
-                }
-                drop(guard);
-            }
-            while let Some(msg_bytes) = self.try_take_one_framed_message() {
-                if let Ok(msg) = serde_json::from_slice::<Value>(&msg_bytes) {
-                    self.stash_non_matching_message(msg);
-                }
-            }
-
             {
                 let mut notifications = self.notification_buffer.lock();
                 if let Some(pos) = notifications.iter().position(|n| {

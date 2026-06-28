@@ -320,7 +320,15 @@ pub fn start_lsp_server() -> LspServer {
     server
 }
 
-pub fn send_request(server: &LspServer, mut request: Value) -> Value {
+pub fn send_request(server: &LspServer, request: Value) -> Value {
+    send_request_with_response_timeout(server, request, default_timeout())
+}
+
+pub fn send_request_with_response_timeout(
+    server: &LspServer,
+    mut request: Value,
+    timeout: Duration,
+) -> Value {
     // IMPORTANT: Extract/assign ID FIRST, before any early returns.
     // This ensures error responses can include the proper request ID.
     let id = match request.get("id") {
@@ -349,7 +357,7 @@ pub fn send_request(server: &LspServer, mut request: Value) -> Value {
                 Some(num) => num,
                 None => must(Err::<i64, _>(format!("ID number should be i64: {n:?}"))),
             };
-            match read_response_matching_i64(server, id_num, default_timeout()) {
+            match read_response_matching_i64(server, id_num, timeout) {
                 Some(resp) => resp,
                 None => error_response_for_request(
                     Some(id.clone()),
@@ -358,7 +366,7 @@ pub fn send_request(server: &LspServer, mut request: Value) -> Value {
                 ),
             }
         }
-        v => match read_response_matching(server, v, default_timeout()) {
+        v => match read_response_matching(server, v, timeout) {
             Some(resp) => resp,
             None => error_response_for_request(
                 Some(id.clone()),

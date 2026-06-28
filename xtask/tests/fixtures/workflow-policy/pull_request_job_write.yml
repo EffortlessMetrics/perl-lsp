@@ -1,0 +1,10 @@
+name: fixture-pr-job-write
+on:
+  pull_request:
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: git push

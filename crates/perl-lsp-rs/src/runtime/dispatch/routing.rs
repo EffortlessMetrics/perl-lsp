@@ -6,12 +6,6 @@
 use super::super::*;
 use super::response::RoutedResponse;
 
-fn unsupported_method_message(method: &str) -> String {
-    format!(
-        "Method '{method}' not found or not supported: check the LSP method spelling and the capabilities returned by initialize; supported examples include textDocument/hover, textDocument/completion, textDocument/formatting, and workspace/executeCommand"
-    )
-}
-
 impl LspServer {
     pub(super) fn route_request(
         &self,
@@ -20,6 +14,7 @@ impl LspServer {
         should_respond: bool,
     ) -> RoutedResponse {
         let method = request.method.clone();
+        let request_start = std::time::Instant::now();
         let result = match method.as_str() {
             "initialize" => self.handle_initialize_dispatch(request.params),
             "initialized" => self.handle_initialized_dispatch(),
@@ -203,7 +198,7 @@ impl LspServer {
                 // Enhanced error response with comprehensive context
                 Err(enhanced_error(
                     METHOD_NOT_FOUND,
-                    &unsupported_method_message(&method),
+                    &format!("Method '{}' not found or not supported", method),
                     "method_not_found",
                     Some(&method),
                 ))
@@ -211,6 +206,7 @@ impl LspServer {
         };
 
         self.record_live_provider_decision_trace(&method, &result);
+        self.record_lsp_request_latency(&method, request_start);
         RoutedResponse::Handler { id, method, should_respond, result }
     }
 
@@ -224,16 +220,58 @@ impl LspServer {
     where
         F: FnOnce(Option<&Value>) -> Result<Option<Value>, JsonRpcError>,
     {
+        let request_start = std::time::Instant::now();
         if let Some(request_id) = id.as_ref()
             && let Some(typed_id) = JsonRpcId::from_value(request_id)
             && self.is_cancelled(&typed_id)
         {
             self.cancel_clear(&typed_id);
+            self.record_lsp_request_latency(&method, request_start);
             return RoutedResponse::Immediate(cancelled_response_with_method(request_id, &method));
         }
 
         let result = handler(id.as_ref());
         self.record_live_provider_decision_trace(&method, &result);
+        self.record_lsp_request_latency(&method, request_start);
         RoutedResponse::Handler { id, method, should_respond, result }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn cancelled_cancellable_route_records_latency_before_immediate_response()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let request_id = JsonRpcId::Integer(3107);
+        let handler_called = Cell::new(false);
+        server.cancel_mark(&request_id);
+
+        let routed = server.route_cancellable(
+            Some(request_id.to_value()),
+            "textDocument/completion".to_string(),
+            true,
+            |_| {
+                handler_called.set(true);
+                Ok(None)
+            },
+        );
+
+        assert!(!handler_called.get(), "cancelled route must not call the provider handler");
+        assert!(
+            !server.is_cancelled(&request_id),
+            "cancelled route must clear the local cancellation marker"
+        );
+
+        let RoutedResponse::Immediate(response) = routed else {
+            return Err(
+                std::io::Error::other("cancelled route must return an immediate response").into()
+            );
+        };
+        assert_eq!(response.error.map(|error| error.code), Some(REQUEST_CANCELLED));
+        Ok(())
     }
 }

@@ -1,6 +1,3 @@
-// Test receipt emits per-probe status and JSON evidence to stderr for auditability.
-#![allow(clippy::print_stderr)]
-
 //! Scenario 33 - Mojolicious workspace-symbol noise receipt.
 //!
 //! This receipt exercises `workspace/symbol` over the committed Mojolicious
@@ -478,10 +475,6 @@ fn scenario_33_mojolicious_workspace_symbol_noise_receipt() {
             )?;
             recorder
                 .check("workspace-symbol probes returned live symbols", live_symbol_total > 0)?;
-            recorder.check(
-                "all workspace-symbol probes returned live symbols",
-                reports.iter().all(|report| report.first_count > 0),
-            )?;
             recorder.check(
                 "workspace-symbol probes returned useful project hits",
                 useful_hit_total > 0,

@@ -188,7 +188,7 @@ fn validate_title(title: &str, no_gh: bool) -> Result<TitleCheckReceipt> {
         })
         .unwrap_or_default();
     let issue_ref: Option<u64> = refs.iter().copied().find(|&n| n != 0);
-    let has_placeholder = refs.iter().any(|&n| n == 0);
+    let has_placeholder = refs.contains(&0);
 
     if issue_ref.is_some() {
         checks.push(CheckResult {

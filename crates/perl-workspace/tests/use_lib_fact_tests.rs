@@ -442,6 +442,245 @@ fn test_workspace_index_remove_file_clears_use_lib() -> Result<(), Box<dyn std::
     Ok(())
 }
 
+// ── Quote-operator whitespace conformance matrix — perl-workspace consumer ────
+//
+// Shared case matrix applied to two sub-systems in this crate:
+//
+//   Sub-system A: `extract_use_lib_facts` (uses parse_quote_operator_content)
+//     Covers: q{text}, qq[text], q (text), qq [text] (space-before-delimiter forms)
+//     and qw (foo bar) variants via the qw path.
+//
+//   Sub-system B: `extract_import_specs` (uses parse_qw_content → parse_quote_operator_content)
+//     Covers: all qw delimiter forms for `use Foo qw...` statements.
+//
+// Invariants:
+//   - Compact and space-before-delimiter forms produce identical output.
+//   - qwfoo bareword is NOT parsed as a qw list.
+//   - q and qq operators support the same delimiter flexibility as qw.
+
+use perl_semantic_facts::ImportSymbols;
+use perl_workspace::semantic::workspace_import_extractor::extract_import_specs;
+
+fn parse_and_extract_workspace_import_specs(code: &str) -> Vec<perl_semantic_facts::ImportSpec> {
+    let file_id = FileId(99);
+    let mut parser = perl_workspace::Parser::new(code);
+    match parser.parse() {
+        Ok(ast) => extract_import_specs(&ast, file_id),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn workspace_explicit_symbols_for_module(code: &str, module: &str) -> Result<Vec<String>, String> {
+    let specs = parse_and_extract_workspace_import_specs(code);
+    let spec = specs
+        .into_iter()
+        .find(|s| s.module == module)
+        .ok_or_else(|| format!("expected an ImportSpec for module '{module}', got none"))?;
+    match spec.symbols {
+        ImportSymbols::Explicit(names) => Ok(names),
+        other => {
+            Err(format!("expected ImportSymbols::Explicit for module '{module}', got {other:?}"))
+        }
+    }
+}
+
+// ── Sub-system B: extract_import_specs, qw delimiter conformance ─────────────
+
+#[test]
+fn conformance_ws_qw_compact_paren_produces_explicit_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
+    let syms = workspace_explicit_symbols_for_module("use Foo qw(foo bar);\n", "Foo")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw(foo bar) must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qw_space_before_paren_produces_explicit_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
+    let syms = workspace_explicit_symbols_for_module("use Foo qw (foo bar);\n", "Foo")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw (foo bar) must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qw_compact_bracket_produces_explicit_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
+    let syms = workspace_explicit_symbols_for_module("use Foo qw[foo bar];\n", "Foo")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw[foo bar] must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qw_space_before_bracket_produces_explicit_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
+    let syms = workspace_explicit_symbols_for_module("use Foo qw [foo bar];\n", "Foo")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw [foo bar] must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qw_compact_slash_produces_explicit_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
+    let syms = workspace_explicit_symbols_for_module("use Foo qw/foo bar/;\n", "Foo")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw/foo bar/ must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qw_space_before_slash_produces_explicit_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
+    let syms = workspace_explicit_symbols_for_module("use Foo qw /foo bar/;\n", "Foo")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw /foo bar/ must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qw_compact_brace_produces_explicit_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
+    let syms = workspace_explicit_symbols_for_module("use Foo qw{foo bar};\n", "Foo")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw{{foo bar}} must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qw_space_before_brace_produces_explicit_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
+    let syms = workspace_explicit_symbols_for_module("use Foo qw {foo bar};\n", "Foo")?;
+    assert_eq!(syms, vec!["foo", "bar"], "qw {{foo bar}} must yield [foo, bar]");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qw_space_and_compact_forms_are_identical()
+-> Result<(), Box<dyn std::error::Error>> {
+    let pairs: &[(&str, &str)] = &[
+        ("use Foo qw(foo bar);\n", "use Foo qw (foo bar);\n"),
+        ("use Foo qw[foo bar];\n", "use Foo qw [foo bar];\n"),
+        ("use Foo qw/foo bar/;\n", "use Foo qw /foo bar/;\n"),
+        ("use Foo qw{foo bar};\n", "use Foo qw {foo bar};\n"),
+    ];
+
+    for (compact_src, spaced_src) in pairs {
+        let compact_syms = workspace_explicit_symbols_for_module(compact_src, "Foo")?;
+        let spaced_syms = workspace_explicit_symbols_for_module(spaced_src, "Foo")?;
+        assert_eq!(
+            compact_syms, spaced_syms,
+            "parity: compact {compact_src:?} vs spaced {spaced_src:?}: \
+             compact={compact_syms:?}, spaced={spaced_syms:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qwfoo_bareword_is_not_parsed_as_qw_list() -> Result<(), Box<dyn std::error::Error>>
+{
+    // `qwfoo` is NOT a valid qw operator — it is a bareword identifier.
+    // The workspace import extractor must NOT split it into qw-content words.
+    let specs = parse_and_extract_workspace_import_specs("use Foo qwfoo;\n");
+    let foo_spec = specs.into_iter().find(|s| s.module == "Foo");
+    if let Some(spec) = foo_spec {
+        match &spec.symbols {
+            ImportSymbols::Explicit(names) => {
+                for name in names {
+                    assert_ne!(
+                        name, "oo",
+                        "qwfoo must not produce 'oo' — that would mean 'f' was treated as qw delimiter"
+                    );
+                }
+            }
+            ImportSymbols::Default | ImportSymbols::None => {}
+            other => {
+                return Err(format!("unexpected ImportSymbols for qwfoo: {other:?}").into());
+            }
+        }
+    }
+    Ok(())
+}
+
+// ── Sub-system A: extract_use_lib_facts, q/qq delimiter conformance ───────────
+
+#[test]
+fn conformance_ws_q_compact_brace_emits_fact() -> Result<(), Box<dyn std::error::Error>> {
+    let facts = parse_and_extract_use_lib("use lib q{text};\n");
+    assert_eq!(facts.len(), 1, "q{{text}} must emit one fact");
+    assert_eq!(facts[0].path, "text", "q{{text}} must yield path='text'");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_q_space_before_brace_emits_fact() -> Result<(), Box<dyn std::error::Error>> {
+    let facts = parse_and_extract_use_lib("use lib q {text};\n");
+    assert_eq!(facts.len(), 1, "q {{text}} must emit one fact");
+    assert_eq!(facts[0].path, "text", "q {{text}} (space before brace) must yield path='text'");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qq_compact_bracket_emits_fact() -> Result<(), Box<dyn std::error::Error>> {
+    let facts = parse_and_extract_use_lib("use lib qq[text];\n");
+    assert_eq!(facts.len(), 1, "qq[text] must emit one fact");
+    assert_eq!(facts[0].path, "text", "qq[text] must yield path='text'");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qq_space_before_bracket_emits_fact() -> Result<(), Box<dyn std::error::Error>> {
+    let facts = parse_and_extract_use_lib("use lib qq [text];\n");
+    assert_eq!(facts.len(), 1, "qq [text] must emit one fact");
+    assert_eq!(facts[0].path, "text", "qq [text] (space before bracket) must yield path='text'");
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_q_and_qq_space_compact_parity() -> Result<(), Box<dyn std::error::Error>> {
+    // Compact and space-before-delimiter forms of q/qq must produce the same path.
+    let q_compact = parse_and_extract_use_lib("use lib q{text};\n");
+    let q_spaced = parse_and_extract_use_lib("use lib q {text};\n");
+    assert_eq!(q_compact.len(), 1);
+    assert_eq!(q_spaced.len(), 1);
+    assert_eq!(
+        q_compact[0].path, q_spaced[0].path,
+        "q{{text}} and q {{text}} must produce the same path"
+    );
+
+    let qq_compact = parse_and_extract_use_lib("use lib qq[text];\n");
+    let qq_spaced = parse_and_extract_use_lib("use lib qq [text];\n");
+    assert_eq!(qq_compact.len(), 1);
+    assert_eq!(qq_spaced.len(), 1);
+    assert_eq!(
+        qq_compact[0].path, qq_spaced[0].path,
+        "qq[text] and qq [text] must produce the same path"
+    );
+    Ok(())
+}
+
+#[test]
+fn conformance_ws_qw_lib_space_and_compact_parity() -> Result<(), Box<dyn std::error::Error>> {
+    // use lib qw forms — each delimiter compact vs space must yield the same paths.
+    let pairs: &[(&str, &str)] = &[
+        ("use lib qw(path1 path2);\n", "use lib qw (path1 path2);\n"),
+        ("use lib qw[path1 path2];\n", "use lib qw [path1 path2];\n"),
+        ("use lib qw/path1 path2/;\n", "use lib qw /path1 path2/;\n"),
+        ("use lib qw{path1 path2};\n", "use lib qw {path1 path2};\n"),
+    ];
+
+    for (compact_src, spaced_src) in pairs {
+        let compact_facts = parse_and_extract_use_lib(compact_src);
+        let spaced_facts = parse_and_extract_use_lib(spaced_src);
+
+        let compact_paths: Vec<&str> = compact_facts.iter().map(|f| f.path.as_str()).collect();
+        let spaced_paths: Vec<&str> = spaced_facts.iter().map(|f| f.path.as_str()).collect();
+
+        assert_eq!(
+            compact_paths, spaced_paths,
+            "parity: compact {compact_src:?} vs spaced {spaced_src:?}: \
+             compact={compact_paths:?}, spaced={spaced_paths:?}"
+        );
+    }
+    Ok(())
+}
+
 /// Proves that re-indexing a file with different `use lib` paths replaces
 /// the stale facts (incremental re-index correctness).
 #[test]

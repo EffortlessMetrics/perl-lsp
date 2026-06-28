@@ -1346,7 +1346,7 @@ ci-test-parser-dap-full:
         sh -c 'echo "🧪 Running all perl-parser lib tests..." && \
         cargo test -p perl-parser --lib -j1 -- --test-threads=1 && \
         echo "🧪 Running all perl-dap tests..." && \
-        cargo test -p perl-dap -j1 -- --test-threads=1 && \
+        cargo test -p perl-dap --features test-helpers -j1 -- --test-threads=1 && \
         echo "🔍 Running clippy on affected crates (no-deps)..." && \
         cargo clippy -p perl-parser-core -p perl-parser -p perl-dap --lib --no-deps -j1 -- -D warnings'
     @echo "✅ Full Parser/DAP tests passed"
@@ -1439,6 +1439,7 @@ status-update subsystem="":
 # Verify docs/project/status/ subsystem files are up-to-date
 status-check:
     @cargo run -p xtask -- update-status --check
+    @cargo xtask metrics hir-coverage --check
 
 # ============================================================================
 # Corpus Audit Commands
@@ -1942,14 +1943,25 @@ coverage-proof base='origin/main':
     "$HOME/.cargo/bin/rustup" run nightly cargo test --workspace --lib --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask quality_baseline --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask merge_ready --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask gates --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask queue_reconciler --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask ci_route --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask workflow_policy_lint --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask allocation_tracker --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask agent_lease --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask agent_ledgers --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask agent_receipt --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask active_goal_manifest --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask file_policy --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask native_tooling --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask ripr --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask lsp_318 --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask inline_completion_quality --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask semantic_inline_receipts --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask semantic_inline_next_edit --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --locked \
+        --test active_goal_manifest_cli \
+        --test agent_leases_cli \
         --test ci_route_cli \
         --test codecov_patch_gate_policy \
         --test quality_ci_wiring_policy \
@@ -2022,10 +2034,21 @@ coverage-proof-routed base='origin/main' head='HEAD':
     echo "coverage target: $coverage_target"
     export CARGO_TARGET_DIR="$coverage_target"
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov clean --workspace
-    coverage_env="$coverage_target/llvm-cov-env.sh"
-    "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov show-env --sh > "$coverage_env"
-    source "$coverage_env"
-    python3 -c 'import json, shlex; from pathlib import Path; route = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); packs = route.get("coverage_proof_packs") or []; commands = []; seen = set(); pack_ids = []; exec("for pack in packs:\n    pack_ids.append(str(pack.get(\"id\", \"<unknown>\")))\n    for command in pack.get(\"commands\") or []:\n        if command not in seen:\n            seen.add(command)\n            commands.append(command)"); Path("target/receipts/quality/coverage-route-selected-packs.txt").write_text(", ".join(pack_ids) + "\n", encoding="utf-8"); body = "#!/usr/bin/env bash\nset -euo pipefail\n" + "".join("echo " + shlex.quote(">>> routed coverage: " + command) + "\n" + command + "\n" for command in commands); Path("target/receipts/quality/coverage-pack-commands.sh").write_text(body, encoding="utf-8")'
+    # Generate coverage-pack-commands.sh.  Integration-test commands (--tests)
+    # are wrapped non-fatally: failing assertions still produce LLVM coverage
+    # data, so the numeric gate still measures real coverage.  This decouples
+    # coverage measurement from pre-existing test-debt (perl-dap tests/); see
+    # #1269 for the long-term correctness lane.
+    #
+    # IMPORTANT (#1282): commands use `cargo llvm-cov test --no-report` (NOT
+    # plain `cargo test`).  Do NOT source `cargo llvm-cov show-env` before
+    # executing coverage-pack-commands.sh -- cargo-llvm-cov warns that its
+    # subcommands other than `report` and `clean` may not work correctly when
+    # show-env environment variables are already set in the shell (double-wrapper
+    # conflict).  `cargo llvm-cov test --no-report` handles LLVM instrumentation
+    # and binary registration internally without needing show-env.
+    # `cargo llvm-cov report` at the end then symbolises all registered profdata.
+    python3 scripts/ci/generate-coverage-pack-commands.py
     bash target/receipts/quality/coverage-pack-commands.sh
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --profile agent --lcov --output-path target/lcov.info \
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
@@ -2835,6 +2858,17 @@ cpan-corpus-check:
 # Auto-add newly-clean CPAN modules to known-clean manifest
 cpan-corpus-ratchet:
     cargo run -p xtask -- cpan-corpus ratchet
+
+# Install the top-50 bounded CPAN subset (~5-8 min, for quick local validation)
+cpan-corpus-install-bounded:
+    cargo run -p xtask -- cpan-corpus install \
+        --dist-list .ci/cpan-top-50-distributions.txt \
+        --install-dir target/cpan-corpus-bounded
+
+# Sweep the bounded CPAN subset (requires cpan-corpus-install-bounded first)
+cpan-corpus-sweep-bounded:
+    cargo run -p xtask -- cpan-corpus sweep \
+        --install-dir target/cpan-corpus-bounded
 
 # ============================================================================
 # Scorecard Metrics Ratchet

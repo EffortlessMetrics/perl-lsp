@@ -966,8 +966,12 @@ fn next_token_returns_none_after_eof() -> R {
 
 #[test]
 fn custom_config() -> R {
-    let config =
-        LexerConfig { parse_interpolation: false, track_positions: false, max_lookahead: 512 };
+    let config = LexerConfig {
+        parse_interpolation: false,
+        track_positions: false,
+        max_lookahead: 512,
+        symbol_table: None,
+    };
     let mut lexer = PerlLexer::with_config("my $x = 1;", config);
     let toks = lexer.collect_tokens();
     let last = toks.last().ok_or("no tokens")?;

@@ -269,9 +269,10 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
 
         NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
             for var in variables {
-                if let Some(decl) = variable_decl_from_node(var, node, ctx, declarator) {
-                    out.push(decl);
-                }
+                // A variable slot may itself be a NestedVariableList (e.g. the ($b, $c)
+                // group in `my ($a, ($b, $c))`).  Walk nested lists recursively so all
+                // leaf variables are registered as declarations.
+                push_variable_list_decls(var, node, ctx, declarator, out);
             }
             if let Some(init) = initializer {
                 walk(init, ctx, out);
@@ -491,6 +492,32 @@ fn walk_statements(statements: &[Node], ctx: &mut WalkCtx, out: &mut Vec<SymbolD
 ///
 /// Returns `None` for non-`Variable` children (e.g. `VariableWithAttributes`
 /// wrapping — in that case the caller should unwrap further).
+/// Push symbol declarations for a single slot in a variable list.
+///
+/// If the slot is a bare `Variable` or `VariableWithAttributes`, emit one
+/// `SymbolDecl`.  If it is a `NestedVariableList` (e.g. the `($b, $c)` group
+/// inside `my ($a, ($b, $c))`), recurse into all items.
+fn push_variable_list_decls(
+    var_node: &Node,
+    decl_node: &Node,
+    ctx: &WalkCtx,
+    declarator: &str,
+    out: &mut Vec<SymbolDecl>,
+) {
+    match &var_node.kind {
+        NodeKind::NestedVariableList { items } => {
+            for item in items {
+                push_variable_list_decls(item, decl_node, ctx, declarator, out);
+            }
+        }
+        _ => {
+            if let Some(decl) = variable_decl_from_node(var_node, decl_node, ctx, declarator) {
+                out.push(decl);
+            }
+        }
+    }
+}
+
 fn variable_decl_from_node(
     var_node: &Node,
     decl_node: &Node,

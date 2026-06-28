@@ -45,6 +45,7 @@ const E2E_FIXTURES: &[&str] = &[
     "operator_precedence",
     "quote_like",
     "regex_match",
+    "slash_ambiguity",
     "heredoc_basic",
     "post_error_package_sub_recovery",
 ];

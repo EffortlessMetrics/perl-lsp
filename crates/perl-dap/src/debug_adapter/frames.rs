@@ -64,13 +64,13 @@ impl DebugAdapter {
                 framed_frames
             }
         } else {
-            let output_lines = self.snapshot_recent_output_lines();
-            if output_lines.is_empty() {
-                Vec::new()
-            } else {
-                let output = output_lines.join("\n");
-                Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
-            }
+            // Snapshot buffer is unreliable when framed transport fails: it holds
+            // the full session history so snapshot-based parsing returns frames in
+            // buffer order — the stale pre-stop context line appears before the
+            // current stop line, producing a wrong first frame.  Return empty so
+            // the caller falls through to session.stack_frames, which the output
+            // reader populates with the authoritative current-stop frame.
+            Vec::new()
         };
 
         let stack_frames = if !parsed_frames.is_empty() {
@@ -98,21 +98,13 @@ impl DebugAdapter {
                 end_column: None,
             }]
         } else {
-            // No session - return placeholder frame for testing
-            vec![StackFrame {
-                id: 1,
-                name: "main::hello".to_string(),
-                source: Source {
-                    name: Some("hello.pl".to_string()),
-                    path: "/tmp/hello.pl".to_string(),
-                    source_reference: None,
-                },
-                line: 10,
-                column: 1,
-                end_line: None,
-                end_column: None,
-            }]
+            // No active session — return honest empty list per DAP spec
+            Vec::new()
         };
+        // Capture full depth before pagination so totalFrames reports the real
+        // stack depth, not the size of the paginated window (DAP spec §StackTraceResponse:
+        // "totalFrames: The total number of frames available in the stack").
+        let total_frames = stack_frames.len();
         let stack_frames = Self::paginate_stack_frames(stack_frames, start_frame, requested_count);
 
         DapMessage::Response {
@@ -122,14 +114,14 @@ impl DebugAdapter {
             command: "stackTrace".to_string(),
             body: Some(json!({
                 "stackFrames": stack_frames,
-                "totalFrames": stack_frames.len()
+                "totalFrames": total_frames
             })),
             message: None,
         }
     }
 
     /// Handle scopes request
-    pub(super) fn handle_scopes(
+    pub fn handle_scopes(
         &self,
         seq: i64,
         request_seq: i64,
@@ -144,18 +136,22 @@ impl DebugAdapter {
                     success: false,
                     command: "scopes".to_string(),
                     body: None,
-                    message: Some(Self::missing_scope_frame_id_message()),
+                    message: Some("Missing frameId".to_string()),
                 };
             }
         };
 
-        let frame_id = args.frame_id as i32;
+        let frame_id = Self::i64_to_i32_saturating(args.frame_id);
 
         // AC8.3: Hierarchical scope inspection
-        // Use bit-shifting or offsets to distinguish between scope types for the same frame
-        let locals_ref = frame_id * 10 + 1;
-        let package_ref = frame_id * 10 + 2;
-        let globals_ref = frame_id * 10 + 3;
+        // Use VariableReference codec to encode scope refs into disjoint wire bands.
+        use crate::debug_adapter::var_ref::{ScopeKind, VariableReference};
+        let locals_ref =
+            VariableReference::Scope { frame_id, kind: ScopeKind::Locals }.encode().unwrap_or(0);
+        let package_ref =
+            VariableReference::Scope { frame_id, kind: ScopeKind::Package }.encode().unwrap_or(0);
+        let globals_ref =
+            VariableReference::Scope { frame_id, kind: ScopeKind::Globals }.encode().unwrap_or(0);
 
         let scopes_body = ScopesResponseBody {
             scopes: vec![
@@ -164,18 +160,24 @@ impl DebugAdapter {
                     presentation_hint: Some("locals".to_string()),
                     variables_reference: i64::from(locals_ref),
                     expensive: false,
+                    named_variables: None,
+                    indexed_variables: None,
                 },
                 Scope {
                     name: "Package".to_string(),
                     presentation_hint: None,
                     variables_reference: i64::from(package_ref),
                     expensive: true,
+                    named_variables: None,
+                    indexed_variables: None,
                 },
                 Scope {
                     name: "Globals".to_string(),
                     presentation_hint: None,
                     variables_reference: i64::from(globals_ref),
                     expensive: true,
+                    named_variables: None,
+                    indexed_variables: None,
                 },
             ],
         };
@@ -188,40 +190,6 @@ impl DebugAdapter {
             body: serde_json::to_value(&scopes_body).ok(),
             message: None,
         }
-    }
-
-    fn missing_scope_frame_id_message() -> String {
-        "Missing frameId for scopes request. Request stackTrace first and pass one of the returned \
-         stackFrames[].id values as frameId."
-            .to_string()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-    #[test]
-    fn scopes_missing_frame_id_guides_recovery() -> TestResult {
-        let mut adapter = DebugAdapter::new();
-
-        let response = adapter.handle_request(1, "scopes", None);
-
-        match response {
-            DapMessage::Response { success, command, message, .. } => {
-                assert_eq!(command, "scopes");
-                assert!(!success, "scopes without frameId should fail");
-                let message = message.ok_or("scopes failure should include guidance")?;
-                assert!(message.contains("Missing frameId"));
-                assert!(message.contains("Request stackTrace first"));
-                assert!(message.contains("stackFrames[].id"));
-            }
-            other => return Err(format!("expected scopes response, got {other:?}").into()),
-        }
-
-        Ok(())
     }
 }
 
@@ -236,5 +204,74 @@ impl DebugAdapter {
             Some(limit) => iter.take(limit).collect(),
             None => iter.collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod pagination_tests {
+    use super::*;
+
+    fn make_frame(id: i32, name: &str) -> StackFrame {
+        StackFrame {
+            id,
+            name: name.to_string(),
+            source: Source {
+                name: Some("test.pl".to_string()),
+                path: "/tmp/test.pl".to_string(),
+                source_reference: None,
+            },
+            line: id,
+            column: 1,
+            end_line: None,
+            end_column: None,
+        }
+    }
+
+    /// Regression: paginate_stack_frames used to be called BEFORE capturing the
+    /// full depth, so totalFrames reported the slice length instead of the full
+    /// stack depth.  This unit test locks the correct invariant:
+    ///   totalFrames == pre-pagination length >= paginated-window length
+    #[test]
+    fn total_frames_is_pre_pagination_length() -> Result<(), Box<dyn std::error::Error>> {
+        let all_frames: Vec<StackFrame> = (1..=5).map(|i| make_frame(i, "main::step")).collect();
+        let total_before = all_frames.len();
+
+        // Paginate to window of 2, starting at offset 0.
+        let paginated = DebugAdapter::paginate_stack_frames(all_frames, 0, Some(2));
+
+        assert_eq!(paginated.len(), 2, "paginated window should be 2");
+        assert_eq!(total_before, 5, "total_frames must be full depth (5)");
+        assert!(
+            total_before >= paginated.len(),
+            "total_frames ({total_before}) must be >= paginated len ({})",
+            paginated.len()
+        );
+        Ok(())
+    }
+
+    /// startFrame beyond the stack depth: paginated slice is empty, but the
+    /// pre-pagination total is still the real depth.
+    #[test]
+    fn total_frames_with_start_frame_beyond_depth() -> Result<(), Box<dyn std::error::Error>> {
+        let all_frames: Vec<StackFrame> = (1..=3).map(|i| make_frame(i, "main::step")).collect();
+        let total_before = all_frames.len();
+
+        let paginated = DebugAdapter::paginate_stack_frames(all_frames, 10, Some(2));
+
+        assert_eq!(paginated.len(), 0, "paginated slice beyond depth should be empty");
+        assert_eq!(total_before, 3, "total_frames must still report full depth when start > depth");
+        Ok(())
+    }
+
+    /// No pagination (None levels): total_frames == paginated length (no difference).
+    #[test]
+    fn total_frames_no_pagination_unchanged() -> Result<(), Box<dyn std::error::Error>> {
+        let all_frames: Vec<StackFrame> = (1..=4).map(|i| make_frame(i, "main::step")).collect();
+        let total_before = all_frames.len();
+
+        let paginated = DebugAdapter::paginate_stack_frames(all_frames, 0, None);
+
+        assert_eq!(paginated.len(), total_before, "no pagination: total == paginated");
+        Ok(())
     }
 }

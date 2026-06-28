@@ -11,7 +11,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use anyhow::Result;
-use assert_cmd::cargo::cargo_bin_cmd;
+use assert_cmd::{Command as AssertCommand, cargo::cargo_bin_cmd};
 use serde_json::Value;
 use std::{
     fs,
@@ -47,6 +47,12 @@ fn git_cmd(args: &[&str], cwd: Option<&Path>) -> Result<()> {
 fn parse_receipt(stdout: &[u8]) -> Result<Value> {
     let text = std::str::from_utf8(stdout)?;
     Ok(serde_json::from_str(text)?)
+}
+
+fn xtask_cmd() -> AssertCommand {
+    let mut cmd = cargo_bin_cmd!("xtask");
+    cmd.env_remove("CARGO_TARGET_DIR");
+    cmd
 }
 
 /// Create a minimal standalone git repo with one commit (no remote needed).
@@ -109,7 +115,7 @@ fn write_fake_binary(repo: &Path, profile: &str, offset_secs: i64) -> Result<()>
 fn missing_binaries_are_not_stale() -> Result<()> {
     let work_dir = init_standalone_repo()?;
 
-    let mut cmd = cargo_bin_cmd!("xtask");
+    let mut cmd = xtask_cmd();
     let stdout = cmd
         .current_dir(work_dir.path())
         .args(["freshness-check", "--base", "HEAD", "--no-fetch", "--binaries"])
@@ -144,7 +150,7 @@ fn fresh_debug_binary_exits_zero() -> Result<()> {
     // mtime is 60 seconds after the commit → fresh
     write_fake_binary(work_dir.path(), "debug", 60)?;
 
-    let mut cmd = cargo_bin_cmd!("xtask");
+    let mut cmd = xtask_cmd();
     let stdout = cmd
         .current_dir(work_dir.path())
         .args(["freshness-check", "--base", "HEAD", "--no-fetch", "--binaries"])
@@ -176,7 +182,7 @@ fn stale_debug_binary_exits_nonzero() -> Result<()> {
     // mtime is 60 seconds before the commit → stale
     write_fake_binary(work_dir.path(), "debug", -60)?;
 
-    let mut cmd = cargo_bin_cmd!("xtask");
+    let mut cmd = xtask_cmd();
     let stdout = cmd
         .current_dir(work_dir.path())
         .args(["freshness-check", "--base", "HEAD", "--no-fetch", "--binaries"])
@@ -206,7 +212,7 @@ fn stale_release_binary_exits_nonzero() -> Result<()> {
     let work_dir = init_standalone_repo()?;
     write_fake_binary(work_dir.path(), "release", -120)?;
 
-    let mut cmd = cargo_bin_cmd!("xtask");
+    let mut cmd = xtask_cmd();
     cmd.current_dir(work_dir.path())
         .args(["freshness-check", "--base", "HEAD", "--no-fetch", "--binaries"])
         .assert()
@@ -222,7 +228,7 @@ fn mixed_fresh_and_stale_fails() -> Result<()> {
     write_fake_binary(work_dir.path(), "debug", 60)?; // fresh
     write_fake_binary(work_dir.path(), "release", -60)?; // stale
 
-    let mut cmd = cargo_bin_cmd!("xtask");
+    let mut cmd = xtask_cmd();
     let stdout = cmd
         .current_dir(work_dir.path())
         .args(["freshness-check", "--base", "HEAD", "--no-fetch", "--binaries"])
@@ -251,7 +257,7 @@ fn mixed_fresh_and_stale_fails() -> Result<()> {
 fn without_flag_receipt_omits_binary_fields() -> Result<()> {
     let work_dir = init_standalone_repo()?;
 
-    let mut cmd = cargo_bin_cmd!("xtask");
+    let mut cmd = xtask_cmd();
     let stdout = cmd
         .current_dir(work_dir.path())
         .args(["freshness-check", "--base", "HEAD", "--no-fetch"])
@@ -295,7 +301,7 @@ fn cargo_target_dir_override_is_honoured() -> Result<()> {
         ),
     )?;
 
-    let mut cmd = cargo_bin_cmd!("xtask");
+    let mut cmd = xtask_cmd();
     let stdout = cmd
         .current_dir(work_dir.path())
         .env("CARGO_TARGET_DIR", custom_target.to_str().expect("utf8"))
@@ -326,7 +332,7 @@ fn json_output_includes_binary_fields_when_flag_set() -> Result<()> {
     write_fake_binary(work_dir.path(), "debug", 60)?;
 
     let receipt_path = work_dir.path().join("receipt.json");
-    let mut cmd = cargo_bin_cmd!("xtask");
+    let mut cmd = xtask_cmd();
     cmd.current_dir(work_dir.path())
         .args([
             "freshness-check",

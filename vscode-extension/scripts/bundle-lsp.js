@@ -16,6 +16,17 @@ const extensionRoot = path.join(__dirname, '..');
 const projectRoot = path.join(extensionRoot, '..');
 const binDir = path.join(extensionRoot, 'bin');
 
+function cargoTargetDir() {
+    const configuredTargetDir = process.env.CARGO_TARGET_DIR;
+    if (configuredTargetDir && configuredTargetDir.trim() !== '') {
+        return path.isAbsolute(configuredTargetDir)
+            ? configuredTargetDir
+            : path.resolve(projectRoot, configuredTargetDir);
+    }
+
+    return path.join(projectRoot, 'target');
+}
+
 // Create bin directory
 if (!fs.existsSync(binDir)) {
     fs.mkdirSync(binDir, { recursive: true });
@@ -36,8 +47,12 @@ if (!platform) {
 }
 
 try {
+    const targetDir = cargoTargetDir();
+    const releaseDir = path.join(targetDir, 'release');
+
     // Build the binary
     console.log('Building perllsp binary...');
+    console.log(`Using Cargo target dir: ${targetDir}`);
     const buildCmd = `cargo build -p perllsp --release`;
     execSync(buildCmd, { 
         cwd: projectRoot,
@@ -55,11 +70,11 @@ try {
         ? ['perllsp.exe', 'perl-lsp.exe']
         : ['perllsp', 'perl-lsp'];
     const sourcePath = binaryNames
-        .map(binaryName => ({ binaryName, sourcePath: path.join(projectRoot, 'target', 'release', binaryName) }))
+        .map(binaryName => ({ binaryName, sourcePath: path.join(releaseDir, binaryName) }))
         .find(candidate => fs.existsSync(candidate.sourcePath));
 
     if (!sourcePath) {
-        console.error(`Binary not found at ${path.join(projectRoot, 'target', 'release')}`);
+        console.error(`Binary not found at ${releaseDir}`);
         process.exit(1);
     }
 

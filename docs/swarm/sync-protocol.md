@@ -81,6 +81,50 @@ Required before opening the old-repo sync PR:
 
 The old-repo PR body must link to the swarm source PRs and list verification.
 
+#### Mechanics: history-preserving complete-tree merge
+
+The two repos are **content-synced-divergent** — they share an old merge-base but
+have since diverged with real work on both sides, so there is no clean
+fast-forward. Use a **complete-tree merge**: take swarm's whole tree, but record
+both histories via a 2-parent merge commit.
+
+```bash
+# in the perl-lsp checkout, on a fresh sync branch off origin/master:
+git fetch swarm main                              # refresh the swarm remote-tracking ref
+git checkout -B release/sync-vX.Y.Z origin/master
+git merge -s ours --no-commit swarm/main          # record BOTH parents, keep our tree for now
+git read-tree -u --reset swarm/main               # set the tree to swarm's COMPLETE content
+# EXCLUDE swarm-internal harness (restore perl-lsp's own, drop swarm-only scripts):
+git rm -rq .claude && git checkout origin/master -- .claude
+git rm -q scripts/agent-cleanup.ps1 scripts/agent-preflight.ps1 scripts/swarm-clean
+git add -A && git commit -m "release: history-preserving merge sync swarm/main (X.Y.Z) -> master"
+```
+
+**Why complete-tree, not per-file.** `git merge -X theirs` resolves *per file*,
+mixing swarm's version of some files in a diverged crate with perl-lsp's version
+of others — leaving the crate referencing methods that no longer exist (observed
+on a 0.17.0 sync: `perl-dap` failed with E0599 ×6). `read-tree --reset
+swarm/main` takes swarm's tree **whole**, so every crate is internally
+consistent (swarm's tree already passed swarm CI). The `-s ours --no-commit`
+step records both parents without letting the "ours" strategy keep perl-lsp's
+tree.
+
+**Verify before pushing to the canonical repo:**
+
+- `git log -1 --format='%p' | wc -w` → **2** (both parents recorded).
+- `git diff --name-only HEAD swarm/main` → only the EXCLUDE paths differ.
+- `cargo check --workspace; echo "EXIT=$?"` → **EXIT=0**. Capture cargo's *own*
+  exit — do **not** pipe cargo through `tail`/`head`, which replaces cargo's exit
+  code with the pager's `0` and hides a real build failure.
+- Confirm swarm/main is the *current* GitHub HEAD, not a stale local ref:
+  `gh api repos/EffortlessMetrics/perl-lsp-swarm/commits/main --jq .sha`.
+
+**EXCLUDE** (swarm-internal, not for the release repo): `.claude/` agent harness
+(restore perl-lsp's own), swarm-only scripts (`agent-cleanup.ps1`,
+`agent-preflight.ps1`, `swarm-clean`). **PRESERVE** perl-lsp release-lineage:
+`docs/releases/vX.Y.*.md`, `RELEASE_HISTORY.md` (swarm carries these too once
+synced, so the complete-tree merge keeps them).
+
 ### perl-lsp to Swarm
 
 Use only for emergency release fixes or old-repo-only markers.
@@ -94,6 +138,25 @@ Required before merging old `perl-lsp` work:
 
 Source-to-swarm sync PRs should use merge commits when commit ancestry matters.
 Do not squash source-sync PRs that are meant to prove `source/master` ancestry.
+
+**Reconciling accumulated perl-lsp-unique work.** When `perl-lsp/master` has
+drifted ahead with parallel work (release-lineage aside), identify the genuine
+unique set with:
+
+```bash
+git cherry -v swarm/main origin/master | grep '^+' \
+  | grep -ivE 'mirror|^queue:|Merge pull request|^release:'
+```
+
+In practice this set is dominated by **new files** (e.g. `test(ux): lock …`
+behavior receipts), which port to swarm as additions rather than a
+conflict-merge. Bring them back so swarm becomes the superset and the
+[Hard Invariant](#hard-invariant) is restored. Note that a complete-tree
+swarm→perl-lsp release sync intentionally takes swarm's whole tree, so any
+perl-lsp-unique work not yet in swarm is dropped from the *release tree* (it
+survives in history via the merge's perl-lsp parent) until this reverse step
+lands it in swarm — do the reverse step, or accept that work ships a later
+release.
 
 ## Cadence
 
@@ -116,6 +179,29 @@ open or merge swarm mirror first
 merge old-repo emergency PR only after the invariant is preserved
 run post-merge support/provider/status checks
 ```
+
+## Pre-Cut Verification (release repo)
+
+The cut (tag + publish to crates.io / marketplace / Open VSX / Docker) is
+**irreversible**. Before dispatching `release-orchestration.yml`, confirm on the
+release repo (`perl-lsp`):
+
+- The sync PR is merged; `perl-lsp/master` HEAD is the 2-parent sync commit at
+  the target version (`[workspace.package].version` and `CHANGELOG.md` show a
+  dated `## [X.Y.Z]`).
+- Publish secrets are reachable where the cut runs. Repo-level `gh secret list`
+  may show only a subset, and org/environment secrets are not listable without
+  `admin:org`. The strongest evidence is a **prior successful release**:
+  `gh run list --workflow=release-orchestration.yml` and
+  `gh run list --workflow=publish-crates.yml` showing past `success` from
+  `master` means the full chain (CARGO_REGISTRY_TOKEN, VSCE_PAT, OVSX_PAT,
+  DOCKER_USERNAME/PASSWORD) is wired.
+- `release-orchestration.yml` is present with inputs `version`, `prerelease`,
+  `skip_crates`, `skip_extension`, `skip_docker`. If a single channel fails
+  mid-cut, re-dispatch with that channel's `skip_*` set rather than re-tagging.
+
+Tag, publish, and GitHub release creation still require explicit approval per
+[Branch Protection Expectations](#branch-protection-expectations).
 
 ## Docs That Must Stay Aligned
 

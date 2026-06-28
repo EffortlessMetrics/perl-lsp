@@ -54,7 +54,8 @@
     {
       "requestSeq": 104,
       "command": "configurationDone",
-      "expectSuccess": true
+      "expectSuccess": false,
+      "requiredMessageContains": "launch or attach request must be sent before configurationDone"
     },
     {
       "requestSeq": 105,

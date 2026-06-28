@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp-swarm/blob/main/docs/agents/pr-ledger.schema.json",
+  "title": "PR Reconciliation Ledger Row",
+  "description": "Schema for one row in the PR reconciliation ledger. Each row represents one PR or issue evaluated during a reconciliation wave. Generated output goes to target/reconciliation/ — never committed.",
+  "type": "object",
+  "required": [
+    "repo",
+    "pr",
+    "surface",
+    "canonical_repo",
+    "classification",
+    "evidence",
+    "required_action",
+    "validation",
+    "sync_direction"
+  ],
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "Short repository slug (e.g. 'perl-lsp-swarm', 'source-repo').",
+      "minLength": 1
+    },
+    "pr": {
+      "type": "integer",
+      "description": "PR or issue number as a positive integer.",
+      "minimum": 1
+    },
+    "surface": {
+      "type": "string",
+      "description": "Where this item was discovered (e.g. 'swarm-pr-queue', 'source-issue-tracker', 'manual-audit').",
+      "minLength": 1
+    },
+    "canonical_repo": {
+      "type": "string",
+      "description": "The authoritative repository for this change (slug). May differ from repo when a fix originated upstream.",
+      "minLength": 1
+    },
+    "classification": {
+      "type": "string",
+      "description": "Disposition verdict for this PR/issue.",
+      "enum": [
+        "merge",
+        "port",
+        "close-superseded",
+        "defer",
+        "duplicate"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "description": "List of evidence artifacts supporting the classification. Each entry is a human-readable string (e.g. merge commit SHA, CI run URL, reachability output). Must be non-empty.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "required_action": {
+      "type": "string",
+      "description": "The concrete next action required (e.g. 'merge', 'open port-PR against main', 'close with proof comment', 'no action').",
+      "minLength": 1
+    },
+    "validation": {
+      "type": "string",
+      "description": "Command or check that confirms the required_action is complete (e.g. 'gh pr view NNN --json state', 'cargo test -p crate').",
+      "minLength": 1
+    },
+    "close_proof": {
+      "type": "object",
+      "description": "Required when classification is 'close-superseded'. Contains the git merge-base reachability output proving the superseding commit is in main ancestry.",
+      "required": ["command", "output", "verified_date"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The exact command run: git merge-base --is-ancestor <sha> origin/main && echo ANCESTOR || echo NOT ANCESTOR",
+          "minLength": 1
+        },
+        "output": {
+          "type": "string",
+          "description": "Verbatim stdout of the command. Must be 'ANCESTOR' for a valid close.",
+          "enum": ["ANCESTOR", "NOT ANCESTOR"]
+        },
+        "verified_date": {
+          "type": "string",
+          "description": "ISO 8601 date the proof was captured (YYYY-MM-DD).",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sync_direction": {
+      "type": "string",
+      "description": "Which direction the change must flow: swarm->source (swarm change must be ported upstream), source->swarm (upstream fix must come in), or none (no sync required).",
+      "enum": [
+        "swarm->source",
+        "source->swarm",
+        "none"
+      ]
+    }
+  },
+  "if": {
+    "properties": {
+      "classification": { "const": "close-superseded" }
+    },
+    "required": ["classification"]
+  },
+  "then": {
+    "required": ["close_proof"]
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "repo": "perl-lsp-swarm",
+      "pr": 1234,
+      "surface": "swarm-pr-queue",
+      "canonical_repo": "perl-lsp-swarm",
+      "classification": "merge",
+      "evidence": ["CI green on d5f8e54f", "review-reviewed label present"],
+      "required_action": "merge via ops batch",
+      "validation": "gh pr view 1234 --json state,mergedAt",
+      "sync_direction": "none"
+    },
+    {
+      "repo": "perl-lsp-swarm",
+      "pr": 999,
+      "surface": "swarm-pr-queue",
+      "canonical_repo": "perl-lsp-swarm",
+      "classification": "close-superseded",
+      "evidence": ["Superseded by merge commit abc1234 in PR #1100"],
+      "required_action": "close with proof comment",
+      "validation": "gh pr view 999 --json state | jq .state",
+      "close_proof": {
+        "command": "git merge-base --is-ancestor abc1234 origin/main && echo ANCESTOR || echo NOT ANCESTOR",
+        "output": "ANCESTOR",
+        "verified_date": "2026-06-07"
+      },
+      "sync_direction": "none"
+    }
+  ]
+}

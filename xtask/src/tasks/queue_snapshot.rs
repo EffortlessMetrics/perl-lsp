@@ -95,10 +95,10 @@ fn snapshot_from_gh_cli() -> Result<QueueSnapshot> {
         "unknown".to_string()
     };
 
-    // Fetch current master SHA via git.
+    // Fetch current main SHA via git.
     let sha_output = Command::new("git")
         .current_dir(&root)
-        .args(["rev-parse", "origin/master"])
+        .args(["rev-parse", "origin/main"])
         .output()
         .context("failed to execute git rev-parse")?;
     let master_sha = if sha_output.status.success() {

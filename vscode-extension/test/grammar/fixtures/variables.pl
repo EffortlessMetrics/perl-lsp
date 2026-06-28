@@ -1,0 +1,11 @@
+my $scalar = 1;
+our @array = (1, 2, 3);
+my %hash = (key => 'value');
+local $_ = 'topic';
+my $ref = \$scalar;
+my $elem = $array[0];
+my $val = $hash{key};
+my @slice = @array[0, 1];
+print $hash{$key}->{nested};
+my $special = $@;
+my $argv = $ARGV[0];

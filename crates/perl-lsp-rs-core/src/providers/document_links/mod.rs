@@ -1,7 +1,7 @@
 //! Document links provider for Perl LSP protocol compatibility.
 //!
 //! This crate provides document link detection for Perl source files,
-//! identifying `use`, `require` module statements, and file includes.
+//! identifying `use`, `require` module statements, POD links, and file includes.
 
 use perl_module::import::{ModuleImportKind, RequireForm, parse_module_import_head};
 use perl_module::path::module_name_to_path;
@@ -10,14 +10,31 @@ use url::Url;
 
 /// Computes document links for a given Perl document.
 ///
-/// This function scans the text for `use` and `require` statements and creates
-/// document links for them. Links are returned with a `data` field containing
-/// metadata for deferred resolution via `documentLink/resolve`.
+/// This function scans the text for `use` and `require` statements plus POD
+/// `L<>` links and creates document links for them. Links are returned with a
+/// `data` field containing metadata for deferred resolution via
+/// `documentLink/resolve`.
 #[must_use]
 pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
     let mut out = Vec::new();
+    let current_package = current_package_name(text);
+    let mut in_pod = false;
 
     for (i, line) in text.lines().enumerate() {
+        if in_pod && line.starts_with("=cut") {
+            in_pod = false;
+            continue;
+        }
+
+        if starts_pod_block(line) {
+            in_pod = true;
+        }
+
+        if in_pod {
+            collect_pod_document_links(uri, i as u32, line, current_package.as_deref(), &mut out);
+            continue;
+        }
+
         if let Some(import) = parse_module_import_head(line) {
             match import.kind {
                 ModuleImportKind::Use => {
@@ -89,6 +106,11 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
     out
 }
 
+enum PodLinkTarget<'a> {
+    Module(&'a str),
+    Section(&'a str),
+}
+
 fn make_deferred_module_link(
     uri: &str,
     line: u32,
@@ -112,6 +134,174 @@ fn make_deferred_module_link(
             "baseUri": uri
         }
     }))
+}
+
+fn make_deferred_pod_section_link(
+    uri: &str,
+    line: u32,
+    section: &str,
+    col_start: u32,
+    col_end: u32,
+) -> Option<Value> {
+    if section.is_empty() || col_start >= col_end {
+        return None;
+    }
+
+    Some(json!({
+        "range": {
+            "start": {"line": line, "character": col_start},
+            "end": {"line": line, "character": col_end}
+        },
+        "tooltip": format!("Open POD section {}", section),
+        "data": {
+            "type": "pod_section",
+            "section": section,
+            "baseUri": uri
+        }
+    }))
+}
+
+fn collect_pod_document_links(
+    uri: &str,
+    line_number: u32,
+    line: &str,
+    current_package: Option<&str>,
+    out: &mut Vec<Value>,
+) {
+    let mut search_start = 0;
+    while let Some(open_offset) = line[search_start..].find("L<") {
+        let content_start = search_start + open_offset + 2;
+        let after_open = &line[content_start..];
+        let Some(close_offset) = after_open.find('>') else {
+            break;
+        };
+
+        let content_end = content_start + close_offset;
+        let target = after_open[..close_offset].trim();
+        let col_start = byte_to_utf16_col(line, content_start);
+        let col_end = byte_to_utf16_col(line, content_end);
+
+        match pod_link_target(target) {
+            Some(PodLinkTarget::Module(module)) if Some(module) != current_package => {
+                if let Some(link) =
+                    make_deferred_module_link(uri, line_number, module, col_start, col_end)
+                {
+                    out.push(link);
+                }
+            }
+            Some(PodLinkTarget::Section(section)) => {
+                if let Some(link) =
+                    make_deferred_pod_section_link(uri, line_number, section, col_start, col_end)
+                {
+                    out.push(link);
+                }
+            }
+            _ => {}
+        }
+
+        search_start = content_end + 1;
+    }
+}
+
+fn pod_link_target(target: &str) -> Option<PodLinkTarget<'_>> {
+    let candidate = if let Some((label, link_target)) = target.split_once('|') {
+        if label.trim().is_empty() {
+            return None;
+        }
+        link_target.trim()
+    } else {
+        target.trim()
+    };
+
+    if let Some(section) = candidate.strip_prefix('/') {
+        let section = section.trim();
+        if is_pod_section_target(section) {
+            return Some(PodLinkTarget::Section(section));
+        }
+        return None;
+    }
+
+    if is_simple_pod_module_target(candidate) {
+        Some(PodLinkTarget::Module(candidate))
+    } else {
+        None
+    }
+}
+
+fn starts_pod_block(line: &str) -> bool {
+    line.starts_with("=head")
+        || line.starts_with("=pod")
+        || line.starts_with("=over")
+        || line.starts_with("=begin")
+        || line.starts_with("=for")
+        || line.starts_with("=encoding")
+        || line.starts_with("=item")
+}
+
+fn is_simple_pod_module_target(target: &str) -> bool {
+    is_simple_package_pod_target(target) || is_supported_core_pragma_pod_target(target)
+}
+
+fn is_simple_package_pod_target(target: &str) -> bool {
+    target.contains("::") && target.split("::").all(is_perl_module_segment)
+}
+
+fn is_supported_core_pragma_pod_target(target: &str) -> bool {
+    matches!(target, "strict" | "warnings")
+}
+
+fn is_pod_section_target(section: &str) -> bool {
+    !section.is_empty()
+        && section.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | ' '))
+}
+
+fn is_perl_module_segment(segment: &str) -> bool {
+    let mut chars = segment.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    (first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+fn current_package_name(text: &str) -> Option<String> {
+    let mut in_pod = false;
+
+    for line in text.lines() {
+        if in_pod && line.starts_with("=cut") {
+            in_pod = false;
+            continue;
+        }
+
+        if starts_pod_block(line) {
+            in_pod = true;
+            continue;
+        }
+
+        if in_pod {
+            continue;
+        }
+
+        let Some(rest) = line.trim_start().strip_prefix("package ") else {
+            continue;
+        };
+        let name: String = rest
+            .trim_start()
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_' || *ch == ':')
+            .collect();
+        if name.split("::").all(is_perl_module_segment) {
+            return Some(name);
+        }
+    }
+    None
+}
+
+fn byte_to_utf16_col(line: &str, byte_offset: usize) -> u32 {
+    line.get(..byte_offset)
+        .map(|prefix| prefix.encode_utf16().count() as u32)
+        .unwrap_or(byte_offset as u32)
 }
 
 fn is_pragma(pkg: &str) -> bool {
@@ -212,6 +402,10 @@ mod tests {
 
     fn uri() -> &'static str {
         "file:///workspace/test.pl"
+    }
+
+    fn data_str<'a>(link: &'a Value, pointer: &str) -> Option<&'a str> {
+        link.pointer(pointer).and_then(Value::as_str)
     }
 
     // ── use statement ──────────────────────────────────────────
@@ -357,5 +551,108 @@ mod tests {
             .iter()
             .any(|l| l.pointer("/data/module").and_then(Value::as_str) == Some("strict"));
         assert!(!has_strict, "strict pragma must not appear in links");
+    }
+
+    #[test]
+    fn pod_emits_module_links_for_plain_and_labeled_targets() {
+        let text =
+            "package Local::Doc;\n=head1 SEE ALSO\n\nSee L<Foo::Bar> and L<docs|Baz::Qux>.\n=cut\n";
+
+        let links = compute_links(uri(), text, &[]);
+
+        assert_eq!(links.len(), 2);
+        assert!(
+            links.iter().any(|link| data_str(link, "/data/module") == Some("Foo::Bar")),
+            "missing plain POD module link: {links:#?}"
+        );
+        assert!(
+            links.iter().any(|link| data_str(link, "/data/module") == Some("Baz::Qux")),
+            "missing labeled POD module link: {links:#?}"
+        );
+        let foo = links
+            .iter()
+            .find(|link| data_str(link, "/data/module") == Some("Foo::Bar"))
+            .unwrap_or(&Value::Null);
+        assert_eq!(data_str(foo, "/data/type"), Some("module"));
+        assert_eq!(foo.pointer("/range/start/line").and_then(Value::as_u64), Some(3));
+        assert_eq!(foo.pointer("/range/start/character").and_then(Value::as_u64), Some(6));
+        assert_eq!(foo.pointer("/range/end/character").and_then(Value::as_u64), Some(14));
+    }
+
+    #[test]
+    fn pod_emits_core_pragma_links_for_supported_perldoc_topics() {
+        let text = "=pod\nSee L<strict>, L<warnings>, and L<feature>.\n=cut\n";
+
+        let links = compute_links(uri(), text, &[]);
+
+        assert_eq!(links.len(), 2);
+        assert!(links.iter().any(|link| data_str(link, "/data/module") == Some("strict")));
+        assert!(links.iter().any(|link| data_str(link, "/data/module") == Some("warnings")));
+        assert!(!links.iter().any(|link| data_str(link, "/data/module") == Some("feature")));
+    }
+
+    #[test]
+    fn pod_emits_section_links_for_plain_and_labeled_local_sections() {
+        let text = "=pod\nSee L</method_name> and L<section docs|/setup>.\n=cut\n";
+
+        let links = compute_links(uri(), text, &[]);
+
+        assert_eq!(links.len(), 2);
+        assert!(
+            links.iter().any(|link| {
+                data_str(link, "/data/type") == Some("pod_section")
+                    && data_str(link, "/data/section") == Some("method_name")
+            }),
+            "missing plain POD section link: {links:#?}"
+        );
+        assert!(
+            links.iter().any(|link| {
+                data_str(link, "/data/type") == Some("pod_section")
+                    && data_str(link, "/data/section") == Some("setup")
+            }),
+            "missing labeled POD section link: {links:#?}"
+        );
+    }
+
+    #[test]
+    fn pod_skips_empty_label_path_like_single_segment_and_self_targets() {
+        let text = "package Local::Doc;\n=pod\nSee L<|Other::Module>, L<docs|Local::>, L<docs|https://example.invalid>, L<Local::Doc>, L<Foo/Bar>, and L<NotAModule>.\n=cut\n";
+
+        let links = compute_links(uri(), text, &[]);
+
+        assert!(links.is_empty(), "malformed POD targets must stay quiet: {links:#?}");
+    }
+
+    #[test]
+    fn pod_package_example_does_not_suppress_matching_link() {
+        let text = "=pod\npackage Example::Module;\nSee L<Example::Module>.\n=cut\n";
+
+        let links = compute_links(uri(), text, &[]);
+
+        assert!(
+            links.iter().any(|link| data_str(link, "/data/module") == Some("Example::Module")),
+            "POD package examples must not be treated as the current code package: {links:#?}"
+        );
+    }
+
+    #[test]
+    fn pod_ignores_markup_after_cut_and_use_statements_inside_pod() {
+        let text = "=pod\nuse Pod::Example;\n=cut\nSee L<Foo::Bar>.\n";
+
+        let links = compute_links(uri(), text, &[]);
+
+        assert!(links.is_empty(), "non-POD L<> and use statements inside POD must stay quiet");
+    }
+
+    #[test]
+    fn pod_directives_must_start_at_column_zero() {
+        let text = "    =pod\nuse Foo::Bar;\n";
+
+        let links = compute_links(uri(), text, &[]);
+
+        assert!(
+            links.iter().any(|link| data_str(link, "/data/module") == Some("Foo::Bar")),
+            "indented POD-looking text must not suppress code links: {links:#?}"
+        );
     }
 }

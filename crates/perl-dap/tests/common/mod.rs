@@ -113,6 +113,28 @@ impl DapWorkflowSession {
         Ok(())
     }
 
+    /// Launch a script with an explicit `cwd` field.
+    ///
+    /// The script will run in the specified `cwd` directory, not in the directory
+    /// where the script file is located.
+    pub fn launch_with_cwd(&mut self, script_path: &str, cwd: &str) -> Result<(), String> {
+        let args = json!({
+            "program": script_path,
+            "cwd": cwd,
+            "args": [],
+            "stopOnEntry": false,
+            "env": {
+                "PERL_PERTURB_KEYS": "0",
+                "PERL_HASH_SEED": "0",
+                "LC_ALL": "C",
+                "TZ": "UTC"
+            }
+        });
+        let resp = self.request("launch", Some(args));
+        self.expect_success(&resp, "launch")?;
+        Ok(())
+    }
+
     /// Attach to a running process with optional stopOnEntry.
     ///
     /// Callers must call `set_breakpoints` and `configuration_done` before

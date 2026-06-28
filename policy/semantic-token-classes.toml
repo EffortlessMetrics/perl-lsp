@@ -7,7 +7,7 @@ schema_version = 1
 policy = "semantic-token-classes"
 owner = "perl-lsp maintainers"
 status = "advisory"
-updated = "2026-05-20"
+updated = "2026-06-20"
 spec = "docs/specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md"
 support_tiers = "docs/project/status/SUPPORT_TIERS.md"
 provider_promotion_ledger = "policy/provider-promotion-ledger.toml"
@@ -205,3 +205,39 @@ blocks = [
   "unmatched_span",
 ]
 claim_boundary = "Only source-backed compiler lexical-variable use spans that exactly match existing live parser/HIR variable tokens participate."
+
+[[class]]
+name = "our_variable_declaration"
+state = "partial_live_trace"
+live_token_kind = "variable"
+compiler_identity_prefix = "token:our_variable_declaration:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler our-variable (package-scoped) declaration spans that exactly match existing live parser/HIR variable tokens participate."
+
+[[class]]
+name = "state_variable_declaration"
+state = "partial_live_trace"
+live_token_kind = "variable"
+compiler_identity_prefix = "token:state_variable_declaration:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler state-variable (lexical persistent) declaration spans that exactly match existing live parser/HIR variable tokens participate."

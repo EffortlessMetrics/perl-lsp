@@ -12,9 +12,31 @@ static PERL_NOT_FOUND_WARNED: Once = Once::new();
 
 impl LspServer {
     /// Set the root path from the root URI during initialization
+    ///
+    /// Also performs one-time `.perltidyrc` discovery for the workspace so a
+    /// project-local profile applies without explicit configuration. The
+    /// discovered profile's supported scalar options are applied to the server
+    /// config here — at initialize, **before** `.perl-lsp.toml` and
+    /// `didChangeConfiguration` are applied — so they override the built-in
+    /// defaults while explicit user configuration still wins. The discovered
+    /// path is also cached for the external adapter (`--profile`). An explicitly
+    /// configured `perltidy_profile` takes precedence when the formatter config
+    /// is built.
     pub(crate) fn set_root_uri(&self, root_uri: &str) {
         let root_path = super::super::source_path_from_uri(root_uri);
+        let discovered =
+            root_path.as_deref().and_then(perl_lsp_rs_core::config::discover_perltidy_profile);
+        let discovered_options =
+            discovered.as_deref().and_then(super::super::read_perltidy_native_options);
         *self.root_path.lock() = root_path;
+        *self.discovered_perltidy_profile.lock() = discovered;
+        // Apply the discovered profile's options as a base layer over the
+        // built-in defaults. This must happen before user config is applied;
+        // a per-request `.or()` merge cannot work because the defaults are
+        // `Some(..)` and would always short-circuit the profile value.
+        if let Some(options) = discovered_options {
+            self.config.lock().apply_perltidy_native_options(&options);
+        }
     }
 
     /// Detect the Perl interpreter and surface an actionable message if not found.
@@ -205,6 +227,50 @@ mod tests {
         let server = LspServer::new();
         server.set_root_uri("untitled:Untitled-1");
         assert!(server.root_path.lock().is_none());
+        // With no file-scheme root there is no workspace to search, so discovery
+        // contributes nothing regardless of the ambient environment.
+        assert!(server.discovered_perltidy_profile.lock().is_none());
+    }
+
+    #[test]
+    fn set_root_uri_discovers_workspace_perltidyrc() -> std::io::Result<()> {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir()?;
+        let profile = temp.path().join(".perltidyrc");
+        std::fs::write(&profile, "-l=100\n")?;
+
+        server.set_root_uri(&format!("file://{}", temp.path().display()));
+
+        // The workspace profile is searched first, so this assertion holds
+        // regardless of any ambient $HOME/.perltidyrc or $PERLTIDY on the host.
+        assert_eq!(
+            server.discovered_perltidy_profile.lock().as_deref(),
+            profile.to_str(),
+            "workspace .perltidyrc should be discovered and cached at initialize"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn set_root_uri_applies_discovered_perltidyrc_options_to_config() -> std::io::Result<()> {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir()?;
+        std::fs::write(temp.path().join(".perltidyrc"), "-l=120\n-i 3\n")?;
+
+        server.set_root_uri(&format!("file://{}", temp.path().display()));
+
+        // The discovered profile is applied at initialize and overrides the
+        // built-in defaults (which are Some(80)/Some(4)), so the native
+        // formatter actually honors the project profile. Workspace-first search
+        // keeps this assertion independent of any ambient $HOME/$PERLTIDY profile.
+        let config = server.config.lock();
+        assert_eq!(
+            config.perltidy_maximum_line_length,
+            Some(120),
+            "discovered profile's line width must override the built-in default (80)"
+        );
+        assert_eq!(config.perltidy_indent_columns, Some(3));
+        Ok(())
     }
 
     #[test]

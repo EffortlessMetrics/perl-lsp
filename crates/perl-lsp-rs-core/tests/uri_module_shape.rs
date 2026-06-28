@@ -13,6 +13,42 @@ fn uri_module_exposes_parse_uri_function() {
     );
 }
 
+/// Ported from EffortlessMetrics/perl-lsp#9903.
+///
+/// Unix bare file paths must be converted to `file://` URIs automatically.
+/// Only runs on Unix because `Url::from_file_path` requires POSIX path semantics.
+#[cfg(unix)]
+#[test]
+fn uri_module_parse_uri_accepts_unix_file_paths() -> Result<(), Box<dyn std::error::Error>> {
+    let uri = parse_uri("/tmp/perl-lsp/lib/PlainPath.pm");
+    assert_eq!(uri.as_str(), "file:///tmp/perl-lsp/lib/PlainPath.pm");
+    Ok(())
+}
+
+/// Ported from EffortlessMetrics/perl-lsp#9903.
+///
+/// Windows bare file paths (drive-letter + backslash) must be normalised to
+/// `file:///DRIVE:/...` URIs automatically — even on non-Windows hosts.
+#[test]
+fn uri_module_parse_uri_accepts_windows_file_paths() -> Result<(), Box<dyn std::error::Error>> {
+    let uri = parse_uri(r"C:\Users\dev\lib\PlainPath.pm");
+    assert_eq!(uri.as_str(), "file:///C:/Users/dev/lib/PlainPath.pm");
+    Ok(())
+}
+
+/// Ported from EffortlessMetrics/perl-lsp#9903.
+///
+/// Windows bare file paths with forward-slash separators (e.g. `C:/foo/bar.pm`)
+/// must also be accepted and normalised — some editors send forward-slash
+/// Windows paths even on Windows hosts.
+#[test]
+fn uri_module_parse_uri_accepts_windows_forward_slash_paths()
+-> Result<(), Box<dyn std::error::Error>> {
+    let uri = parse_uri("C:/Users/dev/lib/PlainPath.pm");
+    assert_eq!(uri.as_str(), "file:///C:/Users/dev/lib/PlainPath.pm");
+    Ok(())
+}
+
 #[test]
 fn uri_module_parse_uri_handles_windows_paths() {
     // Verify that parse_uri handles Windows paths correctly post-absorption

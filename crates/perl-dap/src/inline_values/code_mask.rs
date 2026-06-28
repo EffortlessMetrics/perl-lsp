@@ -248,3 +248,140 @@ fn matching_delimiter(open: u8) -> (u8, bool) {
         _ => (open, false),
     }
 }
+
+// ============================================================================
+// paired_delimiter_conformance — inline tests for matching_delimiter
+//
+// This test block is one of THREE that together form the conformance matrix
+// for paired-delimiter implementations across the workspace (#1320).
+//
+// The same input set is tested in:
+//   - crates/perl-lexer/src/quote_handler.rs                   (paired_close)
+//   - crates/perl-parser-core/src/syntax/quote.rs              (get_closing_delimiter)
+//
+// Normalized contract: each impl maps to (close_char: char, is_paired: bool).
+//   - This impl: matching_delimiter(c as u8) → (b, p); normalized as (b as char, p)
+// ============================================================================
+#[cfg(test)]
+mod paired_delimiter_conformance {
+    use super::matching_delimiter;
+
+    /// Normalize `matching_delimiter` to the shared `(close_char, is_paired)` shape.
+    fn normalize(open: char) -> (char, bool) {
+        let (close_byte, is_paired) = matching_delimiter(open as u8);
+        (close_byte as char, is_paired)
+    }
+
+    /// The shared conformance matrix.
+    /// Each entry is `(open_char, expected_close, expected_is_paired)`.
+    const MATRIX: &[(char, char, bool)] = &[
+        // --- Paired openers -------------------------------------------
+        ('(', ')', true),
+        ('[', ']', true),
+        ('{', '}', true),
+        ('<', '>', true),
+        // --- Self-delimiting: common punctuation ----------------------
+        ('/', '/', false),
+        ('#', '#', false),
+        ('|', '|', false),
+        ('!', '!', false),
+        (',', ',', false),
+        ('%', '%', false),
+        ('~', '~', false),
+        ('.', '.', false),
+        (':', ':', false),
+        (';', ';', false),
+        // --- Self-delimiting: quote-adjacent chars --------------------
+        ('\'', '\'', false),
+        ('"', '"', false),
+        // --- Self-delimiting: less-common punctuation ----------------
+        ('@', '@', false),
+        ('$', '$', false),
+        ('^', '^', false),
+        ('&', '&', false),
+        ('*', '*', false),
+        ('+', '+', false),
+        ('-', '-', false),
+        ('=', '=', false),
+        ('?', '?', false),
+        // --- Closing chars used as openers (not paired) --------------
+        // Note: Perl does NOT auto-pair ) ] } > as openers.
+        (')', ')', false),
+        (']', ']', false),
+        ('}', '}', false),
+        ('>', '>', false),
+    ];
+
+    #[test]
+    fn matching_delimiter_agrees_with_conformance_matrix() {
+        // MATRIX is ASCII by construction; matching_delimiter operates on u8.
+        for &(open, expected_close, expected_paired) in MATRIX {
+            let (got_close, got_paired) = normalize(open);
+            assert_eq!(
+                got_close, expected_close,
+                "perl-dap matching_delimiter({open:?}): close char mismatch \
+                 (got {got_close:?}, expected {expected_close:?})"
+            );
+            assert_eq!(
+                got_paired, expected_paired,
+                "perl-dap matching_delimiter({open:?}): is_paired mismatch \
+                 (got {got_paired}, expected {expected_paired})"
+            );
+        }
+    }
+
+    #[test]
+    fn matching_delimiter_paired_openers_return_true() {
+        // The four Perl auto-paired delimiters must all return is_paired = true.
+        for (open, expected_close) in [(b'(', b')'), (b'[', b']'), (b'{', b'}'), (b'<', b'>')] {
+            let (close, is_paired) = matching_delimiter(open);
+            assert!(
+                is_paired,
+                "matching_delimiter({} = {:?}): is_paired should be true",
+                open, open as char
+            );
+            assert_eq!(
+                close, expected_close,
+                "matching_delimiter({} = {:?}): close byte mismatch",
+                open, open as char
+            );
+        }
+    }
+
+    #[test]
+    fn matching_delimiter_self_delimiters_return_false() {
+        // Self-delimiting ASCII chars must return (self, false).
+        let self_delims: &[u8] = b"/#|!,%~.:;'\"@$^&*+=-?";
+        for &open in self_delims {
+            let (close, is_paired) = matching_delimiter(open);
+            assert_eq!(
+                close, open,
+                "matching_delimiter({} = {:?}): close should equal open for self-delimiting char",
+                open, open as char
+            );
+            assert!(
+                !is_paired,
+                "matching_delimiter({} = {:?}): is_paired should be false for self-delimiting char",
+                open, open as char
+            );
+        }
+    }
+
+    #[test]
+    fn matching_delimiter_closing_chars_used_as_openers_return_false() {
+        // Perl does NOT auto-pair ) ] } > as openers.
+        for &close in b")]}>" {
+            let (result_byte, is_paired) = matching_delimiter(close);
+            assert_eq!(
+                result_byte, close,
+                "matching_delimiter({} = {:?}): closing chars used as openers should return self",
+                close, close as char
+            );
+            assert!(
+                !is_paired,
+                "matching_delimiter({} = {:?}): is_paired should be false for closing chars used as openers",
+                close, close as char
+            );
+        }
+    }
+}

@@ -14,6 +14,7 @@
 
 use anyhow::Result;
 use perl_dap::BridgeAdapter;
+use serial_test::serial;
 
 /// New adapter starts with no child process; shutdown is a harmless no-op.
 #[tokio::test]
@@ -84,10 +85,10 @@ async fn test_drop_then_new_adapter_works() -> Result<()> {
 /// overriding PATH to ensure perl is not found.
 ///
 /// SAFETY: set_var is unsafe in Rust 2024 edition because env mutation is
-/// not thread-safe. This test is marked serial-only via test-threads=1 at
-/// the call-site level or accepted as safe because the env is restored
-/// before any assertion.
+/// not thread-safe. #[serial(env_path)] ensures this test runs exclusively
+/// against any other test that mutates PATH, preventing races.
 #[tokio::test]
+#[serial(env_path)]
 async fn test_spawn_fails_when_perl_not_on_path() -> Result<()> {
     // Save and clobber PATH so resolve_perl_path fails
     let original_path = std::env::var("PATH").ok();

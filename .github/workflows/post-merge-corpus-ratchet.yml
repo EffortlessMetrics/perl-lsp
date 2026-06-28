@@ -11,15 +11,59 @@ name: Post-Merge Corpus Ratchet
 # per-merge runs (exit 143, runner shutdown) when rapid parser merges triggered
 # concurrent 18-min cold CPAN installs. Manual runs available via workflow_dispatch.
 #
-# See issue #4186 (corpus ratchet fails intermittently on cold cache).
+# CACHE CYCLE FIX (#1505):
+#   The original workflow used actions/cache@v5 (combined mode), where the
+#   post-job save phase is skipped on job failure or cancellation. A timed-out
+#   install never produced a saved cache, so every subsequent run started cold
+#   and timed out again — a self-reinforcing vicious cycle.
+#
+#   Fix: split into separate actions/cache/restore + actions/cache/save steps.
+#   The save step runs immediately after a successful install
+#   (`if: steps.cpan-install.outcome == 'success'`) — before any downstream
+#   ratchet/sweep step can fail. One successful install permanently warm-starts
+#   all future runs.
+#
+# TIMEOUT HEADROOM (#1505):
+#   Raised from 45 min to 120 min to allow a cold seed install to complete
+#   on the first warm-up run. ubuntu-24.04 runner time is billed but
+#   infrequent (nightly only); subsequent runs hit the cache and complete
+#   in ~5 minutes.
+#
+# BOUNDED MODE (#1505):
+#   The corpus-ratchet-bounded job runs on PR and workflow_dispatch triggers
+#   with a representative top-50 CPAN subset. It installs in ~5-8 minutes,
+#   emits a parse-clean % receipt artifact, and provides fast feedback without
+#   tying up a runner for the full nightly budget.
+#   The full 1000-distribution ratchet (corpus-ratchet-full) runs only on
+#   schedule and workflow_dispatch to keep it out of the PR hot path.
+#
+# See issue #1505 (corpus ratchet fails; manifest stale since v0.12.3).
 
 on:
+  pull_request:
+    branches: [ main, master ]
+    types: [opened, synchronize, reopened]
+    # Only run on PRs that change the distribution list files, to avoid
+    # triggering on every parser fix. The full 1000-dist ratchet is nightly-only;
+    # the PR trigger runs the bounded (top-50) job for quick distribution-list review.
+    paths:
+      - '.ci/cpan-top-1000-distributions.txt'
+      - '.ci/cpan-top-50-distributions.txt'
   schedule:
     # Nightly at 08:00 UTC. The ratchet is periodic bookkeeping, not a
     # per-merge gate (post-merge-status.yml handles per-merge regeneration).
     # Nightly cadence avoids concurrency-cancel storms from rapid parser merges.
     - cron: '0 8 * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run mode: bounded (top-50, fast) or full (top-1000, nightly)'
+        required: false
+        type: choice
+        options:
+          - bounded
+          - full
+        default: bounded
 
 # Only one ratchet at a time; cancel stale in-progress runs on re-trigger.
 concurrency:
@@ -27,25 +71,46 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
+
+# ============================================================================
+# Shared setup steps factored as a reusable composite action would require a
+# separate file; instead we repeat the minimal setup in each job. The cargo
+# build cache (Swatinem) is the expensive part; CPAN install is shared via the
+# separate cpan-corpus cache.
+# ============================================================================
 
 jobs:
-  corpus-ratchet:
-    name: Refresh CPAN corpus receipts
+
+  # --------------------------------------------------------------------------
+  # BOUNDED mode: top-50 representative distributions (~5-8 min install).
+  # Runs on: PR paths triggers, workflow_dispatch(mode=bounded).
+  # Does NOT run on schedule (the full job covers nightly bookkeeping).
+  # Emits: corpus-receipt artifact with parse-clean % and regression delta.
+  # --------------------------------------------------------------------------
+  corpus-ratchet-bounded:
+    name: CPAN corpus (bounded — top 50)
+    # Run on PR paths trigger, or workflow_dispatch when mode=bounded (or unset,
+    # which defaults to bounded for quick manual verification).
+    # Not on schedule: the full nightly job provides the canonical ratchet.
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.mode == 'bounded' || github.event.inputs.mode == ''))
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Fetch full history so git can commit cleanly.
-          fetch-depth: 0
+          # Shallow clone sufficient for the bounded sweep — no git commit step.
+          fetch-depth: 1
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
         with:
-          toolchain: 1.92.0
+          toolchain: 1.95.0
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
@@ -54,13 +119,139 @@ jobs:
           shared-key: post-merge-corpus-ratchet-${{ hashFiles('Cargo.lock') }}
 
       - name: Install just
-        uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4  # v2.79.7
+        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
         with:
           tool: just
 
-      - name: Restore CPAN corpus cache
-        id: cpan-corpus-cache
-        uses: actions/cache@v5
+      # CACHE CYCLE FIX: Use separate restore + save steps so the save fires
+      # immediately after a successful install, independent of downstream steps.
+      - name: Restore CPAN corpus cache (bounded)
+        id: cpan-bounded-cache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: target/cpan-corpus-bounded
+          key: cpan-corpus-bounded-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-50-distributions.txt') }}
+          restore-keys: |
+            cpan-corpus-bounded-${{ runner.os }}-
+
+      - name: Install CPAN corpus (bounded — top 50)
+        id: cpan-bounded-install
+        if: steps.cpan-bounded-cache-restore.outputs.cache-hit != 'true'
+        run: |
+          cargo xtask cpan-corpus install \
+            --dist-list .ci/cpan-top-50-distributions.txt \
+            --install-dir target/cpan-corpus-bounded
+
+      # Save cache immediately after install — independent of downstream steps.
+      # This ensures one successful install warm-starts all future runs, even
+      # if a subsequent sweep/ratchet step fails (breaking the cache cycle).
+      - name: Save CPAN corpus cache (bounded)
+        if: steps.cpan-bounded-install.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: target/cpan-corpus-bounded
+          key: cpan-corpus-bounded-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-50-distributions.txt') }}
+
+      - name: Verify corpus baseline path (bounded)
+        run: test -d "$GITHUB_WORKSPACE/target/cpan-corpus-bounded/lib/perl5"
+
+      - name: Sweep bounded corpus and emit receipt
+        id: bounded-sweep
+        run: |
+          mkdir -p target/corpus-receipts
+          cargo xtask cpan-corpus sweep \
+            --install-dir target/cpan-corpus-bounded \
+            --output target/corpus-receipts/bounded-sweep.json
+          # Extract key metrics for the job summary
+          python3 - <<'EOF'
+          import json, sys, os
+          try:
+              with open('target/corpus-receipts/bounded-sweep.json') as f:
+                  report = json.load(f)
+              total = report.get('total_files', 0)
+              clean = report.get('clean_files', 0)
+              pct = (clean / total * 100) if total > 0 else 0
+              print(f"### CPAN Corpus (Bounded — Top 50)")
+              print(f"| Metric | Value |")
+              print(f"|--------|-------|")
+              print(f"| Total .pm files | {total} |")
+              print(f"| Parse-clean | {clean} ({pct:.1f}%) |")
+              print(f"| Parse failures | {total - clean} |")
+              with open(os.environ.get('GITHUB_STEP_SUMMARY', '/dev/stdout'), 'a') as f:
+                  f.write(f"### CPAN Corpus (Bounded — Top 50)\n")
+                  f.write(f"| Metric | Value |\n|--------|-------|\n")
+                  f.write(f"| Total .pm files | {total} |\n")
+                  f.write(f"| Parse-clean | {clean} ({pct:.1f}%) |\n")
+                  f.write(f"| Parse failures | {total - clean} |\n")
+          except Exception as e:
+              print(f"Warning: could not parse sweep report: {e}", file=sys.stderr)
+          EOF
+
+      - name: Upload bounded corpus receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cpan-corpus-bounded-receipt-${{ github.sha }}
+          path: target/corpus-receipts/bounded-sweep.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  # --------------------------------------------------------------------------
+  # FULL mode: all 1000 distributions.
+  # Runs on: schedule (nightly only) or workflow_dispatch(mode=full).
+  # Cache cycle fix applied: save fires immediately after install success.
+  # Timeout raised to 120 min to handle cold seed install.
+  # --------------------------------------------------------------------------
+  corpus-ratchet-full:
+    name: CPAN corpus ratchet (full — 1000 distributions)
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full')
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    # Raised from 45 to 120 minutes to survive a cold seed install.
+    # A cold install of 1000 distributions takes ~60-90 min on a fresh runner.
+    # Subsequent warm-cache runs complete in ~3-5 min (corpus restore only).
+    # ubuntu-24.04 runner time is billed; this is a nightly-only job, so the
+    # added budget is ~75 min/day on a cache miss, 0 extra on cache hit.
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Fetch full history so git can commit cleanly.
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        with:
+          toolchain: 1.95.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          shared-key: post-merge-corpus-ratchet-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install just
+        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
+        with:
+          tool: just
+
+      # CACHE CYCLE FIX: Separate restore + save so the save fires as soon as
+      # install completes — even if downstream ratchet/sweep steps fail.
+      #
+      # The original combined actions/cache@v5 only saved in the post-job
+      # cleanup phase, which is skipped on job failure or cancellation. A
+      # timed-out install never produced a saved cache, guaranteeing the next
+      # run also started cold. This split breaks that vicious cycle: one
+      # successful install warm-starts all future runs (see issue #1505).
+      - name: Restore CPAN corpus cache (full)
+        id: cpan-corpus-cache-restore
+        uses: actions/cache/restore@v5
         with:
           path: target/cpan-corpus
           key: cpan-corpus-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-1000-distributions.txt') }}
@@ -68,8 +259,23 @@ jobs:
             cpan-corpus-${{ runner.os }}-
 
       - name: Install CPAN corpus
-        if: steps.cpan-corpus-cache.outputs.cache-hit != 'true'
+        id: cpan-install
+        if: steps.cpan-corpus-cache-restore.outputs.cache-hit != 'true'
+        # No step-level timeout here: the job timeout (120 min) is the hard
+        # ceiling. cpanm's own per-batch timeouts (5 min) and per-dist retries
+        # are handled inside `cargo xtask cpan-corpus install` (see cpan_corpus.rs).
         run: cargo xtask cpan-corpus install
+
+      # Save cache immediately after install — independent of downstream steps.
+      # Even if sweep/ratchet/enforce fail, the installed corpus is preserved
+      # so the next scheduled run warm-starts. This is the durable fix for the
+      # self-reinforcing cache-miss → timeout → no-cache cycle.
+      - name: Save CPAN corpus cache (full)
+        if: steps.cpan-install.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: target/cpan-corpus
+          key: cpan-corpus-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-1000-distributions.txt') }}
 
       - name: Verify corpus baseline path
         # Use the workspace-root-absolute path so this check cannot drift
@@ -77,7 +283,9 @@ jobs:
         run: test -d "$GITHUB_WORKSPACE/target/cpan-corpus/lib/perl5"
 
       - name: Update CPAN baseline receipt
-        run: cargo xtask cpan-corpus sweep --output .ci/cpan-corpus-baseline.json
+        run: |
+          mkdir -p target/corpus-receipts
+          cargo xtask cpan-corpus sweep --output .ci/cpan-corpus-baseline.json
 
       - name: Run corpus ratchet
         run: cargo xtask cpan-corpus ratchet
@@ -85,24 +293,71 @@ jobs:
       - name: Verify CPAN corpus gate
         run: cargo xtask cpan-corpus sweep --enforce
 
-      - name: Commit updated corpus receipts if changed
-        # TODO(#follow-up): Switch to creating a PR instead of direct push once a
-        # bot token or GitHub App is configured that can bypass branch protection.
-        # For now, the push is best-effort (git push || echo warning) so CI stays green
-        # even when branch protection blocks the direct-to-master push. The warning
-        # annotation remains visible in the Actions UI so the failure is not silent.
+      - name: Emit corpus receipt summary
+        if: always()
         run: |
-          CHANGED_FILES=$(git diff --name-only -- \
-            .ci/cpan-corpus-baseline.json \
-            .ci/cpan-corpus-manifest.txt)
+          python3 - <<'EOF'
+          import json, sys, os
+          try:
+              with open('.ci/cpan-corpus-baseline.json') as f:
+                  report = json.load(f)
+              total = report.get('total_files', 0)
+              clean = report.get('clean_files', 0)
+              pct = (clean / total * 100) if total > 0 else 0
+              summary = os.environ.get('GITHUB_STEP_SUMMARY', '/dev/stdout')
+              with open(summary, 'a') as f:
+                  f.write(f"### CPAN Corpus (Full — 1000 distributions)\n")
+                  f.write(f"| Metric | Value |\n|--------|-------|\n")
+                  f.write(f"| Total .pm files | {total} |\n")
+                  f.write(f"| Parse-clean | {clean} ({pct:.1f}%) |\n")
+                  f.write(f"| Parse failures | {total - clean} |\n")
+          except Exception as e:
+              print(f"Warning: could not parse baseline report: {e}", file=sys.stderr)
+          EOF
 
-          if [ -n "$CHANGED_FILES" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add .ci/cpan-corpus-baseline.json .ci/cpan-corpus-manifest.txt
-            git commit -m "chore(ci): refresh CPAN corpus receipts post-merge [skip ci]"
-            git push || echo "::warning::Direct push to master blocked by branch protection rules -- CPAN corpus receipts not auto-updated. Run 'just cpan-corpus-baseline-update && just cpan-corpus-ratchet' locally and push. See TODO above for proper fix."
-            echo "::notice::Attempted to push updated CPAN corpus receipts."
-          else
-            echo "::notice::CPAN corpus receipts already up to date -- nothing to commit."
-          fi
+      - name: Upload full corpus receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cpan-corpus-full-receipt-${{ github.sha }}
+          path: .ci/cpan-corpus-baseline.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      # Fix for #1004: a direct `git push` to the protected default branch is
+      # rejected by branch protection, so the former best-effort push (`git push
+      # || echo warning`) never landed — the corpus baseline went stale (~2.5
+      # months / 540 parser commits as of 2026-06-27) and the cpan-corpus-check
+      # gate enforced out-of-date truth. Open a PR instead, via the repo's
+      # established peter-evans/create-pull-request automation pattern (see
+      # version-bump.yml, badge-endpoints.yml). NOTE: a PR created by GITHUB_TOKEN
+      # does not trigger the required checks (GitHub loop-prevention — same as the
+      # *-bump automation PRs), so it merges via admin/ops override; a bot token or
+      # GitHub App for full self-merge is the #1004 follow-up. Either way this is
+      # strictly better than the former push, which branch protection always
+      # rejected. The action is a no-op when there is no diff in the tracked paths,
+      # so no empty PRs are created; a fixed branch updates the existing PR rather
+      # than opening duplicates each run.
+      - name: Open PR with refreshed corpus receipts (if changed)
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: ${{ github.event.repository.default_branch }}
+          branch: automation/corpus-ratchet
+          add-paths: |
+            .ci/cpan-corpus-baseline.json
+            .ci/cpan-corpus-manifest.txt
+          commit-message: "chore(ci): refresh CPAN corpus receipts (#1004)"
+          title: "chore(ci): refresh CPAN corpus receipts (#1004)"
+          labels: ci
+          body: |
+            Automated CPAN corpus receipt refresh from the post-merge ratchet
+            (`post-merge-corpus-ratchet.yml`, `corpus-ratchet-full` job).
+
+            Updates `.ci/cpan-corpus-baseline.json` and `.ci/cpan-corpus-manifest.txt`
+            to the current parser's corpus state.
+
+            Replaces the former best-effort direct-push, which branch protection
+            rejected — leaving the baseline stale and the `cpan-corpus-check` gate
+            enforcing out-of-date truth. See #1004. Merging keeps the corpus
+            baseline and gate truthful.

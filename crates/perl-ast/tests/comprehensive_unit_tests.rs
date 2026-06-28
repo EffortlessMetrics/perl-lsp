@@ -249,6 +249,7 @@ fn subroutine_named_and_anonymous() -> Result<(), Box<dyn std::error::Error>> {
         NodeKind::Subroutine {
             name: Some("greet".to_string()),
             name_span: Some(loc(4, 9)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -260,6 +261,7 @@ fn subroutine_named_and_anonymous() -> Result<(), Box<dyn std::error::Error>> {
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -903,6 +905,7 @@ fn sexp_class() -> Result<(), Box<dyn std::error::Error>> {
     let c = Node::new(
         NodeKind::Class {
             name: "MyClass".to_string(),
+            name_span: None,
             parents: vec![],
             body: Box::new(block_node(vec![])),
         },
@@ -983,6 +986,7 @@ fn sexp_named_subroutine() -> Result<(), Box<dyn std::error::Error>> {
         NodeKind::Subroutine {
             name: Some("hello".to_string()),
             name_span: Some(loc(4, 9)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -1001,6 +1005,7 @@ fn sexp_subroutine_with_attributes() -> Result<(), Box<dyn std::error::Error>> {
         NodeKind::Subroutine {
             name: Some("foo".to_string()),
             name_span: Some(loc(4, 7)),
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec!["lvalue".to_string()],
@@ -1032,7 +1037,7 @@ fn sexp_tie_and_untie() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_format() -> Result<(), Box<dyn std::error::Error>> {
     let f = Node::new(
-        NodeKind::Format { name: "STDOUT".to_string(), body: "@<<<".to_string() },
+        NodeKind::Format { name: "STDOUT".to_string(), name_span: None, body: "@<<<".to_string() },
         loc(0, 20),
     );
     let sexp = f.to_sexp();
@@ -1167,6 +1172,7 @@ fn sexp_inner_keeps_anon_sub_wrapped() -> Result<(), Box<dyn std::error::Error>>
         NodeKind::Subroutine {
             name: None,
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: None,
             attributes: vec![],
@@ -1393,6 +1399,7 @@ fn for_each_child_visits_subroutine_body() -> Result<(), Box<dyn std::error::Err
         NodeKind::Subroutine {
             name: Some("foo".to_string()),
             name_span: None,
+            declarator: None,
             prototype: None,
             signature: Some(Box::new(Node::new(
                 NodeKind::Signature { parameters: vec![] },
@@ -1512,14 +1519,84 @@ fn count_nodes_nested_tree() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn kind_name_covers_all_variants() -> Result<(), Box<dyn std::error::Error>> {
-    // Verify ALL_KIND_NAMES is populated and sorted
+    // Verify ALL_KIND_NAMES is populated (auto-derived via strum::VariantNames —
+    // declaration order, not alphabetical).
     assert!(!NodeKind::ALL_KIND_NAMES.is_empty());
-    let sorted: Vec<&str> = {
-        let mut v: Vec<&str> = NodeKind::ALL_KIND_NAMES.to_vec();
-        v.sort();
-        v
-    };
-    assert_eq!(NodeKind::ALL_KIND_NAMES, sorted.as_slice(), "ALL_KIND_NAMES should be sorted");
+
+    // Verify no duplicates.
+    let unique: std::collections::BTreeSet<&str> =
+        NodeKind::ALL_KIND_NAMES.iter().copied().collect();
+    assert_eq!(
+        NodeKind::ALL_KIND_NAMES.len(),
+        unique.len(),
+        "ALL_KIND_NAMES should have no duplicates"
+    );
+
+    // Spot-check representatives from every NodeKind category to verify ALL_KIND_NAMES
+    // contains each variant's kind_name(). The exhaustive set-equality check lives in
+    // ast.rs::tests::all_kind_names_exact_match_with_variants_set (internal test module
+    // has access to all_kind_names_from_variants() helper).
+    let loc = SourceLocation { start: 0, end: 0 };
+    let dummy = Node::new(NodeKind::Undef, loc);
+    let spot_checks: &[(&str, NodeKind)] = &[
+        ("Program", NodeKind::Program { statements: vec![] }),
+        ("Variable", NodeKind::Variable { sigil: "$".into(), name: "x".into() }),
+        (
+            "Binary",
+            NodeKind::Binary {
+                op: "+".into(),
+                left: Box::new(dummy.clone()),
+                right: Box::new(dummy.clone()),
+            },
+        ),
+        (
+            "If",
+            NodeKind::If {
+                condition: Box::new(dummy.clone()),
+                then_branch: Box::new(dummy.clone()),
+                elsif_branches: vec![],
+                else_branch: None,
+                keyword: None,
+            },
+        ),
+        (
+            "Subroutine",
+            NodeKind::Subroutine {
+                name: None,
+                name_span: None,
+                declarator: None,
+                prototype: None,
+                signature: None,
+                attributes: vec![],
+                body: Box::new(dummy.clone()),
+            },
+        ),
+        ("FunctionCall", NodeKind::FunctionCall { name: String::new(), args: vec![] }),
+        ("Use", NodeKind::Use { module: String::new(), args: vec![], has_filter_risk: false }),
+        (
+            "Error",
+            NodeKind::Error {
+                message: String::new(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+        ),
+        ("MissingExpression", NodeKind::MissingExpression),
+        ("UnknownRest", NodeKind::UnknownRest),
+    ];
+    for (expected_name, kind) in spot_checks {
+        let actual_kind_name = kind.kind_name();
+        assert_eq!(actual_kind_name, *expected_name, "kind_name() mismatch");
+        assert!(
+            NodeKind::ALL_KIND_NAMES.contains(expected_name),
+            "ALL_KIND_NAMES missing entry for variant '{expected_name}'"
+        );
+    }
+
+    // Count guard: at least 70 variants (pre-PR baseline including NestedVariableList).
+    assert!(NodeKind::ALL_KIND_NAMES.len() >= 70, "ALL_KIND_NAMES has too few entries");
+
     Ok(())
 }
 
@@ -1716,7 +1793,11 @@ fn leaf_nodes_have_no_children() -> Result<(), Box<dyn std::error::Error>> {
         Node::new(NodeKind::Prototype { content: "$".to_string() }, loc(0, 3)),
         Node::new(NodeKind::DataSection { marker: "__END__".to_string(), body: None }, loc(0, 7)),
         Node::new(
-            NodeKind::Format { name: "STDOUT".to_string(), body: "@<<<".to_string() },
+            NodeKind::Format {
+                name: "STDOUT".to_string(),
+                name_span: None,
+                body: "@<<<".to_string(),
+            },
             loc(0, 15),
         ),
         Node::new(NodeKind::LoopControl { op: "next".to_string(), label: None }, loc(0, 4)),

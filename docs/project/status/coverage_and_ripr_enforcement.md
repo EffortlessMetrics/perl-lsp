@@ -15,15 +15,16 @@ The proof lane is in transition from measurement to enforcement:
 - `ripr+ New Gap Gate` blocks new RIPR gaps and stale or missing RIPR proof
   receipts
 - `Codecov / Patch 95` blocks patch coverage below 95%, stale or missing
-  coverage receipts, missing coverage artifacts, and Codecov upload or
-  processing failures through `fail_ci_if_error: true`
+  coverage receipts, missing coverage artifacts, and coverage routing or setup
+  failures. Codecov upload and Test Analytics telemetry are non-fatal.
 - PR patch coverage is routed by changed surface through `cargo xtask ci route`;
   code routes run the focused coverage pack selected from
   `.ci/coverage-packs.toml`, while PR routes without an LCOV coverage pack are
   recorded as `skipped-by-policy` instead of falling back to broad workspace
   coverage
 - `codecov/patch` must complete and pass after Codecov processes the uploaded
-  LCOV
+  LCOV; its status policy ignores unrelated CI/test gate failures so it remains
+  a coverage signal
 - generated quality-gate receipts are freshness-checked for patch, new-RIPR,
   and final modes; the final mode remains a future enforcement flip until
   burn-down closes

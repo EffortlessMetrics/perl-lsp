@@ -953,3 +953,134 @@ fn link_display_text_strips_nested_formatting_before_escaping() {
         "expected nested formatting to be stripped and markdown brackets escaped; got: {name}"
     );
 }
+
+#[test]
+fn extracts_arguments_section() {
+    let source = r#"
+=head1 NAME
+
+My::Module - A test module
+
+=head1 ARGUMENTS
+
+=over 4
+
+=item $param1
+
+The first parameter.
+
+=item $param2
+
+The second parameter.
+
+=back
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert!(doc.arguments.is_some(), "ARGUMENTS section should be extracted");
+    let args = doc.arguments.as_ref().unwrap();
+    assert!(args.contains("$param1"), "arguments should contain param1");
+    assert!(args.contains("The first parameter"), "arguments should contain param1 description");
+}
+
+#[test]
+fn extracts_return_values_section() {
+    let source = r#"
+=head1 NAME
+
+My::Module - A test module
+
+=head1 RETURN VALUES
+
+Returns a reference to a hash containing the results.
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert!(doc.return_values.is_some(), "RETURN VALUES section should be extracted");
+    let ret = doc.return_values.as_ref().unwrap();
+    assert!(ret.contains("hash"), "return values should contain description");
+}
+
+#[test]
+fn extracts_examples_section() {
+    let source = r#"
+=head1 NAME
+
+My::Module - A test module
+
+=head1 EXAMPLES
+
+    use My::Module;
+    my $result = My::Module->process();
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert!(doc.examples.is_some(), "EXAMPLES section should be extracted");
+    let examples = doc.examples.as_ref().unwrap();
+    assert!(examples.contains("use My::Module"), "examples should contain usage code");
+}
+
+#[test]
+fn extracts_see_also_section() {
+    let source = r#"
+=head1 NAME
+
+My::Module - A test module
+
+=head1 SEE ALSO
+
+L<Some::Other::Module>, L<Another::Module>
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert!(doc.see_also.is_some(), "SEE ALSO section should be extracted");
+    let see_also = doc.see_also.as_ref().unwrap();
+    assert!(see_also.contains("Some::Other::Module"), "see_also should contain module references");
+}
+
+#[test]
+fn multiple_nonstandard_head1_sections_all_extracted() {
+    let source = r#"
+=head1 NAME
+
+Full::Module - Test all sections
+
+=head1 SYNOPSIS
+
+    use Full::Module;
+
+=head1 DESCRIPTION
+
+A comprehensive test module.
+
+=head1 ARGUMENTS
+
+Input parameters go here.
+
+=head1 RETURN VALUES
+
+Output values go here.
+
+=head1 EXAMPLES
+
+Code examples go here.
+
+=head1 SEE ALSO
+
+Related modules go here.
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert_eq!(doc.name.as_deref(), Some("Full::Module - Test all sections"));
+    assert!(doc.synopsis.is_some());
+    assert!(doc.description.is_some());
+    assert!(doc.arguments.is_some());
+    assert!(doc.return_values.is_some());
+    assert!(doc.examples.is_some());
+    assert!(doc.see_also.is_some());
+}

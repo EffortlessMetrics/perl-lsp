@@ -354,6 +354,46 @@ fn semantic_analyzer_function_token_type() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
+fn semantic_analyzer_nested_varlist_inner_vars_get_declaration_tokens()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Regression test: variables inside nested parens in my (, (, )) must
+    // receive Declaration semantic tokens.  Before the fix, VariableListDeclaration
+    // only did  and silently skipped NestedVariableList
+    // items, so  and  got no semantic tokens at all.
+    let analyzer = parse_and_analyze("my ($a, ($b, $c)) = (1, 2, 3);");
+    let decl_tokens: Vec<_> = analyzer
+        .semantic_tokens()
+        .iter()
+        .filter(|t| t.modifiers.contains(&SemanticTokenModifier::Declaration))
+        .collect();
+    // , , and  must all appear as VariableDeclaration tokens.
+    assert!(
+        decl_tokens.len() >= 3,
+        "expected at least 3 declaration tokens for , , ; got {}: {:?}",
+        decl_tokens.len(),
+        decl_tokens
+    );
+    Ok(())
+}
+
+#[test]
+fn semantic_analyzer_deeply_nested_varlist_tokens() -> Result<(), Box<dyn std::error::Error>> {
+    // Three-level nesting: my (, (, (, ))) — all four variables must get tokens.
+    let analyzer = parse_and_analyze("my ($a, ($b, ($c, $d))) = (1, 2, 3, 4);");
+    let decl_tokens: Vec<_> = analyzer
+        .semantic_tokens()
+        .iter()
+        .filter(|t| t.modifiers.contains(&SemanticTokenModifier::Declaration))
+        .collect();
+    assert!(
+        decl_tokens.len() >= 4,
+        "expected at least 4 declaration tokens for , , , ; got {}",
+        decl_tokens.len()
+    );
+    Ok(())
+}
+
+#[test]
 fn semantic_analyzer_symbol_table_access() -> Result<(), Box<dyn std::error::Error>> {
     let analyzer = parse_and_analyze("my $var = 99;");
     let table = analyzer.symbol_table();
