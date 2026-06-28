@@ -111,6 +111,7 @@ pub mod queue_reconciler;
 pub mod queue_snapshot;
 pub mod receipts;
 pub mod release;
+pub mod release_artifact_check;
 pub mod release_evidence;
 pub mod release_notes;
 pub mod release_turnkey;

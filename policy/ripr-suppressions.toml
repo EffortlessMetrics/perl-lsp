@@ -1462,3 +1462,49 @@ reason = "PR #3078 (issue #3071) adds collect_constant_names() to fix PL304 fals
 created = "2026-06-26"
 review_after = "2026-09-26"
 expires = "2026-12-31"
+
+# -----------------------------------------------------------------------------
+# release_artifact_check.rs fixture/serde-driven branch predicates: activation
+# untraceable by ripr 0.9.x (ripr#1429 class).
+#
+# PR #3142 (issue #3141) adds xtask/src/tasks/release_artifact_check.rs — the
+# `cargo xtask release artifact-check` release-archive guard. RIPR cannot
+# statically trace activation from the on-disk binary fixtures (tar.gz / zip
+# archives + consolidated SHA256SUMS) and the JSON-deserialized `Contract`
+# through `serde_json::from_str` + `fs::read_dir` + the gzip/tar and ZIP
+# central-directory byte parsers to the per-branch predicates in validate_dist
+# (missing-binary, exec-bit, version-mismatch, undeclared-archive,
+# extension-mismatch, platform-not-declared, checksum missing/not-listed/
+# mismatch, completeness) and the archive readers. Same ripr#1429
+# predicate-infection-untraceable class as the quality_baseline, agent_ledgers,
+# and pr_close_proof xtask suppressions above.
+#
+# Coverage evidence: 28 inline #[cfg(test)] unit tests drive every branch in
+# process against committed fixtures (good / bad-missing-dap / bad-checksum) and
+# tempdir-constructed edge dists, plus 6 CLI integration tests. Key seams:
+#   validate_dist_passes_on_good_fixture / _flags_missing_required_binary /
+#   _flags_checksum_mismatch / _flags_version_mismatch / _flags_undeclared_archive /
+#   _flags_extension_mismatch / _flags_target_platform_without_spec /
+#   _flags_missing_checksums_file / _flags_archive_not_in_checksums /
+#   _flags_no_archives / _requires_all_targets_without_allow_partial;
+#   read_tar_gz_entries_lists_binaries_with_exec_bit / read_zip_entries_lists_windows_binaries /
+#   read_zip_entries_rejects_non_zip / _rejects_tiny_file / read_tar_gz_entries_rejects_non_gzip;
+#   run_succeeds_on_good_fixture / run_fails_on_missing_dap / run_errors_on_missing_dist;
+#   load_contract_reads_repo_contract; parse_checksums_handles_modes_and_prefixes.
+# Codecov patch coverage for the file is 96.88%; the residual lines are the
+# genuinely-unreachable defensive guards (e.g. platform_for_triple None).
+#
+# Suppression is narrow (single xtask file, one PR #3142). Remove when ripr#1429
+# is fixed upstream or when targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-release-artifact-check"
+kind = "predicate_infection_untraceable"
+paths = ["xtask/src/tasks/release_artifact_check.rs"]
+classification = ["weakly_exposed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3142 (issue #3141) adds the release-archive DAP guard. RIPR 0.9.x cannot statically trace activation from on-disk binary fixtures (tar.gz/zip + SHA256SUMS) and JSON-deserialized Contract through serde_json::from_str + fs::read_dir + the gzip/tar and ZIP central-directory byte parsers to the per-branch predicates in validate_dist (missing-binary, exec-bit, version-mismatch, undeclared-archive, extension-mismatch, platform-not-declared, checksum missing/not-listed/mismatch, completeness) and the archive readers. Same ripr#1429 class as the quality_baseline, agent_ledgers, and pr_close_proof xtask suppressions. Coverage: 28 inline #[cfg(test)] unit tests drive every branch in-process against committed fixtures (good/bad-missing-dap/bad-checksum) and tempdir edge dists, plus 6 CLI integration tests; Codecov patch coverage 96.88% with only genuinely-unreachable defensive guards (e.g. platform_for_triple None) residual. Suppression is narrow (single xtask file, one PR #3142). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-06-28"
+review_after = "2026-07-28"
+expires = "2026-09-30"

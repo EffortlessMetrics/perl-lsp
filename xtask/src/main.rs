@@ -2248,6 +2248,23 @@ enum ReleaseCommand {
         #[arg(long)]
         bundle_dir: Option<PathBuf>,
     },
+    /// Verify produced release archives ship the binaries downstream DAP
+    /// consumers depend on (`perl-dap` alongside `perllsp`), per
+    /// `docs/reference/downstream-dap-integrations.json`.
+    ArtifactCheck {
+        /// Directory holding the release archives and consolidated `SHA256SUMS`.
+        #[arg(long)]
+        dist: PathBuf,
+        /// Override the contract JSON (defaults to the in-repo file).
+        #[arg(long)]
+        contract: Option<PathBuf>,
+        /// Require every archive name to contain this release version.
+        #[arg(long)]
+        version: Option<String>,
+        /// Permit a dist that does not cover every contract target triple.
+        #[arg(long)]
+        allow_partial: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -3126,6 +3143,14 @@ fn main() -> Result<()> {
                     PathBuf::from(format!("target/release-evidence/v{version}"))
                 });
                 release_evidence::verify(&version, &effective_bundle_dir, &receipt)
+            }
+            ReleaseCommand::ArtifactCheck { dist, contract, version, allow_partial } => {
+                release_artifact_check::run(release_artifact_check::Config {
+                    dist,
+                    contract,
+                    version,
+                    allow_partial,
+                })
             }
         },
         Commands::ReleaseNotes { tag, output, root } => release_notes::run(tag, output, root),

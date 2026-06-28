@@ -17,6 +17,7 @@ Use `NEW_VERSION` as the target semver string for the release you are preparing.
 - [ ] `CHANGELOG.md` contains a dated `## [NEW_VERSION]` section and leaves `[Unreleased]` empty.
 - [ ] The crates listed in `[workspace.metadata.publish.allow]` report `NEW_VERSION`.
 - [ ] `cargo xtask install-surface-check` passes.
+- [ ] Release archives ship the DAP binary: the release workflow runs `cargo xtask release artifact-check` on the produced `dist/` (see `.github/workflows/release.yml`). To verify a local/downloaded set: `cargo xtask release artifact-check --dist dist --version NEW_VERSION`.
 - [ ] `cargo xtask release-notes --tag vNEW_VERSION --output /tmp/vNEW_VERSION-body.md` produces release notes with the Linux asset chooser:
 
   ```bash

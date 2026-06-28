@@ -81,7 +81,11 @@ hover, and go-to-definition.
 - **Variable Inspection** -- View variables, watch expressions, and call stack
 - **Attach to Process** -- Debug running Perl processes by PID or TCP
 
-Debugging is optional and uses `perl-dap` as a separate adapter. See the
+Debugging is optional and powered by the managed `perl-dap` adapter shipped
+alongside the `perl-lsp` release artifacts -- the extension downloads it for you,
+there is nothing extra to install. Native debug sessions require a local Perl
+interpreter. The native path does **not** require `Perl::LanguageServer`; that
+module is only needed for legacy bridge-mode workflows. See the
 [debugging guide](../docs/tutorials/DAP_USER_GUIDE.md) for setup steps and
 the required launch configuration.
 

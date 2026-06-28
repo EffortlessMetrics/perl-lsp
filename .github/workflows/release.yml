@@ -240,6 +240,18 @@ jobs:
           cd ..
           cat SHA256SUMS
 
+      - name: Verify release archives ship the DAP binary
+        run: |
+          # Flatten the per-artifact download tree into a single dist/ dir that
+          # holds every archive plus the consolidated SHA256SUMS, then enforce
+          # the downstream DAP contract (perl-dap present in every archive).
+          mkdir -p dist
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} dist/ \;
+          cp SHA256SUMS dist/
+          cargo xtask release artifact-check \
+            --dist dist \
+            --version "${{ needs.release-metadata.outputs.version }}"
+
       - name: Verify curated release notes exist
         id: release_notes_preflight
         run: |

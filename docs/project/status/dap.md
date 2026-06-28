@@ -36,6 +36,21 @@
 | Scorecard fixtures | 5 |
 <!-- END: DAP_TEST_COUNTS -->
 
+## Distribution readiness
+
+Receipts that downstream consumers (VS Code / Open VSX, LSP4IJ) depend on. Each
+row links to its source of truth so the claim can be re-verified.
+
+| Check | Status | Evidence |
+|---|---|---|
+| VS Code debugger contribution | PASS | `vscode-extension/package.json` contributes `perl` debugger, breakpoints, and launch/attach schemas |
+| Managed `perl-dap` discovery | PASS | extension downloader resolves managed `perl-dap` before `PATH` |
+| Launch honors both `perl` and `perlPath` | PASS | `resolve_launch_interpreter` (`crates/perl-dap/src/debug_adapter/process.rs`) + tests |
+| Release archives contain `perl-dap` | PASS | built/packaged in `.github/workflows/release.yml`; guarded by `cargo xtask release artifact-check` |
+| Native path avoids `Perl::LanguageServer` dependency | PASS | native launch/attach use the in-binary Rust runtime + local Perl only |
+| Bridge path documents `Perl::LanguageServer` requirement | PASS | `crates/perl-dap/README.md` "External dependencies" |
+| Downstream artifact contract documented | PASS | `docs/reference/DOWNSTREAM_DAP_INTEGRATIONS.md` |
+
 ## How to Update
 
 ```bash
