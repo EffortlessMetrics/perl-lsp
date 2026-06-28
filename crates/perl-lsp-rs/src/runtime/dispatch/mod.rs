@@ -110,4 +110,29 @@ mod tests {
             .map(|error| error.code);
         assert_eq!(after_initialize, Some(-32601));
     }
+
+    #[test]
+    fn first_use_hot_paths_are_wrapped_by_shared_latency_recorder() {
+        let routing = include_str!("routing.rs");
+        for method in [
+            "initialize",
+            "textDocument/didOpen",
+            "textDocument/didChange",
+            "textDocument/completion",
+            "textDocument/hover",
+            "textDocument/definition",
+            "textDocument/references",
+            "textDocument/signatureHelp",
+            "textDocument/semanticTokens/full",
+        ] {
+            assert!(routing.contains(method), "routing table must include hot path `{method}`");
+        }
+
+        let recorder_calls =
+            routing.matches("record_lsp_request_latency(&method, request_start)").count();
+        assert!(
+            recorder_calls >= 2,
+            "normal and cancellable dispatch paths must record shared request latency"
+        );
+    }
 }

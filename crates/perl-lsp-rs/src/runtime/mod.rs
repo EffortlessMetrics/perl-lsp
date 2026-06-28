@@ -22,6 +22,7 @@ pub mod file_discovery;
 /// File watcher change debouncer for bulk operation handling
 pub mod file_watcher_debounce;
 mod language;
+mod latency;
 mod lifecycle;
 mod notebook;
 pub(crate) mod outbound;
