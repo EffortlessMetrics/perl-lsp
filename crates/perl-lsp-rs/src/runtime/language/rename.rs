@@ -1048,19 +1048,6 @@ impl LspServer {
             .unwrap_or(0)
     }
 
-    fn workspace_edit_change_uri_count(workspace_edit: &Value) -> usize {
-        workspace_edit
-            .get("changes")
-            .and_then(Value::as_object)
-            .map(|changes| {
-                changes
-                    .values()
-                    .filter(|edits| edits.as_array().is_some_and(|edits| !edits.is_empty()))
-                    .count()
-            })
-            .unwrap_or(0)
-    }
-
     #[cfg(feature = "workspace")]
     fn workspace_edit_change_keys(workspace_edit: &Value) -> BTreeSet<String> {
         let mut keys = BTreeSet::new();
@@ -1403,25 +1390,6 @@ impl LspServer {
                                                     Self::workspace_edit_change_count(
                                                         &guard_ws_edit,
                                                     );
-                                                if Self::workspace_edit_change_uri_count(
-                                                    &guard_ws_edit,
-                                                ) > 1
-                                                {
-                                                    self.record_rename_provider_decision_trace(
-                                                        Some(uri),
-                                                        Some(symbol),
-                                                        "package_local_live_pilot_ambiguous",
-                                                        0,
-                                                        "ambiguous_identity",
-                                                    );
-                                                    return Err(JsonRpcError {
-                                                        code: -32602,
-                                                        message: format!(
-                                                            "ambiguous symbol identity for package-local rename: {symbol}"
-                                                        ),
-                                                        data: None,
-                                                    });
-                                                }
                                                 self.record_rename_provider_decision_trace(
                                                     Some(uri),
                                                     Some(symbol),

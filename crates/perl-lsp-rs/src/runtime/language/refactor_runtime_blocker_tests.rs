@@ -1956,6 +1956,61 @@ fn refactor_runtime_blocker_ux_package_local_live_pilot_real_workspace_false_all
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_inherited_arrow_method_rename_uses_workspace_guard()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (shared_line, shared_character) = position_of(base, "shared {")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+            "position": {"line": shared_line, "character": shared_character},
+            "newName": "renamed_shared"
+        })))?
+        .ok_or("missing inherited arrow-method rename result")?;
+
+    let edit_count = workspace_edit_change_count(&rename_result)?;
+    assert!(
+        edit_count >= 3,
+        "inherited arrow-method rename should edit Base.pm and App.pm call sites: {rename_result}"
+    );
+    let base_texts = workspace_edit_texts_for_uri(&rename_result, REAL_BASELINE_BASE_URI)?;
+    let app_texts = workspace_edit_texts_for_uri(&rename_result, REAL_BASELINE_APP_URI)?;
+    assert!(
+        base_texts.iter().any(|text| *text == "renamed_shared"),
+        "Base.pm declaration edit should carry the new name: {rename_result}"
+    );
+    assert!(
+        app_texts.iter().filter(|text| **text == "renamed_shared").count() >= 2,
+        "App.pm inherited arrow-method call sites should be renamed: {rename_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("full_index_workspace_edit")
+    );
+    assert_eq!(
+        request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("workspace_index")
+    );
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_package_local_live_pilot_catalyst_false_allow_blocks()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
