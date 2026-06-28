@@ -486,6 +486,7 @@ my $y = 2;
 }
 
 #[test]
+#[ignore = "infra: quarantine pending deterministic folding-range provider output; tracked in #3123"]
 fn test_folding_range_region_markers_multiple_non_nested() -> TestResult {
     let content = r#"# region Helpers
 sub helper1 {

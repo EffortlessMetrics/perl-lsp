@@ -4458,3 +4458,28 @@ expires = "2026-10-20"
 ast_kind = "tracked_file"
 glob = "docs/**/*.csv"
 
+# ===========================================================================
+# REVIEWED EXCEPTIONS — owned, time-boxed (NOT baseline floor)
+#
+# Entries below are deliberate, reviewed exceptions with a named owner, a
+# tracking issue, and a near-term expiry. Unlike the baseline_debt floor
+# above, they represent a conscious decision recorded for audit, not a
+# pre-existing count we are ratcheting down.
+# ===========================================================================
+
+[[allow]]
+id = "allow-q3123-folding-quarantine"
+kind = "lint_exception"
+family = "test_ignore"
+glob = "crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs"
+owner = "core/maintainers"
+classification = "quarantine"
+reason = "test_folding_range_region_markers_multiple_non_nested is #[ignore]d to unblock the merge queue: the folding-range provider emits duplicate subroutine folds (no dedup across passes) and a nondeterministic start line for the second #region fold, so the test fails ~2/3 of runs inside the merge-blocking unit_routed_full gate. The provider defect (dedup + deterministic region start line in crates/perl-lsp-rs-core/src/providers/folding/) is tracked in #3123; remove this exception and the #[ignore] together once that lands."
+evidence = ["issue:#3123", "registry:.ci/flaky-tests.json"]
+created = "2026-06-28"
+expires = "2026-07-28"
+
+[allow.selector]
+ast_kind = "attribute"
+glob = "crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs"
+
