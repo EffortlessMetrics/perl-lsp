@@ -756,14 +756,23 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
     assert_eq!(compiler_edit_count, 1, "compiler plan should include the definition edit");
     let live_state =
         fallback_noise.get("live_provider_state").and_then(Value::as_str).ok_or("missing state")?;
-    assert_eq!(live_state, "edits", "unexpected live provider state: {fallback_noise}");
+    assert_eq!(live_state, "error", "unexpected live provider state: {fallback_noise}");
     assert!(
-        live_edit_count > compiler_edit_count,
-        "receipt should expose the live provider's edit-producing fallback/noise: {fallback_noise}"
+        fallback_noise
+            .get("live_provider_error")
+            .and_then(Value::as_str)
+            .is_some_and(|message| !message.is_empty()),
+        "error state must include the live provider error: {fallback_noise}"
+    );
+    assert_eq!(
+        live_edit_count, 0,
+        "live provider should not produce edits after refusal: {fallback_noise}"
     );
     assert!(
-        fallback_noise.get("live_provider_error").is_some_and(Value::is_null),
-        "edit-producing fallback/noise should not fabricate a provider error: {fallback_noise}"
+        fallback_noise.get("live_provider_error").and_then(Value::as_str).is_some_and(|message| {
+            message.contains("ambiguous symbol identity") && message.contains("helper")
+        }),
+        "package/compiler-backed rename receipt should expose the live fallback/noise reason: {fallback_noise}"
     );
     assert_trace_contains(compiler, "CompilerFact", "High", "Fresh")?;
     assert_note_contains(
@@ -2328,18 +2337,12 @@ fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback
         request_receipt.get("compiler_requires_confirmation").and_then(Value::as_bool),
         Some(true)
     );
-    assert_eq!(request_receipt.get("live_provider_state").and_then(Value::as_str), Some("edits"));
-    let live_provider_edit_count = request_receipt
-        .get("live_provider_edit_count")
-        .and_then(Value::as_u64)
-        .ok_or("missing live_provider_edit_count")?;
+    assert_eq!(request_receipt.get("live_provider_state").and_then(Value::as_str), Some("error"));
     assert!(
-        live_provider_edit_count > 1,
-        "request-local receipt must preserve edit-producing fallback/noise: {request_receipt:?}"
-    );
-    assert!(
-        request_receipt.get("live_provider_error").is_some_and(Value::is_null),
-        "request-local edit-producing fallback/noise should not fabricate a provider error: {request_receipt:?}"
+        request_receipt.get("live_provider_error").and_then(Value::as_str).is_some_and(|message| {
+            message.contains("ambiguous symbol identity") && message.contains("helper")
+        }),
+        "request-local receipt must preserve live fallback/noise reason: {request_receipt:?}"
     );
 
     Ok(())
@@ -3571,7 +3574,10 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_catalyst_false_allow_block
     );
     assert_eq!(live_result.get("symbol").and_then(Value::as_str), Some("get_action"));
     assert_eq!(live_result.get("decision").and_then(Value::as_str), Some("blocked"));
-    assert_eq!(live_result.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(
+        live_result.get("reason").and_then(Value::as_str),
+        Some("ambiguous_low_confidence_candidates")
+    );
     assert_eq!(live_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
     assert_eq!(live_result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(false));
     assert_eq!(live_result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(0));
@@ -3582,13 +3588,18 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_catalyst_false_allow_block
             .map(serde_json::Map::len),
         Some(0)
     );
-    assert_safe_delete_decision_trace(&live_result, "blocked", "references_exist", "no_edit")?;
+    assert_safe_delete_decision_trace(
+        &live_result,
+        "blocked",
+        "ambiguous_low_confidence_candidates",
+        "no_edit",
+    )?;
 
     let live_blocker_ux = live_result.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
-    assert_json_array_contains(live_blocker_ux, "blocker_reasons", "ReferencesExist")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_reasons", "AmbiguousReference")?;
     assert_eq!(
         live_result.get("live_pilot_workspace_identity_guard").and_then(Value::as_str),
-        Some("accepted")
+        Some("ambiguous_workspace_identity")
     );
     assert!(
         live_result
