@@ -317,7 +317,6 @@ fn test_enhanced_extract_variable_refactoring() -> Result<(), Box<dyn std::error
 // ======================== AC3: Enhanced Import Organization ========================
 
 #[test]
-#[ignore = "real gap — organize imports code action not yet implemented (see issue #3080)"]
 // AC3:codeActions - Enhanced organize imports with correct action kind validation
 fn test_enhanced_organize_imports_refactoring() -> Result<(), Box<dyn std::error::Error>> {
     let (mut harness, workspace) = create_enhanced_code_actions_server()?;
