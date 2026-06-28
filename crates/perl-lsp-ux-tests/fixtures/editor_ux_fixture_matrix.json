@@ -485,6 +485,91 @@
       ]
     },
     {
+      "id": "crossfile_provider_dogfood",
+      "scenario_file": "ux_scenario_21_crossfile_provider_dogfood.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "workspace_symbols",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "run cross-file references, rename, signature help, symbols, and semantic tokens over the RealBaseline workspace",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate",
+        "module_resolution_workflow_success_rate"
+      ],
+      "expected_outcomes": [
+        "cross-file references and rename requests include module-boundary results or fail safely",
+        "signature help, document symbols, workspace symbols, and semantic tokens return valid provider shapes",
+        "the multi-file RealBaseline fixture stays crash-free across provider requests"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "crossfile_extended_providers",
+      "scenario_file": "ux_scenario_22_crossfile_extended_providers.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "code_lens",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "exercise extended LSP providers over the RealBaseline multi-file workspace",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "call hierarchy and related extended providers return valid shapes without crashing",
+        "folding range, code lens, document highlight, selection range, and formatting remain stable in multi-file context",
+        "known unsupported or ignored cases remain documented in the executable scenario"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "index_readiness_race_regression",
+      "scenario_file": "ux_scenario_22_index_race_regression.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "component": "hover",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request index-backed providers immediately after workspace open and verify startup race behavior",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "references find cross-file usages even when the target file is not open",
+        "hover on inherited methods returns provenance-correct contents after readiness handling",
+        "signature help remains usable while the workspace index warms"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "template_language_mode_resilience",
       "scenario_file": "ux_scenario_22_template_language_mode.rs",
       "subsystem_owner": "editor_intelligence",
