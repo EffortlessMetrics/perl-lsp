@@ -8,7 +8,7 @@
 > - **Explanation sections**: Understanding DAP architecture and design
 
 **Status**: Native adapter CLI for launch, attach, stepping, variables, stack frames, and evaluate; BridgeAdapter remains for `Perl::LanguageServer` compatibility.
-**Version**: 0.16.0
+**Version**: 0.17.0
 **Date**: 2026-06-28
 
 **Dependency note**: Native `perl-dap` requires a local Perl interpreter for debug sessions. Its Rust parser-backed runtime (`perl-parser`, `perl-lexer`, and the `perl-dap-*` support crates) is compiled into the shipped binary; users do not install `perl-parser` separately. `Perl::LanguageServer` is only required for legacy bridge-mode workflows (the BridgeAdapter library or `Perl::LanguageServer` DAP directly).

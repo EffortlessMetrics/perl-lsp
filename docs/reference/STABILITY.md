@@ -11,7 +11,7 @@ version-bump behavior.
 This policy applies to every crate in the workspace publish allowlist at
 `[workspace.metadata.publish.allow]` in the root `Cargo.toml`.
 
-As of workspace version `0.16.0`, the allowlist contains **31 published crates**.
+As of workspace version `0.17.0`, the allowlist contains **31 published crates**.
 
 Contract tiers:
 

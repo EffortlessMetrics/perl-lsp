@@ -35,7 +35,7 @@ Use the Claude Code **Workflow** tool with:
   "args": {
     "swarmSha": "<40-char commit SHA on swarm main>",
     "sourceRepo": "EffortlessMetrics/perl-lsp-swarm",
-    "version": "0.16.1"
+    "version": "0.17.0"
   }
 }
 ```
