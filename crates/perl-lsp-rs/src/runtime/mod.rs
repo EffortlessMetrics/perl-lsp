@@ -782,6 +782,32 @@ impl LspServer {
             .map(|folder| folder.effective_workspace_config.clone())
     }
 
+    pub(crate) fn declared_dependency_for_doc(
+        &self,
+        doc_uri: &str,
+        module_name: &str,
+    ) -> Option<perl_lsp_rs_core::config::DeclaredDependency> {
+        let config =
+            self.config_for_doc(doc_uri).unwrap_or_else(|| self.workspace_config.lock().clone());
+        config.declared_dependencies.into_iter().find(|dependency| dependency.module == module_name)
+    }
+
+    pub(crate) fn declared_dependency_summary(
+        dependency: &perl_lsp_rs_core::config::DeclaredDependency,
+    ) -> String {
+        let mut summary = format!("declared in {}", dependency.source.display_name());
+        if !dependency.kind.is_empty() {
+            if let Some(version) =
+                dependency.version.as_deref().filter(|version| !version.is_empty())
+            {
+                summary.push_str(&format!(" ({} {})", dependency.kind, version));
+            } else {
+                summary.push_str(&format!(" ({})", dependency.kind));
+            }
+        }
+        summary
+    }
+
     /// Get all include paths for a document (from its folder and others).
     ///
     /// Returns a vector of resolved absolute include paths from all workspace folders,

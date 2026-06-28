@@ -162,6 +162,7 @@ impl LspServer {
                         }
                     }
                 }
+                folder.refresh_workspace_metadata();
             }
         }
 

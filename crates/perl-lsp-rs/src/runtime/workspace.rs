@@ -1231,6 +1231,7 @@ impl LspServer {
                             }
                             effective_config.update_from_value(perl);
                             folder.effective_workspace_config = effective_config;
+                            folder.refresh_workspace_metadata();
                         }
                     }
 

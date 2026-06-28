@@ -200,6 +200,49 @@ fn missing_module_hover_gives_actionable_next_steps() {
 }
 
 #[test]
+fn missing_module_hover_mentions_declared_unindexed_dependency() {
+    use perl_lsp_rs_core::config::{DeclaredDependency, DeclaredDependencySource, WorkspaceConfig};
+
+    let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+    let mut config = WorkspaceConfig::default();
+    config.use_perl5lib = false;
+    config.use_system_inc = false;
+    config.declared_dependencies = vec![DeclaredDependency::new(
+        "JSON::PP",
+        Some("4.16"),
+        "requires",
+        DeclaredDependencySource::Cpanfile,
+    )];
+    *server.workspace_folders.lock() = vec![
+        crate::runtime::workspace_folder::WorkspaceFolderState::new(
+            "file:///workspace".to_string(),
+        )
+        .with_effective_workspace_config(config),
+    ];
+
+    let hover = server.build_module_hover(
+        "JSON::PP",
+        "use JSON::PP;\n",
+        "file:///workspace/main.pl",
+        Some(4),
+    );
+    let value = must_some(hover["contents"]["value"].as_str());
+
+    assert!(
+        value.contains("declared in cpanfile"),
+        "missing module hover should explain metadata declaration source: {value}"
+    );
+    assert!(
+        value.contains("not currently indexed"),
+        "missing module hover should distinguish declared-but-unindexed modules: {value}"
+    );
+    assert!(
+        value.contains("requires 4.16"),
+        "missing module hover should include declared dependency kind and version: {value}"
+    );
+}
+
+#[test]
 fn resolved_module_hover_links_virtual_perldoc() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
     let temp = tempfile::tempdir()?;

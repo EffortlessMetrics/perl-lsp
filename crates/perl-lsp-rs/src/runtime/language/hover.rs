@@ -1402,6 +1402,15 @@ impl LspServer {
         let include_paths = config.effective_include_paths(&perl5lib_paths);
         let searched_paths = Self::format_missing_module_search_paths(&include_paths);
         let system_inc_status = if config.use_system_inc { "enabled" } else { "disabled" };
+        let declared_dependency_note = self
+            .declared_dependency_for_doc(doc_uri, module_name)
+            .map(|dependency| {
+                let summary = Self::declared_dependency_summary(&dependency);
+                format!(
+                    "\n\n**Declared dependency**: `{module_name}` is {summary}, but it is not currently indexed."
+                )
+            })
+            .unwrap_or_default();
 
         json!({
             "contents": {
@@ -1415,6 +1424,8 @@ Not found in workspace or configured include paths.
 {searched_paths}
 
 **System `@INC`**: {system_inc_status}
+
+{declared_dependency_note}
 
 **Next steps**: install `{module_name}` (for example, `cpanm {module_name}`) or add the directory that contains it to `.perl-lsp.toml` `include_paths`.
 

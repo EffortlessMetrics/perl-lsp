@@ -421,6 +421,78 @@ impl LspServer {
         false
     }
 
+    fn module_completion_prefix(doc_text: &str, offset: usize) -> Option<String> {
+        if !Self::is_module_import_completion_context(doc_text, offset) {
+            return None;
+        }
+
+        let text_before = &doc_text[..offset.min(doc_text.len())];
+        Some(
+            text_before
+                .chars()
+                .rev()
+                .take_while(|&c| c.is_ascii_alphanumeric() || c == '_' || c == ':')
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect(),
+        )
+    }
+
+    fn add_declared_dependency_completions(
+        &self,
+        completions: &mut Vec<crate::completion::CompletionItem>,
+        doc_text: &str,
+        doc_uri: &str,
+        offset: usize,
+        cap: usize,
+    ) {
+        let Some(prefix) = Self::module_completion_prefix(doc_text, offset) else {
+            return;
+        };
+        if completions.len() >= cap {
+            return;
+        }
+
+        let config =
+            self.config_for_doc(doc_uri).unwrap_or_else(|| self.workspace_config.lock().clone());
+        let mut seen: HashSet<String> =
+            completions.iter().map(|completion| completion.label.clone()).collect();
+
+        for dependency in config.declared_dependencies {
+            if completions.len() >= cap {
+                break;
+            }
+            if !prefix.is_empty() && !dependency.module.starts_with(&prefix) {
+                continue;
+            }
+            if !seen.insert(dependency.module.clone()) {
+                continue;
+            }
+
+            let summary = Self::declared_dependency_summary(&dependency);
+            let module = dependency.module;
+            let detail = format!("{summary}; not currently indexed");
+            let documentation = format!(
+                "`{module}` is {summary}, but it is not currently indexed. Install it or add its directory to `.perl-lsp.toml` `include_paths`.",
+            );
+
+            completions.push(crate::completion::CompletionItem {
+                label: module.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some(detail),
+                documentation: Some(documentation),
+                insert_text: Some(module.clone()),
+                sort_text: Some(format!("080_declared_dependency_{module}")),
+                filter_text: None,
+                additional_edits: Vec::new(),
+                text_edit_range: None,
+                commit_characters: None,
+                label_details: None,
+            });
+        }
+    }
+
     fn add_runtime_workspace_completions(
         &self,
         completions: &mut Vec<crate::completion::CompletionItem>,
@@ -926,6 +998,14 @@ impl LspServer {
                     self.lexical_complete(&doc.text, offset, Some(uri))
                 };
 
+                self.add_declared_dependency_completions(
+                    &mut completions,
+                    &doc.text,
+                    uri,
+                    offset,
+                    cap,
+                );
+
                 // Add workspace-wide completions using routing policy
                 #[cfg(feature = "workspace")]
                 if start.elapsed() < deadline {
@@ -1139,6 +1219,14 @@ impl LspServer {
                         data: None,
                     });
                 }
+
+                self.add_declared_dependency_completions(
+                    &mut completions,
+                    &doc.text,
+                    uri,
+                    offset,
+                    completion_cap(),
+                );
 
                 #[cfg(feature = "workspace")]
                 self.add_runtime_workspace_completions(
@@ -2119,6 +2207,69 @@ mod tests {
         assert!(
             include_paths.contains(&lib_dir),
             "use lib path should be in include_paths; got: {include_paths:?}",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn module_completion_offers_declared_but_unindexed_dependencies()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::config::{
+            DeclaredDependency, DeclaredDependencySource, WorkspaceConfig,
+        };
+
+        let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+        let mut config = WorkspaceConfig::default();
+        config.use_system_inc = false;
+        config.use_perl5lib = false;
+        config.declared_dependencies = vec![DeclaredDependency::new(
+            "JSON::PP",
+            Some("4.16"),
+            "requires",
+            DeclaredDependencySource::Cpanfile,
+        )];
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                "file:///workspace".to_string(),
+            )
+            .with_effective_workspace_config(config),
+        );
+
+        let uri = "file:///workspace/app.pl";
+        let text = "use JS";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        })))?;
+
+        let response = server
+            .handle_completion(Some(json!({
+                "textDocument": { "uri": uri, "version": 1 },
+                "position": { "line": 0, "character": text.len() }
+            })))?
+            .ok_or("expected completion response")?;
+        let items = response["items"].as_array().ok_or("expected completion items")?;
+        let item = items
+            .iter()
+            .find(|item| item["label"].as_str() == Some("JSON::PP"))
+            .ok_or_else(|| format!("expected declared dependency completion, got: {items:?}"))?;
+
+        assert_eq!(item["kind"].as_i64(), Some(9));
+        assert_eq!(item["insertText"].as_str(), Some("JSON::PP"));
+        assert!(
+            item["detail"].as_str().is_some_and(|detail| detail.contains("declared in cpanfile")),
+            "completion detail should explain declaration source: {item:?}"
+        );
+        assert!(
+            item.pointer("/documentation/value")
+                .and_then(Value::as_str)
+                .is_some_and(|doc| doc.contains("not currently indexed")),
+            "completion docs should explain the dependency is not indexed: {item:?}"
         );
         Ok(())
     }
