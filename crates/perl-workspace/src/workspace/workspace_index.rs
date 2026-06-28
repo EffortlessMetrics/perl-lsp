@@ -1131,6 +1131,8 @@ pub struct FileIndex {
     dependencies: HashSet<String>,
     /// Content hash for early-exit optimization
     content_hash: u64,
+    /// Document generation represented by this indexed snapshot.
+    generation: u32,
     /// Workspace folder URI this file belongs to (for multi-root workspace support)
     folder_uri: Option<String>,
 }
@@ -1614,6 +1616,21 @@ impl WorkspaceIndex {
         self.workspace_folders.read().clone()
     }
 
+    /// Return the document generation represented by the indexed file snapshot.
+    #[must_use]
+    pub fn indexed_generation(&self, uri: &str) -> Option<u32> {
+        let uri_str = Self::normalize_uri(uri);
+        let key = DocumentStore::uri_key(&uri_str);
+        self.files.read().get(&key).map(|file_index| file_index.generation)
+    }
+
+    /// Whether the indexed snapshot for `uri` is older than `expected_generation`.
+    #[must_use]
+    pub fn is_index_generation_stale(&self, uri: &str, expected_generation: u32) -> bool {
+        self.indexed_generation(uri)
+            .is_some_and(|indexed_generation| indexed_generation < expected_generation)
+    }
+
     /// Normalize a URI to a consistent form using proper URI handling
     fn normalize_uri(uri: &str) -> String {
         perl_uri::normalize_uri(uri)
@@ -1669,6 +1686,16 @@ impl WorkspaceIndex {
     ///
     /// Returns: `Ok(())` when indexing succeeds, otherwise an error string.
     pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
+        self.index_file_with_generation(uri, text, 0)
+    }
+
+    /// Index a file from its URI, text content, and document generation.
+    pub fn index_file_with_generation(
+        &self,
+        uri: Url,
+        text: String,
+        generation: u32,
+    ) -> Result<(), String> {
         let uri_str = uri.to_string();
 
         // Compute content hash for early-exit optimization
@@ -1679,9 +1706,10 @@ impl WorkspaceIndex {
         // Check if content is unchanged (early-exit optimization)
         let key = DocumentStore::uri_key(&uri_str);
         {
-            let files = self.files.read();
-            if let Some(existing_index) = files.get(&key) {
+            let mut files = self.files.write();
+            if let Some(existing_index) = files.get_mut(&key) {
                 if existing_index.content_hash == content_hash {
+                    existing_index.generation = existing_index.generation.max(generation);
                     // Content unchanged, skip re-indexing
                     return Ok(());
                 }
@@ -1712,6 +1740,7 @@ impl WorkspaceIndex {
         let mut file_index = FileIndex {
             source_uri: uri_str.clone(),
             content_hash,
+            generation,
             folder_uri: folder_uri.clone(),
             ..Default::default()
         };
@@ -5899,6 +5928,50 @@ sub hello {
         assert_eq!(symbols1.len(), symbols2.len());
         assert!(symbols2.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
         assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+    }
+
+    #[test]
+    fn test_index_file_generation_updates_on_same_content_reindex() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///generation.pl"));
+        let code = "package Generation;\nsub stable { 1 }\n1;\n";
+
+        must(index.index_file_with_generation(uri.clone(), code.to_string(), 1));
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(1));
+        assert!(!index.is_index_generation_stale(uri.as_str(), 1));
+        assert!(index.is_index_generation_stale(uri.as_str(), 2));
+
+        must(index.index_file_with_generation(uri.clone(), code.to_string(), 2));
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(2));
+        assert!(!index.is_index_generation_stale(uri.as_str(), 2));
+    }
+
+    #[test]
+    fn is_index_generation_stale_boundary_discriminator_indexed_generation_less_than_expected_generation()
+     {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///generation-boundary.pl"));
+        let code = "package GenerationBoundary;\nsub stable { 1 }\n1;\n";
+
+        must(index.index_file_with_generation(uri.clone(), code.to_string(), 2));
+
+        assert_eq!(
+            index.indexed_generation(uri.as_str()),
+            Some(2),
+            "test setup must index the boundary generation"
+        );
+        assert!(
+            !index.is_index_generation_stale(uri.as_str(), 1),
+            "indexed_generation > expected_generation must not be stale"
+        );
+        assert!(
+            !index.is_index_generation_stale(uri.as_str(), 2),
+            "indexed_generation == expected_generation must not be stale"
+        );
+        assert!(
+            index.is_index_generation_stale(uri.as_str(), 3),
+            "indexed_generation < expected_generation must be stale"
+        );
     }
 
     #[test]

@@ -337,6 +337,10 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
+            let req_version =
+                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            self.ensure_latest(uri, req_version)?;
+            let workspace_index_stale_for_document = self.workspace_index_stale_for_document(uri);
             let include_declaration = if let Some(context) = params.get("context") {
                 context["includeDeclaration"].as_bool().unwrap_or(true)
             } else {
@@ -379,7 +383,10 @@ impl LspServer {
                     // Check index state and use appropriate search strategy
                     #[cfg(feature = "workspace")]
                     {
-                        let access_mode = route_index_access(self.coordinator());
+                        let mut access_mode = route_index_access(self.coordinator());
+                        if workspace_index_stale_for_document {
+                            access_mode = IndexAccessMode::None;
+                        }
                         // A Full index can still fall through to semantic_analyzer when no symbol
                         // is found, so inferring index_state from the tier would be wrong.
                         index_state = match &access_mode {
@@ -1260,7 +1267,102 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "workspace")]
+    fn make_document_index_stale(
+        server: &crate::runtime::LspServer,
+        uri: &str,
+        text: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        server.test_apply_did_open(uri, text, 1)?;
+        server.test_index_file_in_building_state(uri, text).map_err(std::io::Error::other)?;
+        server.test_simulate_indexing_complete();
+        server.test_replace_document_without_index(uri, text, 2).map_err(std::io::Error::other)?;
+
+        assert!(
+            server.workspace_index_stale_for_document(uri),
+            "test setup must leave the open document newer than the workspace index"
+        );
+
+        Ok(())
+    }
+
     // ── Handler trace tests (--lib reachable) ────────────────────────────
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn handle_references_records_none_index_state_when_open_document_index_is_stale()
+    -> Result<(), Box<dyn Error>> {
+        use crate::runtime::LspServer;
+        use parking_lot::Mutex;
+        use std::io::Cursor;
+        use std::sync::Arc;
+
+        let output = Arc::new(Mutex::new(
+            Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>
+        ));
+        let server = LspServer::with_output(output);
+        let uri = "file:///test/stale-references.pl";
+        let text = "my $value = 1;\nmy $other = $value;\n";
+
+        make_document_index_stale(&server, uri, text)?;
+
+        server.test_handle_references(Some(serde_json::json!({
+            "textDocument": {"uri": uri, "version": 2},
+            "position": {"line": 0, "character": 3},
+            "context": {"includeDeclaration": true}
+        })))?;
+
+        let explanation = server
+            .handle_execute_command(Some(serde_json::json!({
+                "command": "perl.explainProviderDecision",
+                "arguments": [{"provider": "references"}]
+            })))?
+            .ok_or("missing explain-provider-decision response")?;
+        let receipt = explanation
+            .get("request_receipt")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("missing request_receipt")?;
+
+        assert_eq!(
+            receipt.get("index_state").and_then(serde_json::Value::as_str),
+            Some("none"),
+            "stale current-document index must downgrade references index access"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn handle_references_inner_call_presence_observer_rejects_stale_request_version()
+    -> Result<(), Box<dyn Error>> {
+        use crate::runtime::LspServer;
+
+        let server = LspServer::new();
+        let uri = "file:///test/references-version.pl";
+        let text = "my $value = 1;\nmy $other = $value;\n";
+
+        server.test_apply_did_open(uri, text, 3)?;
+
+        let err = match server.test_handle_references(Some(serde_json::json!({
+            "textDocument": {"uri": uri, "version": 2},
+            "position": {"line": 0, "character": 3},
+            "context": {"includeDeclaration": true}
+        }))) {
+            Ok(value) => return Err(format!("expected stale-version error, got {value:?}").into()),
+            Err(err) => err,
+        };
+
+        assert_eq!(
+            err.code, CONTENT_MODIFIED,
+            "references request with stale textDocument.version must hit ensure_latest"
+        );
+        assert_eq!(
+            err.message, "Document changed before request executed",
+            "references stale-version rejection must preserve the ContentModified payload"
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn handle_references_workspace_variable_answering_tier_in_trace() -> Result<(), Box<dyn Error>>

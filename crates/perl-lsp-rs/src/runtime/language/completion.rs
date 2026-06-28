@@ -841,7 +841,10 @@ impl LspServer {
             self.wait_for_index_ready_if_building();
 
             // Use routing to determine workspace index access mode
-            let workspace_mode = route_index_access(self.coordinator());
+            let mut workspace_mode = route_index_access(self.coordinator());
+            if self.workspace_index_stale_for_document(uri) {
+                workspace_mode = IndexAccessMode::None;
+            }
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -1060,7 +1063,10 @@ impl LspServer {
             self.wait_for_index_ready_if_building();
 
             // Use routing to determine workspace index access mode
-            let workspace_mode = route_index_access(self.coordinator());
+            let mut workspace_mode = route_index_access(self.coordinator());
+            if self.workspace_index_stale_for_document(uri) {
+                workspace_mode = IndexAccessMode::None;
+            }
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -1549,6 +1555,25 @@ mod tests {
         Ok(response)
     }
 
+    #[cfg(feature = "workspace")]
+    fn make_document_index_stale(
+        server: &LspServer,
+        uri: &str,
+        text: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        server.test_apply_did_open(uri, text, 1)?;
+        server.test_index_file_in_building_state(uri, text).map_err(std::io::Error::other)?;
+        server.test_simulate_indexing_complete();
+        server.test_replace_document_without_index(uri, text, 2).map_err(std::io::Error::other)?;
+
+        assert!(
+            server.workspace_index_stale_for_document(uri),
+            "test setup must leave the open document newer than the workspace index"
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn completion_item_serializer_serializes_filter_text() -> Result<(), Box<dyn std::error::Error>>
     {
@@ -1903,6 +1928,83 @@ mod tests {
             Some("textDocument/completion")
         );
         assert_eq!(receipt.get("is_incomplete").and_then(Value::as_bool), Some(false));
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn regular_completion_records_none_index_state_when_open_document_index_is_stale()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_stale_regular.pl";
+        let text = "my $ready = 1;\n$re\n";
+
+        make_document_index_stale(&server, uri, text)?;
+
+        let response = server
+            .handle_completion(Some(json!({
+                "textDocument": { "uri": uri, "version": 2 },
+                "position": { "line": 1, "character": 3 }
+            })))?
+            .ok_or("expected completion response")?;
+        let items =
+            response.get("items").and_then(Value::as_array).ok_or("expected completion items")?;
+        assert!(
+            items.iter().any(|item| item.get("label").and_then(Value::as_str) == Some("$ready")),
+            "stale-index regular completion must still use current-document fallback: {items:?}"
+        );
+
+        let explanation = explain_provider_decision(&server, "completion")?;
+        let receipt = explanation
+            .get("request_receipt")
+            .and_then(Value::as_object)
+            .ok_or("missing persisted completion request receipt")?;
+        assert_eq!(
+            receipt.get("workspace_index_state").and_then(Value::as_str),
+            Some("none"),
+            "stale current-document index must downgrade regular completion index access"
+        );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn cancellable_completion_records_none_index_state_when_open_document_index_is_stale()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_stale_cancellable.pl";
+        let text = "my $count = 1;\n$co\n";
+
+        make_document_index_stale(&server, uri, text)?;
+
+        let response = server
+            .handle_completion_cancellable(
+                Some(json!({
+                    "textDocument": { "uri": uri, "version": 2 },
+                    "position": { "line": 1, "character": 3 }
+                })),
+                Some(&json!("completion-stale-cancellable")),
+            )?
+            .ok_or("expected completion response")?;
+        let items =
+            response.get("items").and_then(Value::as_array).ok_or("expected completion items")?;
+        assert!(
+            items.iter().any(|item| item.get("label").and_then(Value::as_str) == Some("$count")),
+            "stale-index cancellable completion must still use current-document fallback: {items:?}"
+        );
+
+        let explanation = explain_provider_decision(&server, "completion")?;
+        let receipt = explanation
+            .get("request_receipt")
+            .and_then(Value::as_object)
+            .ok_or("missing persisted completion request receipt")?;
+        assert_eq!(
+            receipt.get("workspace_index_state").and_then(Value::as_str),
+            Some("none"),
+            "stale current-document index must downgrade cancellable completion index access"
+        );
+
         Ok(())
     }
 

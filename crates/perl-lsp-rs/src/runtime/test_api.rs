@@ -84,6 +84,57 @@ impl LspServer {
         self.handle_did_change(Some(params))
     }
 
+    /// Test-only helper that updates an open document snapshot without touching
+    /// the workspace index.
+    ///
+    /// This models the post-edit window where `didChange` has made the document
+    /// current but the asynchronous workspace index update has not completed.
+    /// Production text sync must continue to use the real didChange handler.
+    pub fn test_replace_document_without_index(
+        &self,
+        uri: &str,
+        text: &str,
+        version: i32,
+    ) -> Result<(), String> {
+        let normalized_uri = self.normalize_uri_key(uri);
+        let mut parser = perl_parser::Parser::new(text);
+        let ast = match parser.parse() {
+            Ok(ast) => Some(std::sync::Arc::new(ast)),
+            Err(err) => return Err(format!("Parse error: {err}")),
+        };
+        let errors = parser.errors().to_vec();
+
+        let mut parent_map = perl_parser::declaration::ParentMap::default();
+        if let Some(ref ast) = ast {
+            crate::declaration::DeclarationProvider::build_parent_map(ast, &mut parent_map, None);
+        }
+
+        let rope = ropey::Rope::from_str(text);
+        let line_starts = perl_parser::position::LineStartsCache::new_rope(&rope);
+        let degradation_tier = crate::state::DegradationTier::from_parse_result(&ast, &errors);
+
+        let mut documents = self.documents.lock();
+        let doc = documents
+            .get_mut(&normalized_uri)
+            .ok_or_else(|| format!("document not open: {uri}"))?;
+        doc.rope = rope;
+        doc.text = text.to_string();
+        doc.version = version;
+        doc.ast = ast;
+        doc.parse_errors = errors;
+        doc.parent_map = parent_map;
+        doc.line_starts = line_starts;
+        doc.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        doc.degradation_tier = degradation_tier;
+        #[cfg(feature = "incremental")]
+        {
+            doc.incremental_doc = None;
+            doc.incremental_state = None;
+        }
+
+        Ok(())
+    }
+
     /// Test-only entrypoint for LSP `initialize`.
     pub fn test_handle_initialize_dispatch(
         &self,

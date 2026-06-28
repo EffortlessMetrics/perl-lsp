@@ -136,15 +136,17 @@ impl LspServer {
                 }
                 #[cfg(feature = "workspace")]
                 HoverExtracted::InheritedMethod(receiver_pkg, method_name, doc_uri) => {
-                    // Wait for the workspace index to finish building before querying it.
-                    // build_inherited_method_hover calls coordinator().index() directly; if the
-                    // index is in IndexState::Building the lookup returns partial/empty results.
-                    // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
-                    self.wait_for_index_ready_if_building();
-                    if let Some(hover_value) =
-                        self.build_inherited_method_hover(&receiver_pkg, &method_name, &doc_uri)
-                    {
-                        return Ok(Some(hover_value));
+                    if !self.workspace_index_stale_for_document(&doc_uri) {
+                        // Wait for the workspace index to finish building before querying it.
+                        // build_inherited_method_hover calls coordinator().index() directly; if the
+                        // index is in IndexState::Building the lookup returns partial/empty results.
+                        // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
+                        self.wait_for_index_ready_if_building();
+                        if let Some(hover_value) =
+                            self.build_inherited_method_hover(&receiver_pkg, &method_name, &doc_uri)
+                        {
+                            return Ok(Some(hover_value));
+                        }
                     }
                 }
                 #[cfg(not(feature = "workspace"))]

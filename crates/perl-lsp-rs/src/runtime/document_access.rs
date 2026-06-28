@@ -86,6 +86,34 @@ impl LspServer {
         Ok(())
     }
 
+    /// Whether the workspace index snapshot for `uri` is older than the open
+    /// document generation.
+    pub(crate) fn workspace_index_stale_for_document(&self, uri: &str) -> bool {
+        #[cfg(feature = "workspace")]
+        {
+            let document_generation = {
+                let documents = self.documents.lock();
+                self.get_document(&documents, uri).map(DocumentState::current_generation)
+            };
+            let Some(document_generation) = document_generation else {
+                return false;
+            };
+            if document_generation == 0 {
+                return false;
+            }
+            let Some(coordinator) = self.coordinator() else {
+                return false;
+            };
+            coordinator.index().is_index_generation_stale(uri, document_generation)
+        }
+
+        #[cfg(not(feature = "workspace"))]
+        {
+            let _ = uri;
+            false
+        }
+    }
+
     /// Offset to position conversion using cached line starts for O(log n) performance
     #[inline]
     pub(crate) fn offset_to_pos16(&self, doc: &DocumentState, offset: usize) -> (u32, u32) {
@@ -247,5 +275,62 @@ impl LspServer {
         }
 
         analyzer
+    }
+}
+
+#[cfg(all(test, feature = "workspace"))]
+mod tests {
+    use super::*;
+    use crate::runtime::LspServer;
+
+    #[test]
+    fn workspace_index_stale_for_document_false_when_document_is_not_open() {
+        let server = LspServer::new();
+
+        assert!(
+            !server.workspace_index_stale_for_document("file:///workspace/missing.pl"),
+            "missing open document must not be treated as stale"
+        );
+    }
+
+    #[test]
+    fn workspace_index_stale_for_document_false_when_coordinator_is_absent()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut server = LspServer::new();
+        let uri = "file:///workspace/no-coordinator.pl";
+        let text = "my $value = 1;\n";
+
+        server.test_apply_did_open(uri, text, 1)?;
+        server.test_replace_document_without_index(uri, text, 2).map_err(std::io::Error::other)?;
+        server.index_coordinator = None;
+
+        assert!(
+            !server.workspace_index_stale_for_document(uri),
+            "missing coordinator must fail closed to non-stale rather than blocking local providers"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_index_stale_for_document_boundary_discriminator_document_generation_zero()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///workspace/fresh-open.pl";
+        let text = "my $value = 1;\n";
+
+        server.test_apply_did_open(uri, text, 1)?;
+
+        assert_eq!(
+            server.document_generation(uri),
+            Some(0),
+            "didOpen must start at document_generation == 0 before any didChange"
+        );
+        assert!(
+            !server.workspace_index_stale_for_document(uri),
+            "document_generation == 0 must never be reported as stale"
+        );
+
+        Ok(())
     }
 }

@@ -284,7 +284,7 @@ impl LspServer {
                                 task_counter.fetch_sub(1, Ordering::SeqCst);
                                 return;
                             }
-                            match workspace_index.index_file(url, text_owned) {
+                            match workspace_index.index_file_with_generation(url, text_owned, 0) {
                                 Ok(()) => {
                                     if matches!(
                                         coordinator_clone.state(),
@@ -836,7 +836,11 @@ impl LspServer {
                                     task_counter.fetch_sub(1, Ordering::SeqCst);
                                     return;
                                 }
-                                if let Err(e) = workspace_index.index_file(url, doc_content) {
+                                if let Err(e) = workspace_index.index_file_with_generation(
+                                    url,
+                                    doc_content,
+                                    expected_generation,
+                                ) {
                                     tracing::warn!("Failed to index file {}: {}", uri_owned, e);
                                 }
                                 coordinator_clone.notify_parse_complete(&uri_owned);
