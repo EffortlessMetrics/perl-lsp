@@ -122,6 +122,9 @@ impl LspServer {
         for folder in folders.iter_mut() {
             // Try to load .perl-lsp.toml from this folder
             if let Some(folder_path) = &folder.path {
+                folder.project_config = None;
+                folder.effective_workspace_config = WorkspaceConfig::default();
+
                 match perl_lsp_rs_core::config::load_project_config(folder_path) {
                     Ok(None) => {
                         // No .perl-lsp.toml found — normal, no action needed
@@ -372,6 +375,65 @@ include_paths = ["other_lib"]
         assert!(folder_state.project_config.is_none());
         // Should have default include paths
         assert!(!folder_state.effective_workspace_config.include_paths.is_empty());
+    }
+
+    #[test]
+    fn load_and_apply_project_config_clears_stale_folder_config() -> anyhow::Result<()> {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir()?;
+        let folder = temp.path().join("folder");
+        std::fs::create_dir_all(&folder)?;
+
+        let config = folder.join(".perl-lsp.toml");
+        std::fs::write(
+            &config,
+            r#"
+[perl]
+include_paths = ["stale_lib"]
+"#,
+        )?;
+
+        let uri = url::Url::from_directory_path(&folder)
+            .map_err(|()| anyhow::anyhow!("failed to create folder URI"))?
+            .to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri.clone())
+                .with_path(folder.clone()),
+        );
+
+        server.load_and_apply_project_config();
+        {
+            let folders = server.workspace_folders.lock();
+            let folder_state = folders
+                .iter()
+                .find(|f| f.uri == uri)
+                .ok_or_else(|| anyhow::anyhow!("missing folder"))?;
+            assert!(folder_state.project_config.is_some());
+            assert!(
+                folder_state
+                    .effective_workspace_config
+                    .include_paths
+                    .contains(&"stale_lib".to_string())
+            );
+        }
+
+        std::fs::remove_file(config)?;
+        server.load_and_apply_project_config();
+
+        let folders = server.workspace_folders.lock();
+        let folder_state = folders
+            .iter()
+            .find(|f| f.uri == uri)
+            .ok_or_else(|| anyhow::anyhow!("missing folder"))?;
+        assert!(folder_state.project_config.is_none());
+        assert!(
+            !folder_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"stale_lib".to_string())
+        );
+        Ok(())
     }
 
     #[test]
