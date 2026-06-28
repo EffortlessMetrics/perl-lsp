@@ -11,9 +11,9 @@ for whoever touches this code next.
 
 ## Steps
 
-1. Claim the PR immediately to prevent double-assignment:
-   ```bash
-   gh pr edit <number> --add-label "in-review"
+1. Claim the PR immediately to prevent double-assignment (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified pr <number> "in-review"
    ```
    Do this BEFORE reading the diff. The `in-review` label tells the orchestrator
    this PR is actively being reviewed and should not be dispatched to another reviewer.

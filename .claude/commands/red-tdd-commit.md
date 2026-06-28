@@ -29,9 +29,9 @@ Commit failing tests, push, set the pipeline label, and comment on the issue.
    git push origin impl/<issue#>-<specslug>
    ```
 
-4. **Set the pipeline label** — this signals the builder that red tests are ready:
-   ```bash
-   gh issue edit <number> --add-label "red-tdd-reviewed"
+4. **Set the pipeline label** — this signals the builder that red tests are ready (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified issue <number> "red-tdd-reviewed"
    ```
 
 5. Comment on the issue:

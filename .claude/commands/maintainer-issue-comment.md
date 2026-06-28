@@ -32,7 +32,7 @@ Post your project-alignment verdict and set the sign-off label.
    )"
    ```
 
-2. Set sign-off label:
-   ```bash
-   gh issue edit <number> --add-label "maintainer-issue-reviewed"
+2. Set sign-off label (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified issue <number> "maintainer-issue-reviewed"
    ```

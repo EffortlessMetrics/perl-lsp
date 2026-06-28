@@ -63,7 +63,7 @@ plan-review.
    )"
    ```
 
-3. **Ensure the `research-reviewed` label exists, then apply it:**
+3. **Ensure the `research-reviewed` label exists, then apply it** (verified apply — see `/label-apply-verified`):
 
    ```bash
    # Create the label if it doesn\'t exist (idempotent)
@@ -71,9 +71,9 @@ plan-review.
      --color "0075ca" \
      --description "Facts verified by research-verifier agent" \
      2>/dev/null || true
-
-   # Apply the label to the issue
-   gh issue edit <number> --add-label "research-reviewed"
+   ```
+   ```
+   /label-apply-verified issue <number> "research-reviewed"
    ```
 
 4. **Remove `needs-research-verification` label if present:**

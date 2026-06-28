@@ -42,10 +42,10 @@ will read this alongside the scout spec and research verification.
    )"
    ```
 
-3. Add the label:
+3. Add the label (verified apply — see `/label-apply-verified`):
 
-   ```bash
-   gh issue edit <number> --add-label "oppositional-reviewed"
+   ```
+   /label-apply-verified issue <number> "oppositional-reviewed"
    ```
 
 ## Notes

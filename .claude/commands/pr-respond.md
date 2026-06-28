@@ -52,6 +52,13 @@ cargo test -p <crate>
 ### 6. Push, set label, and request re-review
 ```bash
 git push
-gh pr edit $ARGUMENTS --add-label "pr-responded"
+```
+
+Apply the `pr-responded` label with verification (see `/label-apply-verified`):
+```
+/label-apply-verified pr $ARGUMENTS "pr-responded"
+```
+
+```bash
 gh pr edit $ARGUMENTS --add-reviewer <original-reviewer> 2>/dev/null || true
 ```

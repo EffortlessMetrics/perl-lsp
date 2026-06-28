@@ -32,7 +32,7 @@ Post your project-fit verdict on the PR and set the sign-off label.
    )"
    ```
 
-2. Set sign-off label on the PR:
-   ```bash
-   gh pr edit <number> --add-label "maintainer-pr-reviewed"
+2. Set sign-off label on the PR (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified pr <number> "maintainer-pr-reviewed"
    ```

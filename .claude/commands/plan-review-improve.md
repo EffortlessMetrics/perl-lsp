@@ -39,11 +39,15 @@ Write your findings as an issue comment and label the issue as builder-ready.
    )"
    ```
 
-2. If ready for builder, set final labels in a single call:
-   ```bash
-   gh issue edit <number> --add-label "plan-reviewed" --add-label "builder-ready" --remove-label "needs-plan-review"
+2. If ready for builder, apply each sign-off label with verification (see `/label-apply-verified`), then remove the routing label:
    ```
-   All three label changes in one call: `plan-reviewed` and `builder-ready` are added atomically,
+   /label-apply-verified issue <number> "plan-reviewed"
+   /label-apply-verified issue <number> "builder-ready"
+   ```
+   ```bash
+   gh issue edit <number> --remove-label "needs-plan-review"
+   ```
+   `plan-reviewed` and `builder-ready` are each applied and read back independently,
    and `needs-plan-review` is removed so the orchestrator does not re-route this issue to another
    plan-reviewer on the next swarm pass. (`--remove-label` is a no-op if the label is absent.)
 

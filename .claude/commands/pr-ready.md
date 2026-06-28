@@ -45,7 +45,11 @@ Optionally validate receipt freshness when `deep-reviewed` is present to ensure 
 
 ```bash
 gh pr ready $NUMBER
-gh pr edit $NUMBER --add-label "merge-ready"
+```
+
+Apply the `merge-ready` label with verification (see `/label-apply-verified`):
+```
+/label-apply-verified pr $NUMBER "merge-ready"
 ```
 
 The `merge-ready` label signals the ops agent that this PR has passed review and is cleared for merge pickup.

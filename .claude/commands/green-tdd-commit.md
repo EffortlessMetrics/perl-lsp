@@ -51,12 +51,12 @@ Commit your edge case tests, push, and comment on the issue.
    )"
    ```
 
-5. **Set the sign-off label:**
-   ```bash
-   gh issue edit <number> --add-label "green-tdd-reviewed"
+5. **Set the sign-off label** (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified issue <number> "green-tdd-reviewed"
    ```
 
-6. If bugs were found (new tests fail), ALSO add the routing label:
-   ```bash
-   gh issue edit <number> --add-label "needs-builder-fix"
+6. If bugs were found (new tests fail), ALSO add the routing label (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified issue <number> "needs-builder-fix"
    ```

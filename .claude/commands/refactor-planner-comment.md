@@ -11,9 +11,9 @@ Post your analysis and set the sign-off label.
 
 1. Post the refactoring plan as a PR comment (from analyze step output).
 
-2. Set sign-off label:
-   ```bash
-   gh pr edit <number> --add-label "refactor-planner-reviewed"
+2. Set sign-off label (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified pr <number> "refactor-planner-reviewed"
    ```
 
 3. If no refactoring opportunities found, say so explicitly:

@@ -51,12 +51,12 @@ Default posture: every PR is potentially problematic. "CLEAN, nothing to flag" o
    )"
    ```
 
-2. If CLEAN:
-   ```bash
-   gh pr edit <number> --add-label "diff-audited"
+2. If CLEAN (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified pr <number> "diff-audited"
    ```
 
-3. If not CLEAN:
-   ```bash
-   gh pr edit <number> --add-label "needs-diff-fix"
+3. If not CLEAN (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified pr <number> "needs-diff-fix"
    ```

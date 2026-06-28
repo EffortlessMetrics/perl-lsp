@@ -37,7 +37,7 @@ Post the implementation checklist to the issue and note the branch.
    )"
    ```
 
-2. Add label:
-   ```bash
-   gh issue edit <number> --add-label "spec-reviewed"
+2. Add label (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified issue <number> "spec-reviewed"
    ```

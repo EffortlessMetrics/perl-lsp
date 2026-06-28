@@ -63,15 +63,16 @@ body if needed, and attach the `accuracy-reviewed` label.
    )"
    ```
 
-3. **Ensure the `accuracy-reviewed` label exists, then apply it:**
+3. **Ensure the `accuracy-reviewed` label exists, then apply it** (verified apply — see `/label-apply-verified`):
 
    ```bash
    gh label create "accuracy-reviewed" \
      --color "e4e669" \
      --description "Mechanical facts verified against master by accuracy-scout" \
      2>/dev/null || true
-
-   gh issue edit <number> --add-label "accuracy-reviewed"
+   ```
+   ```
+   /label-apply-verified issue <number> "accuracy-reviewed"
    ```
 
 4. **Remove `needs-accuracy-scout` label if present:**
@@ -83,9 +84,9 @@ body if needed, and attach the `accuracy-reviewed` label.
 5. **If LIKELY FIXED or DUPLICATE, add a close recommendation** by adding
    label `needs-triage` so a human or ops agent can review and close:
 
-   ```bash
-   # Only if LIKELY FIXED or DUPLICATE:
-   gh issue edit <number> --add-label "needs-triage"
+   Only if LIKELY FIXED or DUPLICATE (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified issue <number> "needs-triage"
    ```
 
 ## Rules

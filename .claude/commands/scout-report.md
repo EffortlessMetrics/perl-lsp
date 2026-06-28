@@ -42,9 +42,9 @@ Fill all sections: Problem, Root Cause, Options, Recommendation, Builder Spec, A
 - If you can't fill in the Builder Spec completely, **fill in what you can and note your uncertainty.** A plan-reviewer will verify and improve. A roughly-right spec that a plan-reviewer can correct is more valuable than no spec at all.
 - Label `swarm-discovered` for bugs/improvements, `swarm-architectural`
   for design decisions that need human input.
-- After creating the issue, **add the pipeline label:**
-  ```bash
-  gh issue edit <number> --add-label "needs-plan-review"
+- After creating the issue, **add the pipeline label** (verified apply — see `/label-apply-verified`):
+  ```
+  /label-apply-verified issue <number> "needs-plan-review"
   ```
   This is the entry point for the verification pipeline. Without it, the
   issue is invisible to accuracy-scouts, research-verifiers, and plan-reviewers.

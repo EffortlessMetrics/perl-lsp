@@ -18,7 +18,11 @@ gh pr checkout <number>
 # ... make improvements, commit ...
 git push
 gh pr review <number> --approve --body "Deep review: <what you improved>. Logic verified, low regression risk."
-gh pr edit <number> --add-label "deep-reviewed"
+```
+```
+/label-apply-verified pr <number> "deep-reviewed"
+```
+```bash
 gh pr edit <number> --remove-label "needs-deep-review"
 ```
 

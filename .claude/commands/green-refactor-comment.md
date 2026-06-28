@@ -14,9 +14,9 @@ Commit refactoring, push, set sign-off label, comment on PR.
    git push
    ```
 
-2. Set sign-off label:
-   ```bash
-   gh pr edit <number> --add-label "green-refactor-reviewed"
+2. Set sign-off label (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified pr <number> "green-refactor-reviewed"
    ```
 
 3. Comment on PR:

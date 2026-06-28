@@ -38,7 +38,7 @@ Post your architectural alignment findings and set the sign-off label.
    )"
    ```
 
-2. Set sign-off label:
-   ```bash
-   gh issue edit <number> --add-label "architecture-reviewed"
+2. Set sign-off label (verified apply — see `/label-apply-verified`):
+   ```
+   /label-apply-verified issue <number> "architecture-reviewed"
    ```

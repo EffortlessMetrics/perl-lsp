@@ -49,10 +49,12 @@ gh pr checkout <number>
 git push
 ```
 
-After pushing improvements, set sign-off and route to deep review:
+After pushing improvements, set sign-off and route to deep review (verified apply for each label — see `/label-apply-verified`):
+```
+/label-apply-verified pr <number> "review-reviewed"
+/label-apply-verified pr <number> "needs-deep-review"
+```
 ```bash
-gh pr edit <number> --add-label "review-reviewed"
-gh pr edit <number> --add-label "needs-deep-review"
 gh pr comment <number> --body "Standards review complete. Improved: <list of changes>. Deep reviewer: focus on <areas of concern>."
 ```
 
@@ -72,9 +74,11 @@ When you find substantive blocking issues that you cannot mechanically fix forwa
 - Cross-PR contamination in source/test files (not just `.hermes/`)
 - Banned production patterns the builder must address
 
-Apply ONLY the routing label, NOT the sign-off:
+Apply ONLY the routing label, NOT the sign-off (verified apply — see `/label-apply-verified`):
+```
+/label-apply-verified pr <number> "needs-builder-fix"
+```
 ```bash
-gh pr edit <number> --add-label "needs-builder-fix"
 gh pr comment <number> --body "Standards review: NEEDS BUILDER — <specific blockers>.
 
 Blockers:

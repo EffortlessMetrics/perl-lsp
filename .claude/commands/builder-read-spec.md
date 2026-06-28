@@ -27,13 +27,16 @@ Read the issue and figure out what to build. Be proactive and fix forward.
    - No `builder-ready` label AND no plan-review comments? → **Route to plan-reviewer first** unless the task is obviously simple (bug fix with clear repro, test addition, doc change, one-file tweak).
 
 4. If routing to plan-reviewer:
-   - Add `needs-plan-review` label: `gh issue edit <number> --add-label needs-plan-review`
+   - Add `needs-plan-review` label (verified apply — see `/label-apply-verified`): `/label-apply-verified issue <number> needs-plan-review`
    - Report back: "Recommend plan-reviewer for #NNN"
    - STOP — let the pipeline do its job
 
-5. If proceeding to build, claim the issue immediately to prevent double-assignment:
+5. If proceeding to build, claim the issue immediately to prevent double-assignment. Apply `in-build` with verification (see `/label-apply-verified`), then drop `builder-ready`:
+   ```
+   /label-apply-verified issue <number> "in-build"
+   ```
    ```bash
-   gh issue edit <number> --add-label "in-build" --remove-label "builder-ready"
+   gh issue edit <number> --remove-label "builder-ready"
    ```
    The `in-build` label tells the orchestrator this issue is taken. The `--remove-label "builder-ready"` removes it from the builder queue. (`--remove-label` is a no-op if the label is absent, so this is always safe.)
 
@@ -52,9 +55,12 @@ Read the issue and figure out what to build. Be proactive and fix forward.
 
 7. If you get stuck mid-implementation on an architectural question:
    - Post your **specific questions** as a comment on the GitHub issue
-   - Remove `in-build` and add `needs-plan-review` so the orchestrator sees a clean state:
+   - Remove `in-build` and add `needs-plan-review` so the orchestrator sees a clean state (verified apply for the add — see `/label-apply-verified`):
      ```bash
-     gh issue edit <number> --remove-label "in-build" --add-label "needs-plan-review"
+     gh issue edit <number> --remove-label "in-build"
+     ```
+     ```
+     /label-apply-verified issue <number> "needs-plan-review"
      ```
    - Report back: "Recommend plan-reviewer for #NNN — questions posted on issue"
 

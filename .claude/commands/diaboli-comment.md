@@ -36,10 +36,10 @@ this to decide whether to invest sonnet-grade time.
    )"
    ```
 
-3. Add the label:
+3. Add the label (verified apply — see `/label-apply-verified`):
 
-   ```bash
-   gh issue edit <number> --add-label "diaboli-reviewed"
+   ```
+   /label-apply-verified issue <number> "diaboli-reviewed"
    ```
 
 ## Verdicts
