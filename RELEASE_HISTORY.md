@@ -14,6 +14,7 @@ Tag commit timestamps may differ from release dates.
 
 | Version | Tag | GitHub Release | Released | Tag commit | Compare | Assets | crates.io | VS Code Marketplace | Notes file |
 |---------|-----|----------------|----------|------------|---------|--------|-----------|---------------------|------------|
+| [0.17.0] | `v0.17.0` | pending | pending | `pending` | [v0.16.0...v0.17.0] | pending | pending | pending | [v0.17.0][n-0.17.0] |
 | [0.16.0] | `v0.16.0` | pending | pending | `pending` | [v0.15.2...v0.16.0] | pending | pending | pending | [v0.16.0][n-0.16.0] |
 | [0.15.2] | `v0.15.2` | pending | 2026-05-26 | `746edcb7` | [v0.15.1...v0.15.2] | pending | pending | pending | [v0.15.2][n-0.15.2] |
 | [0.15.1] | `v0.15.1` | pending | 2026-05-26 | `15cbe7e6` | [v0.15.0...v0.15.1] | pending | pending | pending | [v0.15.1][n-0.15.1] |
@@ -64,6 +65,7 @@ Tag commit timestamps may differ from release dates.
 ## Links
 
 <!-- Notes files -->
+[n-0.17.0]: docs/releases/v0.17.0.md
 [n-0.16.0]: docs/releases/v0.16.0.md
 [n-0.15.2]: docs/releases/v0.15.2.md
 [n-0.15.1]: docs/releases/v0.15.1.md
@@ -87,6 +89,7 @@ Tag commit timestamps may differ from release dates.
 [n-0.8.3]: docs/releases/v0.8.3.md
 
 <!-- Version links (to notes files) -->
+[0.17.0]: docs/releases/v0.17.0.md
 [0.16.0]: docs/releases/v0.16.0.md
 [0.15.2]: docs/releases/v0.15.2.md
 [0.15.1]: docs/releases/v0.15.1.md
@@ -129,6 +132,7 @@ Tag commit timestamps may differ from release dates.
 [gh-0.8.3]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.8.3
 
 <!-- Compare ranges -->
+[v0.16.0...v0.17.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.16.0...v0.17.0
 [v0.15.2...v0.16.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.15.2...v0.16.0
 [v0.15.1...v0.15.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.15.1...v0.15.2
 [v0.15.0...v0.15.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.15.0...v0.15.1
