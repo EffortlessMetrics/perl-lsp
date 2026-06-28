@@ -15,10 +15,17 @@ use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 use std::{fs::File, io::Read};
 
+mod metadata_dependencies;
 mod native_build_hints;
 pub mod perl_oracle_env;
 pub mod toolchain_profile;
 
+pub use metadata_dependencies::{
+    DeclaredDependency, DeclaredDependencySource, detect_declared_dependencies,
+    extract_build_pl_requirements, extract_cpanfile_requirements, extract_dist_ini_requirements,
+    extract_makefile_pl_requirements, extract_meta_json_requirements,
+    extract_meta_yml_requirements,
+};
 pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
 pub use perl_lsp_perltidy::FormatterMode;
 #[cfg(not(target_arch = "wasm32"))]
@@ -596,6 +603,12 @@ pub struct WorkspaceConfig {
     /// Perl module search paths.
     pub native_build_hints: NativeBuildHints,
 
+    /// Declared dependency facts derived from workspace-root project metadata.
+    ///
+    /// These facts are advisory only. They do not mutate module search paths or
+    /// imply that a dependency is installed/indexed.
+    pub declared_dependencies: Vec<DeclaredDependency>,
+
     /// Resolution timeout in milliseconds
     /// Default: 50ms
     pub resolution_timeout_ms: u64,
@@ -618,6 +631,7 @@ impl Default for WorkspaceConfig {
             perl_path: None,
             perl_args: Vec::new(),
             native_build_hints: NativeBuildHints::default(),
+            declared_dependencies: Vec::new(),
             resolution_timeout_ms: 50,
             use_perl5lib: true,
             perl5lib_precedence: Perl5LibPrecedence::Prepend,
@@ -730,6 +744,14 @@ impl WorkspaceConfig {
     /// module-resolution include paths.
     pub fn refresh_native_build_hints(&mut self, workspace_root: &Path) {
         self.native_build_hints = detect_native_build_hints(workspace_root);
+    }
+
+    /// Refresh declared dependency facts from the selected workspace root.
+    ///
+    /// This is a workspace-initialization cache step only; it does not mutate
+    /// module-resolution include paths.
+    pub fn refresh_declared_dependencies(&mut self, workspace_root: &Path) {
+        self.declared_dependencies = detect_declared_dependencies(workspace_root);
     }
 
     /// Update workspace configuration from LSP settings.
