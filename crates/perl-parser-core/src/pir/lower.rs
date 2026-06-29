@@ -9,9 +9,9 @@
 use std::collections::HashMap;
 
 use crate::hir::{
-    AccessMode, AssignMode, BranchShell, CallForm, DeclStorageClass, DynamicBoundaryKind,
-    HIR_BODY_MODEL_VERSION, HirBody, HirBodyId, HirExpr, HirExprId, HirFile, HirItem, HirKind,
-    HirScopeId, HirStmt, LoopShell, Sigil, UnaryMode, VariableKind,
+    AccessMode, AssignMode, BranchShell, CallForm, ControlTransferKind, DeclStorageClass,
+    DynamicBoundaryKind, HIR_BODY_MODEL_VERSION, HirBody, HirBodyId, HirExpr, HirExprId, HirFile,
+    HirItem, HirKind, HirScopeId, HirStmt, LoopShell, Sigil, UnaryMode, VariableKind,
 };
 
 use super::model::{
@@ -95,6 +95,16 @@ impl Lowerer {
             }
             HirKind::BranchShell(branch) => self.lower_branch(item, branch),
             HirKind::LoopShell(loop_shell) => self.lower_loop(item, loop_shell),
+            // Only the `return` verb lowers to PirOperation::Return. The other
+            // ControlTransferKind verbs (next/last/redo/goto) are loop-control /
+            // goto transfers, not subroutine returns; they fall through to the
+            // `other` arm below and stay visible in unsupported_construct_counts
+            // under the canonical `hir_kind_name` key — never mislabeled as a
+            // return or dropped. Future #[non_exhaustive] verbs default to the
+            // same safe, receipt-visible fallback.
+            HirKind::ControlTransfer(transfer) if transfer.kind == ControlTransferKind::Return => {
+                self.lower_return(item);
+            }
             // Construct families PIR v0 does not yet lower. They remain visible
             // in the receipt instead of being silently dropped.
             other => {
@@ -240,6 +250,39 @@ impl Lowerer {
         self.push_node(item, anchor, operation, PirContext::Void, None);
     }
 
+    fn lower_return(&mut self, item: &HirItem) {
+        // Source anchor: explicit, backed by the ControlTransfer HIR item's
+        // range.
+        let anchor = PirSourceAnchor::explicit(item.range, item.id);
+
+        // `PirOperation::Return` is fieldless in PIR v0: the returned expression
+        // (`return $x`) is not lowered to a separate PIR node, mirroring the
+        // deferred condition lowering in lower_branch/lower_loop. The HIR
+        // `has_value`/`label` fields are intentionally not consumed yet;
+        // returned-value lowering is a named follow-up (see PLSP-SPEC-0025
+        // §Control-Flow Model).
+        let operation = PirOperation::Return;
+
+        // Void context: a `return` statement yields no value at the statement
+        // level — it transfers control out of the enclosing subroutine. The
+        // returned expression carries its own context, not the Return node's.
+        let id = self.push_node(item, anchor, operation, PirContext::Void, None);
+
+        // A `return` is terminal: control leaves the enclosing subroutine and
+        // does NOT fall through to the next statement. Record the Return exit
+        // edge (mirroring the DynamicExit shape — `to: None` leaves the modeled
+        // graph) and clear this scope's fallthrough source so later items in the
+        // same scope are not linked by a spurious `Fallthrough` edge *from* the
+        // return. This matters in two cases the conservative push_node linking
+        // would otherwise get wrong: (1) `return foo();`, where HIR emits the
+        // ControlTransfer item *before* the returned `CallExpr` sibling, and
+        // (2) any statement following a `return` in the same scope. Modeling the
+        // returned expression as a reachable operand (rather than an unlinked
+        // sibling) is part of the deferred returned-expression lowering.
+        self.edges.push(PirEdge { from: id, to: None, kind: PirEdgeKind::Return });
+        self.last_in_scope.remove(&item.scope_context);
+    }
+
     fn push_node(
         &mut self,
         item: &HirItem,
@@ -376,11 +419,14 @@ fn hir_kind_name(kind: &HirKind) -> &'static str {
         HirKind::LiteralExpr(_) => "LiteralExpr",
         HirKind::BlockShell(_) => "BlockShell",
         // Control-flow variants: BranchShell lowered by #8196 (Branch op),
-        // LoopShell lowered by #8196 (Loop op); ControlTransfer and
-        // StatementModifierShell remain in unsupported_construct_counts.
-        // These arms are retained for completeness (hir_kind_name is also used
-        // by the BodyLowerer unsupported path) even though BranchShell and
-        // LoopShell will not reach the fallback from the Lowerer match above.
+        // LoopShell lowered by #8196 (Loop op), ControlTransfer::Return lowered
+        // by #8196 (Return op). Non-Return ControlTransfer verbs
+        // (next/last/redo/goto) and StatementModifierShell are not lowered and
+        // reach the `other =>` fallback above, which keys unsupported counts on
+        // hir_kind_name — so this "ControlTransfer" arm is the single source of
+        // that key (no duplicated literal). BranchShell/LoopShell/return do not
+        // reach this fallback; their arms are retained for completeness
+        // (hir_kind_name is also used by the BodyLowerer unsupported path).
         HirKind::BranchShell(_) => "BranchShell",
         HirKind::LoopShell(_) => "LoopShell",
         HirKind::ControlTransfer(_) => "ControlTransfer",
@@ -1133,9 +1179,22 @@ mod tests {
     }
 
     #[test]
-    fn control_transfer_counted_in_receipt() {
+    fn control_transfer_return_lowers_to_return_operation() {
+        // Since #8196, ControlTransferKind::Return lowers to PirOperation::Return.
         let graph = lower("sub f { return 1; }");
+        // The return is no longer an unsupported construct.
+        assert_eq!(graph.receipt.unsupported_construct_counts.get("ControlTransfer"), None);
+        // The Return operation must appear in operation_counts.
+        assert_eq!(graph.receipt.operation_counts.get("Return"), Some(&1));
+    }
+
+    #[test]
+    fn non_return_control_transfer_stays_unsupported() {
+        // `last`/`next`/`redo`/`goto` are not subroutine returns; they remain
+        // visible in unsupported_construct_counts rather than lowering to Return.
+        let graph = lower("while (1) { last; }");
         assert_eq!(graph.receipt.unsupported_construct_counts.get("ControlTransfer"), Some(&1));
+        assert_eq!(graph.receipt.operation_counts.get("Return"), None);
     }
 
     #[test]
@@ -1163,8 +1222,12 @@ $x = 1 if $y;
         // LoopShell now lowers to Loop (#8196) — not in unsupported.
         assert_eq!(graph.receipt.unsupported_construct_counts.get("LoopShell"), None);
         assert_eq!(graph.receipt.operation_counts.get("Loop"), Some(&1));
-        // Remaining control-flow families are still unsupported.
-        assert_eq!(graph.receipt.unsupported_construct_counts.get("ControlTransfer"), Some(&2));
+        // ControlTransferKind::Return now lowers to Return (#8196). The fixture
+        // has one `return` (in sub f) and one `last` (in the while loop): the
+        // return becomes a Return op, the last stays an unsupported transfer.
+        assert_eq!(graph.receipt.operation_counts.get("Return"), Some(&1));
+        assert_eq!(graph.receipt.unsupported_construct_counts.get("ControlTransfer"), Some(&1));
+        // StatementModifierShell is still unsupported.
         assert_eq!(
             graph.receipt.unsupported_construct_counts.get("StatementModifierShell"),
             Some(&1)
