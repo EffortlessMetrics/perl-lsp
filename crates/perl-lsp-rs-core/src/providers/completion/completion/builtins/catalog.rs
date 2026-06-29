@@ -232,6 +232,27 @@ pub fn all_names() -> impl Iterator<Item = &'static str> {
         "utf8::downgrade",
         "utf8::native_to_unicode",
         "utf8::unicode_to_native",
+        // Perl 5.36+ `use builtin` functions
+        // These are available via: use builtin 'funcname'; or as builtin::funcname()
+        // Perl 5.36: boolean + reference utilities
+        "true",
+        "false",
+        "is_bool",
+        "weaken",
+        "unweaken",
+        "is_weak",
+        "refaddr",
+        "reftype",
+        // Perl 5.38: math + string utilities
+        "ceil",
+        "floor",
+        "inf",
+        "nan",
+        "trim",
+        "indexed",
+        // Perl 5.40: module loading + lexical export
+        "load_module",
+        "export_lexically",
     ]
     .into_iter()
 }
