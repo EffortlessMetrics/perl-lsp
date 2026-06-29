@@ -126,6 +126,33 @@ fn entry_uri(entry: &serde_json::Value) -> Option<&str> {
     entry.get("uri").or_else(|| entry.get("targetUri")).and_then(serde_json::Value::as_str)
 }
 
+fn symbol_is_shared_from_base(symbol: &serde_json::Value) -> bool {
+    let is_shared = symbol.get("name").and_then(serde_json::Value::as_str) == Some("shared");
+    let from_base = symbol
+        .get("location")
+        .and_then(|location| location.get("uri"))
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|uri| uri.ends_with("Base.pm"));
+
+    is_shared && from_base
+}
+
+fn wait_for_shared_workspace_symbol(harness: &UxHarness) -> anyhow::Result<()> {
+    let symbols = harness.wait_for_workspace_symbols(
+        "shared",
+        Duration::from_secs(5),
+        Duration::from_millis(200),
+        |symbols| symbols.iter().any(symbol_is_shared_from_base),
+    )?;
+
+    anyhow::ensure!(
+        symbols.iter().any(symbol_is_shared_from_base),
+        "workspace index did not surface Base.pm::shared before rename: {symbols:?}"
+    );
+
+    Ok(())
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  PROVIDER 1: textDocument/references  (find-all-refs)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -239,6 +266,7 @@ fn scenario_21_rename_shared_in_base_pm() -> anyhow::Result<()> {
     let harness = create_harness()?;
     harness.open_file("lib/RealBaseline/Base.pm", BASE_PM)?;
     harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
+    wait_for_shared_workspace_symbol(&harness)?;
 
     // Line 4 of Base.pm: `sub shared {`  cursor at col 4 inside `shared`.
     let uri = harness.workspace.uri("lib/RealBaseline/Base.pm");
@@ -312,6 +340,7 @@ fn scenario_21_rename_shared_in_base_pm_hard_assert() -> anyhow::Result<()> {
     let harness = create_harness()?;
     harness.open_file("lib/RealBaseline/Base.pm", BASE_PM)?;
     harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
+    wait_for_shared_workspace_symbol(&harness)?;
 
     let uri = harness.workspace.uri("lib/RealBaseline/Base.pm");
     let resp = harness.client.request(

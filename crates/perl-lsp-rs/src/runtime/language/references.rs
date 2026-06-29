@@ -217,6 +217,40 @@ where
     out
 }
 
+fn should_skip_text_reference_match(
+    line: &str,
+    match_start: usize,
+    sigil: Option<char>,
+    include_declaration: bool,
+) -> bool {
+    if include_declaration {
+        return false;
+    }
+
+    let Some(sigil) = sigil else {
+        return false;
+    };
+
+    let symbol_start = line
+        .get(..match_start)
+        .and_then(|prefix| prefix.char_indices().next_back())
+        .and_then(|(idx, ch)| (ch == sigil).then_some(idx))
+        .unwrap_or(match_start);
+    let Some(prefix) = line.get(..symbol_start) else {
+        return false;
+    };
+
+    let statement_prefix =
+        prefix.rfind([';', '{', '}']).map(|idx| &prefix[idx + 1..]).unwrap_or(prefix);
+    if statement_prefix.contains('=') {
+        return false;
+    }
+
+    statement_prefix
+        .split(|ch: char| !ch.is_ascii_alphabetic() && ch != '_')
+        .any(|token| matches!(token, "my" | "our" | "state" | "local"))
+}
+
 impl LspServer {
     fn references_decision_trace_context(
         params: Option<&Value>,
@@ -536,6 +570,14 @@ impl LspServer {
                                                 let lines: Vec<&str> = doc_text.lines().collect();
                                                 for (line_num, line) in lines.iter().enumerate() {
                                                     for mat in search_regex.find_iter(line) {
+                                                        if should_skip_text_reference_match(
+                                                            line,
+                                                            mat.start(),
+                                                            symbol_key.sigil,
+                                                            include_declaration,
+                                                        ) {
+                                                            continue;
+                                                        }
                                                         // Convert byte offsets to UTF-16 columns for LSP compliance
                                                         let start_utf16 =
                                                             byte_to_utf16_col(line, mat.start());
@@ -1342,6 +1384,56 @@ mod tests {
         assert_eq!(classify_combined_tier(0, 4), ReferencesAnsweringTier::WorkspaceText);
         // Neither (degenerate empty call) → WorkspaceText
         assert_eq!(classify_combined_tier(0, 0), ReferencesAnsweringTier::WorkspaceText);
+        Ok(())
+    }
+
+    #[test]
+    fn should_skip_text_reference_match_omits_variable_declarations_when_requested()
+    -> Result<(), Box<dyn Error>> {
+        let line = "my $total = 1;";
+        let match_start = line.find("total").ok_or("missing total match")?;
+
+        assert!(
+            should_skip_text_reference_match(line, match_start, Some('$'), false),
+            "includeDeclaration=false must omit lexical declaration matches"
+        );
+        assert!(
+            !should_skip_text_reference_match(line, match_start, Some('$'), true),
+            "includeDeclaration=true must keep declaration matches"
+        );
+        assert!(
+            !should_skip_text_reference_match(line, match_start, None, false),
+            "subroutine/bareword text matches are not variable declarations"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn should_skip_text_reference_match_keeps_initializer_rhs_usages() -> Result<(), Box<dyn Error>>
+    {
+        let line = "my $other = $total;";
+        let match_start = line.find("total").ok_or("missing total match")?;
+
+        assert!(
+            !should_skip_text_reference_match(line, match_start, Some('$'), false),
+            "RHS usages inside a declaration statement are still references"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn should_skip_text_reference_match_omits_variable_list_declaration_targets()
+    -> Result<(), Box<dyn Error>> {
+        let line = "for my ($first, $total) {";
+        let match_start = line.find("total").ok_or("missing total match")?;
+
+        assert!(
+            should_skip_text_reference_match(line, match_start, Some('$'), false),
+            "declaration targets inside variable lists must be omitted"
+        );
+
         Ok(())
     }
 
