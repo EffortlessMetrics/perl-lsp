@@ -1508,3 +1508,46 @@ reason = "PR #3142 (issue #3141) adds the release-archive DAP guard. RIPR 0.9.x 
 created = "2026-06-28"
 review_after = "2026-07-28"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# utf16_column line_start > text.len() overflow guard: private-field-write-to-
+# predicate activation untraceable by ripr 0.9.x (ripr#1428 class).
+#
+# PR #3042 (issue #2484) adds `if line_start > self.text.len()` at line 232 in
+# the private `utf16_column` method of `LineIndex`. The guard protects against
+# corrupt internal state where `line_starts[i]` exceeds the text length —
+# reachable only by mutating the private `line_starts` field directly (not via
+# the public API, which normalizes offsets before any lookup).
+#
+# RIPR seam f197bc96baa7df76 is classified `activation_unknown` / `infect: weak`
+# because the discriminating input (`line_start > self.text.len()`) is only
+# reachable by writing to the private `line_starts` field
+# (`index.line_starts = vec![0, 100]`). RIPR's static tracer cannot follow a
+# private-field write to the predicate boundary — the ripr#1428 blind spot.
+#
+# Call-observation discriminator test was attempted first per gap-closure
+# playbook: `utf16_column_boundary_discriminator` uses a named variable
+# `line_start_past_end: usize = 100` with `debug_assert!(line_start_past_end >
+# text.len())` to make the inequality visible in source. The test passes but the
+# seam persisted in the subsequent ripr run, confirming the ripr#1428 class.
+#
+# Behavioral coverage is confirmed via green Codecov / Patch 95 (line 232 IS
+# instrumented-executed per LLVM coverage) and two --lib unit tests:
+#   utf16_column_clamps_line_start_past_text_end — line_start=100 > text.len()=3
+#   utf16_column_boundary_discriminator          — explicit named-variable form
+#
+# Suppression is narrow: single production file, one PR (#3042), one seam ID
+# (f197bc96baa7df76). Remove when EffortlessMetrics/ripr#1428 (private-field
+# mutation tracing) is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-line-index-utf16-column-overflow-guard"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-position-tracking/src/line_index.rs"]
+classification = ["activation_unknown"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "PR #3042 (issue #2484) hardens utf16_column with `if line_start > self.text.len()` at line 232. RIPR seam f197bc96baa7df76 is activation_unknown / infect:weak because the predicate's discriminating input is only reachable via private-field mutation (`index.line_starts = vec![0, 100]`), which ripr#1428 cannot trace from field write to predicate boundary. Call-observation discriminator test was tried first (utf16_column_boundary_discriminator: named variable + debug_assert!(line_start_past_end > text.len())); seam persisted in post-discriminator ripr run, confirming the ripr#1428 class. Behavioral coverage is confirmed: Codecov / Patch 95 is GREEN (line 232 is instrumented-executed), and two --lib unit tests exercise the truthy branch (utf16_column_clamps_line_start_past_text_end and utf16_column_boundary_discriminator). Suppression is narrow: single production file, one PR (#3042), seam ID f197bc96baa7df76. Remove when ripr#1428 (private-field-mutation tracing) is fixed upstream."
+created = "2026-06-28"
+review_after = "2026-09-28"
+expires = "2026-12-31"
