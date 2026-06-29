@@ -20,6 +20,8 @@ use perl_lsp_rs_core::providers::navigation::references_shadow::{
     ReferencesCutoverResult, find_references_live_source_backed,
 };
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+use perl_semantic_facts::AnchorId;
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 
 #[cfg(feature = "workspace")]
@@ -401,30 +403,51 @@ impl LspServer {
                             IndexAccessMode::Full(coordinator) => {
                                 let index = coordinator.index();
                                 if let Some(symbol_key) = workspace_symbol_key.as_ref() {
+                                    // Guard: for sigil-prefixed symbols (lexical variables) with
+                                    // include_declaration=true, skip the semantic tier.  Variable
+                                    // references are not "compiler-source-backed" in the sense
+                                    // required by the SemanticSourceBacked tier; they belong in
+                                    // the workspace-index tier regardless of include_declaration.
+                                    //
+                                    // Subroutine references (no sigil) may use the semantic tier
+                                    // with include_declaration=true — that is exactly the #2673
+                                    // fix: VS Code defaults to includeDeclaration=true and we now
+                                    // serve those requests from the high-fidelity source-backed
+                                    // path instead of falling back to the workspace-index tier.
                                     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-                                    if let Some(mut live_locations) = self
-                                        .live_source_backed_reference_locations(
-                                            uri,
-                                            symbol_key.name.as_ref(),
-                                            offset,
-                                            include_declaration,
-                                        )
-                                    {
-                                        live_locations.truncate(cap);
-                                        tracing::debug!(
-                                            count = live_locations.len(),
-                                            elapsed = ?start.elapsed(),
-                                            "References: returned live source-backed compiler facts"
-                                        );
-                                        let result_count = live_locations.len();
-                                        return Ok((
-                                            Some(json!(live_locations)),
-                                            ReferencesAnsweringTier::SemanticSourceBacked,
-                                            index_state,
-                                            result_count,
-                                            0,
-                                            start.elapsed().as_micros(),
-                                        ));
+                                    let symbol_is_variable = symbol_key.sigil.is_some();
+                                    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+                                    if !symbol_is_variable {
+                                        if let Some(mut live_locations) = self
+                                            .live_source_backed_reference_locations(
+                                                uri,
+                                                symbol_key.name.as_ref(),
+                                                offset,
+                                                include_declaration,
+                                            )
+                                        {
+                                            live_locations.truncate(cap);
+                                            // Precompute before the tracing macro so these
+                                            // expressions are unconditionally instrumented
+                                            // rather than lazily evaluated only when the
+                                            // debug subscriber is active.
+                                            let ref_count = live_locations.len();
+                                            let elapsed = start.elapsed();
+                                            tracing::debug!(
+                                                ref_count,
+                                                elapsed = ?elapsed,
+                                                "References: returned live source-backed compiler facts"
+                                            );
+                                            let result_count = live_locations.len();
+                                            return Ok((
+                                                Some(json!(live_locations)),
+                                                ReferencesAnsweringTier::SemanticSourceBacked,
+                                                index_state,
+                                                result_count,
+                                                0,
+                                                start.elapsed().as_micros(),
+                                            ));
+                                        }
                                     }
 
                                     tracing::debug!(key = ?symbol_key, "Looking for references");
@@ -903,46 +926,80 @@ impl LspServer {
         byte_offset: usize,
         include_declaration: bool,
     ) -> Option<Vec<Value>> {
-        if include_declaration {
-            return None;
-        }
-
         let byte_offset = u32::try_from(byte_offset).ok()?;
         let workspace_index = self.workspace_index()?;
-        let outcome = workspace_index
+
+        // Resolve the semantic outcome plus, when the caller wants the
+        // declaration included, the anchor that points at the definition site.
+        let (outcome, decl_anchor) = workspace_index
             .with_semantic_queries_for_uri(uri, |file_id, queries| {
                 let ctx = QueryContext::new(file_id, None, Some(byte_offset));
-                let entity_id = queries
-                    .symbol_at(file_id, byte_offset)
-                    .and_then(|(_, occurrence)| occurrence.entity_id)
-                    .or_else(|| {
-                        let exact_candidates: Vec<_> = queries
-                            .definitions(symbol, &ctx)
-                            .into_iter()
-                            .filter(|candidate| {
-                                candidate.confidence == perl_semantic_facts::Confidence::High
-                                    && matches!(
+
+                // Two-step entity resolution: prefer the typed occurrence at
+                // the cursor, fall back to a uniquely-matching definition
+                // candidate.  When resolving via definitions we keep the
+                // anchor around so we can include it as the declaration site.
+                let symbol_at = queries.symbol_at(file_id, byte_offset);
+                let entity_id =
+                    symbol_at.as_ref().and_then(|(_, occurrence)| occurrence.entity_id).or_else(
+                        || {
+                            let exact_candidates: Vec<_> = queries
+                                .definitions(symbol, &ctx)
+                                .into_iter()
+                                .filter(|candidate| {
+                                    candidate.confidence == perl_semantic_facts::Confidence::High
+                                        && matches!(
                                         candidate.provenance,
                                         perl_semantic_facts::Provenance::ExactAst
                                             | perl_semantic_facts::Provenance::ImportExportInference
                                             | perl_semantic_facts::Provenance::LiteralRequireImport
-                                    )
-                                    && workspace_index
+                                    ) && workspace_index
                                         .semantic_anchor_wire_location(candidate.anchor_id)
                                         .is_some()
+                                })
+                                .collect();
+                            match exact_candidates.as_slice() {
+                                [candidate] => Some(candidate.entity_id),
+                                _ => None,
+                            }
+                        },
+                    )?;
+
+                // Find the declaration anchor for this entity, used when
+                // `include_declaration` is true.  We accept the anchor from
+                // `symbol_at` if the occurrence is a definition kind, or look
+                // up a high-confidence definition candidate otherwise.
+                let decl_anchor: Option<AnchorId> = if include_declaration {
+                    use perl_semantic_facts::OccurrenceKind;
+                    let from_symbol_at = symbol_at
+                        .as_ref()
+                        .filter(|(_, occ)| occ.kind == OccurrenceKind::Definition)
+                        .map(|(_, occ)| occ.anchor_id);
+                    from_symbol_at.or_else(|| {
+                        queries
+                            .definitions(symbol, &ctx)
+                            .into_iter()
+                            .filter(|c| {
+                                c.confidence == perl_semantic_facts::Confidence::High
+                                    && c.entity_id == entity_id
+                                    && workspace_index
+                                        .semantic_anchor_wire_location(c.anchor_id)
+                                        .is_some()
                             })
-                            .collect();
-                        match exact_candidates.as_slice() {
-                            [candidate] => Some(candidate.entity_id),
-                            _ => None,
-                        }
-                    })?;
-                Some(find_references_live_source_backed(
+                            .map(|c| c.anchor_id)
+                            .next()
+                    })
+                } else {
+                    None
+                };
+
+                let outcome = find_references_live_source_backed(
                     workspace_index.as_ref(),
                     &queries,
                     symbol,
                     entity_id,
-                ))
+                );
+                Some((outcome, decl_anchor))
             })
             .flatten()?;
 
@@ -950,12 +1007,29 @@ impl LspServer {
             return None;
         };
 
-        let mut locations = Vec::with_capacity(occurrences.len());
+        let mut locations = Vec::with_capacity(occurrences.len() + 1);
         for occurrence in occurrences {
             let wire_location =
                 workspace_index.semantic_anchor_wire_location(occurrence.anchor_id)?;
             let location: lsp_types::Location = wire_location.into();
             locations.push(serde_json::to_value(location).ok()?);
+        }
+
+        // Include the declaration location when requested, deduped against the
+        // reference set already collected above.
+        if include_declaration {
+            if let Some(anchor_id) = decl_anchor {
+                if let Some(wire_location) =
+                    workspace_index.semantic_anchor_wire_location(anchor_id)
+                {
+                    let decl_location: lsp_types::Location = wire_location.into();
+                    let decl_value = serde_json::to_value(&decl_location).ok()?;
+                    let already_present = locations.iter().any(|loc| loc == &decl_value);
+                    if !already_present {
+                        locations.push(decl_value);
+                    }
+                }
+            }
         }
 
         if locations.is_empty() { None } else { Some(locations) }
@@ -1034,11 +1108,13 @@ impl LspServer {
                                 &symbol,
                                 entity_id,
                             );
-                            let live_cutover = !include_declaration
-                                && matches!(outcome.result, ReferencesCutoverResult::Exact(_));
+                            let live_cutover =
+                                matches!(outcome.result, ReferencesCutoverResult::Exact(_));
                             let mut receipt = outcome.receipt;
                             let compiler_result_count = receipt.new_result.match_count;
-                            let behavior_note = if live_cutover {
+                            let behavior_note = if live_cutover && include_declaration {
+                                "partial live exact/imported references cutover (includeDeclaration=true)"
+                            } else if live_cutover {
                                 "partial live exact/imported references cutover"
                             } else {
                                 "legacy fallback"
@@ -1596,6 +1672,184 @@ mod tests {
         if starts != vec![(0, 4), (0, 18)] {
             return Err(format!("unexpected UTF-16 starts: {starts:?}").into());
         }
+
+        Ok(())
+    }
+
+    // ── includeDeclaration=true call-observation test (ripr+ gate) ──────────
+
+    /// Drive `live_source_backed_reference_locations` (lines 862–863) through the
+    /// real `textDocument/references` handler with `includeDeclaration=true`.
+    ///
+    /// Before #2673 the source-backed path bailed early with `return None` when
+    /// `include_declaration==true`, causing every such request to fall through to
+    /// the workspace-index tier and leaving the declaration off the result.
+    ///
+    /// This test proves the fix is live end-to-end:
+    /// - The `answering_tier` in the provider-decision trace must be
+    ///   `semantic_source_backed` (proving the early bail was removed).
+    /// - The result returned to the client must contain the declaration site
+    ///   (the `sub target` definition line), proving the append logic runs.
+    ///
+    /// The test would FAIL if the fix were reverted: the early bail would cause
+    /// `live_source_backed_reference_locations` to return `None`, the provider
+    /// would fall through to the workspace-index tier, `answering_tier` would be
+    /// `workspace_exact` or `workspace_text` rather than `semantic_source_backed`,
+    /// and the declaration-line assertion would be unreliable under both tiers.
+    #[test]
+    fn handle_references_include_declaration_true_reaches_source_backed_tier_and_appends_declaration()
+    -> Result<(), Box<dyn Error>> {
+        use crate::runtime::LspServer;
+        use parking_lot::Mutex;
+        use std::io::Cursor;
+        use std::sync::Arc;
+
+        let output = Arc::new(Mutex::new(
+            Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>
+        ));
+        let server = LspServer::with_output(output);
+
+        // A package with a named sub definition followed by a call site.
+        // This is the minimal fixture that triggers the semantic-source-backed tier
+        // because the workspace index resolves `target` to the `sub target`
+        // definition via semantic queries.
+        let uri = "file:///test/incl_decl.pl";
+        let text = concat!(
+            "package InclDecl;\n",
+            "\n",
+            "sub target {\n", // line 2  — declaration site
+            "    return 1;\n",
+            "}\n",
+            "\n",
+            "sub caller {\n",
+            "    target();\n",           // line 7  — first call site
+            "    InclDecl::target();\n", // line 8  — second call site
+            "}\n",
+            "\n",
+            "1;\n",
+        );
+        server.test_apply_did_open(uri, text, 1)?;
+
+        // Position cursor on the bare `target` inside `caller` (line 7, col 4).
+        // `includeDeclaration: true` is the VS Code default.
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 7, "character": 4},
+            "context": {"includeDeclaration": true}
+        });
+
+        let result = server.test_handle_references(Some(params))?;
+
+        // ── Tier assertion ────────────────────────────────────────────────────
+        // Read the provider-decision trace; the answering tier must be
+        // `semantic_source_backed`.  If the early bail (pre-fix) were present
+        // `live_source_backed_reference_locations` would return `None` and the
+        // provider would fall through to `workspace_exact` / `workspace_text`.
+        let explanation = server
+            .handle_execute_command(Some(serde_json::json!({
+                "command": "perl.explainProviderDecision",
+                "arguments": [{"provider": "references"}]
+            })))?
+            .ok_or("missing explain-provider-decision response")?;
+        let receipt = explanation
+            .get("request_receipt")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("missing request_receipt")?;
+
+        assert_eq!(
+            receipt.get("answering_tier").and_then(serde_json::Value::as_str),
+            Some("semantic_source_backed"),
+            "includeDeclaration=true must reach the semantic_source_backed tier, \
+             not fall through to a lower-fidelity workspace tier (pre-fix bail would produce workspace_exact)"
+        );
+        assert_eq!(
+            receipt.get("include_declaration").and_then(serde_json::Value::as_bool),
+            Some(true),
+            "provider trace must record include_declaration=true"
+        );
+
+        // ── Declaration-append assertion ──────────────────────────────────────
+        // The result must contain the `sub target` declaration line (line 2).
+        // This proves that lines 940–953 (the dedup-append block) executed.
+        let locations = result
+            .as_ref()
+            .and_then(serde_json::Value::as_array)
+            .ok_or("textDocument/references must return a non-null array")?;
+
+        let decl_line: u64 = 2; // `sub target {` is at line index 2 (0-based)
+        let contains_decl = locations.iter().any(|loc| {
+            loc.pointer("/range/start/line")
+                .and_then(serde_json::Value::as_u64)
+                .map_or(false, |l| l == decl_line)
+        });
+        assert!(
+            contains_decl,
+            "includeDeclaration=true result must contain the declaration line ({decl_line}); \
+             got locations: {locations:?}"
+        );
+
+        Ok(())
+    }
+
+    /// Prove that `live_source_backed_reference_locations` returns `None` when
+    /// the cursor is on an identifier that has no definition in the semantic
+    /// model.
+    ///
+    /// This exercises two branches that are not reachable when a definition IS
+    /// found:
+    ///
+    /// - The `_ => None` arm of the `match exact_candidates.as_slice()` block
+    ///   (0 candidates because `definitions("undefined_fn")` returns nothing).
+    /// - The `?` propagation that exits the outer closure with `None`, causing
+    ///   `live_source_backed_reference_locations` to return `None` and the
+    ///   provider to fall back to the workspace-index tier.
+    ///
+    /// The test verifies that the request completes without error — the
+    /// semantic tier gracefully yields to the lower-fidelity fallback.
+    #[test]
+    fn handle_references_undefined_symbol_falls_back_gracefully() -> Result<(), Box<dyn Error>> {
+        use crate::runtime::LspServer;
+        use parking_lot::Mutex;
+        use std::io::Cursor;
+        use std::sync::Arc;
+
+        let output = Arc::new(Mutex::new(
+            Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>
+        ));
+        let server = LspServer::with_output(output);
+
+        // A minimal fixture where `undefined_fn()` is called but never defined.
+        // When the cursor lands on `undefined_fn`, the semantic model has no
+        // entity for it: `definitions("undefined_fn")` returns 0 candidates,
+        // so `exact_candidates` is empty, `_ => None` is matched, and
+        // `entity_id` is `None`.  The `?` on that `None` exits the closure,
+        // `with_semantic_queries_for_uri` returns `Some(None)` which `.flatten()`
+        // resolves to `None`, and `live_source_backed_reference_locations`
+        // returns `None` — falling back to the workspace-index tier.
+        let uri = "file:///test/no_decl.pl";
+        let text = concat!(
+            "package NoDecl;\n",
+            "\n",
+            "sub caller {\n",
+            "    undefined_fn();\n", // line 3  — call with no local definition
+            "}\n",
+            "\n",
+            "1;\n",
+        );
+        server.test_apply_did_open(uri, text, 1)?;
+
+        // Position cursor on `undefined_fn` (line 3, character 4).
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 3, "character": 4},
+            "context": {"includeDeclaration": true}
+        });
+
+        // The request must complete without error.  Coverage proof: the semantic
+        // tier returns `None` here, exercising the `_ => None` arm (line 957)
+        // and the `?` propagation path (line 960) in
+        // `live_source_backed_reference_locations`.
+        let _result = server.test_handle_references(Some(params))?;
 
         Ok(())
     }

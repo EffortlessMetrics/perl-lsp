@@ -1551,3 +1551,42 @@ reason = "PR #3042 (issue #2484) hardens utf16_column with `if line_start > self
 created = "2026-06-28"
 review_after = "2026-09-28"
 expires = "2026-12-31"
+
+# =============================================================================
+# References includeDeclaration=true quality tests (PR #3050 / #2673):
+# ripr#1428-class false-positives in newly added test functions.
+#
+# PR #3050 adds two test functions to the existing
+# crates/perl-lsp-rs/src/runtime/language/navigation_runtime_quality_tests.rs
+# #[cfg(test)] module:
+#   - references_source_backed_tier_used_when_include_declaration_true
+#   - references_include_declaration_true_adds_declaration_to_source_backed_result
+#
+# Both functions use `?` operators to propagate errors from `test_handle_references`
+# calls.  ripr 0.9.x diff-scoped analysis flags these error-path seams (lines
+# 481 and 487) as new production exposure because the functions are newly added
+# to the diff.
+#
+# These are ripr#1428-class false-positives: the `?` operators are in test
+# helper function bodies, not in production code.  The test functions exercise
+# the #2673 fix: serving includeDeclaration=true requests from the semantic
+# source-backed tier rather than falling through to the workspace-index tier.
+# The production seam (live_source_backed_reference_locations, references.rs
+# ~line 862) IS covered by strong oracle assertions in both test functions.
+#
+# This is the same class as ripr-suppress-multi-root-workspace-symbol-test-surface
+# (multi_root_workspace_tests.rs: error_path seams in test setup code) and
+# ripr-suppress-seam-proof-tests (newly added test files). Remove when
+# ripr#1428 is fixed upstream.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-references-include-declaration-quality-tests"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs/src/runtime/language/navigation_runtime_quality_tests.rs"]
+classification = ["error_path", "reachable_unrevealed"]
+owner = "proof-lane"
+issue = "#2673"
+reason = "PR #3050 adds two test functions (references_source_backed_tier_used_when_include_declaration_true and references_include_declaration_true_adds_declaration_to_source_backed_result) to the navigation_runtime_quality_tests.rs #[cfg(test)] module. Both functions use ? operators (lines 481 and 487) to propagate errors from test_handle_references calls. ripr 0.9.x diff-scoped analysis flags these as new production seams (error_path / reachable_unrevealed). These are ripr#1428-class false-positives: the ? operators are inside newly added test functions, not production code. The production fix (#2673: live_source_backed_reference_locations serves includeDeclaration=true requests) is covered by strong oracle assertions in both test functions (tier verification, location count comparison, declaration-line presence). Same class as ripr-suppress-multi-root-workspace-symbol-test-surface (error_path seams in test setup code). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-25"
+review_after = "2026-09-25"
+expires = "2026-12-31"
