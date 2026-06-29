@@ -13,6 +13,8 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 #[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
+#[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
 use perl_lsp_rs_core::providers::completion::collect_module_names_from_roots_with_cache;
@@ -1074,7 +1076,7 @@ impl LspServer {
             // Without this, an inlineCompletion request while the index is in Building
             // state routes to Partial and fewer workspace module completions are returned.
             // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
-            self.wait_for_index_ready_if_building();
+            let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
             let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
                 return;
             };

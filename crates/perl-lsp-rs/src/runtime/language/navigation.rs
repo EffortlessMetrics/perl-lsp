@@ -18,6 +18,8 @@ use perl_lsp_rs_core::providers::navigation::definition_shadow::{
 use perl_workspace::semantic::queries::QueryContext;
 
 #[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
+#[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 #[cfg(feature = "workspace")]
 use std::sync::OnceLock;
@@ -1878,7 +1880,7 @@ impl LspServer {
                 // Without this, an implementation request while the index is in Building
                 // state routes to Partial and returns no cross-file implementors.
                 // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
-                self.wait_for_index_ready_if_building();
+                let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
 
                 // Use routing policy - only provide workspace index in Full mode
                 let access_mode = route_index_access(self.coordinator());

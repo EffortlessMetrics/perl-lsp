@@ -6,6 +6,8 @@
 use super::super::*;
 use crate::protocol::{req_position, req_uri};
 #[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
+#[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 #[cfg(feature = "workspace")]
 use crate::workspace_index::{
@@ -576,7 +578,7 @@ impl LspServer {
                         // items are returned with no workspace-enriched detail during indexing.
                         // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
                         #[cfg(feature = "workspace")]
-                        self.wait_for_index_ready_if_building();
+                        let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
                         #[cfg(feature = "workspace")]
                         let items: Vec<_> = items
                             .into_iter()
@@ -618,7 +620,7 @@ impl LspServer {
             // state routes to Partial and returns no cross-file callers.
             // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
             #[cfg(feature = "workspace")]
-            self.wait_for_index_ready_if_building();
+            let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
             #[cfg(feature = "workspace")]
             if let Some(symbol_key) = self.workspace_symbol_key(&ch_item) {
                 let access_mode = route_index_access(self.coordinator());
@@ -727,7 +729,7 @@ impl LspServer {
             // state routes to Partial and callees are not resolved cross-file.
             // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
             #[cfg(feature = "workspace")]
-            self.wait_for_index_ready_if_building();
+            let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
             #[cfg(feature = "workspace")]
             {
                 let access_mode = route_index_access(self.coordinator());

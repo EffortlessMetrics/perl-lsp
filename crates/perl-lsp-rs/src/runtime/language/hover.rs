@@ -6,6 +6,8 @@ use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::documentation_targets::PerlDocumentationTarget;
 use crate::protocol::{req_position, req_uri};
+#[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
 use crate::util::escape_markdown_text;
 mod hover_cards;
 mod hover_extracted;
@@ -141,7 +143,7 @@ impl LspServer {
                         // build_inherited_method_hover calls coordinator().index() directly; if the
                         // index is in IndexState::Building the lookup returns partial/empty results.
                         // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
-                        self.wait_for_index_ready_if_building();
+                        let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
                         if let Some(hover_value) =
                             self.build_inherited_method_hover(&receiver_pkg, &method_name, &doc_uri)
                         {

@@ -25,6 +25,8 @@ use perl_semantic_facts::AnchorId;
 use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 
 #[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
+#[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 static QUALIFIED_NAME_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
@@ -380,7 +382,7 @@ impl LspServer {
                     // but production users on large workspaces see empty cross-file results.
                     // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
                     #[cfg(feature = "workspace")]
-                    self.wait_for_index_ready_if_building();
+                    let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
 
                     // Check index state and use appropriate search strategy
                     #[cfg(feature = "workspace")]

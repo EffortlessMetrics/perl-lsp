@@ -716,7 +716,7 @@ impl LspServer {
     #[cfg(feature = "workspace")]
     pub fn test_notify_index_ready_wait_entered(&self, sender: std::sync::mpsc::Sender<()>) {
         let _ = self;
-        super::workspace::set_index_ready_wait_entered_observer(sender);
+        super::readiness::set_index_ready_wait_entered_observer(sender);
     }
 
     /// Enable `callHierarchy` in the server's advertised features.
@@ -727,5 +727,41 @@ impl LspServer {
     /// is set, so the wait line is unreachable without enabling it.
     pub fn test_enable_call_hierarchy(&self) {
         self.advertised_features.lock().call_hierarchy = true;
+    }
+}
+
+#[cfg(all(test, feature = "workspace"))]
+mod tests {
+    use super::LspServer;
+    use crate::runtime::readiness::{IndexReadinessOutcome, IndexReadinessPolicy};
+    use anyhow::Result;
+    use std::time::Duration;
+
+    #[test]
+    fn test_notify_index_ready_wait_entered_forwards_to_readiness_observer() -> Result<()> {
+        let server = LspServer::new();
+        let coordinator = server
+            .index_coordinator
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("workspace coordinator missing"))?;
+        coordinator.transition_to_building(1);
+        server.test_simulate_indexing_start();
+
+        let (wait_entered_tx, wait_entered_rx) = std::sync::mpsc::channel();
+        server.test_notify_index_ready_wait_entered(wait_entered_tx);
+        let worker_coordinator = coordinator;
+        let worker = std::thread::spawn(move || -> Result<()> {
+            wait_entered_rx.recv_timeout(Duration::from_secs(1))?;
+            worker_coordinator.transition_to_ready(0, 0);
+            Ok(())
+        });
+
+        let outcome = server.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
+
+        worker.join().map_err(|_| anyhow::anyhow!("readiness observer thread panicked"))??;
+        assert!(matches!(outcome, IndexReadinessOutcome::Ready));
+        assert!(outcome.is_ready());
+        Ok(())
     }
 }

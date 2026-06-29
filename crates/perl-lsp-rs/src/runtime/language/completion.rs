@@ -13,6 +13,8 @@ use crate::cancellation::{
 use crate::completion::{
     CompletionItemKind, CompletionProvider, add_xs_api_completions_for_prefix,
 };
+#[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
 use crate::runtime::types::workspace_folder_matches_doc_uri;
 use crate::{
     protocol::{JsonRpcError, JsonRpcId, REQUEST_CANCELLED, req_position, req_uri},
@@ -910,7 +912,7 @@ impl LspServer {
             // workspace/symbol handler (issue #1514 race, extended to completion).
             // The wait is bounded (2 s) and a no-op when the index is already ready.
             #[cfg(feature = "workspace")]
-            self.wait_for_index_ready_if_building();
+            let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
 
             // Use routing to determine workspace index access mode
             let mut workspace_mode = route_index_access(self.coordinator());
@@ -1140,7 +1142,7 @@ impl LspServer {
             // workspace/symbol handler (issue #1514 race, extended to completion).
             // The wait is bounded (2 s) and a no-op when the index is already ready.
             #[cfg(feature = "workspace")]
-            self.wait_for_index_ready_if_building();
+            let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
 
             // Use routing to determine workspace index access mode
             let mut workspace_mode = route_index_access(self.coordinator());

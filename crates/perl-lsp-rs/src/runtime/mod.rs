@@ -26,6 +26,8 @@ mod latency;
 mod lifecycle;
 mod notebook;
 pub(crate) mod outbound;
+#[cfg(feature = "workspace")]
+pub(crate) mod readiness;
 mod refresh;
 /// Routing module for lifecycle-aware index access
 pub mod routing;

@@ -10,6 +10,8 @@
 
 use super::*;
 #[cfg(feature = "workspace")]
+use crate::runtime::readiness::{IndexReadinessOutcome, IndexReadinessPolicy, check_readiness};
+#[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::runtime::workspace_progress::{
     send_index_ready_notification, send_progress_begin, send_progress_create, send_progress_end,
@@ -45,30 +47,6 @@ mod configuration_response;
 mod text_decode;
 
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
-static INDEX_READY_WAIT_ENTERED_OBSERVER: std::sync::Mutex<Option<std::sync::mpsc::Sender<()>>> =
-    std::sync::Mutex::new(None);
-
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
-pub(crate) fn set_index_ready_wait_entered_observer(sender: std::sync::mpsc::Sender<()>) {
-    if let Ok(mut observer) = INDEX_READY_WAIT_ENTERED_OBSERVER.lock() {
-        *observer = Some(sender);
-    }
-}
-
-#[cfg(feature = "workspace")]
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
-fn notify_index_ready_wait_entered() {
-    let sender =
-        INDEX_READY_WAIT_ENTERED_OBSERVER.lock().ok().and_then(|mut observer| observer.take());
-    if let Some(sender) = sender {
-        let _ = sender.send(());
-    }
-}
-
-#[cfg(feature = "workspace")]
-#[cfg(not(any(test, feature = "expose_lsp_test_api")))]
-fn notify_index_ready_wait_entered() {}
 
 // Note: WalkDir logic has been extracted to super::file_discovery.
 // These helper functions are retained for potential future use by
@@ -280,7 +258,7 @@ impl LspServer {
             // briefly for readiness before serving, bounded by INDEX_READY_WAIT_MS.
             // This eliminates the ~60% intermittent-empty race
             // that occurs when workspace/symbol arrives right after `initialized`.
-            self.wait_for_index_ready_if_building();
+            let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
 
             let access_mode = route_index_access(self.coordinator());
 
@@ -377,57 +355,25 @@ impl LspServer {
         self.search_open_documents_for_symbols(query, cap)
     }
 
-    /// Wait briefly until the workspace index transitions out of Building state
-    /// or the deadline expires.
-    ///
-    /// Called by `handle_workspace_symbols_v2` before routing so that a
-    /// `workspace/symbol` request issued immediately after `initialized` always
-    /// sees a Ready index rather than an empty partial index.
-    ///
-    /// The wait is bounded and only polls while `indexing_in_progress` is set.
-    /// Bounded by `INDEX_READY_WAIT_MS` milliseconds (default 2 s).
+    /// Apply the shared provider-readiness policy before consulting the index.
     #[cfg(feature = "workspace")]
-    pub(in crate::runtime) fn wait_for_index_ready_if_building(&self) {
-        use perl_parser::workspace_index::IndexState;
-        use std::time::Instant;
-
-        // Only wait when indexing is actively in progress.
-        if !self.indexing_in_progress.load(Ordering::Acquire) {
-            return;
-        }
-
-        const INDEX_READY_WAIT_MS: u128 = 2_000;
-        let deadline = Instant::now() + Duration::from_millis(INDEX_READY_WAIT_MS as u64);
-
-        let Some(coordinator) = self.coordinator() else {
-            return;
-        };
-
-        loop {
-            match coordinator.state() {
-                IndexState::Ready { .. } => {
-                    tracing::debug!("wait_for_index_ready: index is now Ready");
-                    break;
-                }
-                // Degraded means indexing ended early — serve what we have.
-                IndexState::Degraded { .. } => {
-                    tracing::debug!("wait_for_index_ready: index degraded, proceeding");
-                    break;
-                }
-                IndexState::Building { .. } => {
-                    notify_index_ready_wait_entered();
-                    if Instant::now() >= deadline {
-                        tracing::debug!(
-                            "wait_for_index_ready: deadline reached, serving partial index"
-                        );
-                        break;
-                    }
-                    // Keep the wait cheap under slow indexing while still
-                    // releasing quickly once the coordinator reaches Ready.
-                    std::thread::sleep(Duration::from_millis(1));
-                }
-            }
-        }
+    pub(in crate::runtime) fn check_index_readiness(
+        &self,
+        policy: IndexReadinessPolicy,
+    ) -> IndexReadinessOutcome {
+        let outcome = check_readiness(self.coordinator(), &self.indexing_in_progress, policy);
+        let index_readiness = outcome.reason();
+        let index_ready = outcome.is_ready();
+        let fallback_safe = outcome.is_fallback_safe();
+        let unsafe_rejected = outcome.is_unsafe_rejected();
+        tracing::trace!(
+            index_readiness,
+            index_ready,
+            fallback_safe,
+            unsafe_rejected,
+            "index readiness evaluated"
+        );
+        outcome
     }
 
     /// Resolve the best-matching workspace folder URI for a given file URI.

@@ -1,6 +1,8 @@
 //! Signature help handlers and signature extraction helpers.
 
 use super::*;
+#[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
 
 /// Build an actionable INVALID_PARAMS error for malformed signatureHelp requests.
 ///
@@ -98,7 +100,7 @@ impl LspServer {
                     // resolve_method_in_workspace returns None — empty signatures on fresh open.
                     // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
                     #[cfg(feature = "workspace")]
-                    self.wait_for_index_ready_if_building();
+                    let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
                     #[cfg(feature = "workspace")]
                     if Self::is_method_call_context(&doc.text, offset) {
                         if let Some(signature) = self.resolve_method_in_workspace(&function_name) {
