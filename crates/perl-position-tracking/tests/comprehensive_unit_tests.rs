@@ -433,6 +433,28 @@ fn line_starts_cache_position_to_offset_utf16_emoji() {
     assert_eq!(cache.position_to_offset(src, 0, 3), 5);
 }
 
+#[test]
+fn line_starts_cache_position_to_offset_mid_surrogate_clamps_to_char_start() {
+    // Regression for #2478: a column landing inside a surrogate pair must clamp
+    // to the start of that codepoint instead of over-advancing past it.
+    // UTF-16 layout of "x😀y": 'x'=1 unit, '😀'=2 units, 'y'=1 unit.
+    // Byte layout: 'x'=0..1, '😀'=1..5 (4 bytes), 'y'=5..6.
+    let src = "x😀y";
+    let cache = LineStartsCache::new(src);
+
+    // Column 0 → byte 0 (start of 'x').
+    assert_eq!(cache.position_to_offset(src, 0, 0), 0);
+    // Column 1 → byte 1 (start of the emoji, just after 'x').
+    assert_eq!(cache.position_to_offset(src, 0, 1), 1);
+    // Column 2 lands on the trailing half of the surrogate pair; it must clamp
+    // back to the emoji start (byte 1), not skip to byte 5.
+    assert_eq!(cache.position_to_offset(src, 0, 2), 1);
+    // Column 3 → byte 5 (just past the emoji, start of 'y').
+    assert_eq!(cache.position_to_offset(src, 0, 3), 5);
+    // Column 4 → byte 6 (end of line, just past 'y').
+    assert_eq!(cache.position_to_offset(src, 0, 4), 6);
+}
+
 // ─── LineIndex ───────────────────────────────────────────────────────────────
 
 #[test]

@@ -11,7 +11,7 @@ schema_version = 1
 policy = "ripr-suppressions"
 owner = "EffortlessMetrics"
 status = "advisory"
-updated = "2026-06-22"
+updated = "2026-06-28"
 
 # -----------------------------------------------------------------------------
 # Generated status docs: validated through status-generation checks, not
@@ -1505,9 +1505,44 @@ classification = ["weakly_exposed", "no_static_path"]
 owner = "proof-lane"
 issue = "EffortlessMetrics/ripr#1429"
 reason = "PR #3142 (issue #3141) adds the release-archive DAP guard. RIPR 0.9.x cannot statically trace activation from on-disk binary fixtures (tar.gz/zip + SHA256SUMS) and JSON-deserialized Contract through serde_json::from_str + fs::read_dir + the gzip/tar and ZIP central-directory byte parsers to the per-branch predicates in validate_dist (missing-binary, exec-bit, version-mismatch, undeclared-archive, extension-mismatch, platform-not-declared, checksum missing/not-listed/mismatch, completeness) and the archive readers. Same ripr#1429 class as the quality_baseline, agent_ledgers, and pr_close_proof xtask suppressions. Coverage: 28 inline #[cfg(test)] unit tests drive every branch in-process against committed fixtures (good/bad-missing-dap/bad-checksum) and tempdir edge dists, plus 6 CLI integration tests; Codecov patch coverage 96.88% with only genuinely-unreachable defensive guards (e.g. platform_for_triple None) residual. Suppression is narrow (single xtask file, one PR #3142). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+
+# Mid-surrogate call-observation test surface (#2478): ripr#1428-class
+# false-positives in newly added call-observation test file.
+#
+# PR #3040 adds one new integration test file:
+#   crates/perl-lsp-rs-core/tests/detect_dead_code_mid_surrogate_position.rs
+#
+# The file contains one test function:
+#   detect_dead_code_position_to_offset_clamps_mid_surrogate_column
+#
+# It exercises detect_dead_code (a production caller of LineStartsCache::
+# position_to_offset in dead_code.rs:52) with emoji-containing source text
+# whose UTF-16 column 2 is the trailing surrogate of "😀".  The assertion
+# proves the returned byte offset clamps to the emoji start.
+#
+# ripr's diff-scoped analysis flags the test-harness plumbing inside this
+# newly added file (calls to WorkspaceIndex::new, index_file_str,
+# find_unused_symbols, detect_dead_code) as new production seams.  This is
+# the same ripr#1428 class as ripr-suppress-seam-proof-tests and
+# ripr-suppress-ux-receipt-tests: internal calls within a newly added test
+# file are classified as production seams even though they are pure test
+# scaffolding driving existing production APIs.
+#
+# Suppression is minimal (single test file, one PR). Remove when ripr#1428
+# is fixed upstream.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-mid-surrogate-call-observation-test"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs-core/tests/detect_dead_code_mid_surrogate_position.rs"]
+classification = ["weakly_gripped", "no_static_path", "call_presence"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "PR #3040 adds detect_dead_code_mid_surrogate_position.rs as a call-observation test for the mid-surrogate UTF-16 clamp fix (#2478). The single test function (detect_dead_code_position_to_offset_clamps_mid_surrogate_column) drives the production detect_dead_code path (dead_code.rs:52 calls LineStartsCache::position_to_offset) with emoji source text whose UTF-16 column 2 is the trailing surrogate of '😀'. ripr's diff-scoped analyzer flags the test-harness plumbing (WorkspaceIndex::new, index_file_str, find_unused_symbols, detect_dead_code calls inside the newly added test file) as new production seams. This is the same ripr#1428 class as ripr-suppress-seam-proof-tests and ripr-suppress-ux-receipt-tests (test-harness plumbing inside newly added test files falsely classified as production seams). The production seam itself (line_index.rs:91) is covered by ripr-suppress-mid-surrogate-position-clamp-predicate. Suppression is minimal (single test file, PR #3040). Remove when ripr#1428 is fixed upstream."
 created = "2026-06-28"
 review_after = "2026-07-28"
 expires = "2026-09-30"
+
 
 # -----------------------------------------------------------------------------
 # utf16_column line_start > text.len() overflow guard: private-field-write-to-
@@ -1590,3 +1625,60 @@ reason = "PR #3050 adds two test functions (references_source_backed_tier_used_w
 created = "2026-06-25"
 review_after = "2026-09-25"
 expires = "2026-12-31"
+
+# =============================================================================
+# LineStartsCache::position_to_offset for-loop surrogate clamp (fix #2478):
+# ripr#1429-class predicate-infection-untraceable seams in the changed loop
+# condition `uc + ch.len_utf16() > character` in line_index.rs.
+#
+# PR #3040 changes the break guard in `position_to_offset` from
+#   `uc >= character as usize`
+# to
+#   `uc + ch.len_utf16() > character as usize`
+# so a column landing inside a surrogate pair clamps to the codepoint start
+# instead of over-advancing past it.
+#
+# ripr 0.9.x flags 3 `weakly_gripped` seams in `LineStartsCache::position_to_offset`
+# (mapped to `reachable_unrevealed` in the evidence receipt). The seams correspond to
+# the three discriminator boundaries of the changed for-loop condition:
+#   (1) Condition fires on the FIRST char iteration (e.g. character=0 on "x😀y"):
+#       uc=0, ch.len_utf16()=1, 0+1>0 = true → immediate break.
+#   (2) Condition fires MID-LOOP at a surrogate boundary (e.g. character=2 on "x😀y"):
+#       after 'x': uc=1; ch='😀', 1+2>2 = true → clamps to emoji start (byte 1).
+#   (3) Condition never fires — loop exhausts (e.g. character=4 on "x😀y"):
+#       all chars consumed without break → returns ls + lt.len() = end of line.
+#
+# Coverage evidence: the regression test
+#   `line_starts_cache_position_to_offset_mid_surrogate_clamps_to_char_start`
+# in `crates/perl-position-tracking/tests/comprehensive_unit_tests.rs` exercises
+# all three discriminator boundaries with exact-value assertions:
+#   column 0 → byte 0 (fires on first char)
+#   column 1 → byte 1 (fires at emoji start without clamping)
+#   column 2 → byte 1 (mid-surrogate clamp, the fixed boundary)
+#   column 3 → byte 5 (fires after emoji)
+#   column 4 → byte 6 (loop exhausts — past all UTF-16 units)
+# All five assertions would fail if the fix were reverted to `uc >= character`.
+# A call-observation test in `detect_dead_code_mid_surrogate_position.rs` drives
+# `detect_dead_code` (a production caller of LineStartsCache::position_to_offset)
+# with column 2 on "x😀y" text and asserts the returned byte offset is 1.
+#
+# RIPR cannot statically trace activation of the for-loop break condition from
+# test inputs through the accumulating `uc` variable across loop iterations.
+# This is the same ripr#1429 predicate-infection-untraceable class that suppresses
+# `is_method_call_context` (paren-scan loop predicates), `parse_quote_operator_content`
+# (string-parsing chain), and `quality_baseline_cfg_test_scanner` (line-scanning loops).
+#
+# Suppression is narrow (single production file, one PR #3040). Remove when
+# ripr#1429 is fixed upstream or targeted mutation is scheduled.
+# =============================================================================
+[[suppress]]
+id = "ripr-suppress-position-tracking-surrogate-loop-seam"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-position-tracking/src/line_index.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3040 changes the for-loop break guard in LineStartsCache::position_to_offset from `uc >= character` to `uc + ch.len_utf16() > character` (fix #2478: mid-surrogate UTF-16 column clamping). ripr 0.9.x reports 3 weakly_gripped seams (classified reachable_unrevealed) for the three discriminator boundaries of the new condition: (1) fires on first char, (2) fires mid-loop at a surrogate boundary (the fixed case), (3) never fires / loop exhausts. All three boundaries are covered by the regression test line_starts_cache_position_to_offset_mid_surrogate_clamps_to_char_start in comprehensive_unit_tests.rs with exact assertions at columns 0, 1, 2, 3, 4 over 'x😀y' — all five assertions would fail on the reverted guard. A call-observation test in detect_dead_code_mid_surrogate_position.rs additionally drives detect_dead_code (a production caller of LineStartsCache::position_to_offset) with column 2 on 'x😀y' text and asserts the returned byte offset is 1 (not 5). RIPR cannot statically trace the accumulating `uc` variable through for-loop iterations to confirm the condition fires at the test-supplied column value — the same ripr#1429 predicate-infection-untraceable limitation as is_method_call_context, parse_quote_operator_content, and quality_baseline_cfg_test_scanner. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-06-28"
+review_after = "2026-07-28"
+expires = "2026-09-30"
