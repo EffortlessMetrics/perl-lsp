@@ -710,6 +710,34 @@ impl SymbolExtractor {
 
             // Handle other node types by visiting children
             NodeKind::Assignment { lhs, rhs, .. } => {
+                // Cross-construct sub resolver (#3108): `*foo = sub { ... }` creates a
+                // callable named `foo`.  Synthesize a Subroutine symbol so workspace-index
+                // cross-file lookup can find it even without an explicit `sub foo {}`.
+                if let NodeKind::Typeglob { name: glob_name } = &lhs.kind {
+                    if matches!(rhs.kind, NodeKind::Subroutine { .. }) {
+                        let bare = glob_name.rsplit("::").next().unwrap_or(glob_name.as_str());
+                        if !bare.is_empty() {
+                            // For `*Pkg::foo = sub {}` use the package from the glob name;
+                            // for unqualified `*foo = sub {}` (or `*::foo` where "::"
+                            // is shorthand for "main::") fall back to the current package.
+                            let pkg = match glob_name.rfind("::") {
+                                Some(pos) if pos > 0 => &glob_name[..pos],
+                                _ => self.table.current_package.as_str(),
+                            };
+                            let sym = Symbol {
+                                name: bare.to_string(),
+                                qualified_name: format!("{pkg}::{bare}"),
+                                kind: SymbolKind::Subroutine,
+                                location: node.location,
+                                scope_id: self.table.current_scope(),
+                                declaration: None,
+                                documentation: None,
+                                attributes: vec![],
+                            };
+                            self.table.add_symbol(sym);
+                        }
+                    }
+                }
                 // Mark LHS as write reference
                 self.mark_write_reference(lhs);
                 self.visit_node(lhs);
@@ -3812,6 +3840,205 @@ sub jump {
         assert!(
             references.iter().any(|reference| reference.kind == SymbolKind::Subroutine),
             "goto &target should produce a subroutine reference"
+        );
+    }
+
+    // =========================================================================
+    // Cross-construct sub resolver — #3108
+    //
+    // Covers the new typeglob-assignment symbol synthesis in visit_node.
+    // =========================================================================
+
+    /// `*foo = sub { ... }` synthesizes a Subroutine symbol named "foo" so that
+    /// workspace-index cross-file lookup can find it.
+    ///
+    /// Exercises the TRUE side of: `if matches!(rhs.kind, NodeKind::Subroutine { .. })`
+    /// inside the Assignment handler.
+    #[test]
+    fn typeglob_sub_assignment_synthesizes_subroutine_symbol() {
+        let code = "*foo = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(
+            table.symbols.contains_key("foo"),
+            "*foo = sub {{}} must synthesize a 'foo' symbol in the table"
+        );
+        let foo_syms = &table.symbols["foo"];
+        assert!(
+            foo_syms.iter().any(|s| s.kind == SymbolKind::Subroutine),
+            "'foo' symbol must be of kind Subroutine; got: {foo_syms:?}"
+        );
+    }
+
+    /// `*foo = 42` does NOT synthesize a Subroutine symbol for "foo" — only the
+    /// Subroutine RHS form is indexed.
+    ///
+    /// Exercises the FALSE side of: `if matches!(rhs.kind, NodeKind::Subroutine { .. })`
+    #[test]
+    fn typeglob_non_sub_assignment_does_not_synthesize_subroutine_symbol() {
+        let code = "*foo = 42;";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        // "foo" must not appear as a Subroutine symbol
+        let is_subroutine = table
+            .symbols
+            .get("foo")
+            .map(|syms| syms.iter().any(|s| s.kind == SymbolKind::Subroutine))
+            .unwrap_or(false);
+        assert!(!is_subroutine, "*foo = 42 must NOT synthesize a Subroutine symbol for 'foo'");
+    }
+
+    // =========================================================================
+    // Additional edge case tests for typeglob symbol synthesis (#3108)
+    // =========================================================================
+
+    /// Edge case: Qualified typeglob `*Pkg::foo = sub { ... }` should synthesize
+    /// a symbol for the bare name `foo` with qualified_name `"Pkg::foo"`, not the
+    /// current-package-qualified `"main::foo"`.
+    ///
+    /// Regression guard for the bug where `qualified_name` was derived from
+    /// `self.table.current_package` instead of the package encoded in the glob itself.
+    #[test]
+    fn typeglob_sub_qualified_synthesizes_bare_name_symbol() {
+        let code = "*Pkg::foo = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        // The symbol table should contain "foo" (bare name)
+        assert!(
+            table.symbols.contains_key("foo"),
+            "*Pkg::foo should synthesize a 'foo' symbol (bare name)"
+        );
+        let foo_syms = &table.symbols["foo"];
+        assert!(
+            foo_syms.iter().any(|s| s.kind == SymbolKind::Subroutine),
+            "'foo' from *Pkg::foo should be a Subroutine"
+        );
+        // qualified_name must reflect the package encoded in the glob, not the
+        // current lexical package (which is "main" by default).
+        assert!(
+            foo_syms.iter().any(|s| s.qualified_name == "Pkg::foo"),
+            "'foo' from *Pkg::foo must have qualified_name 'Pkg::foo'; got: {:?}",
+            foo_syms.iter().map(|s| &s.qualified_name).collect::<Vec<_>>()
+        );
+    }
+
+    /// Edge case: Nested package `*Pkg::Sub::foo = sub { ... }` should also
+    /// synthesize a symbol for the bare name `foo` with qualified_name `"Pkg::Sub::foo"`.
+    #[test]
+    fn typeglob_sub_nested_package_synthesizes_bare_name() {
+        let code = "*Pkg::Sub::foo = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(
+            table.symbols.contains_key("foo"),
+            "*Pkg::Sub::foo should synthesize a 'foo' symbol"
+        );
+        let foo_syms = &table.symbols["foo"];
+        assert!(
+            foo_syms.iter().any(|s| s.qualified_name == "Pkg::Sub::foo"),
+            "*Pkg::Sub::foo must have qualified_name 'Pkg::Sub::foo'; got: {:?}",
+            foo_syms.iter().map(|s| &s.qualified_name).collect::<Vec<_>>()
+        );
+    }
+
+    /// Edge case: Multiple typeglobs in the same file should all synthesize symbols.
+    #[test]
+    fn typeglob_sub_multiple_assignments_all_synthesized() {
+        let code = "*foo = sub { 1 };\n*bar = sub { 2 };\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(table.symbols.contains_key("foo"), "should have symbol for foo");
+        assert!(table.symbols.contains_key("bar"), "should have symbol for bar");
+        let bar_is_sub = table
+            .symbols
+            .get("bar")
+            .map(|syms| syms.iter().any(|s| s.kind == SymbolKind::Subroutine))
+            .unwrap_or(false);
+        assert!(bar_is_sub, "'bar' should be a Subroutine");
+    }
+
+    /// Edge case: Typeglob with underscore name should also synthesize a symbol.
+    #[test]
+    fn typeglob_sub_underscore_name_synthesized() {
+        let code = "*_private = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(table.symbols.contains_key("_private"), "*_private should synthesize a symbol");
+        let sym = &table.symbols["_private"];
+        assert!(
+            sym.iter().any(|s| s.kind == SymbolKind::Subroutine),
+            "_private should be a Subroutine"
+        );
+    }
+
+    /// Edge case: Typeglob with non-subroutine RHS (string) should NOT synthesize
+    /// a Subroutine symbol. May create a symbol of another kind, but not Subroutine.
+    #[test]
+    fn typeglob_string_rhs_does_not_synthesize_subroutine() {
+        let code = "*foo = \"hello\";";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        let is_subroutine = table
+            .symbols
+            .get("foo")
+            .map(|syms| syms.iter().any(|s| s.kind == SymbolKind::Subroutine))
+            .unwrap_or(false);
+        assert!(!is_subroutine, "*foo = \"string\" should NOT synthesize a Subroutine symbol");
+    }
+
+    /// Edge case: Typeglob alongside a named subroutine should create symbols for both.
+    #[test]
+    fn typeglob_sub_coexists_with_named_sub() {
+        let code = "sub foo { 1 }\n*foo = sub { 2 };\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(table.symbols.contains_key("foo"), "should have 'foo' symbol");
+        let foo_syms = &table.symbols["foo"];
+        // Should have multiple symbols for 'foo' (the named sub and the typeglob assignment)
+        assert!(
+            !foo_syms.is_empty(),
+            "should have at least one Subroutine symbol for 'foo'; got {count} symbol(s)",
+            count = foo_syms.len()
+        );
+        let has_subroutine = foo_syms.iter().any(|s| s.kind == SymbolKind::Subroutine);
+        assert!(has_subroutine, "at least one 'foo' symbol should be Subroutine");
+    }
+
+    /// Edge case: Case sensitivity — typeglob names are case-sensitive,
+    /// so `*Foo = sub {}` should NOT create a symbol for lowercase `foo`.
+    #[test]
+    fn typeglob_sub_case_sensitive_symbol_name() {
+        let code = "*Foo = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        // Should have "Foo" but not "foo"
+        assert!(table.symbols.contains_key("Foo"), "should have symbol for 'Foo' (capitalized)");
+        let has_lowercase_foo_subroutine = table
+            .symbols
+            .get("foo")
+            .map(|syms| syms.iter().any(|s| s.kind == SymbolKind::Subroutine))
+            .unwrap_or(false);
+        assert!(
+            !has_lowercase_foo_subroutine,
+            "should NOT have Subroutine symbol for lowercase 'foo'"
         );
     }
 }
