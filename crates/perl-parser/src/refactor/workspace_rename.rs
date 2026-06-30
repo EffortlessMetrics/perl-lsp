@@ -825,8 +825,24 @@ enum StringContext {
     SingleQuoted,
     /// Inside a `"..."` double-quoted string (interpolation allowed for sigil-preceded names).
     DoubleQuoted,
+    /// Inside a simple `m#...#` or `s#...#...#` regex form.
+    HashRegex { remaining_delimiters: u8 },
     /// Inside a `# ...` line comment (never rename).
     LineComment,
+}
+
+fn hash_regex_delimiter_count(text: &str, hash_offset: usize) -> Option<u8> {
+    let before_hash = &text[..hash_offset];
+    let (marker_start, marker) = before_hash.char_indices().next_back()?;
+    if !matches!(marker, 'm' | 's') {
+        return None;
+    }
+
+    if before_hash[..marker_start].chars().next_back().is_some_and(is_perl_ident_char) {
+        return None;
+    }
+
+    Some(if marker == 's' { 2 } else { 1 })
 }
 
 /// Scan `text` up to `offset` and return the Perl string context at that position.
@@ -843,7 +859,13 @@ fn scan_string_context(text: &str, offset: usize) -> StringContext {
             StringContext::Code => match byte {
                 b'\'' => state = StringContext::SingleQuoted,
                 b'"' => state = StringContext::DoubleQuoted,
-                b'#' => state = StringContext::LineComment,
+                b'#' => {
+                    if let Some(remaining_delimiters) = hash_regex_delimiter_count(text, idx) {
+                        state = StringContext::HashRegex { remaining_delimiters };
+                    } else {
+                        state = StringContext::LineComment;
+                    }
+                }
                 _ => {}
             },
             StringContext::SingleQuoted => {
@@ -862,6 +884,19 @@ fn scan_string_context(text: &str, offset: usize) -> StringContext {
                     escaped = true;
                 } else if byte == b'"' {
                     state = StringContext::Code;
+                }
+            }
+            StringContext::HashRegex { remaining_delimiters } => {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'#' {
+                    state = if remaining_delimiters <= 1 {
+                        StringContext::Code
+                    } else {
+                        StringContext::HashRegex { remaining_delimiters: remaining_delimiters - 1 }
+                    };
                 }
             }
             StringContext::LineComment => {
@@ -946,22 +981,25 @@ fn is_word_boundary_after(text: &str, byte_offset: usize) -> bool {
 fn find_package_at_offset(text: &str, offset: usize) -> Option<String> {
     let before = &text[..offset];
     // Search backwards for the most recent "package NAME" declaration
-    let mut last_package = None;
-    let mut search_pos = 0;
-    while let Some(found) = before[search_pos..].find("package ") {
-        let pkg_start = search_pos + found + "package ".len();
-        // Extract the package name (until ; or { or whitespace)
-        let remaining = &before[pkg_start..];
-        let pkg_end = remaining
-            .find(|c: char| c == ';' || c == '{' || c.is_whitespace())
-            .unwrap_or(remaining.len());
-        let pkg_name = remaining[..pkg_end].trim();
-        if !pkg_name.is_empty() {
-            last_package = Some(pkg_name.to_string());
+    let mut search_limit = before.len();
+    while let Some(package_keyword_start) = before[..search_limit].rfind("package ") {
+        let pkg_start = package_keyword_start + "package ".len();
+
+        if is_rename_code_position(text, package_keyword_start) {
+            // Extract the package name (until ; or { or whitespace)
+            let remaining = &before[pkg_start..];
+            let pkg_end = remaining
+                .find(|c: char| c == ';' || c == '{' || c.is_whitespace())
+                .unwrap_or(remaining.len());
+            let pkg_name = remaining[..pkg_end].trim();
+            if !pkg_name.is_empty() {
+                return Some(pkg_name.to_string());
+            }
         }
-        search_pos = pkg_start;
+
+        search_limit = package_keyword_start;
     }
-    last_package
+    None
 }
 
 #[cfg(test)]
@@ -1010,6 +1048,59 @@ mod tests {
         assert_eq!(find_package_at_offset(text, 20), Some("Foo".to_string()));
         assert_eq!(find_package_at_offset(text, 45), Some("Bar".to_string()));
         assert_eq!(find_package_at_offset(text, 0), None);
+    }
+
+    #[test]
+    fn test_find_package_at_offset_ignores_comments_and_strings() -> Result<(), String> {
+        let text = concat!(
+            "package Real;\n",
+            "# package Commented;\n",
+            "my $literal = \"package InString;\";\n",
+            "sub here { 1 }\n",
+        );
+        let sub_pos = text.find("sub here").ok_or_else(|| "missing sub here marker".to_string())?;
+
+        assert_eq!(find_package_at_offset(text, sub_pos), Some("Real".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_package_at_offset_preserves_package_after_hash_regex() -> Result<(), String> {
+        let text = concat!(
+            "m#package InRegex#; package RegexPackage;\n",
+            "s#package Pattern#package Replacement#; package SubstitutionPackage;\n",
+            "sub here { 1 }\n",
+        );
+        let sub_pos = text.find("sub here").ok_or_else(|| "missing sub here marker".to_string())?;
+
+        assert_eq!(find_package_at_offset(text, sub_pos), Some("SubstitutionPackage".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_package_at_offset_treats_identifier_hash_as_comment() -> Result<(), String> {
+        let text = concat!(
+            "package Real;\n",
+            "my $label = $asm# package Commented;\n",
+            "sub here { 1 }\n",
+        );
+        let sub_pos = text.find("sub here").ok_or_else(|| "missing sub here marker".to_string())?;
+
+        assert_eq!(find_package_at_offset(text, sub_pos), Some("Real".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_package_at_offset_keeps_escaped_hash_inside_regex() -> Result<(), String> {
+        let text = concat!(
+            "package Real;\n",
+            "my $rx = m#escaped \\# package Hidden#;\n",
+            "sub here { 1 }\n",
+        );
+        let sub_pos = text.find("sub here").ok_or_else(|| "missing sub here marker".to_string())?;
+
+        assert_eq!(find_package_at_offset(text, sub_pos), Some("Real".to_string()));
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
