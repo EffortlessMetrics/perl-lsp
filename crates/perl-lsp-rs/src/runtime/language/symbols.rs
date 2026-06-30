@@ -199,6 +199,23 @@ impl LspServer {
                         }
                     }
 
+                    // Dedup identical ranges (start+end+kind) that arise when both a
+                    // Subroutine node and its inner Block node map to the same line span.
+                    lsp_ranges.sort_by_key(|r| {
+                        (
+                            r["startLine"].as_u64().unwrap_or(0),
+                            r["endLine"].as_u64().unwrap_or(0),
+                            r.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        )
+                    });
+                    lsp_ranges.dedup_by_key(|r| {
+                        (
+                            r["startLine"].as_u64().unwrap_or(0),
+                            r["endLine"].as_u64().unwrap_or(0),
+                            r.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        )
+                    });
+
                     // If no ranges from AST, try fallback
                     if lsp_ranges.is_empty() {
                         return Ok(Some(json!(folding_ranges_from_text(&doc.text, 1000))));

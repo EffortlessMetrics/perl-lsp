@@ -486,7 +486,6 @@ my $y = 2;
 }
 
 #[test]
-#[ignore = "infra: quarantine pending deterministic folding-range provider output; tracked in #3123"]
 fn test_folding_range_region_markers_multiple_non_nested() -> TestResult {
     let content = r#"# region Helpers
 sub helper1 {
@@ -512,8 +511,8 @@ sub main {
                 Some((s, e)) => (s, e),
                 None => return false,
             };
-            // Region markers should be on lines 0-5 and 7-11
-            (start == 0 || start == 7) && end > start
+            // Region markers should be on lines 0-4 and 6-10
+            (start == 0 || start == 6) && end > start
         })
         .collect();
 
