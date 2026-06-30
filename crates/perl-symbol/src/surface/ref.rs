@@ -104,6 +104,15 @@ fn walk(node: &Node, out: &mut Vec<SymbolRef>) {
         }
 
         NodeKind::Typeglob { name } => {
+            // Dynamic typeglob `*{$expr}`: the parser preserves the brace
+            // syntax verbatim in the name field (e.g. `name = "{$var}"`).
+            // Such names do not correspond to any static symbol in the Perl
+            // symbol table and must not be emitted as a concrete reference —
+            // downstream providers (goto-def, rename) would otherwise treat
+            // `{$var}` as a real symbol name.  Skip and return silently.
+            if is_dynamic_typeglob_name(name) {
+                return;
+            }
             let (package_qualifier, bare_name, qualified_name) = split_qualified_name(name);
             out.push(SymbolRef {
                 kind: SymbolRefKind::TypeglobReference,
@@ -265,5 +274,96 @@ fn var_kind_from_sigil(sigil: &str) -> Option<VarKind> {
         "@" => Some(VarKind::Array),
         "%" => Some(VarKind::Hash),
         _ => None,
+    }
+}
+
+/// Return `true` when a typeglob name is dynamic and cannot be statically
+/// resolved.  Dynamic names start with `{`, as the parser preserves the
+/// brace syntax verbatim (e.g. `*{$var}` → `name = "{$var}"`).
+fn is_dynamic_typeglob_name(name: &str) -> bool {
+    name.starts_with('{')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_ast::{Node, NodeKind, SourceLocation};
+
+    fn loc(start: usize, end: usize) -> SourceLocation {
+        SourceLocation { start, end }
+    }
+
+    /// Regression test: `*{$var}` used to produce a SymbolRef with a literal-
+    /// brace name such as `"{$var}"`, which is not a real Perl symbol.
+    ///
+    /// After the fix the dynamic form must be silently skipped — no SymbolRef
+    /// with a brace-containing name should be emitted.
+    #[test]
+    fn dynamic_typeglob_variable_expr_is_not_emitted_as_static_symbol()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // The parser encodes `*{$var}` as NodeKind::Typeglob { name: "{$var}" }.
+        // Before the fix this would emit SymbolRef { name: "{$var}", kind: TypeglobReference }.
+        let node = Node::new(NodeKind::Typeglob { name: "{$var}".to_string() }, loc(0, 8));
+        let program = Node::new(NodeKind::Program { statements: vec![node] }, loc(0, 8));
+
+        let refs = extract_symbol_refs(&program);
+
+        let brace_refs: Vec<_> = refs.iter().filter(|r| r.name.starts_with('{')).collect();
+        assert!(
+            brace_refs.is_empty(),
+            "dynamic typeglob *{{...}} must not produce a TypeglobReference \
+             with a literal-brace name; got: {brace_refs:?}"
+        );
+        Ok(())
+    }
+
+    /// Edge case: `*{}` (empty braces) is also a dynamic form — do not emit.
+    #[test]
+    fn dynamic_typeglob_empty_braces_is_not_emitted() -> Result<(), Box<dyn std::error::Error>> {
+        let node = Node::new(NodeKind::Typeglob { name: "{}".to_string() }, loc(0, 3));
+        let program = Node::new(NodeKind::Program { statements: vec![node] }, loc(0, 3));
+
+        let refs = extract_symbol_refs(&program);
+
+        assert!(
+            refs.is_empty(),
+            "dynamic typeglob *{{}} must not produce any SymbolRef; got: {refs:?}"
+        );
+        Ok(())
+    }
+
+    /// Sanity: static typeglob `*foo` must still be emitted after the fix.
+    #[test]
+    fn static_typeglob_is_still_emitted() -> Result<(), Box<dyn std::error::Error>> {
+        let node = Node::new(NodeKind::Typeglob { name: "foo".to_string() }, loc(0, 4));
+        let program = Node::new(NodeKind::Program { statements: vec![node] }, loc(0, 4));
+
+        let refs = extract_symbol_refs(&program);
+
+        assert_eq!(refs.len(), 1, "static typeglob *foo must still produce a SymbolRef");
+        assert_eq!(refs[0].kind, SymbolRefKind::TypeglobReference);
+        assert_eq!(refs[0].name, "foo");
+        assert_eq!(refs[0].sigil.as_deref(), Some("*"));
+        Ok(())
+    }
+
+    /// Edge case: `*{"literal"}` — string-literal dynamic form — also a brace
+    /// name and must not be emitted as a static symbol.
+    #[test]
+    fn dynamic_typeglob_string_literal_is_not_emitted() -> Result<(), Box<dyn std::error::Error>> {
+        // The parser may encode *{"name"} as Typeglob { name: "{\"name\"}" }
+        // (brace-delimited string).  Same dynamic-boundary rule applies.
+        let node = Node::new(NodeKind::Typeglob { name: "{\"name\"}".to_string() }, loc(0, 10));
+        let program = Node::new(NodeKind::Program { statements: vec![node] }, loc(0, 10));
+
+        let refs = extract_symbol_refs(&program);
+
+        let brace_refs: Vec<_> = refs.iter().filter(|r| r.name.starts_with('{')).collect();
+        assert!(
+            brace_refs.is_empty(),
+            "dynamic typeglob *{{\"literal\"}} must not produce a literal-brace SymbolRef; \
+             got: {brace_refs:?}"
+        );
+        Ok(())
     }
 }

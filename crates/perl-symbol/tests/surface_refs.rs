@@ -510,3 +510,45 @@ fn signature_parameters_are_not_emitted_as_refs() -> Result<()> {
     assert_eq!(refs[0].name, "default");
     Ok(())
 }
+
+/// Regression guard for issue #1704: dynamic typeglob names produced by the
+/// parser (e.g. `name = "{$var}"` for source `*{$var}`) must NOT be emitted
+/// as concrete `TypeglobReference` SymbolRefs.
+///
+/// A name starting with `{` is the parser's verbatim encoding of a
+/// brace-delimited dynamic expression — it is not a real Perl symbol and must
+/// be silently dropped so downstream providers don't treat it as a symbol.
+#[test]
+fn dynamic_typeglob_brace_name_is_not_emitted_as_static_symbol() -> Result<()> {
+    // Simulate the AST shape the parser produces for `*{$var} = \&func;`.
+    // The LHS typeglob carries the brace-delimited text as its name.
+    let typeglob = Node::new(NodeKind::Typeglob { name: "{$var}".to_string() }, loc(0, 8));
+    let program = Node::new(NodeKind::Program { statements: vec![typeglob] }, loc(0, 8));
+
+    let refs = extract_symbol_refs(&program);
+
+    // Before the fix: refs contained SymbolRef { name: "{$var}", kind: TypeglobReference }.
+    // After the fix: no such ref — the dynamic form is silently dropped.
+    let brace_refs: Vec<_> = refs.iter().filter(|r| r.name.starts_with('{')).collect();
+    assert!(
+        brace_refs.is_empty(),
+        "dynamic typeglob *{{$var}} must not emit a SymbolRef with a \
+         literal-brace name; got: {brace_refs:?}"
+    );
+    Ok(())
+}
+
+/// Guard: static typeglob `*foo` is unaffected by the dynamic-name check.
+#[test]
+fn static_typeglob_is_still_emitted_after_dynamic_fix() -> Result<()> {
+    let typeglob = Node::new(NodeKind::Typeglob { name: "foo".to_string() }, loc(0, 4));
+    let program = Node::new(NodeKind::Program { statements: vec![typeglob] }, loc(0, 4));
+
+    let refs = extract_symbol_refs(&program);
+
+    assert_eq!(refs.len(), 1, "static typeglob *foo must still produce a SymbolRef");
+    assert_eq!(refs[0].kind, SymbolRefKind::TypeglobReference);
+    assert_eq!(refs[0].name, "foo");
+    assert_eq!(refs[0].sigil.as_deref(), Some("*"));
+    Ok(())
+}
