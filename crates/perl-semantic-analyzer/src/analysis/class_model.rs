@@ -547,6 +547,12 @@ impl ClassModelBuilder {
                     idx += consumed;
                     continue;
                 }
+                if self.current_framework == Framework::NativeClass
+                    && let Some(consumed) = self.try_extract_native_class_fields(statements, idx)
+                {
+                    idx += consumed;
+                    continue;
+                }
                 if self.current_framework == Framework::ClassAccessor
                     && let Some(consumed) = self.try_extract_class_accessor_methods(statements, idx)
                 {
@@ -1119,27 +1125,8 @@ impl ClassModelBuilder {
     ) -> Option<usize> {
         let statement = &statements[idx];
 
-        if let Some(field) = Self::object_pad_field_from_statement(statement) {
-            let location = field.location;
-            let field_name = field.name.clone();
-            let traits = field.attributes.clone();
-
-            self.current_fields.push(field);
-
-            if let Some(reader) = Self::object_pad_reader_name(&field_name, &traits) {
-                self.current_methods.push(MethodInfo::synthetic(reader, location, None));
-            }
-            if let Some(writer) = Self::object_pad_writer_name(&field_name, &traits) {
-                self.current_methods.push(MethodInfo::synthetic(writer, location, None));
-            }
-            if let Some(accessor) = Self::object_pad_accessor_name(&field_name, &traits) {
-                self.current_methods.push(MethodInfo::synthetic(accessor, location, None));
-            }
-            if let Some(mutator) = Self::object_pad_mutator_name(&field_name, &traits) {
-                self.current_methods.push(MethodInfo::synthetic(mutator, location, None));
-            }
-
-            return Some(1);
+        if let Some(consumed) = self.try_extract_field_declaration(statement) {
+            return Some(consumed);
         }
 
         match &statement.kind {
@@ -1157,6 +1144,49 @@ impl ClassModelBuilder {
         }
 
         None
+    }
+
+    /// Extract a `field` declaration, push it to `current_fields`, and generate
+    /// synthetic accessor methods.  Returns `Some(1)` if a field was found, `None`
+    /// otherwise.
+    ///
+    /// Shared by both the Object::Pad and NativeClass extraction paths — the `field`
+    /// keyword and attribute set (`:param`, `:reader`, `:writer`, `:accessor`,
+    /// `:mutator`) are identical for both frameworks.
+    fn try_extract_field_declaration(&mut self, statement: &Node) -> Option<usize> {
+        let field = Self::object_pad_field_from_statement(statement)?;
+        let location = field.location;
+        let field_name = field.name.clone();
+        let traits = field.attributes.clone();
+
+        self.current_fields.push(field);
+
+        if let Some(reader) = Self::object_pad_reader_name(&field_name, &traits) {
+            self.current_methods.push(MethodInfo::synthetic(reader, location, None));
+        }
+        if let Some(writer) = Self::object_pad_writer_name(&field_name, &traits) {
+            self.current_methods.push(MethodInfo::synthetic(writer, location, None));
+        }
+        if let Some(accessor) = Self::object_pad_accessor_name(&field_name, &traits) {
+            self.current_methods.push(MethodInfo::synthetic(accessor, location, None));
+        }
+        if let Some(mutator) = Self::object_pad_mutator_name(&field_name, &traits) {
+            self.current_methods.push(MethodInfo::synthetic(mutator, location, None));
+        }
+
+        Some(1)
+    }
+
+    /// Extract `field` declarations from a Perl 5.38+ native class body.
+    ///
+    /// Native `field` syntax is identical to Object::Pad's, so this delegates to
+    /// [`Self::try_extract_field_declaration`] to avoid duplication.
+    fn try_extract_native_class_fields(
+        &mut self,
+        statements: &[Node],
+        idx: usize,
+    ) -> Option<usize> {
+        self.try_extract_field_declaration(&statements[idx])
     }
 
     fn record_object_pad_adjust(&mut self, location: SourceLocation) {
@@ -2311,6 +2341,110 @@ class MyApp::Point {
         assert_eq!(model.methods.len(), 2);
         assert!(model.methods.iter().any(|m| m.name == "get_x"));
         assert!(model.methods.iter().any(|m| m.name == "get_y"));
+        // Fields must be extracted (core gap fix for issue #1651)
+        assert_eq!(model.fields.len(), 2, "native class fields must be extracted");
+        assert!(model.fields.iter().any(|f| f.name == "x"), "field $x must be present");
+        assert!(model.fields.iter().any(|f| f.name == "y"), "field $y must be present");
+        let x = must_some(model.fields.iter().find(|f| f.name == "x"));
+        assert!(x.param, "field $x has :param attribute");
+        assert_eq!(x.default.as_deref(), Some("0"), "field $x default is 0");
+    }
+
+    #[test]
+    fn native_class_field_extraction_complete() {
+        // Issue #1651: Perl 5.38+ native class fields must be extracted with attributes
+        // and synthetic accessors, matching Object::Pad parity.
+        let models = build_models(
+            r#"
+class Point {
+    field $x :param :reader = 0;
+    field $y :param :writer = 1;
+
+    method move($dx, $dy) { $x += $dx; $y += $dy; }
+}
+"#,
+        );
+
+        assert_eq!(models.len(), 1, "expected one model");
+        let model = must_some(find_model(&models, "Point"));
+        assert_eq!(model.name, "Point");
+        assert_eq!(model.framework, Framework::NativeClass);
+
+        // Two fields extracted
+        assert_eq!(model.fields.len(), 2, "two fields must be extracted");
+
+        // Field $x: :param :reader
+        let x = must_some(model.fields.iter().find(|f| f.name == "x"));
+        assert!(x.param, "field $x has :param");
+        assert_eq!(x.reader.as_deref(), Some("x"), ":reader on $x synthesizes reader 'x'");
+        assert_eq!(x.default.as_deref(), Some("0"), "field $x default is 0");
+
+        // Field $y: :param :writer
+        let y = must_some(model.fields.iter().find(|f| f.name == "y"));
+        assert!(y.param, "field $y has :param");
+        assert_eq!(y.writer.as_deref(), Some("set_y"), ":writer on $y synthesizes writer 'set_y'");
+        assert_eq!(y.default.as_deref(), Some("1"), "field $y default is 1");
+
+        // Synthetic accessor methods generated
+        assert!(has_method(model, "x", true, None), "synthetic reader 'x' must exist");
+        assert!(has_method(model, "set_y", true, None), "synthetic writer 'set_y' must exist");
+
+        // Declared method present
+        assert!(has_method(model, "move", false, None), "declared method 'move' must exist");
+
+        // param_field_names works for NativeClass too
+        let param_names: Vec<_> = model.object_pad_param_field_names().collect();
+        assert_eq!(param_names, vec!["x", "y"], ":param fields must be listed");
+    }
+
+    #[test]
+    fn native_class_fields_isolated_from_object_pad() {
+        // Object::Pad fields and NativeClass fields must not interfere with each other
+        let models = build_models(
+            r#"
+use Object::Pad;
+
+class OPPoint {
+    field $a :param :reader = 10;
+}
+
+class NativePoint {
+    field $b :param :writer = 20;
+}
+"#,
+        );
+
+        // Two models: OPPoint is ObjectPad (because `use Object::Pad` was active),
+        // NativePoint inherits the ObjectPad framework detection because it follows
+        // in the same file.  Both must have their fields extracted correctly.
+        let op = must_some(find_model(&models, "OPPoint"));
+        assert_eq!(op.fields.len(), 1, "OPPoint must have field $a");
+        assert_eq!(op.fields[0].name, "a");
+
+        let nat = must_some(find_model(&models, "NativePoint"));
+        assert_eq!(nat.fields.len(), 1, "NativePoint must have field $b");
+        assert_eq!(nat.fields[0].name, "b");
+    }
+
+    #[test]
+    fn native_class_accessor_and_mutator_attributes() {
+        // Verify :accessor and :mutator synthetic method generation for NativeClass
+        let models = build_models(
+            r#"
+class Config {
+    field $_secret :accessor :mutator;
+}
+"#,
+        );
+
+        let model = must_some(find_model(&models, "Config"));
+        assert_eq!(model.fields.len(), 1);
+        let field = must_some(model.fields.iter().find(|f| f.name == "_secret"));
+        assert_eq!(field.accessor.as_deref(), Some("secret"), ":accessor strips leading _");
+        assert_eq!(field.mutator.as_deref(), Some("secret"), ":mutator strips leading _");
+
+        // Synthetic methods should be generated
+        assert!(has_method(model, "secret", true, None), "synthetic accessor 'secret' present");
     }
 
     #[test]
