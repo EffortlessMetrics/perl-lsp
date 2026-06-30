@@ -200,7 +200,4 @@ kept only in prompt prose.
 ## Related Files
 
 - [`.claude/commands/swarm.md`](../../.claude/commands/swarm.md)
-- [`.claude/skills/swarm/SKILL.md`](../../.claude/skills/swarm/SKILL.md)
-- [`.claude/skills/swarm/reference/team-structure.md`](../../.claude/skills/swarm/reference/team-structure.md)
-- [`.claude/skills/swarm/templates/teammate-prompt-template.md`](../../.claude/skills/swarm/templates/teammate-prompt-template.md)
 - [`docs/reference/SKILL_AND_AGENT_DESIGN.md`](../reference/SKILL_AND_AGENT_DESIGN.md)

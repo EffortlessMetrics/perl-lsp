@@ -42,7 +42,7 @@ The pipeline is organized into **7 gates** (coarse stages) with multiple agents 
 
 **Learning is captured continuously** by every agent in every gate. Gate 7 is the dedicated consolidation layer — it shapes captured artifacts into durable memory, doctrine, and follow-up work.
 
-**Gate-7 capture loop**: Every deep-review fix or observable incident => one  entry (YAML frontmatter with tags + search_terms, links the PR# and the  pattern) + a spec/contract follow-up in  or  if the class is recurring.
+**Gate-7 capture loop**: Every deep-review fix or observable incident => one learnings entry (YAML frontmatter with tags + search_terms, links the PR# and the incident pattern) + a spec/contract follow-up in docs/learnings/ or docs/concepts/ if the class is recurring.
 
 See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for the full gate model: skip criteria, within-gate ordering, three-axis triangulation in Gate 4, and worked examples.
 
@@ -114,7 +114,6 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 | `green-tdd-reviewed` | green-tdd | Edge case and regression tests added |
 | `architecture-reviewed` | architecture-reviewer | Design fits microcrate layering and dependency contracts |
 | `maintainer-issue-reviewed` | maintainer-issue | Issue aligns with project goals, roadmap, user base |
-| `green-tdd-reviewed` | green-tdd | Edge case and regression tests added |
 | `review-reviewed` | reviewer | Standards check passed (banned patterns, scope) |
 | `maintainer-pr-reviewed` | maintainer-pr | PR implementation fits project direction and quality bar |
 | `pr-responded` | pr-responder | Bot comments and CI failures addressed |
@@ -291,7 +290,7 @@ cargo test --workspace --lib          # Run all tests
 
 ## Crate Structure
 
-39 workspace members across 38 crate directories under `crates/` plus `xtask/` at the root (see `cargo metadata --no-deps`). The pre-v0.13.0 count of ~135 reflected the original microcrate split; successive collapse waves (D, G1a/G1b, G2, G3, Final-PR-B, H) absorbed those crates into larger units. Key crates:
+39 workspace members: 38 under `crates/` subdirectories, plus `xtask/` at the root (see `cargo metadata --no-deps`). The pre-v0.13.0 count of ~135 reflected the original microcrate split; successive collapse waves (D, G1a/G1b, G2, G3, Final-PR-B, H) absorbed those crates into larger units. Key crates:
 
 | Crate | Path | Purpose |
 |-------|------|---------|
