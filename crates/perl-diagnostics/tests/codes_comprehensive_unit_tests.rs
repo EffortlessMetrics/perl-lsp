@@ -1187,6 +1187,43 @@ fn from_message_real_perl_cant_locate_module() {
     assert_eq!(DiagnosticCode::from_message("can't locate the configuration entry"), None,);
 }
 
+/// Regression guard for issue #2212: `.pm` as a non-boundary substring must not
+/// trigger `ModuleNotFound`.  Before the fix, `msg_lower.contains(".pm")` matched
+/// `.pml`, `.pmx`, `.pm2`, and `.pm.bak` — all false positives.
+#[test]
+fn from_message_module_not_found_no_false_positive_on_pm_substring() {
+    // .pml — common Perl Module List extension, not a module path
+    assert_eq!(
+        DiagnosticCode::from_message("Can't locate Foo/Bar.pml in @INC"),
+        None,
+        ".pml should not trigger ModuleNotFound",
+    );
+    // .pmx — another variant
+    assert_eq!(
+        DiagnosticCode::from_message("Can't locate Foo/Bar.pmx in @INC"),
+        None,
+        ".pmx should not trigger ModuleNotFound",
+    );
+    // .pm2 — numeric suffix
+    assert_eq!(
+        DiagnosticCode::from_message("Can't locate Foo/Bar.pm2 in @INC"),
+        None,
+        ".pm2 should not trigger ModuleNotFound",
+    );
+    // .pm.bak — backup file
+    assert_eq!(
+        DiagnosticCode::from_message("Can't locate Foo/Bar.pm.bak in @INC"),
+        None,
+        ".pm.bak should not trigger ModuleNotFound",
+    );
+    // Positive control: real .pm still works
+    assert_eq!(
+        DiagnosticCode::from_message("Can't locate Foo/Bar.pm in @INC"),
+        Some(DiagnosticCode::ModuleNotFound),
+        "real .pm must still trigger ModuleNotFound",
+    );
+}
+
 /// Real Perl output: `Bareword "foo" not allowed while 'strict subs' in use at script.pl line 7.`
 /// Also: `Unquoted string "foo" may clash with future reserved word at script.pl line 7.`
 #[test]
