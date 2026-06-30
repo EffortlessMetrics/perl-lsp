@@ -16,7 +16,7 @@ use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, summarize_identities,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// LSP-compatible document symbol produced from source-backed compiler facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,7 +77,7 @@ fn source_backed_document_symbols_from_table(
 
     let empty_vec = Vec::new();
     let global_symbols = symbols_by_scope.get(&0).unwrap_or(&empty_vec);
-    let mut output = Vec::new();
+    let mut raw = Vec::new();
     let mut fact_traces = Vec::new();
 
     for symbol in global_symbols {
@@ -88,9 +88,26 @@ fn source_backed_document_symbols_from_table(
             source,
             &mut fact_traces,
         ) {
-            output.push(document_symbol);
+            raw.push(document_symbol);
         }
     }
+
+    // De-duplicate: a symbol that was collected as a child of some container must
+    // not also appear at the top level.  Without this guard, a `package Foo;`
+    // statement at byte offset 0 matches the global scope (also start=0) in the
+    // children-search, causing every global-scope sibling to appear BOTH as a
+    // child of `Foo` AND as a flat top-level entry — the duplication bug in #1519.
+    // We identify duplicates by (line, character) of the symbol's start position,
+    // which is unique within a source file.
+    let child_starts: HashSet<(u32, u32)> = raw
+        .iter()
+        .flat_map(|sym| sym.children.iter())
+        .map(|c| (c.range.start.line, c.range.start.character))
+        .collect();
+    let output: Vec<DocumentSymbol> = raw
+        .into_iter()
+        .filter(|sym| !child_starts.contains(&(sym.range.start.line, sym.range.start.character)))
+        .collect();
 
     DocumentSymbolLiveResult { symbols: output, fact_traces }
 }
@@ -399,32 +416,72 @@ mod tests {
         Ok(())
     }
 
+    /// Regression guard for #1519: `package Foo;\nsub greet {}` must produce greet
+    /// exactly ONCE — as a child of Foo, not also duplicated at the top level.
+    ///
+    /// The global scope has `location.start = 0` and `package Foo;` at the top of a
+    /// file also has `location.start = 0`, so the children-search absorbs global-scope
+    /// siblings (greet) as children of Foo.  The de-dup pass then removes greet from
+    /// the top-level list.  Both effects together give the correct LSP outline.
     #[test]
-    fn source_backed_document_symbols_keep_children_source_backed()
+    fn source_backed_document_symbols_no_duplication_statement_package()
     -> Result<(), Box<dyn std::error::Error>> {
-        let source = "package Foo;\n\nsub greet {\n    return 1;\n}\n";
+        let source =
+            "package Foo;\n\nsub greet {\n    return 1;\n}\nsub farewell {\n    return 0;\n}\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
 
         let result = source_backed_document_symbols_from_ast(&ast, source);
-        let package = result
-            .symbols
-            .iter()
-            .find(|symbol| symbol.name == "Foo")
-            .ok_or("expected Foo package symbol")?;
 
-        assert!(
-            package.children.iter().any(|symbol| symbol.name == "greet"),
-            "package symbol should contain greet child: {:?}",
-            package.children
+        // greet and farewell must each appear exactly once in the full tree.
+        let all_names: Vec<String> = {
+            let mut names = Vec::new();
+            for sym in &result.symbols {
+                names.push(sym.name.clone());
+                for child in &sym.children {
+                    names.push(child.name.clone());
+                }
+            }
+            names
+        };
+        assert_eq!(
+            all_names.iter().filter(|n| n.as_str() == "greet").count(),
+            1,
+            "greet must appear exactly once (no top-level duplication); tree names: {:?}",
+            all_names
         );
+        assert_eq!(
+            all_names.iter().filter(|n| n.as_str() == "farewell").count(),
+            1,
+            "farewell must appear exactly once (no top-level duplication); tree names: {:?}",
+            all_names
+        );
+
+        // Foo must be at the top level.
         assert!(
-            package.children.iter().all(|symbol| {
-                symbol.range.start.line <= symbol.range.end.line
-                    && symbol.selection_range.start.line <= symbol.selection_range.end.line
-            }),
-            "child symbols must carry source-backed ranges: {:?}",
-            package.children
+            result.symbols.iter().any(|s| s.name == "Foo"),
+            "Foo package must appear at top level; got: {:?}",
+            result.symbols
+        );
+
+        // greet and farewell must NOT appear at top level (they are children of Foo).
+        assert!(
+            !result.symbols.iter().any(|s| s.name == "greet"),
+            "greet must not appear at top level (it is a child of Foo); got: {:?}",
+            result.symbols
+        );
+
+        // greet must be a child of Foo with source-backed ranges.
+        let foo = result.symbols.iter().find(|s| s.name == "Foo").ok_or("no Foo")?;
+        let greet = foo
+            .children
+            .iter()
+            .find(|c| c.name == "greet")
+            .ok_or("greet must be a child of Foo")?;
+        assert!(
+            greet.range.start.line <= greet.range.end.line,
+            "greet must carry source-backed range: {:?}",
+            greet
         );
         Ok(())
     }

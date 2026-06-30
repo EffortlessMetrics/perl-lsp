@@ -687,11 +687,14 @@ __PACKAGE__->meta->make_immutable;
         "sound attribute should appear as a Property symbol"
     );
 
-    // Should find subroutines
+    // After the #1519 de-dup fix, symbols that are children of a container no
+    // longer appear at the top level.  `speak` is in the global scope alongside
+    // `Animal`, so the children-search nests it under Animal — meaning it is
+    // now a child, not a top-level entry.  Verify it appears in Animal's children.
     assert!(
-        names.iter().any(|n| n.contains("speak")),
-        "should find speak subroutine symbol, found: {:?}",
-        names
+        children.iter().any(|s| s.get("name").and_then(|n| n.as_str()) == Some("speak")),
+        "speak subroutine should appear as a child of Animal after #1519 fix, children: {:?}",
+        child_names
     );
 
     Ok(())
