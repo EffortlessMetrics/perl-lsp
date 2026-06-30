@@ -1841,6 +1841,34 @@ Not found in workspace or configured include paths.
                  unknown which branch matched.\n\n\
                  ```perl\n\"1999-12-31\" =~ /(\\d{4})-(\\d{2})-(\\d{2})/;\nprint $+;  # \"31\" (last group)\n```"
             }
+            "@+" => {
+                "**`@+` \u{2014} Regex Match End Positions**\n\n\
+                 Array containing the end positions of captures in the last \
+                 successful regex match. `$+[0]` is the end of the overall match, \
+                 `$+[1]` is the end of the first capture group, etc. Indexed from 0.\n\n\
+                 ```perl\n\"foo123bar\" =~ /(\\d+)/; print $+[0];  # 6 (end of match)\n```"
+            }
+            "@-" => {
+                "**`@-` \u{2014} Regex Match Start Positions**\n\n\
+                 Array containing the start positions of captures in the last \
+                 successful regex match. `$-[0]` is the start of the overall match, \
+                 `$-[1]` is the start of the first capture group, etc. Indexed from 0.\n\n\
+                 ```perl\n\"foo123bar\" =~ /(\\d+)/; print $-[0];  # 3 (start of match)\n```"
+            }
+            "@EXPORT" => {
+                "**`@EXPORT` \u{2014} Default Export List**\n\n\
+                 Array of symbol names exported by default when a module is \
+                 imported without specific `qw(...)` arguments. Used with the \
+                 `Exporter` pragma. Symbols are typically subroutine or variable names.\n\n\
+                 ```perl\nour @EXPORT = qw(process_file clean_data);\n```"
+            }
+            "@EXPORT_OK" => {
+                "**`@EXPORT_OK` \u{2014} Optional Exports**\n\n\
+                 Array of symbol names that can be optionally imported from a module. \
+                 These are not exported by default, but users can explicitly request \
+                 them. Used with the `Exporter` pragma in conjunction with `use Module qw(:tag foo)`.\n\n\
+                 ```perl\nour @EXPORT_OK = qw(advanced_function internal_util);\n```"
+            }
             "@ISA" => {
                 "**`@ISA` \u{2014} Inheritance List**\n\n\
                  Defines the parent classes for method resolution. Perl \
@@ -1907,6 +1935,21 @@ Not found in workspace or configured include paths.
                  Hash mapping signal names to handler code refs (or `'IGNORE'` / \
                  `'DEFAULT'`). Use `local %SIG` to temporarily override handlers.\n\n\
                  ```perl\n$SIG{INT}  = sub { print \"Interrupted\\n\"; exit 1 };\n$SIG{TERM} = 'IGNORE';\n```"
+            }
+            "%!" => {
+                "**`%!` \u{2014} OS Error Details Hash**\n\n\
+                 Hash providing access to individual errno values on systems that \
+                 support it (primarily Unix-like systems). Each key is an error name \
+                 (like `ENOENT`, `EACCES`), and the value is the corresponding \
+                 numeric errno. Similar to `$!` but organized as a hash for per-errno queries.\n\n\
+                 ```perl\nif ($!{ENOENT}) { warn \"File not found\"; }\n```"
+            }
+            "%EXPORT_TAGS" => {
+                "**`%EXPORT_TAGS` \u{2014} Export Tag Definitions**\n\n\
+                 Hash mapping export tag names to array references of symbol lists. \
+                 Used with the `Exporter` pragma to group related symbols for \
+                 convenient bulk imports (e.g., `use Module qw(:all)`).\n\n\
+                 ```perl\nour %EXPORT_TAGS = (\n    core   => [qw(foo bar)],\n    extra  => [qw(baz qux)],\n    all    => [@EXPORT, @EXPORT_OK],\n);\n```"
             }
             "$^A" => {
                 "**`$^A` \u{2014} Accumulator for `format()`**\n\n\
