@@ -391,7 +391,11 @@ use warnings;
         assert_eq!(percentile(&sorted, 0.0), 10, "H-P-2: p0 must be the first element");
         assert_eq!(percentile(&sorted, 100.0), 30, "H-P-3: p100 must be the last element");
         assert_eq!(percentile(&sorted, 50.0), 20, "H-P-4: p50 of 3-element slice must be middle");
-        assert_eq!(percentile(&[5], 50.0), 5, "H-P-5: singleton slice must return its only element");
+        assert_eq!(
+            percentile(&[5], 50.0),
+            5,
+            "H-P-5: singleton slice must return its only element"
+        );
     }
 
     fn print_routing_matrix(rows: &[Row]) {
