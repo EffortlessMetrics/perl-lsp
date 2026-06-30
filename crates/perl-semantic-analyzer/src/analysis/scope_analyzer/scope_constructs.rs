@@ -311,6 +311,10 @@ pub(super) fn handle_package<'a>(
         // Block form: `package Foo { ... }` — scope is limited to the block.
         // Save the previous package name and restore it after the block.
         let saved_package = context.current_package.borrow().clone();
+        // Increment generation: entering a new package context. This ensures that
+        // `our` redeclarations inside the block are detected independently of
+        // declarations in the enclosing scope.
+        context.package_change_generation.set(context.package_change_generation.get() + 1);
         *context.current_package.borrow_mut() = name.to_string();
 
         let pkg_scope = Rc::new(Scope::with_parent(scope.clone()));
@@ -319,10 +323,17 @@ pub(super) fn handle_package<'a>(
         ancestors.pop();
         analyzer.collect_unused_variables(&pkg_scope, issues, context);
 
+        // Restore the previous package and bump generation again so re-entry
+        // into `saved_package` is treated as a fresh visit.
+        context.package_change_generation.set(context.package_change_generation.get() + 1);
         *context.current_package.borrow_mut() = saved_package;
     } else {
         // Statement form: `package Foo;` — affects the rest of the file.
         // No scope boundary is created; the current scope continues.
+        // Increment generation so that `our` re-imports after a package switch
+        // (e.g., `package Foo; our $x; package Bar; our $x; package Foo; our $x;`)
+        // are not mis-reported as redeclarations.
+        context.package_change_generation.set(context.package_change_generation.get() + 1);
         *context.current_package.borrow_mut() = name.to_string();
     }
 }
