@@ -1180,6 +1180,15 @@ pub struct WorkspaceIndex {
     files: Arc<RwLock<HashMap<String, FileIndex>>>,
     /// Global symbol multimap (qualified/bare name -> ordered definition candidates)
     symbols: Arc<RwLock<HashMap<String, Vec<DefinitionCandidate>>>>,
+    /// Workspace-symbol search index for fast query lookup.
+    ///
+    /// Maps lowercase symbol name (bare or qualified) to all `WorkspaceSymbol`
+    /// instances that carry that name.  `search_source_symbols` iterates the
+    /// unique name keys in this map instead of scanning every file's symbol list,
+    /// turning the outer loop from O(total_symbols) to O(unique_lowercase_names).
+    ///
+    /// Lock order: always acquire `symbols` before `search_index`.
+    search_index: Arc<RwLock<HashMap<String, Vec<WorkspaceSymbol>>>>,
     /// Global reference index (symbol name -> locations across all files)
     ///
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
@@ -1352,6 +1361,71 @@ impl WorkspaceIndex {
                     .cmp(&Self::definition_candidate_sort_key(right))
             });
             entries.dedup();
+        }
+    }
+
+    /// Build the search index from scratch from all file indexes.
+    ///
+    /// Keyed by lowercase bare name and lowercase qualified name so that
+    /// `search_source_symbols` can iterate unique name keys (O(unique_lowercase_names))
+    /// rather than all (file, symbol) pairs (O(total_symbols)).
+    ///
+    /// Lock order: hold `symbols` write before calling; acquire `search_index` write
+    /// immediately after `symbols` write.
+    fn rebuild_search_index(
+        files: &HashMap<String, FileIndex>,
+        search_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+    ) {
+        search_index.clear();
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                let key = symbol.name.to_lowercase();
+                search_index.entry(key).or_default().push(symbol.clone());
+                if let Some(ref qname) = symbol.qualified_name {
+                    let qkey = qname.to_lowercase();
+                    search_index.entry(qkey).or_default().push(symbol.clone());
+                }
+            }
+        }
+    }
+
+    /// Incrementally add one file's symbols to the search index.
+    fn incremental_add_search(
+        search_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+        file_index: &FileIndex,
+    ) {
+        for symbol in &file_index.symbols {
+            let key = symbol.name.to_lowercase();
+            search_index.entry(key).or_default().push(symbol.clone());
+            if let Some(ref qname) = symbol.qualified_name {
+                let qkey = qname.to_lowercase();
+                search_index.entry(qkey).or_default().push(symbol.clone());
+            }
+        }
+    }
+
+    /// Incrementally remove one file's symbols from the search index by URI.
+    fn incremental_remove_search(
+        search_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+        file_index: &FileIndex,
+    ) {
+        for symbol in &file_index.symbols {
+            let key = symbol.name.to_lowercase();
+            if let Some(entries) = search_index.get_mut(&key) {
+                entries.retain(|s| s.uri != symbol.uri);
+                if entries.is_empty() {
+                    search_index.remove(&key);
+                }
+            }
+            if let Some(ref qname) = symbol.qualified_name {
+                let qkey = qname.to_lowercase();
+                if let Some(entries) = search_index.get_mut(&qkey) {
+                    entries.retain(|s| s.uri != symbol.uri);
+                    if entries.is_empty() {
+                        search_index.remove(&qkey);
+                    }
+                }
+            }
         }
     }
 
@@ -1531,6 +1605,7 @@ impl WorkspaceIndex {
         Self {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
+            search_index: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
             fact_shards: Arc::new(RwLock::new(HashMap::new())),
             semantic_reference_index: Arc::new(RwLock::new(ReferenceIndex::new())),
@@ -1572,6 +1647,7 @@ impl WorkspaceIndex {
         Self {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
+            search_index: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
             fact_shards: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             semantic_reference_index: Arc::new(RwLock::new(ReferenceIndex::new())),
@@ -1787,13 +1863,18 @@ impl WorkspaceIndex {
             // Incrementally remove old symbols before inserting new file
             if let Some(old_index) = files.get(&key) {
                 let mut symbols = self.symbols.write();
+                let mut search_idx = self.search_index.write();
                 Self::incremental_remove_symbols(&files, &mut symbols, old_index);
+                Self::incremental_remove_search(&mut search_idx, old_index);
+                drop(search_idx);
                 drop(symbols);
             }
             files.insert(key.clone(), file_index);
             let mut symbols = self.symbols.write();
+            let mut search_idx = self.search_index.write();
             if let Some(new_index) = files.get(&key) {
                 Self::incremental_add_symbols(&mut symbols, new_index);
+                Self::incremental_add_search(&mut search_idx, new_index);
             }
 
             if let Some(file_index) = files.get(&key) {
@@ -1865,7 +1946,9 @@ impl WorkspaceIndex {
 
             // Incrementally remove symbols and re-insert any shadowed names.
             let mut symbols = self.symbols.write();
+            let mut search_idx = self.search_index.write();
             Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
+            Self::incremental_remove_search(&mut search_idx, &file_index);
 
             // Defensive sweep: purge any remaining cache entries whose value
             // points to this file's URI.  incremental_remove_symbols already
@@ -1891,6 +1974,12 @@ impl WorkspaceIndex {
                     !removed_uris.contains(&cand_uri)
                 });
                 !candidates.is_empty()
+            });
+            // Defensive sweep for search_index: remove any remaining entries
+            // pointing to the removed URI (mirrors the symbols sweep above).
+            search_idx.retain(|_, syms| {
+                syms.retain(|sym| !removed_uris.contains(&sym.uri.as_str()));
+                !syms.is_empty()
             });
 
             // Remove from global reference index. Two-phase cleanup: first
@@ -2145,6 +2234,7 @@ impl WorkspaceIndex {
         {
             let mut files = self.files.write();
             let mut symbols = self.symbols.write();
+            let mut search_idx = self.search_index.write();
             let mut global_refs = self.global_references.write();
 
             // Pre-allocate capacity for the incoming batch to avoid rehashing.
@@ -2176,6 +2266,7 @@ impl WorkspaceIndex {
 
             // Single rebuild at the end
             Self::rebuild_symbol_cache(&files, &mut symbols);
+            Self::rebuild_search_index(&files, &mut search_idx);
         }
 
         errors
@@ -2443,6 +2534,7 @@ impl WorkspaceIndex {
     pub fn clear(&self) {
         self.files.write().clear();
         self.symbols.write().clear();
+        self.search_index.write().clear();
         self.global_references.write().clear();
         self.fact_shards.write().clear();
         *self.semantic_reference_index.write() = ReferenceIndex::new();
@@ -2959,21 +3051,28 @@ impl WorkspaceIndex {
     /// Generated/framework members are excluded. Use this when a caller needs
     /// to preserve the historical source-backed live slice for trust receipts
     /// or fallback paths.
+    ///
+    /// Uses the `search_index` (keyed by lowercase bare/qualified names) to
+    /// iterate unique name keys rather than all (file, symbol) pairs, turning
+    /// the outer loop from O(total_symbols) to O(unique_lowercase_names).
+    /// A symbol that is stored under both its bare name key and its qualified
+    /// name key is deduplicated by `(uri, start_byte)` so each `WorkspaceSymbol`
+    /// appears at most once in the result.
     pub fn search_source_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
         let query = query.trim();
         let query_lower = query.to_lowercase();
-        let files = self.files.read();
+        let search_idx = self.search_index.read();
+        let mut seen: HashSet<(String, usize)> = HashSet::new();
         let mut results = Vec::new();
-        for file_index in files.values() {
-            for symbol in &file_index.symbols {
-                if symbol.name.to_lowercase().contains(&query_lower)
-                    || symbol
-                        .qualified_name
-                        .as_ref()
-                        .map(|qn| qn.to_lowercase().contains(&query_lower))
-                        .unwrap_or(false)
-                {
-                    results.push(symbol.clone());
+        for (name_key, symbols) in search_idx.iter() {
+            if name_key.contains(&query_lower) {
+                for sym in symbols {
+                    // Dedup: a symbol may appear under both its bare-name key
+                    // and its qualified-name key; keep only the first occurrence.
+                    let dedup_key = (sym.uri.clone(), sym.range.start.byte);
+                    if seen.insert(dedup_key) {
+                        results.push(sym.clone());
+                    }
                 }
             }
         }
@@ -7993,6 +8092,145 @@ mod entity_id_file_scoped_tests {
             "synthetic anchor injection API not yet available",
         )
         .into())
+    }
+
+    // ── search_index correctness: issue #2994 ──
+
+    /// Verify that `search_source_symbols` via the indexed path returns the same
+    /// symbol set as iterating all files would, across multiple files, for both
+    /// bare-name and qualified-name queries.
+    ///
+    /// This is the primary correctness guard for the O(n) → O(unique_names) fix:
+    /// if the search_index gets out of sync (stale entry, missing add, duplicate),
+    /// these assertions catch it.
+    #[test]
+    fn search_source_symbols_indexed_matches_full_scan_result_set() {
+        let index = WorkspaceIndex::new();
+
+        let uri_a = "file:///lib/Utils.pm";
+        let uri_b = "file:///lib/App.pm";
+
+        must(index.index_file(
+            must(url::Url::parse(uri_a)),
+            "package Utils;\nsub process { 1 }\nsub helper { 2 }\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse(uri_b)),
+            "package App;\nuse Utils;\nsub run { 3 }\n1;\n".to_string(),
+        ));
+
+        // Bare-name substring match: "proc" matches Utils::process
+        let results = index.search_source_symbols("proc");
+        let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            names.contains(&"process"),
+            "bare-name substring 'proc' must match 'process'; got: {:?}",
+            names
+        );
+        assert!(!names.contains(&"helper"), "'helper' must not match 'proc'; got: {:?}", names);
+
+        // Qualified-name substring match: "Utils::proc" must match via qualified name
+        let qresults = index.search_source_symbols("Utils::proc");
+        assert!(
+            qresults.iter().any(|s| s.name == "process"),
+            "'Utils::proc' must match process via qualified name; got: {:?}",
+            qresults.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+
+        // Cross-file: "run" lives only in App.pm
+        let run_results = index.search_source_symbols("run");
+        assert!(
+            run_results.iter().any(|s| s.name == "run" && s.uri == uri_b),
+            "'run' must be found in App.pm; got: {:?}",
+            run_results.iter().map(|s| (&s.name, &s.uri)).collect::<Vec<_>>()
+        );
+
+        // No duplicates: a symbol appearing under both bare and qualified name keys
+        // must appear exactly once in results.
+        let all = index.search_source_symbols("process");
+        let process_count = all.iter().filter(|s| s.name == "process").count();
+        assert_eq!(
+            process_count, 1,
+            "'process' must appear exactly once (no dup from dual-key indexing); got: {process_count}"
+        );
+    }
+
+    /// Verify that `search_source_symbols` via the indexed path is correct after
+    /// a file is updated (incremental remove + add) and after `remove_file`.
+    #[test]
+    fn search_source_symbols_indexed_correct_after_update_and_remove() {
+        let index = WorkspaceIndex::new();
+
+        let uri = "file:///lib/Foo.pm";
+
+        // Index v1: has `old_func`
+        must(index.index_file(
+            must(url::Url::parse(uri)),
+            "package Foo;\nsub old_func { 1 }\n1;\n".to_string(),
+        ));
+        assert!(
+            index.search_source_symbols("old_func").iter().any(|s| s.name == "old_func"),
+            "old_func must be found after initial index"
+        );
+
+        // Re-index (update) v2: `old_func` gone, `new_func` added
+        must(index.index_file(
+            must(url::Url::parse(uri)),
+            "package Foo;\nsub new_func { 2 }\n1;\n".to_string(),
+        ));
+        assert!(
+            index.search_source_symbols("new_func").iter().any(|s| s.name == "new_func"),
+            "new_func must appear after update"
+        );
+        assert!(
+            index.search_source_symbols("old_func").iter().all(|s| s.name != "old_func"),
+            "old_func must be gone after update; stale entry in search_index"
+        );
+
+        // Remove the file entirely
+        index.remove_file(uri);
+        assert!(
+            index.search_source_symbols("new_func").is_empty(),
+            "new_func must be gone after remove_file"
+        );
+    }
+
+    /// Verify that `search_source_symbols` returns the same set (sorted by name+uri)
+    /// whether a batch index or incremental index is used.  This exercises
+    /// `rebuild_search_index` (batch path) vs `incremental_add_search` (single path).
+    #[test]
+    fn search_source_symbols_batch_vs_incremental_same_result_set() {
+        let uri_a = "file:///lib/Alpha.pm";
+        let uri_b = "file:///lib/Beta.pm";
+        let code_a = "package Alpha;\nsub alpha_fn { 1 }\n1;\n";
+        let code_b = "package Beta;\nsub beta_fn { 2 }\n1;\n";
+
+        // Incremental path
+        let idx_inc = WorkspaceIndex::new();
+        must(idx_inc.index_file(must(url::Url::parse(uri_a)), code_a.to_string()));
+        must(idx_inc.index_file(must(url::Url::parse(uri_b)), code_b.to_string()));
+
+        // Batch path
+        let idx_batch = WorkspaceIndex::new();
+        let errors = idx_batch.index_files_batch(vec![
+            (must(url::Url::parse(uri_a)), code_a.to_string()),
+            (must(url::Url::parse(uri_b)), code_b.to_string()),
+        ]);
+        assert!(errors.is_empty(), "batch index must have no errors: {:?}", errors);
+
+        // Both should find "alpha_fn" and "beta_fn"
+        for query in &["alpha_fn", "beta_fn", "fn"] {
+            let mut inc = idx_inc.search_source_symbols(query);
+            let mut bat = idx_batch.search_source_symbols(query);
+            inc.sort_by(|a, b| a.name.cmp(&b.name).then(a.uri.cmp(&b.uri)));
+            bat.sort_by(|a, b| a.name.cmp(&b.name).then(a.uri.cmp(&b.uri)));
+            let inc_names: Vec<&str> = inc.iter().map(|s| s.name.as_str()).collect();
+            let bat_names: Vec<&str> = bat.iter().map(|s| s.name.as_str()).collect();
+            assert_eq!(
+                inc_names, bat_names,
+                "query '{query}': incremental and batch must return same symbol names"
+            );
+        }
     }
 }
 
