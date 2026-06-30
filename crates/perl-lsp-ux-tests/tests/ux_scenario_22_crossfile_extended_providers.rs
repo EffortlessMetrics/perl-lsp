@@ -538,12 +538,10 @@ fn scenario_22_call_hierarchy_outgoing_from_run_hard_assert() -> anyhow::Result<
 
 /// Hard assert — callHierarchy/incomingCalls for `run` must return at least one caller.
 ///
-/// BROKEN on current main: incomingCalls returns empty [] even though
-/// script/real-baseline.pl calls `$app->run`. OO arrow-method caller lookup
-/// is not resolving back to the CallHierarchyItem.
-/// Tracking: #3093
+/// Fixed in #3093: top-level callers (not inside any `sub`) are now returned as
+/// file-level CallHierarchyItems instead of being silently dropped.
+/// script/real-baseline.pl calls `$app->run` at the top level — must appear.
 #[test]
-#[ignore = "real gap — incomingCalls returns empty for OO method callers; tracking #3093"]
 fn scenario_22_call_hierarchy_incoming_to_run_hard_assert() -> anyhow::Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_22: perl-lsp binary not found");
@@ -595,6 +593,17 @@ fn scenario_22_call_hierarchy_incoming_to_run_hard_assert() -> anyhow::Result<()
         !calls.is_empty(),
         "incomingCalls for `App::run` must return at least one caller. \
          script/real-baseline.pl calls `$app->run`. Got: []"
+    );
+
+    // The caller must be the script file — not just any non-empty result.
+    // This guards against vacuous passes where an unrelated item happens to appear.
+    let script_caller = calls.iter().find(|c| {
+        c["from"]["uri"].as_str().map(|u| u.contains("real-baseline.pl")).unwrap_or(false)
+    });
+    assert!(
+        script_caller.is_some(),
+        "incomingCalls for `App::run` must include `real-baseline.pl` as a caller \
+         (top-level `$app->run` call). Got callers: {calls:?}"
     );
 
     harness.assert_no_crash();

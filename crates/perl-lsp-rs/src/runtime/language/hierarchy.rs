@@ -630,22 +630,29 @@ impl LspServer {
                     let refs = index.find_refs(&symbol_key);
 
                     for location in refs {
-                        if let Some(from) =
-                            self.find_workspace_enclosing_callable(&callable_symbols, &location)
-                        {
-                            let key = (from.name.clone(), from.uri.clone());
-                            let from_range = index_location_to_wire_range(&location);
-                            if let Some(&idx) = seen.get(&key) {
-                                all_calls[idx].from_ranges.push(from_range);
-                            } else {
-                                seen.insert(key, all_calls.len());
-                                all_calls.push(
-                                    crate::call_hierarchy_provider::CallHierarchyIncomingCall {
-                                        from,
-                                        from_ranges: vec![from_range],
-                                    },
-                                );
-                            }
+                        let from_range = index_location_to_wire_range(&location);
+                        let from = self
+                            .find_workspace_enclosing_callable(&callable_symbols, &location)
+                            .unwrap_or_else(|| {
+                                // Top-level call site — no enclosing callable in the
+                                // workspace index.  Synthesize a file-level caller so the
+                                // script appears in incomingCalls instead of being dropped.
+                                crate::call_hierarchy_provider::synthetic_file_level_caller(
+                                    &location.uri,
+                                    from_range,
+                                )
+                            });
+                        let key = (from.name.clone(), from.uri.clone());
+                        if let Some(&idx) = seen.get(&key) {
+                            all_calls[idx].from_ranges.push(from_range);
+                        } else {
+                            seen.insert(key, all_calls.len());
+                            all_calls.push(
+                                crate::call_hierarchy_provider::CallHierarchyIncomingCall {
+                                    from,
+                                    from_ranges: vec![from_range],
+                                },
+                            );
                         }
                     }
                 }
@@ -910,6 +917,75 @@ mod tests {
             }
         })));
         assert!(result.is_ok(), "handle_incoming_calls must not error: {result:?}");
+    }
+
+    /// Verifies that the workspace-index path in `handle_incoming_calls` synthesizes
+    /// a file-level `CallHierarchyItem` (kind=1/File) when a reference location in
+    /// the index has no enclosing callable symbol — i.e., it is a top-level call.
+    ///
+    /// Covers lines 633-645 (the `unwrap_or_else` closure + seen-map insert) for the
+    /// Codecov/Patch-95 gate (#3093).
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_incoming_calls_workspace_path_synthesizes_file_level_caller() {
+        let server = LspServer::new();
+        server.test_enable_call_hierarchy();
+
+        // script.pl: static method call at the TOP LEVEL (no enclosing sub).
+        // App->run() is a static call so workspace_index stores it as "App::run".
+        let script_uri = "file:///script.pl";
+        let script_text = "App->run();\n";
+
+        // Index the file (transitions coordinator to Building internally).
+        server
+            .test_index_file_in_building_state(script_uri, script_text)
+            .expect("indexing script.pl");
+        // Transition coordinator to Ready so workspace path is taken.
+        server.test_simulate_indexing_complete();
+
+        // Also open as a document so open-doc fallback doesn't add duplicates.
+        open_doc(&server, script_uri, script_text);
+
+        // incomingCalls for "App::run" — data.packageName drives workspace_symbol_key.
+        let result = server.handle_incoming_calls(Some(json!({
+            "item": {
+                "name": "run",
+                "kind": 6,
+                "uri": "file:///App.pm",
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end":   { "line": 2, "character": 1 }
+                },
+                "selectionRange": {
+                    "start": { "line": 1, "character": 4 },
+                    "end":   { "line": 1, "character": 7 }
+                },
+                "data": {
+                    "packageName": "App",
+                    "qualifiedName": "App::run"
+                }
+            }
+        })));
+
+        assert!(result.is_ok(), "handle_incoming_calls must not error: {result:?}");
+        let value = result.expect("already checked");
+        let value = value.expect("handler must return Some value");
+        // handle_incoming_calls returns the calls array directly (not wrapped in {"result":...})
+        let calls = value.as_array().expect("result should be an array");
+
+        // The reference in script.pl has no enclosing callable, so the workspace
+        // path must synthesize a file-level caller with kind=1 (SymbolKind.File).
+        let file_caller = calls
+            .iter()
+            .find(|c| c["from"]["uri"].as_str().map_or(false, |u| u.contains("script.pl")));
+        assert!(file_caller.is_some(), "expected file-level caller from script.pl, got: {calls:?}");
+        let from = &file_caller.expect("already checked")["from"];
+        assert_eq!(
+            from["kind"].as_u64(),
+            Some(1),
+            "file-level caller must have SymbolKind.File=1, got: {from:?}"
+        );
+        assert_eq!(from["name"].as_str(), Some("script.pl"));
     }
 
     /// Verifies that `handle_outgoing_calls` executes the workspace
