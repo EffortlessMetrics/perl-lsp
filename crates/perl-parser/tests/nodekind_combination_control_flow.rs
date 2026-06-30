@@ -938,7 +938,7 @@ where
             }
         }
         NodeKind::LoopControl { .. } => {} // No children
-        NodeKind::Goto { target } => {
+        NodeKind::Goto { target, .. } => {
             find_nodes_recursive(target, predicate, results);
         }
         NodeKind::Tie { variable, package, args } => {

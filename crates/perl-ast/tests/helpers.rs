@@ -17,7 +17,7 @@
 //! 2. Add a representative instance here.
 //! 3. All tests that use `all_nodekind_instances()` automatically cover the new variant.
 
-use perl_ast::{Node, NodeKind, SourceLocation};
+use perl_ast::{GotoTargetForm, Node, NodeKind, SourceLocation};
 
 fn loc() -> SourceLocation {
     SourceLocation { start: 0, end: 1 }
@@ -349,6 +349,9 @@ pub fn all_nodekind_instances() -> Vec<Node> {
             },
             loc(),
         ),
-        Node::new(NodeKind::Goto { target: Box::new(var("$", "sub_ref")) }, loc()),
+        Node::new(
+            NodeKind::Goto { target: Box::new(var("$", "sub_ref")), form: GotoTargetForm::Label },
+            loc(),
+        ),
     ]
 }

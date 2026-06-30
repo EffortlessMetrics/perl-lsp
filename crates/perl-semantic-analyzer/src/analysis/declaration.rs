@@ -3,7 +3,7 @@
 //! Provides go-to-declaration functionality for finding where symbols are declared.
 //! Supports LocationLink for enhanced client experience.
 
-use crate::ast::{Node, NodeKind};
+use crate::ast::{GotoTargetForm, Node, NodeKind};
 use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
 use rustc_hash::FxHashMap;
@@ -338,12 +338,33 @@ impl<'a> DeclarationProvider<'a> {
                 self.find_method_declaration(node, method, object)
             }
             NodeKind::Identifier { name } => self.find_identifier_declaration(node, name),
-            NodeKind::Goto { target } => {
-                if let NodeKind::Identifier { name } = &target.kind {
-                    self.find_label_declaration(node, name)
-                        .or_else(|| self.find_subroutine_declaration(node, name))
-                } else {
-                    None
+            NodeKind::Goto { target, form } => {
+                match form {
+                    GotoTargetForm::Label => {
+                        if let NodeKind::Identifier { name } = &target.kind {
+                            self.find_label_declaration(node, name)
+                                .or_else(|| self.find_subroutine_declaration(node, name))
+                        } else {
+                            None
+                        }
+                    }
+                    GotoTargetForm::Sub => {
+                        // goto &sub — navigate to the subroutine declaration.
+                        // Skip dynamic coderefs (e.g. `goto &$var`, where the parser
+                        // produces `FunctionCall { name: "$var", .. }`) so we don't
+                        // issue a wasted lookup for a non-existent subroutine. This
+                        // mirrors the sigil guard in symbol.rs so both consumers of
+                        // the `form` field agree on what the `Sub` arm means.
+                        match &target.kind {
+                            NodeKind::FunctionCall { name, .. }
+                                if !name.is_empty() && !name.starts_with(['$', '@', '%']) =>
+                            {
+                                self.find_subroutine_declaration(node, name)
+                            }
+                            _ => None,
+                        }
+                    }
+                    GotoTargetForm::Expr => None,
                 }
             }
             // Cursor on a `method` name at its declaration site — self-location.
@@ -708,7 +729,7 @@ impl<'a> DeclarationProvider<'a> {
         };
 
         match &parent.kind {
-            NodeKind::Goto { target } => std::ptr::eq(target.as_ref(), node),
+            NodeKind::Goto { target, .. } => std::ptr::eq(target.as_ref(), node),
             _ => false,
         }
     }
@@ -2249,6 +2270,93 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = parser.parse().expect("parse must succeed");
         DeclarationProvider::new(Arc::new(ast), source.to_string(), "file:///test.pl".to_string())
+    }
+
+    // =========================================================================
+    // NodeKind::Goto / GotoTargetForm::Sub — changed lines in declaration.rs (#1923)
+    //
+    // find_declaration Goto/Sub arm (lines ~351-366): `goto &sub` navigates to the
+    // subroutine declaration, but dynamic coderefs (`goto &$var`) are skipped via the
+    // sigil guard mirroring symbol.rs so no wasted lookup is issued.
+    // =========================================================================
+
+    /// `goto &target` (named subroutine) resolves to the sub declaration —
+    /// exercises the guarded `FunctionCall { name, .. }` arm of GotoTargetForm::Sub.
+    ///
+    /// Covered changed lines: ~351-360 (Sub arm, named-subroutine branch).
+    #[test]
+    fn goto_sub_decl_resolves_named_subroutine() {
+        let source = "sub target { return 42; }\nsub jump { goto &target; }\n";
+        let provider = make_provider(source);
+        // Cursor on the `goto` keyword inside `jump` so find_node_at_offset
+        // returns the Goto node (the keyword region has no child node).
+        let offset = source.rfind("goto").expect("goto must be in source");
+        let result = provider.find_declaration(offset, 0);
+        assert!(
+            result.is_some(),
+            "find_declaration on `goto &target` must resolve the subroutine; \
+             source={source:?} offset={offset}"
+        );
+    }
+
+    /// `goto &$dispatch` (dynamic coderef) is NOT treated as a named-subroutine
+    /// lookup — the sigil guard sends it to the `_ => None` arm, so no wasted
+    /// `find_subroutine_declaration("$dispatch")` is issued.
+    ///
+    /// Covered changed line: the `name.starts_with(['$','@','%'])` guard +
+    /// `_ => None` arm of GotoTargetForm::Sub.
+    #[test]
+    fn goto_sub_decl_skips_dynamic_coderef() {
+        let source = "sub jump { goto &$dispatch; }\n";
+        let provider = make_provider(source);
+        let offset = source.find("goto").expect("goto must be in source");
+        let result = provider.find_declaration(offset, 0);
+        assert!(
+            result.is_none(),
+            "find_declaration on `goto &$dispatch` must return None (dynamic coderef, \
+             not a named subroutine); source={source:?} offset={offset}"
+        );
+    }
+
+    /// `goto LABEL` (sigil-less bareword → Label form) exercises the Label arm,
+    /// which tries label resolution then falls back to subroutine resolution.
+    /// Here `helper` is a subroutine, so the `.or_else` fallback resolves it.
+    #[test]
+    fn goto_label_decl_resolves_via_subroutine_fallback() {
+        let source = "sub helper { 1 }\nsub jump { goto helper; }\n";
+        let provider = make_provider(source);
+        let offset = source.rfind("goto").expect("goto must be in source");
+        assert!(
+            provider.find_declaration(offset, 0).is_some(),
+            "goto helper (Label form) should resolve via the subroutine fallback"
+        );
+    }
+
+    /// `goto $target` (scalar → Expr form) exercises the `Expr => None` arm.
+    #[test]
+    fn goto_expr_decl_returns_none() {
+        let source = "sub jump { my $t = 0; goto $t; }\n";
+        let provider = make_provider(source);
+        let offset = source.rfind("goto").expect("goto must be in source");
+        assert!(
+            provider.find_declaration(offset, 0).is_none(),
+            "goto $target (Expr form) resolves to no declaration"
+        );
+    }
+
+    /// Cursor on the goto *target* identifier reaches `identifier_is_goto_target`,
+    /// which confirms the identifier is the target child of its `Goto` parent
+    /// before label/subroutine resolution.
+    #[test]
+    fn goto_target_identifier_resolves_via_goto_target_check() {
+        let source = "sub helper { 1 }\nsub jump { goto helper; }\n";
+        let provider = make_provider(source);
+        let goto_at = source.rfind("goto helper").expect("goto helper present");
+        let helper_off = goto_at + source[goto_at..].find("helper").expect("helper after goto");
+        assert!(
+            provider.find_declaration(helper_off, 0).is_some(),
+            "cursor on the goto target `helper` should resolve to the subroutine"
+        );
     }
 
     // =========================================================================

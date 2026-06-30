@@ -137,6 +137,40 @@ impl Drop for ToSexpDepthGuard {
     }
 }
 
+/// Discriminant for the three semantically distinct forms of Perl's `goto` statement.
+///
+/// Perl's `goto` is overloaded across three fundamentally different operations:
+///
+/// | Form | Example | Semantics |
+/// |------|---------|-----------|
+/// | `Label` | `goto LABEL` | Jump to a named label in the current program |
+/// | `Sub` | `goto &sub` | **Frame replacement** — tail-call with same `@_`; even `caller()` cannot distinguish |
+/// | `Expr` | `goto $expr` | Dynamic target — computed at run time |
+///
+/// The `Sub` form (`goto &NAME`) is semantically different from a normal call: it replaces
+/// the current stack frame with the called subroutine, so the called sub sees the same `@_`
+/// and `caller` context. Semantic analysis and DAP must treat it as a tail-call, not a jump.
+///
+/// This enum is always populated at parse time (never `None`); the parser detects the form
+/// by examining the first token of the target expression before consuming the full target.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum GotoTargetForm {
+    /// `goto LABEL` — transfer control to a named label (plain identifier).
+    Label,
+    /// `goto &sub`, `goto &Pkg::sub`, `goto &$coderef` — frame replacement (tail call).
+    ///
+    /// The `&` sigil is the distinguishing marker. The target may be:
+    /// - A bare name: `goto &helper`
+    /// - A package-qualified name: `goto &Pkg::helper`
+    /// - A variable coderef: `goto &$dispatch_table{$key}`
+    Sub,
+    /// `goto $expr` or `goto EXPR` where the target is a computed scalar expression.
+    ///
+    /// This includes `goto $label_var` (dynamic label) and other computed forms
+    /// that are not a plain identifier (Label) or an ampersand-prefixed coderef (Sub).
+    Expr,
+}
+
 /// Core AST node representing any Perl language construct within parsing workflows.
 ///
 /// This is the fundamental building block for representing parsed Perl code. Each node
@@ -686,8 +720,13 @@ impl Node {
                 }
             }
 
-            NodeKind::Goto { target } => {
-                format!("(goto {})", target.to_sexp())
+            NodeKind::Goto { target, form } => {
+                let form_str = match form {
+                    GotoTargetForm::Label => "label",
+                    GotoTargetForm::Sub => "sub",
+                    GotoTargetForm::Expr => "expr",
+                };
+                format!("(goto :{} {})", form_str, target.to_sexp())
             }
 
             NodeKind::MethodCall { object, method, args } => {
@@ -1068,7 +1107,7 @@ impl Node {
                     f(v);
                 }
             }
-            NodeKind::Goto { target } => f(target),
+            NodeKind::Goto { target, .. } => f(target),
             NodeKind::Signature { parameters } => {
                 for param in parameters {
                     f(param);
@@ -1323,7 +1362,7 @@ impl Node {
                     f(v);
                 }
             }
-            NodeKind::Goto { target } => f(target),
+            NodeKind::Goto { target, .. } => f(target),
             NodeKind::Signature { parameters } => {
                 for param in parameters {
                     f(param);
@@ -2103,6 +2142,11 @@ pub enum NodeKind {
     Goto {
         /// The target of the goto (label identifier, sub reference, or expression)
         target: Box<Node>,
+        /// Which of the three goto forms this is.
+        ///
+        /// Always populated at parse time. Consumers should use this rather than
+        /// inspecting the target's node kind, to avoid coupling to target representation.
+        form: GotoTargetForm,
     },
 
     /// Method call: `$obj->method(@args)` or `$obj->method`
@@ -2774,7 +2818,7 @@ mod tests {
             },
             NodeKind::Return { value: None },
             NodeKind::LoopControl { op: String::new(), label: None },
-            NodeKind::Goto { target: Box::new(dummy_node()) },
+            NodeKind::Goto { target: Box::new(dummy_node()), form: GotoTargetForm::Label },
             NodeKind::MethodCall {
                 object: Box::new(dummy_node()),
                 method: String::new(),

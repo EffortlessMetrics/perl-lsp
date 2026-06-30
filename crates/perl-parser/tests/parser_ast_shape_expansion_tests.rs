@@ -222,10 +222,10 @@ fn collect_loop_controls<'a>(node: &'a Node, controls: &mut Vec<&'a Node>) {
         }
         NodeKind::ExpressionStatement { expression }
         | NodeKind::Unary { operand: expression, .. }
-        | NodeKind::Goto { target: expression }
         | NodeKind::Eval { block: expression }
         | NodeKind::Do { block: expression }
         | NodeKind::Defer { block: expression } => collect_loop_controls(expression, controls),
+        NodeKind::Goto { target, .. } => collect_loop_controls(target, controls),
         NodeKind::VariableDeclaration { variable, initializer, .. } => {
             collect_loop_controls(variable, controls);
             if let Some(initializer) = initializer {
@@ -594,7 +594,7 @@ fn labeled_loop_control_and_goto_targets_are_preserved() -> Result<(), String> {
     let goto_node =
         find_first(&ast, &|kind| matches!(kind, NodeKind::Goto { .. })).ok_or("missing goto")?;
     match &goto_node.kind {
-        NodeKind::Goto { target } => match &target.kind {
+        NodeKind::Goto { target, .. } => match &target.kind {
             NodeKind::Identifier { name } => assert_eq!(name, "DONE"),
             other => return Err(format!("expected identifier goto target, got {other:?}")),
         },
@@ -737,7 +737,7 @@ fn labeled_loop_control_modifiers_and_goto_keep_targets() -> Result<(), String> 
     }
 
     match &body_statements[3].kind {
-        NodeKind::Goto { target } => match &target.kind {
+        NodeKind::Goto { target, .. } => match &target.kind {
             NodeKind::Identifier { name } => assert_eq!(name, "FINISH"),
             other => return Err(format!("expected goto target identifier, got {other:?}")),
         },

@@ -1,4 +1,4 @@
-use perl_ast::{Node, NodeKind, SourceLocation};
+use perl_ast::{GotoTargetForm, Node, NodeKind, SourceLocation};
 
 fn loc() -> SourceLocation {
     SourceLocation::new(0, 0)
@@ -362,7 +362,14 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             "LoopControl",
             0,
         ),
-        (Node::new(NodeKind::Goto { target: Box::new(leaf("target")) }, loc()), "Goto", 1),
+        (
+            Node::new(
+                NodeKind::Goto { target: Box::new(leaf("target")), form: GotoTargetForm::Label },
+                loc(),
+            ),
+            "Goto",
+            1,
+        ),
         (
             Node::new(
                 NodeKind::MethodCall {

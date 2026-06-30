@@ -869,7 +869,7 @@ impl SemanticAnalyzer {
                 });
             }
 
-            NodeKind::Goto { target } => {
+            NodeKind::Goto { target, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::KeywordControl,

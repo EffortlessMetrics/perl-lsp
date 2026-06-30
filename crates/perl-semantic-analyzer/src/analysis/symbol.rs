@@ -25,7 +25,7 @@
 //! ```
 
 use crate::SourceLocation;
-use crate::ast::{Node, NodeKind};
+use crate::ast::{GotoTargetForm, Node, NodeKind};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
@@ -1017,26 +1017,53 @@ impl SymbolExtractor {
                 self.visit_node(variable);
             }
 
-            NodeKind::Goto { target } => match &target.kind {
-                NodeKind::Identifier { name } => {
-                    self.table.add_reference(SymbolReference {
-                        name: name.clone(),
-                        kind: SymbolKind::Label,
-                        location: target.location,
-                        scope_id: self.table.current_scope(),
-                        is_write: false,
-                    });
+            NodeKind::Goto { target, form } => match form {
+                GotoTargetForm::Label => {
+                    // goto LABEL — record the label as a reference for jump-to-definition.
+                    if let NodeKind::Identifier { name } = &target.kind {
+                        self.table.add_reference(SymbolReference {
+                            name: name.clone(),
+                            kind: SymbolKind::Label,
+                            location: target.location,
+                            scope_id: self.table.current_scope(),
+                            is_write: false,
+                        });
+                    } else {
+                        self.visit_node(target);
+                    }
                 }
-                NodeKind::Variable { sigil, name } if sigil == "&" => {
-                    self.table.add_reference(SymbolReference {
-                        name: name.clone(),
-                        kind: SymbolKind::Subroutine,
-                        location: target.location,
-                        scope_id: self.table.current_scope(),
-                        is_write: false,
-                    });
+                GotoTargetForm::Sub => {
+                    // goto &sub — frame replacement (tail call); record a subroutine reference
+                    // so that find-references and call-hierarchy can trace the tail-call edge.
+                    // The target may be:
+                    //   - FunctionCall { name: "foo", .. } for goto &foo or goto &Pkg::bar
+                    //   - FunctionCall { name: "$dispatch", .. } for goto &$var (NOT a subroutine ref)
+                    //   - Unary { op: "&{}", .. } for goto &{ code } (NOT a subroutine ref)
+                    // Only record a subroutine reference for FunctionCall with a plain name
+                    // (no leading sigil), which indicates a real named subroutine.
+                    match &target.kind {
+                        NodeKind::FunctionCall { name, .. }
+                            if !name.is_empty() && !name.starts_with(['$', '@', '%']) =>
+                        {
+                            // Real named subroutine: goto &foo or goto &Pkg::bar
+                            self.table.add_reference(SymbolReference {
+                                name: name.clone(),
+                                kind: SymbolKind::Subroutine,
+                                location: target.location,
+                                scope_id: self.table.current_scope(),
+                                is_write: false,
+                            });
+                        }
+                        // goto &$var or goto &{ code }: not a named subroutine reference,
+                        // but visit the target to record variable uses or other references
+                        _ => self.visit_node(target),
+                    }
                 }
-                _ => self.visit_node(target),
+                GotoTargetForm::Expr => {
+                    // goto $expr / goto EXPR — dynamic target; recurse to analyse
+                    // any sub-expressions (variable uses, method calls, etc.).
+                    self.visit_node(target);
+                }
             },
 
             // Regex related nodes - we recurse into expression
@@ -3840,6 +3867,78 @@ sub jump {
         assert!(
             references.iter().any(|reference| reference.kind == SymbolKind::Subroutine),
             "goto &target should produce a subroutine reference"
+        );
+    }
+
+    #[test]
+    fn test_goto_dynamic_coderef_records_no_subroutine_reference() {
+        // goto &$dispatch — Sub form, but the FunctionCall name carries a sigil
+        // (dynamic coderef), so the `_ => visit_node` arm runs and NO subroutine
+        // reference is recorded for a clean named subroutine `dispatch`.
+        let code = r#"
+sub jump {
+    goto &$dispatch;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(
+            !table
+                .references
+                .values()
+                .flatten()
+                .any(|reference| reference.kind == SymbolKind::Subroutine
+                    && reference.name == "dispatch"),
+            "goto &$dispatch (dynamic coderef) must not record a subroutine named `dispatch`"
+        );
+    }
+
+    #[test]
+    fn test_goto_expr_form_records_no_label_or_subroutine_reference() {
+        // goto $target — Expr form; the Expr arm visits the target. No Label or
+        // Subroutine reference should be recorded for the scalar target.
+        let code = r#"
+sub jump {
+    my $target = 0;
+    goto $target;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(
+            table.references.get("$target").into_iter().flatten().all(|reference| {
+                reference.kind != SymbolKind::Label && reference.kind != SymbolKind::Subroutine
+            }),
+            "goto $target (Expr form) must not record label/subroutine references"
+        );
+    }
+
+    #[test]
+    fn test_goto_label_nonidentifier_target_visits_via_else() {
+        use crate::ast::GotoTargetForm;
+        // Synthetic AST the parser never produces (Label form is only assigned to
+        // identifier targets): a Label-form goto whose target is a Number literal.
+        // Exercises the defensive `else => visit_node` branch of the Label arm.
+        let target = Node::new(
+            NodeKind::Number { value: "1".to_string() },
+            SourceLocation { start: 0, end: 1 },
+        );
+        let goto = Node::new(
+            NodeKind::Goto { target: Box::new(target), form: GotoTargetForm::Label },
+            SourceLocation { start: 0, end: 1 },
+        );
+        let table = SymbolExtractor::new().extract(&goto);
+        assert!(
+            !table
+                .references
+                .values()
+                .flatten()
+                .any(|reference| reference.kind == SymbolKind::Label),
+            "a Label goto with a non-identifier target must not record a label reference"
         );
     }
 

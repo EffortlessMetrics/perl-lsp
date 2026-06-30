@@ -857,7 +857,7 @@ impl Lowerer {
                     Some(self.current_scope()),
                 );
             }
-            NodeKind::Goto { target } => {
+            NodeKind::Goto { target, .. } => {
                 self.push_item(
                     node,
                     None,
@@ -2901,5 +2901,31 @@ mod saturating_id_tests {
         let far = u32::MAX as usize + 12_345;
         assert_eq!(to_u32_saturating(far), u32::MAX);
         assert_ne!(to_u32_saturating(far), far as u32);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod goto_lowering_tests {
+    //! `--lib` coverage for the `NodeKind::Goto` HIR-lowering arm (#1923).
+    //! goto lowering is otherwise exercised only by integration tests under
+    //! `tests/`, which do not count toward Codecov / Patch 95 (`--lib` only).
+    use super::*;
+    use crate::parser::Parser;
+    use perl_tdd_support::must;
+
+    #[test]
+    fn goto_lowers_to_control_transfer_item() {
+        let mut parser = Parser::new("goto &handler;");
+        let ast = must(parser.parse());
+        let file = lower_ast(&ast);
+        assert!(
+            file.items.iter().any(|item| matches!(
+                &item.kind,
+                HirKind::ControlTransfer(transfer)
+                    if matches!(transfer.kind, ControlTransferKind::Goto)
+            )),
+            "goto must lower to a ControlTransfer HIR item of kind Goto"
+        );
     }
 }

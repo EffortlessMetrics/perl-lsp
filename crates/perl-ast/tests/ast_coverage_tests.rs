@@ -14,7 +14,7 @@
 //!   DataSection, Identifier, missing-node variants)
 //! - Clone independence for nested Box nodes
 
-use perl_ast::ast::{Node, NodeKind, SourceLocation};
+use perl_ast::ast::{GotoTargetForm, Node, NodeKind, SourceLocation};
 
 #[path = "helpers.rs"]
 mod helpers;
@@ -246,7 +246,10 @@ fn for_each_child_tie_with_args() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn for_each_child_goto() -> Result<(), Box<dyn std::error::Error>> {
-    let node = Node::new(NodeKind::Goto { target: Box::new(ident("DONE")) }, loc(0, 10));
+    let node = Node::new(
+        NodeKind::Goto { target: Box::new(ident("DONE")), form: GotoTargetForm::Label },
+        loc(0, 10),
+    );
     let mut count = 0usize;
     node.for_each_child(|_| count += 1);
     assert_eq!(count, 1);
@@ -498,7 +501,10 @@ fn children_of_return_without_value() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn children_of_goto() -> Result<(), Box<dyn std::error::Error>> {
-    let node = Node::new(NodeKind::Goto { target: Box::new(ident("DONE")) }, loc(0, 10));
+    let node = Node::new(
+        NodeKind::Goto { target: Box::new(ident("DONE")), form: GotoTargetForm::Label },
+        loc(0, 10),
+    );
     assert_eq!(node.children().len(), 1);
     assert_eq!(node.first_child().map(|n| n.kind.kind_name()), Some("Identifier"));
     Ok(())
@@ -695,7 +701,10 @@ fn source_location_copy_semantics() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn sexp_goto() -> Result<(), Box<dyn std::error::Error>> {
-    let node = Node::new(NodeKind::Goto { target: Box::new(ident("DONE")) }, loc(0, 10));
+    let node = Node::new(
+        NodeKind::Goto { target: Box::new(ident("DONE")), form: GotoTargetForm::Label },
+        loc(0, 10),
+    );
     let sexp = node.to_sexp();
     assert!(sexp.starts_with("(goto"), "got: {sexp}");
     assert!(sexp.contains("identifier"), "got: {sexp}");

@@ -55,7 +55,7 @@
 //! ```
 
 use crate::{
-    ast::{Node, NodeKind, SourceLocation},
+    ast::{GotoTargetForm, Node, NodeKind, SourceLocation},
     error::{ParseError, ParseOutput, ParseResult, RecoveryKind, RecoverySite},
     heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_all},
     quote_parser,

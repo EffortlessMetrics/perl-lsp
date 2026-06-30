@@ -1,6 +1,6 @@
 //! Tests for phase-1 `SymbolRef` extraction.
 
-use perl_ast::{Node, NodeKind, SourceLocation};
+use perl_ast::{GotoTargetForm, Node, NodeKind, SourceLocation};
 use perl_symbol::VarKind;
 use perl_symbol::surface::{SymbolRefKind, extract_symbol_refs};
 
@@ -370,7 +370,10 @@ fn coderef_syntax_forms_are_classified_conservatively() -> Result<()> {
     );
     let goto_amp =
         Node::new(NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] }, loc(16, 20));
-    let goto = Node::new(NodeKind::Goto { target: Box::new(goto_amp) }, loc(11, 20));
+    let goto = Node::new(
+        NodeKind::Goto { target: Box::new(goto_amp), form: GotoTargetForm::Sub },
+        loc(11, 20),
+    );
     let program =
         Node::new(NodeKind::Program { statements: vec![amp, backslash_amp, goto] }, loc(0, 20));
 
@@ -392,7 +395,10 @@ fn non_ampersand_call_targets_stay_call_refs() -> Result<()> {
 
     let goto_call_target =
         Node::new(NodeKind::FunctionCall { name: "bar".to_string(), args: vec![] }, loc(18, 23));
-    let goto = Node::new(NodeKind::Goto { target: Box::new(goto_call_target) }, loc(13, 23));
+    let goto = Node::new(
+        NodeKind::Goto { target: Box::new(goto_call_target), form: GotoTargetForm::Expr },
+        loc(13, 23),
+    );
 
     let program = Node::new(
         NodeKind::Program { statements: vec![reference_to_call_result, goto] },

@@ -562,16 +562,49 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse goto statement: `goto LABEL`, `goto &sub`, `goto EXPR`
+    ///
+    /// Perl has three semantically distinct goto forms:
+    ///
+    /// - `goto LABEL`  — transfer control to a named label; target is a bare identifier.
+    /// - `goto &sub`   — **frame replacement** (tail call); the `&` sigil is the marker.
+    ///   Forms: `goto &name`, `goto &Pkg::name`, `goto &$coderef`.
+    /// - `goto EXPR`   — dynamic target; all other forms (variables, expressions).
+    ///
+    /// The `form` field is determined by a two-phase approach:
+    /// 1. Peek at the first token to detect `&` (which always means Sub form) or
+    ///    a plain Identifier (which may be Label, but could be part of a larger expression).
+    /// 2. For the plain-Identifier case, inspect the fully-parsed target to distinguish
+    ///    Label (plain Identifier node) from Expr (complex expression like `E . $suffix`).
     fn parse_goto(&mut self) -> ParseResult<Node> {
         let start = self.consume_token()?.start; // consume 'goto'
         self.mark_not_stmt_start();
+
+        // Phase 1: Quick detection of & (always Sub form)
+        let starts_with_ampersand = self.peek_kind() == Some(TokenKind::BitwiseAnd);
 
         // Parse the target as an assignment-level expression (not full comma
         // expression) to avoid consuming surrounding list separators.
         let target = self.parse_assignment()?;
         let end = target.location.end;
+
+        // Phase 2: Determine form based on parsed target (and whether it started with &)
+        let form = if starts_with_ampersand {
+            // Leading & always means Sub form (goto &foo, goto &$var, goto &{ code })
+            GotoTargetForm::Sub
+        } else {
+            // No leading &, so classify based on target node kind
+            match &target.kind {
+                // Plain identifier → Label form (goto LABEL)
+                NodeKind::Identifier { name } if !name.starts_with(['$', '@', '%']) => {
+                    GotoTargetForm::Label
+                }
+                // Everything else → Expr form (variables, function calls, expressions, etc.)
+                _ => GotoTargetForm::Expr,
+            }
+        };
+
         Ok(Node::new(
-            NodeKind::Goto { target: Box::new(target) },
+            NodeKind::Goto { target: Box::new(target), form },
             SourceLocation { start, end },
         ))
     }
@@ -956,4 +989,70 @@ impl<'a> Parser<'a> {
         Ok(Node::new(NodeKind::Default { body: Box::new(body) }, SourceLocation { start, end }))
     }
 
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod goto_form_tests {
+    //! `--lib` unit coverage for `parse_goto`'s form classification (#1923).
+    //!
+    //! The goto-form distinction is also exercised by integration tests under
+    //! `tests/`, but `Codecov / Patch 95` measures `--lib` coverage only, so the
+    //! classification arms in `parse_goto` need in-crate unit tests as well.
+    use crate::ast::GotoTargetForm;
+    use crate::parser::Parser;
+    use crate::{Node, NodeKind};
+    use perl_tdd_support::must;
+
+    /// Parse `source` and return the classified form of the first `Goto` node.
+    fn first_goto_form(source: &str) -> GotoTargetForm {
+        fn find(node: &Node) -> Option<GotoTargetForm> {
+            if let NodeKind::Goto { form, .. } = &node.kind {
+                return Some(form.clone());
+            }
+            node.children().into_iter().find_map(find)
+        }
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        find(&ast).expect("source must contain a goto statement")
+    }
+
+    #[test]
+    fn parse_goto_bare_label_is_label_form() {
+        // `goto LABEL` — sigil-less bare identifier → Label form.
+        assert_eq!(first_goto_form("goto LABEL;"), GotoTargetForm::Label);
+    }
+
+    #[test]
+    fn parse_goto_named_sub_is_sub_form() {
+        // `goto &sub` — leading `&` → Sub form (frame replacement / tail call).
+        assert_eq!(first_goto_form("goto &handler;"), GotoTargetForm::Sub);
+    }
+
+    #[test]
+    fn parse_goto_dynamic_coderef_is_sub_form() {
+        // `goto &$dispatch` — leading `&` still drives Sub form for a coderef.
+        assert_eq!(first_goto_form("goto &$dispatch;"), GotoTargetForm::Sub);
+    }
+
+    #[test]
+    fn parse_goto_scalar_target_is_expr_form() {
+        // `goto $target` — variable (no `&`, not a bare identifier) → Expr form.
+        assert_eq!(first_goto_form("goto $target;"), GotoTargetForm::Expr);
+    }
+
+    #[test]
+    fn parse_goto_complex_expression_is_expr_form() {
+        // `goto E . $suffix` — a bareword followed by concat is a complex
+        // expression, not a label → Expr form (covers the `_ => Expr` arm).
+        assert_eq!(first_goto_form("goto E . $suffix;"), GotoTargetForm::Expr);
+    }
+
+    #[test]
+    fn parse_goto_form_renders_in_sexp() {
+        // Exercise the `GotoTargetForm` → sexp rendering ("label"/"sub"/"expr").
+        let mut parser = Parser::new("goto &handler;");
+        let ast = must(parser.parse());
+        assert!(ast.to_sexp().contains("goto"), "sexp must render the goto node");
+    }
 }

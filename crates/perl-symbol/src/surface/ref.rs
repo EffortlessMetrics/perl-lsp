@@ -87,7 +87,7 @@ fn walk(node: &Node, out: &mut Vec<SymbolRef>) {
             walk(default_value, out);
         }
 
-        NodeKind::Goto { target } => {
+        NodeKind::Goto { target, .. } => {
             if !push_coderef_target(target, (node.location.start, node.location.end), out) {
                 walk(target, out);
             }
