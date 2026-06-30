@@ -12,9 +12,6 @@ use anyhow::{Context, Result};
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::{Value, json};
-use std::time::Duration;
-
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 const RENAME_FIXTURE: &str = r#"use strict;
 use warnings;
@@ -27,14 +24,23 @@ my $value = greet();
 print greet();
 "#;
 
+fn rename_config() -> ScenarioConfig {
+    ScenarioConfig::default().with_file("rename_flow.pl", RENAME_FIXTURE)
+}
+
+fn request_timeout(config: &ScenarioConfig) -> std::time::Duration {
+    config.timeout
+}
+
 #[test]
 fn scenario_23_prepare_rename_and_rename_do_not_error() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_23: perl-lsp binary not found");
         return Ok(());
     }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("rename_flow.pl", RENAME_FIXTURE))?;
+    let config = rename_config();
+    let timeout = request_timeout(&config);
+    let harness = UxHarness::new(config)?;
     harness.open_file("rename_flow.pl", RENAME_FIXTURE)?;
 
     let uri = harness.workspace.uri("rename_flow.pl");
@@ -45,7 +51,7 @@ fn scenario_23_prepare_rename_and_rename_do_not_error() -> Result<()> {
             "textDocument": { "uri": uri },
             "position": { "line": 7, "character": 12 }
         }),
-        REQUEST_TIMEOUT,
+        timeout,
     )?;
     assert!(
         prepare.get("error").is_none(),
@@ -60,7 +66,7 @@ fn scenario_23_prepare_rename_and_rename_do_not_error() -> Result<()> {
             "position": { "line": 7, "character": 12 },
             "newName": "welcome"
         }),
-        REQUEST_TIMEOUT,
+        timeout,
     )?;
     assert!(rename.get("error").is_none(), "rename must not return JSON-RPC error: {:?}", rename);
 
@@ -74,8 +80,9 @@ fn scenario_23_rename_workspace_edit_targets_file_and_multiple_occurrences() -> 
         eprintln!("SKIP scenario_23: perl-lsp binary not found");
         return Ok(());
     }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("rename_flow.pl", RENAME_FIXTURE))?;
+    let config = rename_config();
+    let timeout = request_timeout(&config);
+    let harness = UxHarness::new(config)?;
     harness.open_file("rename_flow.pl", RENAME_FIXTURE)?;
 
     let uri = harness.workspace.uri("rename_flow.pl");
@@ -87,7 +94,7 @@ fn scenario_23_rename_workspace_edit_targets_file_and_multiple_occurrences() -> 
             "position": { "line": 7, "character": 12 },
             "newName": "welcome"
         }),
-        REQUEST_TIMEOUT,
+        timeout,
     )?;
 
     assert!(rename.get("error").is_none(), "rename returned JSON-RPC error: {:?}", rename);
@@ -106,6 +113,15 @@ fn scenario_23_rename_workspace_edit_targets_file_and_multiple_occurrences() -> 
     );
 
     harness.assert_no_crash();
+    Ok(())
+}
+
+#[test]
+fn scenario_23_request_timeout_comes_from_scenario_config() -> Result<()> {
+    let config =
+        ScenarioConfig { timeout: std::time::Duration::from_millis(1234), ..Default::default() };
+
+    assert_eq!(request_timeout(&config), std::time::Duration::from_millis(1234));
     Ok(())
 }
 
