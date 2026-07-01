@@ -1047,6 +1047,15 @@ pub struct WorkspaceSymbol {
     pub has_body: bool,
     /// Workspace folder URI this symbol belongs to (for multi-root workspace support)
     pub workspace_folder_uri: Option<String>,
+    /// Whether this symbol is a lexically-scoped variable (`my` or `state`).
+    ///
+    /// Lexical variables cannot be correctly analysed by the bare-name unused-symbol
+    /// check in [`WorkspaceIndex::find_unused_symbols`], which lacks scope-range
+    /// information.  Setting this flag during indexing lets the function skip them
+    /// entirely, avoiding both false positives and false negatives.  Proper
+    /// lexical-unused detection is deferred to the scope-aware `ScopeAnalyzer`.
+    #[serde(default)]
+    pub is_lexical: bool,
 }
 
 fn default_has_body() -> bool {
@@ -3136,6 +3145,7 @@ impl WorkspaceIndex {
                     container_name: Some(format!("{container_name} [generated/framework]")),
                     has_body: false,
                     workspace_folder_uri: self.determine_folder_uri(&shard.source_uri),
+                    is_lexical: false,
                 });
             }
         }
@@ -3463,6 +3473,16 @@ impl WorkspaceIndex {
         // Collect all defined symbols
         for (_uri_key, file_index) in files.iter() {
             for symbol in &file_index.symbols {
+                // Lexically-scoped variables (my/state) require scope-range analysis to
+                // determine whether a reference in the same file refers to *this* declaration
+                // or a same-named variable in a different block.  The bare-name lookup below
+                // cannot make that distinction, so lexical variables are excluded from this
+                // check entirely.  Proper unused-lexical detection is handled by the
+                // scope-aware ScopeAnalyzer.  See issue #1805.
+                if symbol.is_lexical {
+                    continue;
+                }
+
                 // Check if this symbol has any references beyond its definition
                 let has_usage = files.values().any(|fi| {
                     if let Some(refs) = fi.references.get(&symbol.name) {
@@ -3806,6 +3826,11 @@ impl IndexVisitor {
                 _ => decl.container,
             };
 
+            // Lexical declarators (my/state) produce scope-local variables that cannot be
+            // correctly analysed by a bare-name unused-symbol check.  Flag them so that
+            // `find_unused_symbols` can skip the whole class.
+            let is_lexical = matches!(decl.declarator.as_deref(), Some("my") | Some("state"));
+
             file_index.symbols.push(WorkspaceSymbol {
                 name: symbol_name.clone(),
                 kind: decl.kind,
@@ -3816,6 +3841,7 @@ impl IndexVisitor {
                 container_name,
                 has_body: true,
                 workspace_folder_uri: self.workspace_folder_uri.clone(),
+                is_lexical,
             });
 
             file_index.references.entry(symbol_name).or_default().push(SymbolReference {
@@ -8239,6 +8265,7 @@ mod entity_id_file_scoped_tests {
 #[cfg(test)]
 mod file_fact_shard_serde_tests {
     use super::*;
+    use perl_tdd_support::must;
 
     #[test]
     fn file_fact_shard_serializes_and_deserializes_round_trip() {
@@ -8288,5 +8315,124 @@ mod file_fact_shard_serde_tests {
         let json = serde_json::to_string(&shard).expect("must serialize with facts");
         assert!(json.contains("\"source_uri\":\"file:///t/app.t\""));
         assert!(json.contains("\"content_hash\":999"));
+    }
+
+    // ── find_unused_symbols: lexical exclusion tests (#1805) ──────────────────
+
+    /// A genuinely-unused `my` variable must NOT appear in `find_unused_symbols`
+    /// after the fix, because scope-local lexicals are excluded from the bare-name
+    /// unused check entirely (bare-name lookup cannot determine scope correctly).
+    /// Pre-fix: the variable IS reported (no usage refs → `has_usage = false`).
+    /// Post-fix: excluded from check → not reported.
+    #[test]
+    fn test_find_unused_symbols_excludes_genuinely_unused_my_variable() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///unused-lexical.pl";
+        let code = "sub foo {\n    my $isolated = 42;\n    return 1;\n}\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !unused_names.contains(&"$isolated"),
+            "my variable must be excluded from bare-name unused check; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// A used `my $x` (referenced within same scope) must also NOT appear in
+    /// find_unused_symbols — the exclusion is class-wide, not use-sensitive.
+    #[test]
+    fn test_find_unused_symbols_excludes_used_my_variable() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///used-lexical.pl";
+        let code = "sub foo {\n    my $x = 1;\n    return $x;\n}\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !unused_names.contains(&"$x"),
+            "used my $x must not appear in find_unused_symbols; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// `state` variables are lexically scoped just like `my` — excluded from
+    /// the bare-name unused check.
+    #[test]
+    fn test_find_unused_symbols_excludes_state_variable() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///state-var.pl";
+        let code =
+            "use feature 'state';\nsub counter {\n    state $count = 0;\n    return $count;\n}\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !unused_names.contains(&"$count"),
+            "state variable must be excluded from bare-name unused check; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// Positive control: an unused package-level subroutine IS still reported
+    /// by find_unused_symbols — only lexical my/state vars are excluded.
+    #[test]
+    fn test_find_unused_symbols_still_reports_unused_subroutine() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///unused-sub.pl";
+        let code = "package Foo;\nsub bar { return 1; }\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            unused_names.contains(&"bar"),
+            "unused package-level sub must still be reported by find_unused_symbols; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// Positive control: an unused `our` (package-level) variable IS still
+    /// reported — only lexical my/state vars are excluded, not our/local.
+    #[test]
+    fn test_find_unused_symbols_still_reports_unused_our_variable() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///our-var.pl";
+        let code = "package Foo;\nour $VERSION = '1.0';\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            unused_names.contains(&"$VERSION"),
+            "unused our variable must still be reported by find_unused_symbols; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// Cross-scope collision: two subs each declare `my $shared_name`. The one
+    /// without a usage should NOT appear in find_unused_symbols (the whole
+    /// class is excluded). Pre-fix it would appear due to bare-name false-negative
+    /// hiding — but post-fix both are excluded from the check entirely.
+    #[test]
+    fn test_find_unused_symbols_cross_scope_name_collision_excluded() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///cross-scope.pl";
+        // foo declares $shared but doesn't use it; bar declares and uses $shared.
+        // Pre-fix: bar's usage ref makes foo's $shared appear "used" (false neg).
+        // Post-fix: both are excluded because they're my vars.
+        let code = "sub foo {\n    my $shared = 1;\n    return 1;\n}\nsub bar {\n    my $shared = 2;\n    return $shared;\n}\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !unused_names.contains(&"$shared"),
+            "cross-scope my variable must not appear in find_unused_symbols; got: {:?}",
+            unused_names
+        );
     }
 }

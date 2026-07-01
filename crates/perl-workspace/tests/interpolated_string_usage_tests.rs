@@ -23,6 +23,12 @@ fn interpolated_string_variable_is_not_unused() -> Result<(), Box<dyn std::error
 
 #[test]
 fn escaped_interpolated_string_variable_is_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // Note (#1805): `my` variables are entirely excluded from `find_unused_symbols`
+    // because the bare-name lookup cannot correctly handle lexical scoping.  Even though
+    // the escaped `\$name` should not count as a use reference (and it doesn't —
+    // the interpolation-detection logic is still correct), `$name` is a `my` variable
+    // and is therefore excluded from the check regardless of whether it appears used.
+    // Proper unused-lexical detection requires scope-aware analysis (ScopeAnalyzer).
     let index = WorkspaceIndex::new();
     let uri = file_url("/escaped.pl")?;
     index.index_file(uri, "my $name = 'World';\nprint \"\\$name\\n\";\n".to_string())?;
@@ -30,8 +36,8 @@ fn escaped_interpolated_string_variable_is_unused() -> Result<(), Box<dyn std::e
     let unused = index.find_unused_symbols();
     let unused_names: Vec<&str> = unused.iter().map(|symbol| symbol.name.as_str()).collect();
     assert!(
-        unused_names.contains(&"$name"),
-        "$name escaped in a string should still be unused: {unused_names:?}"
+        !unused_names.contains(&"$name"),
+        "my $name is excluded from bare-name unused check (#1805), not present in results: {unused_names:?}"
     );
 
     Ok(())
@@ -55,6 +61,10 @@ fn heredoc_interpolated_variable_is_not_unused() -> Result<(), Box<dyn std::erro
 
 #[test]
 fn hash_marker_in_string_does_not_count_as_use() -> Result<(), Box<dyn std::error::Error>> {
+    // Note (#1805): `my` variables are entirely excluded from `find_unused_symbols`.
+    // The `%seen` in a plain string literal is still NOT counted as an interpolation
+    // reference (the reference-tracking logic is correct), but since `%seen` is a
+    // `my` variable it is excluded from the unused check entirely regardless.
     let index = WorkspaceIndex::new();
     let uri = file_url("/hash.pl")?;
     index.index_file(uri, "my %seen = (name => 1);\nprint \"%seen\\n\";\n".to_string())?;
@@ -62,8 +72,8 @@ fn hash_marker_in_string_does_not_count_as_use() -> Result<(), Box<dyn std::erro
     let unused = index.find_unused_symbols();
     let unused_names: Vec<&str> = unused.iter().map(|symbol| symbol.name.as_str()).collect();
     assert!(
-        unused_names.contains(&"%seen"),
-        "%seen in a string should not count as interpolation: {unused_names:?}"
+        !unused_names.contains(&"%seen"),
+        "my %seen is excluded from bare-name unused check (#1805), not present in results: {unused_names:?}"
     );
 
     Ok(())
