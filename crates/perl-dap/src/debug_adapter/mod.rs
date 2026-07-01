@@ -396,19 +396,15 @@ impl DebugAdapter {
     /// Convert u64 values (e.g. JSON protocol IDs) to u32 with saturation.
     /// Values above [`u32::MAX`] are clamped to [`u32::MAX`] rather than wrapping.
     fn u64_to_u32_saturating(value: u64) -> u32 {
-        match u32::try_from(value) {
-            Ok(v) => v,
-            Err(_) => u32::MAX,
-        }
+        u32::try_from(value).unwrap_or(u32::MAX)
     }
 
     /// Convert u32 process/thread IDs to i32 (as required by Unix signal APIs) with saturation.
     /// Values above [`i32::MAX`] are clamped to [`i32::MAX`] rather than wrapping to negatives.
+    // Windows builds do not call the Unix signal PID conversion paths.
+    #[cfg_attr(windows, allow(dead_code))]
     fn u32_to_i32_saturating(value: u32) -> i32 {
-        match i32::try_from(value) {
-            Ok(v) => v,
-            Err(_) => i32::MAX,
-        }
+        i32::try_from(value).unwrap_or(i32::MAX)
     }
 
     fn line_contains_full_marker(line: &str, marker: &str) -> bool {
