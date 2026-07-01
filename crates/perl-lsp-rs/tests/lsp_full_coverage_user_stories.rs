@@ -46,6 +46,21 @@ use support::test_helpers::assert_hover_has_text;
 
 // ===================== Test Context =====================
 
+fn flatten_document_symbols(symbols: &[Value]) -> Vec<&Value> {
+    let mut flattened = Vec::new();
+    collect_document_symbols(symbols, &mut flattened);
+    flattened
+}
+
+fn collect_document_symbols<'a>(symbols: &'a [Value], flattened: &mut Vec<&'a Value>) {
+    for symbol in symbols {
+        flattened.push(symbol);
+        if let Some(children) = symbol.get("children").and_then(Value::as_array) {
+            collect_document_symbols(children, flattened);
+        }
+    }
+}
+
 struct TestContext {
     server: LspServer,
     documents: HashMap<String, String>,
@@ -470,7 +485,7 @@ sub connect {
         ctx.story_context()
     );
     assert!(
-        doc_symbols.iter().any(|s| {
+        flatten_document_symbols(&doc_symbols).iter().any(|s| {
             s.get("name").and_then(|n| n.as_str()).map(|n| n == "connect").unwrap_or(false)
         }),
         "Should find connect method ({})",
