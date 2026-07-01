@@ -129,10 +129,7 @@ impl WorkspaceIndexingReceipt {
 }
 
 fn duration_ms(duration: Duration) -> u64 {
-    match u64::try_from(duration.as_millis()) {
-        Ok(ms) => ms,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 fn files_per_second(indexed_files: usize, total_elapsed: Duration) -> f64 {
