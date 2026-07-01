@@ -947,73 +947,31 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         use crate::features::diagnostics::PullDiagnosticsProvider;
+        use crate::protocol::invalid_params;
         use lsp_types::Uri;
 
-        if let Some(params) = params {
-            let uri_str = params["textDocument"]["uri"].as_str().unwrap_or("");
-            let previous_result_id = params["previousResultId"].as_str().map(|s| s.to_string());
+        // LSP 3.17: missing or malformed params/URI is a client protocol error, not a
+        // silent empty response.  Return InvalidParams so the client can distinguish
+        // "no diagnostics for this file" from "I didn't understand your request".
+        let params =
+            params.ok_or_else(|| invalid_params("textDocument/diagnostic requires params"))?;
+        let uri_str = params["textDocument"]["uri"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
+        let previous_result_id = params["previousResultId"].as_str().map(|s| s.to_string());
 
-            // Parse URI
-            let uri: Uri = match uri_str.parse() {
-                Ok(u) => u,
-                Err(_) => {
-                    return Ok(Some(json!({
-                        "kind": "full",
-                        "items": []
-                    })));
-                }
-            };
+        // Parse URI — an unparseable URI is a client-side protocol error (LSP 3.17)
+        let uri: Uri =
+            uri_str.parse().map_err(|_| invalid_params("Invalid URI in textDocument.uri"))?;
 
-            // Syntax-only short-circuit for pull diagnostics. Mirrors the
-            // push-path gate in `publish_diagnostics`.
-            if self.runtime_tuning.diagnostic_mode
-                == perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly
-            {
-                // Capture the generation Arc alongside the document clone so we can
-                // detect a concurrent didChange that arrives during syntax analysis.
-                let doc_snapshot = {
-                    let documents = self.documents.lock();
-                    self.get_document(&documents, uri_str).map(|doc| {
-                        (
-                            doc.clone(),
-                            std::sync::Arc::clone(&doc.generation),
-                            doc.generation.load(std::sync::atomic::Ordering::SeqCst),
-                        )
-                    })
-                };
-                if let Some((doc, generation, gen_at_snapshot)) = doc_snapshot {
-                    let markup_message_support =
-                        self.client_capabilities.lock().markup_message_support;
-                    let items = Self::syntax_only_lsp_diagnostics(
-                        &doc.parse_errors,
-                        &doc.text,
-                        &doc.line_starts,
-                        &doc.rope,
-                        markup_message_support,
-                    );
-                    // Generation-aware staleness guard: discard if a didChange arrived
-                    // while we were analysing the parse errors.
-                    let current_gen = generation.load(std::sync::atomic::Ordering::SeqCst);
-                    if current_gen != gen_at_snapshot {
-                        tracing::debug!(
-                            uri = uri_str,
-                            gen_at_snapshot,
-                            current_gen,
-                            "Skipping stale syntax-only diagnostic (generation advanced during computation)"
-                        );
-                        return Ok(Some(json!({ "kind": "full", "items": [] })));
-                    }
-                    return Ok(Some(json!({
-                        "kind": "full",
-                        "items": items,
-                    })));
-                }
-                let _ = previous_result_id;
-                return Ok(Some(json!({ "kind": "full", "items": [] })));
-            }
-
-            // Snapshot the document, capturing a clone of the generation Arc so
-            // we can re-check after computation (mirrors the push-path guard).
+        // Syntax-only short-circuit for pull diagnostics. Mirrors the
+        // push-path gate in `publish_diagnostics`.
+        if self.runtime_tuning.diagnostic_mode
+            == perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly
+        {
+            // Capture the generation Arc alongside the document clone so we can
+            // detect a concurrent didChange that arrives during syntax analysis.
             let doc_snapshot = {
                 let documents = self.documents.lock();
                 self.get_document(&documents, uri_str).map(|doc| {
@@ -1024,65 +982,108 @@ impl LspServer {
                     )
                 })
             };
-
             if let Some((doc, generation, gen_at_snapshot)) = doc_snapshot {
-                // Build context from server state
-                let context = self.pull_diagnostics_orchestrator.build_context(self, uri_str);
-
-                // Use PullDiagnosticsProvider for clean, testable logic
-                let provider = PullDiagnosticsProvider::new();
-                let report = provider.get_document_diagnostics_with_context(
-                    &uri,
+                let markup_message_support = self.client_capabilities.lock().markup_message_support;
+                let items = Self::syntax_only_lsp_diagnostics(
+                    &doc.parse_errors,
                     &doc.text,
-                    previous_result_id,
-                    &context,
-                    Some(&doc),
+                    &doc.line_starts,
+                    &doc.rope,
+                    markup_message_support,
                 );
-
-                // Collect external perlcritic diagnostics via orchestrator
-                let mut perlcritic_diags = Vec::new();
-                self.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
-                    self,
-                    uri_str,
-                    &doc.text,
-                    &mut perlcritic_diags,
-                );
-
-                // Generation-aware staleness guard: if a newer didChange arrived while
-                // diagnostics were being computed, discard this result — the next
-                // diagnostic request will compute from the latest version.  Mirrors the
-                // guard already present in the push path.
+                // Generation-aware staleness guard: discard if a didChange arrived
+                // while we were analysing the parse errors.
                 let current_gen = generation.load(std::sync::atomic::Ordering::SeqCst);
                 if current_gen != gen_at_snapshot {
                     tracing::debug!(
                         uri = uri_str,
                         gen_at_snapshot,
                         current_gen,
-                        "Skipping stale document diagnostic (generation advanced during computation)"
+                        "Skipping stale syntax-only diagnostic (generation advanced during computation)"
                     );
-                    // Return an empty full report with no resultId so the client
-                    // does not cache this stale result and retries on the next request.
-                    return Ok(Some(json!({
-                        "kind": "full",
-                        "items": []
-                    })));
+                    return Ok(Some(Self::empty_full_diagnostic_report()));
                 }
-
-                // Convert report to JSON
-                return Ok(Some(self.document_report_to_json(
-                    &report,
-                    &doc,
-                    uri_str,
-                    &perlcritic_diags,
-                )));
+                return Ok(Some(Self::full_diagnostic_report(items)));
             }
+            let _ = previous_result_id;
+            return Ok(Some(Self::empty_full_diagnostic_report()));
         }
 
-        // Return empty diagnostics if document not found
-        Ok(Some(json!({
+        // Snapshot the document, capturing a clone of the generation Arc so
+        // we can re-check after computation (mirrors the push-path guard).
+        let doc_snapshot = {
+            let documents = self.documents.lock();
+            self.get_document(&documents, uri_str).map(|doc| {
+                (
+                    doc.clone(),
+                    std::sync::Arc::clone(&doc.generation),
+                    doc.generation.load(std::sync::atomic::Ordering::SeqCst),
+                )
+            })
+        };
+
+        if let Some((doc, generation, gen_at_snapshot)) = doc_snapshot {
+            // Build context from server state
+            let context = self.pull_diagnostics_orchestrator.build_context(self, uri_str);
+
+            // Use PullDiagnosticsProvider for clean, testable logic
+            let provider = PullDiagnosticsProvider::new();
+            let report = provider.get_document_diagnostics_with_context(
+                &uri,
+                &doc.text,
+                previous_result_id,
+                &context,
+                Some(&doc),
+            );
+
+            // Collect external perlcritic diagnostics via orchestrator
+            let mut perlcritic_diags = Vec::new();
+            self.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
+                self,
+                uri_str,
+                &doc.text,
+                &mut perlcritic_diags,
+            );
+
+            // Generation-aware staleness guard: if a newer didChange arrived while
+            // diagnostics were being computed, discard this result — the next
+            // diagnostic request will compute from the latest version.  Mirrors the
+            // guard already present in the push path.
+            let current_gen = generation.load(std::sync::atomic::Ordering::SeqCst);
+            if current_gen != gen_at_snapshot {
+                tracing::debug!(
+                    uri = uri_str,
+                    gen_at_snapshot,
+                    current_gen,
+                    "Skipping stale document diagnostic (generation advanced during computation)"
+                );
+                // Return an empty full report with no resultId so the client
+                // does not cache this stale result and retries on the next request.
+                return Ok(Some(Self::empty_full_diagnostic_report()));
+            }
+
+            // Convert report to JSON
+            return Ok(Some(self.document_report_to_json(
+                &report,
+                &doc,
+                uri_str,
+                &perlcritic_diags,
+            )));
+        }
+
+        // Return empty diagnostics if document not found or document not yet open
+        Ok(Some(Self::empty_full_diagnostic_report()))
+    }
+
+    fn empty_full_diagnostic_report() -> Value {
+        Self::full_diagnostic_report(Vec::new())
+    }
+
+    fn full_diagnostic_report(items: Vec<Value>) -> Value {
+        json!({
             "kind": "full",
-            "items": []
-        })))
+            "items": items,
+        })
     }
 
     fn diagnostic_message_value(
@@ -2102,6 +2103,20 @@ mod tests {
         (server, buf)
     }
 
+    fn make_server_with_capture_and_tuning(
+        runtime_tuning: perl_lsp_rs_core::runtime::tuning::RuntimeTuning,
+    ) -> (LspServer, StdArc<parking_lot::Mutex<Vec<u8>>>) {
+        let buf = StdArc::new(parking_lot::Mutex::new(Vec::<u8>::new()));
+        let writer = SharedVecWriter { inner: StdArc::clone(&buf) };
+        let server = LspServer::with_io_feature_profile_and_tuning(
+            Box::new(std::io::Cursor::new(Vec::<u8>::new())),
+            Box::new(writer),
+            crate::features::FeatureProfile::current(),
+            runtime_tuning,
+        );
+        (server, buf)
+    }
+
     /// Positive case: when no concurrent change arrives during diagnostic computation,
     /// `publish_diagnostics` MUST send a `textDocument/publishDiagnostics` notification.
     #[test]
@@ -2161,6 +2176,74 @@ mod tests {
             text.contains("publishDiagnostics"),
             "pre-advanced generation must not suppress publish (guard must not false-positive); got: {text:?}"
         );
+    }
+
+    #[test]
+    fn publish_diagnostics_boundary_discriminator_syntax_only_mode()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (server, buf) = make_server_with_capture_and_tuning(
+            perl_lsp_rs_core::runtime::tuning::RuntimeTuning::e2e_defaults(),
+        );
+        let uri = "file:///syntax_only_publish_boundary.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub broken {\n"
+            }
+        })))?;
+
+        server.publish_diagnostics(uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes)?;
+        assert!(
+            text.contains("publishDiagnostics") && text.contains("perl-parser"),
+            "input that hits the boundary: self.runtime_tuning.diagnostic_mode\n            == perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly; got: {text:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn publish_diagnostics_boundary_discriminator_generation_changed_after_snapshot()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (server, buf) = make_server_with_capture();
+        let server = StdArc::new(server);
+        let uri = "file:///stale_publish_boundary.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $stable = 1;\n"
+            }
+        })))?;
+
+        let workspace_guard = server.workspace_folders.lock();
+        let worker_server = StdArc::clone(&server);
+        let handle = std::thread::spawn(move || worker_server.publish_diagnostics(uri));
+
+        std::thread::sleep(Duration::from_millis(50));
+        {
+            let documents = server.documents.lock();
+            let document = documents.get(uri).ok_or("missing open document")?;
+            document.generation.fetch_add(1, Ordering::SeqCst);
+        }
+        drop(workspace_guard);
+        handle.join().map_err(|_| std::io::Error::other("publish worker panicked"))?;
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes)?;
+        assert!(
+            !text.contains("publishDiagnostics"),
+            "input that hits the boundary: generation.load(Ordering::SeqCst) != gen_at_snapshot; got: {text:?}"
+        );
+        Ok(())
     }
 
     #[test]
@@ -3000,6 +3083,259 @@ print \"unreachable\\n\";\n";
             "PL700 must not fire after 'no lib' cancels the path; that would mean \
              the missing module was still treated as resolved.\n\
              Published: {text:?}"
+        );
+        Ok(())
+    }
+
+    // ── pull-diagnostic params-validation tests (#2292) ──────────────────────
+
+    /// `textDocument/diagnostic` with `None` params must return `INVALID_PARAMS`
+    /// (LSP 3.17 — missing params is a client protocol error, not silent empty).
+    #[test]
+    fn pull_diagnostic_none_params_returns_invalid_params() {
+        let server = LspServer::new();
+        let result = server.test_handle_document_diagnostic(None);
+        assert!(result.is_err(), "None params must produce an error, not Ok(empty report)");
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.code,
+            crate::protocol::INVALID_PARAMS,
+            "error code must be INVALID_PARAMS (-32602); got {}",
+            err.code
+        );
+        assert!(
+            err.message.contains("requires params"),
+            "error message must explain that params are required; got: {}",
+            err.message
+        );
+    }
+
+    /// `textDocument/diagnostic` where `textDocument.uri` is absent must return
+    /// `INVALID_PARAMS`.
+    #[test]
+    fn pull_diagnostic_missing_uri_returns_invalid_params() {
+        let server = LspServer::new();
+        let result = server.test_handle_document_diagnostic(Some(json!({ "textDocument": {} })));
+        assert!(result.is_err(), "missing textDocument.uri must produce an error");
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.code,
+            crate::protocol::INVALID_PARAMS,
+            "error code must be INVALID_PARAMS (-32602); got {}",
+            err.code
+        );
+        assert!(
+            err.message.contains("textDocument.uri"),
+            "error message must name the missing field; got: {}",
+            err.message
+        );
+    }
+
+    /// `textDocument/diagnostic` where `textDocument.uri` is an empty string
+    /// must return `INVALID_PARAMS`.
+    #[test]
+    fn pull_diagnostic_empty_uri_returns_invalid_params() {
+        let server = LspServer::new();
+        let result =
+            server.test_handle_document_diagnostic(Some(json!({ "textDocument": { "uri": "" } })));
+        assert!(result.is_err(), "empty textDocument.uri must produce an error");
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.code,
+            crate::protocol::INVALID_PARAMS,
+            "error code must be INVALID_PARAMS (-32602); got {}",
+            err.code
+        );
+    }
+
+    /// `textDocument/diagnostic` where `textDocument.uri` cannot be parsed as
+    /// a valid URI must return `INVALID_PARAMS`.
+    #[test]
+    fn pull_diagnostic_unparseable_uri_returns_invalid_params() {
+        let server = LspServer::new();
+        let result = server.test_handle_document_diagnostic(Some(
+            json!({ "textDocument": { "uri": ":::not a uri:::" } }),
+        ));
+        assert!(result.is_err(), "unparseable URI must produce an error");
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.code,
+            crate::protocol::INVALID_PARAMS,
+            "error code must be INVALID_PARAMS (-32602); got {}",
+            err.code
+        );
+    }
+
+    #[test]
+    fn pull_diagnostic_boundary_discriminator_syntax_only_mode()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new_with_tuning(
+            perl_lsp_rs_core::runtime::tuning::RuntimeTuning::e2e_defaults(),
+        );
+        let uri = "file:///syntax_only_pull_boundary.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub broken {\n"
+            }
+        })))?;
+
+        let report = server
+            .test_handle_document_diagnostic(Some(json!({
+                "textDocument": { "uri": uri },
+                "identifier": "perl-lsp",
+                "previousResultId": null
+            })))?
+            .ok_or("syntax-only pull diagnostic must return a report")?;
+        assert_eq!(
+            report.get("kind").and_then(serde_json::Value::as_str),
+            Some("full"),
+            "input that hits the boundary: self.runtime_tuning.diagnostic_mode\n            == perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly"
+        );
+        let items = report
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .ok_or("syntax-only pull diagnostic report must include items")?;
+
+        assert!(
+            !items.is_empty(),
+            "input that hits the boundary: self.runtime_tuning.diagnostic_mode\n            == perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn pull_syntax_only_diagnostic_boundary_discriminator_current_gen_ne_gen_at_snapshot()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = StdArc::new(LspServer::new_with_tuning(
+            perl_lsp_rs_core::runtime::tuning::RuntimeTuning::e2e_defaults(),
+        ));
+        let uri = "file:///stale_syntax_only_pull_boundary.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub broken {\n"
+            }
+        })))?;
+
+        let capabilities_guard = server.client_capabilities.lock();
+        let worker_server = StdArc::clone(&server);
+        let handle = std::thread::spawn(move || {
+            worker_server.test_handle_document_diagnostic(Some(json!({
+                "textDocument": { "uri": uri },
+                "identifier": "perl-lsp",
+                "previousResultId": null
+            })))
+        });
+
+        std::thread::sleep(Duration::from_millis(50));
+        {
+            let documents = server.documents.lock();
+            let document = documents.get(uri).ok_or("missing open document")?;
+            document.generation.fetch_add(1, Ordering::SeqCst);
+        }
+        drop(capabilities_guard);
+
+        let report = handle
+            .join()
+            .map_err(|_| std::io::Error::other("syntax-only diagnostic worker panicked"))??
+            .ok_or("stale syntax-only pull diagnostic must return an empty full report")?;
+        assert_eq!(
+            report,
+            json!({"kind": "full", "items": []}),
+            "input that hits the boundary: current_gen != gen_at_snapshot"
+        );
+        let items = report
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .ok_or("stale syntax-only pull diagnostic report must include items")?;
+        assert!(items.is_empty(), "input that hits the boundary: current_gen != gen_at_snapshot");
+        Ok(())
+    }
+
+    #[test]
+    fn pull_diagnostic_boundary_discriminator_current_gen_ne_gen_at_snapshot()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = StdArc::new(LspServer::new());
+        let uri = "file:///stale_pull_boundary.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $unused = 1;\n"
+            }
+        })))?;
+
+        let workspace_guard = server.workspace_folders.lock();
+        let worker_server = StdArc::clone(&server);
+        let handle = std::thread::spawn(move || {
+            worker_server.test_handle_document_diagnostic(Some(json!({
+                "textDocument": { "uri": uri },
+                "identifier": "perl-lsp",
+                "previousResultId": null
+            })))
+        });
+
+        std::thread::sleep(Duration::from_millis(50));
+        {
+            let documents = server.documents.lock();
+            let document = documents.get(uri).ok_or("missing open document")?;
+            document.generation.fetch_add(1, Ordering::SeqCst);
+        }
+        drop(workspace_guard);
+
+        let report = handle
+            .join()
+            .map_err(|_| std::io::Error::other("diagnostic worker panicked"))??
+            .ok_or("stale pull diagnostic must return an empty full report")?;
+        assert_eq!(
+            report,
+            json!({"kind": "full", "items": []}),
+            "input that hits the boundary: current_gen != gen_at_snapshot"
+        );
+        assert_eq!(
+            report.get("kind").and_then(serde_json::Value::as_str),
+            Some("full"),
+            "stale pull diagnostic must return a full report"
+        );
+        let items = report
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .ok_or("stale pull diagnostic report must include items")?;
+        assert!(items.is_empty(), "input that hits the boundary: current_gen != gen_at_snapshot");
+        assert!(
+            report.get("resultId").is_none(),
+            "stale pull diagnostic must not cache a result id"
+        );
+        Ok(())
+    }
+
+    /// Positive control: a valid URI for a document that was never opened must
+    /// return `Ok({"kind":"full","items":[]})` — genuinely-no-diagnostics is
+    /// correct and must NOT be conflated with the error cases above.
+    #[test]
+    fn pull_diagnostic_valid_uri_unopened_returns_empty_full_report()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let result = server.test_handle_document_diagnostic(Some(
+            json!({ "textDocument": { "uri": "file:///never_opened.pl" } }),
+        ));
+        assert!(result.is_ok(), "valid URI for unopened file must return Ok; got: {:?}", result);
+        let value = result?.unwrap_or_default();
+        assert_eq!(
+            value["kind"].as_str(),
+            Some("full"),
+            "report kind must be 'full'; got: {value:?}"
+        );
+        let items = value["items"].as_array().ok_or("report must have an items array")?;
+        assert!(
+            items.is_empty(),
+            "report items must be empty for an unopened file; got: {value:?}"
         );
         Ok(())
     }
