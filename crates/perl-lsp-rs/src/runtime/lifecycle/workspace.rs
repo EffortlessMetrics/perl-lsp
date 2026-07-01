@@ -247,9 +247,20 @@ mod tests {
 
         // The workspace profile is searched first, so this assertion holds
         // regardless of any ambient $HOME/.perltidyrc or $PERLTIDY on the host.
+        //
+        // On Windows the URI-to-path round-trip lowercases the drive letter (the
+        // `normalize_windows_path_to_key` helper in perl-uri lowercases it for URI
+        // normalisation, so the stored path is e.g. `c:\…` while `profile.to_str()`
+        // retains the OS-reported `C:\…`). Canonicalize both sides so that the
+        // assertion tests path *equivalence* rather than byte equality, keeping the
+        // check meaningful (wrong path → `canonicalize` succeeds on a different
+        // location → paths still differ) without producing false failures on Windows.
+        let discovered = server.discovered_perltidy_profile.lock().clone();
+        let canon_discovered = discovered.as_deref().and_then(|s| std::fs::canonicalize(s).ok());
+        let canon_expected = std::fs::canonicalize(&profile).ok();
         assert_eq!(
-            server.discovered_perltidy_profile.lock().as_deref(),
-            profile.to_str(),
+            canon_discovered.as_deref(),
+            canon_expected.as_deref(),
             "workspace .perltidyrc should be discovered and cached at initialize"
         );
         Ok(())
