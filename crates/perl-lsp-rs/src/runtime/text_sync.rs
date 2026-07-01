@@ -411,6 +411,10 @@ impl LspServer {
                     let mut cache = self.semantic_analyzer_cache.lock();
                     cache.retain(|(cached_uri, _), _| cached_uri != &normalized_uri);
                 }
+                {
+                    let mut cache = self.type_inference_engine_cache.lock();
+                    cache.retain(|(cached_uri, _), _| cached_uri != &normalized_uri);
+                }
 
                 // Invalidate the perlcritic violation cache for this file so that
                 // the next diagnostic cycle re-runs perlcritic on the new content.

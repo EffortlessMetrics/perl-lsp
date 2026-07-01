@@ -348,8 +348,7 @@ impl LspServer {
             // Infer type for variables using TypeInferenceEngine
             let type_info = if symbol_info.kind.is_variable() {
                 let var_name = &symbol_info.name; // already without sigil
-                let mut type_engine = crate::type_inference::TypeInferenceEngine::new();
-                let _ = type_engine.infer(ast); // ignore errors, just build env
+                let type_engine = self.get_or_build_type_engine(uri, text, ast);
                 type_engine
                     .hover_label_for(var_name)
                     .filter(|label| label != "Any")

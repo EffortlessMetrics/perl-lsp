@@ -24,7 +24,6 @@ use crate::{
 };
 use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_module::resolution::{IncRoot, IncRootKind};
-use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -963,9 +962,8 @@ impl LspServer {
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
 
-                    // Enhance completions with type information
-                    let mut type_engine = TypeInferenceEngine::new();
-                    let _ = type_engine.infer(ast); // Build type environment
+                    // Enhance completions with cached type information.
+                    let type_engine = self.get_or_build_type_engine(uri, &doc.text, ast);
 
                     // Add type information to completion items where possible
                     for completion in &mut base_completions {

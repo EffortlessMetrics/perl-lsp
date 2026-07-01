@@ -276,6 +276,47 @@ impl LspServer {
 
         analyzer
     }
+
+    /// Get or compute a `TypeInferenceEngine` for the given document text and AST.
+    ///
+    /// Cache key and lock ordering mirror `get_or_build_analyzer`.
+    pub(crate) fn get_or_build_type_engine(
+        &self,
+        uri: &str,
+        text: &str,
+        ast: &perl_parser::ast::Node,
+    ) -> Arc<crate::type_inference::TypeInferenceEngine> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        let content_hash = hasher.finish();
+
+        let normalized = self.normalize_uri_key(uri);
+        let key = (normalized, content_hash);
+
+        {
+            let cache = self.type_inference_engine_cache.lock();
+            if let Some(cached) = cache.get(&key) {
+                return Arc::clone(cached);
+            }
+        }
+
+        let mut engine = crate::type_inference::TypeInferenceEngine::new();
+        let _ = engine.infer(ast);
+        let engine = Arc::new(engine);
+
+        {
+            let mut cache = self.type_inference_engine_cache.lock();
+            if cache.len() >= 50 {
+                cache.clear();
+            }
+            cache.insert(key, Arc::clone(&engine));
+        }
+
+        engine
+    }
 }
 
 #[cfg(all(test, feature = "workspace"))]

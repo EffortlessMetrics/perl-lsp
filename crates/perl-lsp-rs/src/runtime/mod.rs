@@ -234,6 +234,12 @@ pub struct LspServer {
     /// invalidation when source text changes — no TTL needed.
     pub(crate) semantic_analyzer_cache:
         Arc<Mutex<HashMap<(String, u64), Arc<crate::semantic::SemanticAnalyzer>>>>,
+    /// Cache of inferred type environments keyed by (normalized_uri, content_hash).
+    ///
+    /// Mirrors `semantic_analyzer_cache` so repeated hover/completion requests
+    /// on an unchanged document do not rebuild `TypeInferenceEngine`.
+    pub(crate) type_inference_engine_cache:
+        Arc<Mutex<HashMap<(String, u64), Arc<crate::type_inference::TypeInferenceEngine>>>>,
     /// Last provider-local decision receipt by provider name.
     ///
     /// `perl.explainProviderDecision` can attach these transient per-server
@@ -359,6 +365,8 @@ pub struct MemoryStateSnapshot {
     pub open_text_bytes: usize,
     /// Number of cached semantic analyzer entries.
     pub semantic_analyzer_cache: usize,
+    /// Number of cached type inference engine entries.
+    pub type_inference_engine_cache: usize,
     /// Number of per-document parse cancellation flags still retained.
     pub parse_cancel_flags: usize,
     /// Number of active inline-completion stream sessions.
@@ -646,6 +654,11 @@ impl LspServer {
         }
 
         {
+            let mut cache = self.type_inference_engine_cache.lock();
+            cache.retain(|(cached_uri, _), _| !uri_keys.iter().any(|key| key == cached_uri));
+        }
+
+        {
             let mut documents = self.documents.lock();
             for key in &uri_keys {
                 if let Some(doc) = documents.remove(key) {
@@ -725,6 +738,7 @@ impl LspServer {
             documents: document_count,
             open_text_bytes,
             semantic_analyzer_cache: self.semantic_analyzer_cache.lock().len(),
+            type_inference_engine_cache: self.type_inference_engine_cache.lock().len(),
             parse_cancel_flags: self.parse_cancel_flags.lock().len(),
             stream_sessions: self.stream_sessions().len(),
             pending_index_tasks: self.pending_index_task_count.load(Ordering::SeqCst),

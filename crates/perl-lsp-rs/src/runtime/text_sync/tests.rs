@@ -1532,6 +1532,105 @@ fn test_semantic_analyzer_cache_separates_document_versions()
     Ok(())
 }
 
+/// Type inference cache must accumulate at most one entry per document version
+/// across multiple hovers on the same source text.
+#[test]
+fn test_type_inference_cache_reuses_entry_on_same_version() -> Result<(), Box<dyn std::error::Error>>
+{
+    let server = LspServer::new();
+    let uri = "file:///test_type_cache_hover.pl";
+    let text = "my $x = 1;\nmy $y = $x;\n";
+
+    server.did_open(json!({
+        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+    }))?;
+
+    let _ = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 0, "character": 3 }
+    })));
+
+    let _ = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 3 }
+    })));
+
+    let cache = server.type_inference_engine_cache.lock();
+    assert_eq!(
+        cache.len(),
+        1,
+        "should cache exactly one type inference entry per document version (got {})",
+        cache.len()
+    );
+
+    Ok(())
+}
+
+/// The type inference cache must be cleared for a URI when source text changes.
+#[test]
+fn test_type_inference_cache_invalidated_on_did_change() -> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::new();
+    let uri = "file:///test_type_cache_invalidate_change.pl";
+    let text = "my $x = 1;\n";
+
+    server.did_open(json!({
+        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+    }))?;
+
+    let _ = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 0, "character": 3 }
+    })));
+
+    {
+        let cache = server.type_inference_engine_cache.lock();
+        assert!(!cache.is_empty(), "type inference cache must be populated before didChange");
+    }
+
+    server.handle_did_change(Some(json!({
+        "textDocument": { "uri": uri, "version": 2 },
+        "contentChanges": [{ "text": "my $x = 99;\n" }]
+    })))?;
+
+    let cache = server.type_inference_engine_cache.lock();
+    let uri_key = server.normalize_uri_key(uri);
+    let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
+    assert!(!still_has_stale, "type inference cache must evict entries for changed URI");
+
+    Ok(())
+}
+
+/// The type inference cache must be cleared for a URI when the document closes.
+#[test]
+fn test_type_inference_cache_invalidated_on_did_close() -> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::new();
+    let uri = "file:///test_type_cache_invalidate_close.pl";
+    let text = "my $x = 1;\n";
+
+    server.did_open(json!({
+        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+    }))?;
+
+    let _ = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 0, "character": 3 }
+    })));
+
+    {
+        let cache = server.type_inference_engine_cache.lock();
+        assert!(!cache.is_empty(), "type inference cache must be populated before didClose");
+    }
+
+    server.handle_did_close(Some(json!({ "textDocument": { "uri": uri } })))?;
+
+    let cache = server.type_inference_engine_cache.lock();
+    let uri_key = server.normalize_uri_key(uri);
+    let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
+    assert!(!still_has_stale, "type inference cache must evict entries for closed URI");
+
+    Ok(())
+}
+
 // =========================================================================
 // Error-path tests — closes #3039
 //
