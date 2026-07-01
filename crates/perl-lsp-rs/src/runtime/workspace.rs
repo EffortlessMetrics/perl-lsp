@@ -85,6 +85,8 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
 }
 
 #[cfg(feature = "workspace")]
+use perl_workspace::monitoring::WorkspaceIndexingReceipt;
+#[cfg(feature = "workspace")]
 use text_decode::read_text_with_encoding_fallback;
 
 #[cfg(feature = "workspace")]
@@ -1942,6 +1944,7 @@ impl LspServer {
 
             let mut files: Vec<std::path::PathBuf> = Vec::new();
             let mut early_exit: Option<(EarlyExitReason, u64, usize, usize)> = None;
+            let mut indexing_receipt = WorkspaceIndexingReceipt::default();
 
             'scan: for folder_state in workspace_folders {
                 let Some(root) =
@@ -1982,6 +1985,7 @@ impl LspServer {
             }
 
             coordinator.update_scan_progress(files.len());
+            indexing_receipt.record_discovery(files.len(), budget_start.elapsed());
             coordinator.transition_to_indexing(files.len());
 
             let mut indexed_files = 0usize;
@@ -2002,9 +2006,11 @@ impl LspServer {
                     break;
                 }
 
+                let read_started = Instant::now();
                 let content = match read_text_with_encoding_fallback(&path) {
                     Ok(c) => c,
                     Err(e) => {
+                        indexing_receipt.record_read_error();
                         if is_permission_denied_error(&e) {
                             // ONE-TIME window/showMessage (AtomicBool guard)
                             if permission_denied_shown
@@ -2062,9 +2068,17 @@ impl LspServer {
                     }
                 };
                 let Ok(url) = Url::from_file_path(&path) else {
+                    indexing_receipt.record_index_error();
                     continue;
                 };
+                let read_elapsed = read_started.elapsed();
+                let index_started = Instant::now();
                 if coordinator.index().index_file(url, content).is_ok() {
+                    indexing_receipt.record_indexed_file(
+                        &path,
+                        read_elapsed,
+                        index_started.elapsed(),
+                    );
                     indexed_files += 1;
                     coordinator.update_building_progress(indexed_files);
 
@@ -2073,10 +2087,13 @@ impl LspServer {
                         send_progress_report(&outbound, indexed_files, total_files);
                         last_reported = indexed_files;
                     }
+                } else {
+                    indexing_receipt.record_index_error();
                 }
             }
 
             if let Some((reason, elapsed_ms, indexed_files, total_files)) = early_exit {
+                indexing_receipt.log(budget_start.elapsed(), Some(reason));
                 coordinator.record_early_exit(reason, elapsed_ms, indexed_files, total_files);
                 match reason {
                     EarlyExitReason::FileLimit => {
@@ -2094,6 +2111,7 @@ impl LspServer {
                 }
                 send_index_ready_notification(&outbound, false);
             } else {
+                indexing_receipt.log(budget_start.elapsed(), None);
                 let file_count = coordinator.index().file_count();
                 let symbol_count = coordinator.index().symbol_count();
                 coordinator.transition_to_ready(file_count, symbol_count);

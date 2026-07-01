@@ -25,6 +25,9 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
 
+mod indexing_receipt;
+pub use indexing_receipt::WorkspaceIndexingReceipt;
+
 /// Build phase while the index is in `Building` state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IndexPhase {
