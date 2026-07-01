@@ -988,6 +988,52 @@ mod tests {
         assert_eq!(from["name"].as_str(), Some("script.pl"));
     }
 
+    #[test]
+    fn test_incoming_calls_open_doc_fallback_finds_top_level_script_method_call()
+    -> anyhow::Result<()> {
+        let server = LspServer::new();
+        server.test_enable_call_hierarchy();
+
+        let app_uri = "file:///lib/RealBaseline/App.pm";
+        let app_text = "package RealBaseline::App;\n\nsub run {\n    return 1;\n}\n\n1;\n";
+        let script_uri = "file:///script/real-baseline.pl";
+        let script_text =
+            "use RealBaseline::App;\n\nmy $app = RealBaseline::App->new();\n$app->run;\n";
+        open_doc(&server, app_uri, app_text);
+        open_doc(&server, script_uri, script_text);
+
+        let prepared = server
+            .handle_prepare_call_hierarchy(Some(json!({
+                "textDocument": { "uri": app_uri },
+                "position": { "line": 2, "character": 5 }
+            })))
+            .map_err(|err| anyhow::anyhow!("prepareCallHierarchy failed: {err:?}"))?
+            .ok_or_else(|| anyhow::anyhow!("prepareCallHierarchy returned no response"))?;
+        let items = prepared
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("prepareCallHierarchy must return an array"))?;
+        let item = items
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("prepareCallHierarchy returned no items"))?;
+
+        let incoming = server
+            .handle_incoming_calls(Some(json!({ "item": item })))
+            .map_err(|err| anyhow::anyhow!("incomingCalls failed: {err:?}"))?
+            .ok_or_else(|| anyhow::anyhow!("incomingCalls returned no response"))?;
+        let calls = incoming
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("incomingCalls must return an array"))?;
+
+        let script_caller = calls.iter().any(|call| {
+            call["from"]["uri"].as_str().map_or(false, |uri| uri.ends_with("real-baseline.pl"))
+        });
+        assert!(
+            script_caller,
+            "expected incomingCalls to include script/real-baseline.pl, got: {calls:?}"
+        );
+        Ok(())
+    }
+
     /// Verifies that `handle_outgoing_calls` executes the workspace
     /// index-readiness wait when indexing is in progress (#3095).
     #[cfg(feature = "workspace")]

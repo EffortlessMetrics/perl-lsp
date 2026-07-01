@@ -65,7 +65,12 @@ fn scenario_15_workspace_symbol_multi_root_disambiguation() {
     )
     .expect("Failed to create UX harness");
 
-    let deadline = Instant::now() + Duration::from_secs(10);
+    assert!(
+        harness.wait_for_index_ready(Duration::from_secs(20)),
+        "Expected initial workspace index to become ready before querying multi-root symbols"
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(20);
     let mut latest_symbols = Vec::new();
 
     while Instant::now() < deadline {

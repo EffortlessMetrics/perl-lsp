@@ -77,7 +77,7 @@
 
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::time::Duration;
 
 // ── Fixture sources (same as scenario_21) ────────────────────────────────────
@@ -161,6 +161,37 @@ fn create_harness() -> anyhow::Result<UxHarness> {
             .with_file("lib/RealBaseline/Util.pm", UTIL_PM)
             .with_file("script/real-baseline.pl", SCRIPT_PL),
     )
+}
+
+fn wait_for_incoming_calls(
+    harness: &UxHarness,
+    item: &Value,
+    timeout: Duration,
+) -> anyhow::Result<Vec<Value>> {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        let incoming_resp = harness.client.request(
+            "callHierarchy/incomingCalls",
+            json!({ "item": item }),
+            Duration::from_secs(5),
+        )?;
+
+        if incoming_resp.get("error").is_some() {
+            return Err(anyhow::anyhow!(
+                "incomingCalls returned JSON-RPC error: {:?}",
+                incoming_resp["error"]
+            ));
+        }
+
+        let calls = incoming_resp["result"].as_array().cloned().ok_or_else(|| {
+            anyhow::anyhow!("incomingCalls result must be array: {:?}", incoming_resp["result"])
+        })?;
+        if !calls.is_empty() || std::time::Instant::now() >= deadline {
+            return Ok(calls);
+        }
+
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -417,23 +448,14 @@ fn scenario_22_call_hierarchy_incoming_to_run() -> anyhow::Result<()> {
         }
     };
 
-    // Step 2: incoming calls using the item from step 1.
-    let incoming_resp = harness.client.request(
-        "callHierarchy/incomingCalls",
-        json!({ "item": items[0] }),
-        Duration::from_secs(5),
-    )?;
+    // Step 2: incoming calls using the item from step 1. The script didOpen is a
+    // notification in the external-process harness, so poll briefly for the
+    // server to observe the caller instead of treating the first empty snapshot
+    // as final.
+    let calls = wait_for_incoming_calls(&harness, &items[0], Duration::from_secs(5))?;
+    eprintln!("status: incomingCalls/run: calls: {:?}", calls);
 
-    eprintln!("status: incomingCalls/run: raw response: {:?}", incoming_resp);
-
-    if incoming_resp.get("error").is_some() {
-        eprintln!(
-            "status: incomingCalls/run: BROKEN — JSON-RPC error: {:?}",
-            incoming_resp["error"]
-        );
-    } else if incoming_resp["result"].is_null() {
-        eprintln!("status: incomingCalls/run: BROKEN — null result");
-    } else if let Some(calls) = incoming_resp["result"].as_array() {
+    if !calls.is_empty() {
         let names: Vec<&str> = calls
             .iter()
             .filter_map(|c| c.get("from").and_then(|f| f.get("name")).and_then(|n| n.as_str()))
@@ -451,10 +473,7 @@ fn scenario_22_call_hierarchy_incoming_to_run() -> anyhow::Result<()> {
             eprintln!("status: incomingCalls/run: WORKS — at least one caller returned");
         }
     } else {
-        eprintln!(
-            "status: incomingCalls/run: BROKEN — result not an array: {:?}",
-            incoming_resp["result"]
-        );
+        eprintln!("status: incomingCalls/run: BROKEN — no callers found");
     }
 
     harness.assert_no_crash();
@@ -572,21 +591,7 @@ fn scenario_22_call_hierarchy_incoming_to_run_hard_assert() -> anyhow::Result<()
         .ok_or_else(|| anyhow::anyhow!("prepareCallHierarchy must return array"))?;
     assert!(!items.is_empty(), "prepareCallHierarchy must return at least one item");
 
-    let incoming_resp = harness.client.request(
-        "callHierarchy/incomingCalls",
-        json!({ "item": items[0] }),
-        Duration::from_secs(5),
-    )?;
-
-    assert!(
-        incoming_resp.get("error").is_none(),
-        "incomingCalls must not return a JSON-RPC error: {:?}",
-        incoming_resp.get("error")
-    );
-
-    let calls = incoming_resp["result"].as_array().ok_or_else(|| {
-        anyhow::anyhow!("incomingCalls result must be array: {:?}", incoming_resp["result"])
-    })?;
+    let calls = wait_for_incoming_calls(&harness, &items[0], Duration::from_secs(5))?;
 
     // script/real-baseline.pl calls $app->run — must appear as an incoming caller.
     assert!(

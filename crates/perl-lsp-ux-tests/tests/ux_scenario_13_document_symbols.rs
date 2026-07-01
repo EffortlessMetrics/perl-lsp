@@ -14,7 +14,7 @@
 //! - No crash signatures after the request.
 
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::{ScenarioConfig, UxHarness, document_symbol_names};
 use std::time::Duration;
 
 /// Source with two named subs and a package declaration — rich symbol table.
@@ -138,10 +138,10 @@ fn scenario_13_rich_file_returns_known_sub_names() {
         return;
     }
 
-    let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+    let names = document_symbol_names(&symbols);
 
     // At least one of our three subs should appear.
-    let found_any = names.iter().any(|n| ["new", "greet", "farewell"].contains(n));
+    let found_any = names.iter().any(|name| ["new", "greet", "farewell"].contains(name));
     assert!(
         found_any,
         "Expected at least one of [new, greet, farewell] in document symbols, \

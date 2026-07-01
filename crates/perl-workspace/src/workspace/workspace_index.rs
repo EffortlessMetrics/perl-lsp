@@ -8181,6 +8181,35 @@ mod entity_id_file_scoped_tests {
         );
     }
 
+    #[test]
+    fn search_source_symbols_keeps_same_name_from_multiple_workspace_folders() {
+        let index = WorkspaceIndex::new();
+        index.set_workspace_folders(vec![
+            "file:///repo/svc-a".to_string(),
+            "file:///repo/svc-b".to_string(),
+        ]);
+
+        must(index.index_file(
+            must(url::Url::parse("file:///repo/svc-a/lib/ServiceA.pm")),
+            "package ServiceA;\nsub shared_action_4481 { 1 }\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse("file:///repo/svc-b/lib/ServiceB.pm")),
+            "package ServiceB;\nsub shared_action_4481 { 2 }\n1;\n".to_string(),
+        ));
+
+        let mut results = index.search_source_symbols("shared_action_4481");
+        results.sort_by(|left, right| left.uri.cmp(&right.uri));
+
+        let folders: Vec<Option<&str>> =
+            results.iter().map(|symbol| symbol.workspace_folder_uri.as_deref()).collect();
+        assert_eq!(
+            folders,
+            vec![Some("file:///repo/svc-a"), Some("file:///repo/svc-b")],
+            "same-name workspace symbols must preserve both workspace folder owners"
+        );
+    }
+
     /// Verify that `search_source_symbols` via the indexed path is correct after
     /// a file is updated (incremental remove + add) and after `remove_file`.
     #[test]

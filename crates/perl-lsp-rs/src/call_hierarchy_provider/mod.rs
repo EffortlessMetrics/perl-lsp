@@ -1004,6 +1004,40 @@ sub helper {
         }
     }
 
+    /// The UX #3093 fixture uses a variable receiver and no call parentheses:
+    /// `my $app = App->new(...); $app->run;`.
+    #[test]
+    fn test_incoming_calls_top_level_variable_method_call_synthesizes_file_caller()
+    -> anyhow::Result<()> {
+        let code = "my $app = App->new();\n$app->run;\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let provider =
+            CallHierarchyProvider::new(code.to_string(), "file:///script.pl".to_string());
+        let target_item = CallHierarchyItem {
+            name: "run".to_string(),
+            kind: "method".to_string(),
+            uri: "file:///App.pm".to_string(),
+            range: Range {
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 2, character: 1 },
+            },
+            selection_range: Range {
+                start: Position { line: 1, character: 4 },
+                end: Position { line: 1, character: 7 },
+            },
+            detail: None,
+            package_name: None,
+            qualified_name: None,
+        };
+        let incoming = provider.incoming_calls(&ast, &target_item);
+        assert_eq!(incoming.len(), 1, "expected exactly one file-level caller");
+        assert_eq!(incoming[0].from.name, "script.pl");
+        assert_eq!(incoming[0].from.kind, "file");
+        assert_eq!(incoming[0].from.uri, "file:///script.pl");
+        Ok(())
+    }
+
     /// A top-level `FunctionCall` (not inside any sub) must produce a file-level
     /// caller rather than being silently dropped.
     #[test]

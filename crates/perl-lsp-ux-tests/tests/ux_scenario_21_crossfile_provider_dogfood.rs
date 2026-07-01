@@ -27,7 +27,7 @@
 //! ```
 
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::{ScenarioConfig, UxHarness, document_symbol_names};
 use serde_json::json;
 use std::time::Duration;
 
@@ -492,8 +492,7 @@ fn scenario_21_document_symbols_in_app_pm() -> anyhow::Result<()> {
         assert!(has_location, "document symbol must have `range` or `location` field: {sym:?}");
     }
 
-    let sym_names: Vec<&str> =
-        syms.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    let sym_names = document_symbol_names(&syms);
 
     let has_new = sym_names.iter().any(|n| *n == "new");
     let has_run = sym_names.iter().any(|n| *n == "run");
@@ -535,8 +534,7 @@ fn scenario_21_document_symbols_in_app_pm_hard_assert() -> anyhow::Result<()> {
     harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
 
     let syms = harness.document_symbols("lib/RealBaseline/App.pm")?;
-    let sym_names: Vec<&str> =
-        syms.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    let sym_names = document_symbol_names(&syms);
 
     assert!(
         sym_names.iter().any(|n| *n == "new"),

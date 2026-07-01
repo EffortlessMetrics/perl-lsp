@@ -99,6 +99,35 @@ impl CursorPosition {
     }
 }
 
+/// Return every symbol name from a `textDocument/documentSymbol` response.
+///
+/// LSP servers may return either a flat `SymbolInformation[]` response or a
+/// hierarchical `DocumentSymbol[]` tree. UX assertions that care about symbol
+/// presence should use this helper instead of inspecting only top-level names.
+pub fn document_symbol_names(symbols: &[Value]) -> Vec<&str> {
+    let mut names = Vec::new();
+    collect_document_symbol_names(symbols, &mut names);
+    names
+}
+
+fn collect_document_symbol_names<'a>(symbols: &'a [Value], names: &mut Vec<&'a str>) {
+    for symbol in symbols {
+        if let Some(name) = symbol.get("name").and_then(Value::as_str) {
+            names.push(name);
+        }
+        if let Some(children) = symbol.get("children").and_then(Value::as_array) {
+            collect_document_symbol_names(children, names);
+        }
+    }
+}
+
+fn is_index_ready_event(event: &LspEvent) -> bool {
+    let LspEvent::Other { method, params } = event else {
+        return false;
+    };
+    method == "perl-lsp/index-ready" && params.get("ready").and_then(Value::as_bool) == Some(true)
+}
+
 /// Configuration for a UX scenario.
 ///
 /// Centralises all the knobs that affect the test environment without
@@ -434,8 +463,10 @@ impl UxHarness {
 
     /// Request document symbols (`textDocument/documentSymbol`).
     ///
-    /// Returns the flat list of `SymbolInformation` or `DocumentSymbol` objects,
-    /// or an empty vec if the server returned null/empty.
+    /// Returns the top-level `SymbolInformation` or `DocumentSymbol` objects,
+    /// or an empty vec if the server returned null/empty. `DocumentSymbol`
+    /// objects may include nested `children`; use [`document_symbol_names`] for
+    /// recursive name assertions.
     pub fn document_symbols(&self, relative_path: &str) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
         let resp = self.client.request(
@@ -510,6 +541,31 @@ impl UxHarness {
         }
 
         Ok(latest)
+    }
+
+    /// Wait until the harness observes a ready workspace index.
+    pub fn wait_for_index_ready(&self, timeout: Duration) -> bool {
+        self.wait_for_index_ready_event_after(0, timeout)
+    }
+
+    /// Count ready-index notifications already observed by the harness.
+    pub fn index_ready_event_count(&self) -> usize {
+        self.client.peek_events().iter().filter(|event| is_index_ready_event(event)).count()
+    }
+
+    /// Wait until a ready-index notification arrives after `already_seen` events.
+    pub fn wait_for_index_ready_event_after(&self, already_seen: usize, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if self.index_ready_event_count() > already_seen {
+                std::thread::sleep(Duration::from_millis(50));
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 
     /// Notify the server that workspace folders changed.
@@ -1050,10 +1106,10 @@ pub fn missing_binary_skip() -> UxScenarioSkip {
 ///
 /// Resolution order:
 /// 1. `PERL_LSP_BIN` env var (explicit override).
-/// 2. Runtime walk from `current_exe()` — finds `target/debug/perl-lsp[.exe]` by
+/// 2. Runtime walk from `current_exe()` — finds `target/<profile>/perl-lsp[.exe]` by
 ///    traversing parent directories. Avoids the `option_env!` compile-time approach
 ///    which strips backslashes on Windows CI (OS error 3 / path not found).
-/// 3. `CARGO_TARGET_DIR` env var — if set, probe its `debug/` and `release/` subdirs.
+/// 3. `CARGO_TARGET_DIR` env var — if set, probe its active/default profile subdirs.
 /// 4. `CARGO_MANIFEST_DIR`-relative workspace root walk — same approach used by
 ///    `perl-lsp-rs` integration tests.
 /// 5. `perl-lsp` / `perllsp` in PATH.
@@ -1070,10 +1126,9 @@ pub fn resolve_binary() -> Result<String> {
     //    Windows where option_env! bakes paths with backslashes stripped.
     //
     //    Test binaries live at:
-    //      <workspace>/target/debug/deps/<test-binary-name>[.exe]
+    //      <workspace>/target/<profile>/deps/<test-binary-name>[.exe]
     //    The LSP server lives at:
-    //      <workspace>/target/debug/perl-lsp[.exe]
-    //      <workspace>/target/release/perl-lsp[.exe]
+    //      <workspace>/target/<profile>/perl-lsp[.exe]
     //
     //    We walk up from current_exe() until we find a `target` directory
     //    whose parent contains `Cargo.lock` (the workspace root).
@@ -1083,24 +1138,25 @@ pub fn resolve_binary() -> Result<String> {
         }
     }
 
-    // 3. CARGO_TARGET_DIR — if set, look directly in its debug/release subdirs.
+    // 3. CARGO_TARGET_DIR — if set, look directly in its active/default profile subdirs.
     //    This covers custom target directories (e.g. agent worktrees using
     //    CARGO_TARGET_DIR=/tmp/agent-...). Note: CARGO_TARGET_DIR is the target
-    //    directory itself (not a workspace root), so we look in
-    //    CARGO_TARGET_DIR/debug/ and CARGO_TARGET_DIR/release/ directly.
+    //    directory itself (not a workspace root), so we look in profile
+    //    subdirectories directly.
     if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
         let target_path = std::path::Path::new(&target_dir);
-        let bin_name = if cfg!(windows) { "perl-lsp.exe" } else { "perl-lsp" };
-        for profile in ["debug", "release"] {
-            let candidate = target_path.join(profile).join(bin_name);
-            if candidate.exists() {
-                return Ok(candidate.to_string_lossy().into_owned());
-            }
+        let preferred =
+            std::env::var("PROFILE").ok().or_else(|| std::env::var("CARGO_PROFILE").ok());
+        if let Some(binary) = find_binary_in_target_dir_profiles(
+            target_path,
+            profile_candidates(preferred.as_deref()),
+        ) {
+            return Ok(binary);
         }
     }
 
     // 4. CARGO_MANIFEST_DIR walk — find workspace root via Cargo.lock, then
-    //    check target/{debug,release}/perl-lsp[.exe].
+    //    check target/{debug,agent,release}/perl-lsp[.exe].
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let crate_dir = std::path::Path::new(&manifest_dir);
         let workspace_root =
@@ -1126,7 +1182,7 @@ pub fn resolve_binary() -> Result<String> {
 }
 
 /// Walk up from the test binary's path to locate `perl-lsp[.exe]` in the
-/// nearest `target/debug` or `target/release` directory.
+/// nearest `target/<profile>` directory.
 ///
 /// Test binaries are placed in `<workspace>/target/<profile>/deps/`, so we
 /// ascend until we find a directory named `target` whose parent has a
@@ -1137,32 +1193,65 @@ fn find_binary_near_exe(exe: &std::path::Path) -> Option<String> {
         if ancestor.file_name().and_then(|n| n.to_str()) == Some("target") {
             let workspace_root = ancestor.parent()?;
             if workspace_root.join("Cargo.lock").exists() {
-                return find_binary_in_target(workspace_root);
+                let preferred = exe
+                    .strip_prefix(ancestor)
+                    .ok()
+                    .and_then(|relative| relative.components().next())
+                    .and_then(|component| component.as_os_str().to_str());
+                return find_binary_in_target_profiles(
+                    workspace_root,
+                    profile_candidates(preferred),
+                );
             }
         }
     }
     None
 }
 
-/// Given a workspace root, probe `target/debug` and `target/release` for
+/// Given a workspace root, probe known target profiles for
 /// the `perl-lsp` binary (with `.exe` extension on Windows).
 fn find_binary_in_target(workspace_root: &std::path::Path) -> Option<String> {
+    find_binary_in_target_profiles(workspace_root, profile_candidates(None))
+}
+
+fn find_binary_in_target_profiles(
+    workspace_root: &std::path::Path,
+    profiles: Vec<String>,
+) -> Option<String> {
+    find_binary_in_target_dir_profiles(&workspace_root.join("target"), profiles)
+}
+
+fn find_binary_in_target_dir_profiles(
+    target_dir: &std::path::Path,
+    profiles: Vec<String>,
+) -> Option<String> {
     let bin_name = if cfg!(windows) { "perl-lsp.exe" } else { "perl-lsp" };
     let alt_bin_name = if cfg!(windows) { "perllsp.exe" } else { "perllsp" };
 
-    // Prefer debug (matches `cargo test` default profile) over release.
-    let profiles = ["debug", "release"];
     for profile in profiles {
-        let candidate = workspace_root.join("target").join(profile).join(bin_name);
+        let candidate = target_dir.join(&profile).join(bin_name);
         if candidate.exists() {
             return Some(candidate.to_string_lossy().into_owned());
         }
-        let alt_candidate = workspace_root.join("target").join(profile).join(alt_bin_name);
+        let alt_candidate = target_dir.join(&profile).join(alt_bin_name);
         if alt_candidate.exists() {
             return Some(alt_candidate.to_string_lossy().into_owned());
         }
     }
     None
+}
+
+fn profile_candidates(preferred: Option<&str>) -> Vec<String> {
+    let mut profiles = Vec::new();
+    if let Some(profile) = preferred.filter(|profile| !profile.is_empty()) {
+        profiles.push(profile.to_string());
+    }
+    for profile in ["debug", "agent", "release"] {
+        if !profiles.iter().any(|existing| existing == profile) {
+            profiles.push(profile.to_string());
+        }
+    }
+    profiles
 }
 
 /// Utility: find `perl` on PATH, returning its path or `None`.
@@ -1182,10 +1271,81 @@ pub fn find_perlcritic() -> Option<String> {
 
 #[cfg(test)]
 mod normalize_tests {
-    use super::{normalize_lsp_payload, normalize_uri_for_expectations};
+    use super::{
+        document_symbol_names, find_binary_near_exe, is_index_ready_event, normalize_lsp_payload,
+        normalize_uri_for_expectations,
+    };
+    use crate::LspEvent;
     use serde_json::{Value, json};
     use std::path::Path;
     use tempfile::TempDir;
+
+    #[test]
+    fn document_symbol_names_collects_top_level_and_nested_names() -> anyhow::Result<()> {
+        let symbols = vec![
+            json!({
+                "name": "Latency::Symbols",
+                "children": [
+                    {
+                        "name": "alpha",
+                        "children": []
+                    }
+                ]
+            }),
+            json!({
+                "name": "beta"
+            }),
+        ];
+
+        let names = document_symbol_names(&symbols);
+        assert!(names.contains(&"Latency::Symbols"));
+        assert!(names.contains(&"alpha"));
+        assert!(names.contains(&"beta"));
+        assert!(!names.contains(&"gamma"));
+        Ok(())
+    }
+
+    #[test]
+    fn index_ready_event_requires_ready_true_notification() -> anyhow::Result<()> {
+        assert!(is_index_ready_event(&LspEvent::Other {
+            method: "perl-lsp/index-ready".to_string(),
+            params: json!({ "ready": true }),
+        }));
+        assert!(!is_index_ready_event(&LspEvent::Other {
+            method: "perl-lsp/index-ready".to_string(),
+            params: json!({ "ready": false }),
+        }));
+        assert!(!is_index_ready_event(&LspEvent::LogMessage {
+            message_type: 3,
+            message: "perl-lsp/index-ready".to_string(),
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn binary_resolver_prefers_test_binary_profile() -> anyhow::Result<()> {
+        let dir = TempDir::new()?;
+        let root = dir.path();
+        std::fs::write(root.join("Cargo.lock"), "")?;
+        let bin_name = if cfg!(windows) { "perl-lsp.exe" } else { "perl-lsp" };
+        let test_dir = root.join("target").join("agent").join("deps");
+        let server_dir = root.join("target").join("agent");
+        let release_dir = root.join("target").join("release");
+        std::fs::create_dir_all(&test_dir)?;
+        std::fs::create_dir_all(&server_dir)?;
+        std::fs::create_dir_all(&release_dir)?;
+        let agent_bin = server_dir.join(bin_name);
+        let release_bin = release_dir.join(bin_name);
+        std::fs::write(&agent_bin, "")?;
+        std::fs::write(&release_bin, "")?;
+
+        let test_exe = test_dir.join(if cfg!(windows) { "ux-test.exe" } else { "ux-test" });
+        let resolved = find_binary_near_exe(&test_exe)
+            .ok_or_else(|| anyhow::anyhow!("resolver did not find agent-profile binary"))?;
+
+        assert_eq!(resolved, agent_bin.to_string_lossy());
+        Ok(())
+    }
 
     // ── normalize_uri_for_expectations ────────────────────────────────────────
 

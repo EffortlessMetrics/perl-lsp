@@ -1971,6 +1971,48 @@ mod tests {
     }
 
     #[test]
+    fn inline_completion_environment_honors_no_lib_for_default_local_lib()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+        use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
+        use tempfile::TempDir;
+        use url::Url;
+
+        let temp = TempDir::new()?;
+        let workspace = temp.path().join("workspace");
+        let local_module =
+            workspace.join("local").join("lib").join("perl5").join("Local").join("Thing.pm");
+        std::fs::create_dir_all(local_module.parent().ok_or("missing local module parent")?)?;
+        std::fs::write(&local_module, "package Local::Thing;\n1;\n")?;
+
+        let doc_path = workspace.join("script.pl");
+        let doc_text = "no lib 'local/lib/perl5';\nuse Local::";
+        std::fs::write(&doc_path, doc_text)?;
+
+        let workspace_uri =
+            Url::from_file_path(&workspace).map_err(|()| "failed workspace URI")?.to_string();
+        let doc_uri =
+            Url::from_file_path(&doc_path).map_err(|()| "failed document URI")?.to_string();
+
+        let server = LspServer::default();
+        let folder = WorkspaceFolderState::new(workspace_uri).with_path(workspace.clone());
+        server.workspace_folders.lock().push(folder);
+        *server.root_path.lock() = Some(workspace);
+
+        let provider = InlineCompletionProvider::new();
+        let context = provider.prepare_context(doc_text, 1, 11).ok_or("expected inline context")?;
+        let environment =
+            server.inline_completion_environment_for_context(&doc_uri, doc_text, 1, 11, &context);
+
+        assert!(
+            !environment.available_modules.contains(&"Local::Thing".to_string()),
+            "no lib cancellation must suppress default local/lib/perl5 modules; got {:?}",
+            environment.available_modules
+        );
+        Ok(())
+    }
+
+    #[test]
     fn inline_completion_environment_collects_indexed_package_methods()
     -> Result<(), Box<dyn std::error::Error>> {
         use perl_lsp_rs_core::providers::inline_completion::{
