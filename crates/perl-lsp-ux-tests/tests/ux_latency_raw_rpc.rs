@@ -111,6 +111,19 @@ fn timeout() -> Duration {
     Duration::from_secs(8)
 }
 
+fn symbol_tree_contains_name(symbols: &[Value], expected_name: &str) -> bool {
+    let mut pending: Vec<&Value> = symbols.iter().collect();
+    while let Some(symbol) = pending.pop() {
+        if symbol.get("name").and_then(Value::as_str) == Some(expected_name) {
+            return true;
+        }
+        if let Some(children) = symbol.get("children").and_then(Value::as_array) {
+            pending.extend(children.iter());
+        }
+    }
+    false
+}
+
 fn registration_seen(events: &[LspEvent], method_name: &str) -> bool {
     events.iter().any(|event| {
         let LspEvent::Other { method, params } = event else {
@@ -316,7 +329,7 @@ fn ux_latency_document_symbols_returns_real_process_shape() -> Result<()> {
 
     let symbols = harness.document_symbols("lib/Latency/Symbols.pm")?;
     assert!(
-        symbols.iter().any(|symbol| symbol.get("name").and_then(Value::as_str) == Some("alpha")),
+        symbol_tree_contains_name(&symbols, "alpha"),
         "documentSymbol must expose the alpha subroutine over the e2e path; got {symbols:?}"
     );
 
@@ -347,6 +360,29 @@ fn ux_latency_workspace_symbols_sees_open_document_symbols() -> Result<()> {
     );
 
     harness.assert_no_crash();
+    Ok(())
+}
+
+#[test]
+fn symbol_tree_contains_name_searches_nested_children() -> Result<()> {
+    let symbols = vec![
+        json!({
+            "name": "Latency::Symbols",
+            "children": [
+                {
+                    "name": "alpha",
+                    "children": []
+                }
+            ]
+        }),
+        json!({
+            "name": "beta"
+        }),
+    ];
+
+    assert!(symbol_tree_contains_name(&symbols, "alpha"));
+    assert!(symbol_tree_contains_name(&symbols, "beta"));
+    assert!(!symbol_tree_contains_name(&symbols, "gamma"));
     Ok(())
 }
 
