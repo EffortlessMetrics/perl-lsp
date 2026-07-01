@@ -213,9 +213,8 @@ impl DebugAdapter {
                         message: Some(format!(
                             "Cannot start Perl debugger: {}. \
                              {perl_info}. \
-                             To use a specific Perl interpreter, set the `perl-lsp.perl.path` \
-                             extension setting or add a `perl` field to your launch.json \
-                             (e.g. {{\"perl\": \"/path/to/perl\"}}).",
+                             To use a specific Perl interpreter, add `perlPath` to your launch.json \
+                             (e.g. {{\"perlPath\": \"/path/to/perl\"}}).",
                             e
                         )),
                     }
@@ -2008,8 +2007,12 @@ mod tests {
 
         assert!(message.contains("Install Perl"), "expected install guidance, got: {message}");
         assert!(
-            message.contains("perl-lsp.perl.path"),
-            "expected perl-lsp.perl.path guidance, got: {message}"
+            message.contains("launch.json") && message.contains("perlPath"),
+            "expected launch.json perlPath guidance, got: {message}"
+        );
+        assert!(
+            !message.contains("perl-lsp.perl.path"),
+            "spawn error should not point at stale perl-lsp.perl.path setting, got: {message}"
         );
     }
 

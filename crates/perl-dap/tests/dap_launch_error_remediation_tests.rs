@@ -1,7 +1,7 @@
 //! Tests for DAP launch error remediation messaging.
 //!
 //! Issue #4192: Launch failure should provide actionable guidance including
-//! detected Perl location and `perl-lsp.perl.path` config suggestion.
+//! detected Perl location and the documented `launch.json` `perlPath` setting.
 
 // Tests use panic! as structured test failure reporters.
 #![allow(clippy::panic)]
@@ -18,9 +18,9 @@ fn initialize_adapter(adapter: &mut DebugAdapter) {
 }
 
 /// Launch with a nonexistent program path should yield an error message
-/// that mentions `perl-lsp.perl.path` verbatim.
+/// that mentions the documented `launch.json` `perlPath` field.
 #[test]
-fn launch_error_names_perl_lsp_perl_path_setting() {
+fn launch_error_names_launch_json_perlpath_setting() {
     let mut adapter = DebugAdapter::new();
     initialize_adapter(&mut adapter);
 
@@ -36,8 +36,12 @@ fn launch_error_names_perl_lsp_perl_path_setting() {
         DapMessage::Response { success: false, message: Some(msg), request_seq, .. } => {
             assert_eq!(request_seq, 2, "launch response must echo the post-initialize request");
             assert!(
-                msg.contains("perl-lsp.perl.path"),
-                "error message must name the `perl-lsp.perl.path` setting verbatim, got: {msg}"
+                msg.contains("launch.json") && msg.contains("perlPath"),
+                "error message must name launch.json `perlPath`, got: {msg}"
+            );
+            assert!(
+                !msg.contains("perl-lsp.perl.path"),
+                "DAP launch error must not point at stale perl-lsp.perl.path setting, got: {msg}"
             );
         }
         DapMessage::Response { success: true, .. } => {
@@ -119,12 +123,20 @@ fn repeated_launch_failures_keep_actionable_guidance() {
             assert_eq!(first_request_seq, 2, "first launch error must echo request 2");
             assert_eq!(second_request_seq, 3, "second launch error must echo request 3");
             assert!(
-                first_msg.contains("perl-lsp.perl.path"),
-                "first error should include config guidance, got: {first_msg}"
+                first_msg.contains("launch.json") && first_msg.contains("perlPath"),
+                "first error should include launch.json perlPath guidance, got: {first_msg}"
             );
             assert!(
-                second_msg.contains("perl-lsp.perl.path"),
-                "second error should include config guidance, got: {second_msg}"
+                !first_msg.contains("perl-lsp.perl.path"),
+                "first error should not include stale perl-lsp.perl.path guidance, got: {first_msg}"
+            );
+            assert!(
+                second_msg.contains("launch.json") && second_msg.contains("perlPath"),
+                "second error should include launch.json perlPath guidance, got: {second_msg}"
+            );
+            assert!(
+                !second_msg.contains("perl-lsp.perl.path"),
+                "second error should not include stale perl-lsp.perl.path guidance, got: {second_msg}"
             );
         }
         other => {
