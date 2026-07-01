@@ -2111,7 +2111,7 @@ mod tests {
         let server = LspServer::with_io_feature_profile_and_tuning(
             Box::new(std::io::Cursor::new(Vec::<u8>::new())),
             Box::new(writer),
-            crate::features::FeatureProfile::current(),
+            FeatureProfile::current(),
             runtime_tuning,
         );
         (server, buf)
