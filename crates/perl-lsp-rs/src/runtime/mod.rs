@@ -327,6 +327,12 @@ pub struct LspServer {
     /// users with identical `window/showMessage` warnings.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) critic_workspace_warnings_sent: Mutex<std::collections::HashSet<String>>,
+    /// Test-only hook invoked after push diagnostics capture their document
+    /// snapshot and before the stale-generation guard decides whether to
+    /// publish. This keeps concurrency boundary tests deterministic without
+    /// adding production synchronization.
+    #[cfg(test)]
+    pub(crate) diagnostic_after_snapshot_hook: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     /// Optional AI inline-completion backend.
     ///
     /// When `Some`, the `handle_inline_completion` handler will attempt

@@ -488,6 +488,11 @@ impl LspServer {
             return;
         };
 
+        #[cfg(test)]
+        if let Some(hook) = self.diagnostic_after_snapshot_hook.lock().as_ref() {
+            hook();
+        }
+
         // Position helper that works on the snapshotted line_starts + rope.
         let pos16 = |offset: usize| line_starts.offset_to_position_rope(&rope, offset);
 
@@ -2211,7 +2216,6 @@ mod tests {
     fn publish_diagnostics_boundary_discriminator_generation_changed_after_snapshot()
     -> Result<(), Box<dyn std::error::Error>> {
         let (server, buf) = make_server_with_capture();
-        let server = StdArc::new(server);
         let uri = "file:///stale_publish_boundary.pl";
         server.test_handle_did_open(Some(json!({
             "textDocument": {
@@ -2221,19 +2225,25 @@ mod tests {
                 "text": "my $stable = 1;\n"
             }
         })))?;
-
-        let workspace_guard = server.workspace_folders.lock();
-        let worker_server = StdArc::clone(&server);
-        let handle = std::thread::spawn(move || worker_server.publish_diagnostics(uri));
-
         std::thread::sleep(Duration::from_millis(50));
-        {
+        buf.lock().clear();
+
+        let generation = {
             let documents = server.documents.lock();
             let document = documents.get(uri).ok_or("missing open document")?;
-            document.generation.fetch_add(1, Ordering::SeqCst);
-        }
-        drop(workspace_guard);
-        handle.join().map_err(|_| std::io::Error::other("publish worker panicked"))?;
+            StdArc::clone(&document.generation)
+        };
+        let generation_after_publish = StdArc::clone(&generation);
+        *server.diagnostic_after_snapshot_hook.lock() = Some(Box::new(move || {
+            generation.fetch_add(1, Ordering::SeqCst);
+        }));
+
+        server.publish_diagnostics(uri);
+        assert_eq!(
+            generation_after_publish.load(Ordering::SeqCst),
+            1,
+            "test hook must advance generation after the diagnostics snapshot"
+        );
         drop(server);
         std::thread::sleep(Duration::from_millis(50));
 
