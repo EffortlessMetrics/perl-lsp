@@ -122,6 +122,8 @@ pub fn add_special_variables(
         ],
         "@" => &[
             ("@_", "Subroutine arguments (passed by reference)"),
+            ("@+", "Offsets where regex capture groups ended in the last successful match"),
+            ("@-", "Offsets where regex capture groups started in the last successful match"),
             ("@ARGV", "Command-line arguments to the script"),
             ("@INC", "Module search paths (@INC for use/require)"),
             ("@ISA", "List of base classes for the current package"),

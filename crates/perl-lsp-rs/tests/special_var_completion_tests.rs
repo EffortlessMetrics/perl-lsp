@@ -153,7 +153,7 @@ fn test_special_array_vars_with_at_prefix() -> Result<(), Box<dyn std::error::Er
     let items = completion_items(&response);
     let labels = labels_from(items);
 
-    for required in ["@_", "@ARGV", "@INC", "@ISA", "@EXPORT", "@EXPORT_OK"] {
+    for required in ["@_", "@+", "@-", "@ARGV", "@INC", "@ISA", "@EXPORT", "@EXPORT_OK"] {
         assert!(
             labels.contains(&required.to_string()),
             "expected {required} in array completions; got labels: {labels:?}"
