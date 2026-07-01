@@ -175,14 +175,30 @@ fn evaluate_hit_condition(raw: Option<&str>, hit_count: u64) -> Option<bool> {
     parse_hit_condition_operand(expr).map(|n| hit_count == n)
 }
 
+/// Returns true if `haystack` ends with `suffix` and the match starts at a path-component
+/// boundary (i.e. the character immediately before the suffix is `/` or `\`).
+/// When the suffix is exactly as long as the haystack, the strings are equal — also true.
+fn path_suffix_matches(haystack: &str, suffix: &str) -> bool {
+    if !haystack.ends_with(suffix) {
+        return false;
+    }
+    let prefix_len = haystack.len().wrapping_sub(suffix.len());
+    if prefix_len == 0 {
+        // Equal lengths and ends_with holds → exact match.
+        return true;
+    }
+    // The byte immediately before the suffix must be a path separator.
+    matches!(haystack.as_bytes()[prefix_len - 1], b'/' | b'\\')
+}
+
 fn file_paths_match(stored: &str, observed: &str) -> bool {
     if stored == observed {
         return true;
     }
-    if stored.ends_with(observed) || observed.ends_with(stored) {
-        return true;
-    }
-    false
+    // Allow suffix matching for relative-vs-absolute path pairs (e.g. "bar.pl" matches
+    // "/abs/path/bar.pl"), but require a path-component boundary before the matched suffix
+    // to prevent mid-component false matches (e.g. "bar.pl" must NOT match "foobar.pl").
+    path_suffix_matches(stored, observed) || path_suffix_matches(observed, stored)
 }
 
 /// Interpolate logpoint message template with variable values.
@@ -1389,6 +1405,25 @@ EOF
     #[test]
     fn test_file_paths_match_exact() {
         assert!(file_paths_match("/workspace/main.pl", "/workspace/main.pl"));
+    }
+
+    #[test]
+    fn test_file_paths_match_mid_component_rejected() {
+        // "bar.pl" must NOT match "foobar.pl" — the suffix starts in the middle of a component
+        assert!(!file_paths_match("foobar.pl", "bar.pl"));
+        assert!(!file_paths_match("bar.pl", "foobar.pl"));
+        assert!(!file_paths_match("/path/to/foobar.pl", "bar.pl"));
+        assert!(!file_paths_match("bar.pl", "/path/to/foobar.pl"));
+    }
+
+    #[test]
+    fn test_file_paths_match_boundary_positive() {
+        // Relative-vs-absolute with a path separator boundary must still match
+        assert!(file_paths_match("/abs/path/bar.pl", "bar.pl"));
+        assert!(file_paths_match("bar.pl", "/abs/path/bar.pl"));
+        // Windows-style separator
+        assert!(file_paths_match(r"C:\abs\path\bar.pl", "bar.pl"));
+        assert!(file_paths_match("bar.pl", r"C:\abs\path\bar.pl"));
     }
 
     #[test]
