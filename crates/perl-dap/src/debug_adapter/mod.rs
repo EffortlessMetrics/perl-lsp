@@ -393,6 +393,24 @@ impl DebugAdapter {
         }
     }
 
+    /// Convert u64 values (e.g. JSON protocol IDs) to u32 with saturation.
+    /// Values above [`u32::MAX`] are clamped to [`u32::MAX`] rather than wrapping.
+    fn u64_to_u32_saturating(value: u64) -> u32 {
+        match u32::try_from(value) {
+            Ok(v) => v,
+            Err(_) => u32::MAX,
+        }
+    }
+
+    /// Convert u32 process/thread IDs to i32 (as required by Unix signal APIs) with saturation.
+    /// Values above [`i32::MAX`] are clamped to [`i32::MAX`] rather than wrapping to negatives.
+    fn u32_to_i32_saturating(value: u32) -> i32 {
+        match i32::try_from(value) {
+            Ok(v) => v,
+            Err(_) => i32::MAX,
+        }
+    }
+
     fn line_contains_full_marker(line: &str, marker: &str) -> bool {
         line.match_indices(marker).any(|(idx, _)| {
             let before = line[..idx].chars().next_back();
@@ -2010,5 +2028,43 @@ print "result: $final\n";
             }
             _ => Err("Expected response".into()),
         }
+    }
+
+    // --- Saturating cast helper tests (#3052) ---
+
+    #[test]
+    fn test_u64_to_u32_saturating_below_max() {
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(0), 0);
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(1), 1);
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(u32::MAX as u64), u32::MAX);
+    }
+
+    #[test]
+    fn test_u64_to_u32_saturating_at_max() {
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(u32::MAX as u64), u32::MAX);
+    }
+
+    #[test]
+    fn test_u64_to_u32_saturating_above_max() {
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(u32::MAX as u64 + 1), u32::MAX);
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(u64::MAX), u32::MAX);
+    }
+
+    #[test]
+    fn test_u32_to_i32_saturating_below_max() {
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(0), 0);
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(1), 1);
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(i32::MAX as u32), i32::MAX);
+    }
+
+    #[test]
+    fn test_u32_to_i32_saturating_at_max() {
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(i32::MAX as u32), i32::MAX);
+    }
+
+    #[test]
+    fn test_u32_to_i32_saturating_above_max() {
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(i32::MAX as u32 + 1), i32::MAX);
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(u32::MAX), i32::MAX);
     }
 }

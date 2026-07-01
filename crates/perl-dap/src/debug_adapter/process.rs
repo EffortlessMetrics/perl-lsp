@@ -1022,7 +1022,8 @@ impl DebugAdapter {
     ) -> DapMessage {
         // Parse attach arguments
         if let Some(args) = arguments {
-            let process_id = args.get("processId").and_then(|p| p.as_u64()).map(|p| p as u32);
+            let process_id =
+                args.get("processId").and_then(|p| p.as_u64()).map(Self::u64_to_u32_saturating);
 
             // PID attachment mode: best-effort process control without requiring TCP shim transport.
             if let Some(pid) = process_id {
@@ -1115,7 +1116,7 @@ impl DebugAdapter {
                     .get("timeout")
                     .or_else(|| args.get("timeoutMs"))
                     .and_then(|t| t.as_u64())
-                    .map(|t| t as u32);
+                    .map(Self::u64_to_u32_saturating);
                 let stop_on_entry =
                     args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
@@ -1428,7 +1429,7 @@ impl DebugAdapter {
         #[cfg(unix)]
         {
             let pid = process.id();
-            match signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
+            match signal::kill(Pid::from_raw(Self::u32_to_i32_saturating(pid)), Signal::SIGTERM) {
                 Ok(()) => {
                     if Self::wait_for_child_exit(
                         process,
@@ -1634,7 +1635,7 @@ impl DebugAdapter {
         }
         #[cfg(unix)]
         {
-            let pid_i = pid as i32;
+            let pid_i = Self::u32_to_i32_saturating(pid);
             match signal::kill(Pid::from_raw(pid_i), Signal::SIGCONT) {
                 Ok(()) => {
                     tracing::info!("Sent SIGCONT to process {}", pid);
@@ -1676,7 +1677,7 @@ impl DebugAdapter {
         }
         #[cfg(unix)]
         {
-            let pid_i = pid as i32;
+            let pid_i = Self::u32_to_i32_saturating(pid);
             match signal::kill(Pid::from_raw(pid_i), Signal::SIGINT) {
                 Ok(()) => {
                     tracing::info!("Sent SIGINT to process {}", pid);
