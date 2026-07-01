@@ -7705,4 +7705,14 @@ fn extract_fat_comma_keys_covers_quoted_and_bareword_forms() {
     assert!(collect("\"x.y\" => 1").iter().any(|k| k == "x.y"));
     // Unquoted token with a non-word character is rejected (no quoting).
     assert!(collect("a-b => 1").is_empty());
+
+    // Duplicate keys are de-duplicated via the `seen` set carried across calls.
+    let mut keys = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    CompletionProvider::extract_fat_comma_keys("host => 1, host => 2", &mut keys, &mut seen);
+    assert_eq!(
+        keys.iter().filter(|k| *k == "host").count(),
+        1,
+        "already-seen key must not be re-added"
+    );
 }
