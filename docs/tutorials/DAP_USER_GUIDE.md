@@ -1,17 +1,13 @@
 # DAP User Guide: Debugging Perl with VS Code
-<!-- Labels: tutorial:dap-setup, how-to:debugging, reference:configuration, phase:bridge-implementation -->
+<!-- Labels: tutorial:dap-setup, how-to:debugging, reference:configuration, phase:native-dap -->
 
-> This guide follows the **[Diataxis framework](https://diataxis.fr/)** for comprehensive technical documentation:
-> - **Tutorial sections**: Step-by-step learning for first-time DAP users
-> - **How-to sections**: Task-oriented debugging workflows
-> - **Reference sections**: Configuration specifications and options
-> - **Explanation sections**: Understanding DAP architecture and design
+This guide covers the native `perl-dap` Debug Adapter Protocol server shipped with `perl-lsp`.
 
-**Status**: Native adapter CLI for launch, attach, stepping, variables, stack frames, and evaluate; BridgeAdapter remains for `Perl::LanguageServer` compatibility.
-**Version**: 0.17.0
+**Status**: Native `perl-dap` CLI for launch, attach, stepping, stack frames, variables, evaluate, and parser-backed breakpoint validation.  
+**Version**: 0.17.0  
 **Date**: 2026-06-28
 
-**Dependency note**: Native `perl-dap` requires a local Perl interpreter for debug sessions. Its Rust parser-backed runtime (`perl-parser`, `perl-lexer`, and the `perl-dap-*` support crates) is compiled into the shipped binary; users do not install `perl-parser` separately. `Perl::LanguageServer` is only required for legacy bridge-mode workflows (the BridgeAdapter library or `Perl::LanguageServer` DAP directly).
+**Dependency note**: Native `perl-dap` requires a local Perl interpreter for debug sessions. Its Rust parser-backed runtime (`perl-parser`, `perl-lexer`, and the `perl-dap-*` support crates) is compiled into the shipped binary; users do not install parser crates separately.
 
 ---
 
@@ -19,9 +15,8 @@
 
 - [Tutorial: Getting Started with Perl Debugging](#tutorial-getting-started-with-perl-debugging)
   - [Prerequisites](#prerequisites)
-  - [Step 1 (BridgeAdapter only): Install Perl::LanguageServer](#step-1-bridgeadapter-only-install-perllanguageserver)
-  - [Step 2: Configure VS Code](#step-2-configure-vs-code)
-  - [Step 3: Your First Debugging Session](#step-3-your-first-debugging-session)
+  - [Configure VS Code](#configure-vs-code)
+  - [First Debugging Session](#first-debugging-session)
 - [How-To: Common Debugging Scenarios](#how-to-common-debugging-scenarios)
   - [Launch a Perl Script](#launch-a-perl-script)
   - [Attach to a Running Process](#attach-to-a-running-process)
@@ -32,9 +27,7 @@
   - [Launch Configuration](#launch-configuration)
   - [Attach Configuration](#attach-configuration)
   - [Advanced Settings](#advanced-settings)
-- [Explanation: DAP Architecture](#explanation-dap-architecture)
-  - [Adapter Modes (Native CLI + BridgeAdapter)](#adapter-modes-native-cli--bridgeadapter)
-  - [Future Roadmap](#future-roadmap)
+- [Explanation: Native DAP Architecture](#explanation-native-dap-architecture)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -43,51 +36,29 @@
 
 ### Prerequisites
 
-Before you begin debugging Perl code with VS Code, ensure you have:
+Before debugging Perl code with VS Code, ensure you have:
 
-1. **Perl Installation**: Perl 5.10 or higher installed and available on PATH
+1. **Perl**: Perl 5.10 or higher installed and available on PATH.
    ```bash
-   perl --version  # Should output Perl version
+   perl --version
    ```
 
-2. **VS Code**: Visual Studio Code 1.88 or higher with `EffortlessMetrics.perl-lsp-rs` installed
+2. **VS Code**: Visual Studio Code with `EffortlessMetrics.perl-lsp-rs` installed.
 
-3. **Operating System**: Windows, macOS, Linux, or WSL
+3. **Operating system**: Windows, macOS, Linux, or WSL.
 
-4. **Perl::LanguageServer** (BridgeAdapter only): required for the bridge path
+The VS Code extension downloads the managed `perl-dap` binary from the `perl-lsp` release artifacts. You do not install internal Rust crates or Perl debug-adapter modules separately.
 
-### Step 1 (BridgeAdapter only): Install Perl::LanguageServer
+### Configure VS Code
 
-The DAP bridge requires the Perl::LanguageServer CPAN module for debugging functionality.
+Create a launch configuration in your workspace.
 
-**Install via CPAN**:
-```bash
-cpan Perl::LanguageServer
-```
-
-**Install via cpanm** (recommended):
-```bash
-cpanm Perl::LanguageServer
-```
-
-**Verify Installation**:
-```bash
-perl -e "use Perl::LanguageServer::DebuggerInterface; print qq{OK\n};"
-```
-
-If the verification succeeds, you'll see `OK` printed. If you see an error, the module installation failed.
-
-### Step 2: Configure VS Code
-
-Create a launch configuration in your workspace to enable debugging.
-
-1. **Open Command Palette**: Press `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (macOS)
-
-2. **Create Debug Configuration**: Type "Debug: Open launch.json" and press Enter
-
-3. **Add Perl Configuration**: If prompted, select "Perl" as the environment. VS Code will generate a `.vscode/launch.json` file.
+1. Open the Command Palette.
+2. Run **Debug: Open launch.json**.
+3. Choose **Perl** if prompted.
 
 **Basic launch.json**:
+
 ```json
 {
   "version": "0.2.0",
@@ -101,68 +72,53 @@ Create a launch configuration in your workspace to enable debugging.
       "perlPath": "perl",
       "includePaths": ["${workspaceFolder}/lib"],
       "cwd": "${workspaceFolder}",
-      "env": {}
+      "env": {},
+      "stopOnEntry": true
     }
   ]
 }
 ```
 
-**Configuration Explained**:
-- `type`: Must be `"perl"` for Perl debugging
-- `request`: `"launch"` to start a new process, `"attach"` to connect to a running process/debugger
-- `name`: Display name in VS Code's debug dropdown
-- `program`: Path to the Perl script to debug (supports VS Code variables like `${file}`)
-- `args`: Command-line arguments to pass to your script
-- `perlPath`: Path to perl binary (defaults to `"perl"` on PATH)
-- `includePaths`: Additional directories to add to `@INC` (Perl's include path)
-- `cwd`: Working directory for the debugged process
-- `env`: Environment variables to set for the debugged process
+**Configuration fields**:
 
-### Step 3: Your First Debugging Session
+- `type`: Must be `"perl"`.
+- `request`: `"launch"` starts a new process; `"attach"` connects to an existing debug target.
+- `program`: Path to the Perl script to debug.
+- `args`: Command-line arguments passed to the script.
+- `perlPath`: Perl executable path. Defaults to `"perl"` on PATH.
+- `includePaths`: Additional library directories added to the debug session environment.
+- `cwd`: Working directory for the debugged process.
+- `env`: Environment variables for the debugged process.
+- `stopOnEntry`: Pause at the first executable statement.
 
-Let's debug a simple Perl script to verify everything works.
+### First Debugging Session
 
-1. **Create a test script** (`hello.pl`):
-   ```perl
-   #!/usr/bin/env perl
-   use strict;
-   use warnings;
+Create `hello.pl`:
 
-   my $name = "World";
-   my $greeting = "Hello, $name!";
+```perl
+#!/usr/bin/env perl
+use strict;
+use warnings;
 
-   print "$greeting\n";
+my $name = "World";
+my $greeting = "Hello, $name!";
 
-   for my $i (1..3) {
-       print "Count: $i\n";
-   }
+print "$greeting\n";
 
-   print "Done!\n";
-   ```
+for my $i (1..3) {
+    print "Count: $i\n";
+}
 
-2. **Set a breakpoint**: Click in the gutter (left of line numbers) at line 8 (`print "$greeting\n";`). A red dot appears.
+print "Done!\n";
+```
 
-3. **Start debugging**: Press `F5` or select "Run > Start Debugging" from the menu.
+Then:
 
-4. **Observe the debugger**:
-   - Execution pauses at line 8
-   - Variables panel shows best-effort parsed values from debugger output
-   - Call stack shows your script in the execution context
-
-5. **Step through code**:
-   - **Step Over** (`F10`): Execute current line, move to next
-   - **Step Into** (`F11`): Enter function calls
-   - **Step Out** (`Shift+F11`): Exit current function
-   - **Continue** (`F5`): Resume execution until next breakpoint
-
-6. **Inspect variables**:
-   - Hover over variables to inspect parsed values
-   - Use the Variables panel to explore data structures with lazy expansion
-   - Use the Debug Console to evaluate Perl expressions (safe mode by default — syntactic validation only, not interpreter sandboxing)
-
-7. **Stop debugging**: Press `Shift+F5` or click the red stop square in the debug toolbar.
-
-**Congratulations!** You've successfully debugged your first Perl script with VS Code.
+1. Set a breakpoint in the editor gutter.
+2. Press `F5` or run **Run > Start Debugging**.
+3. Use the Debug toolbar for Continue, Step Over, Step Into, and Step Out.
+4. Inspect variables in the Variables panel and evaluate expressions in the Debug Console.
+5. Stop debugging with `Shift+F5`.
 
 ---
 
@@ -170,33 +126,35 @@ Let's debug a simple Perl script to verify everything works.
 
 ### Launch a Perl Script
 
-**Use Case**: Debug a script from start to finish with full control over execution.
+Use this when you want the debug adapter to start the process.
 
-**Configuration**:
 ```json
 {
   "type": "perl",
   "request": "launch",
-  "name": "Debug Script",
+  "name": "Debug Current File",
   "program": "${file}",
+  "perlPath": "perl",
+  "cwd": "${fileDirname}",
   "stopOnEntry": false
 }
 ```
 
-**Tips**:
-- Use `${file}` to debug the currently open file
-- Set `stopOnEntry: true` to pause at the first line of code
-- Add `"args": ["--verbose", "--input=data.txt"]` for command-line arguments
+Tips:
+
+- Use `${file}` to debug the active file.
+- Use `stopOnEntry: true` when validating setup.
+- Add `args` for script arguments.
 
 ### Attach to a Running Process
 
-**Use Case**: Connect to an already-running debug target.
+The native adapter supports two attach shapes:
 
-The native adapter supports two attach modes:
-- `processId`: local PID signal-control mode
-- `host`/`port`: TCP debugger endpoint (for shim/bridge workflows)
+- `processId`: local PID attach.
+- `host`/`port`: TCP debugger endpoint attach.
 
-**Attach Configuration**:
+**TCP attach**:
+
 ```json
 {
   "type": "perl",
@@ -208,7 +166,8 @@ The native adapter supports two attach modes:
 }
 ```
 
-**Attach by PID**:
+**PID attach**:
+
 ```json
 {
   "type": "perl",
@@ -218,16 +177,12 @@ The native adapter supports two attach modes:
 }
 ```
 
-**When to Use**:
-- Debugging long-running daemons or servers
-- Connecting to Perl processes started by external tools
-- Remote debugging scenarios (change `host` to remote IP)
+Use attach when debugging long-running services, externally launched processes, or remote workflows with an exposed TCP endpoint.
 
 ### Debug with Custom Include Paths
 
-**Use Case**: Your Perl project uses custom library directories that need to be added to `@INC`.
+Use `includePaths` when the project uses local libraries that must be visible to the debuggee.
 
-**Configuration**:
 ```json
 {
   "type": "perl",
@@ -236,22 +191,13 @@ The native adapter supports two attach modes:
   "program": "${workspaceFolder}/bin/app.pl",
   "includePaths": [
     "${workspaceFolder}/lib",
-    "${workspaceFolder}/local/lib/perl5",
-    "/opt/custom/perl/lib"
+    "${workspaceFolder}/local/lib/perl5"
   ]
 }
 ```
 
-**How It Works**:
-- Each path in `includePaths` is added to `PERL5LIB` environment variable
-- Paths are platform-specific (`;` separator on Windows, `:` on Unix)
-- Relative paths are resolved against `${workspaceFolder}`
-
 ### Debug with Environment Variables
 
-**Use Case**: Your script requires specific environment variables (API keys, database URLs, feature flags).
-
-**Configuration**:
 ```json
 {
   "type": "perl",
@@ -260,14 +206,12 @@ The native adapter supports two attach modes:
   "program": "${workspaceFolder}/script.pl",
   "env": {
     "DEBUG": "1",
-    "DATABASE_URL": "dbi:SQLite:dbname=test.db",
-    "API_KEY": "your-api-key-here",
-    "LOG_LEVEL": "debug"
+    "DATABASE_URL": "dbi:SQLite:dbname=test.db"
   }
 }
 ```
 
-**Security Note**: Avoid committing sensitive credentials to version control. Use VS Code variables or external configuration files:
+Prefer VS Code environment substitution for secrets:
 
 ```json
 {
@@ -277,13 +221,8 @@ The native adapter supports two attach modes:
 }
 ```
 
-**Note**: The `${env:API_KEY}` syntax reads from your shell environment, avoiding hardcoded secrets.
-
 ### Debug on WSL or Remote Systems
 
-**Use Case**: Develop on Windows but debug Perl code running in WSL (Windows Subsystem for Linux).
-
-**WSL Configuration**:
 ```json
 {
   "type": "perl",
@@ -295,10 +234,11 @@ The native adapter supports two attach modes:
 }
 ```
 
-**Platform-Specific Notes**:
-- **WSL**: Paths starting with `/mnt/c` are automatically translated to `C:\`
-- **macOS**: Supports Homebrew perl installations (e.g., `/usr/local/bin/perl`)
-- **Windows**: Handles UNC paths (`\\server\share`) and drive letters (`C:\`)
+Platform notes:
+
+- **WSL**: Use the Perl executable inside the WSL environment.
+- **macOS**: Homebrew Perl paths work when supplied through `perlPath`.
+- **Windows**: UNC paths and drive letters are normalized by the adapter.
 
 ---
 
@@ -306,330 +246,114 @@ The native adapter supports two attach modes:
 
 ### Launch Configuration
 
-Complete schema for `"request": "launch"` configurations.
-
 | Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `type` | `string` | ✅ Yes | N/A | Must be `"perl"` |
-| `request` | `string` | ✅ Yes | N/A | Must be `"launch"` for launching new process |
-| `name` | `string` | ✅ Yes | N/A | Display name in debug dropdown |
-| `program` | `string` | ✅ Yes | N/A | Path to Perl script (absolute or relative to workspace) |
-| `args` | `string[]` | ❌ No | `[]` | Command-line arguments for the script |
-| `cwd` | `string` | ❌ No | `${workspaceFolder}` | Working directory for debugged process |
-| `env` | `object` | ❌ No | `{}` | Environment variables (key-value pairs) |
-| `perlPath` | `string` | ❌ No | `"perl"` | Path to perl binary |
-| `includePaths` | `string[]` | ❌ No | `[]` | Additional directories for `@INC` (sets `PERL5LIB`) |
-| `stopOnEntry` | `boolean` | ❌ No | `false` | Pause execution at first line of code |
+|---|---|---:|---|---|
+| `type` | `string` | Yes | — | Must be `"perl"` |
+| `request` | `string` | Yes | — | Must be `"launch"` |
+| `name` | `string` | Yes | — | Display name in the debug dropdown |
+| `program` | `string` | Yes | — | Perl script path |
+| `args` | `string[]` | No | `[]` | Script arguments |
+| `cwd` | `string` | No | `${workspaceFolder}` | Working directory |
+| `env` | `object` | No | `{}` | Environment variables |
+| `perlPath` | `string` | No | `"perl"` | Perl executable path |
+| `includePaths` | `string[]` | No | `[]` | Additional library paths |
+| `stopOnEntry` | `boolean` | No | `false` | Pause at entry |
 
-**VS Code Variable Substitution**:
-
-Launch configurations support VS Code variables for dynamic paths:
-
-- `${workspaceFolder}`: Absolute path to the workspace folder
-- `${file}`: Absolute path to the currently open file
-- `${fileBasename}`: Name of the currently open file (e.g., `script.pl`)
-- `${fileDirname}`: Directory containing the currently open file
-- `${env:VAR_NAME}`: Value of environment variable `VAR_NAME`
-
-**Example with Variables**:
-```json
-{
-  "type": "perl",
-  "request": "launch",
-  "name": "Debug Current File",
-  "program": "${file}",
-  "cwd": "${fileDirname}",
-  "includePaths": ["${workspaceFolder}/lib"],
-  "env": {
-    "HOME": "${env:HOME}"
-  }
-}
-```
+VS Code variables such as `${workspaceFolder}`, `${file}`, `${fileDirname}`, and `${env:VAR_NAME}` are supported by the editor before the adapter receives the configuration.
 
 ### Attach Configuration
 
-Complete schema for `"request": "attach"` configurations.
-
 | Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `type` | `string` | ✅ Yes | N/A | Must be `"perl"` |
-| `request` | `string` | ✅ Yes | N/A | Must be `"attach"` for connecting to running process |
-| `name` | `string` | ✅ Yes | N/A | Display name in debug dropdown |
-| `processId` | `number` | ❌ No | N/A | Local process ID for signal-control attach mode |
-| `host` | `string` | ❌ No | `"localhost"` | Hostname or IP address of DAP server |
-| `port` | `number` | ❌ No | `13603` | Port number of DAP server |
-| `timeout` | `number` | ❌ No | `5000` | Connection timeout in milliseconds |
-
-**Example Attach Configuration**:
-```json
-{
-  "type": "perl",
-  "request": "attach",
-  "name": "Attach to Remote Perl Process",
-  "host": "192.168.1.100",
-  "port": 13603,
-  "timeout": 10000
-}
-```
+|---|---|---:|---|---|
+| `type` | `string` | Yes | — | Must be `"perl"` |
+| `request` | `string` | Yes | — | Must be `"attach"` |
+| `name` | `string` | Yes | — | Display name in the debug dropdown |
+| `processId` | `number` | No | — | Local process ID |
+| `host` | `string` | No | `localhost` | TCP endpoint host |
+| `port` | `number` | No | `13603` | TCP endpoint port |
+| `timeout` | `number` | No | `5000` | TCP attach timeout in milliseconds |
 
 ### Advanced Settings
 
-#### Path Normalization
+#### Path normalization
 
-The DAP adapter automatically normalizes paths across platforms:
+The native adapter normalizes paths across supported platforms:
 
-- **Windows**: Drive letters uppercased (`c:\` → `C:\`), UNC paths preserved (`\\server\share`)
-- **WSL**: WSL paths translated (`/mnt/c/Users/Name` → `C:\Users\Name`)
-- **macOS/Linux**: Symlinks canonicalized, redundant separators removed
+- Windows drive letters are normalized.
+- UNC paths are preserved.
+- WSL and Unix-like paths are handled according to the active debug environment.
 
-#### Environment Setup
+#### Environment setup
 
-The adapter sets `PERL5LIB` from `includePaths`:
-
-```bash
-# For includePaths: ["/workspace/lib", "/custom/lib"]
-# Unix/macOS:
-PERL5LIB=/workspace/lib:/custom/lib perl script.pl
-
-# Windows:
-PERL5LIB=C:\workspace\lib;C:\custom\lib perl script.pl
-```
-
-#### Argument Escaping
-
-Arguments with spaces are automatically quoted platform-appropriately:
-
-```json
-{
-  "args": ["--file", "path with spaces.txt", "--verbose"]
-}
-```
-
-**Becomes**:
-- **Windows**: `--file "path with spaces.txt" --verbose`
-- **Unix**: `--file 'path with spaces.txt' --verbose`
+`includePaths` are passed to the debug session environment so project libraries can be resolved during debugging. Keep launch-specific runtime paths in `launch.json`; keep editor indexing paths in `perl-lsp` workspace settings.
 
 ---
 
-## Explanation: DAP Architecture
+## Explanation: Native DAP Architecture
 
-### Adapter Modes (Native CLI + BridgeAdapter)
+`perl-dap` is the native Debug Adapter Protocol server for Perl. It speaks DAP over stdio or TCP and drives debug sessions through the local Perl interpreter.
 
-The `perl-dap` CLI uses the native adapter to drive `perl -d` directly. A BridgeAdapter library is available to proxy between VS Code and Perl::LanguageServer, but it is not wired into the CLI yet.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    VS Code Extension                        │
-│  - DAP client (JSON-RPC 2.0 over stdio)                     │
-│  - Launch configuration management                          │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ DAP Protocol (stdio)
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│                     perl-dap (Rust)                         │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ DebugAdapter (native, CLI default)                    │  │
-│  │  - Drives perl -d directly                             │  │
-│  └───────────────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ BridgeAdapter (library)                               │  │
-│  │  - Proxies to Perl::LanguageServer DAP                │  │
-│  └───────────────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ Platform Layer                                        │  │
-│  │  - Cross-platform perl binary resolution             │  │
-│  │  - Path normalization (Windows/WSL/macOS/Linux)      │  │
-│  │  - Environment variable setup (PERL5LIB)             │  │
-│  └───────────────────────────────────────────────────────┘  │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ perl -d / Perl::LanguageServer
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│                      Perl Runtime                           │
-└─────────────────────────────────────────────────────────────┘
+```text
+VS Code / DAP client
+        │ DAP over stdio or TCP
+        ▼
+perl-dap (Rust)
+  - request routing
+  - breakpoint validation
+  - stack frame, variable, and evaluate handling
+  - path and environment setup
+        │
+        ▼
+local Perl interpreter / debuggee
 ```
 
-**BridgeAdapter Compatibility Role**:
+The shipped binary includes the Rust parser-backed runtime used for breakpoint validation and source-aware behavior. External comparison tools are not part of the native DAP runtime.
 
-1. **Interoperability**: Supports environments already standardized on Perl::LanguageServer DAP
-2. **Migration Path**: Lets teams move incrementally from bridge-based workflows to native `perl-dap`
-3. **Isolation**: Bridge code remains separate from native adapter runtime paths
+### Current hardening focus
 
-**BridgeAdapter Trade-offs**:
+The native adapter already supports launch, attach, stepping, stack frames, variables, evaluate, and parser-backed breakpoint validation. Current work focuses on:
 
-- ✅ **Pros**: Fast implementation, proven debugging backend, cross-platform compatibility
-- ⚠️ **Cons**: External dependency on Perl::LanguageServer CPAN module, additional process overhead
-
-### Future Roadmap
-
-**Native Adapter Roadmap**
-
-The CLI already uses the native adapter with launch + attach + evaluation support. Remaining roadmap items focus on deeper protocol parity and hardening.
-
-**Already shipped**:
-- AST-based breakpoint validation (`AstBreakpointValidator`, leveraging `perl-parser`) — rejects breakpoints on blank lines, comments, POD regions, and heredoc interiors, and validates conditional-breakpoint expressions. Where source context is unavailable the validator falls back conservatively rather than rejecting.
-
-**Planned Features**:
-- Incremental parsing integration (<1ms breakpoint updates)
-- Workspace navigation for cross-file debugging
-- Enhanced performance (<50ms breakpoint operations)
-
-**Phase 3: Production Hardening (Planned)**
-
-- Comprehensive security validation (path traversal prevention, safe eval)
-- Performance benchmarking and optimization
-- Advanced DAP features (conditional breakpoints, logpoints, hit counts)
-- Editor integration (Neovim, Emacs, Helix)
-
-**Migration Path**: BridgeAdapter users can keep their configuration if/when CLI wiring is added.
+- faster breakpoint/source updates from incremental parser integration,
+- deeper workspace-aware debugging flows,
+- broader protocol parity across editors,
+- continued release-artifact and editor-integration validation.
 
 ---
 
 ## Troubleshooting
 
-### Perl::LanguageServer Not Found (BridgeAdapter only)
+### Perl binary not found
 
-**Symptom**: Error message "Failed to spawn Perl::LanguageServer DAP process" when starting debugger.
+**Symptom**: The debugger cannot launch because Perl is unavailable.
 
-**Solution**:
-1. Verify installation:
-   ```bash
-   perl -e "use Perl::LanguageServer::DebuggerInterface; print qq{OK\n};"
-   ```
+**Fix**:
 
-2. If module not found, install:
-   ```bash
-   cpanm Perl::LanguageServer
-   ```
-
-3. Check CPAN installation path is in `@INC`:
-   ```bash
-   perl -V
-   ```
-
-### Perl Binary Not Found on PATH
-
-**Symptom**: Error "perl binary not found on PATH" when launching debugger.
-
-**Solution**:
-1. Verify perl is installed:
+1. Verify Perl is installed:
    ```bash
    which perl  # Unix/macOS
    where perl  # Windows
    ```
-
-2. Add perl to PATH or specify absolute path in `launch.json`:
+2. Add Perl to PATH, or set `perlPath` explicitly:
    ```json
    {
-     "perlPath": "/usr/local/bin/perl"  // Use actual path from 'which perl'
+     "perlPath": "/usr/local/bin/perl"
    }
    ```
 
-### Breakpoints Not Hitting
+### Breakpoints not hitting
 
-**Symptom**: Breakpoints shown as gray circles, not red dots. Debugger doesn't stop.
+Common causes:
 
-**Common Causes**:
-1. **Wrong file path**: Ensure `program` in `launch.json` matches the file with breakpoints
-2. **Syntax errors**: Fix Perl syntax errors that prevent script from running
-3. **Unverified breakpoints**: Perl::LanguageServer may reject breakpoints in invalid locations (comments, blank lines)
+1. `program` points to a different file than the one with breakpoints.
+2. Syntax errors prevent the script from running.
+3. Breakpoints are placed on comments, blank lines, POD, or non-executable locations.
 
-**Solution**:
-- Set breakpoints on executable Perl statements (not comments or blank lines)
-- Check Debug Console for error messages
-- Try `"stopOnEntry": true` to verify debugger starts
+Try `stopOnEntry: true` to confirm the adapter starts and receives the launch configuration.
 
-### Path Issues on WSL
+### Variables not shown
 
-**Symptom**: "Program file does not exist" error when debugging on WSL.
+Variable rendering is best-effort and derived from debugger output. For complex structures, expand variables lazily in the Variables panel and use the Debug Console for targeted expression evaluation.
 
-**Solution**:
-1. Use WSL-style paths in `launch.json`:
-   ```json
-   {
-     "program": "${workspaceFolder}/script.pl",  // Correct
-     "program": "C:\\Users\\Name\\script.pl"     // Wrong - use WSL path
-   }
-   ```
+### Path issues
 
-2. Let the adapter normalize paths automatically
-3. Verify file exists in WSL:
-   ```bash
-   ls -l /mnt/c/Users/Name/workspace/script.pl
-   ```
-
-### Environment Variables Not Working
-
-**Symptom**: Script doesn't see environment variables set in `launch.json`.
-
-**Solution**:
-1. Verify syntax in `launch.json`:
-   ```json
-   {
-     "env": {
-       "DEBUG": "1",           // Correct
-       "LOG_LEVEL": "debug"    // Correct
-     }
-   }
-   ```
-
-2. Use shell environment variables:
-   ```json
-   {
-     "env": {
-       "API_KEY": "${env:API_KEY}"  // Reads from shell
-     }
-   }
-   ```
-
-3. Check environment in Debug Console:
-   ```perl
-   # In Debug Console, evaluate:
-   $ENV{DEBUG}
-   ```
-
-### Slow Debugger Startup
-
-**Symptom**: Debugging takes >5 seconds to start.
-
-**Common Causes**:
-- Large Perl modules with heavy initialization
-- Slow filesystem (network drives, WSL)
-- Many `@INC` directories to scan
-
-**Solution**:
-1. Reduce `includePaths` to only necessary directories
-2. Use local filesystem instead of network drives
-3. Optimize module loading in your Perl code
-
-### Debugger Crashes or Hangs
-
-**Symptom**: Debugger stops responding or crashes VS Code.
-
-**Solution**:
-1. Check Debug Console for error messages
-2. Restart VS Code: `Ctrl+Shift+P` → "Developer: Reload Window"
-3. Verify Perl script runs without debugger:
-   ```bash
-   perl script.pl
-   ```
-
-4. Report issue with logs:
-   - Debug Console output
-   - VS Code version (`Help` → `About`)
-   - Perl version (`perl --version`)
-   - Operating system
-
----
-
-## Getting Help
-
-- **Documentation**: See [DAP Implementation Specification](../reference/DAP_IMPLEMENTATION_SPECIFICATION.md) for technical details
-- **Security**: See [DAP Security Specification](../DAP_SECURITY_SPECIFICATION.md) for security considerations
-- **Architecture**: See [Crate Architecture Guide](../reference/CRATE_ARCHITECTURE_GUIDE.md) for DAP crate design
-- **Issues**: Report bugs at [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
-
----
-
-**Version History**:
-- **0.9.x** (2025-10-04): Phase 1 bridge implementation with Perl::LanguageServer DAP support
+Use absolute paths while troubleshooting. Once the debug session works, move back to VS Code variables such as `${workspaceFolder}` and `${file}`.
