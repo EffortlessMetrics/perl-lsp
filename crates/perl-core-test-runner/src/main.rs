@@ -4,6 +4,7 @@
 #![allow(clippy::print_stderr, clippy::print_stdout)]
 
 use anyhow::{Context, Result, bail};
+use perl_parser_core::hir::{CompileEffectKind, lower_ast};
 use perl_parser_core::{Parser, RecoverySalvageClass, RecoverySalvageProfile};
 use serde::Serialize;
 use std::env;
@@ -62,13 +63,17 @@ fn main() {
 
 fn run() -> Result<RunnerStatus> {
     let mode = env::var(MODE_ENV).unwrap_or_else(|_| "parse".to_string());
-    if mode != "parse" {
-        bail!("perl-core-test-runner only supports parse mode in this slice, got {mode}");
-    }
-
     let invocation = parse_invocation(env::args_os().skip(1))?;
-    let result = run_parse(&invocation).unwrap_or_else(ParseRunResult::from_error);
-    emit_tap(&invocation.display_path, &result);
+
+    let result = match mode.as_str() {
+        "parse" => run_parse(&invocation),
+        "compile" => run_compile(&invocation),
+        "execute" => bail!("execute mode is not implemented in perl-core-test-runner"),
+        other => bail!("unsupported perl-core-test-runner mode: {other}"),
+    }
+    .unwrap_or_else(ModeRunResult::from_error);
+
+    emit_tap(&mode, &invocation.display_path, &result);
     append_context_record(&mode, &invocation.display_path, &result)?;
     Ok(result.status)
 }
@@ -151,13 +156,13 @@ fn file_invocation(path: OsString) -> Result<Invocation> {
 }
 
 #[derive(Debug)]
-struct ParseRunResult {
+struct ModeRunResult {
     status: RunnerStatus,
     bucket: Option<String>,
     first_diagnostic: Option<String>,
 }
 
-impl ParseRunResult {
+impl ModeRunResult {
     fn pass() -> Self {
         Self { status: RunnerStatus::Pass, bucket: None, first_diagnostic: None }
     }
@@ -175,19 +180,22 @@ impl ParseRunResult {
     }
 }
 
-fn run_parse(invocation: &Invocation) -> Result<ParseRunResult> {
-    let source = match &invocation.source {
+fn read_source(invocation: &Invocation) -> Result<String> {
+    match &invocation.source {
         SourceInput::File(path) => fs::read_to_string(path)
-            .with_context(|| format!("reading Perl test script {}", path.display()))?,
-        SourceInput::Inline(code) => code.clone(),
-    };
+            .with_context(|| format!("reading Perl test script {}", path.display())),
+        SourceInput::Inline(code) => Ok(code.clone()),
+    }
+}
 
+fn run_parse(invocation: &Invocation) -> Result<ModeRunResult> {
+    let source = read_source(invocation)?;
     let mut parser = Parser::new(&source);
     let output = parser.parse_with_recovery();
     let profile = RecoverySalvageProfile::from_parse(&output.ast, &output.diagnostics, false);
 
     if output.diagnostics.is_empty() && profile.class == RecoverySalvageClass::Clean {
-        return Ok(ParseRunResult::pass());
+        return Ok(ModeRunResult::pass());
     }
 
     let first_diagnostic = output
@@ -197,15 +205,47 @@ fn run_parse(invocation: &Invocation) -> Result<ParseRunResult> {
         .or(profile.first_unrecovered_error_node)
         .unwrap_or_else(|| format!("parse salvage class {:?}", profile.class));
 
-    Ok(ParseRunResult::fail("parse_recovery", first_diagnostic))
+    Ok(ModeRunResult::fail("parse_recovery", first_diagnostic))
 }
 
-fn emit_tap(display_path: &str, result: &ParseRunResult) {
+fn run_compile(invocation: &Invocation) -> Result<ModeRunResult> {
+    let source = read_source(invocation)?;
+    let mut parser = Parser::new(&source);
+    let output = parser.parse_with_recovery();
+    let profile = RecoverySalvageProfile::from_parse(&output.ast, &output.diagnostics, false);
+
+    if !output.diagnostics.is_empty() || profile.class != RecoverySalvageClass::Clean {
+        let first_diagnostic = output
+            .diagnostics
+            .first()
+            .map(ToString::to_string)
+            .or(profile.first_unrecovered_error_node)
+            .unwrap_or_else(|| format!("parse salvage class {:?}", profile.class));
+        return Ok(ModeRunResult::fail("parse_recovery", first_diagnostic));
+    }
+
+    let hir = lower_ast(&output.ast);
+    let effects = hir.compile_effects();
+    if let Some(effect) =
+        effects.iter().find(|effect| effect.kind == CompileEffectKind::EmitDynamicBoundary)
+    {
+        let first_diagnostic = effect
+            .dynamic_reason
+            .clone()
+            .or_else(|| effect.fact_name.clone())
+            .unwrap_or_else(|| "unsupported compile-mode dynamic boundary".to_string());
+        return Ok(ModeRunResult::fail("compile_effect", first_diagnostic));
+    }
+
+    Ok(ModeRunResult::pass())
+}
+
+fn emit_tap(mode: &str, display_path: &str, result: &ModeRunResult) {
     println!("1..1");
     match result.status {
-        RunnerStatus::Pass => println!("ok 1 - parse {display_path}"),
+        RunnerStatus::Pass => println!("ok 1 - {mode} {display_path}"),
         RunnerStatus::Fail => {
-            println!("not ok 1 - parse {display_path}");
+            println!("not ok 1 - {mode} {display_path}");
             if let Some(bucket) = &result.bucket {
                 println!("# bucket: {bucket}");
             }
@@ -223,7 +263,7 @@ fn emit_internal_failure(err: &anyhow::Error) {
     println!("# first diagnostic: {}", one_line(&err.to_string()));
 }
 
-fn append_context_record(mode: &str, display_path: &str, result: &ParseRunResult) -> Result<()> {
+fn append_context_record(mode: &str, display_path: &str, result: &ModeRunResult) -> Result<()> {
     let Ok(context_path) = env::var(CONTEXT_ENV) else {
         return Ok(());
     };
@@ -234,7 +274,7 @@ fn write_context_record(
     path: &Path,
     mode: &str,
     display_path: &str,
-    result: &ParseRunResult,
+    result: &ModeRunResult,
 ) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -456,11 +496,60 @@ mod tests {
     }
 
     #[test]
+    fn compile_clean_file_passes() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let script = temp.path().join("ok.t");
+        fs::write(&script, "my $x = 1;\n")?;
+        let invocation =
+            Invocation { source: SourceInput::File(script), display_path: "base/ok.t".to_string() };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_parse_error_file_fails_with_parse_bucket() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let script = temp.path().join("bad.t");
+        fs::write(&script, "my $x = ;\n")?;
+        let invocation = Invocation {
+            source: SourceInput::File(script),
+            display_path: "base/bad.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("parse_recovery"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_dynamic_boundary_fails_with_compile_effect_bucket() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("require $module;\n".to_string()),
+            display_path: "-e".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
+            diagnostic.contains("require target is not statically known")
+        }));
+        Ok(())
+    }
+
+    #[test]
     fn appends_context_record_as_jsonl() -> TestResult {
         let temp = tempfile::tempdir()?;
         let context = temp.path().join("records.jsonl");
 
-        let result = ParseRunResult::pass();
+        let result = ModeRunResult::pass();
         write_context_record(&context, "parse", "base/ok.t", &result)?;
 
         let raw = fs::read_to_string(context)?;
@@ -481,7 +570,7 @@ mod tests {
         let temp = tempfile::tempdir()?;
         let context = temp.path().join("records.jsonl");
 
-        let result = ParseRunResult::fail("parse_recovery", "expected expression\nfound ;".into());
+        let result = ModeRunResult::fail("parse_recovery", "expected expression\nfound ;".into());
         write_context_record(&context, "parse", "base/bad.t", &result)?;
 
         let raw = fs::read_to_string(context)?;

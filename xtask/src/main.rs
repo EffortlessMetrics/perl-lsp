@@ -4027,7 +4027,7 @@ mod tests {
             (PerlCoreHarnessCommand::Prepare { perl_ref: None }, "prepare is not implemented"),
             (
                 PerlCoreHarnessCommand::Run {
-                    mode: perl_core_harness::HarnessMode::Compile,
+                    mode: perl_core_harness::HarnessMode::Execute,
                     perl_tree: PathBuf::from("unused"),
                     host_perl: PathBuf::from("perl"),
                     runner: perl_core_harness::HarnessRunner::Test,
@@ -4035,7 +4035,7 @@ mod tests {
                     output: None,
                     runner_binary: None,
                 },
-                "run --mode compile is not implemented yet",
+                "run --mode execute is not implemented yet",
             ),
             (PerlCoreHarnessCommand::Report, "report is not implemented"),
             (PerlCoreHarnessCommand::Baseline { accept: false }, "baseline is not implemented"),

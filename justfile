@@ -2861,6 +2861,13 @@ perl-core-parse-base PERL_TREE HOST_PERL="perl":
           --host-perl {{HOST_PERL}} \
           --profile base
 
+perl-core-compile-base PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness run \
+          --mode compile \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile base
+
 # Bootstrap/update the committed CPAN corpus baseline
 cpan-corpus-baseline-update:
     cargo run -p xtask -- cpan-corpus sweep --output .ci/cpan-corpus-baseline.json

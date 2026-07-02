@@ -1,8 +1,8 @@
 //! Upstream Perl core harness integration scaffold.
 //!
 //! The scaffold can discover tests from a prepared Perl source tree and run the
-//! staged profile through a `t/perl` compatibility wrapper in parse mode.
-//! Compile and execute modes remain fail-closed for later slices.
+//! staged profile through a `t/perl` compatibility wrapper in parse and compile
+//! modes. Execute mode remains fail-closed for later slices.
 
 use crate::utils::project_root;
 use chrono::Utc;
@@ -285,9 +285,9 @@ pub fn prepare() -> Result<()> {
 
 /// Run upstream Perl core tests through the compatibility runner.
 pub fn run_mode(config: RunConfig) -> Result<()> {
-    if config.mode != HarnessMode::Parse {
+    if config.mode == HarnessMode::Execute {
         bail!(
-            "perl-core-harness run --mode {} is not implemented yet; this slice supports parse only",
+            "perl-core-harness run --mode {} is not implemented yet; this slice supports parse and compile only",
             config.mode
         );
     }
@@ -781,8 +781,15 @@ fn workstream_for_bucket(bucket: &str) -> &'static str {
     match bucket {
         "parse_recovery" => "parser_recovery",
         "source_decode" => "source_loading",
+        "hir_lowering" => "hir",
+        "compile_effect" => "compile_time_effects",
+        "scope_pad" => "scope_and_pad",
+        "package_stash" => "package_stash",
+        "pragma_feature" => "pragma_model",
+        "module_resolution" => "module_resolution",
         "cli_switch" => "harness_cli_compat",
         "harness_prepare" => "harness_integration",
+        "unknown" => "compiler_conformance",
         _ => "compiler_conformance",
     }
 }
@@ -791,6 +798,12 @@ fn lsp_impact_for_bucket(bucket: &str) -> Vec<&'static str> {
     match bucket {
         "parse_recovery" => vec!["diagnostics", "syntax_tree", "semantic_tokens"],
         "source_decode" => vec!["workspace_index", "diagnostics"],
+        "hir_lowering" => vec!["definition", "rename", "diagnostics"],
+        "compile_effect" => vec!["definition", "references", "diagnostics"],
+        "scope_pad" => vec!["rename", "definition", "diagnostics"],
+        "package_stash" => vec!["workspace_symbols", "completion", "definition"],
+        "pragma_feature" => vec!["diagnostics", "semantic_tokens"],
+        "module_resolution" => vec!["definition", "hover", "completion"],
         "cli_switch" | "harness_prepare" => vec!["compiler_conformance"],
         _ => vec!["compiler_conformance"],
     }
@@ -951,22 +964,22 @@ mod tests {
     }
 
     #[test]
-    fn compile_mode_remains_fail_closed() -> TestResult {
+    fn execute_mode_remains_fail_closed() -> TestResult {
         let config = RunConfig {
             perl_tree: PathBuf::from("unused"),
             host_perl: PathBuf::from("perl"),
             runner: HarnessRunner::Test,
-            mode: HarnessMode::Compile,
+            mode: HarnessMode::Execute,
             profile: HarnessProfile::Base,
             output: None,
             runner_binary: None,
         };
 
         let Err(err) = run_mode(config) else {
-            bail!("compile mode should remain fail-closed in parse slice");
+            bail!("execute mode should remain fail-closed in compile slice");
         };
 
-        assert!(err.to_string().contains("run --mode compile is not implemented yet"));
+        assert!(err.to_string().contains("run --mode execute is not implemented yet"));
         Ok(())
     }
 
@@ -1047,6 +1060,44 @@ mod tests {
 
         let json = serde_json::to_string(&report)?;
         let back: DiscoveryReport = serde_json::from_str(&json)?;
+
+        assert_eq!(back, report);
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_report_schema_roundtrips() -> TestResult {
+        let report = RunReport {
+            schema_version: RUN_REPORT_SCHEMA_VERSION.into(),
+            commit: "abc".into(),
+            timestamp: "2026-07-02T00:00:00Z".into(),
+            perl_ref: "perl-ref".into(),
+            prepared_tree: "/tmp/perl".into(),
+            run_tree: "/tmp/run".into(),
+            host_perl: "perl".into(),
+            runner: HarnessRunner::Test,
+            mode: HarnessMode::Compile,
+            profile: HarnessProfile::Base,
+            harness_status: Some(0),
+            summary: RunSummary {
+                files_total: 1,
+                files_passed: 1,
+                files_failed: 0,
+                tap_assertions_total: 1,
+                tap_assertions_passed: 1,
+            },
+            buckets: BTreeMap::new(),
+            file_results: vec![RunFileResult {
+                path: "base/ok.t".into(),
+                status: RunnerStatus::Pass,
+                assertions_passed: 1,
+                assertions_total: 1,
+            }],
+            failures: Vec::new(),
+        };
+
+        let json = serde_json::to_string(&report)?;
+        let back: RunReport = serde_json::from_str(&json)?;
 
         assert_eq!(back, report);
         Ok(())
@@ -1169,10 +1220,24 @@ mod tests {
     #[test]
     fn bucket_metadata_maps_failure_classes() {
         assert_eq!(workstream_for_bucket("source_decode"), "source_loading");
+        assert_eq!(workstream_for_bucket("hir_lowering"), "hir");
+        assert_eq!(workstream_for_bucket("compile_effect"), "compile_time_effects");
+        assert_eq!(workstream_for_bucket("scope_pad"), "scope_and_pad");
+        assert_eq!(workstream_for_bucket("package_stash"), "package_stash");
+        assert_eq!(workstream_for_bucket("pragma_feature"), "pragma_model");
+        assert_eq!(workstream_for_bucket("module_resolution"), "module_resolution");
         assert_eq!(workstream_for_bucket("cli_switch"), "harness_cli_compat");
         assert_eq!(workstream_for_bucket("harness_prepare"), "harness_integration");
         assert_eq!(workstream_for_bucket("unknown_bucket"), "compiler_conformance");
         assert_eq!(lsp_impact_for_bucket("source_decode"), vec!["workspace_index", "diagnostics"]);
+        assert_eq!(
+            lsp_impact_for_bucket("compile_effect"),
+            vec!["definition", "references", "diagnostics"]
+        );
+        assert_eq!(
+            lsp_impact_for_bucket("module_resolution"),
+            vec!["definition", "hover", "completion"]
+        );
         assert_eq!(lsp_impact_for_bucket("cli_switch"), vec!["compiler_conformance"]);
         assert_eq!(lsp_impact_for_bucket("harness_prepare"), vec!["compiler_conformance"]);
         assert_eq!(lsp_impact_for_bucket("unknown_bucket"), vec!["compiler_conformance"]);
@@ -1324,6 +1389,39 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn run_mode_generated_fixture_smoke_runs_two_compile_tests() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let perl_tree = write_fake_perl_tree_with_two_base_tests(temp.path())?;
+        let runner = write_fake_runner(temp.path(), RunnerStatus::Pass)?;
+        let output = temp.path().join("compile-report.json");
+
+        run_mode(RunConfig {
+            perl_tree: perl_tree.clone(),
+            host_perl: PathBuf::from("/bin/sh"),
+            runner: HarnessRunner::Test,
+            mode: HarnessMode::Compile,
+            profile: HarnessProfile::Base,
+            output: Some(output.clone()),
+            runner_binary: Some(runner),
+        })?;
+
+        let raw = fs::read_to_string(output)?;
+        let report: RunReport = serde_json::from_str(&raw)?;
+        assert_eq!(report.mode, HarnessMode::Compile);
+        assert_eq!(report.summary.files_total, 2);
+        assert_eq!(report.summary.files_passed, 2);
+        assert_eq!(report.summary.files_failed, 0);
+        let mut paths =
+            report.file_results.iter().map(|result| result.path.as_str()).collect::<Vec<_>>();
+        paths.sort_unstable();
+        assert_eq!(paths, vec!["base/lex.t", "base/ok.t"]);
+        assert!(report.file_results.iter().all(|result| result.status == RunnerStatus::Pass));
+        assert!(!perl_tree.join("t").join("perl").exists(), "source Perl tree must not be mutated");
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn run_mode_buckets_runner_failure_records() -> TestResult {
         let temp = tempfile::tempdir()?;
         let perl_tree = write_fake_perl_tree(temp.path())?;
@@ -1457,22 +1555,24 @@ fi
                 r#"#!/bin/sh
 set -eu
 script="${1:-unknown.t}"
+mode="${PERL_LSP_HARNESS_MODE:-parse}"
 mkdir -p "$(dirname "$PERL_LSP_HARNESS_CONTEXT")"
 printf '1..1\n'
-printf 'ok 1 - parse %s\n' "$script"
-printf '{"schema_version":"perl_core_harness.runner_record.v1","mode":"parse","path":"%s","status":"pass","assertions_passed":1,"assertions_total":1,"bucket":null,"first_diagnostic":null}\n' "$script" >> "$PERL_LSP_HARNESS_CONTEXT"
+printf 'ok 1 - %s %s\n' "$mode" "$script"
+printf '{"schema_version":"perl_core_harness.runner_record.v1","mode":"%s","path":"%s","status":"pass","assertions_passed":1,"assertions_total":1,"bucket":null,"first_diagnostic":null}\n' "$mode" "$script" >> "$PERL_LSP_HARNESS_CONTEXT"
 "#
             }
             RunnerStatus::Fail => {
                 r#"#!/bin/sh
 set -eu
 script="${1:-unknown.t}"
+mode="${PERL_LSP_HARNESS_MODE:-parse}"
 mkdir -p "$(dirname "$PERL_LSP_HARNESS_CONTEXT")"
 printf '1..1\n'
-printf 'not ok 1 - parse %s\n' "$script"
+printf 'not ok 1 - %s %s\n' "$mode" "$script"
 printf '# bucket: parse_recovery\n'
 printf '# first diagnostic: expected expression\n'
-printf '{"schema_version":"perl_core_harness.runner_record.v1","mode":"parse","path":"%s","status":"fail","assertions_passed":0,"assertions_total":1,"bucket":"parse_recovery","first_diagnostic":"expected expression"}\n' "$script" >> "$PERL_LSP_HARNESS_CONTEXT"
+printf '{"schema_version":"perl_core_harness.runner_record.v1","mode":"%s","path":"%s","status":"fail","assertions_passed":0,"assertions_total":1,"bucket":"parse_recovery","first_diagnostic":"expected expression"}\n' "$mode" "$script" >> "$PERL_LSP_HARNESS_CONTEXT"
 exit 1
 "#
             }
