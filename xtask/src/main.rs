@@ -1280,6 +1280,13 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Run upstream Perl core test harness against perl-lsp compiler modes.
+    #[command(name = "perl-core-harness")]
+    PerlCoreHarness {
+        #[command(subcommand)]
+        command: PerlCoreHarnessCommand,
+    },
+
     /// Emit parser-ratchet scaffold receipts.
     ParserRatchet {
         #[command(subcommand)]
@@ -2071,6 +2078,60 @@ enum CpanCorpusCommand {
         /// Local install directory containing CPAN modules
         #[arg(long)]
         install_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum PerlCoreHarnessCommand {
+    /// Prepare a disposable upstream Perl test tree (future slice).
+    Prepare {
+        /// Upstream Perl tag or commit to prepare.
+        #[arg(long = "ref")]
+        perl_ref: Option<String>,
+    },
+
+    /// Discover upstream Perl core tests through t/TEST or t/harness --dumptests.
+    Discover {
+        /// Prepared upstream Perl source/build tree.
+        #[arg(long)]
+        perl_tree: PathBuf,
+
+        /// Host Perl used to run upstream t/TEST or t/harness.
+        #[arg(long, default_value = "perl")]
+        host_perl: PathBuf,
+
+        /// Upstream scheduler to query.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessRunner::Test)]
+        runner: perl_core_harness::HarnessRunner,
+
+        /// Staged upstream Perl core profile.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
+        profile: perl_core_harness::HarnessProfile,
+
+        /// Discovery JSON output path.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Run discovered tests in parse, compile, or execute mode (future slice).
+    Run {
+        /// Harness mode to run.
+        #[arg(long, value_enum)]
+        mode: perl_core_harness::HarnessMode,
+
+        /// Staged upstream Perl core profile.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
+        profile: perl_core_harness::HarnessProfile,
+    },
+
+    /// Render the latest Perl core harness report (future slice).
+    Report,
+
+    /// Manage checked-in Perl core harness baselines (future slice).
+    Baseline {
+        /// Accept the latest report as the baseline.
+        #[arg(long)]
+        accept: bool,
     },
 }
 
@@ -2873,9 +2934,10 @@ enum UxScorecardOutputFormat {
 
 fn main() -> Result<()> {
     color_eyre::install()?;
+    run_cli(Cli::parse())
+}
 
-    let cli = Cli::parse();
-
+fn run_cli(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::List => {
             print_top_level_commands();
@@ -3399,6 +3461,21 @@ fn main() -> Result<()> {
                 receipt,
             })
         }
+        Commands::PerlCoreHarness { command } => match command {
+            PerlCoreHarnessCommand::Prepare { perl_ref: _ } => perl_core_harness::prepare(),
+            PerlCoreHarnessCommand::Discover { perl_tree, host_perl, runner, profile, output } => {
+                perl_core_harness::discover(perl_core_harness::DiscoverConfig {
+                    perl_tree,
+                    host_perl,
+                    runner,
+                    profile,
+                    output,
+                })
+            }
+            PerlCoreHarnessCommand::Run { mode, profile: _ } => perl_core_harness::run_mode(mode),
+            PerlCoreHarnessCommand::Report => perl_core_harness::report(),
+            PerlCoreHarnessCommand::Baseline { accept } => perl_core_harness::baseline(accept),
+        },
         Commands::ParserRatchet { command } => match command {
             ParserRatchetCommand::Run { profile, base, head, receipt, force_selected } => {
                 parser_ratchet::run(parser_ratchet::ParserRatchetRunConfig {
@@ -3904,6 +3981,63 @@ mod tests {
             DevexCommand::Plan { base } => assert_eq!(base, "HEAD~1"),
             _ => return Err(std::io::Error::other("expected devex plan command").into()),
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn perl_core_harness_dispatch_fails_closed_for_future_subcommands() -> TestResult {
+        let cases = [
+            (PerlCoreHarnessCommand::Prepare { perl_ref: None }, "prepare is not implemented"),
+            (
+                PerlCoreHarnessCommand::Run {
+                    mode: perl_core_harness::HarnessMode::Parse,
+                    profile: perl_core_harness::HarnessProfile::Base,
+                },
+                "run --mode parse is not implemented",
+            ),
+            (PerlCoreHarnessCommand::Report, "report is not implemented"),
+            (PerlCoreHarnessCommand::Baseline { accept: false }, "baseline is not implemented"),
+            (
+                PerlCoreHarnessCommand::Baseline { accept: true },
+                "baseline --accept is not implemented",
+            ),
+        ];
+
+        for (command, expected) in cases {
+            let err = run_cli(Cli { command: Commands::PerlCoreHarness { command } })
+                .err()
+                .ok_or_else(|| std::io::Error::other("perl-core-harness command should fail"))?;
+
+            assert!(err.to_string().contains(expected), "expected {expected:?}, got {err:?}");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn perl_core_harness_dispatch_reports_missing_discovery_tree() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let missing_tree = temp.path().join("missing-perl-tree");
+
+        let err = run_cli(Cli {
+            command: Commands::PerlCoreHarness {
+                command: PerlCoreHarnessCommand::Discover {
+                    perl_tree: missing_tree,
+                    host_perl: PathBuf::from("perl"),
+                    runner: perl_core_harness::HarnessRunner::Test,
+                    profile: perl_core_harness::HarnessProfile::Base,
+                    output: None,
+                },
+            },
+        })
+        .err()
+        .ok_or_else(|| std::io::Error::other("discover should fail for a missing tree"))?;
+
+        assert!(
+            err.to_string().contains("prepared Perl tree does not exist or is not a directory"),
+            "missing-tree error should be explicit, got {err:?}"
+        );
 
         Ok(())
     }

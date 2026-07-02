@@ -2847,6 +2847,13 @@ cpan-corpus-install:
 cpan-corpus-sweep:
     cargo run -p xtask -- cpan-corpus sweep
 
+# Discover upstream Perl core base tests from a prepared Perl tree.
+perl-core-discover-base PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness discover \
+        --perl-tree {{PERL_TREE}} \
+        --host-perl {{HOST_PERL}} \
+        --profile base
+
 # Bootstrap/update the committed CPAN corpus baseline
 cpan-corpus-baseline-update:
     cargo run -p xtask -- cpan-corpus sweep --output .ci/cpan-corpus-baseline.json
