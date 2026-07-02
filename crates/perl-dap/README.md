@@ -1,7 +1,6 @@
 # perl-dap
 
-Use this crate when you need a native Debug Adapter Protocol server for Perl,
-not just debugger helper components.
+Use this crate when you need the native Debug Adapter Protocol server for Perl.
 
 `perl-dap` is the runtime layer of the debugger stack. It speaks DAP over stdio
 or TCP, dispatches requests, validates breakpoints, and renders values for
@@ -19,50 +18,34 @@ DAP-capable editors and tools.
 ## Key pieces
 
 - `DapServer`, `DapConfig`, and `DapMode` wire the server and its launch mode.
-- `DebugAdapter` handles request routing and protocol state.
-- `BridgeAdapter` supports migration from `Perl::LanguageServer`.
+- `DebugAdapter` handles native request routing and protocol state.
 - `TcpAttachConfig` and `BreakpointStore` support socket attach and breakpoint tracking.
+- Parser-backed breakpoint validation rejects non-executable source locations where context is available.
 
 ## Run modes
 
-- **Native launch (stdio DAP server):**
+### Native launch (stdio DAP server)
 
 ```bash
 perl-dap --stdio
 ```
 
-- **TCP attach endpoint (native DAP over socket):**
+### TCP attach endpoint (native DAP over socket)
 
 ```bash
 perl-dap --socket --port 13603
 ```
 
-- **Legacy bridge mode (proxy to Perl::LanguageServer):**
+## Runtime dependencies
 
-```bash
-perl-dap --bridge
-```
+Native launch and TCP attach use the built-in Rust runtime plus a local Perl
+installation. The Rust parser-backed runtime (`perl-parser`, `perl-parser-core`,
+`perl-lexer`, and the `perl-dap-*` support crates) is compiled into the shipped
+`perl-dap` binary; users do not install `perl-parser` or any other internal crate
+separately.
 
-## External dependencies
-
-Native launch and TCP attach use the built-in Rust runtime plus a local Perl installation.
-The Rust parser-backed runtime (`perl-parser`, `perl-parser-core`, `perl-lexer`, and the
-`perl-dap-*` support crates) is compiled into the shipped `perl-dap` binary; users do not
-install `perl-parser` or any other internal crate separately.
-
-`--bridge` mode additionally requires the CPAN module `Perl::LanguageServer`.
-Install it with either:
-
-```bash
-cpan Perl::LanguageServer
-cpanm Perl::LanguageServer
-```
-
-You can verify availability with:
-
-```bash
-perl -e "use Perl::LanguageServer::DebuggerInterface; print qq{OK\n};"
-```
+The release artifacts ship the native Rust binaries (`perllsp` and `perl-dap`).
+External Perl debugger backends are not bundled into the native product surface.
 
 ## Benchmarks
 
