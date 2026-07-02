@@ -4,16 +4,15 @@ name: CI (Nightly)
 # Combines: ci-expensive.yml, quality-checks.yml, fuzz.yml
 # Cost: ~$0.15 per run (label-gated), ~$0.30 per nightly run
 #
-# merge_group added in #1232: required for the "Codecov / Patch 95" required
-# check to produce a status context in merge_group runs.  Only the test-coverage
-# job runs on merge_group; all nightly / label-gated jobs are explicitly excluded.
+# Coverage is advisory: run it on the nightly/manual lane, or explicitly on PRs
+# with `ci:coverage`. Normal PR and merge-queue validation use the required
+# Rust Small and RIPR+ gates instead.
 
 on:
   pull_request:
     branches: [ main, master ]
     # Keep label-gated jobs alive after the label is applied.
     types: [opened, synchronize, reopened, ready_for_review, labeled]
-  merge_group:
   schedule:
     # Run nightly at 3am UTC
     - cron: '0 3 * * *'
@@ -427,12 +426,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'merge_group' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_coverage != 'false') ||
       (github.event_name == 'pull_request' &&
        github.event.pull_request.draft != true &&
-       github.event.action != 'labeled') ||
-      github.event_name == 'schedule'
+       contains(github.event.pull_request.labels.*.name, 'ci:coverage'))
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
         with:
@@ -442,10 +440,9 @@ jobs:
       - name: Emit changed-file coverage route summary
         id: coverage_route
         env:
-          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix.
           BASE_REF="${BASE_REF#refs/heads/}"
           mkdir -p target/receipts/quality
           base_ref="$BASE_REF"
@@ -467,7 +464,6 @@ jobs:
 
       - name: Install Rust
         if: >-
-          github.event_name == 'merge_group' ||
           github.event_name != 'pull_request' ||
           steps.coverage_route.outputs.coverage_required == 'true'
         uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # nightly (master)
@@ -477,7 +473,6 @@ jobs:
 
       - name: Cache cargo dependencies
         if: >-
-          github.event_name == 'merge_group' ||
           github.event_name != 'pull_request' ||
           steps.coverage_route.outputs.coverage_required == 'true'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
@@ -488,7 +483,6 @@ jobs:
 
       - name: Install just
         if: >-
-          github.event_name == 'merge_group' ||
           github.event_name != 'pull_request' ||
           steps.coverage_route.outputs.coverage_required == 'true'
         uses: taiki-e/install-action@9bcaee1dcae34154180f412e2fa69355a7cda9f6  # v2.82.6
@@ -497,14 +491,12 @@ jobs:
 
       - name: Install cargo-llvm-cov
         if: >-
-          github.event_name == 'merge_group' ||
           github.event_name != 'pull_request' ||
           steps.coverage_route.outputs.coverage_required == 'true'
         run: rustup run nightly cargo install cargo-llvm-cov --locked
 
       - name: Create legacy LSP fixtures (CI-only)
         if: >-
-          github.event_name == 'merge_group' ||
           github.event_name != 'pull_request' ||
           steps.coverage_route.outputs.coverage_required == 'true'
         run: |
@@ -515,27 +507,25 @@ jobs:
 
       - name: Run routed PR coverage proof
         if: >-
-          (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+          github.event_name == 'pull_request' &&
           steps.coverage_route.outputs.coverage_required == 'true'
         env:
-          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
           RUSTFLAGS: "-Cdebuginfo=0"
           CARGO_BUILD_JOBS: 1
         run: |
-          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix.
           BASE_REF="${BASE_REF#refs/heads/}"
           base_ref="$BASE_REF"
           git fetch --no-tags --depth=200 origin "$base_ref" || true
           just coverage-proof-routed "origin/$base_ref" "HEAD"
 
       - name: Run workspace coverage proof
-        if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
+        if: github.event_name != 'pull_request'
         env:
-          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
           RUSTFLAGS: "-Cdebuginfo=0"
           CARGO_BUILD_JOBS: 1
         run: |
-          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix.
           BASE_REF="${BASE_REF#refs/heads/}"
           base_ref="$BASE_REF"
           git fetch --no-tags --depth=200 origin "$base_ref" || true
@@ -569,8 +559,7 @@ jobs:
         # entirely when secrets are unavailable (fork PRs, certain re-run contexts).
         if: |
           env.CODECOV_TOKEN != '' &&
-          (github.event_name == 'merge_group' ||
-           github.event_name != 'pull_request' ||
+          (github.event_name != 'pull_request' ||
            steps.coverage_route.outputs.coverage_required == 'true')
         continue-on-error: true
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v7.0.0

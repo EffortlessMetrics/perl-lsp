@@ -9,30 +9,27 @@
 The proof lane is in transition from measurement to enforcement:
 
 - GitHub branch protection requires the current proof-floor contexts:
-  `ripr+ New Gap Gate`, `Codecov / Patch 95`, `codecov/patch`, and
-  `Perl LSP Rust Small Result`
+  `ripr+ New Gap Gate` and `Perl LSP Rust Small Result`
 - `Perl LSP Rust Small Result` must pass before merge
 - `ripr+ New Gap Gate` blocks new RIPR gaps and stale or missing RIPR proof
   receipts
-- `Codecov / Patch 95` blocks patch coverage below 95%, stale or missing
-  coverage receipts, missing coverage artifacts, and coverage routing or setup
-  failures. Codecov upload and Test Analytics telemetry are non-fatal.
-- PR patch coverage is routed by changed surface through `cargo xtask ci route`;
-  code routes run the focused coverage pack selected from
-  `.ci/coverage-packs.toml`, while PR routes without an LCOV coverage pack are
-  recorded as `skipped-by-policy` instead of falling back to broad workspace
+- `Codecov / Patch 95` and `codecov/patch` are advisory coverage contexts.
+  They run on nightly/manual coverage lanes and on PRs explicitly labeled
+  `ci:coverage`, not on normal PR or merge-queue validation.
+- Labeled PR patch coverage is routed by changed surface through
+  `cargo xtask ci route`; code routes run the focused coverage pack selected
+  from `.ci/coverage-packs.toml`, while PR routes without an LCOV coverage pack
+  are recorded as `skipped-by-policy` instead of falling back to broad workspace
   coverage
-- `codecov/patch` must complete and pass after Codecov processes the uploaded
-  LCOV; its status policy ignores unrelated CI/test gate failures so it remains
-  a coverage signal
 - generated quality-gate receipts are freshness-checked for patch, new-RIPR,
   and final modes; the final mode remains a future enforcement flip until
   burn-down closes
-- CI uploads required RIPR and coverage proof artifacts and appends quality-gate
-  Markdown summaries to the GitHub job summary
+- CI uploads required RIPR proof artifacts and appends quality-gate Markdown summaries
+  to the GitHub job summary; coverage proof artifacts are advisory.
 
 This is the current merge contract. A PR with pending, failed, missing, skipped
-unexpectedly, or stale required proof contexts is not merge-ready.
+unexpectedly, or stale required proof contexts is not merge-ready. Advisory
+coverage contexts do not block merge-ready status.
 
 ## Active RIPR+ Inventory
 

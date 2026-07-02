@@ -13,7 +13,8 @@ fn project_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn codecov_patch_status_requires_95_with_no_threshold() -> Result<(), Box<dyn std::error::Error>> {
+fn codecov_patch_status_is_advisory_95_with_no_threshold() -> Result<(), Box<dyn std::error::Error>>
+{
     let root = project_root()?;
     let raw_config = fs::read_to_string(root.join("codecov.yml"))?;
     let config: Value = serde_yaml_ng::from_str(&raw_config)?;
@@ -45,8 +46,13 @@ fn codecov_patch_status_requires_95_with_no_threshold() -> Result<(), Box<dyn st
     );
     assert_ne!(
         yaml_path(&config, &["coverage", "status", "patch", "default", "informational"],),
+        Some("false"),
+        "Codecov patch status must not be configured as blocking"
+    );
+    assert_eq!(
+        yaml_path(&config, &["coverage", "status", "patch", "default", "informational"],),
         Some("true"),
-        "Codecov patch status must be blocking, not informational"
+        "Codecov patch status must be advisory; RIPR+ and focused tests are required"
     );
     assert_eq!(
         yaml_path(&config, &["coverage", "status", "project", "default", "target"],),
@@ -108,51 +114,46 @@ fn codecov_flags_do_not_carry_status_targets() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn coverage_docs_describe_patch_front_door_without_ci_wiring()
+fn coverage_docs_describe_advisory_patch_policy_without_pr_wiring()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root()?;
     let coverage_doc = fs::read_to_string(root.join("docs/how-to/COVERAGE.md"))?;
     let rollout_doc = fs::read_to_string(root.join("docs/ci/codecov-rollout.md"))?;
     let coverage_readme = fs::read_to_string(root.join(".ci/README-coverage.md"))?;
 
-    assert!(
-        coverage_doc.contains("| **Patch** | 95% | Blocking PR gate with `0%` threshold |")
-            && coverage_doc.contains(
-                "| **Project** | 95% | Informational during burn-down; final target is blocking |",
-            ),
-        "coverage how-to must describe the Codecov patch/project policy targets"
-    );
-
     let ci_section = section_block(&coverage_doc, "## CI Integration")
         .ok_or("coverage how-to is missing CI Integration section")?;
     assert!(
-        ci_section.contains("Patch coverage is the front-door PR coverage gate")
+        ci_section.contains("Patch coverage is an advisory coverage signal")
+            && ci_section.contains("not a normal PR merge gate")
+            && ci_section.contains("explicitly labeled `ci:coverage`")
+            && ci_section.contains("Normal PR and merge-queue validation do not run")
             && ci_section.contains("Project coverage remains")
             && ci_section.contains("informational during burn-down")
-            && ci_section.contains(
-                "coverage proof workflow now routes PR patch coverage by changed surface"
-            ),
-        "coverage how-to must describe the transitional Codecov rollout posture"
+            && ci_section.contains("Labeled PR runs route patch coverage by")
+            && ci_section.contains("changed surface through `cargo xtask ci route`"),
+        "coverage how-to must describe the advisory Codecov rollout posture"
     );
     assert!(
-        !ci_section.contains("ci:coverage")
+        !ci_section.contains("front-door PR coverage gate")
             && !ci_section.contains("quality-gate --mode enforce-new-ripr")
             && !ci_section.contains("quality-gate --mode enforce "),
-        "coverage docs must not preserve label-gated, RIPR, or final quality-gate CI language"
+        "coverage docs must not preserve old blocking, RIPR, or final quality-gate CI language"
     );
 
-    let current_policy = section_block(&rollout_doc, "## Proof-lane Codecov posture")
-        .ok_or("rollout doc is missing proof-lane Codecov posture")?;
+    let current_policy = section_block(&rollout_doc, "## Advisory Codecov posture")
+        .ok_or("rollout doc is missing advisory Codecov posture")?;
     assert!(
-        current_policy.contains("patch `95%` / `0%`")
+        current_policy.contains("patch `95%` / `0%` is the advisory coverage target")
             && current_policy.contains("project `95%` remains informational")
-            && current_policy.contains("first blocking proof workflow now runs patch coverage")
+            && current_policy.contains("no longer runs on normal PRs or merge groups")
+            && current_policy.contains("ci:coverage")
             && current_policy.contains("quality-gate --mode enforce-patch-coverage"),
-        "rollout doc must describe the active proof-lane Codecov posture"
+        "rollout doc must describe the active advisory Codecov posture"
     );
     assert!(
         rollout_doc.contains("Historical Codecov ladder")
-            && rollout_doc.contains("superseded by the proof-enforcement lane"),
+            && rollout_doc.contains("advisory, label/manual/nightly coverage"),
         "rollout doc must mark the older Codecov ladder as historical"
     );
     assert!(
@@ -165,7 +166,7 @@ fn coverage_docs_describe_patch_front_door_without_ci_wiring()
         coverage_doc.contains("Codecov / Patch 95")
             && coverage_doc.contains("fail_ci_if_error: false")
             && coverage_doc.contains("local quality-gate receipt"),
-        "coverage how-to must describe the local receipt as the active blocking patch proof"
+        "coverage how-to must describe the local receipt as the advisory patch proof"
     );
     for stale_phrase in [
         "fail_ci_if_error: true",

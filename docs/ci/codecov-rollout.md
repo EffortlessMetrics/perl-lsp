@@ -10,22 +10,26 @@ useful alongside the other evidence lanes.
 > tests, `ripr`, mutation, real-Perl oracle, no-panic, file policy, and
 > release readiness. It is **not** a release-readiness proof.
 
-## Proof-lane Codecov posture
+## Advisory Codecov posture
 
-The proof-enforcement lane supersedes the original non-blocking Codecov rollout posture for PR coverage policy.
+The proof-enforcement lane now uses RIPR+ and focused Rust checks as the
+required PR proof. Codecov remains an advisory coverage lane for nightly/manual
+runs and explicitly labeled `ci:coverage` PRs.
 
 Current policy:
 
-- patch `95%` / `0%` is the front-door PR coverage policy;
+- patch `95%` / `0%` is the advisory coverage target;
 - project `95%` remains informational during burn-down;
 - Codecov statuses use `require_ci_to_pass: false` plus status-level
   `if_ci_failed: ignore` so routed test failures stay in test-named gates;
 - proof-lane `xtask/src/` paths are included through focused quality-gate and RIPR integration coverage;
 - per-flag `target` fields are not used because project and patch status blocks own thresholds.
 
-The first blocking proof workflow now runs patch coverage on every ready PR and
-feeds the local `quality-gate --mode enforce-patch-coverage` receipt. It does
-not implement project-coverage final enforcement.
+The coverage workflow no longer runs on normal PRs or merge groups. It runs on
+nightly/manual events and on PRs explicitly labeled `ci:coverage`, where it
+feeds the local `quality-gate --mode enforce-patch-coverage` receipt without
+becoming a merge requirement. It does not implement project-coverage final
+enforcement.
 
 ## What Codecov answers (and doesn't)
 
@@ -49,11 +53,11 @@ Codecov does **not** answer:
 
 | Surface                 | Current                                                               | Target                                                    |
 | ----------------------- | --------------------------------------------------------------------- | --------------------------------------------------------- |
-| Patch status            | Codecov patch `95%` / `0%`, blocking                                  | unchanged                                                 |
+| Patch status            | Codecov patch `95%` / `0%`, advisory                                  | unchanged target, not branch-protection blocking          |
 | Project status          | Codecov project `95%`, informational during burn-down                 | blocking after project coverage reaches target            |
 | Coverage flags          | crate-level flags, including `xtask/src/` for proof-rail code         | keep flags inspectable without per-flag status targets    |
 | Branch-coverage ratchet | `.ci/coverage-baseline.txt` parser branch ratchet                     | unchanged in this slice                                   |
-| Coverage receipt        | `target/receipts/quality/coverage-baseline.json` plus quality-gate JSON/Markdown in CI | keep current on every PR |
+| Coverage receipt        | `target/receipts/quality/coverage-baseline.json` plus quality-gate JSON/Markdown in explicit coverage runs | keep current on nightly/manual/`ci:coverage` runs |
 | Test Analytics          | receipt to JUnit upload in PR-fast / gate shards / UX regression lanes | unchanged; **test telemetry**, not a coverage verdict     |
 
 ## Historical current vs target
@@ -73,7 +77,9 @@ The table below is retained for historical context and is superseded by the proo
 
 ## Historical Codecov ladder
 
-The older parser-branch Codecov ladder below is retained as history only. Its non-blocking, label-gated posture is superseded by the proof-enforcement lane for active PR coverage policy.
+The older parser-branch Codecov ladder below is retained as history only. The
+current posture is advisory, label/manual/nightly coverage alongside required
+RIPR+ and Rust Small proof.
 
 ## PR ladder
 

@@ -47,20 +47,21 @@ This creates `lcov.info` in the project root.
 
 ## CI Integration
 
-### Automatic Coverage Reports
+### Advisory Coverage Reports
 
-Patch coverage is the front-door PR coverage gate in Codecov policy:
+Patch coverage is an advisory coverage signal, not a normal PR merge gate:
 
 - **Patch coverage**: Target `95%` with `0%` threshold.
 - **Project coverage**: Target `95%`, informational during burn-down.
-- **Coverage scope**: The PR patch gate measures workspace library units plus focused proof-lane `xtask` tests. Integration-heavy project coverage remains a burn-down target.
+- **Coverage scope**: Explicit coverage runs measure workspace library units plus focused proof-lane `xtask` tests. Integration-heavy project coverage remains a burn-down target.
 
-The coverage proof workflow now routes PR patch coverage by changed surface.
-Code routes run the focused coverage pack selected by `cargo xtask ci route`.
-Routes without a coverage pack fall back to the broader workspace proof so the
-required Codecov status is still produced. Scheduled and manually dispatched
-coverage runs still use the broader workspace proof. Project coverage remains
-informational during burn-down.
+Normal PR and merge-queue validation do not run the coverage job. The
+`Codecov / Patch 95` job runs on the nightly/manual lane, or on PRs that are
+explicitly labeled `ci:coverage`. Labeled PR runs route patch coverage by
+changed surface through `cargo xtask ci route`; routes without a coverage pack
+record `skipped-by-policy` instead of expanding into the broad workspace proof.
+Scheduled and manually dispatched coverage runs still use the broader workspace
+proof. Project coverage remains informational during burn-down.
 
 ### Patch Coverage Quality Gate
 
@@ -78,8 +79,8 @@ rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/recei
 ```
 
 The coverage receipt records both `coverage.patch` and `coverage.project` so
-the patch gate can block new unproven code while still showing the project
-coverage burn-down number.
+explicit coverage runs can show new-code proof and the project coverage
+burn-down number without blocking normal PR flow.
 
 Then run the patch coverage quality gate:
 
@@ -97,9 +98,9 @@ Failure output includes sample uncovered lines and repair guidance. Treat those 
 
 ### Viewing Coverage in PRs
 
-When Codecov reports on a PR:
+When Codecov is explicitly requested on a PR with `ci:coverage`:
 
-1. The nightly coverage job runs automatically
+1. The advisory coverage job runs for that labeled PR
 2. Coverage data is uploaded to Codecov
 3. Codecov posts a comment to the PR showing:
    - Overall coverage percentage
@@ -107,7 +108,10 @@ When Codecov reports on a PR:
    - Per-file coverage changes
    - Flags for each crate (parser, lsp, lexer, dap, corpus)
 
-The nightly coverage lane also generates branch coverage in `lcov.info` and checks it against `.ci/coverage-baseline.txt`. That lane remains a ratchet: branch coverage can stay flat or improve, and it fails if the total drops by more than the allowed percentage point budget.
+The nightly coverage lane also generates branch coverage in `lcov.info` and
+checks it against `.ci/coverage-baseline.txt`. That lane remains a ratchet:
+branch coverage can stay flat or improve, and it fails if the total drops by
+more than the allowed percentage point budget.
 
 ### Coverage Badge
 
@@ -182,11 +186,12 @@ Set this GitHub Actions secret at the repository or organization level:
 
 - `CODECOV_TOKEN`
 
-The coverage upload uses this token for Codecov telemetry. The blocking patch
+The coverage upload uses this token for Codecov telemetry. The advisory patch
 proof is the local `Codecov / Patch 95` quality-gate receipt, not the upload
 step: CI sets `fail_ci_if_error: false`, and `codecov.yml` sets
-`require_ci_to_pass: false` plus patch `if_ci_failed: ignore` so unrelated
-routed test failures remain in test-named gates.
+`require_ci_to_pass: false`, patch `informational: true`, and patch
+`if_ci_failed: ignore` so unrelated routed test failures remain in test-named
+gates.
 
 ## Configuration Files
 
@@ -249,7 +254,7 @@ Check:
 1. `CODECOV_TOKEN` is configured as a GitHub Actions secret.
 2. The JUnit file exists under `target/test-results/`.
 3. The receipt JSON exists under `target/receipts/`.
-4. Test-results upload failures should be visible in their workflow logs and must not be confused with the blocking patch coverage proof upload.
+4. Test-results upload failures should be visible in their workflow logs and must not be confused with the advisory patch coverage proof upload.
 
 ### Coverage numbers look wrong
 

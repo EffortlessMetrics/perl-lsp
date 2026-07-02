@@ -19,12 +19,13 @@ coverage:
         target: 95%           # Final project target, informational during burn-down
         threshold: 2%         # Temporary burn-down window; removed after project reaches target
         if_ci_failed: ignore  # Keep project telemetry independent from unrelated CI/test failures
-        informational: true   # Patch coverage enforces first; project is promoted later
+        informational: true   # Project telemetry is advisory during burn-down
     patch:
       default:
-        target: 95%           # New code must carry its own proof
-        threshold: 0%         # No patch coverage regression allowance
-        if_ci_failed: ignore  # Patch status fails on coverage, not routed test correctness
+        target: 95%           # Advisory target for explicit coverage runs
+        threshold: 0%         # Preserve the reporting target without gating PRs
+        if_ci_failed: ignore  # Patch telemetry stays independent from test failures
+        informational: true   # RIPR+ and focused tests are the required PR proof
 
 # Files/patterns to exclude from coverage analysis
 ignore:

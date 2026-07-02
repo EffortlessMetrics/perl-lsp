@@ -350,8 +350,8 @@ def main() -> int:
         "schema_version": "ci_route.v1",
         "provider_action": "changed_file_proof_routing",
         "claim_boundary": (
-            "CI-enforced lightweight Codecov coverage-pack route; selected packs "
-            "feed Codecov / Patch 95"
+            "Advisory lightweight Codecov coverage-pack route; selected packs "
+            "feed Codecov / Patch 95 on nightly/manual or ci:coverage runs"
         ),
         "base": args.base,
         "head": args.head,
