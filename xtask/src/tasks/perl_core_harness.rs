@@ -1292,6 +1292,38 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn run_mode_generated_fixture_smoke_runs_two_base_tests() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let perl_tree = write_fake_perl_tree_with_two_base_tests(temp.path())?;
+        let runner = write_fake_runner(temp.path(), RunnerStatus::Pass)?;
+        let output = temp.path().join("parse-report.json");
+
+        run_mode(RunConfig {
+            perl_tree: perl_tree.clone(),
+            host_perl: PathBuf::from("/bin/sh"),
+            runner: HarnessRunner::Test,
+            mode: HarnessMode::Parse,
+            profile: HarnessProfile::Base,
+            output: Some(output.clone()),
+            runner_binary: Some(runner),
+        })?;
+
+        let raw = fs::read_to_string(output)?;
+        let report: RunReport = serde_json::from_str(&raw)?;
+        assert_eq!(report.summary.files_total, 2);
+        assert_eq!(report.summary.files_passed, 2);
+        assert_eq!(report.summary.files_failed, 0);
+        assert_eq!(
+            report.file_results.iter().map(|result| result.path.as_str()).collect::<Vec<_>>(),
+            vec!["base/ok.t", "base/lex.t"]
+        );
+        assert!(report.file_results.iter().all(|result| result.status == RunnerStatus::Pass));
+        assert!(!perl_tree.join("t").join("perl").exists(), "source Perl tree must not be mutated");
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn run_mode_buckets_runner_failure_records() -> TestResult {
         let temp = tempfile::tempdir()?;
         let perl_tree = write_fake_perl_tree(temp.path())?;
@@ -1366,6 +1398,27 @@ exit 7
             r#"./perl base/ok.t
 "#,
         )
+    }
+
+    #[cfg(unix)]
+    fn write_fake_perl_tree_with_two_base_tests(root: &Path) -> TestResult<PathBuf> {
+        let perl_tree = root.join("prepared-perl-two-base-tests");
+        let t_dir = perl_tree.join("t");
+        fs::create_dir_all(t_dir.join("base"))?;
+        fs::write(t_dir.join("base").join("ok.t"), "1;\n")?;
+        fs::write(t_dir.join("base").join("lex.t"), "1;\n")?;
+        let script = r#"#!/bin/sh
+set -eu
+if [ "${1:-}" = "--dumptests" ]; then
+  echo "base/ok.t"
+  echo "base/lex.t"
+  exit 0
+fi
+./perl base/ok.t
+./perl base/lex.t
+"#;
+        fs::write(t_dir.join("TEST"), script)?;
+        Ok(perl_tree)
     }
 
     #[cfg(unix)]
