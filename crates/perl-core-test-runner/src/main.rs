@@ -1,4 +1,5 @@
 //! Compatibility runner invoked as `t/perl` by an upstream Perl core harness.
+//! Context-record emission is append-only; a write failure does not corrupt TAP state.
 
 // TAP is the process protocol for this binary.
 #![allow(clippy::print_stderr, clippy::print_stdout)]
