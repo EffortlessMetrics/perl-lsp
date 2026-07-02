@@ -93,3 +93,16 @@ command = "cargo check --package perl-core-test-runner --locked"
 reason = "Focused build check for perl-core-test-runner crate."
 cost = "focused-build"
 timeout_sec = 180
+
+
+# Custom profile with non-zero focused-build leases for proof execution.
+# This enables the proof broker to execute model-suggested focused-build
+# requests and produce receipts that route to lanes in multi-turn continuation.
+[profiles.gh-runner-proof]
+extends = "gh-runner"
+
+[profiles.gh-runner-proof.budgets]
+proof_max_focused_tests = 1
+proof_command_timeout_sec = 120
+proof_total_timeout_sec = 180
+
