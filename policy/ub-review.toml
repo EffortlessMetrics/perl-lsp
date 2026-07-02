@@ -85,3 +85,11 @@ max_concurrency = 6
 enabled = true
 env = "OPENCODE"
 role = "fallback"
+
+# Proof requirements: focused build for the perl-core-test-runner crate.
+# This enables the proof broker to produce receipts that route to lanes.
+[[proof.required]]
+command = "cargo check --package perl-core-test-runner --locked"
+reason = "Focused build check for perl-core-test-runner crate."
+cost = "focused-build"
+timeout_sec = 180
