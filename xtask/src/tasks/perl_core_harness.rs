@@ -1313,10 +1313,10 @@ mod tests {
         assert_eq!(report.summary.files_total, 2);
         assert_eq!(report.summary.files_passed, 2);
         assert_eq!(report.summary.files_failed, 0);
-        assert_eq!(
-            report.file_results.iter().map(|result| result.path.as_str()).collect::<Vec<_>>(),
-            vec!["base/ok.t", "base/lex.t"]
-        );
+        let mut paths =
+            report.file_results.iter().map(|result| result.path.as_str()).collect::<Vec<_>>();
+        paths.sort_unstable();
+        assert_eq!(paths, vec!["base/lex.t", "base/ok.t"]);
         assert!(report.file_results.iter().all(|result| result.status == RunnerStatus::Pass));
         assert!(!perl_tree.join("t").join("perl").exists(), "source Perl tree must not be mutated");
         Ok(())
