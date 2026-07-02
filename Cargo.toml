@@ -9,6 +9,7 @@ members = [
     "crates/perl-lexer",
     "crates/perl-parser",
     "crates/perl-parser-bench",
+    "crates/perl-core-test-runner",
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
     "crates/perl-parser-comparison",

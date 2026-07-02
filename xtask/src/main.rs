@@ -2119,9 +2119,29 @@ enum PerlCoreHarnessCommand {
         #[arg(long, value_enum)]
         mode: perl_core_harness::HarnessMode,
 
+        /// Prepared upstream Perl source/build tree.
+        #[arg(long)]
+        perl_tree: PathBuf,
+
+        /// Host Perl used to run upstream t/TEST or t/harness.
+        #[arg(long, default_value = "perl")]
+        host_perl: PathBuf,
+
+        /// Upstream scheduler to run.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessRunner::Test)]
+        runner: perl_core_harness::HarnessRunner,
+
         /// Staged upstream Perl core profile.
         #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
         profile: perl_core_harness::HarnessProfile,
+
+        /// Run report JSON output path.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Prebuilt perl-core-test-runner binary. Defaults to target/agent/perl-core-test-runner.
+        #[arg(long)]
+        runner_binary: Option<PathBuf>,
     },
 
     /// Render the latest Perl core harness report (future slice).
@@ -3472,7 +3492,23 @@ fn run_cli(cli: Cli) -> Result<()> {
                     output,
                 })
             }
-            PerlCoreHarnessCommand::Run { mode, profile: _ } => perl_core_harness::run_mode(mode),
+            PerlCoreHarnessCommand::Run {
+                mode,
+                perl_tree,
+                host_perl,
+                runner,
+                profile,
+                output,
+                runner_binary,
+            } => perl_core_harness::run_mode(perl_core_harness::RunConfig {
+                perl_tree,
+                host_perl,
+                runner,
+                mode,
+                profile,
+                output,
+                runner_binary,
+            }),
             PerlCoreHarnessCommand::Report => perl_core_harness::report(),
             PerlCoreHarnessCommand::Baseline { accept } => perl_core_harness::baseline(accept),
         },
@@ -3991,10 +4027,15 @@ mod tests {
             (PerlCoreHarnessCommand::Prepare { perl_ref: None }, "prepare is not implemented"),
             (
                 PerlCoreHarnessCommand::Run {
-                    mode: perl_core_harness::HarnessMode::Parse,
+                    mode: perl_core_harness::HarnessMode::Compile,
+                    perl_tree: PathBuf::from("unused"),
+                    host_perl: PathBuf::from("perl"),
+                    runner: perl_core_harness::HarnessRunner::Test,
                     profile: perl_core_harness::HarnessProfile::Base,
+                    output: None,
+                    runner_binary: None,
                 },
-                "run --mode parse is not implemented",
+                "run --mode compile is not implemented yet",
             ),
             (PerlCoreHarnessCommand::Report, "report is not implemented"),
             (PerlCoreHarnessCommand::Baseline { accept: false }, "baseline is not implemented"),

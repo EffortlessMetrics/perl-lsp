@@ -12,6 +12,12 @@ cargo xtask perl-core-harness discover \
   --profile base
 ```
 
+Parse-mode reports are written to:
+
+```text
+target/perl-core/reports/<profile>-parse.json
+```
+
 Future baselines will live here, for example:
 
 ```text

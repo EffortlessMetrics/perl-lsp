@@ -1,0 +1,204 @@
+use anyhow::{Result, bail};
+use std::process::Command;
+
+fn runner() -> &'static str {
+    env!("CARGO_BIN_EXE_perl-core-test-runner")
+}
+
+fn read_record(path: &std::path::Path) -> Result<serde_json::Value> {
+    let raw = std::fs::read_to_string(path)?;
+    Ok(serde_json::from_str(raw.trim())?)
+}
+
+#[test]
+fn cli_parse_inline_source_emits_tap_and_context() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let context = temp.path().join("records.jsonl");
+
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "parse")
+        .env("PERL_LSP_HARNESS_CONTEXT", &context)
+        .args(["-e", "my $x = 1;"])
+        .output()?;
+
+    if !output.status.success() {
+        bail!("runner should pass for clean inline source");
+    }
+    assert_eq!(String::from_utf8(output.stdout)?, "1..1\nok 1 - parse -e\n");
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+
+    let record = read_record(&context)?;
+    assert_eq!(record["schema_version"], "perl_core_harness.runner_record.v1");
+    assert_eq!(record["mode"], "parse");
+    assert_eq!(record["path"], "-e");
+    assert_eq!(record["status"], "pass");
+    assert_eq!(record["assertions_passed"], 1);
+    assert_eq!(record["assertions_total"], 1);
+    assert!(record["bucket"].is_null());
+    assert!(record["first_diagnostic"].is_null());
+    Ok(())
+}
+
+#[test]
+fn cli_attached_inline_source_emits_tap_and_context() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let context = temp.path().join("nested").join("records.jsonl");
+
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "parse")
+        .env("PERL_LSP_HARNESS_CONTEXT", &context)
+        .arg("-emy $x = 1;")
+        .output()?;
+
+    if !output.status.success() {
+        bail!("runner should pass for clean attached inline source");
+    }
+    assert_eq!(String::from_utf8(output.stdout)?, "1..1\nok 1 - parse -e\n");
+
+    let record = read_record(&context)?;
+    assert_eq!(record["path"], "-e");
+    assert_eq!(record["status"], "pass");
+    Ok(())
+}
+
+#[test]
+fn cli_double_dash_file_invocation_emits_script_path() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let script = temp.path().join("base").join("if.t");
+    std::fs::create_dir_all(script.parent().ok_or_else(|| anyhow::anyhow!("missing parent"))?)?;
+    std::fs::write(&script, "my $x = 1;\n")?;
+    let context = temp.path().join("records.jsonl");
+
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "parse")
+        .env("PERL_LSP_HARNESS_CONTEXT", &context)
+        .arg("--")
+        .arg(&script)
+        .arg("ignored-script-arg")
+        .output()?;
+
+    if !output.status.success() {
+        bail!("runner should pass for clean file source after --");
+    }
+    let stdout = String::from_utf8(output.stdout)?;
+    let display = script.display().to_string().replace('\\', "/");
+    assert_eq!(stdout, format!("1..1\nok 1 - parse {display}\n"));
+
+    let record = read_record(&context)?;
+    assert_eq!(record["path"], display);
+    assert_eq!(record["status"], "pass");
+    Ok(())
+}
+
+#[test]
+fn cli_split_and_attached_switches_preserve_script_path() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let script = temp.path().join("base").join("switches.t");
+    std::fs::create_dir_all(script.parent().ok_or_else(|| anyhow::anyhow!("missing parent"))?)?;
+    std::fs::write(&script, "my $x = 1;\n")?;
+    let context = temp.path().join("records.jsonl");
+
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "parse")
+        .env("PERL_LSP_HARNESS_CONTEXT", &context)
+        .args(["-I", "../lib", "-M", "TestInit", "-I..", "-Mutf8", "-t", "-T", "-w"])
+        .arg(&script)
+        .output()?;
+
+    if !output.status.success() {
+        bail!("runner should pass while ignoring harness compatibility switches");
+    }
+
+    let record = read_record(&context)?;
+    assert_eq!(record["path"], script.display().to_string().replace('\\', "/"));
+    assert_eq!(record["status"], "pass");
+    Ok(())
+}
+
+#[test]
+fn cli_unknown_switch_reports_internal_failure() -> Result<()> {
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "parse")
+        .args(["--unknown-perl-switch", "base/if.t"])
+        .output()?;
+
+    if output.status.success() {
+        bail!("unknown switch should fail closed");
+    }
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("not ok 1 - perl-core-test-runner internal failure"));
+    assert!(stdout.contains("# bucket: cli_switch"));
+    assert!(stdout.contains("unsupported Perl core harness switch"));
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+    Ok(())
+}
+
+#[test]
+fn cli_unreadable_file_reports_source_decode_bucket() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let missing = temp.path().join("base").join("missing.t");
+
+    let output =
+        Command::new(runner()).env("PERL_LSP_HARNESS_MODE", "parse").arg(&missing).output()?;
+
+    if output.status.success() {
+        bail!("missing file should fail closed");
+    }
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("1..1\nnot ok 1 - parse "));
+    assert!(stdout.contains("# bucket: source_decode"));
+    assert!(stdout.contains("reading Perl test script"));
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+    Ok(())
+}
+
+#[test]
+fn cli_parse_failure_returns_nonzero_with_bucket() -> Result<()> {
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "parse")
+        .args(["-e", "my $x = ;"])
+        .output()?;
+
+    if output.status.success() {
+        bail!("runner should fail for parser diagnostics");
+    }
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("1..1\nnot ok 1 - parse -e\n"));
+    assert!(stdout.contains("# bucket: parse_recovery\n"));
+    assert!(stdout.contains("# first diagnostic:"));
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+    Ok(())
+}
+
+#[test]
+fn cli_unsupported_mode_reports_internal_failure() -> Result<()> {
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "compile")
+        .args(["-e", "my $x = 1;"])
+        .output()?;
+
+    if output.status.success() {
+        bail!("unsupported mode should fail closed");
+    }
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("not ok 1 - perl-core-test-runner internal failure"));
+    assert!(stdout.contains("# bucket: cli_switch"));
+    assert!(stdout.contains("only supports parse mode"));
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+    Ok(())
+}
+
+#[test]
+fn cli_missing_script_reports_internal_failure() -> Result<()> {
+    let output = Command::new(runner()).env("PERL_LSP_HARNESS_MODE", "parse").output()?;
+
+    if output.status.success() {
+        bail!("missing script should fail closed");
+    }
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("not ok 1 - perl-core-test-runner internal failure"));
+    assert!(stdout.contains("# bucket: cli_switch"));
+    assert!(stdout.contains("no Perl test script was provided"));
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+    Ok(())
+}

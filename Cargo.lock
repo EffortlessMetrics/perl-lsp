@@ -1535,6 +1535,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-core-test-runner"
+version = "0.17.0"
+dependencies = [
+ "anyhow",
+ "perl-parser-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "perl-corpus"
 version = "0.17.0"
 dependencies = [
