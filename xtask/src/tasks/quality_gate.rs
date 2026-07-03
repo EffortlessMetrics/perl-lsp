@@ -1209,10 +1209,10 @@ fn coverage_scope_not_workspace_action(
 fn codecov_policy_action(status: &str, args: &QualityGateArgs) -> Value {
     json!({
         "kind": "codecov_patch_policy_not_blocking",
-        "blocking": true,
+        "blocking": false,
         "path": display_path(&args.codecov),
         "reason": status,
-        "repair": "Set Codecov patch status to target 95%, threshold 0%, and keep it blocking.",
+        "repair": "Codecov patch status is advisory; RIPR+ and focused tests are the required PR proof.",
         "verify": quality_gate_command(args, true, args.patch_coverage),
         "receipt": quality_gate_command(args, false, args.patch_coverage),
     })
@@ -1221,10 +1221,10 @@ fn codecov_policy_action(status: &str, args: &QualityGateArgs) -> Value {
 fn codecov_project_policy_action(status: &str, args: &QualityGateArgs) -> Value {
     json!({
         "kind": "codecov_project_policy_not_blocking",
-        "blocking": true,
+        "blocking": false,
         "path": display_path(&args.codecov),
         "reason": status,
-        "repair": "Promote Codecov project status to blocking at target 95% with threshold 0.25% or tighter before final enforcement.",
+        "repair": "Codecov project status is advisory; use scheduled/manual coverage for telemetry.",
         "verify": quality_gate_command(args, true, args.patch_coverage),
         "receipt": quality_gate_command(args, false, args.patch_coverage),
     })
