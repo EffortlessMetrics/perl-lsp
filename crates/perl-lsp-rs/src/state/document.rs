@@ -387,4 +387,10 @@ pub struct ClientCapabilities {
     /// When true, completion responses may describe how supported item defaults
     /// combine with per-item fields.
     pub completion_list_apply_kind_support: bool,
+    /// Negotiated position encoding per LSP 3.17 spec.
+    ///
+    /// Parsed from `capabilities.general.positionEncodings` - the server picks
+    /// the first encoding from the client's list that it supports, or defaults
+    /// to UTF-16 if the list is empty or missing.
+    pub position_encoding: crate::textdoc::PosEnc,
 }

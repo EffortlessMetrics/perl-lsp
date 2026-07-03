@@ -31,9 +31,10 @@ pub struct Doc {
 ///
 /// LSP uses UTF-16 code units for positions, while Rust strings are UTF-8.
 /// This enum determines how position conversions are performed.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum PosEnc {
     /// UTF-16 encoding (LSP standard) - counts UTF-16 code units
+    #[default]
     Utf16,
     /// UTF-8 encoding (Rust native) - counts UTF-8 bytes
     Utf8,

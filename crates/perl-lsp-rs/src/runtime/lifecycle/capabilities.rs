@@ -359,6 +359,34 @@ impl LspServer {
                         caps.inlay_hint_resolve_support = Some(props);
                     }
                 }
+
+                // Negotiate position encoding per LSP 3.17 spec
+                // Client's `general.positionEncodings` is a list of encodings it supports
+                // Server picks the first one from the list that it also supports
+                // Default to UTF-16 if the list is empty or missing
+                let negotiated_encoding = if let Some(encodings) = params
+                    .pointer("/capabilities/general/positionEncodings")
+                    .and_then(Value::as_array)
+                {
+                    // Pick the first encoding from client list that server supports
+                    let supported = ["utf-8", "utf-16"]; // Server supports UTF-8 and UTF-16
+                    encodings
+                        .iter()
+                        .find_map(|enc| {
+                            enc.as_str()
+                                .and_then(|s| if supported.contains(&s) { Some(s) } else { None })
+                        })
+                        .and_then(|enc_str| match enc_str {
+                            "utf-8" => Some(crate::textdoc::PosEnc::Utf8),
+                            "utf-16" => Some(crate::textdoc::PosEnc::Utf16),
+                            _ => None,
+                        })
+                        .unwrap_or(crate::textdoc::PosEnc::Utf16)
+                } else {
+                    // No encoding preference list provided, default to UTF-16
+                    crate::textdoc::PosEnc::Utf16
+                };
+                caps.position_encoding = negotiated_encoding;
             } // caps lock released here
 
             // Check if client supports pull diagnostics.
@@ -573,6 +601,18 @@ impl LspServer {
         }
 
         // Add fields not yet in lsp-types 0.97
+        //
+        // Phase 1 (this PR) only negotiates and stores the client's preferred
+        // position encoding on `ClientCapabilities.position_encoding` for
+        // future use. `text_sync` and every feature provider (hover,
+        // definition, diagnostics, ...) still compute positions in UTF-16
+        // code units. Per the LSP 3.17 spec, client and server MUST agree on
+        // one encoding or offsets are misinterpreted, so the *advertised*
+        // `positionEncoding` MUST stay pinned to "utf-16" — the mandatory
+        // default — until phase 2 threads the negotiated encoding through the
+        // providers. Advertising anything else here would silently corrupt
+        // document sync and every position-bearing response for non-ASCII
+        // content on a client that prefers a different encoding.
         capabilities["positionEncoding"] = json!("utf-16");
         if features.declaration {
             capabilities["declarationProvider"] = json!(true);
@@ -1075,6 +1115,39 @@ mod tests {
     }
 
     #[test]
+    fn handle_initialize_boundary_discriminator() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionList": {
+                            "itemDefaults": ["commitCharacters", "data"]
+                        }
+                    },
+                    "codeAction": {
+                        "tagSupport": {
+                            "valueSet": [2, 1]
+                        }
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let caps = server.client_capabilities.lock();
+        assert!(
+            caps.completion_list_item_defaults_data_support,
+            "input that hits the boundary: item.as_str() == Some(\"data\")"
+        );
+        assert!(
+            caps.code_action_llm_generated_tag_support,
+            "input that hits the boundary: tag.as_i64() == Some(1)"
+        );
+    }
+
+    #[test]
     fn initialize_leaves_completion_list_item_defaults_data_disabled_when_absent() {
         let server = LspServer::new();
         let params = json!({
@@ -1231,6 +1304,93 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(!server.client_capabilities.lock().code_action_llm_generated_tag_support);
+    }
+
+    #[test]
+    fn handle_initialize_exact_error_variant() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let params = json!({ "capabilities": {} });
+
+        server.handle_initialize(Some(params.clone()))?;
+        let err = match server.handle_initialize(Some(params)) {
+            Err(err) => err,
+            Ok(_) => return Err("second initialize should fail with InvalidRequest".into()),
+        };
+
+        assert_eq!(err.code, -32600, "duplicate initialize must return InvalidRequest");
+        assert_eq!(
+            err.message, "initialize may only be sent once",
+            "duplicate initialize must preserve the exact error message"
+        );
+        assert!(err.data.is_none(), "duplicate initialize error must not attach data");
+
+        Ok(())
+    }
+
+    #[test]
+    fn initialize_prefers_first_supported_position_encoding() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-32", "utf-8", "utf-16"]
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            matches!(
+                server.client_capabilities.lock().position_encoding,
+                crate::textdoc::PosEnc::Utf8
+            ),
+            "position encoding negotiation should skip unsupported entries and pick the first supported encoding"
+        );
+    }
+
+    #[test]
+    fn initialize_accepts_utf16_when_it_is_first_supported_position_encoding() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-16", "utf-8"]
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            matches!(
+                server.client_capabilities.lock().position_encoding,
+                crate::textdoc::PosEnc::Utf16
+            ),
+            "position encoding negotiation should preserve utf-16 when it is the first supported client preference"
+        );
+    }
+
+    #[test]
+    fn initialize_falls_back_to_utf16_when_position_encodings_have_no_supported_values() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-32", "utf-7"]
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            matches!(
+                server.client_capabilities.lock().position_encoding,
+                crate::textdoc::PosEnc::Utf16
+            ),
+            "unsupported position encoding lists must fall back to utf-16"
+        );
     }
 
     #[test]

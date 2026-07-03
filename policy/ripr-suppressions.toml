@@ -1881,3 +1881,22 @@ reason = "PR #3109 (closes #1401) makes rename keyword-validation context-aware:
 created = "2026-07-03"
 review_after = "2026-08-03"
 expires = "2026-10-03"
+
+# -----------------------------------------------------------------------------
+# positionEncoding negotiation capability predicates (PR #1856, closes #1690):
+# the phase-1 clamp adds a negotiation block inside handle_initialize, changing
+# the function body and causing RIPR 0.9.x diff-scoped analysis to re-attribute
+# PRE-EXISTING client-capability predicate seams in the same function as new
+# weakly_gripped findings.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-position-encoding-negotiation-capability-predicates"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed"]
+owner = "editor-trust"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #1856 (closes #1690) adds the LSP 3.17 positionEncoding negotiation block to handle_initialize (parse capabilities.general.positionEncodings, pick the first server-supported encoding via an enc.as_str() match, store it on ClientCapabilities.position_encoding; the advertised capabilities.positionEncoding stays clamped to \"utf-16\" pending phase 2). Because handle_initialize's body changed, RIPR 0.9.x diff-scoped analysis re-flags THREE seams in the function as new weakly_gripped (reachable_unrevealed): (1) completion_list_item_defaults_data_support = ...completionList/itemDefaults.any(|item| item.as_str() == Some(\"data\")) and (2) code_action_llm_generated_tag_support = ...codeAction/tagSupport/valueSet.any(|tag| tag.as_i64() == Some(1)) are PRE-EXISTING production predicates unchanged by this PR, plus (3) the new positionEncoding enc.as_str() unknown-encoding->default branch. All three are JSON-pointer predicates over parsed params that RIPR cannot statically trace from a test input through the handle_initialize entry point — the same ripr#1429 predicate-infection-untraceable class as the neighboring hover/rename predicate suppressions. Coverage: direct --lib unit tests in capabilities.rs's #[cfg(test)] mod — handle_initialize_boundary_discriminator drives itemDefaults=[..,\"data\"] and tagSupport.valueSet=[2,1] and asserts both flags flip true (naming both boundaries), and the negotiation scenario tests (initialize_prefers_first_supported_position_encoding, initialize_accepts_utf16_when_it_is_first_supported_position_encoding, initialize_falls_back_to_utf16_when_position_encodings_have_no_supported_values) exercise the enc.as_str() match including the unknown-encoding [\"utf-32\",\"utf-7\"]->utf16 default branch. Suppression is narrow (single production file, one PR) and does not touch the pre-existing coverage. Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
