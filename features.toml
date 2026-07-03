@@ -163,7 +163,7 @@ tests = [
   "crates/perl-lsp-rs/tests/lsp_formatting_tests.rs",
   "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
 ]
-description = "Document formatting with Perl::Tidy"
+description = "Native document formatting (external perltidy is an explicit opt-in compatibility mode, not required)"
 
 [[feature]]
 id = "lsp.range_formatting"

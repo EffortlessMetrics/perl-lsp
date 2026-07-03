@@ -485,6 +485,29 @@ mod tests {
         }
     }
 
+    /// A `perltidy` that is present and working (as if resolvable on PATH), and
+    /// records whether it was ever invoked. Used to prove the default native path
+    /// never shells out just because `perltidy` is available.
+    struct RecordingPerltidyRuntime {
+        invoked: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl SubprocessRuntime for RecordingPerltidyRuntime {
+        fn run_command(
+            &self,
+            _program: &str,
+            _args: &[&str],
+            _stdin: Option<&[u8]>,
+        ) -> std::result::Result<SubprocessOutput, SubprocessError> {
+            self.invoked.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(SubprocessOutput {
+                stdout: b"my $external = 1;\n".to_vec(),
+                stderr: Vec::new(),
+                status_code: 0,
+            })
+        }
+    }
+
     #[test]
     fn format_document_uses_native_formatter_when_perltidy_missing() -> Result<()> {
         let provider = FormattingProvider::new(MissingPerltidyRuntime);
@@ -499,6 +522,38 @@ mod tests {
         let formatted = provider.format_document("my$x=1;\n", &options)?;
         assert_eq!(formatted.edits.len(), 1);
         assert_eq!(formatted.edits[0].new_text, "my $x = 1;\n");
+        Ok(())
+    }
+
+    #[test]
+    fn perltidy_available_does_not_change_default_native_formatting() -> Result<()> {
+        // Behavioral counterpart to the config-level PATH guard
+        // (`perltidy_discoverable_on_path_still_yields_native_default`): even when
+        // `perltidy` is present and working, the DEFAULT (native) engine must
+        // format natively AND must never shell out to perltidy. Merely having the
+        // external tool available cannot flip formatting behavior.
+        let invoked = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // No `.with_formatter_mode(...)` — exercise the default engine.
+        let provider =
+            FormattingProvider::new(RecordingPerltidyRuntime { invoked: invoked.clone() });
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+
+        let formatted = provider.format_document("my$x=1;\n", &options)?;
+        assert_eq!(formatted.edits.len(), 1);
+        assert_eq!(
+            formatted.edits[0].new_text, "my $x = 1;\n",
+            "default engine must format natively even when perltidy is available"
+        );
+        assert!(
+            !invoked.load(std::sync::atomic::Ordering::SeqCst),
+            "the native default must not invoke perltidy"
+        );
         Ok(())
     }
 
