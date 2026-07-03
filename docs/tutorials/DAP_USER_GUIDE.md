@@ -134,3 +134,15 @@ perl-dap --help
 The shipped debugger path is native. External Perl debugger backends are not
 required for normal operation. Compatibility and migration notes, when needed,
 belong in reference documentation rather than this first-mile guide.
+
+## External Debugger Peer (optional)
+
+`perl-dap` can also *host* an external Perl debugger engine (e.g.
+`Devel::ptkdb`) instead of driving `perl -d` — your editor keeps speaking DAP
+while the external engine owns the session. This is optional and separate from
+the native path above. Two standalone tools ship today
+(`perl-dap --ptkdb-bootstrap-rc PROGRAM` and `perl-dap --debug-session-plan
+PROGRAM`); the live bridge (`perl-dap --external-peer HOST:PORT`) works against
+any peer that speaks the protocol.
+
+See the [External Debugger Peer Quickstart](../how-to/EXTERNAL_DEBUGGER_PEER_QUICKSTART.md).

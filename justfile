@@ -1143,6 +1143,17 @@ ci-v2-parity:
     cargo run --locked -p xtask --features legacy -- corpus --scanner v2-parity
     @echo "✅ V2 parity corpus check passed"
 
+# Generate a Devel::ptkdb `.ptkdbrc` bootstrap for PROGRAM (prints to stdout).
+# Redirect into `.ptkdbrc` next to your script, then run `perl -d:ptkdb PROGRAM`.
+# See docs/how-to/EXTERNAL_DEBUGGER_PEER_QUICKSTART.md
+ptkdb-rc program:
+    @cargo run -q -p perl-dap -- --ptkdb-bootstrap-rc {{program}}
+
+# Print the `perl-lsp-debug-session-v1` JSON session plan for PROGRAM
+# (breakable lines, subroutines, include paths). Useful for scripting/inspection.
+dap-session-plan program:
+    @cargo run -q -p perl-dap -- --debug-session-plan {{program}}
+
 # Targeted parser/DAP verification (low-memory, for heredoc/breakpoint changes)
 # Key fixes: unset RUSTC_WRAPPER (not empty), --no-deps on clippy, targeted tests
 ci-test-parser-dap:
