@@ -102,6 +102,11 @@ your-project/
 |-----|------|---------|-------------|
 | `engine` | `"legacy"`, `"perlcritic"`, `"external"`, or `"native"` | `"native"` | Selects the critic engine. `native` uses the Rust-native rule registry; `legacy`, `perlcritic`, and `external` use the Perl::Critic-compatible shell-out path. |
 
+For the native engine, see the [Native Critic Rule Matrix](NATIVE_CRITIC_RULE_MATRIX.md)
+for every shipped rule (ID, category, severity, and which of the `recommended` /
+`strict` profiles enables it), plus the `profile` / `severity` / `include` /
+`exclude` knobs.
+
 #### `[features]` — LSP Feature Toggles
 
 | Key | Type | Default | Description |
