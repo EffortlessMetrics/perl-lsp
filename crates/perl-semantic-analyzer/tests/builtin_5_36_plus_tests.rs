@@ -136,6 +136,28 @@ fn builtin_reftype_has_hover_doc() {
     );
 }
 
+// ── Perl 5.36: object utilities ──────────────────────────────────────────────
+
+#[test]
+fn builtin_blessed_has_hover_doc() {
+    let doc = must_some(get_builtin_documentation("blessed"));
+    assert!(
+        doc.signature.contains("EXPR"),
+        "blessed signature must show EXPR parameter: {}",
+        doc.signature
+    );
+    assert!(
+        doc.description.contains("blessed") || doc.description.contains("package"),
+        "blessed description must mention package or blessed reference: {}",
+        doc.description
+    );
+    assert!(
+        doc.description.contains("5.36"),
+        "blessed description must mention Perl 5.36: {}",
+        doc.description
+    );
+}
+
 // ── Perl 5.38: math + string utilities ───────────────────────────────────────
 
 #[test]
@@ -243,6 +265,28 @@ fn builtin_indexed_has_hover_doc() {
     );
 }
 
+// ── Perl 5.38: taint inspection ──────────────────────────────────────────────
+
+#[test]
+fn builtin_is_tainted_has_hover_doc() {
+    let doc = must_some(get_builtin_documentation("is_tainted"));
+    assert!(
+        doc.signature.contains("EXPR"),
+        "is_tainted signature must show EXPR parameter: {}",
+        doc.signature
+    );
+    assert!(
+        doc.description.contains("taint") || doc.description.contains("tainted"),
+        "is_tainted description must mention taint: {}",
+        doc.description
+    );
+    assert!(
+        doc.description.contains("5.38"),
+        "is_tainted description must mention Perl 5.38: {}",
+        doc.description
+    );
+}
+
 // ── Perl 5.40: module loading ─────────────────────────────────────────────────
 
 #[test]
@@ -321,12 +365,40 @@ fn builtin_prefix_ceil_resolves_to_same_doc() {
     );
 }
 
+// ── builtin:: qualified prefix (continued) ───────────────────────────────────
+
+#[test]
+fn builtin_prefix_blessed_resolves_to_same_doc() {
+    let bare = must_some(get_builtin_documentation("blessed"));
+    let qualified = must_some(get_builtin_documentation("builtin::blessed"));
+    assert_eq!(
+        bare.signature, qualified.signature,
+        "builtin::blessed and blessed must resolve to the same documentation"
+    );
+    assert_eq!(
+        bare.description, qualified.description,
+        "builtin::blessed and blessed must have identical descriptions"
+    );
+}
+
+#[test]
+fn builtin_prefix_is_tainted_resolves_to_same_doc() {
+    let bare = must_some(get_builtin_documentation("is_tainted"));
+    let qualified = must_some(get_builtin_documentation("builtin::is_tainted"));
+    assert_eq!(
+        bare.signature, qualified.signature,
+        "builtin::is_tainted and is_tainted must resolve to the same documentation"
+    );
+}
+
 // ── is_builtin_function coverage ─────────────────────────────────────────────
 
 #[test]
 fn perl_5_36_functions_are_recognized_as_builtins() {
-    for name in ["true", "false", "is_bool", "weaken", "unweaken", "is_weak", "refaddr", "reftype"]
-    {
+    for name in [
+        "true", "false", "is_bool", "weaken", "unweaken", "is_weak", "refaddr", "reftype",
+        "blessed",
+    ] {
         assert!(
             is_builtin_function(name),
             "is_builtin_function must return true for Perl 5.36 builtin '{name}'"
@@ -336,7 +408,7 @@ fn perl_5_36_functions_are_recognized_as_builtins() {
 
 #[test]
 fn perl_5_38_functions_are_recognized_as_builtins() {
-    for name in ["ceil", "floor", "inf", "nan", "trim", "indexed"] {
+    for name in ["ceil", "floor", "inf", "nan", "trim", "indexed", "is_tainted"] {
         assert!(
             is_builtin_function(name),
             "is_builtin_function must return true for Perl 5.38 builtin '{name}'"
@@ -380,6 +452,7 @@ fn all_use_builtin_functions_have_hover_docs() {
         "is_weak",
         "refaddr",
         "reftype",
+        "blessed",
         // 5.38
         "ceil",
         "floor",
@@ -387,6 +460,7 @@ fn all_use_builtin_functions_have_hover_docs() {
         "nan",
         "trim",
         "indexed",
+        "is_tainted",
         // 5.40
         "load_module",
         "export_lexically",

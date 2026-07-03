@@ -243,6 +243,7 @@ pub fn all_names() -> impl Iterator<Item = &'static str> {
         "is_weak",
         "refaddr",
         "reftype",
+        "blessed",
         // Perl 5.38: math + string utilities
         "ceil",
         "floor",
@@ -250,6 +251,7 @@ pub fn all_names() -> impl Iterator<Item = &'static str> {
         "nan",
         "trim",
         "indexed",
+        "is_tainted",
         // Perl 5.40: module loading + lexical export
         "load_module",
         "export_lexically",

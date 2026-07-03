@@ -86,6 +86,7 @@ pub fn is_builtin_function(name: &str) -> bool {
             | "weaken"
             | "unweaken"
             | "is_weak"
+            | "is_tainted"
             | "refaddr"
             | "reftype"
             | "ceil"
@@ -470,8 +471,11 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             description: "Associates the referent of REF with package CLASSNAME (or current package). Returns the reference.",
         }),
         "blessed" => Some(BuiltinDoc {
-            signature: "blessed EXPR",
-            description: "Returns the name of the package EXPR is blessed into, or undef if EXPR is not a blessed reference. From Scalar::Util.",
+            signature: "blessed(EXPR)",
+            description: "Returns the name of the package EXPR is blessed into, or undef if \
+                          EXPR is not a blessed reference. Available since Perl 5.36 via \
+                          `use builtin 'blessed'`; also available as `Scalar::Util::blessed`.\n\n\
+                          ```perl\nuse builtin 'blessed';\nmy $obj = bless {}, 'Dog';\nblessed($obj); # 'Dog'\nblessed({});   # undef\n```",
         }),
         "tie" => Some(BuiltinDoc {
             signature: "tie VARIABLE, CLASSNAME, LIST",
@@ -1029,6 +1033,15 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
                           to create truly lexical aliases. Available since Perl 5.38 via \
                           `use builtin 'export_lexically'`.\n\n\
                           ```perl\nuse builtin 'export_lexically';\nexport_lexically('my_fn', \\&some_sub);\n```",
+        }),
+        "is_tainted" => Some(BuiltinDoc {
+            signature: "is_tainted(EXPR)",
+            description: "Returns true if EXPR is tainted — that is, derived from external \
+                          input (environment, command line, user input, files) when taint mode \
+                          is active (`perl -T` or `perl -t`). Returns false for untainted values \
+                          or when taint mode is off. Available since Perl 5.38 via \
+                          `use builtin 'is_tainted'`.\n\n\
+                          ```perl\nuse builtin 'is_tainted';\nmy $input = $ENV{HOME};\nif (is_tainted($input)) { die \"tainted!\" }\n```",
         }),
 
         _ => None,
