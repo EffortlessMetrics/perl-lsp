@@ -144,7 +144,7 @@ pub fn build_ripr_facts_packet(
             (Vec::new(), Vec::new(), Vec::new(), Vec::new())
         };
 
-    let (relations, _changed_observables, _observed_sinks) =
+    let (relations, _changed_observables, _observed_sinks, relation_limitations) =
         emit_relations_and_discriminators(root, &tests, &oracles);
     let has_relation_facts = !relations.is_empty();
 
@@ -180,8 +180,13 @@ pub fn build_ripr_facts_packet(
     let wants_file_facts_explicit = normalized_classes
         .iter()
         .any(|class| class == "files" || class == "owners" || class == "provenance");
+    // `changes` needs the parsed owners to attribute diff hunks, and a
+    // `relation` now carries a resolvable `owner_id` (#3342) — so its referenced
+    // `owners[]`/`files[]` facts must be present in the packet. Run the walk
+    // whenever files/owners/provenance or changes are requested, or a relation
+    // was emitted, mirroring how PR 4 kept `tests[]` for a relation's `test_id`.
     let (files, owners, file_provenance, file_limitations) =
-        if wants_file_facts_explicit || wants_changes {
+        if wants_file_facts_explicit || wants_changes || has_relation_facts {
             emit_files_and_owners(root)
         } else {
             (Vec::new(), Vec::new(), Vec::new(), Vec::new())
@@ -219,16 +224,19 @@ pub fn build_ripr_facts_packet(
     // `unattributable-change` limitation was recorded (both reference a
     // known/parsed file), exactly as PR 4 kept `tests[]` whenever a relation
     // referenced a `test_id`. `diff-file-not-found` references an UNparsed path
-    // (genuinely absent), so it needs no force-include.
+    // (genuinely absent), so it needs no force-include. A `relation`'s resolved
+    // `owner_id` (#3342) likewise references an `owners[]` fact, so force
+    // files+owners in whenever a relation was emitted.
     let changes_reference_known_file = has_change_facts
         || change_limitations.iter().any(|l| {
             l["limitation_id"].as_str().is_some_and(|id| id.starts_with("unattributable-change:"))
         });
-    let (files, owners) = if wants_file_facts_explicit || changes_reference_known_file {
-        (files, owners)
-    } else {
-        (Vec::new(), Vec::new())
-    };
+    let (files, owners) =
+        if wants_file_facts_explicit || changes_reference_known_file || has_relation_facts {
+            (files, owners)
+        } else {
+            (Vec::new(), Vec::new())
+        };
     let has_file_facts = !files.is_empty();
     let has_owner_facts = !owners.is_empty();
 
@@ -330,18 +338,25 @@ pub fn build_ripr_facts_packet(
         all_limitations.extend(test_limitations);
         all_limitations.extend(change_limitations);
         all_limitations.extend(file_limitations);
+        // `relation-owner-unresolved` notes (#3342): a relation was omitted
+        // because its package exposed no `owners[]` fact. Empty `evidence_refs`,
+        // so no referential dependency — always safe to surface.
+        all_limitations.extend(relation_limitations);
         packet["limitations"] = serde_json::Value::Array(all_limitations);
     } else if !test_limitations.is_empty()
         || !change_limitations.is_empty()
         || !file_limitations.is_empty()
+        || !relation_limitations.is_empty()
     {
-        // No facts, but a pass produced limitations (test/file parse failures, or
-        // a `changes` request with no diff) — surface them next to the base
+        // No facts, but a pass produced limitations (test/file parse failures, a
+        // `changes` request with no diff, or a relation omitted for an
+        // unresolvable owner) — surface them next to the base
         // `emitter-not-yet-implemented` limitation so they are never dropped.
         if let Some(limitations) = packet["limitations"].as_array_mut() {
             limitations.extend(test_limitations);
             limitations.extend(change_limitations);
             limitations.extend(file_limitations);
+            limitations.extend(relation_limitations);
         }
     }
 
@@ -1134,6 +1149,91 @@ mod tests {
             assert!(
                 tests.iter().any(|t| t["test_id"] == tid),
                 "relation.test_id {tid} must resolve to a test fact in the packet"
+            );
+        }
+    }
+
+    #[test]
+    fn build_packet_relation_owner_id_resolves_to_owner_fact() {
+        // #3342: a relation's `owner_id` must resolve to a present `owners[]`
+        // fact — the same referential-closure guard as relation→test_id, but for
+        // the owner cross-reference that previously dangled (`owner:{path}:{pkg}`
+        // never matched the `owner:{path}:{kind}:{name}:{span}` owner id). Even a
+        // `relations`-only request must force `owners[]` into the packet.
+        let root = "target/ripr-3342-fixtures/relation-owner-refint";
+        let _ = std::fs::remove_dir_all(root);
+        std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
+        std::fs::create_dir_all(format!("{root}/t")).expect("create t/");
+        std::fs::write(format!("{root}/lib/Foo.pm"), "package Foo;\nsub run { }\n1;\n")
+            .expect("write pm");
+        std::fs::write(format!("{root}/t/Foo.t"), "use Test::More;\nuse Foo;\nok(Foo::run());\n")
+            .expect("write t");
+        let p = build_ripr_facts_packet(&RiprFactsRequest {
+            schema: "ripr-perl-facts-v1",
+            root,
+            base: None,
+            head: None,
+            fact_classes: "relations",
+            diff: None,
+        })
+        .expect("valid request builds a packet");
+        let _ = std::fs::remove_dir_all(root);
+
+        let relations = p["relations"].as_array().expect("relations[]");
+        assert!(!relations.is_empty(), "fixture must produce at least one relation");
+        let owners = p["owners"].as_array().expect("owners[]");
+        assert!(!owners.is_empty(), "relations-only request must force owners[] into the packet");
+        let owner_ids: std::collections::HashSet<&str> =
+            owners.iter().filter_map(|o| o["owner_id"].as_str()).collect();
+        for rel in relations {
+            let oid = rel["owner_id"].as_str().expect("relation.owner_id is a string");
+            assert!(
+                owner_ids.contains(oid),
+                "relation.owner_id {oid} must resolve to an owners[] fact; owners={owner_ids:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn build_packet_relation_owner_id_resolves_when_root_has_ancestor_lib() {
+        // #3342 regression: the relation emitter's `.pm` path derivation must
+        // match `emit_files_and_owners` even when `root` has an ANCESTOR path
+        // segment named `lib` (e.g. `.../lib/proj`, `t/lib/...`). The old
+        // `split_once("/lib/")` heuristic matched the first `/lib/` — the
+        // ancestor one — and corrupted the relation's `owner_id` path, re-
+        // dangling the reference. Both derivations now `strip_prefix(root)`.
+        let root = "target/ripr-3342-fixtures/lib/proj/relation-owner-ancestor-lib";
+        let _ = std::fs::remove_dir_all(root);
+        std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
+        std::fs::create_dir_all(format!("{root}/t")).expect("create t/");
+        std::fs::write(format!("{root}/lib/Foo.pm"), "package Foo;\nsub run { }\n1;\n")
+            .expect("write pm");
+        std::fs::write(format!("{root}/t/Foo.t"), "use Test::More;\nuse Foo;\nok(Foo::run());\n")
+            .expect("write t");
+        let p = build_ripr_facts_packet(&RiprFactsRequest {
+            schema: "ripr-perl-facts-v1",
+            root,
+            base: None,
+            head: None,
+            fact_classes: "relations",
+            diff: None,
+        })
+        .expect("valid request builds a packet");
+        let _ = std::fs::remove_dir_all(root);
+
+        let relations = p["relations"].as_array().expect("relations[]");
+        assert!(!relations.is_empty(), "fixture must produce at least one relation");
+        let owner_ids: std::collections::HashSet<&str> = p["owners"]
+            .as_array()
+            .expect("owners[]")
+            .iter()
+            .filter_map(|o| o["owner_id"].as_str())
+            .collect();
+        for rel in relations {
+            let oid = rel["owner_id"].as_str().expect("relation.owner_id is a string");
+            assert!(
+                owner_ids.contains(oid),
+                "relation.owner_id {oid} must resolve even under an ancestor-lib root; owners={owner_ids:?}"
             );
         }
     }

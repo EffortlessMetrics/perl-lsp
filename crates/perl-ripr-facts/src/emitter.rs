@@ -400,37 +400,81 @@ fn collect_t_files(t_dir: &std::path::Path) -> Vec<(String, String, String)> {
 /// All three are conservative: where extraction is unsure, emit `unknown` /
 /// omit the fact. ripr's strict-actionability validator fails closed on
 /// unknown facts.
+/// Build the canonical `owners[]` `owner_id` string for a declaration. The
+/// single source of truth for the id shape, shared by [`emit_files_and_owners`]
+/// (which emits the `owner` facts) and [`resolve_package_owner_id`] (which
+/// rebuilds a package owner's id so a `relation` can reference it) — so the two
+/// can never drift into the dangling cross-reference #3342 corrected.
+fn owner_fact_id(
+    relative_path: &str,
+    kind: &str,
+    qualified_name: &str,
+    start_byte: usize,
+    end_byte: usize,
+) -> String {
+    format!("owner:{relative_path}:{kind}:{qualified_name}:{start_byte}-{end_byte}")
+}
+
+/// Rebuild the exact `owners[]` `owner_id` that [`emit_files_and_owners`] assigns
+/// to the container declaration (`package`/`class`/`role`) named `package_name`
+/// in `pm_path`. Returns `None` when the parse exposes no such container decl
+/// (a name-mismatched or unparsed package) — the caller then omits the relation
+/// with a limitation rather than emitting a dangling `owner_id`. Uses the same
+/// `extract_symbol_decls` + `owner_kind` + `full_span` path as the owner emitter,
+/// via the shared [`owner_fact_id`], so the reconstructed id is byte-identical.
+fn resolve_package_owner_id(ast: &Node, pm_path: &str, package_name: &str) -> Option<String> {
+    extract_symbol_decls(ast, Some("main")).into_iter().find_map(|decl| {
+        if !matches!(decl.kind, SymbolKind::Package | SymbolKind::Class | SymbolKind::Role) {
+            return None;
+        }
+        if decl.qualified_name != package_name {
+            return None;
+        }
+        let kind = owner_kind(&decl.kind)?;
+        let (start_byte, end_byte) = decl.full_span;
+        Some(owner_fact_id(pm_path, kind, &decl.qualified_name, start_byte, end_byte))
+    })
+}
+
 pub(crate) fn emit_relations_and_discriminators(
     root: &str,
     tests: &[Value],
     _oracles: &[Value],
-) -> (Vec<Value>, Vec<Value>, Vec<Value>) {
+) -> (Vec<Value>, Vec<Value>, Vec<Value>, Vec<Value>) {
     let mut relations = Vec::new();
     let mut changed_observables = Vec::new();
     let mut observed_sinks = Vec::new();
+    let mut limitations = Vec::new();
 
     // Collect .pm files from lib/, sorted for deterministic traversal order
     // (`std::fs::read_dir` order is filesystem/OS-dependent).
-    let lib_dir = std::path::Path::new(root).join("lib");
-    let mut pm_files = collect_pm_files(&lib_dir);
+    let mut pm_files = collect_pm_files(std::path::Path::new(root));
     pm_files.sort_by(|a, b| a.0.cmp(&b.0));
 
     // Parse each candidate `.pm` once, hoisted above the test loop below —
     // NOT once per (test, pm) pair. `extract_package_name` stays the existing
     // string scan (out of scope); only the declared-sub proof is parser-backed.
-    let pm_facts: Vec<(String, String, std::collections::HashSet<String>)> = pm_files
+    // The same parse also resolves the package's real `owners[]` `owner_id`
+    // (#3342) so a relation can carry a resolvable cross-reference; `None` means
+    // the parse exposed no matching container decl (unparsed/name-mismatched).
+    type PmFact = (String, String, std::collections::HashSet<String>, Option<String>);
+    let pm_facts: Vec<PmFact> = pm_files
         .iter()
         .map(|(pm_path, pm_content)| {
             let package_name = extract_package_name(pm_content);
-            let declared_subs = if package_name.is_empty() {
-                std::collections::HashSet::new()
+            let (declared_subs, owner_id) = if package_name.is_empty() {
+                (std::collections::HashSet::new(), None)
             } else {
                 match Parser::new(pm_content).parse() {
-                    Ok(ast) => declared_sub_names(&ast, &package_name),
-                    Err(_) => std::collections::HashSet::new(), // parse failure → cannot prove → falls back
+                    Ok(ast) => (
+                        declared_sub_names(&ast, &package_name),
+                        resolve_package_owner_id(&ast, pm_path, &package_name),
+                    ),
+                    // parse failure → cannot prove calls or resolve an owner
+                    Err(_) => (std::collections::HashSet::new(), None),
                 }
             };
-            (pm_path.clone(), package_name, declared_subs)
+            (pm_path.clone(), package_name, declared_subs, owner_id)
         })
         .collect();
 
@@ -457,13 +501,30 @@ pub(crate) fn emit_relations_and_discriminators(
         let test_file_id = test["file_id"].as_str().unwrap_or("");
         let test_path = test["name"].as_str().unwrap_or("");
 
-        for (pm_path, package_name, declared_subs) in &pm_facts {
+        for (pm_path, package_name, declared_subs, owner_id) in &pm_facts {
             if package_name.is_empty() {
                 continue;
             }
 
             // Check if the test file references the package.
             if !test_file_id.is_empty() && file_references_package(test_path, &[], pm_path) {
+                // #3342: a relation's `owner_id` must resolve to a real
+                // `owners[]` fact. Resolve the package's actual owner id from
+                // the same parse the owner emitter uses; if the package exposed
+                // no container decl (unparsed/name-mismatched), omit the
+                // relation with a limitation rather than dangle the reference.
+                let Some(resolved_owner_id) = owner_id else {
+                    limitations.push(json!({
+                        "limitation_id": format!("relation-owner-unresolved:{pm_path}"),
+                        "kind": "unresolved_owner",
+                        "message": format!(
+                            "test references package `{package_name}` in `{pm_path}` but no matching owners[] fact was found (unparsed or name-mismatched package); the relation is omitted to avoid a dangling owner_id"
+                        ),
+                        "evidence_refs": []
+                    }));
+                    continue;
+                };
+
                 // #3293 PR 6: upgrade to direct_owner_call only when the
                 // test file's parsed call graph provably includes a call to
                 // a sub the candidate package's AST actually declares.
@@ -478,7 +539,7 @@ pub(crate) fn emit_relations_and_discriminators(
                 relations.push(json!({
                     "relation_id": relation_id,
                     "change_id": "change:unresolved",
-                    "owner_id": format!("owner:{pm_path}:{package_name}"),
+                    "owner_id": resolved_owner_id,
                     "test_id": test["test_id"],
                     "oracle_id": null,
                     "relation_kind": relation_kind,
@@ -523,33 +584,47 @@ pub(crate) fn emit_relations_and_discriminators(
         }
     }
 
-    (relations, changed_observables, observed_sinks)
+    // Deterministic order + dedup: the same unresolvable package referenced by
+    // several test files would otherwise push a duplicate limitation per test.
+    limitations.sort_by(|a, b| a["limitation_id"].as_str().cmp(&b["limitation_id"].as_str()));
+    limitations.dedup_by(|a, b| a["limitation_id"] == b["limitation_id"]);
+
+    (relations, changed_observables, observed_sinks, limitations)
 }
 
-/// Collect all `.pm` files under a directory. Returns (relative_path, content).
-fn collect_pm_files(lib_dir: &std::path::Path) -> Vec<(String, String)> {
+/// Collect all `.pm` files under `<root>/lib`. Returns (relative_path, content),
+/// where `relative_path` is `strip_prefix(root)` — byte-identical to the path
+/// [`emit_files_and_owners`] derives for the same file. #3342: the previous
+/// `split_once("/lib/")` heuristic diverged from that path whenever `root` had
+/// an ancestor segment named `lib` (e.g. `vendor/lib/proj`, `t/lib/...`),
+/// re-dangling a relation's resolved `owner_id`; both now strip the same `root`.
+fn collect_pm_files(root: &std::path::Path) -> Vec<(String, String)> {
     let mut result = Vec::new();
-    collect_pm_files_recursive(lib_dir, &mut result);
+    collect_pm_files_recursive(&root.join("lib"), root, &mut result);
     result
 }
 
-fn collect_pm_files_recursive(dir: &std::path::Path, result: &mut Vec<(String, String)>) {
+fn collect_pm_files_recursive(
+    dir: &std::path::Path,
+    root: &std::path::Path,
+    result: &mut Vec<(String, String)>,
+) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            collect_pm_files_recursive(&path, result);
+            collect_pm_files_recursive(&path, root, result);
         } else if path.extension().is_some_and(|ext| ext == "pm") {
             let Ok(content) = std::fs::read_to_string(&path) else {
                 continue;
             };
-            let relative = path.to_string_lossy().replace('\\', "/");
-            let relative = relative
-                .split_once("/lib/")
-                .map(|(_, rest)| format!("lib/{rest}"))
-                .unwrap_or(relative);
+            let relative = path
+                .strip_prefix(root)
+                .unwrap_or(path.as_path())
+                .to_string_lossy()
+                .replace('\\', "/");
             result.push((relative, content));
         }
     }
@@ -719,8 +794,7 @@ pub(crate) fn emit_boundaries_and_commands(root: &str) -> (Vec<Value>, Vec<Value
     let mut verify_commands = Vec::new();
 
     // Scan .pm files for dynamic boundaries.
-    let lib_dir = std::path::Path::new(root).join("lib");
-    let pm_files = collect_pm_files(&lib_dir);
+    let pm_files = collect_pm_files(std::path::Path::new(root));
     let t_dir = std::path::Path::new(root).join("t");
     let t_files = collect_t_files(&t_dir);
 
@@ -1273,9 +1347,12 @@ pub(crate) fn emit_files_and_owners(
                     // Byte-span-derived id: stable and independent of traversal
                     // order (a decl is uniquely located by its span).
                     owners.push(json!({
-                        "owner_id": format!(
-                            "owner:{relative_path}:{kind}:{}:{start_byte}-{end_byte}",
-                            decl.qualified_name
+                        "owner_id": owner_fact_id(
+                            &relative_path,
+                            kind,
+                            &decl.qualified_name,
+                            start_byte,
+                            end_byte,
                         ),
                         "file_id": file_id,
                         "kind": kind,
@@ -1609,7 +1686,7 @@ mod tests {
         // First emit tests, then relations.
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
-        let (relations, _observables, _sinks) =
+        let (relations, _observables, _sinks, _relation_limitations) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
         assert!(!relations.is_empty(), "must find at least one relation between App.pm and App.t");
@@ -1631,7 +1708,7 @@ mod tests {
 
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
-        let (_relations, observables, sinks) =
+        let (_relations, observables, sinks, _relation_limitations) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
         assert!(!observables.is_empty(), "must emit at least one changed-observable from is()");
@@ -2112,7 +2189,7 @@ mod tests {
 
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
-        let (relations, _observables, _sinks) =
+        let (relations, _observables, _sinks, _relation_limitations) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
         assert!(!relations.is_empty(), "must find at least one relation");
@@ -2278,7 +2355,7 @@ mod tests {
 
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
-        let (relations, _observables, _sinks) =
+        let (relations, _observables, _sinks, _relation_limitations) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
         assert!(!relations.is_empty(), "the file_proximity relation is still emitted");
@@ -2313,7 +2390,7 @@ mod tests {
 
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
-        let (relations, _observables, _sinks) =
+        let (relations, _observables, _sinks, _relation_limitations) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
         assert!(
@@ -2339,7 +2416,7 @@ mod tests {
 
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
-        let (relations, _observables, _sinks) =
+        let (relations, _observables, _sinks, _relation_limitations) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
         assert!(!relations.is_empty(), "must still find a file_proximity relation");
@@ -2366,9 +2443,9 @@ mod tests {
 
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
-        let (relations_1, _observables_1, _sinks_1) =
+        let (relations_1, _observables_1, _sinks_1, _limitations_1) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
-        let (relations_2, _observables_2, _sinks_2) =
+        let (relations_2, _observables_2, _sinks_2, _limitations_2) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
         assert_eq!(
@@ -2395,7 +2472,7 @@ mod tests {
 
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
-        let (relations, _observables, _sinks) =
+        let (relations, _observables, _sinks, _relation_limitations) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
         assert!(relations.len() >= 3, "expected at least 3 relations, got {}", relations.len());
@@ -2408,11 +2485,11 @@ mod tests {
     }
 
     #[test]
-    fn relation_owner_id_format_unchanged() {
-        // Characterization test (§5): pins the current, known-mismatched-with-
-        // `owners[]` id shape so a future fix has a clean diff target. Not
-        // introduced or fixed by this PR.
-        let root = std::env::temp_dir().join("perl-P6-owner-id-root");
+    fn relation_owner_id_resolves_to_owner_fact() {
+        // #3342: a relation's `owner_id` must be the real `owners[]` id (kind +
+        // qualified name + byte span), not the old dangling `owner:{path}:{pkg}`
+        // shape — so a consumer walking `relation.owner_id → owners[]` resolves.
+        let root = std::env::temp_dir().join("perl-3342-owner-id-root");
         let lib_dir = root.join("lib/My");
         let t_dir = root.join("t");
         std::fs::create_dir_all(&lib_dir).unwrap();
@@ -2422,12 +2499,24 @@ mod tests {
 
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
-        let (relations, _observables, _sinks) =
+        let (relations, _observables, _sinks, _relation_limitations) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+        let (_files, owners, _file_provenance, _file_limitations) =
+            emit_files_and_owners(root.to_str().unwrap());
 
         assert!(!relations.is_empty());
         let owner_id = relations[0]["owner_id"].as_str().unwrap();
-        assert_eq!(owner_id, "owner:lib/My/App.pm:My::App");
+        // New shape: `owner:{path}:package:{qualified_name}:{span}` (not the bare
+        // package name), with a byte span so it is not hard-pinned here.
+        assert!(
+            owner_id.starts_with("owner:lib/My/App.pm:package:My::App:"),
+            "relation owner_id should use the resolvable owners[] shape, got {owner_id}"
+        );
+        // And it must actually resolve to an emitted `owners[]` fact.
+        assert!(
+            owners.iter().any(|o| o["owner_id"].as_str() == Some(owner_id)),
+            "relation.owner_id {owner_id} must resolve to a present owners[] fact"
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
