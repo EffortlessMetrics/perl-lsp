@@ -94,8 +94,7 @@ pub(crate) fn emit_tests_and_oracles(
     let mut provenance = Vec::new();
     let mut limitations = Vec::new();
 
-    let t_dir = std::path::Path::new(root).join("t");
-    let mut t_files = collect_t_files(&t_dir);
+    let mut t_files = collect_t_files(std::path::Path::new(root));
     // Deterministic order: sort discovered test files by repo-relative path.
     t_files.sort_by(|a, b| a.1.cmp(&b.1));
 
@@ -343,11 +342,26 @@ fn find_framework_use(node: &Node, best: &mut Option<(usize, &'static str, (usiz
     node.for_each_child(|child| find_framework_use(child, best));
 }
 
-/// Collect all `.t` files under a directory. Returns (full_path, relative_path, content).
-fn collect_t_files(t_dir: &std::path::Path) -> Vec<(String, String, String)> {
+/// Collect all `.t` files under `<root>/t`. Returns (absolute_path,
+/// relative_path, content), where `relative_path` is `strip_prefix(root)` —
+/// byte-identical to the path [`emit_files_and_owners`] derives for the same
+/// file. #3361: the previous `split_once("/t/")` heuristic diverged from that
+/// path whenever `root` had an ancestor segment named `t` (e.g. `t/lib/Proj`,
+/// `some/t/proj`), dangling `test.file_id` / `boundary.file_id` against
+/// `files[]`; both now strip the same `root` (as #3342 fixed for `.pm` files).
+fn collect_t_files(root: &std::path::Path) -> Vec<(String, String, String)> {
     let mut result = Vec::new();
-    let Ok(entries) = std::fs::read_dir(t_dir) else {
-        return result;
+    collect_t_files_recursive(&root.join("t"), root, &mut result);
+    result
+}
+
+fn collect_t_files_recursive(
+    dir: &std::path::Path,
+    root: &std::path::Path,
+    result: &mut Vec<(String, String, String)>,
+) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
@@ -359,20 +373,19 @@ fn collect_t_files(t_dir: &std::path::Path) -> Vec<(String, String, String)> {
             if is_symlink {
                 continue;
             }
-            result.extend(collect_t_files(&path));
+            collect_t_files_recursive(&path, root, result);
         } else if path.extension().is_some_and(|ext| ext == "t") {
             let Ok(content) = std::fs::read_to_string(&path) else {
                 continue;
             };
-            // Relative path from the workspace root (forward-slash).
-            let relative = path.to_string_lossy().replace('\\', "/");
-            // Strip everything before "t/" to make it repo-relative.
-            let relative =
-                relative.split_once("/t/").map(|(_, rest)| format!("t/{rest}")).unwrap_or(relative);
+            let relative = path
+                .strip_prefix(root)
+                .unwrap_or(path.as_path())
+                .to_string_lossy()
+                .replace('\\', "/");
             result.push((path.to_string_lossy().to_string(), relative, content));
         }
     }
-    result
 }
 
 /// Emit relations, concrete discriminators, and observed-sink facts.
@@ -481,8 +494,7 @@ pub(crate) fn emit_relations_and_discriminators(
     // Collect + parse every `.t` file once, hoisted and reused by both the
     // relation loop below and the discriminator loop further down (which
     // previously called `collect_t_files` a second time).
-    let t_dir = std::path::Path::new(root).join("t");
-    let mut t_files = collect_t_files(&t_dir);
+    let mut t_files = collect_t_files(std::path::Path::new(root));
     t_files.sort_by(|a, b| a.1.cmp(&b.1));
 
     let t_call_facts: std::collections::HashMap<&str, TestCallFacts> = t_files
@@ -795,8 +807,7 @@ pub(crate) fn emit_boundaries_and_commands(root: &str) -> (Vec<Value>, Vec<Value
 
     // Scan .pm files for dynamic boundaries.
     let pm_files = collect_pm_files(std::path::Path::new(root));
-    let t_dir = std::path::Path::new(root).join("t");
-    let t_files = collect_t_files(&t_dir);
+    let t_files = collect_t_files(std::path::Path::new(root));
 
     let mut boundary_counter = 0usize;
 

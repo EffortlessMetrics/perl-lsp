@@ -1239,6 +1239,49 @@ mod tests {
     }
 
     #[test]
+    fn build_packet_test_file_id_resolves_when_root_has_ancestor_t() {
+        // #3361: the `.t` path derivation must match `emit_files_and_owners`
+        // even when `root` has an ANCESTOR path segment named `t` (e.g.
+        // `.../t/proj`). The old `split_once("/t/")` heuristic matched the first
+        // `/t/` — the ancestor one — corrupting `test.file_id` so it dangled
+        // against `files[]`. Both derivations now `strip_prefix(root)`.
+        let root = "target/ripr-3361-fixtures/t/proj/test-file-id-ancestor-t";
+        let _ = std::fs::remove_dir_all(root);
+        std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
+        std::fs::create_dir_all(format!("{root}/t")).expect("create t/");
+        std::fs::write(format!("{root}/lib/Foo.pm"), "package Foo;\nsub run { }\n1;\n")
+            .expect("write pm");
+        std::fs::write(format!("{root}/t/Foo.t"), "use Test::More;\nuse Foo;\nok(Foo::run());\n")
+            .expect("write t");
+        let p = build_ripr_facts_packet(&RiprFactsRequest {
+            schema: "ripr-perl-facts-v1",
+            root,
+            base: None,
+            head: None,
+            fact_classes: "files,tests",
+            diff: None,
+        })
+        .expect("valid request builds a packet");
+        let _ = std::fs::remove_dir_all(root);
+
+        let tests = tests_of(&p);
+        assert!(!tests.is_empty(), "fixture must produce at least one test fact");
+        let file_ids: std::collections::HashSet<&str> = p["files"]
+            .as_array()
+            .expect("files[]")
+            .iter()
+            .filter_map(|f| f["file_id"].as_str())
+            .collect();
+        for t in &tests {
+            let fid = t["file_id"].as_str().expect("test.file_id is a string");
+            assert!(
+                file_ids.contains(fid),
+                "test.file_id {fid} must resolve to a files[] fact under an ancestor-t root; files={file_ids:?}"
+            );
+        }
+    }
+
+    #[test]
     fn build_packet_is_referentially_closed_across_fact_class_subsets() {
         // Every fact reference must resolve within the packet, and no test-side
         // provenance entry may be an orphan — for any fact-class subset. Guards
