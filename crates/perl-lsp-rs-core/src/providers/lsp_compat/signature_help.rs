@@ -227,7 +227,7 @@ impl SignatureHelpProvider {
             NodeKind::MandatoryParameter { variable }
             | NodeKind::OptionalParameter { variable, .. }
             | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => {
+            | NodeKind::NamedParameter { variable, .. } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     Some(ParameterInfo { label: format!("{}{}", sigil, name), documentation: None })
                 } else {

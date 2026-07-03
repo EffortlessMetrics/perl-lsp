@@ -2932,7 +2932,7 @@ impl SymbolExtractor {
                 NodeKind::MandatoryParameter { variable } => variable.as_ref(),
                 NodeKind::OptionalParameter { variable, .. } => variable.as_ref(),
                 NodeKind::SlurpyParameter { variable } => variable.as_ref(),
-                NodeKind::NamedParameter { variable } => variable.as_ref(),
+                NodeKind::NamedParameter { variable, .. } => variable.as_ref(),
                 // Unexpected node kind inside a signature — skip gracefully
                 _ => continue,
             };

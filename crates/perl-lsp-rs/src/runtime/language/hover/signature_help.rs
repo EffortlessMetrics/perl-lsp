@@ -491,7 +491,7 @@ impl LspServer {
             }
             NodeKind::MandatoryParameter { variable }
             | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => {
+            | NodeKind::NamedParameter { variable, .. } => {
                 self.extract_signature_params(variable, params);
             }
             NodeKind::OptionalParameter { variable, .. } => {

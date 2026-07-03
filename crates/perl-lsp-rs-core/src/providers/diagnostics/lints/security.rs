@@ -207,7 +207,7 @@ fn walk_security_node(
         }
         NodeKind::MandatoryParameter { variable }
         | NodeKind::SlurpyParameter { variable }
-        | NodeKind::NamedParameter { variable } => {
+        | NodeKind::NamedParameter { variable, .. } => {
             let updated_shadowed =
                 if shadows_signal_table(variable) { true } else { signal_shadowed };
             walk_security_node(variable, diagnostics, signal_shadowed);
@@ -720,7 +720,7 @@ fn shadows_signal_table(node: &Node) -> bool {
         }
         NodeKind::MandatoryParameter { variable }
         | NodeKind::SlurpyParameter { variable }
-        | NodeKind::NamedParameter { variable } => shadows_signal_table(variable),
+        | NodeKind::NamedParameter { variable, .. } => shadows_signal_table(variable),
         NodeKind::OptionalParameter { variable, .. } => shadows_signal_table(variable),
         _ => false,
     }

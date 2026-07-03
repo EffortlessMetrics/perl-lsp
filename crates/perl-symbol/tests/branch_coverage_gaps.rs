@@ -268,8 +268,16 @@ fn named_parameter_node_is_not_emitted_as_ref() -> Result<()> {
         NodeKind::Variable { sigil: "$".to_string(), name: "key".to_string() },
         loc(8, 12),
     );
-    let named_param =
-        Node::new(NodeKind::NamedParameter { variable: Box::new(param_var) }, loc(8, 12));
+    let named_param = Node::new(
+        NodeKind::NamedParameter {
+            variable: Box::new(param_var),
+            external_name: String::new(),
+            default_operator: None,
+            default_value: None,
+            required: true,
+        },
+        loc(8, 12),
+    );
     let sig = Node::new(NodeKind::Signature { parameters: vec![named_param] }, loc(7, 13));
     let body = Node::new(NodeKind::Block { statements: vec![] }, loc(14, 16));
     let sub_node = Node::new(

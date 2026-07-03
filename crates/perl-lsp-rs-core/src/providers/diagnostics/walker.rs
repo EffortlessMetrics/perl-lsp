@@ -317,7 +317,13 @@ mod tests {
                 loc(63),
             ),
             Node::new(
-                NodeKind::NamedParameter { variable: Box::new(leaf_variable(64, "named")) },
+                NodeKind::NamedParameter {
+                    variable: Box::new(leaf_variable(64, "named")),
+                    external_name: String::new(),
+                    default_operator: None,
+                    default_value: None,
+                    required: true,
+                },
                 loc(64),
             ),
             Node::new(

@@ -496,7 +496,7 @@ impl<'a> DeclarationProvider<'a> {
                 NodeKind::MandatoryParameter { variable }
                 | NodeKind::OptionalParameter { variable, .. }
                 | NodeKind::SlurpyParameter { variable }
-                | NodeKind::NamedParameter { variable } => variable.as_ref(),
+                | NodeKind::NamedParameter { variable, .. } => variable.as_ref(),
                 _ => continue,
             };
 

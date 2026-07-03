@@ -1041,9 +1041,8 @@ impl Lowerer {
 
     fn record_signature_parameter(&mut self, parameter: &Node, scope_id: HirScopeId) {
         match &parameter.kind {
-            NodeKind::MandatoryParameter { variable }
-            | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => {
+            NodeKind::MandatoryParameter { variable, .. }
+            | NodeKind::SlurpyParameter { variable, .. } => {
                 if let Some(binding) = variable_binding(variable) {
                     self.record_binding(
                         binding.sigil,
@@ -1053,6 +1052,21 @@ impl Lowerer {
                         scope_id,
                         None,
                     );
+                }
+            }
+            NodeKind::NamedParameter { variable, default_value, .. } => {
+                if let Some(binding) = variable_binding(variable) {
+                    self.record_binding(
+                        binding.sigil,
+                        binding.name,
+                        binding.range,
+                        StorageClass::Parameter,
+                        scope_id,
+                        None,
+                    );
+                }
+                if let Some(default_value) = default_value {
+                    self.visit(default_value, RecoveryConfidence::Parsed);
                 }
             }
             NodeKind::OptionalParameter { variable, default_value } => {

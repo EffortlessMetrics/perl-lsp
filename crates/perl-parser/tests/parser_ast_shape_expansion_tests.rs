@@ -319,9 +319,15 @@ fn collect_loop_controls<'a>(node: &'a Node, controls: &mut Vec<&'a Node>) {
                 collect_loop_controls(parameter, controls);
             }
         }
-        NodeKind::MandatoryParameter { variable }
-        | NodeKind::SlurpyParameter { variable }
-        | NodeKind::NamedParameter { variable } => collect_loop_controls(variable, controls),
+        NodeKind::MandatoryParameter { variable } | NodeKind::SlurpyParameter { variable } => {
+            collect_loop_controls(variable, controls)
+        }
+        NodeKind::NamedParameter { variable, default_value, .. } => {
+            collect_loop_controls(variable, controls);
+            if let Some(default) = default_value {
+                collect_loop_controls(default, controls);
+            }
+        }
         NodeKind::OptionalParameter { variable, default_value } => {
             collect_loop_controls(variable, controls);
             collect_loop_controls(default_value, controls);

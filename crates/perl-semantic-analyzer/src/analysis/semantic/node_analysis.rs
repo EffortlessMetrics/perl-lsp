@@ -792,7 +792,7 @@ impl SemanticAnalyzer {
             NodeKind::MandatoryParameter { variable }
             | NodeKind::OptionalParameter { variable, .. }
             | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => {
+            | NodeKind::NamedParameter { variable, .. } => {
                 self.analyze_node(variable, scope_id);
             }
 
@@ -1310,7 +1310,7 @@ fn format_signature_params(sig_node: &Node) -> String {
                 NodeKind::MandatoryParameter { variable }
                 | NodeKind::OptionalParameter { variable, .. }
                 | NodeKind::SlurpyParameter { variable }
-                | NodeKind::NamedParameter { variable } => variable.as_ref(),
+                | NodeKind::NamedParameter { variable, .. } => variable.as_ref(),
                 NodeKind::Variable { .. } => param,
                 _ => return None,
             };

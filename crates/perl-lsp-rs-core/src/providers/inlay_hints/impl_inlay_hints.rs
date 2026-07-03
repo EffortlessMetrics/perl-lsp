@@ -225,7 +225,7 @@ fn param_names_from_signature_node(sig: &Node) -> Vec<String> {
             NodeKind::MandatoryParameter { variable }
             | NodeKind::OptionalParameter { variable, .. }
             | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => {
+            | NodeKind::NamedParameter { variable, .. } => {
                 if let NodeKind::Variable { name, .. } = &variable.kind {
                     Some(name.clone())
                 } else {

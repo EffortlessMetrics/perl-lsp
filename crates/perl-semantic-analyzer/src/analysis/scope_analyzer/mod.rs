@@ -1277,7 +1277,7 @@ impl ScopeAnalyzer {
             NodeKind::MandatoryParameter { variable }
             | NodeKind::OptionalParameter { variable, .. }
             | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => self.extract_variable_name(variable),
+            | NodeKind::NamedParameter { variable, .. } => self.extract_variable_name(variable),
             NodeKind::ArrayLiteral { elements } => {
                 // Handle array reference patterns like @{$ref}
                 if elements.len() == 1 {

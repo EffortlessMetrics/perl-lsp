@@ -2056,10 +2056,18 @@ impl ExtractionWalk {
                     initializer.as_deref(),
                 );
             }
-            NodeKind::MandatoryParameter { variable }
-            | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => {
+            NodeKind::MandatoryParameter { variable } | NodeKind::SlurpyParameter { variable } => {
                 self.visit_parameter(node, variable);
+            }
+            NodeKind::NamedParameter { variable, default_value, .. } => {
+                // A named parameter's default is an expression that may
+                // reference outer-scope symbols; treat it like an optional
+                // parameter so extract-method records those as inputs.
+                if let Some(default_value) = default_value {
+                    self.visit_optional_parameter(node, variable, default_value);
+                } else {
+                    self.visit_parameter(node, variable);
+                }
             }
             NodeKind::OptionalParameter { variable, default_value } => {
                 self.visit_optional_parameter(node, variable, default_value);

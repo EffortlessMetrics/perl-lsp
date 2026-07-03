@@ -672,7 +672,7 @@ impl Node {
                 format!("(slurpy_parameter {})", variable.to_sexp())
             }
 
-            NodeKind::NamedParameter { variable } => {
+            NodeKind::NamedParameter { variable, .. } => {
                 format!("(named_parameter {})", variable.to_sexp())
             }
 
@@ -1119,7 +1119,12 @@ impl Node {
                 f(default_value);
             }
             NodeKind::SlurpyParameter { variable } => f(variable),
-            NodeKind::NamedParameter { variable } => f(variable),
+            NodeKind::NamedParameter { variable, default_value, .. } => {
+                f(variable);
+                if let Some(default) = default_value {
+                    f(default);
+                }
+            }
 
             // Pattern matching
             NodeKind::Match { expr, .. } => f(expr),
@@ -1374,7 +1379,12 @@ impl Node {
                 f(default_value);
             }
             NodeKind::SlurpyParameter { variable } => f(variable),
-            NodeKind::NamedParameter { variable } => f(variable),
+            NodeKind::NamedParameter { variable, default_value, .. } => {
+                f(variable);
+                if let Some(default) = default_value {
+                    f(default);
+                }
+            }
 
             // Pattern matching
             NodeKind::Match { expr, .. } => f(expr),
@@ -2104,10 +2114,23 @@ pub enum NodeKind {
         variable: Box<Node>,
     },
 
-    /// Named parameter placeholder in signature (future Perl feature)
+    /// Named parameter in a signature: `:$alpha` or `:$beta = 1`
+    /// (Perl 5.44 named arguments, PPC0024). The caller supplies these by
+    /// name (`f(alpha => 1)`); the external key is derived from the lexical
+    /// variable name without its sigil.
     NamedParameter {
-        /// Variable for named parameter binding
+        /// Variable for named parameter binding (e.g. `$alpha`)
         variable: Box<Node>,
+        /// External argument name, derived from the variable name without its
+        /// sigil (e.g. `alpha` for `:$alpha`). This is the key callers use.
+        external_name: String,
+        /// Default-assignment operator when a default is present: `=`, `//=`,
+        /// or `||=`. `None` when the parameter has no default.
+        default_operator: Option<String>,
+        /// Default value expression, when the parameter is defaulted.
+        default_value: Option<Box<Node>>,
+        /// True when the parameter has no default (the caller must supply it).
+        required: bool,
     },
 
     /// Method declaration (Perl 5.38+ with `use feature 'class'`)
@@ -2808,7 +2831,13 @@ mod tests {
                 default_value: Box::new(dummy_node()),
             },
             NodeKind::SlurpyParameter { variable: Box::new(dummy_node()) },
-            NodeKind::NamedParameter { variable: Box::new(dummy_node()) },
+            NodeKind::NamedParameter {
+                variable: Box::new(dummy_node()),
+                external_name: String::new(),
+                default_operator: None,
+                default_value: None,
+                required: true,
+            },
             NodeKind::Method {
                 name: String::new(),
                 name_span: None,

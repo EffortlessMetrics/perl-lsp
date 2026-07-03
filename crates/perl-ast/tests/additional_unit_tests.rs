@@ -508,8 +508,16 @@ fn for_each_child_mut_visits_slurpy_and_named_parameter() {
     slurpy.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);
 
-    let mut named =
-        Node::new(NodeKind::NamedParameter { variable: Box::new(var_node("$", "k")) }, loc(0, 2));
+    let mut named = Node::new(
+        NodeKind::NamedParameter {
+            variable: Box::new(var_node("$", "k")),
+            external_name: String::new(),
+            default_operator: None,
+            default_value: None,
+            required: true,
+        },
+        loc(0, 2),
+    );
     count = 0;
     named.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);

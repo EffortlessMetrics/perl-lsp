@@ -1031,8 +1031,16 @@ fn sexp_signature_with_params() -> Result<(), Box<dyn std::error::Error>> {
     );
     let slurpy =
         Node::new(NodeKind::SlurpyParameter { variable: Box::new(var("@", "rest")) }, loc(9, 14));
-    let named =
-        Node::new(NodeKind::NamedParameter { variable: Box::new(var("$", "k")) }, loc(15, 17));
+    let named = Node::new(
+        NodeKind::NamedParameter {
+            variable: Box::new(var("$", "k")),
+            external_name: String::new(),
+            default_operator: None,
+            default_value: None,
+            required: true,
+        },
+        loc(15, 17),
+    );
     let sig =
         Node::new(NodeKind::Signature { parameters: vec![mand, opt, slurpy, named] }, loc(0, 17));
     let sexp = sig.to_sexp();

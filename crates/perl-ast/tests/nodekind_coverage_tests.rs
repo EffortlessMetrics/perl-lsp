@@ -332,9 +332,22 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             1,
         ),
         (
-            Node::new(NodeKind::NamedParameter { variable: Box::new(leaf("var")) }, loc()),
+            // Defaulted named parameter: traversal must descend into the
+            // default expression, so the child count is 2 (variable + default).
+            // (This file keeps exactly one case per NodeKind, so the defaulted
+            // shape is used here to exercise default-value traversal.)
+            Node::new(
+                NodeKind::NamedParameter {
+                    variable: Box::new(leaf("var")),
+                    external_name: "var".to_string(),
+                    default_operator: Some("=".to_string()),
+                    default_value: Some(Box::new(leaf("default"))),
+                    required: false,
+                },
+                loc(),
+            ),
             "NamedParameter",
-            1,
+            2,
         ),
         (
             Node::new(
