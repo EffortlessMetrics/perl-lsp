@@ -2848,6 +2848,11 @@ cpan-corpus-sweep:
     cargo run -p xtask -- cpan-corpus sweep
 
 # Discover upstream Perl core base tests from a prepared Perl tree.
+perl-core-prepare REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
+    cargo run -p xtask -- perl-core-harness prepare \
+          --ref {{REF}} \
+          --output-dir target/perl-core/upstream/{{REF}}
+
 perl-core-discover-base PERL_TREE HOST_PERL="perl":
     cargo run -p xtask -- perl-core-harness discover \
           --perl-tree {{PERL_TREE}} \
@@ -2880,6 +2885,25 @@ perl-core-compile-base-ratchet PERL_TREE HOST_PERL="perl":
           --report target/perl-core/reports/base-compile.json \
           --baseline .ci/perl-core-harness/base-compile-baseline.json \
           --check
+
+perl-core-real-base-smoke PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile base \
+          --modes parse,compile
+
+perl-core-integrated-base REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
+    cargo run -p xtask -- perl-core-harness prepare \
+          --ref {{REF}} \
+          --output-dir target/perl-core/upstream/{{REF}}
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree target/perl-core/upstream/{{REF}}/perl5 \
+          --host-perl perl \
+          --profile base \
+          --modes parse,compile \
+          --perl-ref {{REF}} \
+          --output-dir target/perl-core/smoke/base
 
 # Bootstrap/update the committed CPAN corpus baseline
 cpan-corpus-baseline-update:

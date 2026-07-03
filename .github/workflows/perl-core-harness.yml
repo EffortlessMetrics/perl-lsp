@@ -1,0 +1,100 @@
+name: Perl Core Harness
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  base-smoke:
+    name: Real upstream base parse+compile smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --no-self-update
+          rustup default 1.95.0
+
+      - name: Install upstream Perl build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            libdb-dev \
+            libgdbm-dev \
+            zlib1g-dev
+
+      - name: Read pinned upstream config
+        id: upstream
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import tomllib
+          from pathlib import Path
+
+          config = tomllib.loads(Path(".ci/perl-core-harness/upstream.toml").read_text())
+          print(f"ref={config['ref']}")
+          print(f"profile={config.get('profile', 'base')}")
+          print(f"modes={','.join(config.get('modes', ['parse', 'compile']))}")
+          PY
+
+      - name: Prepare upstream Perl tree
+        run: |
+          cargo run -p xtask -- perl-core-harness prepare \
+            --ref "${{ steps.upstream.outputs.ref }}" \
+            --output-dir "target/perl-core/upstream/${{ steps.upstream.outputs.ref }}"
+
+      - name: Run base parse+compile smoke
+        run: |
+          cargo run -p xtask -- perl-core-harness smoke \
+            --perl-tree "target/perl-core/upstream/${{ steps.upstream.outputs.ref }}/perl5" \
+            --host-perl perl \
+            --profile "${{ steps.upstream.outputs.profile }}" \
+            --modes "${{ steps.upstream.outputs.modes }}" \
+            --perl-ref "${{ steps.upstream.outputs.ref }}" \
+            --output-dir target/perl-core/smoke/base
+
+      - name: Summarize receipts
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Perl core harness advisory smoke"
+            echo
+            echo "- ref: \`${{ steps.upstream.outputs.ref }}\`"
+            echo "- profile: \`${{ steps.upstream.outputs.profile }}\`"
+            echo "- modes: \`${{ steps.upstream.outputs.modes }}\`"
+            echo
+            if [ -f target/perl-core/smoke/base/smoke.json ]; then
+              python3 - <<'PY'
+              import json
+              from pathlib import Path
+
+              smoke = json.loads(Path("target/perl-core/smoke/base/smoke.json").read_text())
+              print(f"- status: `{smoke['status']}`")
+              print(f"- discovered files: `{smoke['discovery_total']}`")
+              print(f"- parse: `{smoke.get('parse_files_passed')}/{smoke.get('parse_files_total')}`")
+              print(f"- compile: `{smoke.get('compile_files_passed')}/{smoke.get('compile_files_total')}`")
+              print(f"- gap map: `{smoke['gap_map']}`")
+              PY
+            else
+              echo "- smoke receipt: not written"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Perl core harness receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perl-core-harness-${{ github.sha }}
+          path: target/perl-core/
+          if-no-files-found: warn
+          retention-days: 14

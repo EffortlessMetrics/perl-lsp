@@ -2091,7 +2091,11 @@ enum PerlCoreHarnessCommand {
     Prepare {
         /// Upstream Perl tag or commit to prepare.
         #[arg(long = "ref")]
-        perl_ref: Option<String>,
+        perl_ref: String,
+
+        /// Output directory for source clone and prepared tree.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
     },
 
     /// Discover upstream Perl core tests through t/TEST or t/harness --dumptests.
@@ -2176,6 +2180,44 @@ enum PerlCoreHarnessCommand {
         /// Accept the latest report as the baseline.
         #[arg(long, conflicts_with = "check")]
         accept: bool,
+    },
+
+    /// Run manual/advisory real-tree discovery + parse/compile smoke receipts.
+    Smoke {
+        /// Prepared upstream Perl source/build tree.
+        #[arg(long)]
+        perl_tree: PathBuf,
+
+        /// Host Perl used to run upstream t/TEST or t/harness.
+        #[arg(long, default_value = "perl")]
+        host_perl: PathBuf,
+
+        /// Upstream scheduler to run.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessRunner::Test)]
+        runner: perl_core_harness::HarnessRunner,
+
+        /// Staged upstream Perl core profile. Smoke is currently scoped to base.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
+        profile: perl_core_harness::HarnessProfile,
+
+        /// Smoke modes to run, comma-separated. Defaults to parse,compile.
+        #[arg(long, value_enum, value_delimiter = ',', default_values_t = [
+            perl_core_harness::HarnessMode::Parse,
+            perl_core_harness::HarnessMode::Compile,
+        ])]
+        modes: Vec<perl_core_harness::HarnessMode>,
+
+        /// Directory for discovery, parse, compile, and smoke JSON receipts.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+
+        /// Prebuilt perl-core-test-runner binary. Defaults to target/agent/perl-core-test-runner.
+        #[arg(long)]
+        runner_binary: Option<PathBuf>,
+
+        /// Requested upstream Perl ref recorded in the smoke receipt.
+        #[arg(long = "perl-ref")]
+        perl_ref: Option<String>,
     },
 }
 
@@ -3507,7 +3549,12 @@ fn run_cli(cli: Cli) -> Result<()> {
             })
         }
         Commands::PerlCoreHarness { command } => match command {
-            PerlCoreHarnessCommand::Prepare { perl_ref: _ } => perl_core_harness::prepare(),
+            PerlCoreHarnessCommand::Prepare { perl_ref, output_dir } => {
+                perl_core_harness::prepare(perl_core_harness::PrepareConfig {
+                    perl_ref,
+                    output_dir,
+                })
+            }
             PerlCoreHarnessCommand::Discover { perl_tree, host_perl, runner, profile, output } => {
                 perl_core_harness::discover(perl_core_harness::DiscoverConfig {
                     perl_tree,
@@ -3548,6 +3595,25 @@ fn run_cli(cli: Cli) -> Result<()> {
                 report,
                 baseline,
                 accept,
+            }),
+            PerlCoreHarnessCommand::Smoke {
+                perl_tree,
+                host_perl,
+                runner,
+                profile,
+                modes,
+                output_dir,
+                runner_binary,
+                perl_ref,
+            } => perl_core_harness::smoke(perl_core_harness::SmokeConfig {
+                perl_tree,
+                host_perl,
+                runner,
+                profile,
+                modes,
+                output_dir,
+                runner_binary,
+                perl_ref,
             }),
         },
         Commands::ParserRatchet { command } => match command {
@@ -4062,7 +4128,6 @@ mod tests {
     #[test]
     fn perl_core_harness_dispatch_fails_closed_for_future_subcommands() -> TestResult {
         let cases = [
-            (PerlCoreHarnessCommand::Prepare { perl_ref: None }, "prepare is not implemented"),
             (
                 PerlCoreHarnessCommand::Run {
                     mode: perl_core_harness::HarnessMode::Execute,
