@@ -188,6 +188,71 @@
                 "type": "object",
                 "description": "Environment variables",
                 "default": {}
+              },
+              "debuggerBackend": {
+                "type": "string",
+                "enum": [
+                  "native",
+                  "external",
+                  "ptkdb-bootstrap"
+                ],
+                "enumDescriptions": [
+                  "Native perl -d adapter (default)",
+                  "External debugger peer (e.g. Devel::ptkdb) over the Perl Debugger Peer Protocol",
+                  "Generate a .ptkdbrc bootstrap and launch perl -d:ptkdb (no live bridge)"
+                ],
+                "description": "Which debug backend perl-dap should drive",
+                "default": "native"
+              },
+              "externalDebugger": {
+                "type": "object",
+                "description": "Configuration for debuggerBackend=external (the Perl Debugger Peer Protocol)",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "ptkdb",
+                      "custom"
+                    ],
+                    "description": "The external debugger engine to cooperate with",
+                    "default": "ptkdb"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "connect",
+                      "listen",
+                      "launchPeer"
+                    ],
+                    "enumDescriptions": [
+                      "perl-dap connects out to a peer already listening at host:port (the supported rendezvous)",
+                      "perl-dap listens for the peer to connect (not yet implemented)",
+                      "perl-dap launches the peer itself (not yet implemented)"
+                    ],
+                    "description": "How perl-dap rendezvous with the peer. 'connect' is the supported mode; 'listen'/'launchPeer' are future work.",
+                    "default": "connect"
+                  },
+                  "control": {
+                    "type": "string",
+                    "enum": [
+                      "mirror",
+                      "cooperative",
+                      "dapControlled"
+                    ],
+                    "description": "Who owns stepping/control. 'mirror' (the peer's UI stays authoritative) is the supported default",
+                    "default": "mirror"
+                  },
+                  "host": {
+                    "type": "string",
+                    "description": "Host for the peer socket",
+                    "default": "127.0.0.1"
+                  },
+                  "port": {
+                    "type": "number",
+                    "description": "Port of the running debugger peer to connect to",
+                    "default": 13604
+                  }
+                }
               }
             }
           },
@@ -230,6 +295,20 @@
             "host": "localhost",
             "port": 13603,
             "timeout": 5000
+          },
+          {
+            "type": "perl",
+            "request": "launch",
+            "name": "Perl: ptkdb peer (mirror)",
+            "program": "${workspaceFolder}/script.pl",
+            "debuggerBackend": "external",
+            "externalDebugger": {
+              "kind": "ptkdb",
+              "mode": "connect",
+              "control": "mirror",
+              "host": "127.0.0.1",
+              "port": 13604
+            }
           }
         ]
       }

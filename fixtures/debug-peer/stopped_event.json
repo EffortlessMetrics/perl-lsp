@@ -1,0 +1,12 @@
+{
+  "type": "event",
+  "seq": 10,
+  "event": "debugger/stopped",
+  "body": {
+    "reason": "breakpoint",
+    "threadId": 1,
+    "source": { "path": "/work/script.pl" },
+    "line": 42,
+    "column": 1
+  }
+}
