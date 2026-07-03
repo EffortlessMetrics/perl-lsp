@@ -897,7 +897,7 @@ impl LspServer {
         // Search the workspace index for callables matching the bare method name.
         // `search_source_symbols` performs a case-insensitive substring match; we
         // post-filter to exact bare-name matches of callable kinds only.
-        let candidates = workspace_index.search_source_symbols(method_name);
+        let candidates = workspace_index.search_source_symbols(method_name, None);
         let symbol =
             candidates.into_iter().find(|sym| sym.name == method_name && sym.kind.is_callable())?;
 

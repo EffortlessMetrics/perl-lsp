@@ -266,14 +266,18 @@ impl LspServer {
 
             match access_mode {
                 IndexAccessMode::Full(coordinator) => {
-                    // Full query path: use workspace index
-                    let mut symbols = coordinator.index().search_source_symbols(query);
-                    symbols.extend(coordinator.index().search_generated_workspace_symbols(query));
+                    // Full query path: use workspace index.
+                    // Pass the cap into the search so results are bounded before
+                    // allocation — early exit at the search boundary, not after collecting.
+                    let mut symbols = coordinator.index().search_source_symbols(query, Some(cap));
+                    symbols.extend(
+                        coordinator.index().search_generated_workspace_symbols(query, Some(cap)),
+                    );
 
-                    // Convert to LSP format with yielding and result cap
+                    // Convert to LSP format with cooperative yielding.
+                    // No .take(cap) needed — the search functions already apply the cap.
                     let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
                         .iter()
-                        .take(cap)
                         .enumerate()
                         .map(|(i, sym)| {
                             // Cooperative yield every 64 symbols
@@ -314,10 +318,9 @@ impl LspServer {
                     // open-doc path only when the partial index is also empty.
                     tracing::debug!(reason, "Workspace symbol: querying partial index");
                     if let Some(coordinator) = self.coordinator() {
-                        let symbols = coordinator.index().search_source_symbols(query);
+                        let symbols = coordinator.index().search_source_symbols(query, Some(cap));
                         let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
                             .iter()
-                            .take(cap)
                             .enumerate()
                             .map(|(i, sym)| {
                                 if i & 0x3f == 0 {
@@ -2224,7 +2227,7 @@ impl LspServer {
         let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
             return 0;
         };
-        coordinator.index().search_source_symbols(query).iter().take(workspace_symbol_cap()).count()
+        coordinator.index().search_source_symbols(query, Some(workspace_symbol_cap())).len()
     }
 
     fn record_workspace_symbols_provider_decision_trace(

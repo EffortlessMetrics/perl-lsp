@@ -3052,7 +3052,7 @@ impl WorkspaceIndex {
     /// let _results = index.search_symbols("example");
     /// ```
     pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
-        self.search_source_symbols(query)
+        self.search_source_symbols(query, None)
     }
 
     /// Search only source-backed syntax symbols from the workspace index.
@@ -3067,13 +3067,13 @@ impl WorkspaceIndex {
     /// A symbol that is stored under both its bare name key and its qualified
     /// name key is deduplicated by `(uri, start_byte)` so each `WorkspaceSymbol`
     /// appears at most once in the result.
-    pub fn search_source_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+    pub fn search_source_symbols(&self, query: &str, cap: Option<usize>) -> Vec<WorkspaceSymbol> {
         let query = query.trim();
         let query_lower = query.to_lowercase();
         let search_idx = self.search_index.read();
         let mut seen: HashSet<(String, usize)> = HashSet::new();
         let mut results = Vec::new();
-        for (name_key, symbols) in search_idx.iter() {
+        'outer: for (name_key, symbols) in search_idx.iter() {
             if name_key.contains(&query_lower) {
                 for sym in symbols {
                     // Dedup: a symbol may appear under both its bare-name key
@@ -3081,6 +3081,9 @@ impl WorkspaceIndex {
                     let dedup_key = (sym.uri.clone(), sym.range.start.byte);
                     if seen.insert(dedup_key) {
                         results.push(sym.clone());
+                        if cap.is_some_and(|c| results.len() >= c) {
+                            break 'outer;
+                        }
                     }
                 }
             }
@@ -3093,7 +3096,11 @@ impl WorkspaceIndex {
     /// This is a narrow workspace-symbol pilot: returned symbols are explicitly
     /// labeled as generated/framework members and point at the source declaration
     /// that produced the member, not at an exact generated method body.
-    pub fn search_generated_workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+    pub fn search_generated_workspace_symbols(
+        &self,
+        query: &str,
+        cap: Option<usize>,
+    ) -> Vec<WorkspaceSymbol> {
         let query = query.trim();
         if query.is_empty() {
             return Vec::new();
@@ -3104,7 +3111,7 @@ impl WorkspaceIndex {
         let shards = self.fact_shards.read();
         let mut results = Vec::new();
 
-        for shard in shards.values() {
+        'outer: for shard in shards.values() {
             for entity in &shard.entities {
                 if entity.kind != EntityKind::GeneratedMember {
                     continue;
@@ -3147,6 +3154,9 @@ impl WorkspaceIndex {
                     workspace_folder_uri: self.determine_folder_uri(&shard.source_uri),
                     is_lexical: false,
                 });
+                if cap.is_some_and(|c| results.len() >= c) {
+                    break 'outer;
+                }
             }
         }
 
@@ -4877,24 +4887,24 @@ has display_name => (is => 'rw');
 "#;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
-        let source_symbols = index.search_source_symbols("display_name");
+        let source_symbols = index.search_source_symbols("display_name", None);
         assert!(
             source_symbols.is_empty(),
             "generated framework members must not enter the exact source-symbol slice"
         );
-        let trimmed_source_symbols = index.search_source_symbols("  display_name  ");
+        let trimmed_source_symbols = index.search_source_symbols("  display_name  ", None);
         assert!(
             trimmed_source_symbols.is_empty(),
             "trimmed generated framework member queries must not enter the exact source-symbol slice"
         );
 
-        let generated_symbols = index.search_generated_workspace_symbols("display_name");
+        let generated_symbols = index.search_generated_workspace_symbols("display_name", None);
         assert_eq!(generated_symbols.len(), 1);
         let trimmed_generated_symbols =
-            index.search_generated_workspace_symbols("  display_name  ");
+            index.search_generated_workspace_symbols("  display_name  ", None);
         assert_eq!(trimmed_generated_symbols.len(), 1);
         assert_eq!(trimmed_generated_symbols[0].name, "display_name [generated/framework]");
-        assert!(index.search_generated_workspace_symbols("   ").is_empty());
+        assert!(index.search_generated_workspace_symbols("   ", None).is_empty());
         let symbol = &generated_symbols[0];
         assert_eq!(symbol.name, "display_name [generated/framework]");
         assert_eq!(symbol.kind, SymbolKind::Method);
@@ -4926,7 +4936,7 @@ has display_name => (is => 'rw');
                 .ok_or("missing generated member entity")?;
             entity.provenance = Provenance::ExactAst;
         }
-        let non_framework_symbols = index.search_generated_workspace_symbols("display_name");
+        let non_framework_symbols = index.search_generated_workspace_symbols("display_name", None);
         assert!(
             non_framework_symbols.is_empty(),
             "generated workspace-symbol pilot must require framework-synthesis provenance"
@@ -4946,13 +4956,13 @@ has status => (is => 'rw', predicate => 1);
 "#;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
-        let source_symbols = index.search_source_symbols("has_status");
+        let source_symbols = index.search_source_symbols("has_status", None);
         assert!(
             source_symbols.is_empty(),
             "predicate generated members must not enter the exact source-symbol slice"
         );
 
-        let generated_symbols = index.search_generated_workspace_symbols("has_status");
+        let generated_symbols = index.search_generated_workspace_symbols("has_status", None);
         assert_eq!(generated_symbols.len(), 1);
         let symbol = &generated_symbols[0];
         assert_eq!(symbol.name, "has_status [generated/framework]");
@@ -8146,7 +8156,7 @@ mod entity_id_file_scoped_tests {
         ));
 
         // Bare-name substring match: "proc" matches Utils::process
-        let results = index.search_source_symbols("proc");
+        let results = index.search_source_symbols("proc", None);
         let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
         assert!(
             names.contains(&"process"),
@@ -8156,7 +8166,7 @@ mod entity_id_file_scoped_tests {
         assert!(!names.contains(&"helper"), "'helper' must not match 'proc'; got: {:?}", names);
 
         // Qualified-name substring match: "Utils::proc" must match via qualified name
-        let qresults = index.search_source_symbols("Utils::proc");
+        let qresults = index.search_source_symbols("Utils::proc", None);
         assert!(
             qresults.iter().any(|s| s.name == "process"),
             "'Utils::proc' must match process via qualified name; got: {:?}",
@@ -8164,7 +8174,7 @@ mod entity_id_file_scoped_tests {
         );
 
         // Cross-file: "run" lives only in App.pm
-        let run_results = index.search_source_symbols("run");
+        let run_results = index.search_source_symbols("run", None);
         assert!(
             run_results.iter().any(|s| s.name == "run" && s.uri == uri_b),
             "'run' must be found in App.pm; got: {:?}",
@@ -8173,7 +8183,7 @@ mod entity_id_file_scoped_tests {
 
         // No duplicates: a symbol appearing under both bare and qualified name keys
         // must appear exactly once in results.
-        let all = index.search_source_symbols("process");
+        let all = index.search_source_symbols("process", None);
         let process_count = all.iter().filter(|s| s.name == "process").count();
         assert_eq!(
             process_count, 1,
@@ -8224,7 +8234,7 @@ mod entity_id_file_scoped_tests {
             "package Foo;\nsub old_func { 1 }\n1;\n".to_string(),
         ));
         assert!(
-            index.search_source_symbols("old_func").iter().any(|s| s.name == "old_func"),
+            index.search_source_symbols("old_func", None).iter().any(|s| s.name == "old_func"),
             "old_func must be found after initial index"
         );
 
@@ -8234,18 +8244,18 @@ mod entity_id_file_scoped_tests {
             "package Foo;\nsub new_func { 2 }\n1;\n".to_string(),
         ));
         assert!(
-            index.search_source_symbols("new_func").iter().any(|s| s.name == "new_func"),
+            index.search_source_symbols("new_func", None).iter().any(|s| s.name == "new_func"),
             "new_func must appear after update"
         );
         assert!(
-            index.search_source_symbols("old_func").iter().all(|s| s.name != "old_func"),
+            index.search_source_symbols("old_func", None).iter().all(|s| s.name != "old_func"),
             "old_func must be gone after update; stale entry in search_index"
         );
 
         // Remove the file entirely
         index.remove_file(uri);
         assert!(
-            index.search_source_symbols("new_func").is_empty(),
+            index.search_source_symbols("new_func", None).is_empty(),
             "new_func must be gone after remove_file"
         );
     }
@@ -8275,8 +8285,8 @@ mod entity_id_file_scoped_tests {
 
         // Both should find "alpha_fn" and "beta_fn"
         for query in &["alpha_fn", "beta_fn", "fn"] {
-            let mut inc = idx_inc.search_source_symbols(query);
-            let mut bat = idx_batch.search_source_symbols(query);
+            let mut inc = idx_inc.search_source_symbols(query, None);
+            let mut bat = idx_batch.search_source_symbols(query, None);
             inc.sort_by(|a, b| a.name.cmp(&b.name).then(a.uri.cmp(&b.uri)));
             bat.sort_by(|a, b| a.name.cmp(&b.name).then(a.uri.cmp(&b.uri)));
             let inc_names: Vec<&str> = inc.iter().map(|s| s.name.as_str()).collect();
@@ -8286,6 +8296,53 @@ mod entity_id_file_scoped_tests {
                 "query '{query}': incremental and batch must return same symbol names"
             );
         }
+    }
+}
+
+// ── search_source_symbols / search_generated_workspace_symbols cap (#1668) ──
+
+#[cfg(test)]
+mod search_cap_tests {
+    use super::*;
+    use perl_tdd_support::must;
+
+    fn make_index_with_subs(uri: &str, subs: &[&str]) -> WorkspaceIndex {
+        let index = WorkspaceIndex::new();
+        let source = subs.iter().map(|s| format!("sub {s} {{}}")).collect::<Vec<_>>().join(" ");
+        must(index.index_file(must(url::Url::parse(uri)), source));
+        index
+    }
+
+    #[test]
+    fn search_source_symbols_cap_limits_results() {
+        let index = make_index_with_subs(
+            "file:///lib/Cap.pm",
+            &["alpha", "beta", "gamma", "delta", "epsilon"],
+        );
+
+        let uncapped = index.search_source_symbols("", None);
+        assert!(uncapped.len() >= 5, "uncapped must return all 5 symbols");
+
+        let capped = index.search_source_symbols("", Some(2));
+        assert!(capped.len() <= 2, "cap=2 must return at most 2 symbols; got {}", capped.len());
+    }
+
+    #[test]
+    fn search_source_symbols_cap_none_returns_all() {
+        let index = make_index_with_subs("file:///lib/All.pm", &["foo", "bar"]);
+
+        let uncapped = index.search_source_symbols("", None);
+        let capped_large = index.search_source_symbols("", Some(usize::MAX));
+        // Cap large enough to never trigger early exit — both paths return the same count.
+        assert_eq!(uncapped.len(), capped_large.len());
+    }
+
+    #[test]
+    fn search_source_symbols_cap_one_returns_exactly_one() {
+        let index = make_index_with_subs("file:///lib/One.pm", &["qux", "quux", "quuz", "corge"]);
+
+        let capped = index.search_source_symbols("", Some(1));
+        assert_eq!(capped.len(), 1, "cap=1 must return exactly 1 symbol; got {:?}", capped);
     }
 }
 
