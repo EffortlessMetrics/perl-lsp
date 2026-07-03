@@ -70,6 +70,48 @@ required = false
 [tools.coverage]
 enabled = false
 
+
+# perl-lsp-v0 lanes: tuned to the actual risk surfaces of this repo.
+[[lanes]]
+id = "tests-oracle"
+role = "Test oracle strength and focused-test discrimination"
+focus = "Check whether tests for changed code actually discriminate the patch. Identify the smallest focused test that would prove or refute the claim."
+
+[[lanes]]
+id = "source-route"
+role = "Source routes from changed code to unchanged callers"
+focus = "Trace source routes from each changed function to its callers including cross-crate boundaries. Identify broken callers or missing route updates."
+
+[[lanes]]
+id = "workspace-state"
+role = "Workspace index lifecycle and incremental state"
+focus = "Review workspace/index lifecycle, incremental state updates, file-watching triggers, and cache invalidation. Are there stale-state bugs or missing invalidation?"
+
+[[lanes]]
+id = "parser-edge-cases"
+role = "Perl syntax edge cases and parser correctness"
+focus = "Check parser behavior on edge cases: nested data structures, special variables, regex, heredocs. Does the change handle them correctly?"
+
+[[lanes]]
+id = "diagnostics-truth"
+role = "Diagnostics accuracy"
+focus = "Verify diagnostics accuracy. Are there false positives, false negatives, or missing diagnostics for common error patterns?"
+
+[[lanes]]
+id = "lsp-protocol-contract"
+role = "LSP protocol compliance"
+focus = "Check LSP protocol compliance: request/response pairing, cancellation, capability negotiation, transport lifecycle."
+
+[[lanes]]
+id = "opposition"
+role = "Strongest substantiated objection"
+focus = "Find the strongest objection grounded in code, tests, or protocol behavior. If none, state what you checked and residual risk."
+
+[[lanes]]
+id = "spec-honesty"
+role = "Doc and spec honesty"
+focus = "Check whether PR body, commits, docs, and specs accurately describe what the code does. Flag overclaims or stale docs."
+
 [providers]
 policy = "minimax-only"
 
@@ -105,4 +147,3 @@ extends = "gh-runner"
 proof_max_focused_tests = 1
 proof_command_timeout_sec = 120
 proof_total_timeout_sec = 180
-
