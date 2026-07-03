@@ -8208,7 +8208,7 @@ mod entity_id_file_scoped_tests {
             "package ServiceB;\nsub shared_action_4481 { 2 }\n1;\n".to_string(),
         ));
 
-        let mut results = index.search_source_symbols("shared_action_4481");
+        let mut results = index.search_source_symbols("shared_action_4481", None);
         results.sort_by(|left, right| left.uri.cmp(&right.uri));
 
         let folders: Vec<Option<&str>> =
