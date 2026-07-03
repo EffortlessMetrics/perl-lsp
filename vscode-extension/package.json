@@ -1065,7 +1065,7 @@
           {
             "id": "verify-perl",
             "title": "Verify Your Perl Installation",
-            "description": "Run the health check to confirm Perl tooling (perl, perltidy, optional perlcritic) is available.",
+            "description": "Run the health check to confirm your Perl interpreter is available (used by the test runner and debugger). Native formatting and native critic diagnostics are built in — perltidy and perlcritic are optional and only used for explicit external-compatibility modes.",
             "media": {
               "image": "media/walkthrough/verify-perl.svg",
               "altText": "Verify Perl"

@@ -89,6 +89,18 @@ describe('package.json walkthrough contribution', () => {
     }
   });
 
+  test('verify-perl step is native-first: does not present perltidy/perlcritic as required tooling (#3276)', () => {
+    const wt = pkg.contributes.walkthroughs[0];
+    const step = wt.steps.find((s: any) => s.id === 'verify-perl');
+    expect(step).toBeDefined();
+    // The health check confirms the Perl interpreter; native formatting and
+    // native critic are built in. External tools must be framed as optional,
+    // never as core "Perl tooling" the product requires.
+    expect(step.description).toMatch(/native/i);
+    expect(step.description).toMatch(/optional/i);
+    expect(step.description).not.toMatch(/Perl tooling \(perl, perltidy/i);
+  });
+
   test('open-project step offers the bundled demo project (#1635)', () => {
     const wt = pkg.contributes.walkthroughs[0];
     const step = wt.steps.find((s: any) => s.id === 'open-project');
