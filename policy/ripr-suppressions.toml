@@ -662,6 +662,25 @@ review_after = "2026-07-12"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# perl-dap CLI entry point (PR #3277): ripr#1429-class no_static_path on the
+# clap-derived Args struct after the --bridge flag removal. Bin entry point
+# (excluded from lcov in the same PR); CLI surface covered by in-process #[bin]
+# tests. Same proc_macro_opaque class as the native_product_surface / xtask CLI
+# suppressions.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-perl-dap-cli-entry-point"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-dap/src/main.rs"]
+classification = ["no_static_path", "weakly_exposed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3277 (epic #3276, PR1) removes the shipped --bridge flag so the perl-dap CLI is native-only. The change reshapes the clap-derived Args struct in crates/perl-dap/src/main.rs; ripr 0.9.x reports a no_static_path seam on the derive because it cannot trace activation through the clap #[derive(Parser)] proc-macro to a static test path. perl-dap/src/main.rs is a bin entry point (excluded from lcov coverage in this same PR); its CLI surface is covered by in-process #[bin] tests that render clap help and parse args (cli_help_has_no_bridge_product_surface, cli_rejects_removed_bridge_flag) plus the resolve_socket_port transport tests. Same proc_macro_opaque ripr#1429 class as the native_product_surface and xtask CLI suppressions. Suppression is narrow (single bin entry file, one PR #3277). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
+
+# -----------------------------------------------------------------------------
 # LSP declaration equality-guard seams (PR #854): ripr#1429-class boundary
 # predicates in collect_subroutine_declarations and collect_package_declarations.
 #

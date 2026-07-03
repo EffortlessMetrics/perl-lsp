@@ -1868,7 +1868,7 @@ coverage:
         "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch --html --output-dir target/coverage \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     @echo "✅ Coverage report: target/coverage/index.html"
     @echo "📈 Opening report in browser..."
     @command -v xdg-open >/dev/null 2>&1 && xdg-open target/coverage/index.html || \
@@ -1883,7 +1883,7 @@ coverage-lcov:
         "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch --lcov --output-path lcov.info \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     @echo "✅ Coverage: lcov.info"
 
 # Show coverage summary (terminal)
@@ -1895,7 +1895,7 @@ coverage-summary:
         "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
 
 
 # Generate parser library branch coverage in LCOV format (CI-safe when cargo-llvm-cov is unavailable)
@@ -1909,7 +1909,7 @@ coverage-parser:
     fi
     @mkdir -p target/coverage
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser -p perl-parser-core --lib --locked --branch --lcov --output-path target/coverage/parser.lcov \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     @echo "✅ Parser coverage: target/coverage/parser.lcov"
 # Generate branch coverage and fail if it regresses against the baseline policy
 coverage-branch-gate:
@@ -1919,7 +1919,7 @@ coverage-branch-gate:
         "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch --lcov --output-path lcov.info \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     @bash ./scripts/check-coverage-baseline.sh lcov.info .ci/coverage-baseline.txt
 
 # Generate workspace library coverage plus focused xtask proof-lane coverage,
@@ -1974,7 +1974,7 @@ coverage-proof base='origin/main':
         --test semantic_inline_next_edit_cli \
         --test ripr_new_gap_gate_workflow
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --lcov --output-path target/lcov.info \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     cargo xtask coverage-baseline \
         --lcov target/lcov.info \
         --receipt target/receipts/quality/coverage-baseline.json \
@@ -2051,7 +2051,7 @@ coverage-proof-routed base='origin/main' head='HEAD':
     python3 scripts/ci/generate-coverage-pack-commands.py
     bash target/receipts/quality/coverage-pack-commands.sh
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --profile agent --lcov --output-path target/lcov.info \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     cargo xtask coverage-baseline \
         --lcov target/lcov.info \
         --receipt target/receipts/quality/coverage-baseline.json \
