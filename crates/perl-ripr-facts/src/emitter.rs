@@ -789,6 +789,15 @@ fn content_hash_to_digest(hash: u64) -> String {
     format!("fnv64:{hash:016x}")
 }
 
+/// Deterministic content fingerprint (`fnv64:` prefix) of a serialized packet
+/// (#3293 PR 7). Non-cryptographic FNV-1a — a content/identity hash the consumer
+/// can dedup or cache on, not a security digest; it keeps the crate's
+/// no-crypto-dependency contract and matches the `fnv64:` style used by file
+/// `digest`s.
+pub(crate) fn content_fingerprint(serialized: &str) -> String {
+    content_hash_to_digest(fnv1a_hash(serialized))
+}
+
 /// Strip a `file:///` prefix from a source URI and normalize to forward-slash.
 #[allow(dead_code)]
 fn uri_to_relative_path(uri: &str) -> String {

@@ -25,8 +25,8 @@
 mod emitter;
 
 use emitter::{
-    emit_boundaries_and_commands, emit_changes_from_diff, emit_files_and_owners,
-    emit_relations_and_discriminators, emit_tests_and_oracles,
+    content_fingerprint, emit_boundaries_and_commands, emit_changes_from_diff,
+    emit_files_and_owners, emit_relations_and_discriminators, emit_tests_and_oracles,
 };
 
 /// Expected schema version for `ripr-perl-facts-v1` packets.
@@ -324,7 +324,7 @@ pub fn build_ripr_facts_packet(
         all_limitations.push(serde_json::json!({
             "limitation_id": "emitter-partial",
             "kind": "partial_emitter",
-            "message": "Parser-backed tests/oracles, relations/discriminators, boundaries/commands, files/owners, and (when a diff is supplied) diff-owned changes are emitted. Semantic relations, the packet fingerprint, and the managed-producer diff source land in later slices.",
+            "message": "Parser-backed tests/oracles, relations/discriminators (incl. a parser-backed direct_owner_call), boundaries/commands, files/owners, (when a diff is supplied) diff-owned changes, and a deterministic packet_fingerprint are emitted. Export-aware relation reachability and the managed-producer diff source land in later slices.",
             "evidence_refs": []
         }));
         all_limitations.extend(test_limitations);
@@ -344,6 +344,21 @@ pub fn build_ripr_facts_packet(
             limitations.extend(file_limitations);
         }
     }
+
+    // #3293 PR 7: deterministic content fingerprint over the fully-assembled
+    // packet. Computed while `packet_fingerprint` is still `null`, so the
+    // fingerprint is a hash of the whole packet-with-null-fingerprint and is
+    // reproducible: recomputing `content_fingerprint` over the packet with
+    // `packet_fingerprint` reset to `null` yields the same value. serde_json
+    // serializes object keys in sorted (BTreeMap) order, so the string is
+    // canonical; the same request always produces the same fingerprint. This
+    // relies on `serde_json`'s `preserve_order` feature being OFF for this crate
+    // (it's pulled only by a `tree-sitter` *build*-dependency elsewhere, which
+    // resolver-v2 keeps out of this crate's normal build — verified via
+    // `cargo build -p perl-ripr-facts -v`); a future *normal* dep enabling it
+    // would switch to insertion order and must re-verify this.
+    let fingerprint = content_fingerprint(&packet.to_string());
+    packet["packet_fingerprint"] = serde_json::Value::String(fingerprint);
 
     Ok(packet)
 }
@@ -539,7 +554,8 @@ fn write_packet(out: &str, packet: &serde_json::Value) -> std::io::Result<()> {
 mod tests {
     use super::{
         RiprFactsError, RiprFactsRequest, build_ripr_facts_packet, build_unavailable_packet,
-        normalize_fact_classes, run_ripr_facts, validate_ripr_facts_path, write_packet,
+        content_fingerprint, normalize_fact_classes, run_ripr_facts, validate_ripr_facts_path,
+        write_packet,
     };
 
     /// A valid request against the crate root (`"."`, no `t/` dir → unavailable).
@@ -1729,5 +1745,55 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ── #3293 PR 7: deterministic packet fingerprint ──
+
+    #[test]
+    fn build_packet_fingerprint_is_non_null_fnv64() {
+        let p = build_ripr_facts_packet(&valid_request("files,owners,tests,oracles"))
+            .expect("valid request builds a packet");
+        let fp = p["packet_fingerprint"].as_str().expect("fingerprint is a string, not null");
+        assert!(fp.starts_with("fnv64:"), "fingerprint uses the fnv64: prefix, got {fp}");
+    }
+
+    #[test]
+    fn build_packet_fingerprint_is_deterministic() {
+        // Same request → byte-identical packet → identical fingerprint.
+        let a = build_ripr_facts_packet(&valid_request("files,owners")).expect("a");
+        let b = build_ripr_facts_packet(&valid_request("files,owners")).expect("b");
+        assert_eq!(
+            a["packet_fingerprint"], b["packet_fingerprint"],
+            "same request must yield the same fingerprint"
+        );
+    }
+
+    #[test]
+    fn build_packet_fingerprint_changes_with_content() {
+        // Same dir (→ same root/packet_id), different `.t` content: isolates
+        // "fact content differs → fingerprint differs" from any root/id change.
+        let a = packet_for_t("fp-content", "use Test::More;\nok(1);\n", "tests,oracles");
+        let b = packet_for_t("fp-content", "use Test::More;\nis(1, 1);\nok(2);\n", "tests,oracles");
+        assert_ne!(
+            a["packet_fingerprint"], b["packet_fingerprint"],
+            "different fact content must yield different fingerprints"
+        );
+    }
+
+    #[test]
+    fn build_packet_fingerprint_is_reproducible_over_null_placeholder() {
+        // Documents the exact definition: the fingerprint is the content hash of
+        // the packet with `packet_fingerprint` set to null. Recomputing it must
+        // reproduce the emitted value.
+        let p = build_ripr_facts_packet(&valid_request("files,owners,tests,oracles"))
+            .expect("valid request");
+        let mut without = p.clone();
+        without["packet_fingerprint"] = serde_json::Value::Null;
+        let recomputed = content_fingerprint(&without.to_string());
+        assert_eq!(
+            p["packet_fingerprint"].as_str(),
+            Some(recomputed.as_str()),
+            "fingerprint must be reproducible as the hash of the null-placeholder packet"
+        );
     }
 }

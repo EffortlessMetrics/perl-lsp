@@ -53,9 +53,13 @@ wrapper writes for the same inputs.
 
 ## Status
 
-The **diff-owned changes slice** (#3293 PR 5), on top of the parser-backed
-tests/oracles slice (PR 4) and files/owners slice (PR 3). `files[]`/`owners[]`,
-`tests[]`/`oracles[]`, and now `changes[]` come from parsing, not string scans:
+The **deterministic packet-fingerprint slice** (#3293 PR 7), on top of the
+parser-backed `direct_owner_call` relations (PR 6), diff-owned `changes[]`
+(PR 5), tests/oracles (PR 4), and files/owners (PR 3). `files[]`/`owners[]`,
+`tests[]`/`oracles[]`, and `changes[]` come from parsing, not string scans;
+`relations[]` classify `direct_owner_call` from parsed call nodes; and the packet
+now carries a deterministic `packet_fingerprint` (an `fnv64:` content hash of the
+assembled packet, reproducible for identical inputs) instead of `null`:
 
 - `files[]` — repo-relative path, role, a deterministic FNV-1a `digest`, and the
   declared package names, for each `.pm` / `.pl` / `.psgi` / `.t` file.
