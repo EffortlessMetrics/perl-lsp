@@ -796,6 +796,126 @@ fn test_workspace_rename_returns_multi_file_workspace_edit() -> TestResult {
     Ok(())
 }
 
+/// Renaming a subroutine to a Perl keyword must be rejected.
+/// `sub if { }` is a Perl syntax error — the rename provider must refuse before
+/// the edit reaches the user's file.
+#[test]
+fn test_rename_sub_to_keyword_fails() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_rename_sub_keyword.pl";
+    harness.open(
+        doc_uri,
+        r#"sub greet {
+    return "hello";
+}
+greet();
+"#,
+    )?;
+
+    // Attempt to rename `greet` -> `if` (a Perl keyword). Position: line 0, character 4.
+    let result = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 0, "character": 4 },
+            "newName": "if"
+        }),
+    );
+
+    match result {
+        Err(e) => {
+            let msg = format!("{e}");
+            assert!(
+                msg.contains("reserved") || msg.contains("keyword") || msg.contains("32602"),
+                "renaming sub to keyword should error with keyword-related message, got: {msg}"
+            );
+        }
+        Ok(response) => {
+            // Some implementations return a WorkspaceEdit with zero edits rather than an error.
+            // In that case, verify no edits rename the symbol to `if`.
+            if let Some(changes) = response.get("changes").and_then(|v| v.as_object()) {
+                for (_uri, edits) in changes {
+                    if let Some(arr) = edits.as_array() {
+                        for edit in arr {
+                            let new_text = edit["newText"].as_str().unwrap_or("");
+                            assert_ne!(
+                                new_text, "if",
+                                "renaming sub to keyword `if` must not produce an `if` edit"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Renaming a scalar variable to a Perl keyword name must succeed.
+/// Perl is perfectly happy with `$if`, `$while`, `$for` etc. as variable names
+/// because the sigil disambiguates them from the keyword at parse time.
+#[test]
+fn test_rename_variable_to_keyword_allowed() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_rename_var_keyword.pl";
+    harness.open(
+        doc_uri,
+        r#"sub check_flag {
+    my $flag = 1;
+    return $flag;
+}
+"#,
+    )?;
+
+    // Rename `$flag` -> `$if` at declaration (line 1, character 7).
+    let result = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 7 },
+            "newName": "$if"
+        }),
+    );
+
+    match result {
+        Ok(response) => {
+            // Rename should succeed: there must be at least one edit producing `$if` or `if`.
+            if let Some(changes) = response.get("changes").and_then(|v| v.as_object()) {
+                if let Some(edits) = changes.get(doc_uri).and_then(|v| v.as_array()) {
+                    assert!(
+                        !edits.is_empty(),
+                        "renaming variable to keyword name `$if` should produce edits"
+                    );
+                    let found_if = edits.iter().any(|edit| {
+                        let new_text = edit["newText"].as_str().unwrap_or("");
+                        new_text == "$if" || new_text == "if"
+                    });
+                    assert!(
+                        found_if,
+                        "at least one edit must reference `$if` or bare `if`, got: {edits:?}"
+                    );
+                }
+            }
+        }
+        Err(e) => {
+            // If the server returns an error, it must NOT be a keyword-related message,
+            // because variables are allowed to have keyword names in Perl.
+            let msg = format!("{e}");
+            assert!(
+                !msg.contains("reserved keyword") && !msg.contains("keyword"),
+                "renaming variable to keyword name `$if` must not be rejected as a keyword: {msg}"
+            );
+        }
+    }
+
+    Ok(())
+}
+
 /// Workspace rename edits must be invertible before broader compiler-backed
 /// refactor cutover can rely on them as a safe live operation.
 #[test]

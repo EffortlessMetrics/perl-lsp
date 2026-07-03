@@ -16,6 +16,7 @@ use crate::protocol::{REQUEST_FAILED, req_position, req_uri};
 use crate::runtime::readiness::{IndexReadinessOutcome, IndexReadinessPolicy};
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use perl_lexer::is_rename_keyword;
 #[cfg(feature = "workspace")]
 use perl_lsp_rs_core::providers::navigation::rename_shadow::{
     RenamePackagePilotIneligibleReason, RenamePackagePilotResult, rename_package_pilot_proof,
@@ -977,6 +978,18 @@ impl LspServer {
                     return Err(JsonRpcError {
                         code: -32602,
                         message: format!("Invalid identifier: {}", requested_name),
+                        data: None,
+                    });
+                }
+                // Non-sigiled targets are subroutine or package names.
+                // Renaming them to a reserved keyword would create a syntax error (`sub if {}`).
+                if is_rename_keyword(requested_name) {
+                    return Err(JsonRpcError {
+                        code: -32602,
+                        message: format!(
+                            "'{}' is a reserved Perl keyword; subroutine names cannot be keywords",
+                            requested_name
+                        ),
                         data: None,
                     });
                 }
@@ -2867,6 +2880,20 @@ mod tests {
         assert_eq!(server.normalize_rename_target(Some("$value"), "renamed")?, "$renamed");
         assert_eq!(server.normalize_rename_target(Some("$value"), "$renamed")?, "$renamed");
         assert_eq!(server.normalize_rename_target(Some("target"), "renamed")?, "renamed");
+
+        // Non-sigiled (subroutine/package) targets renamed to a reserved keyword are rejected
+        // by the handler guard — `sub if {}` / `package for` are Perl syntax errors.
+        assert!(
+            server.normalize_rename_target(Some("greet"), "if").is_err(),
+            "renaming a subroutine to a reserved keyword must be rejected"
+        );
+        assert!(
+            server.normalize_rename_target(Some("helper"), "while").is_err(),
+            "renaming a subroutine to a control-flow keyword must be rejected"
+        );
+        // Sigiled (variable) targets may take keyword names — the sigil disambiguates (`$if`).
+        assert_eq!(server.normalize_rename_target(Some("$flag"), "$if")?, "$if");
+        assert_eq!(server.normalize_rename_target(Some("$flag"), "if")?, "$if");
 
         assert!(
             server.normalize_rename_target(Some("$value"), "").is_err(),
