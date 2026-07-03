@@ -1782,3 +1782,17 @@ reason = "PR #3294 (tracking #3293) relocates the ripr-perl-facts-v1 exporter be
 created = "2026-07-03"
 review_after = "2026-08-03"
 expires = "2026-10-03"
+
+# -----------------------------------------------------------------------------
+# eval-sub Path-2 order-guard loop/closure seams (PR #3286, closes #1429):
+[[suppress]]
+id = "ripr-suppress-eval-sub-order-guard-loop-closure"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-workspace/src/semantic/queries.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3286 (closes #1429) adds the Path-2 order guard to dynamic_callable_may_be_visible_at: `let Some(anchor) = shard.anchors.iter().find(|a| a.id == occurrence.anchor_id) else { continue }` (fail-closed) and `if anchor.span_start_byte <= byte_offset { return Some(EvalSub{..}) }`. ripr 0.9.x reports 3 weakly_gripped seams (reachable_unrevealed): the before-offset suppress branch, the after-offset continue branch, and the missing-anchor fail-closed branch. All sit behind an iterator .find() closure over the anchors vec and a byte-offset comparison inside a loop — RIPR cannot statically trace the closure/loop activation from the test-supplied byte offsets to each branch, the same ripr#1429 predicate-infection-untraceable / loop-accumulator class as the position-tracking surrogate loop seam (#3040). Coverage: direct call-observation --lib unit tests in queries.rs — dynamic_callable_eval_sub_order_guard_returns_some_when_anchor_before_offset, dynamic_callable_eval_sub_order_guard_returns_none_when_anchor_after_offset, dynamic_callable_eval_sub_fail_closed_when_anchor_missing — each constructs FileFactShard/AnchorFact/OccurrenceFact fixtures inline and asserts the exact Some/None outcome. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
