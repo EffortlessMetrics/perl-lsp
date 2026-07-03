@@ -643,12 +643,12 @@ describe('extension UX warnings', () => {
       })
     );
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      expect.stringContaining('PerlCritic found 2 issues in Foo.pm.'),
+      expect.stringContaining('Critic found 2 issues in Foo.pm.'),
       'Show Output'
     );
   });
 
-  test('sets perlcritic severity and syncs it to the server', async () => {
+  test('sets native critic severity and syncs it to the server', async () => {
     const sendNotification = jest.fn();
     const sendRequest = jest.fn();
     const showQuickPick = vscode.window.showQuickPick as jest.Mock;
@@ -664,20 +664,97 @@ describe('extension UX warnings', () => {
 
     await setPerlCriticSeverity({ sendNotification, sendRequest } as any);
 
-    expect(update).toHaveBeenCalledWith('perlcritic.severity', 4, vscode.ConfigurationTarget.Global);
+    expect(update).toHaveBeenCalledWith('critic.severity', 4, vscode.ConfigurationTarget.Global);
     expect(sendNotification).toHaveBeenCalledWith(
       'workspace/didChangeConfiguration',
       expect.objectContaining({
         settings: expect.objectContaining({
           perl: expect.objectContaining({
-            perlcritic: expect.objectContaining({
+            critic: expect.objectContaining({
               severity: 4,
             }),
           }),
         }),
       })
     );
-    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('PerlCritic severity set to 4.');
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Critic severity set to 4.');
+  });
+
+  test('forwards both native critic.* and legacy perlcritic.* blocks so the server resolves precedence', async () => {
+    const sendNotification = jest.fn();
+
+    // Both native `critic.*` (severity 4) and legacy `perlcritic.*` (severity 2)
+    // are explicitly set. The extension forwards both blocks; the server applies
+    // precedence (critic wins).
+    const explicit: Record<string, unknown> = {
+      'critic.severity': 4,
+      'perlcritic.severity': 2,
+    };
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn((key: string, defaultValue?: any) =>
+        key in explicit ? explicit[key] : defaultValue
+      ),
+      has: jest.fn(() => false),
+      inspect: jest.fn((key: string) =>
+        key in explicit ? { globalValue: explicit[key] } : undefined
+      ),
+      update: jest.fn(async () => undefined),
+    }));
+
+    await syncPerlCriticConfiguration({ sendNotification } as any);
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      'workspace/didChangeConfiguration',
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          perl: expect.objectContaining({
+            critic: expect.objectContaining({ severity: 4 }),
+            perlcritic: expect.objectContaining({ severity: 2 }),
+          }),
+        }),
+      })
+    );
+  });
+
+  test('forwards native critic.* overrides configured inside a "[perl]" language block', async () => {
+    const sendNotification = jest.fn();
+
+    // A user sets `"[perl]": { "perl-lsp.critic.severity": 5 }` in settings.json.
+    // VS Code exposes that through inspect().globalLanguageValue (not
+    // globalValue), so hasExplicitOverride must detect the language-scoped field.
+    const languageScoped: Record<string, unknown> = {
+      'critic.severity': 5,
+    };
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn((key: string, defaultValue?: any) =>
+        key in languageScoped ? languageScoped[key] : defaultValue
+      ),
+      has: jest.fn(() => false),
+      inspect: jest.fn((key: string) =>
+        key in languageScoped ? { globalLanguageValue: languageScoped[key] } : undefined
+      ),
+      update: jest.fn(async () => undefined),
+    }));
+
+    await syncPerlCriticConfiguration({ sendNotification } as any);
+
+    // The config must be requested with a language scope, otherwise VS Code
+    // never populates the *LanguageValue fields the [perl] block lives in.
+    expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith(
+      'perl-lsp',
+      expect.objectContaining({ languageId: 'perl' })
+    );
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      'workspace/didChangeConfiguration',
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          perl: expect.objectContaining({
+            critic: expect.objectContaining({ severity: 5 }),
+          }),
+        }),
+      })
+    );
   });
 
   test('explains a provider decision through the LSP execute command', async () => {

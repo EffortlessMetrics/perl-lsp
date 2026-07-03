@@ -310,6 +310,12 @@ describe('package.json contributes', () => {
       expect(keys).toContain('perl-lsp.enableFormatting');
       expect(keys).toContain('perl-lsp.formatOnSave');
       expect(keys).toContain('perl-lsp.enableTestIntegration');
+      expect(keys).toContain('perl-lsp.critic.enabled');
+      expect(keys).toContain('perl-lsp.critic.engine');
+      expect(keys).toContain('perl-lsp.critic.profile');
+      expect(keys).toContain('perl-lsp.critic.severity');
+      expect(keys).toContain('perl-lsp.critic.include');
+      expect(keys).toContain('perl-lsp.critic.exclude');
       expect(keys).toContain('perl-lsp.perlcritic.enabled');
       expect(keys).toContain('perl-lsp.perlcritic.severity');
       expect(keys).toContain('perl-lsp.perlcritic.profile');
@@ -432,6 +438,60 @@ describe('package.json contributes', () => {
       expect(includePaths.default).toContain('local/lib/perl5');
     });
 
+    test('defines critic.enabled with default true (native on by default)', () => {
+      const setting = properties['perl-lsp.critic.enabled'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('boolean');
+      expect(setting.default).toBe(true);
+    });
+
+    test('defines critic.engine as a native/legacy picker defaulting to native', () => {
+      const setting = properties['perl-lsp.critic.engine'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('string');
+      expect(setting.enum).toEqual(['native', 'legacy']);
+      expect(setting.default).toBe('native');
+    });
+
+    test('defines critic.profile as a recommended/strict picker defaulting to recommended', () => {
+      const setting = properties['perl-lsp.critic.profile'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('string');
+      expect(setting.enum).toEqual(['recommended', 'strict']);
+      expect(setting.default).toBe('recommended');
+    });
+
+    test('defines critic.severity as a 1-5 picker with default 3', () => {
+      const setting = properties['perl-lsp.critic.severity'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('number');
+      expect(setting.enum).toEqual([1, 2, 3, 4, 5]);
+      expect(setting.default).toBe(3);
+    });
+
+    test('defines critic.include and critic.exclude as string arrays', () => {
+      for (const key of ['perl-lsp.critic.include', 'perl-lsp.critic.exclude']) {
+        const setting = properties[key];
+        expect(setting).toBeDefined();
+        expect(setting.type).toBe('array');
+        expect(setting.items.type).toBe('string');
+        expect(setting.default).toEqual([]);
+      }
+    });
+
+    test('legacy perlcritic.* aliases are deprecated but still present', () => {
+      for (const key of [
+        'perl-lsp.perlcritic.enabled',
+        'perl-lsp.perlcritic.severity',
+        'perl-lsp.perlcritic.profile',
+        'perl-lsp.perlcritic.theme',
+      ]) {
+        const setting = properties[key];
+        expect(setting).toBeDefined();
+        expect(setting.deprecationMessage).toBeTruthy();
+      }
+    });
+
     test('defines perlcritic.enabled with default false', () => {
       const setting = properties['perl-lsp.perlcritic.enabled'];
       expect(setting).toBeDefined();
@@ -516,7 +576,7 @@ describe('package.json contributes', () => {
     test('resource-scoped settings use scope resource', () => {
       // Per-file/workspace settings should be resource-scoped so they can be
       // overridden in workspace and folder settings.
-      const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.perlcritic.enabled', 'perl-lsp.perlcritic.severity', 'perl-lsp.perlcritic.profile', 'perl-lsp.perlcritic.theme', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
+      const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.critic.enabled', 'perl-lsp.critic.engine', 'perl-lsp.critic.profile', 'perl-lsp.critic.severity', 'perl-lsp.critic.include', 'perl-lsp.critic.exclude', 'perl-lsp.perlcritic.enabled', 'perl-lsp.perlcritic.severity', 'perl-lsp.perlcritic.profile', 'perl-lsp.perlcritic.theme', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
       for (const key of resourceScoped) {
         expect(properties[key]?.scope).toBe('resource');
       }

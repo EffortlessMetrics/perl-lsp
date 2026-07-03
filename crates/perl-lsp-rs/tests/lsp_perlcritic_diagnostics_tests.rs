@@ -526,3 +526,77 @@ fn test_g_did_change_configuration_resets_pull_perlcritic_analyzer() {
         last.args
     );
 }
+
+/// A severity change delivered via the native `critic.severity` key must also
+/// reset the shared analyzer. The native `critic.*` keys fold into the same
+/// `perlcritic_severity` config field, so the reset predicate must detect the
+/// change regardless of which key carried it (regression for the #3308 review:
+/// the old predicate re-parsed only `perlcritic.severity` and missed native-key
+/// severity updates, leaving a warmed analyzer stale).
+#[test]
+fn test_h_native_critic_severity_change_resets_analyzer() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path().to_path_buf();
+    let profile = root.join("profile.perlcriticrc");
+    fs::write(&profile, "severity = 3\n").expect("write profile");
+
+    let module_path = root.join("SeveritySwitch.pm");
+    fs::write(&module_path, "package SeveritySwitch;\n1;\n").expect("write module");
+
+    let server = LspServer::new();
+    server.test_set_root_path(root);
+    server.test_bypass_perlcritic_command_check();
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    server.test_install_mock_critic_runtime(runtime.clone());
+
+    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+    server
+        .test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "package SeveritySwitch;\n1;\n"
+            }
+        })))
+        .expect("didOpen should succeed");
+
+    // Establish the analyzer at severity 3 via the legacy engine + profile.
+    server.test_handle_did_change_configuration(Some(json!({
+        "settings": {
+            "perl": {
+                "critic": { "engine": "legacy" },
+                "perlcritic": {
+                    "enabled": true,
+                    "severity": 3,
+                    "profile": profile.to_string_lossy().to_string()
+                }
+            }
+        }
+    })));
+    must(server.test_handle_document_diagnostic(Some(json!({
+        "textDocument": { "uri": uri }
+    }))));
+
+    // Change severity ONLY via the native `critic.severity` key. This must reset
+    // the analyzer and force a fresh invocation on the next diagnostic cycle.
+    server.test_handle_did_change_configuration(Some(json!({
+        "settings": { "perl": { "critic": { "severity": 4 } } }
+    })));
+    must(server.test_handle_document_diagnostic(Some(json!({
+        "textDocument": { "uri": uri }
+    }))));
+
+    let invocations = runtime.invocations();
+    assert_eq!(
+        invocations.len(),
+        2,
+        "native critic.severity change must reset the analyzer and re-invoke; got: {invocations:?}"
+    );
+}

@@ -1073,72 +1073,26 @@ impl LspServer {
                 //   - Wrapped:   {"perl": { "workspace": { "includePaths": [...] } }}
                 //   - Unwrapped: { "workspace": { "includePaths": [...] } }
                 if let Some(perl) = extract_perl_settings(settings) {
-                    // Check whether any perlcritic-related setting is changing before
-                    // updating config so we can decide whether to reset the shared
-                    // CriticAnalyzer.  The analyzer is config-bound (severity, profile)
-                    // so any change to those fields requires a fresh instance.
+                    // Snapshot the critic-relevant config fields before applying the
+                    // update so we can decide whether to reset the shared
+                    // CriticAnalyzer (config-bound on severity/profile/enabled). We
+                    // compare before/after `update_from_value` rather than re-parsing
+                    // the payload here so this stays in lockstep with the parser — in
+                    // particular it detects severity/enabled changes that arrive via
+                    // either the legacy `perlcritic.*` keys or the native `critic.*`
+                    // keys, which the parser folds into the same fields.
                     #[cfg(not(target_arch = "wasm32"))]
-                    let critic_config_changed = {
+                    let critic_snapshot_before = {
                         let cfg = self.config.lock();
-                        let new_enabled = perl
-                            .get("perlcritic")
-                            .and_then(|v| v.get("enabled"))
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(cfg.perlcritic_enabled);
-                        let new_severity = perl
-                            .get("perlcritic")
-                            .and_then(|v| v.get("severity"))
-                            .and_then(|v| v.as_u64())
-                            .map(|v| v as u8)
-                            .unwrap_or(cfg.perlcritic_severity);
-                        let new_profile = perl
-                            .get("perlcritic")
-                            .and_then(|v| v.get("profile"))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        let new_theme = perl
-                            .get("perlcritic")
-                            .and_then(|v| v.get("theme"))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        let new_native_profile = perl
-                            .get("critic")
-                            .and_then(|v| v.get("profile"))
-                            .and_then(|v| v.as_str())
-                            .and_then(
-                                perl_lsp_rs_core::tooling::perl_critic::NativeCriticProfile::parse,
-                            )
-                            .map(|profile| profile.as_str().to_string())
-                            .unwrap_or_else(|| cfg.native_critic_profile.clone());
-                        let new_native_include = perl
-                            .get("critic")
-                            .and_then(|v| v.get("include"))
-                            .and_then(|v| v.as_array())
-                            .map(|values| {
-                                values
-                                    .iter()
-                                    .filter_map(|value| value.as_str().map(ToOwned::to_owned))
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_else(|| cfg.native_critic_include.clone());
-                        let new_native_exclude = perl
-                            .get("critic")
-                            .and_then(|v| v.get("exclude"))
-                            .and_then(|v| v.as_array())
-                            .map(|values| {
-                                values
-                                    .iter()
-                                    .filter_map(|value| value.as_str().map(ToOwned::to_owned))
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_else(|| cfg.native_critic_exclude.clone());
-                        new_enabled != cfg.perlcritic_enabled
-                            || new_severity != cfg.perlcritic_severity
-                            || new_profile != cfg.perlcritic_profile
-                            || new_theme != cfg.perlcritic_theme
-                            || new_native_profile != cfg.native_critic_profile
-                            || new_native_include != cfg.native_critic_include
-                            || new_native_exclude != cfg.native_critic_exclude
+                        (
+                            cfg.perlcritic_enabled,
+                            cfg.perlcritic_severity,
+                            cfg.perlcritic_profile.clone(),
+                            cfg.perlcritic_theme.clone(),
+                            cfg.native_critic_profile.clone(),
+                            cfg.native_critic_include.clone(),
+                            cfg.native_critic_exclude.clone(),
+                        )
                     };
 
                     // Update server config (inlay hints, test runner)
@@ -1147,6 +1101,21 @@ impl LspServer {
                         config.update_from_value(perl);
                         tracing::debug!("Updated server config from perl settings");
                     }
+
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let critic_config_changed = {
+                        let cfg = self.config.lock();
+                        critic_snapshot_before
+                            != (
+                                cfg.perlcritic_enabled,
+                                cfg.perlcritic_severity,
+                                cfg.perlcritic_profile.clone(),
+                                cfg.perlcritic_theme.clone(),
+                                cfg.native_critic_profile.clone(),
+                                cfg.native_critic_include.clone(),
+                                cfg.native_critic_exclude.clone(),
+                            )
+                    };
 
                     // Reset the shared CriticAnalyzer when any critic-related setting
                     // changed so the next diagnostic cycle rebuilds it with the new config.

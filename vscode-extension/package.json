@@ -311,11 +311,97 @@
             "description": "Path to a .perltidyrc profile used for compatibility reporting or explicit external perltidy mode. It is not required for native formatting. If omitted, perl-lsp searches the workspace and home directory.",
             "markdownDescription": "Path to a `.perltidyrc` profile used for compatibility reporting or explicit external `perltidy` mode. It is not required for native formatting. If omitted, perl-lsp searches the workspace and home directory."
           },
+          "perl-lsp.critic.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "order": 32,
+            "description": "Enable native critic diagnostics. Native critic is built in and requires no external tools.",
+            "markdownDescription": "Enable native critic diagnostics. Native critic is built into perl-lsp and requires no external tools."
+          },
+          "perl-lsp.critic.engine": {
+            "type": "string",
+            "enum": [
+              "native",
+              "legacy"
+            ],
+            "enumDescriptions": [
+              "Native built-in critic (default, no external tools required)",
+              "Legacy external Perl::Critic (requires the perlcritic binary on PATH)"
+            ],
+            "default": "native",
+            "scope": "resource",
+            "order": 33,
+            "description": "Critic engine. 'native' uses the built-in critic (default); 'legacy' shells out to an external perlcritic binary for compatibility.",
+            "markdownDescription": "Critic engine. `native` uses the built-in critic (default, no external tools); `legacy` shells out to an external `perlcritic` binary for compatibility and requires it on `PATH`."
+          },
+          "perl-lsp.critic.profile": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "strict"
+            ],
+            "enumDescriptions": [
+              "Recommended native rule set (balanced default)",
+              "Strict native rule set (more rules enabled)"
+            ],
+            "default": "recommended",
+            "scope": "resource",
+            "order": 34,
+            "description": "Native critic rule profile.",
+            "markdownDescription": "Native critic rule profile: `recommended` (balanced default) or `strict` (more rules enabled)."
+          },
+          "perl-lsp.critic.severity": {
+            "type": "number",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "enumDescriptions": [
+              "Severity 1 - very permissive",
+              "Severity 2 - permissive",
+              "Severity 3 - balanced default",
+              "Severity 4 - strict",
+              "Severity 5 - very strict"
+            ],
+            "default": 3,
+            "scope": "resource",
+            "order": 35,
+            "description": "Critic minimum severity (1 = least severe/reports more, 5 = most severe/reports less).",
+            "markdownDescription": "Critic minimum severity (`1` = least severe/reports more, `5` = most severe/reports less)."
+          },
+          "perl-lsp.critic.include": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "scope": "resource",
+            "order": 36,
+            "description": "Native critic rule IDs to force-enable (e.g. native.testing.require_use_strict). Overrides the profile default for the listed rules.",
+            "markdownDescription": "Native critic rule IDs to force-enable (e.g. `native.testing.require_use_strict`). Overrides the profile default for the listed rules."
+          },
+          "perl-lsp.critic.exclude": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "scope": "resource",
+            "order": 37,
+            "description": "Native critic rule IDs to disable (e.g. native.common.assignment_in_condition).",
+            "markdownDescription": "Native critic rule IDs to disable (e.g. `native.common.assignment_in_condition`)."
+          },
           "perl-lsp.perlcritic.enabled": {
             "type": "boolean",
             "default": false,
             "scope": "resource",
             "order": 40,
+            "deprecationMessage": "Deprecated: use perl-lsp.critic.enabled (with perl-lsp.critic.engine = \"legacy\" for the external binary). This alias still works but perl-lsp.critic.* wins if both are set.",
+            "markdownDeprecationMessage": "**Deprecated:** use `perl-lsp.critic.enabled` (with `perl-lsp.critic.engine` = `legacy` for the external binary). This alias still works but `perl-lsp.critic.*` wins if both are set.",
             "description": "Enable external perlcritic diagnostics. Native critic diagnostics are on by default; this setting only takes effect when the critic engine is set to legacy in .perl-lsp.toml (the perlcritic binary must then be on PATH).",
             "markdownDescription": "Enable external `perlcritic` diagnostics. Native critic diagnostics are always on by default; this setting only takes effect when `[critic].engine = \"legacy\"` is set in `.perl-lsp.toml`, in which case the `perlcritic` binary must be on `PATH`."
           },
@@ -338,6 +424,8 @@
             "default": 3,
             "scope": "resource",
             "order": 41,
+            "deprecationMessage": "Deprecated: use perl-lsp.critic.severity. This alias still works but perl-lsp.critic.* wins if both are set.",
+            "markdownDeprecationMessage": "**Deprecated:** use `perl-lsp.critic.severity`. This alias still works but `perl-lsp.critic.*` wins if both are set.",
             "description": "Perl::Critic minimum severity (1 = least severe/reports more, 5 = most severe/reports less).",
             "markdownDescription": "Perl::Critic minimum severity (`1` = least severe/reports more, `5` = most severe/reports less)."
           },
@@ -346,6 +434,8 @@
             "default": "",
             "scope": "resource",
             "order": 42,
+            "deprecationMessage": "Deprecated: use perl-lsp.critic.profile for the native profile, or the legacy [critic] settings in .perl-lsp.toml for an external .perlcriticrc.",
+            "markdownDeprecationMessage": "**Deprecated:** use `perl-lsp.critic.profile` for the native profile, or the legacy `[critic]` settings in `.perl-lsp.toml` for an external `.perlcriticrc`.",
             "description": "Optional path to a .perlcriticrc profile file used by the extension when synchronizing critic settings.",
             "markdownDescription": "Optional path to a `.perlcriticrc` profile file used by the extension when synchronizing critic settings."
           },
@@ -354,6 +444,8 @@
             "default": "",
             "scope": "resource",
             "order": 43,
+            "deprecationMessage": "Deprecated: reserved legacy UI label with no native equivalent. It will be removed in a future release.",
+            "markdownDeprecationMessage": "**Deprecated:** reserved legacy UI label with no native equivalent. It will be removed in a future release.",
             "description": "Optional display theme label for PerlCritic settings. Reserved for editor-facing UI organization.",
             "markdownDescription": "Optional display theme label for PerlCritic settings. Reserved for editor-facing UI organization."
           },
@@ -664,13 +756,13 @@
       },
       {
         "command": "perl-lsp.runPerlCritic",
-        "title": "Run PerlCritic",
+        "title": "Run Critic",
         "category": "Perl",
         "icon": "$(checklist)"
       },
       {
         "command": "perl-lsp.setPerlCriticSeverity",
-        "title": "Set PerlCritic Severity",
+        "title": "Set Critic Severity",
         "category": "Perl",
         "icon": "$(symbol-numeric)"
       },
@@ -1110,7 +1202,7 @@
           {
             "id": "configure-settings",
             "title": "Configure Settings",
-            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. Use `perl-lsp.perlcritic.enabled` and `perl-lsp.perlcritic.severity` for quick local Perl::Critic tuning, or run the `Perl: Run PerlCritic` / `Perl: Set PerlCritic Severity` commands from the palette. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable critic linting (native by default; the legacy external engine additionally uses `perlcritic`)\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
+            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. Use `perl-lsp.critic.enabled` and `perl-lsp.critic.severity` for quick local native-critic tuning, or run the `Perl: Run Critic` / `Perl: Set Critic Severity` commands from the palette. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable critic linting (native by default; the legacy external engine additionally uses `perlcritic`)\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
             "media": {
               "image": "media/walkthrough/configure-settings.svg",
               "altText": "Configure Settings"

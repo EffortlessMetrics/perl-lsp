@@ -92,98 +92,167 @@ export function _setLastStartupDiagnosisForTest(diagnosis: StartupErrorDiagnosis
     lastStartupDiagnosis = diagnosis;
 }
 
-type PerlCriticSyncSettings = {
+// Native critic settings (`perl-lsp.critic.*`) are the product surface. The
+// legacy `perl-lsp.perlcritic.*` keys are kept as deprecated aliases; the Rust
+// server parses the `critic` block after `perlcritic`, so `critic.*` wins when
+// both are present. The extension forwards both blocks untouched and lets the
+// server resolve precedence.
+type NativeCriticSyncSettings = {
+    enabled?: boolean;
+    engine?: string;
+    profile?: string;
+    severity?: number;
+    include?: string[];
+    exclude?: string[];
+};
+
+type LegacyPerlCriticSyncSettings = {
     enabled?: boolean;
     severity?: number;
     profile?: string;
     theme?: string;
 };
 
-function inspectPerlCriticOverride(
-    config: vscode.WorkspaceConfiguration,
-    key: string
-): { globalValue?: unknown; workspaceValue?: unknown; workspaceFolderValue?: unknown } | undefined {
-    return config.inspect(key) as {
+// The native `critic.*` keys and the legacy `perlcritic.*` aliases that mirror
+// them. `theme` has no native equivalent and stays legacy-only.
+const NATIVE_CRITIC_KEYS = [
+    'critic.enabled',
+    'critic.engine',
+    'critic.profile',
+    'critic.severity',
+    'critic.include',
+    'critic.exclude',
+] as const;
+const LEGACY_CRITIC_KEYS = [
+    'perlcritic.enabled',
+    'perlcritic.severity',
+    'perlcritic.profile',
+    'perlcritic.theme',
+] as const;
+
+function hasExplicitOverride(config: vscode.WorkspaceConfiguration, key: string): boolean {
+    const value = config.inspect(key) as {
         globalValue?: unknown;
         workspaceValue?: unknown;
         workspaceFolderValue?: unknown;
+        globalLanguageValue?: unknown;
+        workspaceLanguageValue?: unknown;
+        workspaceFolderLanguageValue?: unknown;
     } | undefined;
+    // Also honor language-specific overrides — VS Code users commonly configure
+    // these settings inside a `"[perl]"` block in settings.json, which populates
+    // the *LanguageValue fields rather than the plain scope fields.
+    return Boolean(
+        value &&
+        (value.globalValue !== undefined ||
+            value.workspaceValue !== undefined ||
+            value.workspaceFolderValue !== undefined ||
+            value.globalLanguageValue !== undefined ||
+            value.workspaceLanguageValue !== undefined ||
+            value.workspaceFolderLanguageValue !== undefined)
+    );
 }
 
-function getPerlCriticSyncSettings(
-    documentUri?: vscode.Uri,
+function getNativeCriticSyncSettings(
+    config: vscode.WorkspaceConfiguration,
     severityOverride?: number
-): PerlCriticSyncSettings {
-    const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
-    const settings: PerlCriticSyncSettings = {};
+): NativeCriticSyncSettings {
+    const settings: NativeCriticSyncSettings = {};
 
-    const enabled = inspectPerlCriticOverride(config, 'perlcritic.enabled');
-    if (enabled?.globalValue !== undefined ||
-        enabled?.workspaceValue !== undefined ||
-        enabled?.workspaceFolderValue !== undefined) {
-        settings.enabled = config.get<boolean>('perlcritic.enabled', false);
+    if (hasExplicitOverride(config, 'critic.enabled')) {
+        settings.enabled = config.get<boolean>('critic.enabled', true);
     }
-
-    const severity = inspectPerlCriticOverride(config, 'perlcritic.severity');
+    if (hasExplicitOverride(config, 'critic.engine')) {
+        settings.engine = config.get<string>('critic.engine', 'native');
+    }
+    if (hasExplicitOverride(config, 'critic.profile')) {
+        settings.profile = config.get<string>('critic.profile', 'recommended');
+    }
     if (severityOverride !== undefined) {
         settings.severity = severityOverride;
-    } else if (severity?.globalValue !== undefined ||
-        severity?.workspaceValue !== undefined ||
-        severity?.workspaceFolderValue !== undefined) {
+    } else if (hasExplicitOverride(config, 'critic.severity')) {
+        settings.severity = config.get<number>('critic.severity', 3);
+    }
+    if (hasExplicitOverride(config, 'critic.include')) {
+        settings.include = config.get<string[]>('critic.include', []);
+    }
+    if (hasExplicitOverride(config, 'critic.exclude')) {
+        settings.exclude = config.get<string[]>('critic.exclude', []);
+    }
+
+    return settings;
+}
+
+function getLegacyPerlCriticSyncSettings(
+    config: vscode.WorkspaceConfiguration
+): LegacyPerlCriticSyncSettings {
+    const settings: LegacyPerlCriticSyncSettings = {};
+
+    if (hasExplicitOverride(config, 'perlcritic.enabled')) {
+        settings.enabled = config.get<boolean>('perlcritic.enabled', false);
+    }
+    if (hasExplicitOverride(config, 'perlcritic.severity')) {
         settings.severity = config.get<number>('perlcritic.severity', 3);
     }
-
-    const profile = inspectPerlCriticOverride(config, 'perlcritic.profile');
-    if (profile?.globalValue !== undefined ||
-        profile?.workspaceValue !== undefined ||
-        profile?.workspaceFolderValue !== undefined) {
+    if (hasExplicitOverride(config, 'perlcritic.profile')) {
         settings.profile = config.get<string>('perlcritic.profile', '');
     }
-
-    const theme = inspectPerlCriticOverride(config, 'perlcritic.theme');
-    if (theme?.globalValue !== undefined ||
-        theme?.workspaceValue !== undefined ||
-        theme?.workspaceFolderValue !== undefined) {
+    if (hasExplicitOverride(config, 'perlcritic.theme')) {
         settings.theme = config.get<string>('perlcritic.theme', '');
     }
 
     return settings;
 }
 
-function buildPerlCriticConfiguration(settings: PerlCriticSyncSettings): Record<string, unknown> | undefined {
-    if (
-        settings.enabled === undefined &&
-        settings.severity === undefined &&
-        settings.profile === undefined &&
-        settings.theme === undefined
-    ) {
+// Resolve the `perl-lsp` configuration for critic syncing. The scope carries
+// `languageId: 'perl'` so that `inspect()` populates the *LanguageValue fields —
+// otherwise a `"[perl]": { "perl-lsp.critic.*": ... }` override in settings.json
+// is invisible to `hasExplicitOverride` and never forwarded to the server. When
+// there is no document (the config-change path passes `undefined`), the
+// language-only scope still exposes language-block overrides.
+function getPerlCriticConfiguration(documentUri?: vscode.Uri): vscode.WorkspaceConfiguration {
+    const scope: { uri?: vscode.Uri; languageId: string } = documentUri
+        ? { uri: documentUri, languageId: 'perl' }
+        : { languageId: 'perl' };
+    return vscode.workspace.getConfiguration('perl-lsp', scope);
+}
+
+// Build the `didChangeConfiguration` payload. Native `critic.*` and legacy
+// `perlcritic.*` blocks are forwarded under their own keys so the server can
+// apply precedence (critic wins). A `severityOverride` (from Set Critic
+// Severity) is applied to the native block.
+function buildPerlCriticConfiguration(
+    documentUri?: vscode.Uri,
+    severityOverride?: number
+): Record<string, unknown> | undefined {
+    const config = getPerlCriticConfiguration(documentUri);
+    const critic = getNativeCriticSyncSettings(config, severityOverride);
+    const perlcritic = getLegacyPerlCriticSyncSettings(config);
+
+    const perl: Record<string, unknown> = {};
+    if (Object.keys(critic).length > 0) {
+        perl.critic = critic;
+    }
+    if (Object.keys(perlcritic).length > 0) {
+        perl.perlcritic = perlcritic;
+    }
+
+    if (Object.keys(perl).length === 0) {
         return undefined;
     }
 
     return {
         settings: {
-            perl: {
-                perlcritic: settings,
-            },
+            perl,
         },
     };
 }
 
 function hasExplicitPerlCriticOverrides(documentUri?: vscode.Uri): boolean {
-    const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
-    return ['perlcritic.enabled', 'perlcritic.severity', 'perlcritic.profile', 'perlcritic.theme'].some(key => {
-        const value = config.inspect(key) as {
-            globalValue?: unknown;
-            workspaceValue?: unknown;
-            workspaceFolderValue?: unknown;
-        } | undefined;
-        return Boolean(
-            value &&
-            (value.globalValue !== undefined ||
-                value.workspaceValue !== undefined ||
-                value.workspaceFolderValue !== undefined)
-        );
-    });
+    const config = getPerlCriticConfiguration(documentUri);
+    return [...NATIVE_CRITIC_KEYS, ...LEGACY_CRITIC_KEYS].some(key =>
+        hasExplicitOverride(config, key)
+    );
 }
 
 export async function syncPerlCriticConfiguration(
@@ -194,7 +263,7 @@ export async function syncPerlCriticConfiguration(
         return;
     }
 
-    const payload = buildPerlCriticConfiguration(getPerlCriticSyncSettings(documentUri));
+    const payload = buildPerlCriticConfiguration(documentUri);
     if (payload) {
         await activeClient.sendNotification('workspace/didChangeConfiguration', payload);
     }
@@ -206,7 +275,7 @@ export async function runPerlCriticOnActiveFile(
     const channel = outputChannel ?? vscode.window.createOutputChannel('Perl Language Server');
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.languageId !== 'perl') {
-        vscode.window.showErrorMessage('No active Perl file to run PerlCritic on');
+        vscode.window.showErrorMessage('No active Perl file to run Critic on');
         return;
     }
 
@@ -231,7 +300,7 @@ export async function runPerlCriticOnActiveFile(
         });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`Failed to run PerlCritic: ${message}`);
+        vscode.window.showErrorMessage(`Failed to run Critic: ${message}`);
         return;
     }
 
@@ -246,13 +315,13 @@ export async function runPerlCriticOnActiveFile(
     const fileName = path.basename(editor.document.uri.fsPath);
 
     channel.appendLine(
-        `[perlcritic] ${fileName}: status=${status} violations=${violationCount} analyzer=${analyzerUsed}`
+        `[critic] ${fileName}: status=${status} violations=${violationCount} analyzer=${analyzerUsed}`
     );
 
     if (status === 'error' || typeof response.error === 'string') {
         const message = typeof response.error === 'string'
             ? response.error
-            : 'PerlCritic returned an error';
+            : 'Critic returned an error';
         vscode.window.showErrorMessage(message, 'Show Output').then(selection => {
             if (selection === 'Show Output') {
                 channel.show();
@@ -263,7 +332,7 @@ export async function runPerlCriticOnActiveFile(
 
     if (violationCount > 0) {
         vscode.window.showWarningMessage(
-            `PerlCritic found ${violationCount} issue${violationCount === 1 ? '' : 's'} in ${fileName}.`,
+            `Critic found ${violationCount} issue${violationCount === 1 ? '' : 's'} in ${fileName}.`,
             'Show Output'
         ).then(selection => {
             if (selection === 'Show Output') {
@@ -274,7 +343,7 @@ export async function runPerlCriticOnActiveFile(
     }
 
     vscode.window.showInformationMessage(
-        `PerlCritic passed for ${fileName} using ${analyzerUsed}.`,
+        `Critic passed for ${fileName} using ${analyzerUsed}.`,
         'Show Output'
     ).then(selection => {
         if (selection === 'Show Output') {
@@ -296,7 +365,7 @@ export async function setPerlCriticSeverity(
             { label: '5', description: 'Very strict' },
         ],
         {
-            placeHolder: 'Choose a PerlCritic severity level',
+            placeHolder: 'Choose a Critic severity level',
         }
     );
 
@@ -309,13 +378,14 @@ export async function setPerlCriticSeverity(
     const target = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
         ? vscode.ConfigurationTarget.Workspace
         : vscode.ConfigurationTarget.Global;
-    await config.update('perlcritic.severity', severity, target);
-    const payload = buildPerlCriticConfiguration(getPerlCriticSyncSettings(resourceUri, severity));
+    // Write the native `critic.severity` key — the product-surface setting.
+    await config.update('critic.severity', severity, target);
+    const payload = buildPerlCriticConfiguration(resourceUri, severity);
     if (activeClient && payload) {
         await activeClient.sendNotification('workspace/didChangeConfiguration', payload);
     }
 
-    vscode.window.showInformationMessage(`PerlCritic severity set to ${severity}.`);
+    vscode.window.showInformationMessage(`Critic severity set to ${severity}.`);
 }
 
 type LspExecuteCommandClient = {
@@ -1204,14 +1274,14 @@ export async function activate(context: vscode.ExtensionContext) {
                 disabled: !isTestFile
             },
             {
-                label: '$(checklist) Run PerlCritic',
-                detail: isPerl ? 'Run PerlCritic on the active file' : 'Run PerlCritic on the active file (Only available for Perl files)',
+                label: '$(checklist) Run Critic',
+                detail: isPerl ? 'Run Critic on the active file' : 'Run Critic on the active file (Only available for Perl files)',
                 command: 'perl-lsp.runPerlCritic',
                 disabled: !isPerl
             },
             {
-                label: '$(symbol-numeric) Set PerlCritic Severity',
-                detail: isPerl ? 'Choose a PerlCritic severity level' : 'Choose a PerlCritic severity level (Only available for Perl files)',
+                label: '$(symbol-numeric) Set Critic Severity',
+                detail: isPerl ? 'Choose a Critic severity level' : 'Choose a Critic severity level (Only available for Perl files)',
                 command: 'perl-lsp.setPerlCriticSeverity',
                 disabled: !isPerl
             },
@@ -1640,6 +1710,12 @@ export async function activate(context: vscode.ExtensionContext) {
         }
 
         if (
+            event.affectsConfiguration('perl-lsp.critic.enabled') ||
+            event.affectsConfiguration('perl-lsp.critic.engine') ||
+            event.affectsConfiguration('perl-lsp.critic.profile') ||
+            event.affectsConfiguration('perl-lsp.critic.severity') ||
+            event.affectsConfiguration('perl-lsp.critic.include') ||
+            event.affectsConfiguration('perl-lsp.critic.exclude') ||
             event.affectsConfiguration('perl-lsp.perlcritic.enabled') ||
             event.affectsConfiguration('perl-lsp.perlcritic.severity') ||
             event.affectsConfiguration('perl-lsp.perlcritic.profile')

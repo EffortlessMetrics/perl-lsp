@@ -402,19 +402,27 @@ impl ServerConfig {
             }
         }
 
-        if let Some(critic) = settings.get("critic")
-            && let Some(engine) = critic.get("engine").and_then(|v| v.as_str())
-            && let Some(engine) = parse_critic_engine(engine)
-        {
-            self.critic_engine = engine;
-        }
-        if let Some(critic) = settings.get("critic")
-            && let Some(profile) = critic.get("profile").and_then(|v| v.as_str())
-            && let Some(profile) = parse_native_critic_profile(profile)
-        {
-            self.native_critic_profile = profile.to_string();
-        }
+        // Native `critic.*` settings are the product-surface keys. They are parsed
+        // after `perlcritic.*` so they win when both are present (see #3276): the
+        // legacy `perlcritic.*` block above seeds the shared severity/enabled state,
+        // and the native block below overrides it.
         if let Some(critic) = settings.get("critic") {
+            if let Some(enabled) = critic.get("enabled").and_then(|v| v.as_bool()) {
+                self.perlcritic_enabled = enabled;
+            }
+            if let Some(severity) = critic.get("severity").and_then(|v| v.as_u64()) {
+                self.perlcritic_severity = severity.clamp(1, 5) as u8;
+            }
+            if let Some(engine) =
+                critic.get("engine").and_then(|v| v.as_str()).and_then(parse_critic_engine)
+            {
+                self.critic_engine = engine;
+            }
+            if let Some(profile) =
+                critic.get("profile").and_then(|v| v.as_str()).and_then(parse_native_critic_profile)
+            {
+                self.native_critic_profile = profile.to_string();
+            }
             if let Some(include) = string_array(critic.get("include")) {
                 self.native_critic_include = include;
             }
@@ -2071,6 +2079,54 @@ profile = "recommended"
             config.native_critic_exclude,
             vec!["native.common.assignment_in_condition".to_string()]
         );
+    }
+
+    #[test]
+    fn server_config_native_critic_enabled_and_severity() {
+        let mut config = ServerConfig::default();
+
+        config.update_from_value(&serde_json::json!({
+            "critic": {
+                "enabled": false,
+                "severity": 5
+            }
+        }));
+        assert!(!config.perlcritic_enabled);
+        assert_eq!(config.perlcritic_severity, 5);
+
+        // Out-of-range severities clamp into 1..=5.
+        config.update_from_value(&serde_json::json!({
+            "critic": { "severity": 9 }
+        }));
+        assert_eq!(config.perlcritic_severity, 5);
+        config.update_from_value(&serde_json::json!({
+            "critic": { "severity": 0 }
+        }));
+        assert_eq!(config.perlcritic_severity, 1);
+    }
+
+    #[test]
+    fn native_critic_settings_win_over_legacy_perlcritic() {
+        let mut config = ServerConfig::default();
+
+        // When both `perlcritic.*` and `critic.*` are present in the same
+        // payload, the native `critic.*` block is parsed second and wins.
+        config.update_from_value(&serde_json::json!({
+            "perlcritic": {
+                "enabled": true,
+                "severity": 2,
+                "profile": "legacy-profile"
+            },
+            "critic": {
+                "enabled": false,
+                "severity": 4,
+                "profile": "strict"
+            }
+        }));
+
+        assert!(!config.perlcritic_enabled);
+        assert_eq!(config.perlcritic_severity, 4);
+        assert_eq!(config.native_critic_profile, "strict");
     }
 
     #[test]
