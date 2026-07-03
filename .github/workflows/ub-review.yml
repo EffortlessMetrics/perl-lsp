@@ -276,8 +276,8 @@ jobs:
           install-tools: 'true'
           tool-bundle: core
           posting: review
-          mode: review-byok
-          fail-on-gate: 'false'
+          mode: intelligent-ci
+          fail-on-gate: 'true'
           fail-on-post-error: 'false'
           allow-heavy: 'false'
           github-token: ${{ github.token }}
@@ -378,8 +378,8 @@ jobs:
           install-tools: 'true'
           tool-bundle: core
           posting: review
-          mode: review-byok
-          fail-on-gate: 'false'
+          mode: intelligent-ci
+          fail-on-gate: 'true'
           fail-on-post-error: 'false'
           allow-heavy: 'false'
           github-token: ${{ github.token }}
@@ -465,8 +465,8 @@ jobs:
           install-tools: 'true'
           tool-bundle: core
           posting: review
-          mode: review-byok
-          fail-on-gate: 'false'
+          mode: intelligent-ci
+          fail-on-gate: 'true'
           fail-on-post-error: 'false'
           allow-heavy: 'false'
           github-token: ${{ github.token }}
