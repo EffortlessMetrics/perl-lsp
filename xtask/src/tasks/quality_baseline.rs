@@ -2038,7 +2038,7 @@ mod tests {\n\
         // executable_found == 0 → patch coverage returns 100.0.
         let patch =
             patch_coverage_from_changed_lines_for_root(Some(temp.path()), &summary, &changed);
-        assert_eq!(patch, 100.0, "test-only PR patch coverage must be 100.0 after stripping");
+        assert_eq!(patch, 100.0, "test-only patch coverage must be 100.0 after stripping");
         Ok(())
     }
 

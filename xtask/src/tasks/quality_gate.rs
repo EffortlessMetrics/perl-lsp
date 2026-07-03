@@ -1114,7 +1114,7 @@ fn patch_coverage_unknown_action(args: &QualityGateArgs) -> Value {
         "blocking": true,
         "path": display_path(&args.coverage_receipt),
         "reason": "coverage receipt did not include coverage.patch and no --patch-coverage value was provided",
-        "repair": "Record the PR patch coverage percentage from Codecov or regenerate the coverage receipt with patch coverage evidence.",
+        "repair": "Record an advisory patch coverage percentage from Codecov or regenerate the coverage receipt with patch coverage evidence.",
         "verify": coverage_baseline_command(args, true),
         "receipt": coverage_baseline_command(args, false),
     })

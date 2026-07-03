@@ -351,7 +351,7 @@ def main() -> int:
         "provider_action": "changed_file_proof_routing",
         "claim_boundary": (
             "Advisory lightweight Codecov coverage-pack route; selected packs "
-            "feed Codecov / Patch 95 on nightly/manual or ci:coverage runs"
+            "feed manual routed coverage diagnostics"
         ),
         "base": args.base,
         "head": args.head,

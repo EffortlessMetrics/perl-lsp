@@ -4,9 +4,8 @@ name: CI (Nightly)
 # Combines: ci-expensive.yml, quality-checks.yml, fuzz.yml
 # Cost: ~$0.15 per run (label-gated), ~$0.30 per nightly run
 #
-# Coverage is advisory: run it on the nightly/manual lane, or explicitly on PRs
-# with `ci:coverage`. Normal PR and merge-queue validation use the required
-# Rust Small and RIPR+ gates instead.
+# Coverage is advisory: run it on the nightly/manual lane only. Normal PR and
+# merge-queue validation use the required Rust Small and RIPR+ gates instead.
 
 on:
   pull_request:
@@ -427,10 +426,7 @@ jobs:
     timeout-minutes: 45
     if: |
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_coverage != 'false') ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.draft != true &&
-       contains(github.event.pull_request.labels.*.name, 'ci:coverage'))
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_coverage != 'false')
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
         with:
@@ -463,18 +459,12 @@ jobs:
           fi
 
       - name: Install Rust
-        if: >-
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
         uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # nightly (master)
         with:
           toolchain: nightly
           components: llvm-tools-preview
 
       - name: Cache cargo dependencies
-        if: >-
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: ${{ runner.os }}-coverage-${{ hashFiles('Cargo.lock') }}
@@ -482,45 +472,21 @@ jobs:
           cache-on-failure: true
 
       - name: Install just
-        if: >-
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
         uses: taiki-e/install-action@9bcaee1dcae34154180f412e2fa69355a7cda9f6  # v2.82.6
         with:
           tool: just
 
       - name: Install cargo-llvm-cov
-        if: >-
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
         run: rustup run nightly cargo install cargo-llvm-cov --locked
 
       - name: Create legacy LSP fixtures (CI-only)
-        if: >-
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
         run: |
           mkdir -p archive/legacy-tests/test_fixtures
           touch archive/legacy-tests/test_fixtures/main.pl
           touch archive/legacy-tests/test_fixtures/Module.pm
           touch archive/legacy-tests/test_fixtures/test.t
 
-      - name: Run routed PR coverage proof
-        if: >-
-          github.event_name == 'pull_request' &&
-          steps.coverage_route.outputs.coverage_required == 'true'
-        env:
-          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
-          RUSTFLAGS: "-Cdebuginfo=0"
-          CARGO_BUILD_JOBS: 1
-        run: |
-          BASE_REF="${BASE_REF#refs/heads/}"
-          base_ref="$BASE_REF"
-          git fetch --no-tags --depth=200 origin "$base_ref" || true
-          just coverage-proof-routed "origin/$base_ref" "HEAD"
-
       - name: Run workspace coverage proof
-        if: github.event_name != 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
           RUSTFLAGS: "-Cdebuginfo=0"
@@ -550,7 +516,7 @@ jobs:
       - name: Upload coverage to Codecov
         id: codecov_upload
         # Non-fatal telemetry: the job verdict comes from the local quality-gate
-        # receipt produced above (just coverage-proof-routed / quality-gate step).
+        # receipt produced above (just coverage-proof / quality-gate step).
         # An upload failure (flake, rate-limit, empty token on re-run) must never
         # fail this required check when the gate passed.
         # Token wiring: CODECOV_TOKEN is set in env so the action can read it via
@@ -558,9 +524,7 @@ jobs:
         # uses internally. The `env.CODECOV_TOKEN != ''` guard skips the upload
         # entirely when secrets are unavailable (fork PRs, certain re-run contexts).
         if: |
-          env.CODECOV_TOKEN != '' &&
-          (github.event_name != 'pull_request' ||
-           steps.coverage_route.outputs.coverage_required == 'true')
+          env.CODECOV_TOKEN != ''
         continue-on-error: true
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v7.0.0
         with:

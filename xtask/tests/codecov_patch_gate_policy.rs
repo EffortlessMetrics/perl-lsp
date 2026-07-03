@@ -126,12 +126,10 @@ fn coverage_docs_describe_advisory_patch_policy_without_pr_wiring()
     assert!(
         ci_section.contains("Patch coverage is an advisory coverage signal")
             && ci_section.contains("not a normal PR merge gate")
-            && ci_section.contains("explicitly labeled `ci:coverage`")
-            && ci_section.contains("Normal PR and merge-queue validation do not run")
+            && ci_section.contains("Coverage does not run on PRs or merge queues")
             && ci_section.contains("Project coverage remains")
             && ci_section.contains("informational during burn-down")
-            && ci_section.contains("Labeled PR runs route patch coverage by")
-            && ci_section.contains("changed surface through `cargo xtask ci route`"),
+            && ci_section.contains("Scheduled and manually dispatched coverage runs"),
         "coverage how-to must describe the advisory Codecov rollout posture"
     );
     assert!(
@@ -146,14 +144,14 @@ fn coverage_docs_describe_advisory_patch_policy_without_pr_wiring()
     assert!(
         current_policy.contains("patch `95%` / `0%` is the advisory coverage target")
             && current_policy.contains("project `95%` remains informational")
-            && current_policy.contains("no longer runs on normal PRs or merge groups")
-            && current_policy.contains("ci:coverage")
+            && current_policy.contains("no longer runs on PRs or merge groups")
+            && current_policy.contains("nightly/manual events")
             && current_policy.contains("quality-gate --mode enforce-patch-coverage"),
         "rollout doc must describe the active advisory Codecov posture"
     );
     assert!(
         rollout_doc.contains("Historical Codecov ladder")
-            && rollout_doc.contains("advisory, label/manual/nightly coverage"),
+            && rollout_doc.contains("advisory manual/nightly coverage"),
         "rollout doc must mark the older Codecov ladder as historical"
     );
     assert!(

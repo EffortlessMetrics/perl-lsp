@@ -14,13 +14,12 @@ The proof lane is in transition from measurement to enforcement:
 - `ripr+ New Gap Gate` blocks new RIPR gaps and stale or missing RIPR proof
   receipts
 - `Codecov / Patch 95` and `codecov/patch` are advisory coverage contexts.
-  They run on nightly/manual coverage lanes and on PRs explicitly labeled
-  `ci:coverage`, not on normal PR or merge-queue validation.
-- Labeled PR patch coverage is routed by changed surface through
-  `cargo xtask ci route`; code routes run the focused coverage pack selected
-  from `.ci/coverage-packs.toml`, while PR routes without an LCOV coverage pack
-  are recorded as `skipped-by-policy` instead of falling back to broad workspace
-  coverage
+  They run only on nightly/manual coverage lanes, not on PR or merge-queue
+  validation.
+- Manual routed coverage diagnostics can still use `cargo xtask ci route`; code
+  routes run the focused coverage pack selected from `.ci/coverage-packs.toml`,
+  while routes without an LCOV coverage pack are recorded as
+  `skipped-by-policy` instead of falling back to broad workspace coverage
 - generated quality-gate receipts are freshness-checked for patch, new-RIPR,
   and final modes; the final mode remains a future enforcement flip until
   burn-down closes

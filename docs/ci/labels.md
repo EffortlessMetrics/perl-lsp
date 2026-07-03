@@ -23,7 +23,6 @@ existing `ci:*` labels already used in some workflows.
 |---|---|
 | `ripr` | Force `ripr` static exposure analysis. |
 | `ripr-waive` | Acknowledge a `ripr` advisory finding (only after PR 18). |
-| `ci:coverage` / `coverage` | Run coverage lane. |
 | `ci:mutation` / `mutation` | Run runtime mutation testing. |
 | `ci:perl-matrix` | Run Perl version matrix lane. |
 | `ci:vscode-matrix` | Run VS Code OS matrix smoke. |
@@ -34,6 +33,9 @@ existing `ci:*` labels already used in some workflows.
 | `ci:dap` | Force DAP regression lanes. |
 | `ci:security` / `security-audit` | Force audit / deny / Trivy lane. |
 | `release-check` | Run release/package dry-run lanes. |
+
+Coverage is not PR-label triggered. Use the scheduled/manual coverage workflow
+when coverage diagnostics are needed.
 
 ## Out-of-scope labels (informational)
 

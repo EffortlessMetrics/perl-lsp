@@ -21,8 +21,8 @@ Every PR must pass the required proof gates before merge:
 | **Perl LSP Rust Small Result** | Routed Rust compile/test aggregate | Medium |
 | **ripr+ New Gap Gate** | Mutation-killing tests at the new production call sites | Trips direct `--lib` unit tests |
 
-`Codecov / Patch 95` is advisory. Run it on nightly/manual coverage lanes or
-PRs explicitly labeled `ci:coverage`; do not add tests solely to satisfy
+`Codecov / Patch 95` is advisory and does not run on PRs or merge queues. Run
+it on nightly/manual coverage lanes only; do not add tests solely to satisfy
 changed-line coverage when the required proof gates are already green.
 
 ---
@@ -79,8 +79,9 @@ never executed those lines.
 
 ### Fix
 
-Add `--lib` unit tests for the uncovered lines. The test does not need to be
-elaborate — it needs to execute the changed code path under `cargo test --lib`.
+If the uncovered lines reveal a real behavior gap, add focused tests that prove
+that behavior. Do not add tests solely to satisfy changed-line coverage; normal
+PR merge proof comes from RIPR+ and focused Rust checks.
 
 ### Comment staleness
 

@@ -43,7 +43,7 @@ fn ripr_workflow_blocks_new_gaps_and_requires_receipts() {
 }
 
 #[test]
-fn coverage_workflow_is_advisory_label_gated_and_requires_receipts() {
+fn coverage_workflow_is_manual_or_nightly_only_and_requires_receipts() {
     let root = repo_root();
     let workflow = must(fs::read_to_string(root.join(".github/workflows/ci-nightly.yml")));
     let justfile = must(fs::read_to_string(root.join("justfile")));
@@ -55,7 +55,7 @@ fn coverage_workflow_is_advisory_label_gated_and_requires_receipts() {
 
     assert!(
         workflow.contains("types: [opened, synchronize, reopened, ready_for_review, labeled]"),
-        "coverage workflow must rerun when ci:coverage is applied or a draft PR becomes ready"
+        "ci-nightly may still host other label-gated jobs"
     );
     assert!(
         coverage_job.contains("name: Codecov / Patch 95"),
@@ -69,12 +69,12 @@ fn coverage_workflow_is_advisory_label_gated_and_requires_receipts() {
     assert!(
         coverage_job.contains("github.event_name == 'schedule'")
             && coverage_job.contains("github.event_name == 'workflow_dispatch'")
-            && coverage_job.contains("github.event.pull_request.draft != true")
-            && coverage_job
-                .contains("contains(github.event.pull_request.labels.*.name, 'ci:coverage')")
+            && !coverage_job.contains("github.event_name == 'pull_request'")
+            && !coverage_job.contains("github.event.pull_request")
+            && !coverage_job.contains("ci:coverage")
             && !coverage_job.contains("github.event_name == 'merge_group'")
             && !workflow.contains("\n  merge_group:"),
-        "patch coverage must be advisory: nightly/manual/ci:coverage only, with no merge_group path"
+        "patch coverage must be advisory: schedule/workflow_dispatch only, with no PR or merge_group path"
     );
     let route_step =
         must_some(coverage_job.find("- name: Emit changed-file coverage route summary"));
@@ -93,9 +93,9 @@ fn coverage_workflow_is_advisory_label_gated_and_requires_receipts() {
         let step = must_some(workflow_step(coverage_job, setup_step));
         assert!(
             !step.contains("merge_group")
-                && step.contains("pull_request")
-                && step.contains("coverage_required"),
-            "coverage setup step `{setup_step}` must run only for non-PR coverage events or routed ci:coverage PRs"
+                && !step.contains("pull_request")
+                && !step.contains("coverage_required"),
+            "coverage setup step `{setup_step}` must not carry PR routing conditions"
         );
     }
     let codecov_upload_start = must_some(coverage_job.find("- name: Upload coverage to Codecov"));
@@ -119,11 +119,7 @@ fn coverage_workflow_is_advisory_label_gated_and_requires_receipts() {
         "base_ref=\"$BASE_REF\"",
         "id: coverage_route",
         "coverage_required=$coverage_required",
-        "Run routed PR coverage proof",
-        "steps.coverage_route.outputs.coverage_required == 'true'",
-        "just coverage-proof-routed \"origin/$base_ref\" \"HEAD\"",
         "changed-file routing selected no LCOV coverage proof packs",
-        "if: github.event_name != 'pull_request'",
         "just coverage-proof \"origin/$base_ref\"",
         "cache-targets: false",
         "RUSTFLAGS: \"-Cdebuginfo=0\"",
@@ -147,6 +143,18 @@ fn coverage_workflow_is_advisory_label_gated_and_requires_receipts() {
     ] {
         assert!(coverage_job.contains(required), "coverage job missing `{required}`");
     }
+    for forbidden in [
+        "Run routed PR coverage proof",
+        "coverage-proof-routed",
+        "github.event_name == 'pull_request'",
+        "github.event.pull_request",
+        "ci:coverage",
+    ] {
+        assert!(
+            !coverage_job.contains(forbidden),
+            "coverage job must not include PR coverage path `{forbidden}`"
+        );
+    }
     assert!(
         coverage_job
             .contains("uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"),
@@ -158,8 +166,7 @@ fn coverage_workflow_is_advisory_label_gated_and_requires_receipts() {
     );
     assert!(
         codecov_router.contains("Advisory lightweight Codecov coverage-pack route")
-            && codecov_router.contains("feed Codecov / Patch 95")
-            && codecov_router.contains("ci:coverage")
+            && codecov_router.contains("feed manual routed coverage diagnostics")
             && !codecov_router.contains("CI-enforced lightweight Codecov coverage-pack route"),
         "Codecov route receipt must describe routed patch proof as advisory"
     );
@@ -183,16 +190,16 @@ fn coverage_workflow_is_advisory_label_gated_and_requires_receipts() {
     assert_eq!(
         routed_recipe.matches("cargo xtask coverage-baseline").count(),
         1,
-        "routed PR coverage proof should generate the coverage receipt once"
+        "manual routed coverage proof should generate the coverage receipt once"
     );
     assert_eq!(
         routed_recipe.matches("cargo xtask quality-gate").count(),
         1,
-        "routed PR coverage proof should evaluate the patch gate once"
+        "manual routed coverage proof should evaluate the patch gate once"
     );
     assert!(
         !routed_recipe.contains("--check"),
-        "routed PR coverage proof writes task-owned receipts and should not immediately recheck them"
+        "manual routed coverage proof writes task-owned receipts and should not immediately recheck them"
     );
     for required in [
         "coverage-proof base='origin/main':",
@@ -266,8 +273,7 @@ fn docs_describe_transitional_blocking_contract() {
     );
     assert!(
         coverage_doc.contains("Patch coverage is an advisory coverage signal")
-            && coverage_doc.contains("ci:coverage")
-            && coverage_doc.contains("just coverage-proof-routed <base> HEAD")
+            && coverage_doc.contains("Coverage does not run on PRs or merge queues")
             && coverage_doc.contains("just coverage-proof <base>")
             && coverage_doc.contains("Project coverage remains informational during burn-down"),
         "coverage docs must describe advisory patch coverage and transitional project coverage"

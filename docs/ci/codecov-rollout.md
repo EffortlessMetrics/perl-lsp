@@ -13,8 +13,8 @@ useful alongside the other evidence lanes.
 ## Advisory Codecov posture
 
 The proof-enforcement lane now uses RIPR+ and focused Rust checks as the
-required PR proof. Codecov remains an advisory coverage lane for nightly/manual
-runs and explicitly labeled `ci:coverage` PRs.
+required PR proof. Codecov remains an advisory coverage lane for nightly and
+manual runs.
 
 Current policy:
 
@@ -25,11 +25,10 @@ Current policy:
 - proof-lane `xtask/src/` paths are included through focused quality-gate and RIPR integration coverage;
 - per-flag `target` fields are not used because project and patch status blocks own thresholds.
 
-The coverage workflow no longer runs on normal PRs or merge groups. It runs on
-nightly/manual events and on PRs explicitly labeled `ci:coverage`, where it
-feeds the local `quality-gate --mode enforce-patch-coverage` receipt without
-becoming a merge requirement. It does not implement project-coverage final
-enforcement.
+The coverage workflow no longer runs on PRs or merge groups. It runs only on
+nightly/manual events, where it feeds the local
+`quality-gate --mode enforce-patch-coverage` receipt without becoming a merge
+requirement. It does not implement project-coverage final enforcement.
 
 ## What Codecov answers (and doesn't)
 
@@ -57,7 +56,7 @@ Codecov does **not** answer:
 | Project status          | Codecov project `95%`, informational during burn-down                 | blocking after project coverage reaches target            |
 | Coverage flags          | crate-level flags, including `xtask/src/` for proof-rail code         | keep flags inspectable without per-flag status targets    |
 | Branch-coverage ratchet | `.ci/coverage-baseline.txt` parser branch ratchet                     | unchanged in this slice                                   |
-| Coverage receipt        | `target/receipts/quality/coverage-baseline.json` plus quality-gate JSON/Markdown in explicit coverage runs | keep current on nightly/manual/`ci:coverage` runs |
+| Coverage receipt        | `target/receipts/quality/coverage-baseline.json` plus quality-gate JSON/Markdown in explicit coverage runs | keep current on nightly/manual runs |
 | Test Analytics          | receipt to JUnit upload in PR-fast / gate shards / UX regression lanes | unchanged; **test telemetry**, not a coverage verdict     |
 
 ## Historical current vs target
@@ -78,8 +77,8 @@ The table below is retained for historical context and is superseded by the proo
 ## Historical Codecov ladder
 
 The older parser-branch Codecov ladder below is retained as history only. The
-current posture is advisory, label/manual/nightly coverage alongside required
-RIPR+ and Rust Small proof.
+current posture is advisory manual/nightly coverage alongside required RIPR+
+and Rust Small proof.
 
 ## PR ladder
 
@@ -267,7 +266,7 @@ language = "yaml"
 surface = "ci"
 classification = "config"
 owner = "release/ci"
-reason = "Runs label-gated and scheduled coverage, mutation, performance, memory, and strict lanes."
+reason = "Runs scheduled/manual coverage plus label-gated mutation, performance, memory, and strict lanes."
 covered_by = ["cargo xtask check-file-policy", "docs/ci/codecov.md"]
 created = "2026-05-11"
 review_after = "2026-08-11"
@@ -294,20 +293,20 @@ this is the intent, not the bit-exact representation.
 Skip this PR if `ci-nightly.yml::test-coverage` continues to be ergonomic.
 Extract into `.github/workflows/coverage.yml` only if:
 
-- Coverage cadence diverges from "nightly" (PR-label use grows, badge
-  consumers want a clean run URL).
+- Coverage cadence diverges from "nightly" (for example, release audits or
+  dashboard consumers want a clean run URL).
 - Or workflow file-size becomes a review burden.
 
 When extracting:
 
-- Use `cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}`.
-- Trigger on `schedule` + `workflow_dispatch` + PR labels (`ci:coverage`,
-  `coverage`, `full-ci`).
+- Use event-aware concurrency that does not cancel scheduled or manual truth
+  runs.
+- Trigger on `schedule` + `workflow_dispatch`.
 - Remove the `test-coverage` job from `ci-nightly.yml` in the same PR.
 
 ## PR Cov-8 — Optional ratchet calibration
 
-Only after several stable `master` and `ci:coverage` runs with the new
+Only after several stable `master` scheduled/manual runs with the new
 `parser-branch` flag. Update `.ci/coverage-baseline.txt`:
 
 - Raise `baseline_branch_coverage` only when actuals are consistently above

@@ -36,7 +36,6 @@ risk-pack routing, expected ordinary-PR LEM ≈ 30–40.
 | Lane id | Trigger labels | Base LEM |
 |---|---|---:|
 | `mutation` | `ci:mutation`, `mutation`, `full-ci` | 60 |
-| `coverage` | `ci:coverage`, `coverage`, `full-ci` | 45 |
 | `fuzz` | `ci:fuzz`, `full-ci` | 60 |
 | `real_repo_latency` | `ci:bench`, `ci:real-repo-latency`, `full-ci` | 30 |
 | `memory_plateau` | `ci:memory`, `full-ci` | 35 |
@@ -50,6 +49,9 @@ risk-pack routing, expected ordinary-PR LEM ≈ 30–40.
 `ci-nightly.yml` (mutation, coverage), `perl-version-matrix.yml`, scheduled passes
 of `vscode-managed-binary-smoke.yml`, `ci-security.yml`, `flake-detection.yml`,
 `triage-issues.yml`, `merge-ready-reconciler.yml`, `tokmd.yml`.
+
+Coverage is scheduled/manual only. It is not a PR label-gated lane and is not
+part of the merge queue.
 
 ## Release-only lanes
 

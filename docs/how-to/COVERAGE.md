@@ -4,11 +4,11 @@ This document describes the code coverage infrastructure for perl-lsp.
 
 ## Overview
 
-The perl-lsp project uses **cargo-llvm-cov** for code coverage generation and **Codecov** for coverage aggregation, trending, and PR reporting.
+The perl-lsp project uses **cargo-llvm-cov** for code coverage generation and **Codecov** for coverage aggregation and trend reporting.
 
 Branch coverage is enabled in the coverage lane with `cargo-llvm-cov --branch`. That requires a nightly Rust toolchain because LLVM branch coverage uses unstable `-Z coverage-options=branch` support.
 
-The initial PR slice keeps the branch gate on library/unit tests (`--lib`) so it stays stable on current master. Integration snapshot suites can still be run separately outside the coverage lane.
+The scheduled/manual coverage lane keeps branch diagnostics on library/unit tests (`--lib`) so it stays stable on current master. Integration snapshot suites can still be run separately outside the coverage lane.
 
 ## Quick Start
 
@@ -55,13 +55,12 @@ Patch coverage is an advisory coverage signal, not a normal PR merge gate:
 - **Project coverage**: Target `95%`, informational during burn-down.
 - **Coverage scope**: Explicit coverage runs measure workspace library units plus focused proof-lane `xtask` tests. Integration-heavy project coverage remains a burn-down target.
 
-Normal PR and merge-queue validation do not run the coverage job. The
-`Codecov / Patch 95` job runs on the nightly/manual lane, or on PRs that are
-explicitly labeled `ci:coverage`. Labeled PR runs route patch coverage by
-changed surface through `cargo xtask ci route`; routes without a coverage pack
-record `skipped-by-policy` instead of expanding into the broad workspace proof.
-Scheduled and manually dispatched coverage runs still use the broader workspace
-proof. Project coverage remains informational during burn-down.
+Coverage does not run on PRs or merge queues. The `Codecov / Patch 95` job runs
+only on the nightly/manual lane. Scheduled and manually dispatched coverage runs
+use the broader workspace proof. Manual routed diagnostics can still run
+`cargo xtask ci route` and `just coverage-proof-routed` locally when a maintainer
+explicitly wants changed-surface LCOV evidence. Project coverage remains
+informational during burn-down.
 
 ### Patch Coverage Quality Gate
 
@@ -71,8 +70,8 @@ Generate the coverage receipt from LCOV before running the patch gate:
 rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-coverage <patch-percent>
 ```
 
-CI derives patch coverage from the PR diff and the route-selected proof-pack
-LCOV file:
+Manual routed diagnostics can derive patch coverage from a diff and the
+route-selected proof-pack LCOV file:
 
 ```bash
 rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope routed-coverage-packs
@@ -96,22 +95,21 @@ Use `--check` on either command to validate existing receipts instead of rewriti
 
 Failure output includes sample uncovered lines and repair guidance. Treat those as behavior-oriented tests to add around error paths, boundaries, config parsing, serialization, cancellation, and output contracts, not as a prompt to add line-touch tests.
 
-### Viewing Coverage in PRs
+### Viewing Coverage
 
-When Codecov is explicitly requested on a PR with `ci:coverage`:
+When Codecov runs on the nightly/manual lane:
 
-1. The advisory coverage job runs for that labeled PR
+1. The advisory coverage job runs outside the PR critical path
 2. Coverage data is uploaded to Codecov
-3. Codecov posts a comment to the PR showing:
+3. Codecov shows:
    - Overall coverage percentage
    - Coverage diff (lines added/removed)
    - Per-file coverage changes
    - Flags for each crate (parser, lsp, lexer, dap, corpus)
 
 The nightly coverage lane also generates branch coverage in `lcov.info` and
-checks it against `.ci/coverage-baseline.txt`. That lane remains a ratchet:
-branch coverage can stay flat or improve, and it fails if the total drops by
-more than the allowed percentage point budget.
+checks it against `.ci/coverage-baseline.txt`. That lane remains a diagnostic
+ratchet outside normal PR and merge-queue validation.
 
 ### Coverage Badge
 
@@ -209,7 +207,7 @@ The `codecov.yml` file at the project root configures:
 
 The coverage workflow file defines:
 
-- When coverage runs (push to main, PR labels, manual dispatch)
+- When coverage runs (schedule, manual dispatch)
 - Build and test environment
 - Upload configuration
 - Artifact retention
@@ -278,9 +276,9 @@ To improve coverage:
 
 ### Reviewing Coverage
 
-When reviewing PRs with coverage:
+When reviewing scheduled or manually requested coverage:
 
-1. Check the Codecov PR comment for coverage delta
+1. Check the Codecov dashboard or uploaded receipt for coverage delta
 2. Look for uncovered lines in changed files
 3. Ask: "Are the uncovered lines error paths that should be tested?"
 4. Don't aim for 100% - focus on meaningful test coverage
@@ -303,17 +301,16 @@ rtk just coverage
 
 ## Integration with CI Gates
 
-Patch coverage is the blocking PR coverage gate for new code. CI runs
-`cargo xtask ci route` first, then `just coverage-proof-routed <base> HEAD` for
-PRs with coverage packs. The routed proof generates focused LCOV from
+Patch coverage is not a PR gate. The required PR proof comes from RIPR+ and
+focused Rust checks. Manual routed diagnostics may run `cargo xtask ci route`
+first, then `just coverage-proof-routed <base> HEAD` when a maintainer wants
+changed-surface LCOV evidence. The routed proof generates focused LCOV from
 `.ci/coverage-packs.toml`, writes and checks
 `target/receipts/quality/coverage-baseline.json`, runs
-`cargo xtask quality-gate --mode enforce-patch-coverage`, appends
-`target/receipts/quality/ci-route.md` and
-`target/receipts/quality/quality-gate-coverage.md` to the GitHub summary, and
-uploads required coverage proof artifacts. On PRs, routes without an LCOV
-coverage pack are recorded as `skipped-by-policy`; scheduled and manual runs
-remain responsible for the broader workspace proof.
+`cargo xtask quality-gate --mode enforce-patch-coverage`, and writes
+`target/receipts/quality/ci-route.md` plus
+`target/receipts/quality/quality-gate-coverage.md`. Routes without an LCOV
+coverage pack are recorded as `skipped-by-policy`.
 
 Scheduled and manually dispatched coverage jobs still run
 `just coverage-proof <base>` to generate the broader workspace library plus

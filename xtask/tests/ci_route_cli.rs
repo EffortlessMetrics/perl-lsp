@@ -35,8 +35,8 @@ fn ci_route_cli_writes_supported_editor_proof_pack_receipt() -> Result<()> {
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("missing claim_boundary"))?;
     assert!(claim_boundary.contains("Advisory changed-file coverage routing"));
-    assert!(claim_boundary.contains("Codecov / Patch 95"));
-    assert!(claim_boundary.contains("ci:coverage"));
+    assert!(claim_boundary.contains("manual routed coverage diagnostics"));
+    assert!(!claim_boundary.contains("ci:coverage"));
     assert!(
         !claim_boundary.contains("CI-enforced"),
         "ci route receipt must not describe advisory coverage packs as CI-enforced"
