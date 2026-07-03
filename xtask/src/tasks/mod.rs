@@ -84,6 +84,7 @@ pub mod methodology_gate;
 pub mod metrics;
 pub mod native_critic;
 pub mod native_format;
+pub mod native_product_surface;
 pub mod native_tooling;
 pub mod oracle_fixture_manifest;
 pub mod oracle_receipt_schema;

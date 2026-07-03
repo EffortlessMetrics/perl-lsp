@@ -73,6 +73,10 @@ enum Commands {
     /// Verify DevEx docs match the toolchain and command surface.
     CheckDevexDocs,
 
+    /// Verify first-mile product surfaces stay native-only (no legacy bridge /
+    /// external-tool-required framing).
+    CheckNativeProductSurface,
+
     /// Validate Real Perl Editor Trust provider/support claim tables.
     CheckProviderConfidenceMatrix,
 
@@ -2980,6 +2984,7 @@ fn run_cli(cli: Cli) -> Result<()> {
         Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::CheckDevexDocs => devex_docs::run(),
+        Commands::CheckNativeProductSurface => native_product_surface::run(),
         Commands::CheckProviderConfidenceMatrix => provider_confidence_matrix::run(),
         Commands::CheckSupportClaims => provider_confidence_matrix::run_support_claims(),
         Commands::CheckActiveGoalManifest => active_goal_manifest::run(),

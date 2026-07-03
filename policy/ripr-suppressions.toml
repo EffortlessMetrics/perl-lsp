@@ -1506,6 +1506,40 @@ owner = "proof-lane"
 issue = "EffortlessMetrics/ripr#1429"
 reason = "PR #3142 (issue #3141) adds the release-archive DAP guard. RIPR 0.9.x cannot statically trace activation from on-disk binary fixtures (tar.gz/zip + SHA256SUMS) and JSON-deserialized Contract through serde_json::from_str + fs::read_dir + the gzip/tar and ZIP central-directory byte parsers to the per-branch predicates in validate_dist (missing-binary, exec-bit, version-mismatch, undeclared-archive, extension-mismatch, platform-not-declared, checksum missing/not-listed/mismatch, completeness) and the archive readers. Same ripr#1429 class as the quality_baseline, agent_ledgers, and pr_close_proof xtask suppressions. Coverage: 28 inline #[cfg(test)] unit tests drive every branch in-process against committed fixtures (good/bad-missing-dap/bad-checksum) and tempdir edge dists, plus 6 CLI integration tests; Codecov patch coverage 96.88% with only genuinely-unreachable defensive guards (e.g. platform_for_triple None) residual. Suppression is narrow (single xtask file, one PR #3142). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
 
+# native_product_surface.rs first-mile guard: clap-dispatch + tempdir-fixture
+# seams untraceable by ripr 0.9.x (ripr#1429 class).
+#
+# PR #3283 (epic #3276, PR7) adds xtask/src/tasks/native_product_surface.rs —
+# the `cargo xtask check-native-product-surface` guard that greps first-mile
+# product surfaces for legacy/external-tool framing. RIPR cannot statically
+# trace activation from the tempdir fixture trees (run_at) and the new top-level
+# clap `Commands::CheckNativeProductSurface` dispatch arm through the proc-macro
+# derive to the per-line seams: the violations-present report branch
+# (eprintln! block), the `format!` violation-string construction (idx + 1), and
+# the SURFACES / DISALLOWED const tables. ripr's own stop_reasons for these are
+# `proc_macro_opaque` and `fixture_opaque`. Same predicate/activation-untraceable
+# class as the quality_baseline, agent_ledgers, pr_close_proof, ci_route, and
+# release_artifact_check xtask suppressions above.
+#
+# Coverage evidence: 7 inline #[cfg(test)] tests drive every branch in-process —
+# flags_each_disallowed_marker (every DISALLOWED marker), allows_native_first_
+# negations (no false positives), reports_line_numbers (exact line-number
+# oracle), flags_markdown_wrapped_and_capitalized_variants (backtick/case
+# normalization), run_at_is_ok_on_a_clean_tree, run_at_errors_when_a_surface_
+# regresses (violations-present error branch), and live_product_surface_is_clean
+# (the real `run` entry point over the live repo surfaces).
+[[suppress]]
+id = "ripr-suppress-native-product-surface-scanner"
+kind = "predicate_infection_untraceable"
+paths = ["xtask/src/tasks/native_product_surface.rs", "xtask/src/main.rs"]
+classification = ["weakly_exposed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
+reason = "PR #3283 (epic #3276, PR7) adds the native product-surface guard xtask. RIPR 0.9.x cannot statically trace activation from tempdir fixture trees and the new top-level clap Commands::CheckNativeProductSurface dispatch arm (xtask/src/main.rs) through the proc-macro derive to the per-line seams in native_product_surface.rs: the violations-present report branch (eprintln! block ~line 68), the format! violation-string construction (idx + 1, ~lines 108-111), and the SURFACES/DISALLOWED const tables (~lines 24, 36). ripr's own stop_reasons are proc_macro_opaque and fixture_opaque. Same ripr#1429 class as the quality_baseline, agent_ledgers, pr_close_proof, ci_route, and release_artifact_check xtask suppressions. Coverage: 7 inline #[cfg(test)] tests drive every branch in-process (flags_each_disallowed_marker, allows_native_first_negations, reports_line_numbers with an exact line-number oracle, flags_markdown_wrapped_and_capitalized_variants, run_at_is_ok_on_a_clean_tree, run_at_errors_when_a_surface_regresses, live_product_surface_is_clean). The main.rs entry is scoped to the same two diff-scoped classifications (weakly_exposed, no_static_path) and only ever affects new clap dispatch arms, which are proc_macro_opaque by construction and delegate to task modules that carry their own coverage. Suppression is narrow (one new xtask task file + its dispatch arm, one PR #3283). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+
 # Mid-surrogate call-observation test surface (#2478): ripr#1428-class
 # false-positives in newly added call-observation test file.
 #
