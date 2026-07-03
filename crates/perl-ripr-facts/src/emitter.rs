@@ -276,22 +276,18 @@ pub(crate) fn emit_relations_and_discriminators(
 /// Collect all `.pm` files under a directory. Returns (relative_path, content).
 fn collect_pm_files(lib_dir: &std::path::Path) -> Vec<(String, String)> {
     let mut result = Vec::new();
-    collect_pm_files_recursive(lib_dir, lib_dir, &mut result);
+    collect_pm_files_recursive(lib_dir, &mut result);
     result
 }
 
-fn collect_pm_files_recursive(
-    dir: &std::path::Path,
-    base: &std::path::Path,
-    result: &mut Vec<(String, String)>,
-) {
+fn collect_pm_files_recursive(dir: &std::path::Path, result: &mut Vec<(String, String)>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            collect_pm_files_recursive(&path, base, result);
+            collect_pm_files_recursive(&path, result);
         } else if path.extension().is_some_and(|ext| ext == "pm") {
             let Ok(content) = std::fs::read_to_string(&path) else {
                 continue;

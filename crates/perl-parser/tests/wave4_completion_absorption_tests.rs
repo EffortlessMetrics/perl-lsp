@@ -18,6 +18,18 @@ fn ws(path: &str) -> PathBuf {
     workspace_root().join(path)
 }
 
+/// Count entries in the root `[workspace.metadata.publish.allow]` array — the live
+/// published-crate count, which the baseline file must match. Derived, not hard-coded,
+/// so an intentional change to the published set only edits Cargo.toml + the baseline file.
+fn published_allowlist_count() -> std::io::Result<usize> {
+    let root_toml = fs::read_to_string(ws("Cargo.toml"))?;
+    let section = root_toml.split("[workspace.metadata.publish]").nth(1).unwrap_or("");
+    let allow_start = section.find("allow = [").unwrap_or(0);
+    let allow = &section[allow_start..];
+    let allow_end = allow.find(']').unwrap_or(allow.len());
+    Ok(allow[..allow_end].matches('"').count() / 2)
+}
+
 // =============================================================================
 // Section 1: Module Accessibility Tests
 // =============================================================================
@@ -188,22 +200,28 @@ fn test_perl_incremental_parsing_not_in_allowlist() -> TestResult {
 // Section 4: Published Count Baseline Tests
 // =============================================================================
 
-/// Test that published-crate-baseline.txt is updated to 31.
+/// Test that published-crate-baseline.txt agrees with the live publish allowlist.
 ///
-/// Wave 4-Completion absorbed perl-dead-code, perl-refactoring, and
-/// perl-incremental-parsing (37 → 34). Wave Final PR B subsequently absorbed
-/// perl-lsp-feature-catalog, perl-lsp-config, and perl-content-length-framing
-/// (34 → 31). The current baseline is 31.
+/// The published-crate count is the single source of truth held jointly by the
+/// `[workspace.metadata.publish.allow]` array in root Cargo.toml and
+/// `xtask/published-crate-baseline.txt`; the two must match. This derives both
+/// rather than hard-coding a literal, so an intentional change to the published set
+/// (e.g. perl-ripr-facts, #3293) only edits those two files, not this guard.
 #[test]
 fn test_published_count_baseline_is_current() -> TestResult {
     let baseline_path = ws("xtask/published-crate-baseline.txt");
     let content = fs::read_to_string(&baseline_path)?;
-    let baseline_count = content.trim().parse::<u32>()?;
+    let baseline_count = content.trim().parse::<usize>()?;
+    let allowlist_count = published_allowlist_count()?;
 
-    if baseline_count == 31 {
+    if baseline_count == allowlist_count {
         Ok(())
     } else {
-        Err(format!("published-crate-baseline.txt must be 31, got {}", baseline_count).into())
+        Err(format!(
+            "published-crate-baseline.txt ({baseline_count}) must match the publish \
+             allowlist entry count ({allowlist_count})"
+        )
+        .into())
     }
 }
 

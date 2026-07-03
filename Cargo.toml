@@ -71,6 +71,7 @@ members = [
     "crates/perl-uri",
     "crates/perl-pod",
     "crates/perl-corpus",
+    "crates/perl-ripr-facts",
     "crates/perl-lsp-rs",
     "crates/perl-lsp-ux-tests",
     "crates/perllsp",
@@ -105,6 +106,8 @@ allow = [
     "perl-regex",
     "perl-pod",
     "tree-sitter-perl-c",
+    # Batch RIPR facts exporter — leaf crate (serde_json only, no workspace deps).
+    "perl-ripr-facts",
     # (perl-heredoc-anti-patterns absorbed into perl-parser — Wave D)
 
     # Tier 1b — Depend only on Tier 1 crates
@@ -253,6 +256,9 @@ perl-lsp-rs-core = { path = "crates/perl-lsp-rs-core", version = "0.17.0" }
 perl-ci-hygiene = { path = "crates/perl-ci-hygiene", version = "0.17.0" }
 perl-pod = { path = "crates/perl-pod", version = "0.17.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.17.0" }
+# Batch RIPR facts exporter — deliberately depends on neither the LSP server
+# runtime nor the raw parser stack (contract enforced in crates/perl-ripr-facts).
+perl-ripr-facts = { path = "crates/perl-ripr-facts", version = "0.17.0" }
 perl-dap = { path = "crates/perl-dap", version = "0.17.0" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.17.0" }
 # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)

@@ -13,6 +13,29 @@ fn workspace_root() -> PathBuf {
     PathBuf::from(manifest_dir).join("..").join("..")
 }
 
+/// Count the entries in the root `[workspace.metadata.publish.allow]` array.
+///
+/// This is the live published-crate count and the single source of truth for it,
+/// alongside `xtask/published-crate-baseline.txt` which must agree with it. Tests
+/// derive the count from here rather than hard-coding a literal, so an intentional
+/// change to the published set (add/remove a crate) only touches Cargo.toml and the
+/// baseline file — never these guards.
+fn published_allowlist_count(root: &Path) -> io::Result<usize> {
+    let root_toml = fs::read_to_string(root.join("Cargo.toml"))?;
+    let section = root_toml.split("[workspace.metadata.publish]").nth(1).unwrap_or("");
+    let allow_start = section.find("allow = [").unwrap_or(0);
+    let allow = &section[allow_start..];
+    let allow_end = allow.find(']').unwrap_or(allow.len());
+    // Crate names are double-quoted; two quotes per entry.
+    Ok(allow[..allow_end].matches('"').count() / 2)
+}
+
+/// Read the published-crate baseline count from `xtask/published-crate-baseline.txt`.
+fn published_baseline_count(root: &Path) -> io::Result<usize> {
+    let raw = fs::read_to_string(root.join("xtask/published-crate-baseline.txt"))?;
+    raw.trim().parse().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+}
+
 /// Test 1: feature_catalog_module_accessible via perl_lsp_rs_core::feature_catalog::*
 #[test]
 fn test_feature_catalog_module_accessible() {
@@ -283,15 +306,24 @@ fn test_g3_content_length_framing_stays_deleted() {
     );
 }
 
-/// Test 16: Baseline updated to 31 published crates in xtask/published-crate-baseline.txt
+/// Test 16: the baseline file agrees with the live publish allowlist (single source of truth).
+///
+/// The published-crate count lives in exactly two places — the
+/// `[workspace.metadata.publish.allow]` array in root Cargo.toml and
+/// `xtask/published-crate-baseline.txt` — and they must match. This derives both
+/// rather than hard-coding a literal, so an intentional change to the published set
+/// (e.g. perl-ripr-facts, #3293) only edits those two files, not this guard.
 #[test]
-fn test_baseline_count_is_31() -> TestResult {
+fn test_baseline_matches_allowlist() -> TestResult {
     let root = workspace_root();
-    let baseline = fs::read_to_string(root.join("xtask/published-crate-baseline.txt"))?;
+    let baseline = published_baseline_count(&root)?;
+    let allowlist = published_allowlist_count(&root)?;
 
-    let count: usize = baseline.trim().parse()?;
-
-    assert_eq!(count, 31, "Published crate count should be 31 (was 34, minus 3 absorbed crates)");
+    assert_eq!(
+        baseline, allowlist,
+        "xtask/published-crate-baseline.txt ({baseline}) must match the \
+         [workspace.metadata.publish.allow] entry count ({allowlist})"
+    );
 
     Ok(())
 }
@@ -310,35 +342,18 @@ fn test_adr_0041_has_amendment_9() -> TestResult {
     Ok(())
 }
 
-/// Test 18: publish allowlist contains no more than 31 quoted crate entries
+/// Test 18: the publish allowlist parses to a non-empty count that matches the baseline.
 #[test]
-fn test_publish_allowlist_has_31_entries() -> TestResult {
+fn test_publish_allowlist_matches_baseline() -> TestResult {
     let root = workspace_root();
-    let root_toml = fs::read_to_string(root.join("Cargo.toml"))?;
+    let allowlist = published_allowlist_count(&root)?;
+    let baseline = published_baseline_count(&root)?;
 
-    // Extract [workspace.metadata.publish] section
-    let allow_section =
-        root_toml.split("[workspace.metadata.publish]").nth(1).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "[workspace.metadata.publish] section not found in root Cargo.toml",
-            )
-        })?;
-
-    // Count quoted entries that look like crate names (quoted strings in allow = [...])
-    // Find the `allow = [` array
-    let allow_start = allow_section.find("allow = [").unwrap_or(0);
-    let allow_content = &allow_section[allow_start..];
-    let allow_end = allow_content.find(']').unwrap_or(allow_content.len());
-    let allow_array = &allow_content[..allow_end];
-
-    // Count quoted entries (crate names are double-quoted strings)
-    let count = allow_array.matches('"').count() / 2;
-
+    assert!(allowlist > 0, "publish allowlist parsed to 0 entries — parser or Cargo.toml broke");
     assert_eq!(
-        count, 31,
-        "Published allowlist should contain exactly 31 crate entries (got {})",
-        count
+        allowlist, baseline,
+        "[workspace.metadata.publish.allow] entry count ({allowlist}) must match \
+         xtask/published-crate-baseline.txt ({baseline})"
     );
 
     Ok(())

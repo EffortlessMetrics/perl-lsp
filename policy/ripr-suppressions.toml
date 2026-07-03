@@ -1682,3 +1682,50 @@ reason = "PR #3040 changes the for-loop break guard in LineStartsCache::position
 created = "2026-06-28"
 review_after = "2026-07-28"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# perl-ripr-facts string-scan emitter seams (PR #3294, tracking #3293):
+# ripr#1429-class weakly_gripped seams in the relocated ripr-facts exporter.
+#
+# PR #3294 relocates the `ripr-perl-facts-v1` exporter behavior-preserving out of
+# the LSP server runtime (perl-lsp-rs::ripr_facts_emitter + the packet-assembly
+# helpers in perl-lsp-rs::cli) into the new leaf crate perl-ripr-facts. Because
+# the whole crate is new to `origin/main`, diff-scoped ripr re-analyzes the moved
+# emitter and reports 3 `weakly_gripped` seams (classified reachable_unrevealed in
+# the 0.9.x receipt).
+#
+# The emitter is a conservative string-scanner: detect_framework
+# (content.contains("use Test::More") / Test2::V0/V1/Suite / Test::Exception /
+# Test::Fatal), count_assertion_calls, collect_t_files directory/line scanning, and
+# the run_ripr_facts packet-assembly / partial-upgrade branch. RIPR's static tracer
+# cannot follow activation from test inputs through these string/`.contains()` scans
+# to the predicate branches — the same ripr#1429 predicate-infection-untraceable
+# class as parse_quote_operator_content (string-parsing chain),
+# quality_baseline_cfg_test_scanner (line-scanning loops), and is_method_call_context
+# (char-by-char scan). Adding tests cannot fix a static-tracer limitation.
+#
+# Coverage evidence: 49 tests in the crate (34 emitter unit tests + 15 lib tests),
+# including the new end-to-end call-observation test
+# ripr_facts_success_with_test_facts_writes_partial_packet, which drives
+# run_ripr_facts on the success-with-facts path (discovers a Test::More `.t` file,
+# emits the test fact, upgrades the packet to `partial`, writes it) and asserts
+# framework detection + partial status. All migrated behavior is byte-identical to
+# the pre-relocation perl-lsp-rs implementation.
+#
+# Suppression is narrow (the two source files of the new crate, one PR). Remove
+# when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-perl-ripr-facts-string-scan-emitter"
+kind = "predicate_infection_untraceable"
+paths = [
+  "crates/perl-ripr-facts/src/emitter.rs",
+  "crates/perl-ripr-facts/src/lib.rs",
+]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3294 (tracking #3293) relocates the ripr-perl-facts-v1 exporter behavior-preserving from perl-lsp-rs into the new leaf crate perl-ripr-facts. Diff-scoped ripr 0.9.x re-analyzes the moved emitter (the whole crate is new to origin/main) and reports 3 weakly_gripped seams (classified reachable_unrevealed). The emitter is a conservative string-scanner: detect_framework (content.contains for Test::More / Test2::V0/V1/Suite / Test::Exception / Test::Fatal), count_assertion_calls, collect_t_files directory/line scanning, and the run_ripr_facts packet assembly / partial-upgrade branch. RIPR cannot statically trace activation from test inputs through these string scans to the predicate branches — the same ripr#1429 predicate-infection-untraceable class as parse_quote_operator_content, quality_baseline_cfg_test_scanner, and is_method_call_context. Coverage: 49 tests (34 emitter unit tests + 15 lib tests) including the new end-to-end call-observation test ripr_facts_success_with_test_facts_writes_partial_packet, which drives run_ripr_facts on the success-with-facts path (discovers a Test::More .t file, emits the test fact, upgrades the packet to partial, writes it) and asserts framework detection + partial status. All migrated behavior is byte-identical to the pre-relocation perl-lsp-rs implementation. Suppression is narrow (two source files of the new crate, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
