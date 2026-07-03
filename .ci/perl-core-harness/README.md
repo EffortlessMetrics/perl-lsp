@@ -1,7 +1,6 @@
 # Perl core harness baselines
 
-This directory is reserved for checked-in Perl core harness baselines once run
-receipts exist.
+This directory stores checked-in Perl core harness baselines.
 
 Initial scaffold:
 
@@ -12,16 +11,19 @@ cargo xtask perl-core-harness discover \
   --profile base
 ```
 
-Parse-mode reports are written to:
+Parse/compile-mode reports are written to:
 
 ```text
 target/perl-core/reports/<profile>-parse.json
+target/perl-core/reports/<profile>-compile.json
 ```
 
-Future baselines will live here, for example:
+The first checked-in ratchet is:
 
 ```text
-base-parse-baseline.json
 base-compile-baseline.json
-base-execute-baseline.json
 ```
+
+It covers the generated two-file base compile fixture only. It does not claim a
+real upstream Perl checkout or runtime execution. Update it explicitly with
+`perl-core-harness baseline --accept` after reviewing an intentional change.

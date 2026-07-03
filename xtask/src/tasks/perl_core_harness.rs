@@ -9,7 +9,7 @@ use chrono::Utc;
 use clap::ValueEnum;
 use color_eyre::eyre::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -17,6 +17,7 @@ use std::process::{Command, Output};
 
 const DISCOVERY_SCHEMA_VERSION: &str = "perl_core_harness.discovery.v1";
 const RUN_REPORT_SCHEMA_VERSION: &str = "perl_core_harness.report.v1";
+const COMPILE_BASELINE_SCHEMA_VERSION: &str = "perl_core_harness.compile_baseline.v1";
 
 /// Upstream Perl test scheduler to query.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, ValueEnum)]
@@ -148,6 +149,16 @@ pub struct RunConfig {
     pub runner_binary: Option<PathBuf>,
 }
 
+/// Configuration for `perl-core-harness baseline`.
+#[derive(Debug, Clone)]
+pub struct BaselineConfig {
+    pub mode: HarnessMode,
+    pub profile: HarnessProfile,
+    pub report: Option<PathBuf>,
+    pub baseline: Option<PathBuf>,
+    pub accept: bool,
+}
+
 /// Machine-readable discovery manifest.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DiscoveryReport {
@@ -214,6 +225,56 @@ pub struct RunFailure {
     pub first_diagnostic: String,
     pub workstream: String,
     pub lsp_impact: Vec<String>,
+}
+
+/// Checked-in baseline for a Perl core harness run report.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CompileBaseline {
+    pub schema_version: String,
+    pub report_schema_version: String,
+    pub mode: HarnessMode,
+    pub profile: HarnessProfile,
+    pub files_total: usize,
+    pub files_passed: usize,
+    pub files_failed: usize,
+    pub tap_assertions_total: usize,
+    pub tap_assertions_passed: usize,
+    pub buckets: BTreeMap<String, usize>,
+    pub expected_failures: Vec<RunFailure>,
+    pub file_results: Vec<RunFileResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BaselineComparison {
+    pub violations: Vec<BaselineViolation>,
+}
+
+impl BaselineComparison {
+    fn is_clean(&self) -> bool {
+        self.violations.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BaselineViolation {
+    pub kind: BaselineViolationKind,
+    pub path: Option<String>,
+    pub message: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BaselineViolationKind {
+    SchemaMismatch,
+    ModeMismatch,
+    ProfileMismatch,
+    PreviouslyPassingFileFailed,
+    UnexpectedNewFailure,
+    UnknownBucket,
+    UnbucketedFailure,
+    BucketCountIncreased,
+    MissingExpectedFile,
+    AssertionRegression,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -364,12 +425,43 @@ pub fn report() -> Result<()> {
     bail!("perl-core-harness report is not implemented until run receipts exist")
 }
 
-/// Stub for future baseline management.
-pub fn baseline(accept: bool) -> Result<()> {
-    if accept {
-        bail!("perl-core-harness baseline --accept is not implemented until run receipts exist");
+/// Check or update a checked-in Perl core harness baseline.
+pub fn baseline(config: BaselineConfig) -> Result<()> {
+    let report_path =
+        config.report.unwrap_or_else(|| default_run_report_path(config.mode, config.profile));
+    let baseline_path =
+        config.baseline.unwrap_or_else(|| default_baseline_path(config.mode, config.profile));
+    let report = read_run_report(&report_path)?;
+
+    if config.accept {
+        let baseline = baseline_from_report(&report)?;
+        write_compile_baseline(&baseline_path, &baseline)?;
+        println!("perl-core-harness: accepted {} {} baseline", baseline.mode, baseline.profile);
+        println!("wrote {}", baseline_path.display());
+        return Ok(());
     }
-    bail!("perl-core-harness baseline is not implemented until run receipts exist")
+
+    let baseline = read_compile_baseline(&baseline_path)?;
+    let comparison = compare_baseline(&baseline, &report);
+    if !comparison.is_clean() {
+        let details = comparison
+            .violations
+            .iter()
+            .map(|violation| {
+                let path = violation.path.as_deref().unwrap_or("-");
+                format!("{:?} {path}: {}", violation.kind, violation.message)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        bail!(
+            "perl-core-harness baseline check failed with {} violation(s):\n{}",
+            comparison.violations.len(),
+            details
+        );
+    }
+
+    println!("perl-core-harness: baseline check passed for {} {}", report.mode, report.profile);
+    Ok(())
 }
 
 fn canonicalize_existing_dir(path: &Path, label: &str) -> Result<PathBuf> {
@@ -523,6 +615,11 @@ fn default_run_report_path(mode: HarnessMode, profile: HarnessProfile) -> PathBu
     root.join("target").join("perl-core").join("reports").join(format!("{profile}-{mode}.json"))
 }
 
+fn default_baseline_path(mode: HarnessMode, profile: HarnessProfile) -> PathBuf {
+    let root = project_root().unwrap_or_else(|_| PathBuf::from("."));
+    root.join(".ci").join("perl-core-harness").join(format!("{profile}-{mode}-baseline.json"))
+}
+
 fn write_discovery_report(path: &Path, report: &DiscoveryReport) -> Result<()> {
     if let Some(parent) = path.parent() {
         let context = format!("creating output directory {}", parent.display());
@@ -541,6 +638,289 @@ fn write_run_report(path: &Path, report: &RunReport) -> Result<()> {
     let json = serde_json::to_string_pretty(report).context("serializing run report")?;
     fs::write(path, format!("{json}\n"))
         .with_context(|| format!("writing run report {}", path.display()))
+}
+
+fn read_run_report(path: &Path) -> Result<RunReport> {
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("reading run report {}", path.display()))?;
+    serde_json::from_str(&raw).with_context(|| format!("decoding run report {}", path.display()))
+}
+
+fn read_compile_baseline(path: &Path) -> Result<CompileBaseline> {
+    let raw =
+        fs::read_to_string(path).with_context(|| format!("reading baseline {}", path.display()))?;
+    serde_json::from_str(&raw).with_context(|| format!("decoding baseline {}", path.display()))
+}
+
+fn write_compile_baseline(path: &Path, baseline: &CompileBaseline) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        let context = format!("creating baseline directory {}", parent.display());
+        fs::create_dir_all(parent).context(context)?;
+    }
+    let json = serde_json::to_string_pretty(baseline).context("serializing compile baseline")?;
+    fs::write(path, format!("{json}\n"))
+        .with_context(|| format!("writing baseline {}", path.display()))
+}
+
+fn baseline_from_report(report: &RunReport) -> Result<CompileBaseline> {
+    let mut baseline = CompileBaseline {
+        schema_version: COMPILE_BASELINE_SCHEMA_VERSION.to_string(),
+        report_schema_version: report.schema_version.clone(),
+        mode: report.mode,
+        profile: report.profile,
+        files_total: report.summary.files_total,
+        files_passed: report.summary.files_passed,
+        files_failed: report.summary.files_failed,
+        tap_assertions_total: report.summary.tap_assertions_total,
+        tap_assertions_passed: report.summary.tap_assertions_passed,
+        buckets: report.buckets.clone(),
+        expected_failures: report.failures.clone(),
+        file_results: report.file_results.clone(),
+    };
+    sort_baseline(&mut baseline);
+    let validation = validate_report_bucket_shape(report);
+    if !validation.is_empty() {
+        let details = validation
+            .iter()
+            .map(|violation| {
+                let path = violation.path.as_deref().unwrap_or("-");
+                format!("{:?} {path}: {}", violation.kind, violation.message)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        bail!("cannot accept baseline with invalid failure buckets:\n{details}");
+    }
+    Ok(baseline)
+}
+
+fn sort_baseline(baseline: &mut CompileBaseline) {
+    baseline.file_results.sort_by(|left, right| left.path.cmp(&right.path));
+    baseline.expected_failures.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then_with(|| left.bucket.cmp(&right.bucket))
+            .then_with(|| left.phase.cmp(&right.phase))
+    });
+}
+
+fn compare_baseline(baseline: &CompileBaseline, report: &RunReport) -> BaselineComparison {
+    let mut violations = Vec::new();
+
+    if baseline.schema_version != COMPILE_BASELINE_SCHEMA_VERSION {
+        violations.push(violation(
+            BaselineViolationKind::SchemaMismatch,
+            None,
+            format!(
+                "baseline schema {} does not match {}",
+                baseline.schema_version, COMPILE_BASELINE_SCHEMA_VERSION
+            ),
+        ));
+    }
+    if baseline.report_schema_version != RUN_REPORT_SCHEMA_VERSION {
+        violations.push(violation(
+            BaselineViolationKind::SchemaMismatch,
+            None,
+            format!(
+                "baseline report schema {} does not match {}",
+                baseline.report_schema_version, RUN_REPORT_SCHEMA_VERSION
+            ),
+        ));
+    }
+    if report.schema_version != baseline.report_schema_version {
+        violations.push(violation(
+            BaselineViolationKind::SchemaMismatch,
+            None,
+            format!(
+                "report schema {} does not match baseline report schema {}",
+                report.schema_version, baseline.report_schema_version
+            ),
+        ));
+    }
+    if baseline.mode != report.mode {
+        violations.push(violation(
+            BaselineViolationKind::ModeMismatch,
+            None,
+            format!("baseline mode {} does not match report mode {}", baseline.mode, report.mode),
+        ));
+    }
+    if baseline.profile != report.profile {
+        violations.push(violation(
+            BaselineViolationKind::ProfileMismatch,
+            None,
+            format!(
+                "baseline profile {} does not match report profile {}",
+                baseline.profile, report.profile
+            ),
+        ));
+    }
+
+    violations.extend(validate_report_bucket_shape(report));
+    violations.extend(compare_file_results(baseline, report));
+    violations.extend(compare_failure_buckets(baseline, report));
+    violations.extend(compare_summary_assertions(baseline, report));
+
+    BaselineComparison { violations }
+}
+
+fn compare_file_results(baseline: &CompileBaseline, report: &RunReport) -> Vec<BaselineViolation> {
+    let baseline_results = baseline
+        .file_results
+        .iter()
+        .map(|result| (result.path.as_str(), result))
+        .collect::<BTreeMap<_, _>>();
+    let report_results = report
+        .file_results
+        .iter()
+        .map(|result| (result.path.as_str(), result))
+        .collect::<BTreeMap<_, _>>();
+    let expected_failure_paths = baseline
+        .expected_failures
+        .iter()
+        .map(|failure| failure.path.as_str())
+        .collect::<BTreeSet<_>>();
+    let report_failure_paths =
+        report.failures.iter().map(|failure| failure.path.as_str()).collect::<BTreeSet<_>>();
+    let mut violations = Vec::new();
+
+    for (path, baseline_result) in &baseline_results {
+        let Some(report_result) = report_results.get(path) else {
+            violations.push(violation(
+                BaselineViolationKind::MissingExpectedFile,
+                Some((*path).to_string()),
+                "baseline file is missing from current report",
+            ));
+            continue;
+        };
+
+        if baseline_result.status == RunnerStatus::Pass
+            && report_result.status == RunnerStatus::Fail
+        {
+            violations.push(violation(
+                BaselineViolationKind::PreviouslyPassingFileFailed,
+                Some((*path).to_string()),
+                "file passed in baseline but fails in current report",
+            ));
+        }
+        if report_result.assertions_passed < baseline_result.assertions_passed {
+            violations.push(violation(
+                BaselineViolationKind::AssertionRegression,
+                Some((*path).to_string()),
+                format!(
+                    "assertions passed regressed from {} to {}",
+                    baseline_result.assertions_passed, report_result.assertions_passed
+                ),
+            ));
+        }
+        if report_result.assertions_total < baseline_result.assertions_total {
+            violations.push(violation(
+                BaselineViolationKind::AssertionRegression,
+                Some((*path).to_string()),
+                format!(
+                    "assertions total regressed from {} to {}",
+                    baseline_result.assertions_total, report_result.assertions_total
+                ),
+            ));
+        }
+    }
+
+    for report_failure in &report_failure_paths {
+        if !baseline_results.contains_key(report_failure)
+            || !expected_failure_paths.contains(report_failure)
+        {
+            violations.push(violation(
+                BaselineViolationKind::UnexpectedNewFailure,
+                Some((*report_failure).to_string()),
+                "current report contains a failure not accepted by the baseline",
+            ));
+        }
+    }
+
+    violations
+}
+
+fn compare_failure_buckets(
+    baseline: &CompileBaseline,
+    report: &RunReport,
+) -> Vec<BaselineViolation> {
+    let mut violations = Vec::new();
+    for (bucket, current_count) in &report.buckets {
+        let baseline_count = baseline.buckets.get(bucket).copied().unwrap_or(0);
+        if *current_count > baseline_count {
+            violations.push(violation(
+                BaselineViolationKind::BucketCountIncreased,
+                None,
+                format!("bucket {bucket} increased from {baseline_count} to {current_count}"),
+            ));
+        }
+    }
+    violations
+}
+
+fn compare_summary_assertions(
+    baseline: &CompileBaseline,
+    report: &RunReport,
+) -> Vec<BaselineViolation> {
+    let mut violations = Vec::new();
+    if report.summary.tap_assertions_passed < baseline.tap_assertions_passed {
+        violations.push(violation(
+            BaselineViolationKind::AssertionRegression,
+            None,
+            format!(
+                "passed assertions regressed from {} to {}",
+                baseline.tap_assertions_passed, report.summary.tap_assertions_passed
+            ),
+        ));
+    }
+    if report.summary.tap_assertions_total < baseline.tap_assertions_total {
+        violations.push(violation(
+            BaselineViolationKind::AssertionRegression,
+            None,
+            format!(
+                "total assertions regressed from {} to {}",
+                baseline.tap_assertions_total, report.summary.tap_assertions_total
+            ),
+        ));
+    }
+    violations
+}
+
+fn validate_report_bucket_shape(report: &RunReport) -> Vec<BaselineViolation> {
+    let mut violations = Vec::new();
+    let failure_paths =
+        report.failures.iter().map(|failure| failure.path.as_str()).collect::<BTreeSet<_>>();
+    for failure in &report.failures {
+        if failure.bucket.trim().is_empty() {
+            violations.push(violation(
+                BaselineViolationKind::UnbucketedFailure,
+                Some(failure.path.clone()),
+                "failure has an empty bucket",
+            ));
+        } else if failure.bucket == "unknown" {
+            violations.push(violation(
+                BaselineViolationKind::UnknownBucket,
+                Some(failure.path.clone()),
+                "failure is bucketed as unknown",
+            ));
+        }
+    }
+    for result in &report.file_results {
+        if result.status == RunnerStatus::Fail && !failure_paths.contains(result.path.as_str()) {
+            violations.push(violation(
+                BaselineViolationKind::UnbucketedFailure,
+                Some(result.path.clone()),
+                "failing file has no failure bucket record",
+            ));
+        }
+    }
+    violations
+}
+
+fn violation(
+    kind: BaselineViolationKind,
+    path: Option<String>,
+    message: impl Into<String>,
+) -> BaselineViolation {
+    BaselineViolation { kind, path, message: message.into() }
 }
 
 fn prepare_run_copy(
@@ -1104,6 +1484,226 @@ mod tests {
     }
 
     #[test]
+    fn compile_baseline_schema_roundtrips() -> TestResult {
+        let baseline = baseline_from_report(&sample_compile_report())?;
+
+        let json = serde_json::to_string(&baseline)?;
+        let back: CompileBaseline = serde_json::from_str(&json)?;
+
+        assert_eq!(back, baseline);
+        Ok(())
+    }
+
+    #[test]
+    fn identical_compile_report_passes_baseline() -> TestResult {
+        let report = sample_compile_report();
+        let baseline = baseline_from_report(&report)?;
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert!(comparison.is_clean(), "identical report should pass: {comparison:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_file_results_are_order_independent() -> TestResult {
+        let mut report = sample_compile_report();
+        let baseline = baseline_from_report(&report)?;
+        report.file_results.reverse();
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert!(comparison.is_clean(), "reordered file results should pass: {comparison:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_fails_when_previously_passing_file_fails() -> TestResult {
+        let mut report = sample_compile_report();
+        let baseline = baseline_from_report(&report)?;
+        mark_file_failed(&mut report, "base/ok.t", "parse_recovery");
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert_violation(&comparison, BaselineViolationKind::PreviouslyPassingFileFailed);
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_fails_on_unexpected_new_failure() -> TestResult {
+        let mut report = sample_compile_report();
+        let baseline = baseline_from_report(&report)?;
+        report.file_results.push(RunFileResult {
+            path: "base/new.t".into(),
+            status: RunnerStatus::Fail,
+            assertions_passed: 0,
+            assertions_total: 1,
+        });
+        report.failures.push(sample_failure("base/new.t", "parse_recovery"));
+        report.buckets.insert("parse_recovery".into(), 1);
+        report.summary.files_total = 3;
+        report.summary.files_failed = 1;
+        report.summary.files_passed = 2;
+        report.summary.tap_assertions_total = 3;
+        report.summary.tap_assertions_passed = 2;
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert_violation(&comparison, BaselineViolationKind::UnexpectedNewFailure);
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_fails_on_unknown_bucket() -> TestResult {
+        let mut report = sample_compile_report();
+        let baseline = baseline_from_report(&report)?;
+        mark_file_failed(&mut report, "base/ok.t", "unknown");
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert_violation(&comparison, BaselineViolationKind::UnknownBucket);
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_fails_on_unbucketed_failure() -> TestResult {
+        let mut report = sample_compile_report();
+        let baseline = baseline_from_report(&report)?;
+        let Some(result) = report.file_results.iter_mut().find(|result| result.path == "base/ok.t")
+        else {
+            bail!("sample report missing base/ok.t");
+        };
+        result.status = RunnerStatus::Fail;
+        result.assertions_passed = 0;
+        report.summary.files_passed = 1;
+        report.summary.files_failed = 1;
+        report.summary.tap_assertions_passed = 1;
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert_violation(&comparison, BaselineViolationKind::UnbucketedFailure);
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_fails_when_bucket_count_increases() -> TestResult {
+        let mut baseline_report = sample_compile_report();
+        mark_file_failed(&mut baseline_report, "base/ok.t", "parse_recovery");
+        let baseline = baseline_from_report(&baseline_report)?;
+        let mut current_report = baseline_report.clone();
+        current_report.file_results.push(RunFileResult {
+            path: "base/new.t".into(),
+            status: RunnerStatus::Fail,
+            assertions_passed: 0,
+            assertions_total: 1,
+        });
+        current_report.failures.push(sample_failure("base/new.t", "parse_recovery"));
+        current_report.buckets.insert("parse_recovery".into(), 2);
+        current_report.summary.files_total = 3;
+        current_report.summary.files_passed = 1;
+        current_report.summary.files_failed = 2;
+        current_report.summary.tap_assertions_total = 3;
+        current_report.summary.tap_assertions_passed = 1;
+
+        let comparison = compare_baseline(&baseline, &current_report);
+
+        assert_violation(&comparison, BaselineViolationKind::BucketCountIncreased);
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_fails_on_assertion_regression() -> TestResult {
+        let mut report = sample_compile_report();
+        let baseline = baseline_from_report(&report)?;
+        let Some(result) = report.file_results.iter_mut().find(|result| result.path == "base/ok.t")
+        else {
+            bail!("sample report missing base/ok.t");
+        };
+        result.assertions_passed = 0;
+        report.summary.tap_assertions_passed = 1;
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert_violation(&comparison, BaselineViolationKind::AssertionRegression);
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_fails_on_mode_and_profile_mismatch() -> TestResult {
+        let mut report = sample_compile_report();
+        let mut baseline = baseline_from_report(&report)?;
+        baseline.mode = HarnessMode::Parse;
+        baseline.profile = HarnessProfile::Comp;
+        report.mode = HarnessMode::Compile;
+        report.profile = HarnessProfile::Base;
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert_violation(&comparison, BaselineViolationKind::ModeMismatch);
+        assert_violation(&comparison, BaselineViolationKind::ProfileMismatch);
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_fails_when_expected_file_is_missing() -> TestResult {
+        let mut report = sample_compile_report();
+        let baseline = baseline_from_report(&report)?;
+        report.file_results.retain(|result| result.path != "base/ok.t");
+        report.summary.files_total = 1;
+        report.summary.files_passed = 1;
+        report.summary.tap_assertions_total = 1;
+        report.summary.tap_assertions_passed = 1;
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert_violation(&comparison, BaselineViolationKind::MissingExpectedFile);
+        Ok(())
+    }
+
+    #[test]
+    fn compile_baseline_accept_writes_deterministic_sorted_json() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let report_path = temp.path().join("report.json");
+        let baseline_path = temp.path().join("baseline.json");
+        let mut report = sample_compile_report();
+        report.file_results.reverse();
+        write_run_report(&report_path, &report)?;
+
+        baseline(BaselineConfig {
+            mode: HarnessMode::Compile,
+            profile: HarnessProfile::Base,
+            report: Some(report_path),
+            baseline: Some(baseline_path.clone()),
+            accept: true,
+        })?;
+
+        let raw = fs::read_to_string(&baseline_path)?;
+        let accepted: CompileBaseline = serde_json::from_str(&raw)?;
+        let paths =
+            accepted.file_results.iter().map(|result| result.path.as_str()).collect::<Vec<_>>();
+        assert_eq!(paths, vec!["base/lex.t", "base/ok.t"]);
+        assert!(raw.ends_with('\n'));
+        Ok(())
+    }
+
+    #[test]
+    fn generated_two_file_compile_report_passes_checked_in_baseline() -> TestResult {
+        let root = project_root()?;
+        let baseline = read_compile_baseline(
+            &root.join(".ci").join("perl-core-harness").join("base-compile-baseline.json"),
+        )?;
+        let report = sample_compile_report();
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert!(
+            comparison.is_clean(),
+            "checked-in baseline should match fixture report: {comparison:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn non_git_perl_tree_has_unknown_ref() -> TestResult {
         let dir = tempfile::tempdir()?;
 
@@ -1295,6 +1895,79 @@ mod tests {
         write_run_report(&run_path, &report)?;
         assert!(run_path.is_file());
         Ok(())
+    }
+
+    fn sample_compile_report() -> RunReport {
+        RunReport {
+            schema_version: RUN_REPORT_SCHEMA_VERSION.into(),
+            commit: "abc".into(),
+            timestamp: "2026-07-02T00:00:00Z".into(),
+            perl_ref: "unknown".into(),
+            prepared_tree: "/tmp/perl".into(),
+            run_tree: "/tmp/run".into(),
+            host_perl: "perl".into(),
+            runner: HarnessRunner::Test,
+            mode: HarnessMode::Compile,
+            profile: HarnessProfile::Base,
+            harness_status: Some(0),
+            summary: RunSummary {
+                files_total: 2,
+                files_passed: 2,
+                files_failed: 0,
+                tap_assertions_total: 2,
+                tap_assertions_passed: 2,
+            },
+            buckets: BTreeMap::new(),
+            file_results: vec![
+                RunFileResult {
+                    path: "base/lex.t".into(),
+                    status: RunnerStatus::Pass,
+                    assertions_passed: 1,
+                    assertions_total: 1,
+                },
+                RunFileResult {
+                    path: "base/ok.t".into(),
+                    status: RunnerStatus::Pass,
+                    assertions_passed: 1,
+                    assertions_total: 1,
+                },
+            ],
+            failures: Vec::new(),
+        }
+    }
+
+    fn mark_file_failed(report: &mut RunReport, path: &str, bucket: &str) {
+        if let Some(result) = report.file_results.iter_mut().find(|result| result.path == path) {
+            result.status = RunnerStatus::Fail;
+            result.assertions_passed = 0;
+        }
+        report.failures.push(sample_failure(path, bucket));
+        report.buckets.insert(bucket.to_string(), 1);
+        report.summary.files_passed = report.summary.files_passed.saturating_sub(1);
+        report.summary.files_failed = report.summary.files_failed.saturating_add(1);
+        report.summary.tap_assertions_passed =
+            report.summary.tap_assertions_passed.saturating_sub(1);
+    }
+
+    fn sample_failure(path: &str, bucket: &str) -> RunFailure {
+        RunFailure {
+            path: path.to_string(),
+            phase: "compile".into(),
+            bucket: bucket.into(),
+            first_diagnostic: "sample failure".into(),
+            workstream: workstream_for_bucket(bucket).into(),
+            lsp_impact: lsp_impact_for_bucket(bucket)
+                .into_iter()
+                .map(ToString::to_string)
+                .collect(),
+        }
+    }
+
+    fn assert_violation(comparison: &BaselineComparison, kind: BaselineViolationKind) {
+        assert!(
+            comparison.violations.iter().any(|violation| violation.kind == kind),
+            "expected {kind:?} in {comparison:?}"
+        );
     }
 
     #[cfg(unix)]

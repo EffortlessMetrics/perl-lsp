@@ -2153,8 +2153,28 @@ enum PerlCoreHarnessCommand {
 
     /// Manage checked-in Perl core harness baselines (future slice).
     Baseline {
-        /// Accept the latest report as the baseline.
+        /// Harness mode covered by the baseline.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessMode::Compile)]
+        mode: perl_core_harness::HarnessMode,
+
+        /// Staged upstream Perl core profile covered by the baseline.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
+        profile: perl_core_harness::HarnessProfile,
+
+        /// Run report JSON to check or accept.
         #[arg(long)]
+        report: Option<PathBuf>,
+
+        /// Checked-in baseline JSON to read or update.
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+
+        /// Check the report against the baseline. This is the default when --accept is absent.
+        #[arg(long, alias = "enforce")]
+        check: bool,
+
+        /// Accept the latest report as the baseline.
+        #[arg(long, conflicts_with = "check")]
         accept: bool,
     },
 }
@@ -3515,7 +3535,20 @@ fn run_cli(cli: Cli) -> Result<()> {
                 runner_binary,
             }),
             PerlCoreHarnessCommand::Report => perl_core_harness::report(),
-            PerlCoreHarnessCommand::Baseline { accept } => perl_core_harness::baseline(accept),
+            PerlCoreHarnessCommand::Baseline {
+                mode,
+                profile,
+                report,
+                baseline,
+                check: _,
+                accept,
+            } => perl_core_harness::baseline(perl_core_harness::BaselineConfig {
+                mode,
+                profile,
+                report,
+                baseline,
+                accept,
+            }),
         },
         Commands::ParserRatchet { command } => match command {
             ParserRatchetCommand::Run { profile, base, head, receipt, force_selected } => {
@@ -4043,11 +4076,6 @@ mod tests {
                 "run --mode execute is not implemented yet",
             ),
             (PerlCoreHarnessCommand::Report, "report is not implemented"),
-            (PerlCoreHarnessCommand::Baseline { accept: false }, "baseline is not implemented"),
-            (
-                PerlCoreHarnessCommand::Baseline { accept: true },
-                "baseline --accept is not implemented",
-            ),
         ];
 
         for (command, expected) in cases {
