@@ -617,7 +617,7 @@ fn test_external_tool_timeout_handling() -> TestResult {
     // Should indicate which analyzer was actually used
     let analyzer_used = result["analyzerUsed"].as_str().unwrap_or("unknown");
     assert!(
-        analyzer_used == "external" || analyzer_used == "builtin",
+        analyzer_used == "external" || analyzer_used == "native",
         "Should indicate valid analyzer type, got: {}",
         analyzer_used
     );

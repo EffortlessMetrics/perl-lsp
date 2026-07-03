@@ -3,7 +3,7 @@
 use super::get_supported_commands;
 use super::provider::{ExecuteCommandProvider, TestRunner, select_test_runner};
 use super::test_support::mock_status;
-use perl_lsp_rs_core::config::WorkspaceConfig;
+use perl_lsp_rs_core::config::{CriticEngine, WorkspaceConfig};
 use serde_json::{Value, json};
 use std::fs;
 use std::path::PathBuf;
@@ -1082,8 +1082,65 @@ fn test_run_builtin_critic_with_valid_file() -> Result<(), Box<dyn std::error::E
     let result_value = result?;
     assert_eq!(result_value["status"], "success");
     assert!(result_value["violations"].is_array());
-    assert_eq!(result_value["analyzerUsed"], "builtin");
+    assert_eq!(result_value["analyzerUsed"], "native");
     Ok(())
+}
+
+// ============= NATIVE-FIRST CRITIC ENGINE GATING =============
+// perl.runCritic must default to the native analyzer. Merely having
+// `perlcritic` on PATH must NOT change the default behavior — external
+// perlcritic runs only when the critic engine is explicitly set to
+// legacy/external/perlcritic.
+
+#[test]
+#[allow(deprecated)]
+fn run_critic_defaults_to_native_analyzer() -> Result<(), Box<dyn std::error::Error>> {
+    // A provider with no workspace config (the common case) must report the
+    // native analyzer, regardless of whether `perlcritic` is installed on the
+    // host running this test.
+    let provider = ExecuteCommandProvider::new();
+
+    let tmp = tempdir()?;
+    let file = tmp.path().join("native_default.pl");
+    fs::write(&file, "#!/usr/bin/perl\nmy $x = 1;\nprint $x;\n")?;
+
+    let result = provider.run_critic(file.to_str().ok_or("path is not utf-8")?)?;
+    assert_eq!(result["status"], "success");
+    assert_eq!(
+        result["analyzerUsed"], "native",
+        "default runCritic must use the native analyzer, not external perlcritic"
+    );
+    Ok(())
+}
+
+#[test]
+fn external_critic_not_requested_without_config() {
+    // The structural guarantee behind "perlcritic on PATH does not change the
+    // default": with no config the external branch is never reached, so the
+    // presence of `perlcritic` on PATH is irrelevant to the default analyzer.
+    let provider = ExecuteCommandProvider::new();
+    assert!(
+        !provider.external_critic_requested(),
+        "no config must default to the native critic engine"
+    );
+}
+
+#[test]
+fn external_critic_not_requested_for_native_engine() {
+    let provider = ExecuteCommandProvider::new().with_critic_engine(CriticEngine::Native);
+    assert!(
+        !provider.external_critic_requested(),
+        "native critic engine must not select external perlcritic"
+    );
+}
+
+#[test]
+fn external_critic_requested_for_legacy_engine() {
+    let provider = ExecuteCommandProvider::new().with_critic_engine(CriticEngine::Legacy);
+    assert!(
+        provider.external_critic_requested(),
+        "explicit legacy/external critic engine must select external perlcritic"
+    );
 }
 
 #[test]

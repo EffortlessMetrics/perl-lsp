@@ -3,7 +3,7 @@
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 #[cfg(not(target_arch = "wasm32"))]
 use perl_lsp_rs_core::config::PerlOracleEnv;
-use perl_lsp_rs_core::config::WorkspaceConfig;
+use perl_lsp_rs_core::config::{CriticEngine, WorkspaceConfig};
 use perl_lsp_rs_core::providers::{
     ProviderDecisionConfidence, ProviderDecisionCopyablePayload, ProviderDecisionExplanation,
     ProviderDecisionFactSource, ProviderDecisionFallback, ProviderDecisionFreshness,
@@ -74,6 +74,12 @@ pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
 pub struct ExecuteCommandProvider {
     workspace_roots: Vec<PathBuf>,
     workspace_config: Option<WorkspaceConfig>,
+    /// Configured critic engine for `perl.runCritic`.
+    ///
+    /// Defaults to [`CriticEngine::Native`]. The external (legacy `perlcritic`)
+    /// analyzer runs only when this is [`CriticEngine::Legacy`] — merely having
+    /// `perlcritic` on `PATH` must not change the default behavior.
+    critic_engine: CriticEngine,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -139,12 +145,26 @@ impl ExecuteCommandProvider {
 impl ExecuteCommandProvider {
     /// Create a new execute command provider.
     pub fn new() -> Self {
-        Self { workspace_roots: Vec::new(), workspace_config: None }
+        Self {
+            workspace_roots: Vec::new(),
+            workspace_config: None,
+            critic_engine: CriticEngine::Native,
+        }
     }
 
     /// Create a provider with workspace root enforcement.
     pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
-        Self { workspace_roots, workspace_config: None }
+        Self { workspace_roots, workspace_config: None, critic_engine: CriticEngine::Native }
+    }
+
+    /// Set the critic engine used by `perl.runCritic`.
+    ///
+    /// Defaults to [`CriticEngine::Native`]. Pass [`CriticEngine::Legacy`] to
+    /// route `perl.runCritic` through the external `perlcritic` analyzer when it
+    /// is available on `PATH`.
+    pub fn with_critic_engine(mut self, engine: CriticEngine) -> Self {
+        self.critic_engine = engine;
+        self
     }
 
     /// Attach a workspace configuration to enable PerlOracleEnv isolation for
@@ -456,13 +476,25 @@ impl ExecuteCommandProvider {
             }
         };
 
-        if command_exists("perlcritic") {
+        if self.external_critic_requested() && command_exists("perlcritic") {
             if let Ok(result) = self.run_external_critic(&canonical_path) {
                 return Ok(result);
             }
         }
 
         self.run_builtin_critic(&canonical_path)
+    }
+
+    /// Whether the configured critic engine explicitly selects the external
+    /// (legacy `perlcritic`) analyzer.
+    ///
+    /// The native analyzer is the default: merely having `perlcritic` present
+    /// on `PATH` must not change the default behavior of `perl.runCritic`.
+    /// External critic runs only when `.perl-lsp.toml` / server config sets the
+    /// critic engine to `legacy`/`external`/`perlcritic`
+    /// ([`CriticEngine::Legacy`]).
+    pub(crate) fn external_critic_requested(&self) -> bool {
+        matches!(self.critic_engine, CriticEngine::Legacy)
     }
 
     #[deprecated(since = "0.8.9", note = "Use run_critic_secure for secure path resolution")]
@@ -479,7 +511,7 @@ impl ExecuteCommandProvider {
             ));
         }
 
-        if command_exists("perlcritic") {
+        if self.external_critic_requested() && command_exists("perlcritic") {
             if let Ok(result) = self.run_external_critic(path) {
                 return Ok(result);
             }
@@ -573,7 +605,7 @@ impl ExecuteCommandProvider {
             "status": "success",
             "violations": formatted_violations,
             "violationCount": formatted_violations.len(),
-            "analyzerUsed": "builtin"
+            "analyzerUsed": "native"
         }))
     }
 

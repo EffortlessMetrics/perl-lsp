@@ -36,9 +36,13 @@ pub use toolchain_profile::PerlToolchainProfile;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum CriticEngine {
     /// Existing built-in/external Perl::Critic-compatible path.
-    #[default]
     Legacy,
     /// Rust-native critic rule registry.
+    ///
+    /// This is the default: native diagnostics are always on and require no
+    /// external `perlcritic`. The legacy/external engine is opt-in via
+    /// `.perl-lsp.toml`.
+    #[default]
     Native,
 }
 

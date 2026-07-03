@@ -562,8 +562,8 @@ fn test_response_structure_validation() -> TestResult {
     let analyzer_used =
         result_value["analyzerUsed"].as_str().ok_or("analyzerUsed should be a string")?;
     assert!(
-        analyzer_used == "builtin" || analyzer_used == "external",
-        "Analyzer should be 'builtin' or 'external', got: {}",
+        analyzer_used == "native" || analyzer_used == "external",
+        "Analyzer should be 'native' or 'external', got: {}",
         analyzer_used
     );
 
