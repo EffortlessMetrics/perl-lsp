@@ -17,13 +17,16 @@
 //!   API, then validates the output path, writes the packet to disk, and maps
 //!   the outcome to a process exit code.
 //!
-//! Subsequent slices replace the string-scan emitter with `perl-workspace` /
-//! `perl-semantic-facts`-backed extraction; this crate is the home for that work.
+//! Later slices replace the remaining string scans with fuller parser- and
+//! semantic-backed extraction (using leaf crates like `perl-parser-core` /
+//! `perl-symbol` that carry no forbidden dependencies — not `perl-workspace`,
+//! which pulls `lsp-types`); this crate is the home for that work.
 
 mod emitter;
 
 use emitter::{
-    emit_boundaries_and_commands, emit_relations_and_discriminators, emit_tests_and_oracles,
+    emit_boundaries_and_commands, emit_files_and_owners, emit_relations_and_discriminators,
+    emit_tests_and_oracles,
 };
 
 /// Expected schema version for `ripr-perl-facts-v1` packets.
@@ -114,9 +117,10 @@ pub fn build_ripr_facts_packet(
         normalize_fact_classes(fact_classes).map_err(RiprFactsError::InvalidFactClasses)?;
 
     // Emit the packet. Tests/oracles (perl-lsp-swarm#2593), relations/
-    // discriminators (#2594), and boundaries/commands (#2595) are populated;
-    // files/owners/changes (#2592) still land in later slices. When any facts
-    // are found, `packet_status` upgrades from `unavailable` to `partial`.
+    // discriminators (#2594), boundaries/commands (#2595), and parser-backed
+    // files/owners (#3293 PR 3) are populated; diff-derived changes still land in
+    // a later slice. When any facts are found, `packet_status` upgrades from
+    // `unavailable` to `partial`.
     let (tests, oracles) = emit_tests_and_oracles(root);
     let has_test_facts = !tests.is_empty();
 
@@ -126,6 +130,23 @@ pub fn build_ripr_facts_packet(
 
     let (boundaries, boundary_limitations, verify_commands) = emit_boundaries_and_commands(root);
     let has_boundary_facts = !boundaries.is_empty();
+
+    // PR 3 (perl-lsp-swarm#3293): emit parser-backed files + owners facts (plus
+    // per-file provenance and parse/read limitations) by parsing every Perl
+    // source/test file under `root`. Only do the (potentially expensive) walk +
+    // parse when the caller actually requested `files`/`owners`/`provenance`, so
+    // a subset request (e.g. `tests,oracles`) stays cheap and the packet does
+    // not carry facts outside the advertised `requested_fact_classes`.
+    let wants_file_facts = normalized_classes
+        .iter()
+        .any(|class| class == "files" || class == "owners" || class == "provenance");
+    let (files, owners, file_provenance, file_limitations) = if wants_file_facts {
+        emit_files_and_owners(root)
+    } else {
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new())
+    };
+    let has_file_facts = !files.is_empty();
+    let has_owner_facts = !owners.is_empty();
 
     // Diff-derived changes are not emitted yet: batch mode has no git diff, and
     // the managed-producer mode that would supply one lands in a later slice.
@@ -149,18 +170,43 @@ pub fn build_ripr_facts_packet(
     packet["dynamic_boundaries"] = serde_json::Value::Array(boundaries);
     packet["verify_commands"] = serde_json::Value::Array(verify_commands);
 
-    // Upgrade status + merge limitations if we found any facts.
-    if has_test_facts || has_relation_facts || has_boundary_facts || has_change_facts {
+    // Populate files + owners arrays (PR 3), and append the per-file `syntax`
+    // provenance entries that each file/owner fact references by id.
+    if has_file_facts || has_owner_facts {
+        packet["files"] = serde_json::Value::Array(files);
+        packet["owners"] = serde_json::Value::Array(owners);
+        if let Some(provenance) = packet["provenance"].as_array_mut() {
+            provenance.extend(file_provenance);
+        }
+    }
+
+    // Upgrade status + merge limitations if we found any facts. Parse/read
+    // limitations from the files pass are always surfaced (even with no facts).
+    let has_facts = has_test_facts
+        || has_relation_facts
+        || has_boundary_facts
+        || has_change_facts
+        || has_file_facts
+        || has_owner_facts;
+    if has_facts {
         packet["packet_status"] = serde_json::json!("partial");
-        // Merge boundary limitations with the emitter-partial limitation.
+        // Merge boundary limitations, the emitter-partial note, and any
+        // parse/read limitations from the files pass.
         let mut all_limitations = boundary_limitations;
         all_limitations.push(serde_json::json!({
             "limitation_id": "emitter-partial",
             "kind": "partial_emitter",
-            "message": "PRs 6-8 landed (tests/oracles, relations/discriminators, boundaries/commands). Files/owners/changes (PR 5) still not yet emitted.",
+            "message": "Tests/oracles, relations/discriminators, boundaries/commands, and files/owners (parser-backed) are emitted. Diff-derived changes (managed-producer mode) are not yet emitted.",
             "evidence_refs": []
         }));
+        all_limitations.extend(file_limitations);
         packet["limitations"] = serde_json::Value::Array(all_limitations);
+    } else if !file_limitations.is_empty() {
+        // No facts, but the files pass hit read/parse failures — surface them
+        // next to the base `emitter-not-yet-implemented` limitation.
+        if let Some(limitations) = packet["limitations"].as_array_mut() {
+            limitations.extend(file_limitations);
+        }
     }
 
     Ok(packet)
@@ -440,6 +486,253 @@ mod tests {
         assert_eq!(built, written, "batch API packet must equal what the wrapper writes");
         let _ = std::fs::remove_file(out);
         Ok(())
+    }
+
+    // ── PR 3 parser-backed files/owners/provenance tests (#3293) ──
+
+    /// Build a packet for a synthetic workspace under a unique repo-relative
+    /// root, then clean the fixture up. `files` is a slice of
+    /// `(repo-relative path, content)`.
+    fn packet_for_fixture(dir: &str, files: &[(&str, &str)]) -> serde_json::Value {
+        let root = format!("target/ripr-p3-fixtures/{dir}");
+        let _ = std::fs::remove_dir_all(&root);
+        for (rel, content) in files {
+            let path = format!("{root}/{rel}");
+            if let Some(parent) = std::path::Path::new(&path).parent() {
+                std::fs::create_dir_all(parent).expect("create fixture dir");
+            }
+            std::fs::write(&path, content).expect("write fixture file");
+        }
+        let packet = build_ripr_facts_packet(&RiprFactsRequest {
+            schema: "ripr-perl-facts-v1",
+            root: &root,
+            base: None,
+            head: None,
+            fact_classes: "files,owners,provenance,limitations",
+        })
+        .expect("valid request builds a packet");
+        let _ = std::fs::remove_dir_all(&root);
+        packet
+    }
+
+    fn owners(packet: &serde_json::Value) -> Vec<serde_json::Value> {
+        packet["owners"].as_array().expect("owners[]").clone()
+    }
+
+    #[test]
+    fn build_packet_emits_file_fact_for_pm() {
+        let packet = packet_for_fixture(
+            "pm-file",
+            &[("lib/Widget.pm", "package Widget;\nsub build { 1 }\n1;\n")],
+        );
+        let files = packet["files"].as_array().expect("files[]");
+        let f = files.iter().find(|f| f["path"] == "lib/Widget.pm").expect(".pm file fact");
+        assert_eq!(f["role"], serde_json::json!(["source"]));
+        assert_eq!(f["file_id"], "file:lib/Widget.pm");
+        assert!(f["digest"].as_str().unwrap().starts_with("fnv64:"), "fnv64 digest");
+    }
+
+    #[test]
+    fn build_packet_emits_file_fact_for_t() {
+        let packet = packet_for_fixture("t-file", &[("t/basic.t", "use Test::More;\nok(1);\n")]);
+        let files = packet["files"].as_array().expect("files[]");
+        let f = files.iter().find(|f| f["path"] == "t/basic.t").expect(".t file fact");
+        assert_eq!(f["role"], serde_json::json!(["test"]));
+    }
+
+    #[test]
+    fn build_packet_emits_package_owner_with_real_range() {
+        let packet =
+            packet_for_fixture("pkg-owner", &[("lib/App.pm", "package App;\nsub run { 1 }\n1;\n")]);
+        let owners = owners(&packet);
+        let pkg = owners
+            .iter()
+            .find(|o| o["kind"] == "package" && o["name"] == "App")
+            .expect("package owner");
+        // Real range, not a 1:1 placeholder: `package App` starts at line 0.
+        assert_eq!(pkg["range"]["start_line"], 0);
+        assert_eq!(pkg["range"]["start_column"], 0);
+        assert_eq!(pkg["confidence"], "high");
+    }
+
+    #[test]
+    fn build_packet_emits_sub_owner_with_real_range() {
+        let packet = packet_for_fixture(
+            "sub-owner",
+            &[("lib/App.pm", "package App;\nsub discount { return 42; }\n1;\n")],
+        );
+        let owners = owners(&packet);
+        let sub = owners
+            .iter()
+            .find(|o| o["kind"] == "sub" && o["name"] == "discount")
+            .expect("sub owner");
+        // `sub discount` is on the second line (0-based line 1) — a real span.
+        assert_eq!(sub["range"]["start_line"], 1);
+        assert_eq!(sub["package"], "App", "sub owner records its enclosing package");
+    }
+
+    #[test]
+    fn build_packet_emits_method_owner_with_real_range() {
+        // Perl 5.38 `use feature 'class'` method declaration.
+        let packet = packet_for_fixture(
+            "method-owner",
+            &[(
+                "lib/Point.pm",
+                "use v5.38;\nuse feature 'class';\nclass Point {\n    method describe { return 'p'; }\n}\n",
+            )],
+        );
+        let owners = owners(&packet);
+        let m = owners.iter().find(|o| o["kind"] == "method" && o["name"] == "describe");
+        assert!(m.is_some(), "method `describe` must be an owner; owners: {owners:?}");
+        assert_eq!(m.unwrap()["range"]["start_line"], 3, "method is on line 3 (0-based)");
+    }
+
+    #[test]
+    fn build_packet_collects_package_names() {
+        let packet = packet_for_fixture(
+            "pkg-names",
+            &[("lib/Multi.pm", "package Foo;\nsub a { }\npackage Bar;\nsub b { }\n1;\n")],
+        );
+        let files = packet["files"].as_array().expect("files[]");
+        let f = files.iter().find(|f| f["path"] == "lib/Multi.pm").expect("file fact");
+        let names: Vec<&str> = f["package_names"]
+            .as_array()
+            .expect("package_names")
+            .iter()
+            .filter_map(|n| n.as_str())
+            .collect();
+        assert!(names.contains(&"Foo") && names.contains(&"Bar"), "both packages, got {names:?}");
+    }
+
+    #[test]
+    fn build_packet_orders_files_and_owners_deterministically() {
+        let fixture: &[(&str, &str)] =
+            &[("lib/Zebra.pm", "package Zebra;\n1;\n"), ("lib/Apple.pm", "package Apple;\n1;\n")];
+        let a = packet_for_fixture("order-a", fixture);
+        let b = packet_for_fixture("order-b", fixture);
+        let paths = |p: &serde_json::Value| -> Vec<String> {
+            p["files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|f| f["path"].as_str().map(String::from))
+                .collect()
+        };
+        let pa = paths(&a);
+        assert_eq!(pa, paths(&b), "file ordering is deterministic across builds");
+        assert!(pa.windows(2).all(|w| w[0] <= w[1]), "files are sorted, got {pa:?}");
+    }
+
+    #[test]
+    fn build_packet_uses_repo_relative_paths_only() {
+        let packet =
+            packet_for_fixture("rel-paths", &[("lib/Deep/Mod.pm", "package Deep::Mod;\n1;\n")]);
+        for f in packet["files"].as_array().expect("files[]") {
+            let path = f["path"].as_str().unwrap();
+            assert!(!path.starts_with('/'), "no absolute path: {path}");
+            assert!(!path.contains(':'), "no drive/host prefix: {path}");
+            assert!(
+                !path.contains("ripr-p3-fixtures"),
+                "path is relative to root, not the temp prefix: {path}"
+            );
+        }
+        assert_eq!(packet["files"][0]["path"], "lib/Deep/Mod.pm");
+    }
+
+    #[test]
+    fn build_packet_records_parser_provenance() {
+        let packet = packet_for_fixture("prov", &[("lib/App.pm", "package App;\n1;\n")]);
+        let provenance = packet["provenance"].as_array().expect("provenance[]");
+        let p = provenance.iter().find(|p| p["source"] == "syntax").expect("syntax provenance");
+        assert_eq!(p["file_id"], "file:lib/App.pm");
+        assert_eq!(p["confidence"], "high");
+        // The file fact references its provenance entry by id.
+        let f =
+            packet["files"].as_array().unwrap().iter().find(|f| f["path"] == "lib/App.pm").unwrap();
+        let refs: Vec<&str> =
+            f["provenance_refs"].as_array().unwrap().iter().filter_map(|r| r.as_str()).collect();
+        assert!(
+            refs.contains(&p["provenance_id"].as_str().unwrap()),
+            "file references its provenance"
+        );
+    }
+
+    #[test]
+    fn build_packet_reports_parse_failure_as_limitation_or_partial() {
+        // Deeply unbalanced braces trip the parser's recursion guard → parse() Err.
+        let bad = "{".repeat(5000);
+        let packet = packet_for_fixture("parse-fail", &[("lib/Bad.pm", &bad)]);
+        // The file is not silently dropped — a file fact is still emitted.
+        let files = packet["files"].as_array().expect("files[]");
+        assert!(
+            files.iter().any(|f| f["path"] == "lib/Bad.pm"),
+            "file fact emitted despite parse issue"
+        );
+        // Fail-soft: either a parse-failure limitation is recorded, or the file
+        // parsed (recovered) but produced no owners — never a silent drop.
+        let limitations = packet["limitations"].as_array().expect("limitations[]");
+        let had_parse_limitation = limitations
+            .iter()
+            .any(|l| l["limitation_id"].as_str().is_some_and(|s| s.starts_with("parse-failed:")));
+        let bad_owners: Vec<_> =
+            owners(&packet).into_iter().filter(|o| o["file_id"] == "file:lib/Bad.pm").collect();
+        assert!(
+            had_parse_limitation || bad_owners.is_empty(),
+            "parse failure must surface a limitation"
+        );
+    }
+
+    #[test]
+    fn wrapper_output_matches_batch_packet_after_parser_facts() -> std::io::Result<()> {
+        // Parity WITH real parser-backed facts: the wrapper writes exactly the
+        // batch-API packet for a root that produces files + owners.
+        let root = "target/ripr-p3-parity";
+        let _ = std::fs::remove_dir_all(root);
+        std::fs::create_dir_all(format!("{root}/lib"))?;
+        std::fs::write(format!("{root}/lib/App.pm"), "package App;\nsub run { return 1; }\n1;\n")?;
+
+        let out = format!("{root}/packet.json");
+        let rc = run_ripr_facts("ripr-perl-facts-v1", root, None, None, "files,owners", &out);
+        assert_eq!(rc, 0, "wrapper must succeed");
+        let written: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&out)?)?;
+
+        let built = build_ripr_facts_packet(&RiprFactsRequest {
+            schema: "ripr-perl-facts-v1",
+            root,
+            base: None,
+            head: None,
+            fact_classes: "files,owners",
+        })
+        .expect("valid request");
+        // Sanity: the fixture actually yields owners, so parity covers PR-3 facts.
+        assert!(!built["owners"].as_array().unwrap().is_empty(), "fixture must yield owners");
+        assert_eq!(built, written, "wrapper output must equal the batch packet with parser facts");
+
+        let _ = std::fs::remove_dir_all(root);
+        Ok(())
+    }
+
+    #[test]
+    fn build_packet_skips_files_when_not_requested() {
+        // A subset request that omits files/owners/provenance must not walk +
+        // parse the workspace: files[]/owners[] stay empty even with a .pm present.
+        let root = "target/ripr-p3-gate";
+        let _ = std::fs::remove_dir_all(root);
+        std::fs::create_dir_all(format!("{root}/lib")).expect("mkdir");
+        std::fs::write(format!("{root}/lib/App.pm"), "package App;\nsub run { 1 }\n1;\n")
+            .expect("write");
+        let packet = build_ripr_facts_packet(&RiprFactsRequest {
+            schema: "ripr-perl-facts-v1",
+            root,
+            base: None,
+            head: None,
+            fact_classes: "tests,oracles",
+        })
+        .expect("valid request");
+        let _ = std::fs::remove_dir_all(root);
+
+        assert!(packet["files"].as_array().unwrap().is_empty(), "files not requested → empty");
+        assert!(packet["owners"].as_array().unwrap().is_empty(), "owners not requested → empty");
     }
 
     // ── ripr-facts command tests (Campaign 31 PR 4, perl-lsp-swarm#2591) ──

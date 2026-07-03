@@ -1921,6 +1921,8 @@ dependencies = [
 name = "perl-ripr-facts"
 version = "0.17.0"
 dependencies = [
+ "perl-parser-core",
+ "perl-symbol",
  "serde_json",
 ]
 

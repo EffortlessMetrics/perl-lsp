@@ -9,6 +9,10 @@
 //! Distinguish exact oracles (is/isnt/cmp_ok) from smoke (ok/pass) from
 //! mention-only (use_ok/require_ok) from unknown.
 
+use perl_parser_core::Parser;
+use perl_parser_core::line_index::LineIndex;
+use perl_symbol::SymbolKind;
+use perl_symbol::surface::extract_symbol_decls;
 use serde_json::{Value, json};
 
 /// The Test::More assertion functions recognized by perl-lsp's completion
@@ -485,8 +489,6 @@ pub(crate) fn emit_boundaries_and_commands(root: &str) -> (Vec<Value>, Vec<Value
     (boundaries, limitations, verify_commands)
 }
 
-// Staged ripr-facts Campaign 31 scaffolding (#2592) — used under --all-targets; allow until wired into the --lib path.
-#[allow(dead_code)]
 /// Map a content_hash (u64) to a hex digest string for the packet.
 fn content_hash_to_digest(hash: u64) -> String {
     format!("fnv64:{hash:016x}")
@@ -502,7 +504,6 @@ fn uri_to_relative_path(uri: &str) -> String {
 }
 
 /// Determine file role from path extension.
-#[allow(dead_code)]
 fn file_role_from_path(path: &str) -> &'static str {
     if path.ends_with(".t") {
         "test"
@@ -654,7 +655,6 @@ fn extract_die_message(line: &str) -> Option<String> {
 }
 
 /// Simple FNV-1a hash for deterministic digests.
-#[allow(dead_code)]
 fn fnv1a_hash(text: &str) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
@@ -664,6 +664,236 @@ fn fnv1a_hash(text: &str) -> u64 {
         hash = hash.wrapping_mul(FNV_PRIME);
     }
     hash
+}
+
+/// Emit `files[]`, `owners[]`, per-file `provenance[]`, and parse/read
+/// `limitations[]` by parsing every Perl source/test file under `root`
+/// (#3293 PR 3).
+///
+/// For each discovered `.pm` / `.pl` / `.psgi` / `.t` file this produces:
+/// - one `file` fact (repo-relative path, role, deterministic FNV-1a digest,
+///   parser-derived package names);
+/// - one `owner` fact per `package` / `class` / `role` / `sub` / `method`
+///   declaration, carrying the parser's real source range and a byte-span-derived
+///   `owner_id` (stable, never traversal-order); and
+/// - one `syntax`-sourced `provenance` fact that the file and its owners
+///   reference by id.
+///
+/// Files that cannot be read or parsed are **not** silently dropped: a read
+/// failure records a limitation and emits no file fact (a digest needs the
+/// content); a parse failure still emits the file fact with zero owners plus a
+/// limitation.
+///
+/// The `range` uses the schema's flat `{start_line, start_column, end_line,
+/// end_column}` shape (0-based, UTF-16 columns from `LineIndex`), and provenance
+/// uses the schema's `source` enum (`"syntax"`) — the packet contract has no
+/// nested-LSP range or free-form provenance `producer`/`kind` fields.
+///
+/// Parser-backed via `perl-parser-core` (parse + `LineIndex` byte→line/column)
+/// and `perl-symbol` (`extract_symbol_decls`) — both leaf crates with no
+/// forbidden dependencies. `perl-workspace` is intentionally avoided (it pulls
+/// `lsp-types`).
+pub(crate) fn emit_files_and_owners(
+    root: &str,
+) -> (Vec<Value>, Vec<Value>, Vec<Value>, Vec<Value>) {
+    let mut files = Vec::new();
+    let mut owners = Vec::new();
+    let mut provenance = Vec::new();
+    let mut limitations = Vec::new();
+
+    for relative_path in collect_perl_files(root) {
+        let file_id = format!("file:{relative_path}");
+        let absolute = std::path::Path::new(root).join(&relative_path);
+
+        let content = match std::fs::read_to_string(&absolute) {
+            Ok(content) => content,
+            Err(error) => {
+                // Do not silently drop: a digest needs the content, so emit no
+                // file fact — just a limitation recording why.
+                limitations.push(json!({
+                    "limitation_id": format!("read-failed:{file_id}"),
+                    "kind": "read_failure",
+                    "message": format!("could not read `{relative_path}`: {error}"),
+                    "evidence_refs": [file_id],
+                }));
+                continue;
+            }
+        };
+
+        let digest = content_hash_to_digest(fnv1a_hash(&content));
+        let role = file_role_from_path(&relative_path);
+        let provenance_id = format!("prov:syntax:{file_id}");
+        let mut package_names: Vec<String> = Vec::new();
+
+        // Parse and project declarations into owner facts. Scope the parser's
+        // borrow of `content` to the parse so `content` can move into
+        // `LineIndex` afterwards (no per-file clone).
+        let parsed = {
+            let mut parser = Parser::new(&content);
+            parser.parse()
+        };
+        match parsed {
+            Ok(ast) => {
+                let line_index = LineIndex::new(content);
+                for decl in extract_symbol_decls(&ast, Some("main")) {
+                    let Some(kind) = owner_kind(&decl.kind) else {
+                        continue;
+                    };
+                    if matches!(
+                        decl.kind,
+                        SymbolKind::Package | SymbolKind::Class | SymbolKind::Role
+                    ) && !package_names.contains(&decl.qualified_name)
+                    {
+                        package_names.push(decl.qualified_name.clone());
+                    }
+
+                    let (start_byte, end_byte) = decl.full_span;
+                    let ((start_line, start_column), (end_line, end_column)) =
+                        line_index.range(start_byte, end_byte);
+
+                    // Byte-span-derived id: stable and independent of traversal
+                    // order (a decl is uniquely located by its span).
+                    owners.push(json!({
+                        "owner_id": format!(
+                            "owner:{relative_path}:{kind}:{}:{start_byte}-{end_byte}",
+                            decl.qualified_name
+                        ),
+                        "file_id": file_id,
+                        "kind": kind,
+                        "package": decl.container,
+                        "name": decl.name,
+                        "range": {
+                            "start_line": start_line,
+                            "start_column": start_column,
+                            "end_line": end_line,
+                            "end_column": end_column,
+                        },
+                        "confidence": "high",
+                        "provenance_refs": [provenance_id.clone()],
+                    }));
+                }
+            }
+            Err(_error) => {
+                // Fail soft: still emit the file fact (below) with zero owners,
+                // and record why parsing yielded none.
+                limitations.push(json!({
+                    "limitation_id": format!("parse-failed:{file_id}"),
+                    "kind": "parse_failure",
+                    "message": format!(
+                        "could not parse `{relative_path}` as Perl; emitted the file fact with no owners"
+                    ),
+                    "evidence_refs": [file_id.clone()],
+                }));
+            }
+        }
+
+        package_names.sort();
+        package_names.dedup();
+
+        provenance.push(json!({
+            "provenance_id": provenance_id.clone(),
+            "source": "syntax",
+            "file_id": file_id.clone(),
+            "confidence": "high",
+        }));
+
+        files.push(json!({
+            "file_id": file_id,
+            "path": relative_path,
+            "role": [role],
+            "digest": digest,
+            "package_names": package_names,
+            "provenance_refs": [provenance_id],
+        }));
+    }
+
+    // Honest digest note: the packet digest is a deterministic FNV-1a hash
+    // (`fnv64:` prefix), not SHA-256 — a SHA-256 digest would require adding a
+    // hashing dependency the crate's dep contract keeps out for now.
+    if !files.is_empty() {
+        limitations.push(json!({
+            "limitation_id": "digest-algorithm",
+            "kind": "digest_algorithm",
+            "message": "file digests are deterministic FNV-1a (fnv64:), not SHA-256; a SHA-256 digest would require an added hashing dependency.",
+            "evidence_refs": [],
+        }));
+    }
+
+    (files, owners, provenance, limitations)
+}
+
+/// Map a `perl-symbol` [`SymbolKind`] to the ripr `owner.kind` vocabulary.
+///
+/// Only namespace and callable declarations are owners; variables, constants,
+/// and imports are not. `Class` / `Role` are namespace declarations, so they map
+/// to `package`.
+fn owner_kind(kind: &SymbolKind) -> Option<&'static str> {
+    match kind {
+        SymbolKind::Package | SymbolKind::Class | SymbolKind::Role => Some("package"),
+        SymbolKind::Subroutine => Some("sub"),
+        SymbolKind::Method => Some("method"),
+        _ => None,
+    }
+}
+
+/// Recursively collect the repo-relative forward-slash paths of Perl
+/// source/test files under `root`, in deterministic (sorted) order.
+///
+/// Skips hidden directories and common build trees so a workspace scan stays
+/// bounded. Content is read per-file by the caller (not here) so that read
+/// failures can be reported as limitations rather than silently dropped.
+fn collect_perl_files(root: &str) -> Vec<String> {
+    let root_path = std::path::Path::new(root);
+    let mut result = Vec::new();
+    collect_perl_files_recursive(root_path, root_path, &mut result);
+    result.sort();
+    result
+}
+
+fn collect_perl_files_recursive(
+    dir: &std::path::Path,
+    root: &std::path::Path,
+    result: &mut Vec<String>,
+) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        // Skip symlinks entirely: a directory-symlink loop would otherwise cause
+        // infinite recursion (`is_dir()` follows the link), and a file symlink
+        // could escape the root. `entry.file_type()` reports the link's own type
+        // without following it.
+        if entry.file_type().is_ok_and(|file_type| file_type.is_symlink()) {
+            continue;
+        }
+        let file_name = entry.file_name();
+        let name = file_name.to_string_lossy();
+        if path.is_dir() {
+            // Skip hidden dirs (.git, .build) and non-source build trees.
+            if name.starts_with('.')
+                || matches!(name.as_ref(), "target" | "blib" | "node_modules" | "_build")
+            {
+                continue;
+            }
+            collect_perl_files_recursive(&path, root, result);
+        } else if is_perl_source_file(&name) {
+            let relative = path
+                .strip_prefix(root)
+                .unwrap_or(path.as_path())
+                .to_string_lossy()
+                .replace('\\', "/");
+            result.push(relative);
+        }
+    }
+}
+
+/// Whether a file name is a Perl source or test file the emitter parses.
+fn is_perl_source_file(name: &str) -> bool {
+    name.ends_with(".pm")
+        || name.ends_with(".pl")
+        || name.ends_with(".psgi")
+        || name.ends_with(".t")
 }
 
 #[cfg(test)]
@@ -1101,6 +1331,70 @@ mod tests {
         assert!(
             relations.iter().any(|r| r["relation_kind"] == "direct_owner_call"),
             "must emit at least one direct_owner_call relation"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn emit_files_and_owners_extracts_packages_and_subs() {
+        let root = std::env::temp_dir().join("perl-P3-files-owners-root");
+        let lib_dir = root.join("lib/My");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::write(
+            lib_dir.join("App.pm"),
+            "package My::App;\nsub discount { return 42; }\nsub total { }\n1;\n",
+        )
+        .unwrap();
+
+        let (files, owners, provenance, limitations) =
+            emit_files_and_owners(root.to_str().unwrap());
+
+        // One file fact for the .pm — source role, an fnv64 digest, the package name.
+        assert_eq!(files.len(), 1, "one .pm file → one file fact");
+        let file = &files[0];
+        assert_eq!(file["path"], "lib/My/App.pm");
+        assert_eq!(file["role"], json!(["source"]));
+        assert!(
+            file["digest"].as_str().unwrap().starts_with("fnv64:"),
+            "digest is an fnv64 hex string, got {:?}",
+            file["digest"]
+        );
+        assert_eq!(file["package_names"], json!(["My::App"]));
+        assert_eq!(file["file_id"], "file:lib/My/App.pm");
+        assert_eq!(file["provenance_refs"], json!(["prov:syntax:file:lib/My/App.pm"]));
+
+        // Owners: the package + both subs, with parser-derived kinds.
+        let kinds: Vec<&str> = owners.iter().filter_map(|o| o["kind"].as_str()).collect();
+        assert!(kinds.contains(&"package"), "package My::App must be an owner, got {kinds:?}");
+        assert_eq!(
+            kinds.iter().filter(|k| **k == "sub").count(),
+            2,
+            "both subs must be owners, got {kinds:?}"
+        );
+
+        // A sub owner carries a real range + the per-file syntax provenance ref.
+        let sub = owners.iter().find(|o| o["name"] == "discount").expect("discount owner");
+        assert_eq!(sub["kind"], "sub");
+        assert_eq!(sub["file_id"], "file:lib/My/App.pm");
+        assert_eq!(sub["confidence"], "high");
+        assert_eq!(sub["provenance_refs"], json!(["prov:syntax:file:lib/My/App.pm"]));
+        // `sub discount` is declared on the second line (0-based line 1).
+        assert_eq!(sub["range"]["start_line"], 1, "discount is on the second line (0-based)");
+        // The owner id is byte-span-derived, not traversal-order (no trailing `:N`).
+        let owner_id = sub["owner_id"].as_str().unwrap();
+        assert!(owner_id.contains("discount"), "owner id names the decl: {owner_id}");
+
+        // A per-file `syntax` provenance fact exists, plus the digest-algorithm note.
+        assert!(
+            provenance
+                .iter()
+                .any(|p| p["source"] == "syntax" && p["file_id"] == "file:lib/My/App.pm"),
+            "a per-file syntax provenance entry must exist"
+        );
+        assert!(
+            limitations.iter().any(|l| l["limitation_id"] == "digest-algorithm"),
+            "the fnv64 digest limitation must be recorded"
         );
 
         let _ = std::fs::remove_dir_all(&root);

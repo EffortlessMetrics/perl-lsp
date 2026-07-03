@@ -17,7 +17,9 @@ semantics — not an interactive editor feature.
 
 Dependency contract (enforced by review): this crate must **not** depend on
 `perllsp`, `perl-lsp-rs`, `perl-lsp-rs-core`, `perl-dap`, `lsp-types`, or the
-LSP provider/transport runtime.
+LSP provider/transport runtime. Parser-backed extraction uses the clean leaf
+crates `perl-parser-core` and `perl-symbol`; `perl-workspace` is deliberately
+avoided because it transitively pulls `lsp-types`.
 
 ## API
 
@@ -51,13 +53,19 @@ wrapper writes for the same inputs.
 
 ## Status
 
-The **batch-API slice** (#3293 PR 2). The emitter body is still the conservative
-string-scan implementation that previously lived in
-`perl-lsp-rs::ripr_facts_emitter`; the packet assembly + validation has been
-lifted into the I/O-free `build_ripr_facts_packet` batch API, with
-`run_ripr_facts` reduced to a parse-args → call → write wrapper. The evidence
-layer is upgraded to `perl-workspace` / `perl-semantic-facts`-backed facts in
-later slices.
+The **parser-backed files/owners slice** (#3293 PR 3). `files[]` and `owners[]`
+are now populated by parsing every Perl source/test file under the root:
+
+- `files[]` — repo-relative path, role, a deterministic FNV-1a `digest`, and the
+  declared package names, for each `.pm` / `.pl` / `.psgi` / `.t` file.
+- `owners[]` — one fact per `package` / `class` / `role` / `sub` / `method`
+  declaration, carrying the parser's source range.
+
+This uses the clean leaf crates `perl-parser-core` (parse + `LineIndex`
+byte→line/column) and `perl-symbol` (`extract_symbol_decls`) — not
+`perl-workspace`. Tests/oracles, relations, and dynamic boundaries remain from
+the earlier conservative string-scan slices; diff-derived `changes[]` land in a
+later slice.
 
 The `perl-lsp` / `perllsp` binaries retain the `ripr-facts` subcommand as a
 thin wrapper that calls [`run_ripr_facts`].

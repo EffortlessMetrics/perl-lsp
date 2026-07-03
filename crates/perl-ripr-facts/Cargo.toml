@@ -20,6 +20,12 @@ path = "src/lib.rs"
 
 [dependencies]
 serde_json.workspace = true
+# Parser-backed fact extraction (#3293 PR 3). Both are leaf crates with no
+# forbidden deps — perl-parser-core parses source and converts byte spans to
+# line/column (LineIndex); perl-symbol projects the AST into declaration facts.
+# perl-workspace is deliberately NOT used here (it transitively pulls lsp-types).
+perl-parser-core.workspace = true
+perl-symbol.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
