@@ -6,14 +6,19 @@
 //! that RIPR fact production sits **below** the editor/LSP stack and **above**
 //! the raw parser — see `README.md` for the dependency contract.
 //!
-//! The public entry point is [`run_ripr_facts`]: it validates the CLI-shaped
-//! inputs, runs the (currently conservative, string-scan) emitter, assembles
-//! the `ripr-perl-facts-v1` packet, and writes it to disk. The `perl-lsp` /
-//! `perllsp` binaries call it directly as a thin wrapper.
+//! Two entry points:
+//!
+//! - [`build_ripr_facts_packet`] is the **structured batch API** (#3293 PR 2):
+//!   it validates a [`RiprFactsRequest`], runs the (currently conservative,
+//!   string-scan) emitter, and returns the assembled `ripr-perl-facts-v1` packet
+//!   as a [`serde_json::Value`] — no I/O.
+//! - [`run_ripr_facts`] is the thin CLI wrapper the `perl-lsp` / `perllsp`
+//!   `ripr-facts` subcommand calls: it forwards CLI-shaped args to the batch
+//!   API, then validates the output path, writes the packet to disk, and maps
+//!   the outcome to a process exit code.
 //!
 //! Subsequent slices replace the string-scan emitter with `perl-workspace` /
-//! `perl-semantic-facts`-backed extraction and add a structured batch API; this
-//! crate is the home for that work.
+//! `perl-semantic-facts`-backed extraction; this crate is the home for that work.
 
 mod emitter;
 
@@ -24,84 +29,108 @@ use emitter::{
 /// Expected schema version for `ripr-perl-facts-v1` packets.
 const EXPECTED_RIPR_FACTS_SCHEMA: &str = "ripr-perl-facts-v1";
 
-/// Run the `ripr-facts` exporter (Campaign 31, ripr-swarm#1379).
+/// A structured request to the `ripr-facts` batch exporter.
 ///
-/// Validates the CLI surface + arg constraints, runs the emitter, assembles the
-/// packet, and writes it to `out`. Returns the process exit code (`0` on
-/// success, `1` on any validation or write failure).
+/// This is the programmatic input shape for [`build_ripr_facts_packet`]. The
+/// `perl-lsp` / `perllsp` `ripr-facts` subcommand parses argv into one of these
+/// and calls the batch API through [`run_ripr_facts`]; other batch producers
+/// can construct it directly.
+#[derive(Debug, Clone, Copy)]
+pub struct RiprFactsRequest<'a> {
+    /// Packet schema version; must equal `ripr-perl-facts-v1`.
+    pub schema: &'a str,
+    /// Repo-relative workspace root to scan (forward-slash, no `..`/drive/absolute).
+    pub root: &'a str,
+    /// Optional base ref for diff-derived facts (managed-producer mode; not yet emitted).
+    pub base: Option<&'a str>,
+    /// Optional head ref recorded in the packet.
+    pub head: Option<&'a str>,
+    /// Comma-separated fact classes to request; validated + normalized internally.
+    pub fact_classes: &'a str,
+}
+
+/// A validation failure from [`build_ripr_facts_packet`] that prevents packet
+/// assembly.
 ///
-/// Relocated from `perl-lsp-rs::cli::run_ripr_facts` behavior-preserving; the
-/// emitter body (mapping the workspace fact substrate into the packet shape)
-/// is upgraded in later slices.
-#[expect(
-    clippy::print_stderr,
-    reason = "ripr-facts is a batch CLI unit — user-facing diagnostics intentionally use stderr"
-)]
-pub fn run_ripr_facts(
-    schema: &str,
-    root: &str,
-    base: Option<&str>,
-    head: Option<&str>,
-    fact_classes: &str,
-    out: &str,
-) -> i32 {
+/// Emission itself is infallible — the conservative string-scan emitter degrades
+/// to an `unavailable` / `partial` packet rather than erroring — so the only way
+/// to build no packet at all is to fail input validation.
+///
+/// The [`Display`](std::fmt::Display) form is the operator-facing reason without
+/// the `ripr-facts: ` prefix that [`run_ripr_facts`] adds when printing to
+/// stderr.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RiprFactsError {
+    /// The requested schema is not the supported `ripr-perl-facts-v1`.
+    UnsupportedSchema {
+        /// The unsupported schema string the caller passed.
+        schema: String,
+    },
+    /// The `root` path is not repo-relative (absolute, `./`, `..`, or drive).
+    InvalidRoot(String),
+    /// The `fact_classes` list is empty or contains an unknown class.
+    InvalidFactClasses(String),
+}
+
+impl std::fmt::Display for RiprFactsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedSchema { schema } => {
+                write!(f, "unsupported schema `{schema}`; expected `{EXPECTED_RIPR_FACTS_SCHEMA}`")
+            }
+            Self::InvalidRoot(reason) | Self::InvalidFactClasses(reason) => write!(f, "{reason}"),
+        }
+    }
+}
+
+impl std::error::Error for RiprFactsError {}
+
+/// Build the `ripr-perl-facts-v1` packet for a request, performing no I/O.
+///
+/// This is the structured batch API (#3293 PR 2). It validates the schema, the
+/// repo-relative `root`, and the requested fact classes, runs the (currently
+/// conservative, string-scan) emitter, and assembles the packet — returning it
+/// as a [`serde_json::Value`] instead of writing it to disk.
+///
+/// The returned packet is byte-identical to what the pre-PR-2 `run_ripr_facts`
+/// wrote for the same inputs. Callers that want the CLI behaviour (validate an
+/// `out` path, write the packet, map to an exit code) use [`run_ripr_facts`],
+/// which is a thin wrapper over this function.
+pub fn build_ripr_facts_packet(
+    request: &RiprFactsRequest<'_>,
+) -> Result<serde_json::Value, RiprFactsError> {
+    let &RiprFactsRequest { schema, root, base, head, fact_classes } = request;
+
     // Validate schema version.
     if schema != EXPECTED_RIPR_FACTS_SCHEMA {
-        eprintln!(
-            "ripr-facts: unsupported schema `{schema}`; expected `{EXPECTED_RIPR_FACTS_SCHEMA}`"
-        );
-        return 1;
+        return Err(RiprFactsError::UnsupportedSchema { schema: schema.to_owned() });
     }
 
     // Validate root is repo-relative (forward-slash, no host/drive/temp).
-    if let Err(reason) = validate_ripr_facts_path(root, "root") {
-        eprintln!("ripr-facts: {reason}");
-        return 1;
-    }
-
-    // Validate out path.
-    if let Err(reason) = validate_ripr_facts_path(out, "out") {
-        eprintln!("ripr-facts: {reason}");
-        return 1;
-    }
+    validate_ripr_facts_path(root, "root").map_err(RiprFactsError::InvalidRoot)?;
 
     // Validate + normalize fact classes.
-    let normalized_classes = match normalize_fact_classes(fact_classes) {
-        Ok(classes) => classes,
-        Err(reason) => {
-            eprintln!("ripr-facts: {reason}");
-            return 1;
-        }
-    };
+    let normalized_classes =
+        normalize_fact_classes(fact_classes).map_err(RiprFactsError::InvalidFactClasses)?;
 
-    // Emit the packet. PR 6 (perl-lsp-swarm#2593) adds test + oracle emission;
-    // files/owners/changes (PR 5) + relations/discriminators (PR 7) + boundaries
-    // (PR 8) land in subsequent PRs. When tests are found, upgrade packet_status
-    // from `unavailable` to `partial` (some fact classes are populated).
+    // Emit the packet. Tests/oracles (perl-lsp-swarm#2593), relations/
+    // discriminators (#2594), and boundaries/commands (#2595) are populated;
+    // files/owners/changes (#2592) still land in later slices. When any facts
+    // are found, `packet_status` upgrades from `unavailable` to `partial`.
     let (tests, oracles) = emit_tests_and_oracles(root);
     let has_test_facts = !tests.is_empty();
 
-    // PR 7 (perl-lsp-swarm#2594): emit relations + concrete discriminators +
-    // observed-sink facts.
     let (relations, _changed_observables, _observed_sinks) =
         emit_relations_and_discriminators(root, &tests, &oracles);
     let has_relation_facts = !relations.is_empty();
 
-    // PR 8 (perl-lsp-swarm#2595): emit dynamic boundaries + limitations +
-    // typed verify-command candidates.
     let (boundaries, boundary_limitations, verify_commands) = emit_boundaries_and_commands(root);
     let has_boundary_facts = !boundaries.is_empty();
 
-    // P2 (Campaign 31): emit diff-derived changes with concrete discriminators.
-    // For now, scan .pm files for changed lines (no git diff available in
-    // batch mode; future managed-producer mode will supply a real diff).
-    // Emit empty changes[] when no diff is available — the packet stays partial.
-    let changes = if base.is_some() {
-        // In managed mode, a diff would be available. For now emit empty.
-        Vec::new()
-    } else {
-        Vec::new()
-    };
+    // Diff-derived changes are not emitted yet: batch mode has no git diff, and
+    // the managed-producer mode that would supply one lands in a later slice.
+    // Emit an empty `changes[]` so the packet stays honest (partial, not final).
+    let changes: Vec<serde_json::Value> = Vec::new();
     let has_change_facts = !changes.is_empty();
 
     let mut packet = build_unavailable_packet(schema, root, base, head, &normalized_classes);
@@ -134,7 +163,51 @@ pub fn run_ripr_facts(
         packet["limitations"] = serde_json::Value::Array(all_limitations);
     }
 
-    // Write the packet to the output path.
+    Ok(packet)
+}
+
+/// Run the `ripr-facts` exporter (Campaign 31, ripr-swarm#1379).
+///
+/// The thin CLI wrapper over [`build_ripr_facts_packet`]: it forwards the
+/// CLI-shaped args to the batch API, then validates the output path, writes the
+/// assembled packet to `out`, and maps the outcome to a process exit code (`0`
+/// on success, `1` on any validation or write failure). Diagnostics go to
+/// stderr with a `ripr-facts: ` prefix.
+///
+/// The `out` path (a write concern owned by the wrapper, not part of the
+/// packet) is validated first: it is the cheapest check, so failing on it before
+/// building the packet avoids a needless workspace scan when the write
+/// destination is invalid.
+#[expect(
+    clippy::print_stderr,
+    reason = "ripr-facts is a batch CLI unit — user-facing diagnostics intentionally use stderr"
+)]
+pub fn run_ripr_facts(
+    schema: &str,
+    root: &str,
+    base: Option<&str>,
+    head: Option<&str>,
+    fact_classes: &str,
+    out: &str,
+) -> i32 {
+    // Validate the output path first — the cheapest check — so an invalid write
+    // destination fails fast, before the emitter scans the workspace.
+    if let Err(reason) = validate_ripr_facts_path(out, "out") {
+        eprintln!("ripr-facts: {reason}");
+        return 1;
+    }
+
+    let packet =
+        match build_ripr_facts_packet(&RiprFactsRequest { schema, root, base, head, fact_classes })
+        {
+            Ok(packet) => packet,
+            Err(error) => {
+                eprintln!("ripr-facts: {error}");
+                return 1;
+            }
+        };
+
+    // Write the assembled packet to disk.
     if let Err(error) = write_packet(out, &packet) {
         eprintln!("ripr-facts: failed to write packet to `{out}`: {error}");
         return 1;
@@ -277,9 +350,97 @@ fn write_packet(out: &str, packet: &serde_json::Value) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_unavailable_packet, normalize_fact_classes, run_ripr_facts, validate_ripr_facts_path,
-        write_packet,
+        RiprFactsError, RiprFactsRequest, build_ripr_facts_packet, build_unavailable_packet,
+        normalize_fact_classes, run_ripr_facts, validate_ripr_facts_path, write_packet,
     };
+
+    /// A valid request against the crate root (`"."`, no `t/` dir → unavailable).
+    fn valid_request<'a>(fact_classes: &'a str) -> RiprFactsRequest<'a> {
+        RiprFactsRequest {
+            schema: "ripr-perl-facts-v1",
+            root: ".",
+            base: Some("origin/main"),
+            head: Some("HEAD"),
+            fact_classes,
+        }
+    }
+
+    // ── batch API tests (#3293 PR 2) ──
+
+    #[test]
+    fn build_packet_returns_unavailable_for_valid_empty_root() {
+        // `.` has no `t/` directory, so the emitter finds nothing and the packet
+        // stays `unavailable` — and the batch API performs no I/O to produce it.
+        let packet = build_ripr_facts_packet(&valid_request("files,owners,changes,tests,oracles"))
+            .expect("a valid request must build a packet");
+        assert_eq!(packet["schema_version"], "ripr-perl-facts-v1");
+        assert_eq!(packet["packet_status"], "unavailable");
+        assert_eq!(packet["producer"]["name"], "perl-lsp");
+    }
+
+    #[test]
+    fn build_packet_rejects_unsupported_schema() {
+        let err = build_ripr_facts_packet(&RiprFactsRequest {
+            schema: "wrong-schema",
+            ..valid_request("owners")
+        })
+        .expect_err("wrong schema must fail validation");
+        assert_eq!(err, RiprFactsError::UnsupportedSchema { schema: "wrong-schema".to_owned() });
+        // Display carries the exact stderr reason the wrapper prefixes with `ripr-facts: `.
+        assert_eq!(
+            err.to_string(),
+            "unsupported schema `wrong-schema`; expected `ripr-perl-facts-v1`"
+        );
+    }
+
+    #[test]
+    fn build_packet_rejects_invalid_root() {
+        let err = build_ripr_facts_packet(&RiprFactsRequest {
+            root: "/absolute",
+            ..valid_request("owners")
+        })
+        .expect_err("absolute root must fail validation");
+        assert!(matches!(err, RiprFactsError::InvalidRoot(_)), "got {err:?}");
+    }
+
+    #[test]
+    fn build_packet_rejects_empty_fact_classes() {
+        let err = build_ripr_facts_packet(&valid_request(""))
+            .expect_err("empty fact classes must fail validation");
+        assert!(matches!(err, RiprFactsError::InvalidFactClasses(_)), "got {err:?}");
+    }
+
+    #[test]
+    fn build_packet_is_deterministic() {
+        // Pure function: identical input yields an identical packet (no clock, no
+        // randomness, no filesystem mutation between calls).
+        let request = valid_request("tests,oracles");
+        let first = build_ripr_facts_packet(&request).expect("valid");
+        let second = build_ripr_facts_packet(&request).expect("valid");
+        assert_eq!(first, second, "the batch API must be deterministic for identical input");
+    }
+
+    #[test]
+    fn build_packet_matches_what_the_wrapper_writes() -> std::io::Result<()> {
+        // Parity: the packet the batch API returns is byte-identical to what the
+        // `run_ripr_facts` CLI wrapper writes to disk for the same inputs.
+        let out = "target/ripr/test-batch-parity.json";
+        let rc = run_ripr_facts(
+            "ripr-perl-facts-v1",
+            ".",
+            Some("origin/main"),
+            Some("HEAD"),
+            "tests,oracles",
+            out,
+        );
+        assert_eq!(rc, 0, "wrapper must succeed");
+        let written: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(out)?)?;
+        let built = build_ripr_facts_packet(&valid_request("tests,oracles"))
+            .expect("valid request builds a packet");
+        assert_eq!(built, written, "batch API packet must equal what the wrapper writes");
+        let _ = std::fs::remove_file(out);
+        Ok(())
+    }
 
     // ── ripr-facts command tests (Campaign 31 PR 4, perl-lsp-swarm#2591) ──
 
