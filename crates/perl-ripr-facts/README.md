@@ -53,9 +53,9 @@ wrapper writes for the same inputs.
 
 ## Status
 
-The **parser-backed tests/oracles slice** (#3293 PR 4), on top of the
-parser-backed files/owners slice (PR 3). Both `files[]`/`owners[]` and now
-`tests[]`/`oracles[]` come from parsing, not string scans:
+The **diff-owned changes slice** (#3293 PR 5), on top of the parser-backed
+tests/oracles slice (PR 4) and files/owners slice (PR 3). `files[]`/`owners[]`,
+`tests[]`/`oracles[]`, and now `changes[]` come from parsing, not string scans:
 
 - `files[]` — repo-relative path, role, a deterministic FNV-1a `digest`, and the
   declared package names, for each `.pm` / `.pl` / `.psgi` / `.t` file.
@@ -68,18 +68,29 @@ parser-backed files/owners slice (PR 3). Both `files[]`/`owners[]` and now
   `cmp_ok`, `throws_ok`, `exception`, …), each with the call's real source range,
   a schema `kind`/`strength`, and the call's source text as `expression`. No
   string-scan counting, no placeholder `1:1` ranges.
+- `changes[]` — one fact per contiguous added-line hunk of a **caller-supplied**
+  unified diff (`RiprFactsRequest.diff`), attributed to the smallest enclosing
+  `owners[]` fact by line containment. A hunk outside every owner, or in a file
+  not parsed under `root`, is recorded as a limitation rather than force-attributed
+  to a placeholder. Only the three syntactically-detectable `behavior_hint` values
+  (`predicate_boundary`/`return_value`/`exception_path`) are inferred; everything
+  else is `"unknown"`. No git is run — the diff is opaque text.
 - `provenance[]` — `syntax` (files/owners), `test_discovery` (framework/import),
   and `oracle_extraction` (assertions) entries the facts reference by id.
 - `limitations[]` — unparseable files, recognized-framework-but-no-oracle files
-  (wrapped/aliased/dynamic helpers), and the narrower schema representation are
-  all surfaced, never silently dropped.
+  (wrapped/aliased/dynamic helpers), the narrower schema representation, and the
+  diff-side notes (`no-diff-supplied`, `diff-file-not-found`, `unattributable-change`,
+  `diff-provenance-unverified`, range/behavior-hint precision) are all surfaced,
+  never silently dropped.
 
 This uses the clean leaf crates `perl-parser-core` (parse + `LineIndex`
 byte→line/column) and `perl-symbol` (`extract_symbol_decls` /
 `extract_symbol_refs`) — not `perl-workspace` (which pulls `lsp-types`).
 Relations (including a heuristic `direct_owner_call`) and dynamic boundaries
-remain from earlier conservative slices; diff-derived `changes[]`, the
-parser-backed/semantic relations that will replace the current string-heuristic
+remain from earlier conservative slices. The `ripr-facts` CLI does not yet
+supply a diff (so `perllsp ripr-facts … --fact-classes changes` yields an empty
+`changes[]` + a `no-diff-supplied` limitation); the managed-producer diff source,
+the parser-backed/semantic relations that will replace the string-heuristic
 `direct_owner_call`, and the packet fingerprint land in later slices.
 
 The `perl-lsp` / `perllsp` binaries retain the `ripr-facts` subcommand as a
