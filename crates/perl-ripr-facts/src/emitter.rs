@@ -409,40 +409,67 @@ pub(crate) fn emit_relations_and_discriminators(
     let mut changed_observables = Vec::new();
     let mut observed_sinks = Vec::new();
 
-    // Collect .pm files from lib/.
+    // Collect .pm files from lib/, sorted for deterministic traversal order
+    // (`std::fs::read_dir` order is filesystem/OS-dependent).
     let lib_dir = std::path::Path::new(root).join("lib");
-    let pm_files = collect_pm_files(&lib_dir);
+    let mut pm_files = collect_pm_files(&lib_dir);
+    pm_files.sort_by(|a, b| a.0.cmp(&b.0));
+
+    // Parse each candidate `.pm` once, hoisted above the test loop below —
+    // NOT once per (test, pm) pair. `extract_package_name` stays the existing
+    // string scan (out of scope); only the declared-sub proof is parser-backed.
+    let pm_facts: Vec<(String, String, std::collections::HashSet<String>)> = pm_files
+        .iter()
+        .map(|(pm_path, pm_content)| {
+            let package_name = extract_package_name(pm_content);
+            let declared_subs = if package_name.is_empty() {
+                std::collections::HashSet::new()
+            } else {
+                match Parser::new(pm_content).parse() {
+                    Ok(ast) => declared_sub_names(&ast, &package_name),
+                    Err(_) => std::collections::HashSet::new(), // parse failure → cannot prove → falls back
+                }
+            };
+            (pm_path.clone(), package_name, declared_subs)
+        })
+        .collect();
+
+    // Collect + parse every `.t` file once, hoisted and reused by both the
+    // relation loop below and the discriminator loop further down (which
+    // previously called `collect_t_files` a second time).
+    let t_dir = std::path::Path::new(root).join("t");
+    let mut t_files = collect_t_files(&t_dir);
+    t_files.sort_by(|a, b| a.1.cmp(&b.1));
+
+    let t_call_facts: std::collections::HashMap<&str, TestCallFacts> = t_files
+        .iter()
+        .map(|(_, relative_path, content)| {
+            let facts = match Parser::new(content).parse() {
+                Ok(ast) => TestCallFacts::from_ast(&ast),
+                Err(_) => TestCallFacts::unparsed(),
+            };
+            (relative_path.as_str(), facts)
+        })
+        .collect();
 
     // For each test file, infer relations to .pm files by package-name match.
     for test in tests {
         let test_file_id = test["file_id"].as_str().unwrap_or("");
         let test_path = test["name"].as_str().unwrap_or("");
 
-        for (pm_path, pm_content) in &pm_files {
-            // Extract package name from the .pm file.
-            let package_name = extract_package_name(pm_content);
+        for (pm_path, package_name, declared_subs) in &pm_facts {
             if package_name.is_empty() {
                 continue;
             }
 
             // Check if the test file references the package.
-            if !test_file_id.is_empty()
-                && file_references_package(
-                    test_path,
-                    &pm_files.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
-                    pm_path,
-                )
-            {
-                // P3 (Campaign 31): upgrade to direct_owner_call when the
-                // test file calls the package's functions directly.
-                let test_content = collect_t_files(&std::path::Path::new(root).join("t"))
-                    .into_iter()
-                    .find(|(_, rel, _)| rel == test_path)
-                    .map(|(_, _, c)| c);
-                let is_direct = test_content
-                    .as_ref()
-                    .map(|content| test_calls_package(content, &package_name))
-                    .unwrap_or(false);
+            if !test_file_id.is_empty() && file_references_package(test_path, &[], pm_path) {
+                // #3293 PR 6: upgrade to direct_owner_call only when the
+                // test file's parsed call graph provably includes a call to
+                // a sub the candidate package's AST actually declares.
+                let is_direct = t_call_facts.get(test_path).is_some_and(|facts| {
+                    test_calls_declared_sub(facts, package_name, declared_subs)
+                });
 
                 let relation_kind = if is_direct { "direct_owner_call" } else { "file_proximity" };
                 let reachability = if is_direct { "reachable" } else { "weakly_reachable" };
@@ -463,11 +490,12 @@ pub(crate) fn emit_relations_and_discriminators(
         }
     }
 
-    // Extract concrete discriminators + observed-sink facts from `is(...)` assertions.
-    // Read the .t files again to parse assertion arguments.
-    let t_dir = std::path::Path::new(root).join("t");
-    let t_files = collect_t_files(&t_dir);
+    // Sort relations by id for deterministic output order regardless of the
+    // caller's `tests` ordering.
+    relations.sort_by(|a, b| a["relation_id"].as_str().cmp(&b["relation_id"].as_str()));
 
+    // Extract concrete discriminators + observed-sink facts from `is(...)` assertions.
+    // Reuses the `t_files` collected above — no second directory walk.
     for (_file_path, relative_path, content) in &t_files {
         for line in content.lines() {
             if let Some(args) = extract_is_args(line) {
@@ -548,35 +576,93 @@ fn file_references_package(test_path: &str, _all_pm_paths: &[&str], pm_path: &st
     !pm_basename.is_empty() && test_path.contains(pm_basename)
 }
 
-/// Check if test content calls functions from the named package directly.
+/// Per-`.t`-file facts computed once (parse + call/`use` extraction) and
+/// reused across every candidate `.pm` in [`emit_relations_and_discriminators`]
+/// — avoids re-parsing/re-walking `t/` once per (test, pm) pair.
+struct TestCallFacts {
+    /// Subroutine/method/static-method call sites from the test file.
+    calls: Vec<perl_symbol::surface::SymbolRef>,
+}
+
+impl TestCallFacts {
+    /// Conservative fallback for a test file that failed to parse: proves
+    /// nothing, so [`test_calls_declared_sub`] always degrades for it.
+    fn unparsed() -> Self {
+        Self { calls: Vec::new() }
+    }
+
+    fn from_ast(ast: &Node) -> Self {
+        let calls = extract_symbol_refs(ast)
+            .into_iter()
+            .filter(|reference| {
+                matches!(
+                    reference.kind,
+                    SymbolRefKind::SubroutineCall
+                        | SymbolRefKind::MethodCall
+                        | SymbolRefKind::StaticMethodCall
+                )
+            })
+            .collect();
+        Self { calls }
+    }
+}
+
+/// Bare sub/method names a `.pm`'s AST declares *inside* `package_name`.
 ///
-/// Detects:
-/// - `use Package::Name;` followed by calls to its exports
-/// - `Package::Name->method(...)` (class method call)
-/// - `Package::Name::function(...)` (fully qualified call)
+/// Filters [`extract_symbol_decls`] to callables whose `container` matches the
+/// package being evaluated for this relation, so a multi-package file only
+/// credits the package actually being checked.
+fn declared_sub_names(pm_ast: &Node, package_name: &str) -> std::collections::HashSet<String> {
+    extract_symbol_decls(pm_ast, Some("main"))
+        .into_iter()
+        .filter(|decl| matches!(decl.kind, SymbolKind::Subroutine | SymbolKind::Method))
+        .filter(|decl| decl.container.as_deref() == Some(package_name))
+        .map(|decl| decl.name)
+        .collect()
+}
+
+/// Parser-backed replacement for the former string-heuristic
+/// `test_calls_package` (#3293 PR 6). Proves a `direct_owner_call` relation
+/// using AST call nodes (`perl-symbol`) instead of substring scans over raw
+/// file content.
 ///
-/// P3 (Campaign 31): upgrades a relation from file_proximity to
-/// direct_owner_call — the kind the honesty gate (#1405) requires.
-fn test_calls_package(content: &str, package_name: &str) -> bool {
-    // Check for `use Package::Name;`
-    let use_pattern = format!("use {package_name}");
-    if content.contains(&use_pattern) {
-        return content.contains("(");
+/// A call counts as direct **only** when it is a fully-qualified
+/// `SymbolRefKind::SubroutineCall` — `package_name::sub(...)` with
+/// `package_qualifier == Some(package_name)` and `sub` in `declared_subs`. A
+/// fully-qualified call names its owning package unambiguously and reaches the
+/// declared sub regardless of exports, so this is the one form the AST can
+/// *prove*.
+///
+/// Deliberately conservative — never a false `true`:
+///  - A **bare** call (`sub(...)`) after `use package_name` is NOT proof: the
+///    sub is only callable bareword if the package exports it
+///    (`Exporter`/`@EXPORT`), which `perl-symbol` cannot see, and a shared
+///    basename could make the same bare name belong to any of several `use`d
+///    packages. Bare calls fall through to the conservative
+///    `file_proximity`/`weakly_reachable` branch rather than a false
+///    `reachable`. (Export-aware bare-call attribution is a later slice.)
+///  - `MethodCall` / `StaticMethodCall` (`$obj->m` / `Pkg->m`) are excluded —
+///    dynamic dispatch can resolve to an inherited, `AUTOLOAD`'d, or
+///    role-composed method and is never provable from the call site.
+///  - An empty `declared_subs` (the `.pm` failed to parse or declares nothing
+///    in `package_name`) or an unparsed test file proves nothing.
+///
+/// This is a lexical call-graph proof, not a control-flow-verified one: a call
+/// inside a dead branch or a `SKIP:` block still counts, matching this crate's
+/// convention that every other "reachable"-adjacent claim here is also lexical.
+fn test_calls_declared_sub(
+    facts: &TestCallFacts,
+    package_name: &str,
+    declared_subs: &std::collections::HashSet<String>,
+) -> bool {
+    if declared_subs.is_empty() {
+        return false;
     }
-
-    // Check for fully qualified calls: Package::Name::function(...)
-    let fq_prefix = format!("{package_name}::");
-    if content.contains(&fq_prefix) {
-        return true;
-    }
-
-    // Check for class method calls: Package::Name->method(...)
-    let arrow_pattern = format!("{package_name}->");
-    if content.contains(&arrow_pattern) {
-        return true;
-    }
-
-    false
+    facts.calls.iter().any(|call| {
+        call.kind == SymbolRefKind::SubroutineCall
+            && call.package_qualifier.as_deref() == Some(package_name)
+            && declared_subs.contains(&call.name)
+    })
 }
 
 /// Extract the arguments from an `is(...)` call.
@@ -2001,40 +2087,7 @@ mod tests {
         assert_ne!(fnv1a_hash("hello"), fnv1a_hash("world"));
     }
 
-    // ── P3 tests (direct_owner_call relations) ──
-
-    #[test]
-    fn test_calls_package_detects_use_statement() {
-        let content = "use Test::More;\nuse My::App;\nis(My::App::discount(100), 50);\n";
-        assert!(
-            test_calls_package(content, "My::App"),
-            "use My::App + calls must detect direct call"
-        );
-    }
-
-    #[test]
-    fn test_calls_package_detects_qualified_call() {
-        let content = "My::App::discount(100);\n";
-        assert!(
-            test_calls_package(content, "My::App"),
-            "My::App::discount() must detect direct call"
-        );
-    }
-
-    #[test]
-    fn test_calls_package_detects_arrow_call() {
-        let content = "My::App->new()->discount(100);\n";
-        assert!(test_calls_package(content, "My::App"), "My::App->new() must detect direct call");
-    }
-
-    #[test]
-    fn test_calls_package_rejects_no_reference() {
-        let content = "use strict;\nprint 1;\n";
-        assert!(
-            !test_calls_package(content, "My::App"),
-            "no reference to My::App must not detect a call"
-        );
-    }
+    // ── P3 / #3293 PR 6 tests (direct_owner_call relations) ──
 
     #[test]
     fn emit_relations_upgrades_to_direct_owner_call() {
@@ -2058,6 +2111,314 @@ mod tests {
             relations.iter().any(|r| r["relation_kind"] == "direct_owner_call"),
             "must emit at least one direct_owner_call relation"
         );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── #3293 PR 6: parser-backed `test_calls_declared_sub` predicate ──
+
+    /// Build `TestCallFacts` directly from source, mirroring what
+    /// `emit_relations_and_discriminators` does per `.t` file.
+    fn facts_from_src(src: &str) -> TestCallFacts {
+        TestCallFacts::from_ast(&parse_src(src))
+    }
+
+    fn one_sub(name: &str) -> std::collections::HashSet<String> {
+        std::collections::HashSet::from([name.to_string()])
+    }
+
+    #[test]
+    fn declared_sub_matches_qualified_call_without_use() {
+        let facts = facts_from_src("My::App::discount(100);\n");
+        assert!(
+            test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "qualified call must prove direct_owner_call even without a `use`"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_bare_call_after_use_export_unproven() {
+        // A bare call after `use My::App` is NOT proof of direct_owner_call: the
+        // sub is only callable bareword if My::App exports it (Exporter/@EXPORT),
+        // which perl-symbol can't see. Marking it `reachable` would be a false
+        // positive (the call fails at runtime if the sub isn't exported), so the
+        // bare-call case degrades to the conservative file_proximity branch.
+        let facts = facts_from_src("use My::App;\ndiscount(100);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "a bare call after `use` is export-unproven — must not claim direct_owner_call"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_use_without_matching_call() {
+        let facts = facts_from_src("use My::App;\nok(1);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "`use` alone, with no call to a declared sub, must not prove direct_owner_call"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_call_name_in_comment() {
+        // The key false positive `test_calls_package`'s substring scan had:
+        // a comment mentioning the qualified name is not a call node.
+        let facts = facts_from_src("# My::App::discount(100);\nok(1);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "a call name inside a comment must never prove direct_owner_call"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_call_name_in_string_literal() {
+        let facts = facts_from_src("my $x = \"My::App::discount(100)\";\nok(1);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "a call name inside a string literal must never prove direct_owner_call"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_static_method_call() {
+        let facts = facts_from_src("My::App->discount(100);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "a static method call must degrade — dispatch can resolve to an \
+             inherited/AUTOLOAD'd method the AST can't distinguish from a direct hit"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_instance_method_call() {
+        let facts = facts_from_src("my $o = My::App->new;\n$o->discount(100);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "an instance method call on a dynamic receiver must degrade"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_qualified_call_to_different_package() {
+        let facts = facts_from_src("Other::Pkg::discount(100);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "a call qualified to a different package must not prove this package's relation"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_bare_call_without_use() {
+        let facts = facts_from_src("discount(100);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "a bare call with no matching `use` must not prove direct_owner_call \
+             (same bare name could belong to any package)"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_when_declared_subs_empty() {
+        // Even a real, unambiguous qualified call must degrade when the
+        // candidate package's `.pm` declared no subs (e.g. it failed to
+        // parse, or only declared anonymous subs) — never a false `true`.
+        let facts = facts_from_src("My::App::discount(100);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &std::collections::HashSet::new()),
+            "empty declared_subs must always degrade, regardless of call shape"
+        );
+    }
+
+    #[test]
+    fn declared_sub_rejects_use_with_empty_import_list_and_no_call() {
+        // `test_calls_package`'s `content.contains("(")` used to trip on the
+        // parens of `use My::App ();` alone, with zero actual calls.
+        let facts = facts_from_src("use My::App ();\nok(1);\n");
+        assert!(
+            !test_calls_declared_sub(&facts, "My::App", &one_sub("discount")),
+            "an empty-import-list `use` with no call must not prove direct_owner_call"
+        );
+    }
+
+    #[test]
+    fn declared_sub_names_filters_by_container() {
+        // A file declaring two packages must only credit the one being asked
+        // about — `declared_sub_names` filters on `container`, not just name.
+        let ast = parse_src(
+            "package My::App;\nsub discount { }\npackage Other::Pkg;\nsub discount { }\n",
+        );
+        let app_subs = declared_sub_names(&ast, "My::App");
+        assert!(app_subs.contains("discount"));
+        let other_subs = declared_sub_names(&ast, "Other::Pkg");
+        assert!(other_subs.contains("discount"));
+        // Cross-check: a package name that appears nowhere yields no subs.
+        assert!(declared_sub_names(&ast, "Unrelated::Pkg").is_empty());
+    }
+
+    #[test]
+    fn emit_relations_bare_call_after_use_stays_file_proximity() {
+        // End-to-end: a bare call after `use` is export-unproven, so the relation
+        // stays file_proximity/weakly_reachable — NOT a false direct_owner_call.
+        let root = std::env::temp_dir().join("perl-P6-bare-call-root");
+        let lib_dir = root.join("lib/My");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(lib_dir.join("App.pm"), "package My::App;\nsub discount { }\n1;\n").unwrap();
+        std::fs::write(t_dir.join("App.t"), "use My::App;\ndiscount(100);\nok(1);\n").unwrap();
+
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
+        let (relations, _observables, _sinks) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        assert!(!relations.is_empty(), "the file_proximity relation is still emitted");
+        assert!(
+            relations.iter().all(|r| r["relation_kind"] != "direct_owner_call"),
+            "a bare (export-unproven) call must NOT be direct_owner_call, got: {relations:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn emit_relations_shared_basename_bare_call_marks_neither_direct() {
+        // Two packages share the basename `Widget` and both declare `run`; the
+        // test `use`s both and calls bare `run()`. At most one is the real owner,
+        // so neither may be claimed direct_owner_call (the string version would
+        // have marked both). Qualified calls would disambiguate; bare ones can't.
+        let root = std::env::temp_dir().join("perl-P6-shared-basename-root");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(root.join("lib/V1")).unwrap();
+        std::fs::create_dir_all(root.join("lib/V2")).unwrap();
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(root.join("lib/V1/Widget.pm"), "package V1::Widget;\nsub run { }\n1;\n")
+            .unwrap();
+        std::fs::write(root.join("lib/V2/Widget.pm"), "package V2::Widget;\nsub run { }\n1;\n")
+            .unwrap();
+        std::fs::write(
+            t_dir.join("Widget.t"),
+            "use V1::Widget;\nuse V2::Widget;\nrun();\nok(1);\n",
+        )
+        .unwrap();
+
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
+        let (relations, _observables, _sinks) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        assert!(
+            relations.iter().all(|r| r["relation_kind"] != "direct_owner_call"),
+            "an ambiguous shared-basename bare call must mark neither package direct, got: {relations:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn emit_relations_comment_mention_stays_file_proximity() {
+        // The headline false positive the string heuristic had, proven fixed
+        // through the full emitter, not just the predicate.
+        let root = std::env::temp_dir().join("perl-P6-comment-mention-root");
+        let lib_dir = root.join("lib/My");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(lib_dir.join("App.pm"), "package My::App;\nsub discount { }\n1;\n").unwrap();
+        std::fs::write(t_dir.join("App.t"), "# My::App::discount(100) is deprecated\nok(1);\n")
+            .unwrap();
+
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
+        let (relations, _observables, _sinks) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        assert!(!relations.is_empty(), "must still find a file_proximity relation");
+        assert!(
+            relations.iter().all(|r| r["relation_kind"] == "file_proximity"),
+            "a comment-only mention must never upgrade to direct_owner_call, got: {relations:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn emit_relations_deterministic_across_runs_and_fs_order() {
+        let root = std::env::temp_dir().join("perl-P6-determinism-root");
+        let lib_dir = root.join("lib/My");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::create_dir_all(&t_dir).unwrap();
+        // Create files in reverse-alphabetical order on disk.
+        std::fs::write(lib_dir.join("Zeta.pm"), "package My::Zeta;\nsub run { }\n1;\n").unwrap();
+        std::fs::write(lib_dir.join("Alpha.pm"), "package My::Alpha;\nsub run { }\n1;\n").unwrap();
+        std::fs::write(t_dir.join("Zeta.t"), "use My::Zeta;\nrun();\nok(1);\n").unwrap();
+        std::fs::write(t_dir.join("Alpha.t"), "use My::Alpha;\nrun();\nok(1);\n").unwrap();
+
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
+        let (relations_1, _observables_1, _sinks_1) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+        let (relations_2, _observables_2, _sinks_2) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        assert_eq!(
+            relations_1, relations_2,
+            "two runs over the same root must produce byte-identical relations JSON"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn emit_relations_sorted_by_relation_id() {
+        let root = std::env::temp_dir().join("perl-P6-sorted-root");
+        let lib_dir = root.join("lib/My");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(lib_dir.join("Zeta.pm"), "package My::Zeta;\nsub run { }\n1;\n").unwrap();
+        std::fs::write(lib_dir.join("Mid.pm"), "package My::Mid;\nsub run { }\n1;\n").unwrap();
+        std::fs::write(lib_dir.join("Alpha.pm"), "package My::Alpha;\nsub run { }\n1;\n").unwrap();
+        std::fs::write(t_dir.join("Zeta.t"), "use My::Zeta;\nrun();\n").unwrap();
+        std::fs::write(t_dir.join("Mid.t"), "use My::Mid;\nrun();\n").unwrap();
+        std::fs::write(t_dir.join("Alpha.t"), "use My::Alpha;\nrun();\n").unwrap();
+
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
+        let (relations, _observables, _sinks) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        assert!(relations.len() >= 3, "expected at least 3 relations, got {}", relations.len());
+        let ids: Vec<&str> = relations.iter().map(|r| r["relation_id"].as_str().unwrap()).collect();
+        let mut sorted_ids = ids.clone();
+        sorted_ids.sort_unstable();
+        assert_eq!(ids, sorted_ids, "relations must be sorted by relation_id");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn relation_owner_id_format_unchanged() {
+        // Characterization test (§5): pins the current, known-mismatched-with-
+        // `owners[]` id shape so a future fix has a clean diff target. Not
+        // introduced or fixed by this PR.
+        let root = std::env::temp_dir().join("perl-P6-owner-id-root");
+        let lib_dir = root.join("lib/My");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(lib_dir.join("App.pm"), "package My::App;\nsub discount { }\n1;\n").unwrap();
+        std::fs::write(t_dir.join("App.t"), "use My::App;\ndiscount(100);\n").unwrap();
+
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
+        let (relations, _observables, _sinks) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        assert!(!relations.is_empty());
+        let owner_id = relations[0]["owner_id"].as_str().unwrap();
+        assert_eq!(owner_id, "owner:lib/My/App.pm:My::App");
 
         let _ = std::fs::remove_dir_all(&root);
     }

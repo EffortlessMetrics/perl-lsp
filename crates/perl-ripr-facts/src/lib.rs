@@ -1660,61 +1660,6 @@ mod tests {
     }
 
     #[test]
-    fn scratch_adversarial_verification_unattributable_change_dangling_evidence_ref() {
-        // Reproduction attempt for the reviewer finding: a file that IS parsed
-        // (script-level code, no sub/package) so it lands in `known_files`, but
-        // a diff hunk touching it has no enclosing owner -> unattributable-change
-        // limitation with evidence_refs pointing at a file_id that (per the
-        // force-include gate at lib.rs:220) may not appear in packet["files"].
-        let root = "target/ripr-p5-fixtures/scratch-adversarial".to_string();
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
-        std::fs::write(format!("{root}/lib/Script.pm"), "my $x = 1;\nmy $y = 2;\nprint $x + $y;\n")
-            .expect("write pm");
-        let diff = "+++ b/lib/Script.pm\n@@ -1,2 +1,3 @@\n my $x = 1;\n+my $z = 3;\n my $y = 2;\n";
-        let p = build_ripr_facts_packet(&RiprFactsRequest {
-            schema: "ripr-perl-facts-v1",
-            root: &root,
-            base: Some("origin/main"),
-            head: Some("HEAD"),
-            fact_classes: "changes",
-            diff: Some(diff),
-        })
-        .expect("valid request builds a packet");
-        let _ = std::fs::remove_dir_all(&root);
-
-        eprintln!("PACKET = {}", serde_json::to_string_pretty(&p).expect("json"));
-
-        let changes = changes_of(&p);
-        assert!(changes.is_empty(), "no owner -> no change fact");
-        assert!(
-            has_limitation(&p, "unattributable-change:"),
-            "expected unattributable-change limitation"
-        );
-
-        let files_empty = p["files"].as_array().expect("files[]").is_empty();
-        eprintln!("files[] empty = {files_empty}");
-
-        // Find the unattributable-change limitation's evidence_refs and check
-        // whether they resolve into packet["files"].
-        let file_ids: std::collections::HashSet<&str> = p["files"]
-            .as_array()
-            .expect("files[]")
-            .iter()
-            .filter_map(|f| f["file_id"].as_str())
-            .collect();
-        for l in p["limitations"].as_array().expect("limitations[]") {
-            if l["limitation_id"].as_str().is_some_and(|s| s.starts_with("unattributable-change:"))
-            {
-                for r in l["evidence_refs"].as_array().expect("evidence_refs") {
-                    let r = r.as_str().expect("evidence_ref str");
-                    eprintln!("evidence_ref = {r}, resolves = {}", file_ids.contains(r));
-                }
-            }
-        }
-    }
-
-    #[test]
     fn build_packet_changes_are_deterministically_ordered() {
         let a = packet_for_diff("det-a", "changes", Some(APP_DIFF));
         let b = packet_for_diff("det-b", "changes", Some(APP_DIFF));
