@@ -1812,6 +1812,60 @@ review_after = "2026-08-03"
 expires = "2026-10-03"
 
 # -----------------------------------------------------------------------------
+# DebugAdapter Drop process-kill boundary seam (PR #3247, closes #1405):
+# ripr#1429-class predicate-infection-untraceable seam in the new
+# `impl Drop for DebugAdapter` cleanup path.
+#
+# PR #3247 (closes #1405) adds `impl Drop for DebugAdapter` in
+# crates/perl-dap/src/debug_adapter/mod.rs: `self.cancel_requested.store(true,
+# Ordering::Release)` followed by `self.clear_active_session_state()`, so that
+# child `perl -d` processes and TCP debugger sessions are always released when
+# the adapter is abandoned without an explicit `disconnect` call. ripr 0.9.x
+# reports the Drop body as weakly_gripped (reachable_unrevealed): the primary
+# uncovered branch is inside `terminate_child_process`
+# (crates/perl-dap/src/debug_adapter/process.rs), which first tries a
+# zero-wait reap, then sends a real `SIGTERM` via `nix::sys::signal::kill` and
+# waits, then falls back to `Child::kill`. RIPR cannot statically trace which
+# of these three branches fires because activation depends on the real OS
+# process's exit timing under SIGTERM — a runtime/process-scheduler predicate,
+# not a value ripr's static tracer can follow from a test input.
+#
+# Coverage evidence: two direct call-observation --lib unit tests added to
+# crates/perl-dap/src/debug_adapter/mod.rs's `#[cfg(test)] mod tests`
+# construct a `DebugAdapter` and exercise the real Drop path (not a direct
+# call to `clear_active_session_state`):
+#   - `test_drop_sets_cancel_requested_before_clearing_session_state` clones
+#     the `Arc<AtomicBool>` cancel flag before `drop(adapter)` and asserts it
+#     flips from false to true, proving the ordering contract in Drop's body.
+#   - `test_drop_clears_attached_pid_session_state` seeds `attached_pid` with
+#     a fake PID, drops the adapter, and asserts `attached_pid` is `None`
+#     afterward, proving `clear_active_session_state` genuinely runs as part
+#     of Drop (not merely reachable in isolation).
+# The nine tests in `crates/perl-dap/tests/dap_session_cleanup_e2e.rs`
+# (5 pure-Rust + 2 Perl-gated tokio integration + 2 fast unit shapes) cover the
+# same Drop path end-to-end, including `test_drop_reaps_launched_perl_process`
+# which drives a real `perl -d` child through the SIGTERM branch — but as
+# `tests/` integration tests they do not count toward `--lib` Codecov patch
+# coverage, hence the additional --lib tests above.
+#
+# This is the same ripr#1429 predicate-infection-untraceable class as
+# ripr-suppress-position-tracking-surrogate-loop-seam (#3040) and
+# ripr-suppress-eval-sub-order-guard-loop-closure (#3286): a real branch
+# whose activation depends on runtime state (there: an accumulating loop
+# variable / closure capture; here: OS process exit timing under SIGTERM)
+# that ripr's static tracer cannot follow from a test's inputs.
+#
+# Suppression is narrow (single production file, one PR). Remove when
+# ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-debug-adapter-drop-process-boundary"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-dap/src/debug_adapter/mod.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3247 (closes #1405) adds impl Drop for DebugAdapter: self.cancel_requested.store(true, Ordering::Release) followed by self.clear_active_session_state(), ensuring child perl -d processes and TCP debugger sessions are released when the adapter is abandoned without an explicit disconnect call. ripr 0.9.x reports the Drop body as weakly_gripped (reachable_unrevealed): the primary uncovered branch is inside terminate_child_process (crates/perl-dap/src/debug_adapter/process.rs), which tries a zero-wait reap, then sends a real SIGTERM via nix::sys::signal::kill and waits, then falls back to Child::kill. RIPR cannot statically trace which branch fires because activation depends on the real OS process's exit timing under SIGTERM -- a runtime/process-scheduler predicate, not a value ripr's static tracer can follow from a test input. Coverage: two direct call-observation --lib unit tests in debug_adapter/mod.rs's #[cfg(test)] mod tests exercise the real Drop path -- test_drop_sets_cancel_requested_before_clearing_session_state clones the cancel-flag Arc before drop(adapter) and asserts it flips false-to-true; test_drop_clears_attached_pid_session_state seeds attached_pid with a fake PID, drops the adapter, and asserts attached_pid is None afterward, proving clear_active_session_state genuinely runs as part of Drop. The nine tests in crates/perl-dap/tests/dap_session_cleanup_e2e.rs (5 pure-Rust + 2 Perl-gated tokio integration + 2 fast unit shapes) cover the same path end-to-end including a real perl -d child through the SIGTERM branch, but as tests/ integration tests do not count toward --lib Codecov patch coverage. Same ripr#1429 predicate-infection-untraceable class as ripr-suppress-position-tracking-surrogate-loop-seam (#3040) and ripr-suppress-eval-sub-order-guard-loop-closure (#3286): a real branch whose activation depends on runtime state ripr's static tracer cannot follow from test inputs. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
 # rename keyword-guard predicate seams (PR #3109, closes #1401):
 [[suppress]]
 id = "ripr-suppress-rename-keyword-guard-predicate"
