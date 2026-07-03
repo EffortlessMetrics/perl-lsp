@@ -621,6 +621,19 @@ fn lookup_workspace_definition(
     None
 }
 
+/// Real subs in `package UNIVERSAL` per perldoc.perl.org/UNIVERSAL: `isa`,
+/// `can`, `DOES`, `VERSION`. Goto-definition may fall back to
+/// `UNIVERSAL::<name>` for these because that symbol genuinely exists.
+///
+/// `DESTROY` (garbage-collection destructor hook) and `AUTOLOAD` (failed
+/// method-lookup hook) are deliberately excluded: per perlobj, they are
+/// interpreter special-method hooks, not subs shipped in `UNIVERSAL`. There
+/// is no `UNIVERSAL::DESTROY` or `UNIVERSAL::AUTOLOAD` to navigate to, so
+/// they must never drive the `UNIVERSAL::<name>` goto-definition fallback
+/// below. They are still recognized for completion (see
+/// `perl-lsp-rs-core/.../completion/methods.rs`) and for hover when an
+/// actual `AUTOLOAD`/`DESTROY` sub is found via real inheritance lookup
+/// (see `autoload_definition_location`, `hover.rs`).
 const UNIVERSAL_METHODS: [&str; 4] = ["can", "isa", "DOES", "VERSION"];
 
 fn is_universal_method(name: &str) -> bool {

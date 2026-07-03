@@ -1820,6 +1820,42 @@ $self->"#;
     Ok(())
 }
 
+#[test]
+fn test_default_method_completion_includes_universal_destroy_autoload()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"my $obj = bless {}, 'MyLib';
+$obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    let destroy = completions
+        .iter()
+        .find(|item| item.label == "DESTROY")
+        .ok_or("DESTROY fallback method completion missing")?;
+    assert_eq!(destroy.detail.as_deref(), Some("method"));
+    assert_eq!(
+        destroy.documentation.as_deref(),
+        Some("Called when the last reference to the object is released (garbage collected)")
+    );
+    assert_eq!(destroy.insert_text.as_deref(), Some("DESTROY()"));
+    assert_eq!(destroy.sort_text.as_deref(), Some("2_DESTROY"));
+
+    let autoload = completions
+        .iter()
+        .find(|item| item.label == "AUTOLOAD")
+        .ok_or("AUTOLOAD fallback method completion missing")?;
+    assert_eq!(autoload.detail.as_deref(), Some("method"));
+    assert_eq!(
+        autoload.documentation.as_deref(),
+        Some("Automatic method dispatcher for undefined methods")
+    );
+    assert_eq!(autoload.insert_text.as_deref(), Some("AUTOLOAD()"));
+    assert_eq!(autoload.sort_text.as_deref(), Some("2_AUTOLOAD"));
+    Ok(())
+}
+
 // -------------------------------------------------------------------------
 // Literal `bless` receiver inference (issue #7896)
 // -------------------------------------------------------------------------
