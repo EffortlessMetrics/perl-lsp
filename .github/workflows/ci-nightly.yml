@@ -766,6 +766,52 @@ jobs:
         run: |
           cargo clippy --workspace --locked -- -D warnings -D clippy::all -A missing_docs
 
+  perl-kwalitee:
+    name: Perl Kwalitee (advisory)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Advisory-only for now: report never fails the process, and the job is
+    # continue-on-error so a non-clean verdict does not block anything. Promote
+    # to a blocking `check --profile pr --strict` once the receipt-backed
+    # indicators are consistently green. See docs/reference/PERL_KWALITEE.md.
+    continue-on-error: true
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:kwalitee'))
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        with:
+          toolchain: 1.95.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          key: ${{ runner.os }}-kwalitee-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
+
+      - name: Evaluate Perl distribution Kwalitee (nightly profile)
+        run: |
+          cargo xtask perl-kwalitee report --profile nightly \
+            --json target/receipts/kwalitee/perl-kwalitee.json \
+            --markdown target/receipts/kwalitee/perl-kwalitee.md
+          cat target/receipts/kwalitee/perl-kwalitee.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Kwalitee receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perl-kwalitee-${{ github.sha }}
+          path: |
+            target/receipts/kwalitee/perl-kwalitee.json
+            target/receipts/kwalitee/perl-kwalitee.md
+          if-no-files-found: warn
+          retention-days: 30
+
   # ============================================================================
   # Fuzz Testing (nightly only)
   # ============================================================================

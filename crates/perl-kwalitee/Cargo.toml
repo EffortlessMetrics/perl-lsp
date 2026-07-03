@@ -1,0 +1,38 @@
+[package]
+name = "perl-kwalitee"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Perl distribution Kwalitee evaluator — measurable distribution-quality indicators, profiles, and receipts for the perl-lsp native stack"
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+keywords = ["perl", "kwalitee", "quality", "distribution", "lsp"]
+categories = ["development-tools"]
+# Kept private while the receipt schema (schema_version = 1) stabilizes. The
+# publish decision is deferred to a follow-up: flip `publish = false`, add
+# `perl-kwalitee` to `[workspace.metadata.publish].allow`, and run
+# `cargo xtask publish-manifest-check`. See docs/reference/PERL_KWALITEE.md.
+publish = false
+include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
+
+[lib]
+name = "perl_kwalitee"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+# `toml` is not a workspace dependency; pinned to the same version xtask uses so
+# the lockfile does not gain a second copy. Used only to parse Cargo.toml
+# manifests for the manifest/license indicators.
+toml = "1.1.2"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

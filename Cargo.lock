@@ -1627,6 +1627,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-kwalitee"
+version = "0.17.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "perl-lexer"
 version = "0.17.0"
 dependencies = [
@@ -3963,6 +3974,7 @@ dependencies = [
  "notify",
  "perl-ci-hygiene",
  "perl-corpus",
+ "perl-kwalitee",
  "perl-lsp-rs-core",
  "perl-lsp-ux-tests",
  "perl-parser",

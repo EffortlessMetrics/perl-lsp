@@ -867,6 +867,13 @@ enum Commands {
         command: NativeToolingCommand,
     },
 
+    /// Evaluate Perl distribution Kwalitee indicators (measurable
+    /// distribution quality) and emit a scored receipt.
+    PerlKwalitee {
+        #[command(subcommand)]
+        command: PerlKwaliteeCommand,
+    },
+
     /// Run production security hardening checks.
     SecurityHardening,
 
@@ -2421,6 +2428,42 @@ enum ReleaseCommand {
 }
 
 #[derive(Subcommand)]
+enum PerlKwaliteeCommand {
+    /// Evaluate the indicators and fail on a non-clean verdict.
+    Check {
+        /// Evaluation profile.
+        #[arg(long, value_enum, default_value = "pr")]
+        profile: perl_kwalitee::PerlKwaliteeProfile,
+        /// Release `dist` directory (required to satisfy release indicators).
+        #[arg(long)]
+        dist: Option<PathBuf>,
+        /// Treat unverified mandatory indicators as failures.
+        #[arg(long)]
+        strict: bool,
+    },
+    /// Evaluate the indicators and write JSON + Markdown receipts.
+    Report {
+        /// Evaluation profile.
+        #[arg(long, value_enum, default_value = "pr")]
+        profile: perl_kwalitee::PerlKwaliteeProfile,
+        /// Release `dist` directory (required to satisfy release indicators).
+        #[arg(long)]
+        dist: Option<PathBuf>,
+        /// JSON receipt output path.
+        #[arg(long)]
+        json: Option<PathBuf>,
+        /// Markdown receipt output path.
+        #[arg(long)]
+        markdown: Option<PathBuf>,
+    },
+    /// Explain a single indicator by id.
+    Explain {
+        /// The indicator id, e.g. `release.no_external_tooling`.
+        indicator: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum FixForwardCommand {
     /// Classify a failing receipt into a typed fix-forward playbook.
     Classify {
@@ -3482,6 +3525,19 @@ fn run_cli(cli: Cli) -> Result<()> {
                     markdown,
                 })
             }
+        },
+        Commands::PerlKwalitee { command } => match command {
+            PerlKwaliteeCommand::Check { profile, dist, strict } => {
+                perl_kwalitee::check(profile, dist, strict)
+            }
+            PerlKwaliteeCommand::Report { profile, dist, json, markdown } => {
+                let root = utils::project_root()?;
+                let json = json.unwrap_or_else(|| perl_kwalitee::default_json_path(&root));
+                let markdown =
+                    markdown.unwrap_or_else(|| perl_kwalitee::default_markdown_path(&root));
+                perl_kwalitee::report(profile, dist, json, markdown)
+            }
+            PerlKwaliteeCommand::Explain { indicator } => perl_kwalitee::explain(&indicator),
         },
         Commands::SecurityHardening => hardening::security_hardening(),
         Commands::PerformanceHardening => hardening::performance_hardening(),

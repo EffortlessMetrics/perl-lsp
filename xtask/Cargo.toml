@@ -28,6 +28,7 @@ perl-semantic-analyzer = { workspace = true }
 perl-semantic-facts = { workspace = true }
 perl-workspace = { workspace = true }
 perl-ci-hygiene = { workspace = true }
+perl-kwalitee = { workspace = true }
 indicatif = "0.18.4"
 console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
