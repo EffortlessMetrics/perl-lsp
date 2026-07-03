@@ -2440,6 +2440,12 @@ enum PerlKwaliteeCommand {
         /// Treat unverified mandatory indicators as failures.
         #[arg(long)]
         strict: bool,
+        /// Evaluate this distribution tree instead of the live workspace. In
+        /// this mode the crate reads only native + receipt-backed indicators
+        /// under the given root and does not run the live-repo gates
+        /// (`update-status`); use it to evaluate an arbitrary tree.
+        #[arg(long)]
+        repo_root: Option<PathBuf>,
     },
     /// Evaluate the indicators and write JSON + Markdown receipts.
     Report {
@@ -2455,6 +2461,10 @@ enum PerlKwaliteeCommand {
         /// Markdown receipt output path.
         #[arg(long)]
         markdown: Option<PathBuf>,
+        /// Evaluate this distribution tree instead of the live workspace
+        /// (see `check --repo-root`).
+        #[arg(long)]
+        repo_root: Option<PathBuf>,
     },
     /// Explain a single indicator by id.
     Explain {
@@ -3527,15 +3537,20 @@ fn run_cli(cli: Cli) -> Result<()> {
             }
         },
         Commands::PerlKwalitee { command } => match command {
-            PerlKwaliteeCommand::Check { profile, dist, strict } => {
-                perl_kwalitee::check(profile, dist, strict)
+            PerlKwaliteeCommand::Check { profile, dist, strict, repo_root } => {
+                perl_kwalitee::check(profile, dist, strict, repo_root)
             }
-            PerlKwaliteeCommand::Report { profile, dist, json, markdown } => {
-                let root = utils::project_root()?;
-                let json = json.unwrap_or_else(|| perl_kwalitee::default_json_path(&root));
+            PerlKwaliteeCommand::Report { profile, dist, json, markdown, repo_root } => {
+                // Default receipt paths anchor to the tree being evaluated:
+                // the override root when given, else the live workspace root.
+                let anchor = match &repo_root {
+                    Some(r) => r.clone(),
+                    None => utils::project_root()?,
+                };
+                let json = json.unwrap_or_else(|| perl_kwalitee::default_json_path(&anchor));
                 let markdown =
-                    markdown.unwrap_or_else(|| perl_kwalitee::default_markdown_path(&root));
-                perl_kwalitee::report(profile, dist, json, markdown)
+                    markdown.unwrap_or_else(|| perl_kwalitee::default_markdown_path(&anchor));
+                perl_kwalitee::report(profile, dist, json, markdown, repo_root)
             }
             PerlKwaliteeCommand::Explain { indicator } => perl_kwalitee::explain(&indicator),
         },

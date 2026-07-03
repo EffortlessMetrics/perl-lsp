@@ -64,9 +64,16 @@ impl PerlKwaliteeProfile {
 }
 
 /// `cargo xtask perl-kwalitee check` — evaluate and fail on a non-clean verdict.
-pub fn check(profile: PerlKwaliteeProfile, dist: Option<PathBuf>, strict: bool) -> Result<()> {
-    let root = project_root()?;
-    let receipt = build_and_evaluate(&root, profile, dist, strict)?;
+///
+/// `repo_root` overrides the tree being evaluated (see [`resolve_root`]).
+pub fn check(
+    profile: PerlKwaliteeProfile,
+    dist: Option<PathBuf>,
+    strict: bool,
+    repo_root: Option<PathBuf>,
+) -> Result<()> {
+    let (root, live) = resolve_root(repo_root)?;
+    let receipt = build_and_evaluate(&root, live, profile, dist, strict)?;
 
     println!("{}", receipt.to_markdown());
     println!(
@@ -96,10 +103,11 @@ pub fn report(
     dist: Option<PathBuf>,
     json: PathBuf,
     markdown: PathBuf,
+    repo_root: Option<PathBuf>,
 ) -> Result<()> {
-    let root = project_root()?;
+    let (root, live) = resolve_root(repo_root)?;
     // Report is not strict — it records the state, it does not gate.
-    let receipt = build_and_evaluate(&root, profile, dist, false)?;
+    let receipt = build_and_evaluate(&root, live, profile, dist, false)?;
 
     write_file(&json, &receipt.to_json_pretty()?)?;
     write_file(&markdown, &receipt.to_markdown())?;
@@ -138,15 +146,39 @@ pub fn explain(id: &str) -> Result<()> {
     }
 }
 
+/// Resolve the tree to evaluate.
+///
+/// Returns `(root, live)`. With no override we evaluate the live workspace
+/// (`live = true`) and run the shell-out gates. With an explicit `--repo-root`
+/// we evaluate that tree using only native + receipt-backed indicators
+/// (`live = false`) — the live-repo gates (`update-status`) assume the current
+/// workspace and are skipped.
+fn resolve_root(repo_root: Option<PathBuf>) -> Result<(PathBuf, bool)> {
+    match repo_root {
+        Some(root) => {
+            // Fail loudly on a typo/missing path rather than silently evaluating
+            // an empty tree (every native indicator would just read missing
+            // files and report Unverified, letting a non-strict `check` pass
+            // without having evaluated anything).
+            if !root.is_dir() {
+                bail!("--repo-root {} is not an existing directory", root.display());
+            }
+            Ok((root, false))
+        }
+        None => Ok((project_root()?, true)),
+    }
+}
+
 /// Assemble [`KwaliteeOptions`], run the external gates, and evaluate.
 fn build_and_evaluate(
     root: &Path,
+    live: bool,
     profile: PerlKwaliteeProfile,
     dist: Option<PathBuf>,
     strict: bool,
 ) -> Result<KwaliteeReceipt> {
     let lib_profile = profile.to_lib();
-    let commit = current_commit();
+    let commit = current_commit(root);
 
     let evidence = EvidencePaths {
         native_tooling_readiness: existing(root.join(READINESS_RECEIPT_REL)),
@@ -158,7 +190,12 @@ fn build_and_evaluate(
     };
 
     let mut external_results = BTreeMap::new();
-    add_docs_status_result(&mut external_results);
+    // `update-status --check` targets the live workspace, so only run it when
+    // evaluating the live repo; under a `--repo-root` override docs.status_current
+    // is left unverified rather than measured against the wrong tree.
+    if live {
+        add_docs_status_result(&mut external_results);
+    }
     if lib_profile.requires_release_artifacts() {
         add_release_results(&mut external_results, dist.clone());
     }
@@ -258,17 +295,35 @@ fn write_file(path: &Path, contents: &str) -> Result<()> {
     Ok(())
 }
 
-/// Current git HEAD short-circuit; `"unknown"` when git is unavailable.
-fn current_commit() -> String {
-    Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|c| !c.is_empty())
-        .unwrap_or_else(|| "unknown".to_string())
+/// Git HEAD of the evaluated tree; `"unknown"` when `root` is not the top level
+/// of a git repo or git is unavailable.
+///
+/// `git -C <root> rev-parse HEAD` walks *up* the directory tree, so if `root`
+/// is a subdirectory of a repo (e.g. `--repo-root crates/foo` or a `target/`
+/// subdir of the live workspace) it would return the parent repo's HEAD. Guard
+/// with `--show-toplevel` and only stamp HEAD when `root` is itself the repo
+/// top level; otherwise the receipt records `"unknown"` rather than leaking an
+/// unrelated commit.
+fn current_commit(root: &Path) -> String {
+    let git = |args: &[&str]| -> Option<String> {
+        Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+
+    let is_own_toplevel = git(&["rev-parse", "--show-toplevel"])
+        .is_some_and(|top| std::fs::canonicalize(&top).ok() == std::fs::canonicalize(root).ok());
+    if !is_own_toplevel {
+        return "unknown".to_string();
+    }
+
+    git(&["rev-parse", "HEAD"]).unwrap_or_else(|| "unknown".to_string())
 }
 
 /// RFC 3339 timestamp for the receipt envelope.
