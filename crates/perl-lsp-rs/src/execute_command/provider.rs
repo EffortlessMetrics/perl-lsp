@@ -254,7 +254,7 @@ impl ExecuteCommandProvider {
                     .ok_or_else(|| "Missing subroutine name argument".to_string())?;
                 self.run_test_sub(&file_path, sub_name)
             }
-            "perl.debugTests" | "perl.debugFile" | "perl.debugTest" => {
+            "perl.debugTests" | "perl.debugTestFile" | "perl.debugFile" | "perl.debugTest" => {
                 let file_path = self.resolve_path_from_args(&arguments)?;
                 self.debug_tests(&file_path)
             }
@@ -264,11 +264,11 @@ impl ExecuteCommandProvider {
             }
             "perl.runSubtest" => {
                 let file_path = self.resolve_path_from_args(&arguments)?;
-                let sub_name = arguments
+                let subtest_name = arguments
                     .get(1)
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| "Missing subroutine name argument".to_string())?;
-                self.run_test_sub(&file_path, sub_name)
+                    .ok_or_else(|| "Missing subtest name argument".to_string())?;
+                self.run_subtest(&file_path, subtest_name)
             }
             "perl.runCritic" => self.run_critic_secure(&arguments),
             "perl.goToTest" => {
@@ -440,8 +440,68 @@ impl ExecuteCommandProvider {
         }
 
         crate::util::run_command_with_timeout(cmd, 30)
-            .map(|result| self.format_command_result(result, Some(("command", command.into()))))
+            .map(|result| self.format_test_command_result(result, command))
             .map_err(|error| error.to_string())
+    }
+
+    /// Format a test-runner process result, enriching the raw command output
+    /// with structured TAP facts: which runner produced it, plan/pass/fail
+    /// counts, and per-failure source locations. TODO/SKIP are reported but do
+    /// not count as hard failures. The raw `output`/`error`/`command`/`success`
+    /// fields are preserved so existing clients keep working.
+    pub(crate) fn format_test_command_result(
+        &self,
+        result: std::process::Output,
+        command: &str,
+    ) -> Value {
+        use perl_lsp_rs_core::providers::testing::tap::parse_tap;
+
+        let stdout = String::from_utf8_lossy(&result.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&result.stderr).into_owned();
+        let success = result.status.success();
+        let exit_code = result.status.code();
+        let report = parse_tap(&stdout);
+
+        let failures: Vec<Value> = report
+            .failures()
+            .into_iter()
+            .map(|test| {
+                json!({
+                    "number": test.number,
+                    "description": test.description,
+                    "file": test.file,
+                    "line": test.line,
+                    "got": test.got,
+                    "expected": test.expected,
+                    "depth": test.depth,
+                })
+            })
+            .collect();
+
+        let plan_mismatch = report
+            .plan_mismatch()
+            .map(|(actual, planned)| json!({ "actual": actual, "planned": planned }));
+
+        json!({
+            "success": success,
+            "output": stdout,
+            "error": if success { Value::Null } else { Value::String(stderr) },
+            "command": command,
+            "runner": command,
+            "exitCode": exit_code,
+            "tap": {
+                "planned": report.plan.as_ref().map(|plan| plan.count),
+                "skipAll": report.plan.as_ref().and_then(|plan| plan.skip_all.clone()),
+                "total": report.summary.total,
+                "passed": report.summary.passed,
+                "failed": report.summary.failed,
+                "skipped": report.summary.skipped,
+                "todo": report.summary.todo,
+                "bailedOut": report.bailed_out,
+                "planMismatch": plan_mismatch,
+            },
+            "failures": failures,
+        })
     }
 
     pub(crate) fn run_test_sub(&self, file_path: &Path, sub_name: &str) -> Result<Value, String> {
@@ -470,6 +530,49 @@ impl ExecuteCommandProvider {
         }
     }
 
+    /// Run a Test2/Test::More subtest by name.
+    ///
+    /// A Test2 `subtest 'name' => sub { ... }` is an anonymous block that is
+    /// part of the file's runtime — `perl-lsp` does **not** extract and execute
+    /// it in isolation (that would misrepresent the test). Instead this runs the
+    /// whole file through the configured runner and *focuses* the resulting TAP
+    /// output on the named subtest, clearly labelling the result as a
+    /// whole-file-focused run rather than filtered execution.
+    pub(crate) fn run_subtest(
+        &self,
+        file_path: &Path,
+        subtest_name: &str,
+    ) -> Result<Value, String> {
+        use perl_lsp_rs_core::providers::testing::tap::{focus_subtest, parse_tap};
+
+        let mut result = self.run_tests(file_path)?;
+
+        let raw = result.get("output").and_then(|value| value.as_str()).unwrap_or("");
+        let report = parse_tap(raw);
+        let focus = focus_subtest(&report, subtest_name);
+
+        result["requestedSubtest"] = json!(subtest_name);
+        // No cross-runner subtest filtering yet: always a whole-file run whose
+        // output we focus on the requested subtest.
+        result["subtestMode"] = json!("whole-file-focused");
+        result["subtestFocus"] = match focus {
+            Some(focus) => json!({
+                "found": true,
+                "passed": focus.passed,
+                "innerFailed": focus.inner_failed,
+                "name": focus.name,
+            }),
+            None => json!({
+                "found": false,
+                "reason": "no labelled subtest with that name in the runner output (dynamic name, or runner did not emit a subtest summary line)",
+            }),
+        };
+        result["note"] = json!(
+            "Ran the whole test file through the runner and focused output on the requested subtest. perl-lsp does not execute subtest blocks in isolation."
+        );
+        Ok(result)
+    }
+
     pub(crate) fn run_file(&self, file_path: &Path) -> Result<Value, String> {
         let ext_path = normalize_path_for_external_command(file_path);
         let mut perl_cmd = self.perl_command_for(file_path)?;
@@ -483,12 +586,44 @@ impl ExecuteCommandProvider {
         }
     }
 
-    fn debug_tests(&self, file_path: &Path) -> Result<Value, String> {
-        let file_path_str = file_path.to_string_lossy();
+    /// Build a Debug Adapter Protocol launch configuration for debugging a test
+    /// file through the native `perl-dap` adapter.
+    ///
+    /// `perl-lsp` does not run the debugger itself: it returns a launch
+    /// configuration (`action: "startDebugging"`) that the editor hands to the
+    /// `perl` debug type (backed by `perl-dap`). The program is the `.t` file
+    /// run under the real Perl interpreter — no Test2 runtime is emulated. The
+    /// working directory follows the same policy as `runTests` (the file's
+    /// directory), and `PERL_TEST_HARNESS_DUMP_TAP` is set so the session emits
+    /// TAP the editor can read back.
+    pub(crate) fn debug_tests(&self, file_path: &Path) -> Result<Value, String> {
+        let ext_path = normalize_path_for_external_command(file_path);
+        // A single-component path (bare filename) has a `Some("")` parent; an
+        // empty cwd can fail to launch, so fall back to the current directory.
+        let cwd = ext_path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let file_name = file_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| ext_path.to_string_lossy().into_owned());
+
         Ok(json!({
-            "success": false,
-            "output": format!("Debug mode not yet implemented for {}", file_path_str),
-            "error": Some("Debugging support coming soon".to_string())
+            "success": true,
+            "action": "startDebugging",
+            "adapter": "perl-dap",
+            "configuration": {
+                "type": "perl",
+                "request": "launch",
+                "name": format!("Debug Test: {file_name}"),
+                "program": ext_path.to_string_lossy(),
+                "cwd": cwd.to_string_lossy(),
+                "stopOnEntry": false,
+                "args": [],
+                "env": { "PERL_TEST_HARNESS_DUMP_TAP": "1" }
+            }
         }))
     }
 
@@ -1552,6 +1687,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.runSubtest".to_string(),
         "perl.debugFile".to_string(),
         "perl.debugTest".to_string(),
+        "perl.debugTestFile".to_string(),
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
         "perl.explainProviderDecision".to_string(),

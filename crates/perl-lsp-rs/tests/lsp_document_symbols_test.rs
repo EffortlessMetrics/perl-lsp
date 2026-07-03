@@ -165,6 +165,50 @@ sub calculate {
 }
 
 #[test]
+fn test_document_symbols_include_test2_subtests() -> TestResult {
+    let server = setup_server();
+
+    let content = "use Test2::V0;\n\
+        subtest 'user lookup' => sub {\n\
+            ok(1, 'found');\n\
+            subtest 'email matches' => sub {\n\
+                is(1, 1, 'ok');\n\
+            };\n\
+        };\n\
+        done_testing;\n";
+
+    open_document(&server, "file:///t/user.t", content);
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///t/user.t" } })),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2)),
+    };
+
+    let response = server.handle_request(request).ok_or("No response from server")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Result is not an array")?;
+
+    // Outer subtest appears as a top-level symbol...
+    let outer = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("user lookup"))
+        .ok_or("outer subtest symbol not found")?;
+    assert_eq!(outer["detail"].as_str(), Some("subtest"));
+
+    // ...with the nested subtest as a child (tree structure preserved).
+    let children = outer["children"].as_array().ok_or("outer has no children array")?;
+    let inner = children
+        .iter()
+        .find(|s| s["name"].as_str() == Some("email matches"))
+        .ok_or("nested subtest symbol not found")?;
+    assert_eq!(inner["detail"].as_str(), Some("subtest"));
+
+    Ok(())
+}
+
+#[test]
 fn test_document_symbols_plack_builder_chain() -> TestResult {
     let server = setup_server();
 

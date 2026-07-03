@@ -63,6 +63,7 @@ executeCommandProvider:
     - perl.runSubtest
     - perl.debugFile
     - perl.debugTest
+    - perl.debugTestFile
     - perl.goToTest
     - perl.goToImplementation
     - perl.explainProviderDecision

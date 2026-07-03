@@ -208,16 +208,20 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
             }
             "perl.debugTests" => {
                 assert!(obj.contains_key("success"), "{} should have success field", description);
-                assert!(obj.contains_key("output"), "{} should have output field", description);
+                // Debug now returns a real perl-dap launch configuration.
                 assert_eq!(
-                    result_value["success"], false,
-                    "{} should indicate not implemented",
+                    result_value["success"], true,
+                    "{} should return a launch config",
                     description
                 );
-                let output = result_value["output"].as_str().ok_or("output should be a string")?;
-                assert!(
-                    output.contains("not yet implemented"),
-                    "{} should have not implemented message",
+                assert_eq!(
+                    result_value["action"], "startDebugging",
+                    "{} should signal startDebugging",
+                    description
+                );
+                assert_eq!(
+                    result_value["configuration"]["type"], "perl",
+                    "{} should launch the perl debug type",
                     description
                 );
             }
@@ -298,14 +302,12 @@ fn test_command_routing_specificity_comprehensive() -> TestResult {
 
     // MUTATION KILLER: Verify command-specific behaviors (proves routing works)
 
-    // debugTests has unique "not implemented" behavior
-    assert_eq!(debug_tests_result["success"], false, "debugTests should be false");
-    assert!(
-        debug_tests_result["output"]
-            .as_str()
-            .ok_or("output should be a string")?
-            .contains("not yet implemented"),
-        "debugTests should have specific not implemented message"
+    // debugTests has unique launch-config behavior (perl-dap)
+    assert_eq!(debug_tests_result["success"], true, "debugTests should return a launch config");
+    assert_eq!(debug_tests_result["action"], "startDebugging");
+    assert_eq!(
+        debug_tests_result["configuration"]["type"], "perl",
+        "debugTests should produce a perl-dap launch configuration"
     );
 
     // runCritic has unique structure with status/violations/analyzerUsed
@@ -744,7 +746,7 @@ fn test_supported_commands_structure() -> TestResult {
 
     // MUTATION KILLER: Verify not empty/default list
     assert!(!commands.is_empty(), "Supported commands should not be empty");
-    assert_eq!(commands.len(), 17, "Should have exactly 17 supported commands");
+    assert_eq!(commands.len(), 18, "Should have exactly 18 supported commands");
 
     // Verify specific commands are present
     let expected_commands = vec![
@@ -757,6 +759,7 @@ fn test_supported_commands_structure() -> TestResult {
         "perl.runSubtest",
         "perl.debugFile",
         "perl.debugTest",
+        "perl.debugTestFile",
         "perl.goToTest",
         "perl.goToImplementation",
         "perl.explainProviderDecision",
@@ -871,7 +874,8 @@ print "Result: $result\n";
     for (command, result) in &all_results {
         match *command {
             "perl.debugTests" => {
-                assert_eq!(result["success"], false, "debugTests should indicate not implemented");
+                assert_eq!(result["success"], true, "debugTests should return a launch config");
+                assert_eq!(result["configuration"]["type"], "perl");
             }
             "perl.runCritic" => {
                 assert_eq!(result["status"], "success", "runCritic should succeed");

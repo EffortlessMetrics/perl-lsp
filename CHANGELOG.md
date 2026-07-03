@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Test2 framework awareness (reader/integration, not a Test2 runtime).**
+  `perl-lsp` now reads Test2 source and Test2 runner output and drives the
+  project's real runner, without replacing `yath`/`prove`/`perl` or executing
+  `subtest` blocks in isolation:
+  - **Imports** — `use Test2::V0;` (and common `Test2::Tools::*`) are understood
+    so assertions like `ok`/`is`/`subtest`/`done_testing` are in scope, with
+    exclusion (`!ok`), rename (`ok => {-as => 'my_ok'}`), and
+    `-no_strict`/`-no_warnings`/`-no_pragmas` handled. Export lists are verified
+    against the canonical Test2-Suite source.
+  - **Critic** — `use Test2::V0;` satisfies the native `require_use_strict` /
+    `require_use_warnings` rules (unless disabled via an import option).
+  - **Subtest structure** — nested subtests are discovered as a tree and appear
+    in the document-symbol outline and code lenses; dynamic names are reported
+    as dynamic rather than guessed.
+  - **TAP output** — runner output is parsed into structured failures mapped to
+    source (`file`/`line`/`got`/`expected`); TODO/SKIP are not hard failures;
+    raw output/exit code/runner are preserved.
+  - **Run/Debug** — "Run Subtest" runs the whole file and focuses output on the
+    named subtest; `perl.debugTestFile` returns a real `perl-dap` launch
+    configuration for `.t` files (replacing the previous placeholder). Test2
+    editor snippets (`usetest2`, `dies`, `lives`)
+    are shipped. See [docs/reference/TEST2_INTEGRATION.md](docs/reference/TEST2_INTEGRATION.md).
+
 ## [0.17.0] - 2026-06-28
 
 ### Added

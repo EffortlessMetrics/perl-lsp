@@ -48,7 +48,7 @@ impl CriticRule for RequireUseStrictRule {
     }
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
-        if has_use_statement(ctx.source, "strict") {
+        if has_use_statement(ctx.source, "strict") || test2_provides_pragma(ctx.source, "strict") {
             return;
         }
 
@@ -91,7 +91,9 @@ impl CriticRule for RequireUseWarningsRule {
     }
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
-        if has_use_statement(ctx.source, "warnings") {
+        if has_use_statement(ctx.source, "warnings")
+            || test2_provides_pragma(ctx.source, "warnings")
+        {
             return;
         }
 
@@ -2333,6 +2335,14 @@ fn has_use_statement(content: &str, feature: &str) -> bool {
     content.lines().any(|line| has_use_statement_line(line, feature))
 }
 
+/// Whether a Test2 bundle in `content` provides the named pragma
+/// (`strict`/`warnings`). `use Test2::V0;` turns both on for the importer
+/// unless disabled via `-no_strict` / `-no_warnings` / `-no_pragmas`, so an
+/// ordinary Test2 test must not trip the require-use-strict/warnings rules.
+fn test2_provides_pragma(content: &str, feature: &str) -> bool {
+    crate::providers::testing::test2::Test2Facts::from_source(content).provides_pragma(feature)
+}
+
 fn has_use_statement_line(line: &str, feature: &str) -> bool {
     let code_portion = line.split('#').next().unwrap_or_default();
     let mut tokens = code_portion.split_whitespace();
@@ -2798,6 +2808,45 @@ mod tests {
         assert!(registry.check(&exact_ctx).is_empty());
         assert_eq!(registry.check(&similar_ctx).len(), 1);
         assert_eq!(registry.check(&commented_ctx).len(), 1);
+    }
+
+    #[test]
+    fn native_require_use_strict_rule_suppressed_by_test2_bundle() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let registry = NativeCriticRegistry::with_rules(vec![
+            Box::new(RequireUseStrictRule),
+            Box::new(RequireUseWarningsRule),
+        ]);
+
+        // Plain `use Test2::V0;` turns strict + warnings on — no findings.
+        let v0 = CriticContext::new("use Test2::V0;\nok(1);\ndone_testing;\n", &ast, &config);
+        assert!(
+            registry.check(&v0).is_empty(),
+            "use Test2::V0 should satisfy both strict and warnings rules"
+        );
+
+        // `-no_strict` re-enables the strict finding but not warnings.
+        let no_strict =
+            CriticContext::new("use Test2::V0 -no_strict => 1;\nok(1);\n", &ast, &config);
+        let findings = registry.check(&no_strict);
+        assert_eq!(findings.len(), 1, "only the strict finding should return");
+        assert_eq!(findings[0].rule_id, "native.testing.require_use_strict");
+
+        // `-no_warnings` re-enables only the warnings finding.
+        let no_warnings =
+            CriticContext::new("use Test2::V0 -no_warnings;\nok(1);\n", &ast, &config);
+        let findings = registry.check(&no_warnings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "native.testing.require_use_warnings");
+
+        // `-no_pragmas` disables both — both findings return.
+        let no_pragmas = CriticContext::new("use Test2::V0 -no_pragmas;\nok(1);\n", &ast, &config);
+        assert_eq!(registry.check(&no_pragmas).len(), 2);
+
+        // A bare Test2 tool (not a bundle) does not provide strict/warnings.
+        let tool_only = CriticContext::new("use Test2::Tools::Basic;\nok(1);\n", &ast, &config);
+        assert_eq!(registry.check(&tool_only).len(), 2, "tool imports don't imply pragmas");
     }
 
     #[test]

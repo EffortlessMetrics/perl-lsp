@@ -105,6 +105,7 @@ The current architecture collapsed the old microcrate graph into a smaller publi
 | Editor setup | [docs/how-to/EDITOR_SETUP.md](docs/how-to/EDITOR_SETUP.md) |
 | Getting started | [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md) |
 | Configuration | [docs/reference/CONFIG.md](docs/reference/CONFIG.md) |
+| Test2 integration | [docs/reference/TEST2_INTEGRATION.md](docs/reference/TEST2_INTEGRATION.md) |
 | Troubleshooting | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
 | Perl setup troubleshooting | [docs/how-to/PERL_SETUP_TROUBLESHOOTING.md](docs/how-to/PERL_SETUP_TROUBLESHOOTING.md) |
 | Editor trust and receipts | [docs/how-to/EDITOR_TRUST.md](docs/how-to/EDITOR_TRUST.md) |

@@ -87,6 +87,20 @@ impl LspServer {
                         );
                     let mut document_symbols = document_symbols_to_json(live_result.symbols);
 
+                    // Append Test2/Test::More subtest symbols so the outline shows
+                    // the subtest tree. Subtest calls only exist in test files, so
+                    // this is empty for ordinary source.
+                    let subtests = perl_lsp_rs_core::providers::testing::subtest::discover_subtests(
+                        ast, &doc.text,
+                    );
+                    if !subtests.is_empty() {
+                        let subtest_symbols =
+                            perl_lsp_rs_core::providers::testing::subtest::subtest_document_symbols(
+                                &subtests,
+                            );
+                        document_symbols.extend(document_symbols_to_json(subtest_symbols));
+                    }
+
                     // Append POD section symbols from a direct line scan
                     document_symbols.extend(pod_section_symbols(&doc.text));
 

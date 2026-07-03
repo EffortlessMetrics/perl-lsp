@@ -857,8 +857,10 @@ fn test_command_routing_perl_debug_tests() -> Result<(), Box<dyn std::error::Err
     assert!(result.is_ok(), "perl.debugTests should execute successfully");
     let result_value = result?;
     assert!(result_value.is_object(), "Should return a structured result");
-    assert_eq!(result_value["success"], false, "Debug should indicate not implemented");
-    assert!(result_value["output"].is_string(), "Should have output field");
+    // Debug now returns a real perl-dap launch configuration.
+    assert_eq!(result_value["success"], true, "Debug should return a launch config");
+    assert_eq!(result_value["action"], "startDebugging");
+    assert_eq!(result_value["configuration"]["type"], "perl");
     Ok(())
 }
 
@@ -991,6 +993,55 @@ fn test_format_command_result_structure() {
     let result = provider
         .format_command_result(output, Some(("command", Value::String("perl".to_string()))));
     assert_eq!(result["command"], "perl", "Should include extra field");
+}
+
+#[test]
+fn test_format_test_command_result_parses_tap() {
+    let provider = ExecuteCommandProvider::new();
+
+    let tap = b"1..2\n\
+ok 1 - addition works\n\
+not ok 2 - email matches\n\
+#   at t/user.t line 12.\n\
+#          got: 'x'\n\
+#     expected: 'y'\n"
+        .to_vec();
+    let output = std::process::Output { status: mock_status(1), stdout: tap, stderr: b"".to_vec() };
+
+    let result = provider.format_test_command_result(output, "prove");
+
+    // Raw output and runner are preserved.
+    assert_eq!(result["runner"], "prove");
+    assert_eq!(result["command"], "prove");
+    assert_eq!(result["exitCode"], 1);
+    assert!(result["output"].as_str().unwrap_or("").contains("not ok 2"));
+
+    // Structured TAP facts are additive.
+    assert_eq!(result["tap"]["planned"], 2);
+    assert_eq!(result["tap"]["passed"], 1);
+    assert_eq!(result["tap"]["failed"], 1);
+
+    let failures = result["failures"].as_array().expect("failures array");
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0]["number"], 2);
+    assert_eq!(failures[0]["description"], "email matches");
+    assert_eq!(failures[0]["file"], "t/user.t");
+    assert_eq!(failures[0]["line"], 12);
+    assert_eq!(failures[0]["got"], "'x'");
+    assert_eq!(failures[0]["expected"], "'y'");
+}
+
+#[test]
+fn test_format_test_command_result_todo_skip_not_hard_failures() {
+    let provider = ExecuteCommandProvider::new();
+    let tap = b"1..2\nnot ok 1 - later # TODO wip\nok 2 - win # SKIP no db\n".to_vec();
+    let output = std::process::Output { status: mock_status(0), stdout: tap, stderr: b"".to_vec() };
+
+    let result = provider.format_test_command_result(output, "yath");
+    assert_eq!(result["tap"]["failed"], 0, "TODO/SKIP are not hard failures");
+    assert_eq!(result["tap"]["todo"], 1);
+    assert_eq!(result["tap"]["skipped"], 1);
+    assert_eq!(result["failures"].as_array().map(Vec::len), Some(0));
 }
 
 #[test]
@@ -1265,6 +1316,56 @@ fn test_all_command_routing_paths() {
     }
 }
 
+#[test]
+fn test_debug_tests_returns_perl_dap_launch_config() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let test_file = temp_dir.path().join("debug_me.t");
+    fs::write(&test_file, "use Test2::V0;\nok(1);\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.debugTestFile",
+        vec![Value::String(test_file.display().to_string())],
+    )?;
+
+    assert_eq!(result["success"], true, "debug should no longer be a 'coming soon' stub");
+    assert_eq!(result["action"], "startDebugging");
+    assert_eq!(result["adapter"], "perl-dap");
+    let config = &result["configuration"];
+    assert_eq!(config["type"], "perl", "launches through the native perl debug type");
+    assert_eq!(config["request"], "launch");
+    assert_eq!(config["stopOnEntry"], false);
+    assert!(config["program"].as_str().unwrap_or("").ends_with("debug_me.t"));
+    assert!(config["cwd"].is_string(), "cwd follows the runner policy (file dir)");
+    assert_eq!(config["env"]["PERL_TEST_HARNESS_DUMP_TAP"], "1");
+    Ok(())
+}
+
+#[test]
+fn test_run_subtest_reports_whole_file_focused_mode() -> Result<(), Box<dyn std::error::Error>> {
+    // The focused-run metadata (mode/requestedSubtest/note) is set regardless of
+    // whether `perl` is present, so this test is robust to the environment.
+    let temp_dir = tempdir()?;
+    let test_file = temp_dir.path().join("focus.t");
+    fs::write(&test_file, "use Test2::V0;\nsubtest 'alpha' => sub { ok(1); };\ndone_testing;\n")?;
+
+    let provider = provider_with_execute_perl(vec![temp_dir.path().to_path_buf()]);
+    let canonical = test_file.canonicalize()?;
+    let result = provider.run_subtest(&canonical, "alpha")?;
+
+    assert_eq!(result["requestedSubtest"], "alpha", "should echo the requested subtest name");
+    assert_eq!(
+        result["subtestMode"], "whole-file-focused",
+        "runs whole file; never executes the subtest block in isolation"
+    );
+    assert!(result["note"].as_str().unwrap_or("").contains("does not execute subtest blocks"));
+    assert!(result["subtestFocus"].is_object(), "should include a subtest focus object");
+    // Raw runner fields are preserved from the whole-file run.
+    assert!(result["output"].is_string(), "raw output preserved");
+    Ok(())
+}
+
 // ============= ADDITIONAL MUTATION KILLER TESTS =============
 // These tests specifically target remaining surviving mutants
 
@@ -1292,8 +1393,8 @@ fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::erro
         "Should have success field"
     );
     assert!(
-        result_value.as_object().ok_or("expected object")?.contains_key("output"),
-        "Should have output field"
+        result_value.as_object().ok_or("expected object")?.contains_key("configuration"),
+        "Should have a launch configuration field"
     );
 
     // The result should be meaningful, not just Default::default()
@@ -1788,7 +1889,9 @@ fn test_command_routing_perl_run_subtest() -> Result<(), Box<dyn std::error::Err
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
     assert!(value["success"].is_boolean(), "Should have success field");
-    assert!(value["subroutine"].is_string(), "Should have subroutine field");
+    // Whole-file-focused run (never executes the subtest block in isolation).
+    assert_eq!(value["subtestMode"], "whole-file-focused");
+    assert_eq!(value["requestedSubtest"], "my_subtest");
     Ok(())
 }
 
@@ -1806,8 +1909,10 @@ fn test_command_routing_perl_debug_file() -> Result<(), Box<dyn std::error::Erro
     assert!(result.is_ok(), "perl.debugFile should dispatch without Unknown command error");
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
-    assert_eq!(value["success"], false, "Debug should indicate not yet implemented");
-    assert!(value["output"].is_string(), "Should have output field");
+    // Debug now returns a real perl-dap launch configuration.
+    assert_eq!(value["success"], true, "Debug should return a launch config");
+    assert_eq!(value["action"], "startDebugging");
+    assert_eq!(value["configuration"]["type"], "perl");
     Ok(())
 }
 
@@ -1825,8 +1930,21 @@ fn test_command_routing_perl_debug_test() -> Result<(), Box<dyn std::error::Erro
     assert!(result.is_ok(), "perl.debugTest should dispatch without Unknown command error");
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
-    assert_eq!(value["success"], false, "Debug should indicate not yet implemented");
-    assert!(value["output"].is_string(), "Should have output field");
+    // Debug now returns a real perl-dap launch configuration.
+    assert_eq!(value["success"], true, "Debug should return a launch config");
+    assert_eq!(value["action"], "startDebugging");
+    assert_eq!(value["configuration"]["type"], "perl");
+    Ok(())
+}
+
+#[test]
+fn test_debug_tests_bare_filename_uses_dot_cwd() -> Result<(), Box<dyn std::error::Error>> {
+    // A single-component path has a Some("") parent; the launch cwd must fall
+    // back to "." rather than an empty string (which can fail to launch).
+    let provider = ExecuteCommandProvider::new();
+    let value = provider.debug_tests(std::path::Path::new("bare.t"))?;
+    assert_eq!(value["configuration"]["cwd"], ".");
+    assert_eq!(value["configuration"]["program"], "bare.t");
     Ok(())
 }
 
@@ -1841,11 +1959,11 @@ fn test_perl_run_subtest_missing_subroutine_arg() -> Result<(), Box<dyn std::err
     let result = provider
         .execute_command("perl.runSubtest", vec![Value::String(temp_file.display().to_string())]);
 
-    assert!(result.is_err(), "perl.runSubtest should fail without subroutine name");
+    assert!(result.is_err(), "perl.runSubtest should fail without a subtest name");
     let err = result.err().ok_or("expected error")?;
     assert!(
-        err.contains("Missing subroutine name"),
-        "Should report missing subroutine name, got: {}",
+        err.contains("Missing subtest name"),
+        "Should report missing subtest name, got: {}",
         err
     );
     Ok(())
