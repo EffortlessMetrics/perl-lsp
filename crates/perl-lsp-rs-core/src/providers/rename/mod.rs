@@ -475,8 +475,7 @@ mod tests {
         );
         // Namespace kinds (Package) reject keyword names via the generic arm — neither
         // variable nor callable, so this exercises the `else` branch of the keyword guard.
-        let pkg_err =
-            validate_name("if", SymbolKind::Package, &provider.symbol_table).unwrap_err();
+        let pkg_err = validate_name("if", SymbolKind::Package, &provider.symbol_table).unwrap_err();
         assert!(
             pkg_err.contains("reserved keyword"),
             "package rename to keyword should be rejected via the generic arm, got: {pkg_err}"

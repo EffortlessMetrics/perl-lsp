@@ -5058,12 +5058,8 @@ mod tests {
         let ie_index = ImportExportIndex::new();
         let queries = build_queries(&ref_index, &ie_index, &shards);
 
-        let result =
-            queries.dynamic_callable_may_be_visible_at(file_id, 100, "before_offset_sub");
-        assert!(
-            result.is_some(),
-            "eval-sub anchor before byte_offset must suppress (return Some)"
-        );
+        let result = queries.dynamic_callable_may_be_visible_at(file_id, 100, "before_offset_sub");
+        assert!(result.is_some(), "eval-sub anchor before byte_offset must suppress (return Some)");
         match result.ok_or("expected DynamicCallableEvidence")? {
             DynamicCallableEvidence::EvalSub { occurrence: occ } => {
                 assert_eq!(occ.id, occurrence_id);
@@ -5184,8 +5180,7 @@ mod tests {
         let ie_index = ImportExportIndex::new();
         let queries = build_queries(&ref_index, &ie_index, &shards);
 
-        let result =
-            queries.dynamic_callable_may_be_visible_at(file_id, 100, "orphan_anchor_sub");
+        let result = queries.dynamic_callable_may_be_visible_at(file_id, 100, "orphan_anchor_sub");
         assert!(
             result.is_none(),
             "missing anchor must fail closed (return None), not suppress or panic"
