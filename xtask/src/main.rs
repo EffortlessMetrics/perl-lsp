@@ -75,7 +75,13 @@ enum Commands {
 
     /// Verify first-mile product surfaces stay native-only (no legacy bridge /
     /// external-tool-required framing).
-    CheckNativeProductSurface,
+    CheckNativeProductSurface {
+        /// Also fail on bare external-tool names (`perltidy`, `perlcritic`,
+        /// `Perl::LanguageServer`, ...) that appear on a first-mile `.md`
+        /// surface without a native-first qualifier on the same line.
+        #[arg(long)]
+        strict: bool,
+    },
 
     /// Validate Real Perl Editor Trust provider/support claim tables.
     CheckProviderConfidenceMatrix,
@@ -3046,7 +3052,7 @@ fn run_cli(cli: Cli) -> Result<()> {
         Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::CheckDevexDocs => devex_docs::run(),
-        Commands::CheckNativeProductSurface => native_product_surface::run(),
+        Commands::CheckNativeProductSurface { strict } => native_product_surface::run_with(strict),
         Commands::CheckProviderConfidenceMatrix => provider_confidence_matrix::run(),
         Commands::CheckSupportClaims => provider_confidence_matrix::run_support_claims(),
         Commands::CheckActiveGoalManifest => active_goal_manifest::run(),
