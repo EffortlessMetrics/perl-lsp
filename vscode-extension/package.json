@@ -292,32 +292,32 @@
             "default": true,
             "scope": "resource",
             "order": 10,
-            "description": "Enable document formatting using perltidy. This requires perltidy to be installed on your system.",
-            "markdownDescription": "Enable document formatting using `perltidy`. This requires `perltidy` to be installed on your system."
+            "description": "Enable native Perl document formatting.",
+            "markdownDescription": "Enable native Perl document formatting. `perltidy` is not required unless you explicitly select an external compatibility mode."
           },
           "perl-lsp.formatOnSave": {
             "type": "boolean",
             "default": false,
             "scope": "resource",
             "order": 20,
-            "description": "Format the document automatically on save. This requires perltidy to be installed.",
-            "markdownDescription": "Format the document automatically on save. This requires `perltidy` to be installed."
+            "description": "Format the document automatically on save using the configured formatter engine. The default engine is native.",
+            "markdownDescription": "Format the document automatically on save using the configured formatter engine. The default engine is native; `perltidy` is used only when an external compatibility mode is explicitly selected."
           },
           "perl-lsp.perltidyConfig": {
             "type": "string",
             "default": "",
             "scope": "resource",
             "order": 30,
-            "description": "Path to your .perltidyrc configuration file. If omitted, perl-lsp searches the workspace and home directory.",
-            "markdownDescription": "Path to your `.perltidyrc` configuration file. If omitted, perl-lsp searches the workspace and home directory."
+            "description": "Path to a .perltidyrc profile used for compatibility reporting or explicit external perltidy mode. It is not required for native formatting. If omitted, perl-lsp searches the workspace and home directory.",
+            "markdownDescription": "Path to a `.perltidyrc` profile used for compatibility reporting or explicit external `perltidy` mode. It is not required for native formatting. If omitted, perl-lsp searches the workspace and home directory."
           },
           "perl-lsp.perlcritic.enabled": {
             "type": "boolean",
             "default": false,
             "scope": "resource",
             "order": 40,
-            "description": "Enable external Perl::Critic diagnostics from the VS Code extension.",
-            "markdownDescription": "Enable external `perlcritic` diagnostics from the VS Code extension."
+            "description": "Enable external perlcritic diagnostics. Native critic diagnostics are on by default; this setting only takes effect when the critic engine is set to legacy in .perl-lsp.toml (the perlcritic binary must then be on PATH).",
+            "markdownDescription": "Enable external `perlcritic` diagnostics. Native critic diagnostics are always on by default; this setting only takes effect when `[critic].engine = \"legacy\"` is set in `.perl-lsp.toml`, in which case the `perlcritic` binary must be on `PATH`."
           },
           "perl-lsp.perlcritic.severity": {
             "type": "number",

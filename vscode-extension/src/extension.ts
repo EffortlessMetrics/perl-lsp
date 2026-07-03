@@ -1218,7 +1218,7 @@ export async function activate(context: vscode.ExtensionContext) {
             {
                 label: '$(list-flat) Format Document',
                 description: 'Shift+Alt+F',
-                detail: isPerl ? 'Format using perltidy' : 'Format using perltidy (Only available for Perl files)',
+                detail: isPerl ? 'Format the active Perl document (native formatter)' : 'Format the active Perl document (Only available for Perl files)',
                 command: 'editor.action.formatDocument',
                 disabled: !isPerl
             },

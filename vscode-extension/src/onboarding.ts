@@ -189,8 +189,9 @@ export class OnboardingManager {
   /**
    * Check whether `perltidy` is on PATH.
    *
-   * Perltidy absence is a *warning*, not an error — the LSP works without it
-   * but formatting will be unavailable.
+   * Perltidy absence is a *warning*, not an error — and native formatting (the
+   * default engine) works without it. `perltidy` is only needed for the
+   * optional external/compatibility formatter mode.
    */
   async checkPerltidyInstalled(): Promise<HealthCheckResult> {
     const label = 'perltidy';
@@ -214,8 +215,9 @@ export class OnboardingManager {
         ok: false,
         status: HealthCheckStatus.Warning,
         detail:
-          'perltidy not found — document formatting will be unavailable. ' +
-          'Install via: cpanm Perl::Tidy',
+          'perltidy not found. Native formatting is the default and does not ' +
+          'require perltidy; install it only for the external/compatibility ' +
+          'formatter mode. Install via: cpanm Perl::Tidy',
       };
     }
   }

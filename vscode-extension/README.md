@@ -45,7 +45,7 @@ for support-tier boundaries, explanations, previews, and copyable receipts.
 - **Unused Variables** -- Find dead code
 - **Missing Pragmas** -- Suggest `strict` and `warnings`
 - **Diagnostic Explanations** -- Explain PL701/PL109 evidence, fallback, and setup boundaries when receipts are available
-- **Document Formatting** -- Format with `perltidy` (`Shift+Alt+F`)
+- **Document Formatting** -- Native Perl formatting (`Shift+Alt+F`)
 
 ### Advanced Features
 - **Semantic Highlighting** -- Context-aware syntax coloring beyond TextMate grammars
@@ -180,7 +180,7 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 | `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.1`) when channel is `tag` |
 | `perl-lsp.linuxLibc` | `"auto"` | Linux libc release asset selection: `auto`, `gnu`, `glibc`, or `musl` |
 | `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting (requires server restart to apply) |
-| `perl-lsp.enableFormatting` | `true` | Enable document formatting (requires `perltidy`; requires server restart to apply) |
+| `perl-lsp.enableFormatting` | `true` | Enable native document formatting (`perltidy` not required; server restart to apply) |
 | `perl-lsp.formatOnSave` | `false` | Format document on save |
 | `perl-lsp.enableTestIntegration` | `true` | Enable Test Explorer integration |
 | `perl-lsp.includePaths` | `["lib", "local/lib/perl5"]` | Additional library paths for module resolution |
@@ -271,8 +271,8 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 3. If auto-download failed, check your network/proxy settings or install manually
 
 **Formatting not working?**
-- Ensure `perltidy` is installed and available in your PATH
-- Check `perl-lsp.enableFormatting` is `true`
+- Check `perl-lsp.enableFormatting` is `true` (native formatting is the default; `perltidy` is not required)
+- If you selected the external/compatibility formatter engine, ensure `perltidy` is installed and available in your PATH
 
 **Diagnostics too noisy?**
 - Run **Perl LSP: Explain This Diagnostic** to see whether the warning is a

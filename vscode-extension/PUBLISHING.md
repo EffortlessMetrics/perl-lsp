@@ -77,7 +77,7 @@ code test/sample.pl
 Test these features:
 - [ ] Syntax highlighting works
 - [ ] Diagnostics appear for syntax errors
-- [ ] Format document (Shift+Alt+F) works (if perltidy installed)
+- [ ] Format document (Shift+Alt+F) works (native formatter; no perltidy required)
 - [ ] Go to definition (F12) works
 - [ ] Hover shows information
 - [ ] Auto-completion triggers
