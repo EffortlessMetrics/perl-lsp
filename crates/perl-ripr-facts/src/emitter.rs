@@ -9,93 +9,338 @@
 //! Distinguish exact oracles (is/isnt/cmp_ok) from smoke (ok/pass) from
 //! mention-only (use_ok/require_ok) from unknown.
 
-use perl_parser_core::Parser;
 use perl_parser_core::line_index::LineIndex;
+use perl_parser_core::{Node, NodeKind, Parser};
 use perl_symbol::SymbolKind;
-use perl_symbol::surface::extract_symbol_decls;
+use perl_symbol::surface::{SymbolRefKind, extract_symbol_decls, extract_symbol_refs};
 use serde_json::{Value, json};
 
-/// The Test::More assertion functions recognized by perl-lsp's completion
-/// module. Maps each assertion name to its oracle kind + strength in the
-/// ripr schema.
-const TEST_MORE_ASSERTIONS: &[(&str, &str, &str)] = &[
-    // (function_name, oracle_kind, oracle_strength)
+/// Recognized test frameworks, most-specific first. Maps a module name (as it
+/// appears in a parsed `use`) to the ripr `test.framework` wire enum. Order
+/// matters: the `Test2::*` bundles and the `Test::Exception`/`Test::Fatal`
+/// add-ons are checked before `Test::More` so a file that pulls both a bundle
+/// and an add-on reports the more specific harness. Parser-backed
+/// (`NodeKind::Use.module`), never a substring match.
+const TEST_FRAMEWORKS: &[(&str, &str)] = &[
+    ("Test2::V1", "Test2::V1"),
+    ("Test2::V0", "Test2::V0"),
+    ("Test2::Suite", "Test2::Suite"),
+    ("Test::Exception", "Test::Exception"),
+    ("Test::Fatal", "Test::Fatal"),
+    ("Test::More", "Test::More"),
+];
+
+/// Assertion / exception-observer / warning-observer call names → ripr
+/// `oracle.kind` + `oracle.strength`. Matched against the **real callee name of
+/// a parsed call node** (via `extract_symbol_refs`), so `isa_ok` never counts as
+/// `is`, and names inside comments or strings never match. `diag`/`note`/`plan`/
+/// `done_testing`/`subtest` are intentionally absent — they are diagnostics or
+/// test structure, not behavioral oracles.
+const ASSERTION_ORACLES: &[(&str, &str, &str)] = &[
+    // (call_name, oracle_kind, oracle_strength)
+    // Test::More / Test2 comparisons
     ("is", "exact_return_assertion", "strong_exact"),
     ("isnt", "exact_return_assertion", "strong_exact"),
-    ("cmp_ok", "predicate_boundary_assertion", "strong_exact"),
     ("is_deeply", "exact_return_assertion", "strong_exact"),
+    ("cmp_ok", "predicate_boundary_assertion", "strong_exact"),
     ("like", "predicate_boundary_assertion", "weak_broad"),
     ("unlike", "predicate_boundary_assertion", "weak_broad"),
+    ("isa_ok", "predicate_boundary_assertion", "weak_broad"),
+    ("can_ok", "predicate_boundary_assertion", "weak_broad"),
     ("ok", "smoke_ok", "weak_smoke"),
     ("pass", "smoke_ok", "weak_smoke"),
     ("fail", "smoke_ok", "weak_smoke"),
-    ("isa_ok", "predicate_boundary_assertion", "weak_broad"),
-    ("can_ok", "predicate_boundary_assertion", "weak_broad"),
     ("use_ok", "mention_only", "mention_only"),
     ("require_ok", "mention_only", "mention_only"),
+    // Test::Exception / Test::Fatal / Test2 exception observers
+    ("throws_ok", "exception_observer", "weak_broad"),
+    ("dies_ok", "exception_observer", "weak_broad"),
+    ("lives_ok", "smoke_ok", "weak_smoke"),
+    ("lives_and", "exception_observer", "weak_broad"),
+    ("exception", "exception_observer", "weak_broad"),
+    ("dies", "exception_observer", "weak_broad"),
+    ("lives", "smoke_ok", "weak_smoke"),
+    // Test::Warn observers (commonly paired with the above)
+    ("warning_is", "warn_observer", "weak_broad"),
+    ("warning_like", "warn_observer", "weak_broad"),
+    ("warnings_are", "warn_observer", "weak_broad"),
 ];
 
-/// Emit test + oracle facts for the `ripr-perl-facts-v1` packet.
+/// Emit parser-backed `tests[]`, `oracles[]`, `provenance[]`, and
+/// `limitations[]` for the `ripr-perl-facts-v1` packet (#3293 PR 4).
 ///
-/// Scans `.t` files in the workspace root for test framework usage + assertion
-/// calls. Returns `(tests_array, oracles_array)` as JSON values matching the
-/// ripr schema.
+/// For each `.t` file under `root/t`, this parses the file with
+/// `perl-parser-core` and:
+/// - detects the framework from parsed `use` statements (`NodeKind::Use.module`,
+///   never `content.contains`) and emits one `test` fact with the file's **real
+///   full-file range** plus a `test_discovery` provenance carrying the `use`
+///   statement's range;
+/// - emits one `oracle` fact per recognized assertion **call node**
+///   (`extract_symbol_refs`, filtered to `SubroutineCall`), with the call's
+///   **real source range**, a kind/strength from [`ASSERTION_ORACLES`], and the
+///   call's source text as `expression`; and
+/// - records limitations for unparseable files, recognized-framework-but-no-
+///   oracle files (wrapped/aliased/dynamic helpers), and the narrower schema
+///   representation (single call range, no observed/expected sub-ranges).
 ///
-/// This is a **conservative first slice** (PR 6): it reads `.t` files directly
-/// (not via the workspace index) and uses simple string matching for assertion
-/// detection. Future PRs can enrich this with byte ranges + AST-level analysis.
-pub(crate) fn emit_tests_and_oracles(root: &str) -> (Vec<Value>, Vec<Value>) {
+/// No string-scan assertion counting and no placeholder `1:1` ranges. On a parse
+/// failure the file still yields a `test` fact (framework `unknown`) plus a
+/// limitation — never silent, never string-fallback oracles.
+pub(crate) fn emit_tests_and_oracles(
+    root: &str,
+) -> (Vec<Value>, Vec<Value>, Vec<Value>, Vec<Value>) {
     let mut tests = Vec::new();
     let mut oracles = Vec::new();
+    let mut provenance = Vec::new();
+    let mut limitations = Vec::new();
 
-    // Scan for .t files under t/
     let t_dir = std::path::Path::new(root).join("t");
-    let t_files = collect_t_files(&t_dir);
+    let mut t_files = collect_t_files(&t_dir);
+    // Deterministic order: sort discovered test files by repo-relative path.
+    t_files.sort_by(|a, b| a.1.cmp(&b.1));
 
-    for (_file_path, relative_path, content) in t_files {
+    let mut any_oracles = false;
+
+    for (_full_path, relative_path, content) in t_files {
         let file_id = format!("file:{relative_path}");
-
-        // Detect framework from `use` statements.
-        let framework = detect_framework(&content);
-
-        // Emit a test fact for the file.
         let test_id = format!("test:{relative_path}");
-        tests.push(json!({
-            "test_id": test_id,
-            "file_id": file_id,
-            "framework": framework,
-            "name": relative_path,
-            "range": {"start_line": 1, "start_column": 1, "end_line": 1, "end_column": 1},
-            "runner_hints": ["prove"],
-            "confidence": "high",
-            "provenance_refs": []
-        }));
+        let import_prov_id = format!("prov:test_discovery:{file_id}");
 
-        // Detect assertion calls and emit oracle facts.
-        for (func_name, oracle_kind, oracle_strength) in TEST_MORE_ASSERTIONS {
-            let count = count_assertion_calls(&content, func_name);
-            for i in 0..count {
-                let oracle_id = format!("oracle:{relative_path}:{func_name}:{i}");
-                oracles.push(json!({
-                    "oracle_id": oracle_id,
-                    "test_id": test_id,
-                    "kind": oracle_kind,
-                    "strength": oracle_strength,
-                    "target_owner_id": null,
-                    "expression": format!("{func_name}(...)"),
-                    "observed_sink": null,
-                    "expected_expression": null,
-                    "range": {"start_line": 1, "start_column": 1, "end_line": 1, "end_column": 1},
-                    "confidence": "medium",
-                    "provenance_refs": []
+        // Parse first (borrowing `content`), so `content` can then move into
+        // `LineIndex` without a per-file clone.
+        let parsed = {
+            let mut parser = Parser::new(&content);
+            parser.parse()
+        };
+        let ast = match parsed {
+            Ok(ast) => ast,
+            Err(_) => {
+                // Never silent, never string-fallback: emit the test fact with
+                // an unknown framework and record why oracles are absent.
+                let content_len = content.len();
+                let line_index = LineIndex::new(content);
+                let full_range = full_file_range(&line_index, content_len);
+                tests.push(test_fact(
+                    "unknown",
+                    &test_id,
+                    &file_id,
+                    &relative_path,
+                    &full_range,
+                    &import_prov_id,
+                ));
+                provenance.push(test_discovery_provenance(
+                    &import_prov_id,
+                    &file_id,
+                    None,
+                    "medium",
+                ));
+                limitations.push(json!({
+                    "limitation_id": format!("test-parse-failed:{file_id}"),
+                    "kind": "parse_failure",
+                    "message": format!(
+                        "could not parse test file `{relative_path}`; emitted the test fact with unknown framework and no oracles"
+                    ),
+                    "evidence_refs": [file_id],
                 }));
+                continue;
             }
+        };
+
+        // Detect the framework and collect each oracle's span + source-text
+        // `expression` while `content` is still borrowed — then `content` can
+        // move into `LineIndex` (no clone) for the range conversions.
+        let (framework, use_span) = framework_from_ast(&ast);
+        let oracle_hits: Vec<(String, &'static str, &'static str, usize, usize, String)> =
+            extract_symbol_refs(&ast)
+                .into_iter()
+                .filter(|reference| reference.kind == SymbolRefKind::SubroutineCall)
+                .filter_map(|reference| {
+                    oracle_for(&reference.name).map(|(kind, strength)| {
+                        let (start_byte, end_byte) = reference.full_span;
+                        let expression = call_expression(&content, start_byte, end_byte);
+                        (reference.name, kind, strength, start_byte, end_byte, expression)
+                    })
+                })
+                .collect();
+
+        let content_len = content.len();
+        let line_index = LineIndex::new(content);
+        let full_range = full_file_range(&line_index, content_len);
+        let import_range = use_span.map(|(s, e)| range_string(&line_index, s, e));
+
+        tests.push(test_fact(
+            framework,
+            &test_id,
+            &file_id,
+            &relative_path,
+            &full_range,
+            &import_prov_id,
+        ));
+        provenance.push(test_discovery_provenance(
+            &import_prov_id,
+            &file_id,
+            import_range,
+            if framework == "unknown" { "medium" } else { "high" },
+        ));
+
+        // Oracles from the parsed call sites (byte spans → real ranges).
+        let oracle_prov_id = format!("prov:oracle_extraction:{file_id}");
+        let mut file_oracles = 0usize;
+        for (name, kind, strength, start_byte, end_byte, expression) in oracle_hits {
+            let ((sl, sc), (el, ec)) = line_index.range(start_byte, end_byte);
+            oracles.push(json!({
+                "oracle_id": format!("oracle:{relative_path}:{name}:{start_byte}-{end_byte}"),
+                "test_id": test_id,
+                "kind": kind,
+                "strength": strength,
+                "target_owner_id": null,
+                "expression": expression,
+                "observed_sink": null,
+                "expected_expression": null,
+                "range": {"start_line": sl, "start_column": sc, "end_line": el, "end_column": ec},
+                "confidence": "medium",
+                "provenance_refs": [oracle_prov_id.clone()],
+            }));
+            file_oracles += 1;
+        }
+
+        if file_oracles > 0 {
+            any_oracles = true;
+            provenance.push(json!({
+                "provenance_id": oracle_prov_id,
+                "source": "oracle_extraction",
+                "file_id": file_id,
+                "range": null,
+                "confidence": "medium",
+            }));
+        } else if framework != "unknown" {
+            // A recognized framework but no extractable assertion: assertions may
+            // be wrapped, aliased, or dynamically generated — flag, do not guess.
+            limitations.push(json!({
+                "limitation_id": format!("no-oracles:{file_id}"),
+                "kind": "framework_indirection",
+                "message": format!(
+                    "`{relative_path}` uses {framework} but no supported assertion call was found; assertions may be wrapped, aliased, or dynamically generated"
+                ),
+                "evidence_refs": [file_id],
+            }));
         }
     }
 
-    // If no .t files found, emit nothing (the packet stays unavailable for
-    // tests/oracles). This is the honest state.
-    (tests, oracles)
+    // Representation note: the schema carries one call `range` + string
+    // expressions per oracle, not separate observed/expected sub-ranges.
+    if any_oracles {
+        limitations.push(json!({
+            "limitation_id": "oracle-representation",
+            "kind": "narrowed_representation",
+            "message": "oracle facts locate the whole assertion call range; the ripr-perl-facts-v1 schema has no observed/expected expression sub-range fields, so those are conveyed as string expressions only.",
+            "evidence_refs": [],
+        }));
+    }
+
+    (tests, oracles, provenance, limitations)
+}
+
+/// The whole-file range `(0,0)..(end)` as a schema range value.
+fn full_file_range(line_index: &LineIndex, content_len: usize) -> Value {
+    let ((sl, sc), (el, ec)) = line_index.range(0, content_len);
+    json!({"start_line": sl, "start_column": sc, "end_line": el, "end_column": ec})
+}
+
+/// Build a schema-valid `test` fact. The `test` schema has no `owner_id`
+/// (`additionalProperties: false`), so subtest ownership, when added later, must
+/// ride `test_id` naming rather than a field. Test2 harnesses run under `yath`
+/// or `prove`; everything else under `prove`.
+fn test_fact(
+    framework: &str,
+    test_id: &str,
+    file_id: &str,
+    name: &str,
+    range: &Value,
+    provenance_id: &str,
+) -> Value {
+    let runner_hints =
+        if framework.starts_with("Test2") { json!(["yath", "prove"]) } else { json!(["prove"]) };
+    json!({
+        "test_id": test_id,
+        "file_id": file_id,
+        "framework": framework,
+        "name": name,
+        "range": range,
+        "runner_hints": runner_hints,
+        "confidence": "high",
+        "provenance_refs": [provenance_id],
+    })
+}
+
+/// Build a `test_discovery` provenance fact (framework/import evidence).
+fn test_discovery_provenance(
+    provenance_id: &str,
+    file_id: &str,
+    range: Option<String>,
+    confidence: &str,
+) -> Value {
+    json!({
+        "provenance_id": provenance_id,
+        "source": "test_discovery",
+        "file_id": file_id,
+        "range": range,
+        "confidence": confidence,
+    })
+}
+
+/// Look up a call name in [`ASSERTION_ORACLES`], returning `(kind, strength)`.
+fn oracle_for(name: &str) -> Option<(&'static str, &'static str)> {
+    ASSERTION_ORACLES
+        .iter()
+        .find(|(n, _, _)| *n == name)
+        .map(|(_, kind, strength)| (*kind, *strength))
+}
+
+/// The oracle `expression`: the call's source text, trimmed and length-bounded.
+fn call_expression(content: &str, start: usize, end: usize) -> String {
+    let slice = content.get(start..end).unwrap_or("").trim();
+    const MAX_CHARS: usize = 120;
+    if slice.chars().count() > MAX_CHARS {
+        let head: String = slice.chars().take(MAX_CHARS).collect();
+        format!("{head}…")
+    } else {
+        slice.to_owned()
+    }
+}
+
+/// A compact `sl:sc-el:ec` range string for the schema's string-typed
+/// `provenance.range` field.
+fn range_string(line_index: &LineIndex, start: usize, end: usize) -> String {
+    let ((sl, sc), (el, ec)) = line_index.range(start, end);
+    format!("{sl}:{sc}-{el}:{ec}")
+}
+
+/// Detect the test framework from parsed `use` statements. Returns the ripr
+/// wire name (`"unknown"` if none matched) and the byte span of the matched
+/// `use` node (for provenance). When several frameworks are imported, the most
+/// specific one wins (the earliest entry in [`TEST_FRAMEWORKS`]). Single-pass —
+/// no intermediate allocation or module-name cloning.
+fn framework_from_ast(ast: &Node) -> (&'static str, Option<(usize, usize)>) {
+    // (framework index, wire name, span) of the best (lowest-index) match so far.
+    let mut best: Option<(usize, &'static str, (usize, usize))> = None;
+    find_framework_use(ast, &mut best);
+    match best {
+        Some((_, wire, span)) => (wire, Some(span)),
+        None => ("unknown", None),
+    }
+}
+
+/// Recursively update `best` with the most specific test-framework `use` node.
+fn find_framework_use(node: &Node, best: &mut Option<(usize, &'static str, (usize, usize))>) {
+    if let NodeKind::Use { module, .. } = &node.kind
+        && let Some(index) = TEST_FRAMEWORKS.iter().position(|(m, _)| m == module)
+        && best.is_none_or(|(best_index, _, _)| index < best_index)
+    {
+        let (_, wire) = TEST_FRAMEWORKS[index];
+        *best = Some((index, wire, (node.location.start, node.location.end)));
+    }
+    node.for_each_child(|child| find_framework_use(child, best));
 }
 
 /// Collect all `.t` files under a directory. Returns (full_path, relative_path, content).
@@ -106,8 +351,14 @@ fn collect_t_files(t_dir: &std::path::Path) -> Vec<(String, String, String)> {
     };
     for entry in entries.flatten() {
         let path = entry.path();
+        let is_symlink = entry.file_type().is_ok_and(|file_type| file_type.is_symlink());
         if path.is_dir() {
-            // Recurse one level (t/subdir/*.t).
+            // Do not descend into symlinked directories — a directory-symlink
+            // loop would otherwise recurse infinitely (`is_dir()` follows the
+            // link). A symlinked `.t` *file* (below) is still read.
+            if is_symlink {
+                continue;
+            }
             result.extend(collect_t_files(&path));
         } else if path.extension().is_some_and(|ext| ext == "t") {
             let Ok(content) = std::fs::read_to_string(&path) else {
@@ -122,36 +373,6 @@ fn collect_t_files(t_dir: &std::path::Path) -> Vec<(String, String, String)> {
         }
     }
     result
-}
-
-/// Detect the test framework from `use` statements in the file content.
-///
-/// Returns the serde-expected wire string matching ripr's `TestFramework`
-/// enum (`#[serde(rename = "Test::More")]` etc.). M1 contract convergence
-/// (Campaign 31): the producer and consumer must use the SAME vocabulary.
-///
-/// Order matters: check the most specific Test2 bundles first, because
-/// `use Test2::V0` is a substring-prefix hazard only at the token level
-/// (not here, since we match the full `use Test2::VX;` form), but V0 vs V1
-/// vs Suite must each return its own wire name. Early Campaign 31 builds
-/// collapsed V0 and Suite into a single `"Test2::V0"` return — that was a
-/// contract bug; each bundle is distinct.
-fn detect_framework(content: &str) -> &'static str {
-    if content.contains("use Test2::V1") {
-        "Test2::V1"
-    } else if content.contains("use Test2::V0") {
-        "Test2::V0"
-    } else if content.contains("use Test2::Suite") {
-        "Test2::Suite"
-    } else if content.contains("use Test::Exception") {
-        "Test::Exception"
-    } else if content.contains("use Test::Fatal") {
-        "Test::Fatal"
-    } else if content.contains("use Test::More") {
-        "Test::More"
-    } else {
-        "unknown"
-    }
 }
 
 /// Emit relations, concrete discriminators, and observed-sink facts.
@@ -369,18 +590,6 @@ fn extract_is_args(line: &str) -> Option<(String, String)> {
     } else {
         None
     }
-}
-
-/// Count occurrences of an assertion call (e.g., `is(`, `ok(`) in the content.
-/// Simple string matching — not AST-level, but conservative (over-counts
-/// comments, under-counts is for `isa_ok`). The alpha's conservative bias
-/// means false-positive oracles are OK (ripr fails closed on weak oracles).
-fn count_assertion_calls(content: &str, func_name: &str) -> usize {
-    // Match `func_name(` as a word boundary (not inside a longer identifier).
-    // Use a simple heuristic: count lines where the func_name appears followed
-    // by `(`. This is conservative (may miss multi-line calls or match comments).
-    let needle = format!("{func_name}(");
-    content.lines().filter(|line| line.contains(&needle)).count()
 }
 
 /// Patterns that indicate a dynamic boundary in Perl source. Each entry maps
@@ -860,18 +1069,16 @@ fn collect_perl_files_recursive(
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        // Skip symlinks entirely: a directory-symlink loop would otherwise cause
-        // infinite recursion (`is_dir()` follows the link), and a file symlink
-        // could escape the root. `entry.file_type()` reports the link's own type
-        // without following it.
-        if entry.file_type().is_ok_and(|file_type| file_type.is_symlink()) {
-            continue;
-        }
         let file_name = entry.file_name();
         let name = file_name.to_string_lossy();
+        let is_symlink = entry.file_type().is_ok_and(|file_type| file_type.is_symlink());
         if path.is_dir() {
-            // Skip hidden dirs (.git, .build) and non-source build trees.
-            if name.starts_with('.')
+            // Do not descend into symlinked directories — a directory-symlink
+            // loop would otherwise recurse infinitely (`is_dir()` follows the
+            // link). Also skip hidden dirs and non-source build trees. A
+            // symlinked source *file* (below) is still read.
+            if is_symlink
+                || name.starts_with('.')
                 || matches!(name.as_ref(), "target" | "blib" | "node_modules" | "_build")
             {
                 continue;
@@ -900,83 +1107,156 @@ fn is_perl_source_file(name: &str) -> bool {
 mod tests {
     use super::*;
 
-    #[test]
-    fn detect_test_more_framework() {
-        assert_eq!(detect_framework("use Test::More;\nok(1);"), "Test::More");
+    fn parse_src(src: &str) -> Node {
+        let mut parser = Parser::new(src);
+        parser.parse().expect("test source parses")
     }
 
     #[test]
-    fn detect_test2_v0_framework() {
-        assert_eq!(detect_framework("use Test2::V0;\nok(1);"), "Test2::V0");
+    fn framework_from_ast_detects_test_more() {
+        assert_eq!(framework_from_ast(&parse_src("use Test::More;\nok(1);\n")).0, "Test::More");
     }
 
     #[test]
-    fn detect_test2_v1_framework() {
-        // Campaign 31 contract freeze: Test2::V1 must be recognized and emit
-        // its own wire name (early builds did not detect it at all).
-        assert_eq!(detect_framework("use Test2::V1;\nok(1);"), "Test2::V1");
+    fn framework_from_ast_detects_test2_bundles() {
+        // Contract freeze: each Test2 bundle emits its own distinct wire name
+        // (early builds collapsed Suite/V1 into "Test2::V0").
+        for (src, want) in [
+            ("use Test2::V0;\nok(1);", "Test2::V0"),
+            ("use Test2::V1;\nok(1);", "Test2::V1"),
+            ("use Test2::Suite;\nok(1);", "Test2::Suite"),
+        ] {
+            assert_eq!(framework_from_ast(&parse_src(src)).0, want, "src: {src}");
+        }
     }
 
     #[test]
-    fn detect_test2_suite_returns_suite_not_v0() {
-        // Regression guard: early builds collapsed Suite into "Test2::V0".
-        // The schema (post-freeze) treats each bundle as a distinct wire name.
-        assert_eq!(detect_framework("use Test2::Suite;\nok(1);"), "Test2::Suite");
+    fn framework_from_ast_detects_exception_and_fatal() {
+        assert_eq!(
+            framework_from_ast(&parse_src("use Test::Exception;\nthrows_ok { die } qr/x/;")).0,
+            "Test::Exception"
+        );
+        assert_eq!(framework_from_ast(&parse_src("use Test::Fatal;\nok(1);")).0, "Test::Fatal");
     }
 
     #[test]
-    fn detect_unknown_framework() {
-        assert_eq!(detect_framework("use strict;\nprint 1;"), "unknown");
+    fn framework_from_ast_returns_unknown_for_non_test() {
+        assert_eq!(framework_from_ast(&parse_src("use strict;\nprint 1;\n")).0, "unknown");
     }
 
     #[test]
-    fn count_is_assertions() {
-        let content = "is(1, 1);\nis(2, 2);\nok(1);";
-        assert_eq!(count_assertion_calls(content, "is"), 2);
-        assert_eq!(count_assertion_calls(content, "ok"), 1);
+    fn oracle_for_maps_known_assertions_only() {
+        // Independent contract list — deliberately NOT derived from ASSERTION_ORACLES,
+        // so a rename or kind/strength drift in the table (e.g. `is_deeply` →
+        // `is-deeply`) breaks this test instead of silently dropping coverage.
+        let expected: &[(&str, &str, &str)] = &[
+            ("is", "exact_return_assertion", "strong_exact"),
+            ("isnt", "exact_return_assertion", "strong_exact"),
+            ("is_deeply", "exact_return_assertion", "strong_exact"),
+            ("cmp_ok", "predicate_boundary_assertion", "strong_exact"),
+            ("like", "predicate_boundary_assertion", "weak_broad"),
+            ("unlike", "predicate_boundary_assertion", "weak_broad"),
+            ("isa_ok", "predicate_boundary_assertion", "weak_broad"),
+            ("can_ok", "predicate_boundary_assertion", "weak_broad"),
+            ("ok", "smoke_ok", "weak_smoke"),
+            ("pass", "smoke_ok", "weak_smoke"),
+            ("fail", "smoke_ok", "weak_smoke"),
+            ("use_ok", "mention_only", "mention_only"),
+            ("require_ok", "mention_only", "mention_only"),
+            ("throws_ok", "exception_observer", "weak_broad"),
+            ("dies_ok", "exception_observer", "weak_broad"),
+            ("lives_ok", "smoke_ok", "weak_smoke"),
+            ("lives_and", "exception_observer", "weak_broad"),
+            ("exception", "exception_observer", "weak_broad"),
+            ("dies", "exception_observer", "weak_broad"),
+            ("lives", "smoke_ok", "weak_smoke"),
+            ("warning_is", "warn_observer", "weak_broad"),
+            ("warning_like", "warn_observer", "weak_broad"),
+            ("warnings_are", "warn_observer", "weak_broad"),
+        ];
+        for (name, kind, strength) in expected {
+            assert_eq!(
+                oracle_for(name),
+                Some((*kind, *strength)),
+                "{name} must map to ({kind}, {strength})"
+            );
+        }
+        // Length guard: a new table entry that isn't added to `expected` above
+        // fails here, forcing coverage to track the table.
+        assert_eq!(
+            ASSERTION_ORACLES.len(),
+            expected.len(),
+            "every ASSERTION_ORACLES entry must have a contract assertion above"
+        );
+        // Non-assertions never map — no diagnostics, no arbitrary calls.
+        assert!(oracle_for("diag").is_none(), "diag is a diagnostic, not an oracle");
+        assert!(oracle_for("note").is_none(), "note is a diagnostic, not an oracle");
+        assert!(oracle_for("not_an_assertion").is_none());
     }
 
     #[test]
     fn emit_tests_and_oracles_for_test_more_file() {
-        // Create a temp .t file.
-        let temp = std::env::temp_dir().join("perl-B6-test-more.t");
-        std::fs::write(&temp, "use Test::More;\nis(1, 1, 'one');\nok(1, 'truthy');\n").unwrap();
-        // Create the t/ directory structure.
-        let root = std::env::temp_dir().join("perl-B6-root");
+        let root = std::env::temp_dir().join("perl-p4-test-more-root");
         let t_dir = root.join("t");
-        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::create_dir_all(&t_dir).expect("mkdir");
         std::fs::write(
             t_dir.join("app.t"),
             "use Test::More;\nis(1, 1, 'one');\nok(1, 'truthy');\n",
         )
-        .unwrap();
+        .expect("write");
 
-        let (tests, oracles) = emit_tests_and_oracles(root.to_str().unwrap());
+        let (tests, oracles, provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().expect("utf8 root"));
 
-        // Should have 1 test fact (the .t file) + at least 2 oracle facts
-        // (is + ok). The exact count depends on how many assertion kinds
-        // appear — `is` gives 1, `ok` gives 1.
-        assert!(!tests.is_empty(), "must emit at least one test fact");
+        assert_eq!(tests.len(), 1, "one test fact for the .t file");
         assert_eq!(tests[0]["framework"], "Test::More");
-        assert!(!oracles.is_empty(), "must emit at least one oracle fact");
+        assert!(oracles.iter().any(|o| o["kind"] == "exact_return_assertion"), "is → exact");
+        assert!(oracles.iter().any(|o| o["kind"] == "smoke_ok"), "ok → smoke");
+        // Parser-backed: no placeholder 1:1 ranges.
+        let placeholder =
+            json!({"start_line": 1, "start_column": 1, "end_line": 1, "end_column": 1});
+        assert!(oracles.iter().all(|o| o["range"] != placeholder), "no placeholder oracle ranges");
+        assert!(provenance.iter().any(|p| p["source"] == "test_discovery"));
+        assert!(provenance.iter().any(|p| p["source"] == "oracle_extraction"));
 
-        // Check that oracles have the right kind/strength.
-        let has_exact = oracles.iter().any(|o| o["kind"] == "exact_return_assertion");
-        let has_smoke = oracles.iter().any(|o| o["kind"] == "smoke_ok");
-        assert!(has_exact, "must have an exact_return_assertion oracle (from is)");
-        assert!(has_smoke, "must have a smoke_ok oracle (from ok)");
-
-        // Clean up.
         let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
     fn emit_returns_empty_when_no_t_files() {
-        let root = std::env::temp_dir().join("perl-B6-empty-root");
-        std::fs::create_dir_all(&root).unwrap();
-        let (tests, oracles) = emit_tests_and_oracles(root.to_str().unwrap());
-        assert!(tests.is_empty(), "no .t files → no tests");
-        assert!(oracles.is_empty(), "no .t files → no oracles");
+        let root = std::env::temp_dir().join("perl-p4-empty-root");
+        std::fs::create_dir_all(&root).expect("mkdir");
+        let (tests, oracles, provenance, limitations) =
+            emit_tests_and_oracles(root.to_str().expect("utf8 root"));
+        assert!(tests.is_empty() && oracles.is_empty(), "no .t files → no tests/oracles");
+        assert!(
+            provenance.is_empty() && limitations.is_empty(),
+            "no .t files → no prov/limitations"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collect_t_files_reads_symlinked_t_file() {
+        use std::os::unix::fs::symlink;
+        // A symlinked `.t` file under `t/` must still be discovered + read — only
+        // symlinked *directories* are skipped (loop safety).
+        let root = std::env::temp_dir().join("perl-p4-symlink-t");
+        let _ = std::fs::remove_dir_all(&root);
+        let shared = root.join("shared");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&shared).expect("mkdir shared");
+        std::fs::create_dir_all(&t_dir).expect("mkdir t");
+        std::fs::write(shared.join("real.t"), "use Test::More;\nok(1);\n").expect("write real");
+        symlink(shared.join("real.t"), t_dir.join("linked.t")).expect("symlink .t");
+
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().expect("utf8 root"));
+        assert!(
+            tests.iter().any(|t| t["name"] == "t/linked.t"),
+            "symlinked .t file must be read, not silently dropped"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1017,7 +1297,8 @@ mod tests {
         std::fs::write(t_dir.join("App.t"), "use Test::More;\nok(1);\n").unwrap();
 
         // First emit tests, then relations.
-        let (tests, _oracles) = emit_tests_and_oracles(root.to_str().unwrap());
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
         let (relations, _observables, _sinks) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
@@ -1038,7 +1319,8 @@ mod tests {
         std::fs::write(t_dir.join("app.t"), "use Test::More;\nis(discount(100), 50, 'half');\n")
             .unwrap();
 
-        let (tests, _oracles) = emit_tests_and_oracles(root.to_str().unwrap());
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
         let (_relations, observables, sinks) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 
@@ -1244,7 +1526,8 @@ mod tests {
             "use Test::More;\nis(disco(100), 50, 'half');\nok(1);\n",
         )
         .unwrap();
-        let (_tests, oracles) = emit_tests_and_oracles(temp.to_str().unwrap());
+        let (_tests, oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(temp.to_str().unwrap());
         let _ = std::fs::remove_dir_all(&temp);
         assert!(!oracles.is_empty(), "expected at least one oracle fact");
         for oracle in &oracles {
@@ -1323,7 +1606,8 @@ mod tests {
         std::fs::write(t_dir.join("App.t"), "use My::App;\nis(My::App::discount(100), 50);\n")
             .unwrap();
 
-        let (tests, _oracles) = emit_tests_and_oracles(root.to_str().unwrap());
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
         let (relations, _observables, _sinks) =
             emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
 

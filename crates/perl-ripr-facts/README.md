@@ -53,19 +53,34 @@ wrapper writes for the same inputs.
 
 ## Status
 
-The **parser-backed files/owners slice** (#3293 PR 3). `files[]` and `owners[]`
-are now populated by parsing every Perl source/test file under the root:
+The **parser-backed tests/oracles slice** (#3293 PR 4), on top of the
+parser-backed files/owners slice (PR 3). Both `files[]`/`owners[]` and now
+`tests[]`/`oracles[]` come from parsing, not string scans:
 
 - `files[]` — repo-relative path, role, a deterministic FNV-1a `digest`, and the
   declared package names, for each `.pm` / `.pl` / `.psgi` / `.t` file.
 - `owners[]` — one fact per `package` / `class` / `role` / `sub` / `method`
   declaration, carrying the parser's source range.
+- `tests[]` — one fact per `.t` file, with the framework detected from parsed
+  `use` statements (Test::More, Test2::V0/V1/Suite, Test::Exception,
+  Test::Fatal — never `content.contains`) and a real full-file range.
+- `oracles[]` — one fact per recognized assertion **call node** (`is`, `ok`,
+  `cmp_ok`, `throws_ok`, `exception`, …), each with the call's real source range,
+  a schema `kind`/`strength`, and the call's source text as `expression`. No
+  string-scan counting, no placeholder `1:1` ranges.
+- `provenance[]` — `syntax` (files/owners), `test_discovery` (framework/import),
+  and `oracle_extraction` (assertions) entries the facts reference by id.
+- `limitations[]` — unparseable files, recognized-framework-but-no-oracle files
+  (wrapped/aliased/dynamic helpers), and the narrower schema representation are
+  all surfaced, never silently dropped.
 
 This uses the clean leaf crates `perl-parser-core` (parse + `LineIndex`
-byte→line/column) and `perl-symbol` (`extract_symbol_decls`) — not
-`perl-workspace`. Tests/oracles, relations, and dynamic boundaries remain from
-the earlier conservative string-scan slices; diff-derived `changes[]` land in a
-later slice.
+byte→line/column) and `perl-symbol` (`extract_symbol_decls` /
+`extract_symbol_refs`) — not `perl-workspace` (which pulls `lsp-types`).
+Relations (including a heuristic `direct_owner_call`) and dynamic boundaries
+remain from earlier conservative slices; diff-derived `changes[]`, the
+parser-backed/semantic relations that will replace the current string-heuristic
+`direct_owner_call`, and the packet fingerprint land in later slices.
 
 The `perl-lsp` / `perllsp` binaries retain the `ripr-facts` subcommand as a
 thin wrapper that calls [`run_ripr_facts`].
