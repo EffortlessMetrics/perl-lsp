@@ -1796,3 +1796,17 @@ reason = "PR #3286 (closes #1429) adds the Path-2 order guard to dynamic_callabl
 created = "2026-07-03"
 review_after = "2026-08-03"
 expires = "2026-10-03"
+
+# -----------------------------------------------------------------------------
+# eval-string package-scope string-scan seams (PR #3251, closes #1397):
+[[suppress]]
+id = "ripr-suppress-eval-string-package-scope-string-scan"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-workspace/src/semantic/eval_sub_extractor.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3251 (closes #1397) adds package-scope attribution to the eval-string sub extractor: find_package_keyword (word-boundary content scan), is_valid_package_name, find_package_declarations (pre-scan returning (decl_end_offset, name) pairs), and the active-package rfind + qualified-name id-hash in extract_from_eval_string/emit_triple. ripr 0.9.x reports 3 weakly_gripped seams (reachable_unrevealed): the package-active attribution branch, the rfind-over-declarations selection, and the qualified-id hash path. All sit behind string scanning (.contains / word-boundary checks) and an rfind loop over accumulated declaration offsets — RIPR cannot statically trace activation from the eval-string test inputs through these string scans / loop accumulators to the predicate branches, the same ripr#1429 predicate-infection-untraceable class as quality_baseline_cfg_test_scanner. Coverage: direct call-observation --lib unit tests in eval_sub_extractor.rs (39 total, incl. package_switch_mid_eval_via_ast_parse, three_packages_middle_sub_uses_nearest_preceding_package, distinct_packages_via_ast_parse_produce_distinct_ids, sub_before_package_remains_unscoped_via_ast_parse) with exact-value assertions on canonical names and entity IDs. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
