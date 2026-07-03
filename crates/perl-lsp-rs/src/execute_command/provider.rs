@@ -1,6 +1,9 @@
 //! Backend command implementations for run/debug/test and analyzer actions.
 
-use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
+use crate::perl_critic::{
+    BuiltInAnalyzer, CriticAnalyzer, CriticConfig, CriticContext, NativeCriticProfile,
+    NativeCriticRegistry,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use perl_lsp_rs_core::config::PerlOracleEnv;
 use perl_lsp_rs_core::config::{CriticEngine, WorkspaceConfig};
@@ -80,6 +83,38 @@ pub struct ExecuteCommandProvider {
     /// analyzer runs only when this is [`CriticEngine::Legacy`] — merely having
     /// `perlcritic` on `PATH` must not change the default behavior.
     critic_engine: CriticEngine,
+    /// Native critic rule configuration for `perl.runCritic` when the engine is
+    /// [`CriticEngine::Native`]. Mirrors the `ServerConfig` values the editor's
+    /// native pull-diagnostics path uses, so the command and on-type diagnostics
+    /// report the same `NativeCriticRegistry` rule set.
+    native_critic_config: NativeCriticCommandConfig,
+}
+
+/// Native-critic rule configuration plumbed into [`ExecuteCommandProvider`] from
+/// `ServerConfig`, mirroring the values the native pull-diagnostics path reads.
+#[derive(Debug, Clone)]
+pub(crate) struct NativeCriticCommandConfig {
+    /// Profile name (`recommended`, `strict`, …) selecting the rule set.
+    pub profile: String,
+    /// Rule IDs to include on top of the profile. Empty means profile-only.
+    pub include: Vec<String>,
+    /// Rule IDs to exclude from the profile.
+    pub exclude: Vec<String>,
+    /// Minimum severity (1–5) reported by the native registry.
+    pub severity: u8,
+}
+
+impl Default for NativeCriticCommandConfig {
+    fn default() -> Self {
+        // Matches `ServerConfig::default()` native-critic defaults so a provider
+        // built without explicit config behaves like the on-type native path.
+        Self {
+            profile: "recommended".to_string(),
+            include: Vec::new(),
+            exclude: Vec::new(),
+            severity: 3,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,12 +184,18 @@ impl ExecuteCommandProvider {
             workspace_roots: Vec::new(),
             workspace_config: None,
             critic_engine: CriticEngine::Native,
+            native_critic_config: NativeCriticCommandConfig::default(),
         }
     }
 
     /// Create a provider with workspace root enforcement.
     pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
-        Self { workspace_roots, workspace_config: None, critic_engine: CriticEngine::Native }
+        Self {
+            workspace_roots,
+            workspace_config: None,
+            critic_engine: CriticEngine::Native,
+            native_critic_config: NativeCriticCommandConfig::default(),
+        }
     }
 
     /// Set the critic engine used by `perl.runCritic`.
@@ -164,6 +205,22 @@ impl ExecuteCommandProvider {
     /// is available on `PATH`.
     pub fn with_critic_engine(mut self, engine: CriticEngine) -> Self {
         self.critic_engine = engine;
+        self
+    }
+
+    /// Set the native-critic rule configuration used by `perl.runCritic` under
+    /// [`CriticEngine::Native`]. Plumb the same `ServerConfig` values the native
+    /// pull-diagnostics path uses (profile, include/exclude rule IDs, severity)
+    /// so the command and on-type diagnostics report the same rule set.
+    pub fn with_native_critic_config(
+        mut self,
+        profile: String,
+        include: Vec<String>,
+        exclude: Vec<String>,
+        severity: u8,
+    ) -> Self {
+        self.native_critic_config =
+            NativeCriticCommandConfig { profile, include, exclude, severity };
         self
     }
 
@@ -476,13 +533,22 @@ impl ExecuteCommandProvider {
             }
         };
 
-        if self.external_critic_requested() && command_exists("perlcritic") {
-            if let Ok(result) = self.run_external_critic(&canonical_path) {
-                return Ok(result);
+        if self.external_critic_requested() {
+            // Legacy engine: external `perlcritic` when present, else the
+            // `BuiltInAnalyzer` (Perl::Critic-compatible) fallback. Legacy
+            // behavior is unchanged.
+            if command_exists("perlcritic") {
+                if let Ok(result) = self.run_external_critic(&canonical_path) {
+                    return Ok(result);
+                }
             }
+            return self.run_builtin_critic(&canonical_path);
         }
 
-        self.run_builtin_critic(&canonical_path)
+        // Native engine (default): route through the native rule registry so the
+        // command reports the same `native.*` rule set as the editor's on-type
+        // native pull diagnostics.
+        self.run_native_critic(&canonical_path)
     }
 
     /// Whether the configured critic engine explicitly selects the external
@@ -511,13 +577,16 @@ impl ExecuteCommandProvider {
             ));
         }
 
-        if self.external_critic_requested() && command_exists("perlcritic") {
-            if let Ok(result) = self.run_external_critic(path) {
-                return Ok(result);
+        if self.external_critic_requested() {
+            if command_exists("perlcritic") {
+                if let Ok(result) = self.run_external_critic(path) {
+                    return Ok(result);
+                }
             }
+            return self.run_builtin_critic(path);
         }
 
-        self.run_builtin_critic(path)
+        self.run_native_critic(path)
     }
 
     fn run_external_critic(&self, file_path: &Path) -> Result<Value, String> {
@@ -550,6 +619,101 @@ impl ExecuteCommandProvider {
             }
             Err(e) => Err(format!("External perlcritic failed: {}", e)),
         }
+    }
+
+    /// Run the native critic rule registry (`NativeCriticRegistry`) — the same
+    /// engine the editor's on-type pull diagnostics use — and format its findings
+    /// into the `perl.runCritic` result shape.
+    ///
+    /// This is the default `perl.runCritic` path (engine `Native`). Unlike
+    /// [`Self::run_builtin_critic`] (which runs the Perl::Critic-compatible
+    /// `BuiltInAnalyzer` and is kept only as the legacy fallback), this reports
+    /// the profile-selected `native.*` rules — including `native.*`-only rules
+    /// such as `native.variables.unused_lexical` that the built-in analyzer does
+    /// not emit — so command results and native diagnostics agree.
+    pub(crate) fn run_native_critic(&self, file_path: &Path) -> Result<Value, String> {
+        use crate::Parser;
+
+        let content = std::fs::read_to_string(file_path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+
+        let code_text = perl_parser::util::code_slice(&content);
+        let mut parser = Parser::new(code_text);
+
+        let (ast, parse_error) = match parser.parse() {
+            Ok(ast) => (ast, None),
+            Err(error) => {
+                let message = error.to_string();
+                (
+                    crate::ast::Node::new(
+                        crate::ast::NodeKind::Error {
+                            message,
+                            expected: vec![],
+                            found: None,
+                            partial: None,
+                        },
+                        crate::ast::SourceLocation { start: 0, end: code_text.len() },
+                    ),
+                    Some(error),
+                )
+            }
+        };
+
+        // Build the native critic config from the plumbed server config, mirroring
+        // the editor's native pull-diagnostics path (`add_native_critic_diagnostics`).
+        // The `NativeCriticProfile` selects the rule set; `include`/`exclude`/
+        // `severity` refine it. The rc-file `profile` is an external-perlcritic
+        // concept the native registry does not consult, so it stays `None`.
+        let cfg = &self.native_critic_config;
+        let critic_config = CriticConfig {
+            severity: cfg.severity.clamp(1, 5),
+            profile: None,
+            include: cfg.include.clone(),
+            exclude: cfg.exclude.clone(),
+            ..CriticConfig::default()
+        };
+        let critic_context = CriticContext::new(code_text, &ast, &critic_config);
+        let profile =
+            NativeCriticProfile::parse(&cfg.profile).unwrap_or(NativeCriticProfile::Strict);
+        let registry = NativeCriticRegistry::for_profile(profile);
+
+        let file = file_path.to_string_lossy();
+        let mut formatted_violations: Vec<_> = registry
+            .check(&critic_context)
+            .into_iter()
+            .map(|finding| {
+                let violation = finding.to_violation(file.as_ref());
+                self.format_violation(
+                    &violation.policy,
+                    &violation.description,
+                    &violation.explanation,
+                    violation.severity as u8,
+                    (violation.range.start.line + 1) as usize,
+                    (violation.range.start.column + 1) as usize,
+                    &file,
+                )
+            })
+            .collect();
+
+        if let Some(error) = parse_error {
+            let violation = self.create_syntax_error_violation(&error, code_text, file_path);
+            formatted_violations.push(self.format_violation(
+                &violation.policy,
+                &violation.description,
+                &violation.explanation,
+                violation.severity as u8,
+                (violation.range.start.line + 1) as usize,
+                (violation.range.start.column + 1) as usize,
+                &file,
+            ));
+        }
+
+        Ok(json!({
+            "status": "success",
+            "violations": formatted_violations,
+            "violationCount": formatted_violations.len(),
+            "analyzerUsed": "native"
+        }))
     }
 
     pub(crate) fn run_builtin_critic(&self, file_path: &Path) -> Result<Value, String> {

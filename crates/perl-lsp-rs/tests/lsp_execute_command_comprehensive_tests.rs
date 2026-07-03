@@ -537,15 +537,23 @@ fn test_execute_command_empty_file() -> TestResult {
 
 #[test]
 #[serial]
-// Test built-in analyzer policy coverage
-fn test_builtin_analyzer_policy_coverage() -> TestResult {
+// Native analyzer policy coverage via `perl.runCritic`. Since #3299 the default
+// (Native) engine routes through the `NativeCriticRegistry` — the same engine the
+// editor's on-type pull diagnostics use — so the command reports `native.*` rule
+// IDs (e.g. `native.testing.require_use_strict`) rather than the legacy
+// `BuiltInAnalyzer` PascalCase policy names.
+fn test_native_analyzer_policy_coverage() -> TestResult {
     // Test each known policy individually
     let test_cases = vec![
-        ("missing_strict.pl", "#!/usr/bin/perl\nprint 'no strict';\n", "RequireUseStrict"),
+        (
+            "missing_strict.pl",
+            "#!/usr/bin/perl\nprint 'no strict';\n",
+            "native.testing.require_use_strict",
+        ),
         (
             "missing_warnings.pl",
             "#!/usr/bin/perl\nuse strict;\nprint 'no warnings';\n",
-            "RequireUseWarnings",
+            "native.testing.require_use_warnings",
         ),
         ("has_both.pl", "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'good';\n", "clean"),
     ];

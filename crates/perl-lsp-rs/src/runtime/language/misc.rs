@@ -1507,9 +1507,29 @@ impl LspServer {
                 }
             }
 
+            // Snapshot the critic config under a short-lived lock (not held across
+            // the workspace_config lock below) so `perl.runCritic` (engine Native)
+            // reports the same rule set as the editor's on-type native pull
+            // diagnostics.
+            let (critic_engine, native_profile, native_include, native_exclude, native_severity) = {
+                let config = self.config.lock();
+                (
+                    config.critic_engine,
+                    config.native_critic_profile.clone(),
+                    config.native_critic_include.clone(),
+                    config.native_critic_exclude.clone(),
+                    config.perlcritic_severity,
+                )
+            };
             let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots)
                 .with_workspace_config(self.workspace_config.lock().clone())
-                .with_critic_engine(self.config.lock().critic_engine);
+                .with_critic_engine(critic_engine)
+                .with_native_critic_config(
+                    native_profile,
+                    native_include,
+                    native_exclude,
+                    native_severity,
+                );
 
             match command {
                 // Keep existing test commands for backward compatibility

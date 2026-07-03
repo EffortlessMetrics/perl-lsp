@@ -313,14 +313,20 @@ sub calculate {
             "Should detect at least 2 violations (missing strict and warnings)"
         );
 
-        // Check for specific violations
+        // Check for specific violations. Since #3299 the default (Native)
+        // `perl.runCritic` reports native rule IDs (`native.testing.require_use_*`)
+        // rather than the legacy BuiltInAnalyzer PascalCase policy names.
         if let Some(violations) = result["violations"].as_array() {
-            let has_strict_violation = violations
-                .iter()
-                .any(|v| v["policy"].as_str().is_some_and(|p| p.contains("RequireUseStrict")));
-            let has_warnings_violation = violations
-                .iter()
-                .any(|v| v["policy"].as_str().is_some_and(|p| p.contains("RequireUseWarnings")));
+            let has_strict_violation = violations.iter().any(|v| {
+                v["policy"]
+                    .as_str()
+                    .is_some_and(|p| p.contains("native.testing.require_use_strict"))
+            });
+            let has_warnings_violation = violations.iter().any(|v| {
+                v["policy"]
+                    .as_str()
+                    .is_some_and(|p| p.contains("native.testing.require_use_warnings"))
+            });
 
             assert!(has_strict_violation, "Should detect missing 'use strict'");
             assert!(has_warnings_violation, "Should detect missing 'use warnings'");

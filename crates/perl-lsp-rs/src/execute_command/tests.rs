@@ -1113,6 +1113,71 @@ fn run_critic_defaults_to_native_analyzer() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
+// #3299: default `perl.runCritic` (engine Native) must route through the
+// `NativeCriticRegistry` — the same engine the editor's on-type native pull
+// diagnostics use — so the command reports `native.*` rules (here
+// `native.security.string_eval`, in the default `recommended` profile) that the
+// legacy `BuiltInAnalyzer` does not emit. Before #3299 the command ran
+// `BuiltInAnalyzer` and diverged from native diagnostics on native.*-only rules.
+#[test]
+fn run_critic_native_matches_pull_diagnostics_registry() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::perl_critic::{
+        CriticConfig, CriticContext, NativeCriticProfile, NativeCriticRegistry,
+    };
+
+    // A string `eval` trips `native.security.string_eval`.
+    let source = "use strict;\nuse warnings;\nmy $c = '1';\neval $c;\n";
+    let tmp = tempdir()?;
+    let file = tmp.path().join("string_eval.pl");
+    fs::write(&file, source)?;
+
+    // Default provider = engine Native, `recommended` profile (the real default).
+    let provider = ExecuteCommandProvider::new();
+    let result = provider.run_native_critic(&file)?;
+    assert_eq!(result["analyzerUsed"], "native");
+    let command_policies: Vec<&str> = result["violations"]
+        .as_array()
+        .ok_or("violations is not an array")?
+        .iter()
+        .filter_map(|v| v["policy"].as_str())
+        .collect();
+    assert!(
+        command_policies.contains(&"native.security.string_eval"),
+        "runCritic must report the native registry rule the editor path reports: {command_policies:?}"
+    );
+
+    // Parity: the editor's on-type native pull path runs the same registry over
+    // the same source and must report the same rule.
+    let code = perl_parser::util::code_slice(source);
+    let mut parser = perl_parser::Parser::new(code);
+    let ast = parser.parse().map_err(|e| e.to_string())?;
+    let critic_config = CriticConfig::default();
+    let ctx = CriticContext::new(code, &ast, &critic_config);
+    let registry = NativeCriticRegistry::for_profile(
+        NativeCriticProfile::parse("recommended").ok_or("recommended profile must parse")?,
+    );
+    let pull_rule_ids: Vec<String> = registry.check(&ctx).into_iter().map(|f| f.rule_id).collect();
+    assert!(
+        pull_rule_ids.iter().any(|id| id == "native.security.string_eval"),
+        "native pull path must report the same rule: {pull_rule_ids:?}"
+    );
+
+    // Regression proof: the legacy `BuiltInAnalyzer` path omits native.* rules —
+    // exactly the divergence #3299 removes for the default engine.
+    let builtin = provider.run_builtin_critic(&file)?;
+    let builtin_policies: Vec<&str> = builtin["violations"]
+        .as_array()
+        .ok_or("violations is not an array")?
+        .iter()
+        .filter_map(|v| v["policy"].as_str())
+        .collect();
+    assert!(
+        !builtin_policies.contains(&"native.security.string_eval"),
+        "BuiltInAnalyzer must not emit native.* rules (the pre-#3299 gap): {builtin_policies:?}"
+    );
+    Ok(())
+}
+
 #[test]
 fn external_critic_not_requested_without_config() {
     // The structural guarantee behind "perlcritic on PATH does not change the
