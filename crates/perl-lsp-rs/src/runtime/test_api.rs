@@ -296,6 +296,27 @@ impl LspServer {
         self.handle_hover(params)
     }
 
+    /// Test-only entrypoint for LSP `textDocument/codeAction`.
+    ///
+    /// Exercises quick-fix and refactor code-action generation in tests,
+    /// including the critic-engine-gated quick fixes.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri`, `range`, `context`.
+    ///
+    /// # Returns
+    /// - `Ok(Some(actions))`: The code actions array.
+    /// - `Ok(None)`: No actions applicable.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or document not found.
+    pub fn test_handle_code_action(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_code_action(params)
+    }
+
     /// Test-only entrypoint for LSP `textDocument/documentSymbol`.
     ///
     /// Exercises document symbol functionality in tests. Returns the

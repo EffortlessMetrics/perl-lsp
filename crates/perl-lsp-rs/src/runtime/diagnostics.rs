@@ -3349,4 +3349,107 @@ print \"unreachable\\n\";\n";
         );
         Ok(())
     }
+
+    /// Full-range code-action params for a freshly opened perl document.
+    fn code_action_params(uri: &str) -> Value {
+        json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 50, "character": 0 },
+            },
+            "context": { "diagnostics": [] },
+        })
+    }
+
+    #[test]
+    fn native_critic_code_actions_use_native_source_not_perl_critic() {
+        // On the default native engine, critic quick-fixes must carry the
+        // native diagnostic identity (`source: perl-lsp-critic`, `native.*`
+        // code) that the publish path emits — never the external tool's
+        // `Perl::Critic` brand. This is the #3276 native-product-surface leak:
+        // the code-action handler previously ran the legacy analyzer
+        // unconditionally and hardcoded `source: "Perl::Critic"`.
+        let (server, _buf) = make_server_with_capture();
+        server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Native);
+        server.test_configure_native_critic_profile("strict");
+        let uri = "file:///native_critic_code_action.pl";
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = 1;\nprint $x;\n"
+                }
+            })))
+            .expect("did_open must succeed");
+
+        let result = server
+            .test_handle_code_action(Some(code_action_params(uri)))
+            .expect("code_action must succeed")
+            .unwrap_or_default();
+        let text = result.to_string();
+
+        // The brand must never appear anywhere in the native response.
+        assert!(
+            !text.contains("Perl::Critic"),
+            "native engine code actions must NOT leak the Perl::Critic brand; got: {text}"
+        );
+
+        // Structural check: SOME code action must carry an embedded diagnostic
+        // whose `code` and `source` are BOTH native on the same object — a loose
+        // whole-response substring match would pass even if the native code and
+        // native source landed on two different actions. This is the exact
+        // guarantee the PR makes (code + source line up with the published
+        // native diagnostic, so the client associates the fix).
+        let actions = result.as_array().cloned().unwrap_or_default();
+        let has_native_diag = actions.iter().any(|a| {
+            a["diagnostics"].as_array().is_some_and(|diags| {
+                diags.iter().any(|d| {
+                    d["code"].as_str() == Some("native.testing.require_use_strict")
+                        && d["source"].as_str() == Some("perl-lsp-critic")
+                })
+            })
+        });
+        assert!(
+            has_native_diag,
+            "a native code action must carry code `native.testing.require_use_strict` AND source `perl-lsp-critic` on the SAME diagnostic; got: {text}"
+        );
+    }
+
+    #[test]
+    fn legacy_critic_code_actions_keep_perl_critic_source() {
+        // The opt-in legacy compatibility engine still shares the external
+        // tool's policy names, so its code actions keep `source: Perl::Critic`.
+        // This is the compatibility adapter path — the brand is expected here.
+        let (server, _buf) = make_server_with_capture();
+        server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Legacy);
+        let uri = "file:///legacy_critic_code_action.pl";
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = 1;\nprint $x;\n"
+                }
+            })))
+            .expect("did_open must succeed");
+
+        let result = server
+            .test_handle_code_action(Some(code_action_params(uri)))
+            .expect("code_action must succeed")
+            .unwrap_or_default();
+        let text = result.to_string();
+
+        assert!(
+            text.contains("Perl::Critic"),
+            "legacy engine code actions keep the Perl::Critic source; got: {text}"
+        );
+        assert!(
+            text.contains("TestingAndDebugging::RequireUseStrict"),
+            "legacy engine code actions keep the legacy policy code; got: {text}"
+        );
+    }
 }
