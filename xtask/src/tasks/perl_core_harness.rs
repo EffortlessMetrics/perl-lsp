@@ -3357,8 +3357,8 @@ fi
             RunnerStatus::Pass => {
                 r#"#!/bin/sh
 set -eu
-script="${{1:-unknown.t}}"
-mode="${{PERL_LSP_HARNESS_MODE:-parse}}"
+script="${1:-unknown.t}"
+mode="${PERL_LSP_HARNESS_MODE:-parse}"
 mkdir -p "$(dirname "$PERL_LSP_HARNESS_CONTEXT")"
 printf '1..1\n'
 printf 'ok 1 - %s %s\n' "$mode" "$script"
