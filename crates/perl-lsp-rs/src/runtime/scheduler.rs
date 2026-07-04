@@ -382,6 +382,7 @@ impl Ord for QueuedRead {
 static READ_ARRIVAL_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// Reason a stale read was cancelled before execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StaleReason {
     /// A newer request with the same `(method, uri, line, character)` arrived.
     PositionSuperseded,
@@ -636,6 +637,17 @@ impl Scheduler {
         }
     }
 
+    fn stale_read_reason(
+        server: &LspServer,
+        freshness: Option<&ReadFreshness>,
+    ) -> Option<StaleReason> {
+        let freshness = freshness?;
+        let current = server.document_generation(&freshness.uri);
+        let (captured, current) = is_read_stale(freshness, current)?;
+
+        Some(StaleReason::DocumentGenerationAdvanced { captured, current })
+    }
+
     /// Why a stale read was cancelled. Used only for log/error messages.
     fn send_cancellation(
         server: &Arc<LspServer>,
@@ -689,17 +701,9 @@ impl Scheduler {
         // Stale check 2: generation freshness — document moved on between
         // ingress and dispatch. This catches the typing-storm case where
         // every keystroke produces a unique position dedup key.
-        if let Some(ref freshness) = queued.freshness {
-            let current = server.document_generation(&freshness.uri);
-            if let Some((captured, current)) = is_read_stale(freshness, current) {
-                Self::send_cancellation(
-                    server,
-                    queued.request.id,
-                    &queued.request.method,
-                    StaleReason::DocumentGenerationAdvanced { captured, current },
-                );
-                return;
-            }
+        if let Some(reason) = Self::stale_read_reason(server, queued.freshness.as_ref()) {
+            Self::send_cancellation(server, queued.request.id, &queued.request.method, reason);
+            return;
         }
 
         let permit = match Arc::clone(permits).acquire_owned().await {
@@ -712,6 +716,9 @@ impl Scheduler {
         let seq_done = Arc::clone(mutation_seq_done);
         let notify = Arc::clone(mutation_notify);
         let wait_for = queued.wait_for_seq;
+        let freshness = queued.freshness.clone();
+        let method = queued.request.method.clone();
+        let id = queued.request.id.clone();
 
         in_flight.spawn(async move {
             let _permit = permit;
@@ -719,6 +726,11 @@ impl Scheduler {
             // Wait for all mutations that were enqueued before this read.
             while seq_done.load(Ordering::SeqCst) < wait_for {
                 notify.notified().await;
+            }
+
+            if let Some(reason) = Self::stale_read_reason(&srv, freshness.as_ref()) {
+                Self::send_cancellation(&srv, id, &method, reason);
+                return;
             }
 
             let result =
@@ -1073,6 +1085,30 @@ mod tests {
     // Generation-aware freshness tests (PR 4 of 0.15.1 Neovim latency lane)
     // =====================================================================
 
+    #[derive(Clone)]
+    struct CapturedOutput {
+        bytes: Arc<parking_lot::Mutex<Vec<u8>>>,
+    }
+
+    impl std::io::Write for CapturedOutput {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.bytes.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn server_with_captured_output() -> (Arc<crate::LspServer>, Arc<parking_lot::Mutex<Vec<u8>>>) {
+        let bytes = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let writer = CapturedOutput { bytes: Arc::clone(&bytes) };
+        let output: Arc<parking_lot::Mutex<Box<dyn std::io::Write + Send>>> =
+            Arc::new(parking_lot::Mutex::new(Box::new(writer)));
+        (Arc::new(crate::LspServer::with_output(output)), bytes)
+    }
+
     fn position_params(uri: &str) -> serde_json::Value {
         serde_json::json!({
             "textDocument": { "uri": uri },
@@ -1339,6 +1375,75 @@ mod tests {
         let current = server.document_generation("file:///z.pl");
         assert!(is_read_stale(&fa, current).is_some(), "a is stale");
         assert!(is_read_stale(&fb, current).is_some(), "b is stale");
+        Ok(())
+    }
+
+    #[test]
+    fn stale_read_reason_reports_advanced_generation() -> Result<(), JsonRpcError> {
+        let server = crate::LspServer::new();
+        let uri = "file:///reason.pl";
+        server.test_apply_did_open(uri, "my $a;\n", 1)?;
+        let freshness = make_freshness(uri, Some(0), Some(1));
+
+        assert_eq!(Scheduler::stale_read_reason(&server, Some(&freshness)), None);
+
+        server.test_apply_did_change(uri, "my $aa;\n", 2)?;
+        assert_eq!(
+            Scheduler::stale_read_reason(&server, Some(&freshness)),
+            Some(StaleReason::DocumentGenerationAdvanced { captured: 0, current: 1 })
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn stale_read_cancelled_after_mutation_wait_before_handle_request()
+    -> Result<(), JsonRpcError> {
+        let (server, output) = server_with_captured_output();
+        let uri = "file:///mutation-wait-race.pl";
+        server.test_apply_did_open(uri, &rapid_typing_source(1), 1)?;
+
+        let mut queued = queued_completion_read(&server, uri, 4, 14, 1, 77);
+        queued.wait_for_seq = 1;
+
+        let one_permit = Arc::new(Semaphore::new(1));
+        let mut in_flight = JoinSet::new();
+        let mutation_seq_done = Arc::new(AtomicU64::new(0));
+        let mutation_notify = Arc::new(Notify::new());
+        let latest_seq = HashMap::new();
+
+        Scheduler::dispatch_one(
+            queued,
+            &latest_seq,
+            &one_permit,
+            &mut in_flight,
+            &server,
+            &mutation_seq_done,
+            &mutation_notify,
+        )
+        .await;
+        assert_eq!(in_flight.len(), 1, "fresh read should wait behind mutation barrier");
+
+        server.test_apply_did_change(uri, &rapid_typing_source(2), 2)?;
+        mutation_seq_done.store(1, Ordering::SeqCst);
+        mutation_notify.notify_waiters();
+
+        let completed =
+            tokio::time::timeout(std::time::Duration::from_millis(500), in_flight.join_next())
+                .await;
+        assert!(completed.is_ok(), "read should cancel promptly after mutation barrier opens");
+
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        let bytes = output.lock().clone();
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            text.contains("document moved from generation 0 to 1"),
+            "post-wait stale read must send cancellation before handle_request; output={text}"
+        );
+        assert!(
+            !text.contains("result"),
+            "cancelled stale read must not run handle_request; output={text}"
+        );
+
         Ok(())
     }
 
