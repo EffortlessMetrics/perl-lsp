@@ -18,6 +18,10 @@
 //!   `name => {-as => 'alias'}` renames, `-prefix`/`-postfix`) — `exodist/Importer`.
 //! - `strict`/`warnings` default and the `-no_strict` / `-no_warnings` /
 //!   `-no_pragmas` opt-outs — the `Test2::V0` POD.
+//! - `Test2::V1` default export (`T2()` only), its pragma model (none by
+//!   default; `-strict`/`-warnings`/`-p`/`-pragmas` opt-in), `-import`/`-i`
+//!   (bring in the full bare set), and grouped short flags (`-ipP`) — the
+//!   `Test2::V1` POD.
 //!
 //! # Scope model (documented simplification)
 //!
@@ -157,12 +161,13 @@ const API: &[&str] = &["intercept", "context"];
 /// pair.
 const SUBTEST_OWN: &[&str] = &["subtest_streamed", "subtest_buffered"];
 
-/// The `subtest` name as exposed by the `Test2::V0`/`Test2::V1` bundles.
+/// The `subtest` name as exposed by the `Test2::V0` bundle.
 const SUBTEST_BUNDLE: &[&str] = &["subtest"];
 
 /// The complete `Test2::V0` default `@EXPORT` set, composed from the tool
 /// modules the bundle pulls in. This is the single source of truth for
-/// "what does `use Test2::V0;` put in scope".
+/// "what does `use Test2::V0;` put in scope". `Test2::V1` reuses this set only
+/// under an explicit `-import`/`-i` option.
 static V0_DEFAULT: Lazy<Vec<&'static str>> = Lazy::new(|| {
     let mut v: Vec<&'static str> = Vec::new();
     for group in [
@@ -189,6 +194,13 @@ static V0_DEFAULT: Lazy<Vec<&'static str>> = Lazy::new(|| {
     v
 });
 
+/// `Test2::V1`'s sole default export: the `T2()` handle. Unlike `Test2::V0`,
+/// `Test2::V1` does NOT export the tools as bare subs by default — they are
+/// methods on the returned handle (e.g. `T2->ok(...)`, `T2->is(...)`). The bare
+/// set is imported only under `-import`/`-i`. Oracle: metacpan `Test2::V1`
+/// ("Only 1 export by default: T2()").
+const V1_DEFAULT: &[&str] = &["T2"];
+
 // ---------------------------------------------------------------------------
 // Module classification.
 // ---------------------------------------------------------------------------
@@ -201,11 +213,10 @@ pub fn is_test2_module(module: &str) -> bool {
         || module == "Test2::API"
 }
 
-/// Whether `module` is a Test2 *bundle* — one that turns on `strict` and
-/// `warnings` for the importer (unless disabled by an import option).
-///
-/// Individual `Test2::Tools::*` modules do **not** enable strict/warnings; only
-/// the recommended bundles (`Test2::V0`, `Test2::V1`, `Test2::Bundle::*`) do.
+/// Whether `module` is a Test2 *bundle* module. Bundles are the recommended
+/// entry points (`Test2::V0`, `Test2::V1`, `Test2::Bundle::*`). Note that being
+/// a bundle does **not** imply pragmas are on by default — `Test2::V0` enables
+/// them by default while `Test2::V1` does not (see `resolve_import`).
 pub fn is_test2_bundle(module: &str) -> bool {
     matches!(module, "Test2::V0" | "Test2::V1" | "Test2::Suite")
         || module.starts_with("Test2::Bundle::")
@@ -217,10 +228,15 @@ pub fn is_test2_bundle(module: &str) -> bool {
 /// imports, otherwise unknown" — callers should not emit unknown-sub
 /// diagnostics for such modules.
 pub fn module_default_exports(module: &str) -> Option<&'static [&'static str]> {
-    // Bundles: V0/V1 share the recommended default set. Other bundles are
-    // recognized as strict/warnings providers but not enumerated.
-    if matches!(module, "Test2::V0" | "Test2::V1") {
+    // `Test2::V0` re-exports its tools as bare subs — the recommended default set.
+    if module == "Test2::V0" {
         return Some(V0_DEFAULT.as_slice());
+    }
+    // `Test2::V1`'s only *default* export is the `T2()` handle; the bare set is
+    // pulled in only under `-import`/`-i` (handled in `resolve_import`). Oracle:
+    // metacpan `Test2::V1`.
+    if module == "Test2::V1" {
+        return Some(V1_DEFAULT);
     }
     let group: &'static [&'static str] = match module {
         "Test2::Tools::Basic" => BASIC,
@@ -300,14 +316,35 @@ pub fn resolve_import(module: &str, raw_args: &str) -> Option<ResolvedImport> {
     }
 
     let bundle = is_test2_bundle(module);
-    let default_set = module_default_exports(module);
 
-    // Pragma resolution (bundles only).
+    // `Test2::V1` reaches V0 parity (the full bare tool set) only under an
+    // explicit `-import` long option or an `i` short flag (standalone `-i` or
+    // grouped, e.g. `-ipP` — the "work like V0" form). A plain `use Test2::V1;`
+    // brings in only the `T2()` handle. Oracle: metacpan `Test2::V1`.
+    let v1_import_all = module == "Test2::V1"
+        && (args_contains_option(raw_args, "import") || v1_short_flag(raw_args, 'i'));
+    let default_set =
+        if v1_import_all { Some(V0_DEFAULT.as_slice()) } else { module_default_exports(module) };
+
+    // Pragma resolution (bundles only). Most bundles (`Test2::V0`, `Test2::Suite`,
+    // `Test2::Bundle::*`) enable strict/warnings by default and opt OUT via
+    // `-no_strict`/`-no_warnings`/`-no_pragmas`. `Test2::V1` is the exception: it
+    // enables NO pragmas by default and opts IN via `-pragmas`/`-p` (grouped or
+    // standalone), `-strict`, or `-warnings`. Oracle: metacpan `Test2::V1` ("NO
+    // PRAGMAS ARE ENABLED BY DEFAULT").
     let pragmas = if bundle {
-        let no_pragmas = args_contains_option(raw_args, "no_pragmas");
-        let no_strict = no_pragmas || args_contains_option(raw_args, "no_strict");
-        let no_warnings = no_pragmas || args_contains_option(raw_args, "no_warnings");
-        Some(Test2Pragmas { strict: !no_strict, warnings: !no_warnings })
+        if module == "Test2::V1" {
+            let all = args_contains_option(raw_args, "pragmas") || v1_short_flag(raw_args, 'p');
+            Some(Test2Pragmas {
+                strict: all || args_contains_option(raw_args, "strict"),
+                warnings: all || args_contains_option(raw_args, "warnings"),
+            })
+        } else {
+            let no_pragmas = args_contains_option(raw_args, "no_pragmas");
+            let no_strict = no_pragmas || args_contains_option(raw_args, "no_strict");
+            let no_warnings = no_pragmas || args_contains_option(raw_args, "no_warnings");
+            Some(Test2Pragmas { strict: !no_strict, warnings: !no_warnings })
+        }
     } else {
         None
     };
@@ -366,7 +403,8 @@ pub fn resolve_import(module: &str, raw_args: &str) -> Option<ResolvedImport> {
             continue;
         }
         if atom.starts_with('-') {
-            // Import option (`-no_strict`, `-target`, ...): consumed elsewhere.
+            // Import option (`-no_strict`, `-target`, `-import`, ...): consumed
+            // elsewhere, not a positive symbol.
             continue;
         }
         if is_bareword(atom) {
@@ -493,6 +531,22 @@ fn args_contains_option(raw_args: &str, flag: &str) -> bool {
         // Match the exact flag token, not a prefix (`-no_strict` must not match
         // a hypothetical `-no_strictness`).
         tok == needle
+    })
+}
+
+/// Whether the Test2::V1 short flag `flag_char` is set — either as a standalone
+/// `-c` option or inside a grouped short-flag token such as `-ipP`. A grouped
+/// token is `-` followed only by known V1 short-flag letters (`i`=import,
+/// `p`=pragmas, `P`=plugins, `x`), which distinguishes it from long options like
+/// `-import` or `-strict` (whose other letters are not short flags). Oracle:
+/// metacpan `Test2::V1` SYNOPSIS (`use Test2::V1 -ipP;`).
+fn v1_short_flag(raw_args: &str, flag_char: char) -> bool {
+    raw_args.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-')).any(|tok| {
+        tok.strip_prefix('-').is_some_and(|rest| {
+            !rest.is_empty()
+                && rest.chars().all(|c| matches!(c, 'i' | 'p' | 'P' | 'x'))
+                && rest.contains(flag_char)
+        })
     })
 }
 
