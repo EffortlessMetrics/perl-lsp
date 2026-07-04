@@ -248,12 +248,11 @@ The GitHub issue thread is not a report destination — it is the database, the 
 - Run `just cpan-corpus-ratchet` after parser fix merges
 - `docs/project/status/*.md` subsystem files are regenerated automatically post-merge (no manual step needed)
 
-**Required CI checks for merge** — exactly three branch-protection required checks:
+**Required CI checks for merge** — exactly two branch-protection required checks (authoritative source: `.ci/policies/required-checks.toml`, the `[[checks]]` entries with `required = true`):
 - `Perl LSP Rust Small Result`
 - `ripr+ New Gap Gate`
-- `Codecov / Patch 95`
 
-(`CI Gate (Merge-Blocking)` and `PR Smoke` are **not** required — their failure does not block merge.)
+(`Codecov / Patch 95`, `CI Gate (Merge-Blocking)`, and `PR Smoke` are **not** required — their failure does not block merge. Codecov is advisory per its `required = false` entry: "Coverage is advisory and expensive; RIPR+ plus focused tests are the required PR proof.")
 
 **Local preflight before merge** — run per-crate, separately (the combined `-p X -p Y` form glitches with a spurious failure):
 ```bash
@@ -262,7 +261,7 @@ cargo clippy -p <crate> --locked -- -D warnings -A missing_docs  # per-crate
 ```
 This catches the #1 recurring failure: fmt/clippy drift landing on main through a PR that looked green.
 
-**Merge with UNSTABLE is OK** when all 3 required checks are green and the red check is non-required. Do not block on a non-required check.
+**Merge with UNSTABLE is OK** when both required checks are green and the red check is non-required. Do not block on a non-required check.
 
 **CI timing** — CX53 self-hosted CI + the separate `ripr` workflow + Codecov upload take ~20-30 min. A sparse rollup (e.g. `EM CI Routed Rust = success` but Codecov/ripr+ still empty) means **RUNNING, not stuck**. Verify via `gh run list --branch <branch>`; don't re-poll faster than the gates complete.
 
