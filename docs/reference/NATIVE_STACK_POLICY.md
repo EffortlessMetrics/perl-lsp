@@ -74,3 +74,77 @@ rg -n "requires perltidy|requires perlcritic|Perl::LanguageServer.*required|Brid
 
 Allowed hits must either be in a legacy/compatibility document or in tests that
 assert legacy wording stays out of first-mile native docs.
+
+## Facts-substrate layering rule
+
+**Since 2026-07-03 · ADR:** [PLSP-ADR-0006](../adr/PLSP-ADR-0006-perl-workspace-core-facts-substrate.md)
+
+The "native ships" product rule above says *what* runs by default. This rule
+says *how the analysis crates are layered* so that the same project facts feed
+every product surface without dragging the editor runtime into batch tools.
+
+**Core facts are LSP-free.** Batch fact production lives in one shared
+substrate, `perl-workspace-core`, that sits *below* the editor/LSP runtime and
+*above* the raw parser. It owns the deterministic project model — files,
+packages, symbols, imports/exports, POD, tests, dist metadata, compile effects,
+dynamic boundaries — with **stable IDs, byte-and-line source ranges,
+provenance, confidence, and explicit limitations** on every fact.
+
+```
+leaf facts crates
+  perl-lexer · perl-parser-core · perl-position-tracking
+  perl-semantic-facts · perl-symbol · perl-module · perl-uri
+        ↓  produce raw syntax/semantic facts
+perl-workspace-core   (LSP-FREE project-facts substrate)
+        ↓  consumed by / exported by
+perl-ripr-facts (RIPR)   perl-kwalitee (dist quality)   perl-tree-sitter-compat (later)
+        ↓
+product runtimes: perl-workspace → perl-lsp-rs-core → perl-lsp-rs
+                  perl-dap (own runtime; consumes the substrate for facts)
+```
+
+The rule, stated tersely:
+
+```
+Core facts crates produce facts.
+Product/runtime crates consume facts.
+Export crates project facts into external schemas.
+```
+
+- **Do not** put batch fact production in `perl-lsp-rs`.
+- **Do not** put product schemas (RIPR packet, Kwalitee receipt) in
+  `perl-parser-core`.
+- **Do not** put LSP types (`lsp-types`, UTF-16 positions) in core facts
+  crates. UTF-16 LSP positions are computed only at the LSP boundary, from the
+  substrate's byte + UTF-8 `SourceRange`.
+
+### Forbidden dependencies for `perl-workspace-core`
+
+Enforced by `crates/perl-workspace-core/tests/dependency_contract.rs`:
+
+```
+perl-lsp-rs · perl-lsp-rs-core · perllsp · perl-dap
+lsp-types · tokio · tower-lsp
+perl-workspace   (transitively pulls lsp-types via perl-position-tracking lsp-compat)
+```
+
+Allowed dependencies:
+
+```
+perl-parser-core · perl-position-tracking · perl-semantic-facts
+perl-symbol · perl-uri · serde · serde_json (receipts only) · walkdir
+```
+
+### Crate naming decisions
+
+| Crate | Role | Decision |
+|-------|------|----------|
+| `perl-workspace-core` | LSP-free project-facts substrate | **create** |
+| `perl-kwalitee` | native distribution-quality scoring | **create** (real crate, not just an xtask script) |
+| `perl-ripr-facts` | RIPR packet exporter | **keep** (migrate onto substrate) |
+| `perl-tree-sitter-compat` | tree-sitter-compatible output adapter | **later**, only if it grows |
+| `perl-test-facts` | reusable Test2/Test::More reader | **later**, only after test facts stabilize |
+| `perl-intelligence` / `perl-brain` / `perl-lsp-facts` | — | **rejected** (vague, or wrongly ties facts to the editor runtime) |
+| `perl-test2` | — | **rejected** (we *read* Test2, not reimplement it) |
+
+The crate name describes what it **owns**, not the product slogan.

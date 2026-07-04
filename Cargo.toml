@@ -83,6 +83,8 @@ members = [
     "crates/tree-sitter-perl-rs",
     "crates/perl-ci-hygiene",
     "crates/perl-kwalitee",
+    "crates/perl-workspace-core",
+    "crates/perl-tree-sitter-compat",
     "xtask",
 ]
 
@@ -259,6 +261,11 @@ perl-ci-hygiene = { path = "crates/perl-ci-hygiene", version = "0.17.0" }
 # Distribution-quality (Kwalitee) evaluator. Private (publish = false) while the
 # receipt schema stabilizes; consumed by xtask's perl-kwalitee command.
 perl-kwalitee = { path = "crates/perl-kwalitee", version = "0.17.0" }
+# perl-workspace-core: LSP-free project-facts substrate (PLSP-ADR-0006). Deliberately
+# NOT dependent on perl-workspace/lsp-types (contract in tests/dependency_contract.rs).
+perl-workspace-core = { path = "crates/perl-workspace-core", version = "0.17.0" }
+# perl-tree-sitter-compat: tree-sitter-compatible output adapter over the native parser.
+perl-tree-sitter-compat = { path = "crates/perl-tree-sitter-compat", version = "0.17.0" }
 perl-pod = { path = "crates/perl-pod", version = "0.17.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.17.0" }
 # Batch RIPR facts exporter — deliberately depends on neither the LSP server

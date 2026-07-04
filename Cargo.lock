@@ -2029,6 +2029,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-tree-sitter-compat"
+version = "0.17.0"
+dependencies = [
+ "perl-parser-core",
+ "perl-workspace-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "perl-uri"
 version = "0.17.0"
 dependencies = [
@@ -2060,6 +2070,18 @@ dependencies = [
  "tracing",
  "url",
  "walkdir",
+]
+
+[[package]]
+name = "perl-workspace-core"
+version = "0.17.0"
+dependencies = [
+ "perl-parser-core",
+ "perl-pod",
+ "perl-pragma",
+ "perl-symbol",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

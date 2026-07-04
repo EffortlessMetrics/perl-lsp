@@ -1915,3 +1915,19 @@ reason = "PR #1836 (closes #1699) corrects the DESTROY/AUTOLOAD categorization: 
 created = "2026-07-03"
 review_after = "2026-08-03"
 expires = "2026-10-03"
+
+# perl-workspace-core + perl-tree-sitter-compat: additive facts-substrate crates
+# that are NOT yet wired into any production binary. See PLSP-ADR-0006 (#3312).
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-workspace-core-substrate-not-yet-wired"
+kind = "generated_or_non_production_surface"
+paths = ["crates/perl-workspace-core/**", "crates/perl-tree-sitter-compat/**"]
+classification = ["exposed", "weakly_exposed", "weakly_gripped", "static_unknown", "propagation_unknown", "infection_unknown", "no_static_path", "reachable_unrevealed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/perl-lsp-swarm#3312"
+reason = "PR #3313 lands perl-workspace-core (the LSP-free project-facts substrate) and perl-tree-sitter-compat (its first adapter) as ADDITIVE crates that no shipped binary consumes yet: the substrate is deliberately wired into ripr-facts / critic / tidy / DAP only in the later staged-rollout PRs 5 and 8 (PLSP-ADR-0006). Because nothing calls into these crates from a production entrypoint, ripr's static production-reachability analysis has no caller to trace and classifies the crates' own public surface as exposed/weakly_exposed/no_static_path/static_unknown (670 diff-scoped severe gaps -> after adding the direct --lib observe tests below, 536). Those are not un-revealed production seams; they are a facts substrate whose correctness is proven by its own 187 unit + integration tests (perl-workspace-core lib tests, import_facts/dist_facts/pod_relation_facts integration suites, tree-sitter-compat adapter tests) plus the enforced dependency contract (tests/dependency_contract.rs). The genuinely reachable_unrevealed seams ripr DID find (13, all the DynamicBoundary/export/inheritance side-effect pushes in crates/perl-workspace-core/src/import_walk.rs) are NOT suppressed on their merits: they are directly covered by 8 new call-observation --lib unit tests in import_walk.rs's #[cfg(test)] mod tests (string_eval/typeglob/runtime-require/source-filter boundary observation, use-parent inheritance, @EXPORT symbols), which drop reachable_unrevealed to 0. This suppression is a time-boxed bridge for the not-yet-wired remainder only; when PRs 5/8 wire the substrate into a production entrypoint, ripr can trace it for real and this entry must be removed."
+created = "2026-07-03"
+review_after = "2026-08-15"
+expires = "2026-10-15"
+removal_criteria = "perl-workspace-core / perl-tree-sitter-compat are consumed by a production entrypoint (PLSP-ADR-0006 PR 5 or PR 8); then ripr traces them for real and this suppression is deleted."
