@@ -33,8 +33,8 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H7 | First advisory real upstream `base` receipt | Green | [run 28703494602](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28703494602), #3379 | None | Ref, counts, buckets, and artifact link recorded |
 | H8 | Linux-only upstream prepare | Yellow / future | #3316 | Keep explicit until non-Linux prepare exists | Board names platform boundary |
 | H9 | Real upstream `base` runner invocation | Green | #3384, [run 28707735088](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28707735088) | None | Real upstream `base` parse/compile records come from `perl-core-test-runner` |
-| H10 | `comp` compile smoke | Red | Not started | Start after H9 lands | `comp` smoke writes discovery/parse/compile/smoke/gap-map receipts |
-| H11 | `run` compile smoke | Red | Not started | Start after H10 lands | `run` smoke writes discovery/parse/compile/smoke/gap-map receipts |
+| H10 | `comp` compile smoke | Yellow / advisory scaffold | #3387 | Record first real upstream `comp` receipt after merge | `comp` smoke writes discovery/parse/compile/smoke/gap-map receipts |
+| H11 | `run` compile smoke | Red | Not started | Start after H10 real receipt is recorded | `run` smoke writes discovery/parse/compile/smoke/gap-map receipts |
 | H12 | Real upstream compile ratchets | Red | Not started | Start after H10/H11 are stable | `base`/`comp`/`run` compile receipts are ratcheted or deferral is explicit |
 | H13 | Execute-one | Red / future | Not started | Start after compile receipts are useful | One tiny `base/*.t` executes real TAP |
 | H14 | Execute-base | Red / future | Not started | Start after H13 lands | `base` runtime receipt exists |
@@ -72,12 +72,13 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 
 1. Publish this board. Active issue: #3376.
 2. Record the first advisory real upstream `base` smoke receipt. Active issue: #3378.
-3. Add `comp` compile-mode smoke.
-4. Add `run` compile-mode smoke.
-5. Ratchet real upstream `base`/`comp`/`run` compile receipts, or record an explicit board decision explaining why ratchet is deferred.
-6. Start execute-one for one tiny upstream `t/base/*.t`.
-7. Plan execute-base from the runtime buckets found by execute-one.
-8. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
+3. Add `comp` compile-mode smoke. Active issue: #3387.
+4. Record the first advisory real upstream `comp` smoke receipt.
+5. Add `run` compile-mode smoke.
+6. Ratchet real upstream `base`/`comp`/`run` compile receipts, or record an explicit board decision explaining why ratchet is deferred.
+7. Start execute-one for one tiny upstream `t/base/*.t`.
+8. Plan execute-base from the runtime buckets found by execute-one.
+9. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
 
 ## PR Train
 

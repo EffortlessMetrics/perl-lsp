@@ -2209,7 +2209,7 @@ enum PerlCoreHarnessCommand {
         #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessRunner::Test)]
         runner: perl_core_harness::HarnessRunner,
 
-        /// Staged upstream Perl core profile. Smoke is currently scoped to base.
+        /// Staged upstream Perl core profile.
         #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
         profile: perl_core_harness::HarnessProfile,
 

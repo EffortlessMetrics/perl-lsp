@@ -33,17 +33,23 @@ target/perl-core/prepare/<ref>/prepare.json
 Real-tree smoke receipts are written to:
 
 ```text
-target/perl-core/smoke/base/discovery.json
-target/perl-core/smoke/base/parse.json
-target/perl-core/smoke/base/compile.json
-target/perl-core/smoke/base/gap-map.json
-target/perl-core/smoke/base/smoke.json
+target/perl-core/smoke/<profile>/discovery.json
+target/perl-core/smoke/<profile>/parse.json
+target/perl-core/smoke/<profile>/compile.json
+target/perl-core/smoke/<profile>/gap-map.json
+target/perl-core/smoke/<profile>/smoke.json
 ```
 
 Run the advisory integrated base lane against the pinned upstream ref:
 
 ```bash
 just perl-core-integrated-base
+```
+
+Run the advisory integrated comp lane against the pinned upstream ref:
+
+```bash
+just perl-core-integrated-comp
 ```
 
 Or run the smoke against a user-supplied prepared upstream Perl tree:
