@@ -253,7 +253,18 @@ pub fn run_mode(config: RunConfig) -> Result<()> {
     )
     .with_context(|| format!("running Perl core tests via {} {}", config.runner, config.profile))?;
 
-    let records = read_runner_records_or_empty(&context_path)?;
+    let mut records = read_runner_records_or_empty(&context_path)?;
+    let used_direct_runner = invoke_runner_for_missing_records(
+        &t_dir,
+        &discovered,
+        &records,
+        &runner_binary,
+        &context_path,
+        config.mode,
+    )?;
+    if used_direct_runner {
+        records = read_runner_records_or_empty(&context_path)?;
+    }
     let report = build_run_report(BuildRunReportInput {
         config: &config,
         perl_tree: &perl_tree,
@@ -282,7 +293,7 @@ pub fn run_mode(config: RunConfig) -> Result<()> {
             output_path.display()
         );
     }
-    if !output.status.success() {
+    if !output.status.success() && !used_direct_runner {
         bail!(
             "upstream harness exited with status {} despite no recorded file failures\nstdout:\n{}\nstderr:\n{}",
             output.status,
@@ -687,6 +698,74 @@ fn invoke_harness_run(
     sanitize_perl_env(&mut command);
 
     command.output().with_context(|| format!("spawning host Perl: {}", host_perl.display()))
+}
+
+fn invoke_runner_for_missing_records(
+    t_dir: &Path,
+    discovered: &[DiscoveredTest],
+    records: &[RunnerRecord],
+    runner_binary: &Path,
+    context_path: &Path,
+    mode: HarnessMode,
+) -> Result<bool> {
+    let recorded = records
+        .iter()
+        .filter_map(|record| normalize_test_path(&record.path))
+        .collect::<BTreeSet<_>>();
+    let missing =
+        discovered.iter().filter(|test| !recorded.contains(&test.path)).collect::<Vec<_>>();
+    if missing.is_empty() {
+        return Ok(false);
+    }
+
+    if let Some(parent) = context_path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("creating runner context directory {}", parent.display()))?;
+    }
+
+    for test in &missing {
+        let output = invoke_direct_runner(t_dir, runner_binary, context_path, mode, &test.path)?;
+        if !context_path.is_file() {
+            bail!(
+                "direct runner did not write context for {}\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
+                test.path,
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+
+    let refreshed = read_runner_records_or_empty(context_path)?;
+    let recorded_after = refreshed
+        .iter()
+        .filter_map(|record| normalize_test_path(&record.path))
+        .collect::<BTreeSet<_>>();
+    if let Some(test) = missing.iter().find(|test| !recorded_after.contains(&test.path)) {
+        bail!("direct runner did not write a record for {}", test.path);
+    }
+
+    Ok(true)
+}
+
+fn invoke_direct_runner(
+    t_dir: &Path,
+    runner_binary: &Path,
+    context_path: &Path,
+    mode: HarnessMode,
+    test_path: &str,
+) -> Result<Output> {
+    let mut command = Command::new(runner_binary);
+    command.current_dir(t_dir);
+    command.arg(test_path);
+    command.env("LC_ALL", "C");
+    command.env("PERL_LSP_HARNESS_MODE", mode.as_str());
+    command.env("PERL_LSP_HARNESS_CONTEXT", context_path);
+    sanitize_perl_env(&mut command);
+
+    command
+        .output()
+        .with_context(|| format!("spawning perl-core-test-runner: {}", runner_binary.display()))
 }
 
 fn sanitize_perl_env(command: &mut Command) {
@@ -3015,19 +3094,19 @@ exit 7
 
     #[cfg(unix)]
     #[test]
-    fn run_mode_writes_harness_prepare_failures_when_runner_context_is_missing() -> TestResult {
+    fn run_mode_invokes_runner_directly_when_harness_writes_no_records() -> TestResult {
         let temp = tempfile::tempdir()?;
         let perl_tree = write_fake_perl_tree_with_run_body(
             temp.path(),
-            r#"# Deliberately do not invoke ./perl; real harness integration bugs must still
-# produce a bucketed receipt instead of aborting before report writing.
-exit 0
+            r#"# Deliberately do not invoke ./perl; real harness integration bugs should fall
+# back to direct runner invocation for harness-selected files.
+exit 7
 "#,
         )?;
         let runner = write_fake_runner(temp.path(), RunnerStatus::Pass)?;
         let output = temp.path().join("parse-report.json");
 
-        let Err(err) = run_mode(RunConfig {
+        run_mode(RunConfig {
             perl_tree,
             host_perl: PathBuf::from("/bin/sh"),
             runner: HarnessRunner::Test,
@@ -3035,21 +3114,16 @@ exit 0
             profile: HarnessProfile::Base,
             output: Some(output.clone()),
             runner_binary: Some(runner),
-        }) else {
-            bail!("missing runner context should fail with a bucketed report");
-        };
+        })?;
 
-        assert!(err.to_string().contains("failed for 1 of 1 files"));
         let raw = fs::read_to_string(output)?;
         let report: RunReport = serde_json::from_str(&raw)?;
         assert_eq!(report.summary.files_total, 1);
-        assert_eq!(report.summary.files_passed, 0);
-        assert_eq!(report.summary.files_failed, 1);
-        assert_eq!(report.buckets.get("harness_prepare"), Some(&1));
-        assert_eq!(
-            report.failures[0].first_diagnostic,
-            "test was discovered but produced no runner record"
-        );
+        assert_eq!(report.summary.files_passed, 1);
+        assert_eq!(report.summary.files_failed, 0);
+        assert!(report.buckets.is_empty());
+        assert!(report.failures.is_empty());
+        assert_eq!(report.harness_status, Some(7));
         Ok(())
     }
 
