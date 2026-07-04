@@ -749,6 +749,27 @@ impl LspServer {
     pub fn test_enable_call_hierarchy(&self) {
         self.advertised_features.lock().call_hierarchy = true;
     }
+
+    /// Test-only: begin capturing `PERL_LSP_TIMING` spans into an in-process
+    /// buffer.
+    ///
+    /// This is independent of the `PERL_LSP_TIMING` environment sink, so it does
+    /// not race on process-global env state. Any previously buffered spans are
+    /// cleared. Pair with [`Self::test_timing_capture_drain`].
+    pub fn test_timing_capture_start(&self) {
+        let _ = self;
+        crate::runtime::timing::capture::start();
+    }
+
+    /// Test-only: stop capturing and return the buffered timing spans as
+    /// `(span_name, milliseconds, detail)` tuples in emission order.
+    pub fn test_timing_capture_drain(&self) -> Vec<(String, f64, Option<String>)> {
+        let _ = self;
+        crate::runtime::timing::capture::drain()
+            .into_iter()
+            .map(|span| (span.span.to_string(), span.ms, span.detail))
+            .collect()
+    }
 }
 
 #[cfg(all(test, feature = "workspace"))]

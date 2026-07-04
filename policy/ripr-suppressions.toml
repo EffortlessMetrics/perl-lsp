@@ -1973,3 +1973,21 @@ created = "2026-07-03"
 review_after = "2026-08-15"
 expires = "2026-10-15"
 removal_criteria = "perl-workspace-core / perl-tree-sitter-compat are consumed by a production entrypoint (PLSP-ADR-0006 PR 5 or PR 8); then ripr traces them for real and this suppression is deleted."
+
+# -----------------------------------------------------------------------------
+# PERL_LSP_TIMING parse_mode exact-value predicates (PR #3397, #3396): direct
+# unit tests call parse_mode with the exact "0"/"1" target literals, but the
+# ripr 0.9.x run mis-associates them — its guidance pass timed out (210s) and
+# the mis-association reproduced on a clean re-run of the same head.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-lsp-timing-parse-mode-exact-values"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs/src/runtime/timing.rs"]
+classification = ["weakly_exposed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3397 (#3396) adds the PERL_LSP_TIMING instrumentation sink. ripr 0.9.x reports 2 weakly_exposed severe seams for the exact-value predicates trimmed == \"0\" (timing.rs:108) and trimmed == \"1\" (timing.rs:113) in parse_mode, claiming no related test uses those values — but parse_mode is a pure function and the same file's test module already calls it directly with the exact target literals: parse_mode_off_variants asserts parse_mode(\"0\") -> TimingMode::Off and parse_mode_stderr_variants asserts parse_mode(\"1\") -> TimingMode::Stderr, plus case-insensitive neighbors (off/OFF/false, stderr/STDERR/true) and the file-path fallthrough in parse_mode_file_path. The flagging run's own guidance pass reported tool_error: ripr timed out after 210s with zero annotations, and the identical mis-association reproduced on a clean re-run (run 28712164718) — an instrument-degradation case of the EffortlessMetrics/ripr#1429 class (tracer fails to associate direct exact-value oracles). Suppression is narrow (one production file, one PR). Remove when ripr#1429 is fixed upstream, when PR #3363 (#2015) makes weakly_exposed-only findings non-blocking, or when targeted mutation replaces this advisory path."
+created = "2026-07-04"
+review_after = "2026-08-04"
+expires = "2026-10-04"

@@ -24,6 +24,19 @@ use document_state::{empty_state, minimal_state, minimal_state_from_rope};
 use srp_helpers::build_incremental_edit_set;
 use srp_helpers::{is_embedded_template_uri, is_perl_language_id};
 
+/// Last path segment of a document URI (bounded to 64 chars), used as the
+/// `detail` field of a `PERL_LSP_TIMING` span. Never allocates on the hot path
+/// unless timing is enabled (callers guard the call).
+fn uri_tail(uri: &str) -> String {
+    let tail = uri.rsplit(['/', '\\']).next().unwrap_or(uri);
+    // Keep the last 64 chars on a char boundary to bound JSONL line length.
+    tail.char_indices()
+        .rev()
+        .nth(63)
+        .map(|(idx, _)| tail[idx..].to_string())
+        .unwrap_or_else(|| tail.to_string())
+}
+
 impl LspServer {
     /// Handle textDocument/didOpen notification.
     ///
@@ -391,8 +404,15 @@ impl LspServer {
             }
 
             if let Some(changes) = params["contentChanges"].as_array() {
+                // Phase-1 latency instrumentation (opt-in via PERL_LSP_TIMING).
+                // Instrumentation only — no behavior change to the mutation path.
+                let timing_on = crate::runtime::timing::is_enabled();
+                let t_did_change_start = std::time::Instant::now();
+
                 // Get current document state or create new one
+                let t_lock_start = std::time::Instant::now();
                 let mut documents = self.documents.lock();
+                let lock_wait_ms = crate::runtime::timing::elapsed_ms(t_lock_start);
                 let normalized_uri = self.normalize_uri_key(uri);
                 let existing_doc =
                     documents.get(&normalized_uri).or_else(|| documents.get(uri)).cloned();
@@ -493,9 +513,13 @@ impl LspServer {
                 > = build_incremental_edit_set(&doc_state.rope, &lsp_changes);
 
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
+                let t_apply_start = std::time::Instant::now();
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
+                let apply_changes_ms = crate::runtime::timing::elapsed_ms(t_apply_start);
 
+                let t_rope_start = std::time::Instant::now();
                 let text = doc.rope.to_string();
+                let rope_to_string_ms = crate::runtime::timing::elapsed_ms(t_rope_start);
                 tracing::debug!("Document changed: {} (version {})", uri, version);
 
                 // Keep template documents that were intentionally skipped on didOpen
@@ -612,6 +636,7 @@ impl LspServer {
                 }
 
                 // Check cache first
+                let t_parse_start = std::time::Instant::now();
                 let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, &text) {
                     tracing::debug!("Using cached AST for {}", uri);
                     (Some((*cached_ast).clone()), vec![])
@@ -631,16 +656,29 @@ impl LspServer {
                         }
                         Err(crate::error::ParseError::Cancelled) => {
                             tracing::debug!("Parse cancelled for {} — newer change pending", uri);
+                            // The cooperative cancellation flag fired mid-parse — record
+                            // it so a typing storm's discarded parses are observable.
+                            if timing_on {
+                                crate::runtime::timing::emit(
+                                    crate::runtime::timing::TimingSpan::labeled(
+                                        "parse.cancel_seen",
+                                        crate::runtime::timing::elapsed_ms(t_did_change_start),
+                                        uri_tail(uri),
+                                    ),
+                                );
+                            }
                             return Ok(());
                         }
                         Err(e) => (None, vec![e]),
                     }
                 };
+                let full_parse_ms = crate::runtime::timing::elapsed_ms(t_parse_start);
 
                 // Convert AST to Arc for stable pointers
                 let ast_arc = ast.map(Arc::new);
 
                 // Build parent map from the Arc'd AST so pointers remain stable
+                let t_parent_map_start = std::time::Instant::now();
                 let mut parent_map = ParentMap::default();
                 if let Some(ref arc) = ast_arc {
                     crate::declaration::DeclarationProvider::build_parent_map(
@@ -649,6 +687,7 @@ impl LspServer {
                         None,
                     );
                 }
+                let parent_map_ms = crate::runtime::timing::elapsed_ms(t_parent_map_start);
 
                 // Build line starts cache for O(log n) position conversion
                 let line_starts = LineStartsCache::new_rope(&doc.rope);
@@ -656,6 +695,7 @@ impl LspServer {
                 // Compute degradation tier before moving errors
                 let degradation_tier = DegradationTier::from_parse_result(&ast_arc, &errors);
 
+                let t_incremental_start = std::time::Instant::now();
                 // Update or reinitialize IncrementalDocument for the new text.
                 // - Ranged edits: apply to existing incremental_doc (fast path).
                 // - Full replace or no existing doc: reinitialize from new text (fallback).
@@ -761,6 +801,8 @@ impl LspServer {
                         _ => Some(IncrementalState::new(code_text.to_string())),
                     }
                 };
+                let incremental_doc_update_ms =
+                    crate::runtime::timing::elapsed_ms(t_incremental_start);
 
                 // Update document state with properly updated content
                 doc_state = DocumentState {
@@ -802,10 +844,37 @@ impl LspServer {
                 }
 
                 let generation_for_index_task = doc_state.generation.clone();
+                let t_commit_start = std::time::Instant::now();
                 documents.insert(normalized_uri.clone(), doc_state);
 
                 // Must drop the lock before calling publish_diagnostics
                 drop(documents);
+                let commit_ms = crate::runtime::timing::elapsed_ms(t_commit_start);
+
+                // Emit the phase-1 didChange timing spans (opt-in). This is the
+                // mutation critical section: every span above ran while the
+                // documents lock was held, so a keystroke's read latency includes
+                // the full-parse + parent-map cost recorded here.
+                if timing_on {
+                    use crate::runtime::timing::{TimingSpan, elapsed_ms, emit};
+                    let tail = uri_tail(uri);
+                    let bytes = text.len();
+                    let edits = changes.len();
+                    let ver = i64::from(version);
+                    let total_ms = elapsed_ms(t_did_change_start);
+                    for (name, ms) in [
+                        ("didChange.total", total_ms),
+                        ("didChange.lock_wait", lock_wait_ms),
+                        ("didChange.apply_changes", apply_changes_ms),
+                        ("didChange.rope_to_string", rope_to_string_ms),
+                        ("didChange.full_parse", full_parse_ms),
+                        ("didChange.parent_map", parent_map_ms),
+                        ("didChange.incremental_doc_update", incremental_doc_update_ms),
+                        ("didChange.commit", commit_ms),
+                    ] {
+                        emit(TimingSpan::document(name, ms, tail.clone(), ver, bytes, edits));
+                    }
+                }
 
                 if let Some(ref ast) = ast_arc {
                     self.reindex_document_symbols(uri, ast, &text);

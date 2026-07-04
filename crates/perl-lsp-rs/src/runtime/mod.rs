@@ -38,6 +38,8 @@ mod symbol_extraction;
 mod test_api;
 mod test_runners;
 mod text_sync;
+/// `PERL_LSP_TIMING` phase-1 instrumentation sink (opt-in span timings).
+pub(crate) mod timing;
 mod types;
 mod window;
 mod workspace;

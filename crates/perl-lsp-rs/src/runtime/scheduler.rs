@@ -328,6 +328,9 @@ const READ_WORKERS: usize = 4;
 struct QueuedMutation {
     request: JsonRpcRequest,
     seq: u64,
+    /// Wall-clock instant the request was enqueued, used only to measure
+    /// `scheduler.mutation_wait` (queue latency) when `PERL_LSP_TIMING` is on.
+    enqueued: std::time::Instant,
 }
 
 /// Read-only request with priority metadata for ordered dispatch.
@@ -457,7 +460,8 @@ impl Scheduler {
     /// Returns `Err(())` if the mutation worker has exited (channel closed).
     pub async fn send_mutation(&self, request: JsonRpcRequest) -> Result<(), ()> {
         let seq = self.mutation_seq_next.fetch_add(1, Ordering::SeqCst) + 1;
-        self.mutation_tx.send(QueuedMutation { request, seq }).await.map_err(|_| {
+        let enqueued = std::time::Instant::now();
+        self.mutation_tx.send(QueuedMutation { request, seq, enqueued }).await.map_err(|_| {
             self.mutation_seq_done.store(seq, Ordering::SeqCst);
             self.mutation_notify.notify_waiters();
         })
@@ -510,6 +514,17 @@ impl Scheduler {
         mutation_notify: Arc<Notify>,
     ) {
         while let Some(queued) = rx.recv().await {
+            // Phase-1 latency instrumentation (opt-in): queue latency from
+            // enqueue to worker pickup. The single exclusive worker serializes
+            // mutations, so this is where a queued didChange storm backs up.
+            if crate::runtime::timing::is_enabled() {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "scheduler.mutation_wait",
+                    crate::runtime::timing::elapsed_ms(queued.enqueued),
+                    queued.request.method.clone(),
+                ));
+            }
+
             // Run on blocking thread: handlers are CPU-bound and use
             // parking_lot locks which must not block the tokio runtime.
             let srv = Arc::clone(&server);
@@ -716,6 +731,10 @@ impl Scheduler {
         let seq_done = Arc::clone(mutation_seq_done);
         let notify = Arc::clone(mutation_notify);
         let wait_for = queued.wait_for_seq;
+        // Capture the method (opt-in) before `queued` is moved into the task, so
+        // we can attribute the mutation-barrier wait to a concrete read request.
+        let read_wait_method =
+            crate::runtime::timing::is_enabled().then(|| queued.request.method.clone());
         let freshness = queued.freshness.clone();
         let method = queued.request.method.clone();
         let id = queued.request.id.clone();
@@ -724,8 +743,18 @@ impl Scheduler {
             let _permit = permit;
 
             // Wait for all mutations that were enqueued before this read.
+            let t_read_wait = std::time::Instant::now();
             while seq_done.load(Ordering::SeqCst) < wait_for {
                 notify.notified().await;
+            }
+            // The read blocked here until the mutation barrier cleared — this is
+            // the keystroke-to-completion wait a queued parse storm inflates.
+            if let Some(method) = read_wait_method {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "scheduler.read_wait",
+                    crate::runtime::timing::elapsed_ms(t_read_wait),
+                    method,
+                ));
             }
 
             if let Some(reason) = Self::stale_read_reason(&srv, freshness.as_ref()) {
