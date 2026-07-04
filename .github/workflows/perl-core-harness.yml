@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   base-smoke:
-    name: Real upstream base parse+compile smoke
+    name: Real upstream base+comp parse+compile smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
@@ -57,10 +57,20 @@ jobs:
           cargo run -p xtask -- perl-core-harness smoke \
             --perl-tree "target/perl-core/upstream/${{ steps.upstream.outputs.ref }}/perl5" \
             --host-perl perl \
-            --profile "${{ steps.upstream.outputs.profile }}" \
+            --profile base \
             --modes "${{ steps.upstream.outputs.modes }}" \
             --perl-ref "${{ steps.upstream.outputs.ref }}" \
             --output-dir target/perl-core/smoke/base
+
+      - name: Run comp parse+compile smoke
+        run: |
+          cargo run -p xtask -- perl-core-harness smoke \
+            --perl-tree "target/perl-core/upstream/${{ steps.upstream.outputs.ref }}/perl5" \
+            --host-perl perl \
+            --profile comp \
+            --modes "${{ steps.upstream.outputs.modes }}" \
+            --perl-ref "${{ steps.upstream.outputs.ref }}" \
+            --output-dir target/perl-core/smoke/comp
 
       - name: Summarize receipts
         if: always()
@@ -70,14 +80,30 @@ jobs:
             echo "## Perl core harness advisory smoke"
             echo
             echo "- ref: \`${{ steps.upstream.outputs.ref }}\`"
-            echo "- profile: \`${{ steps.upstream.outputs.profile }}\`"
             echo "- modes: \`${{ steps.upstream.outputs.modes }}\`"
             echo
-            if [ -f target/perl-core/smoke/base/smoke.json ]; then
-              python3 -c 'import json; from pathlib import Path; smoke = json.loads(Path("target/perl-core/smoke/base/smoke.json").read_text()); print("- status: `{}`".format(smoke["status"])); print("- discovered files: `{}`".format(smoke["discovery_total"])); print("- parse: `{}/{}`".format(smoke.get("parse_files_passed"), smoke.get("parse_files_total"))); print("- compile: `{}/{}`".format(smoke.get("compile_files_passed"), smoke.get("compile_files_total"))); print("- gap map: `{}`".format(smoke["gap_map"]))'
-            else
-              echo "- smoke receipt: not written"
-            fi
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          for profile in ("base", "comp"):
+              path = Path(f"target/perl-core/smoke/{profile}/smoke.json")
+              print(f"### `{profile}`")
+              if not path.exists():
+                  print()
+                  print("- smoke receipt: not written")
+                  print()
+                  continue
+
+              smoke = json.loads(path.read_text())
+              print()
+              print(f"- status: `{smoke['status']}`")
+              print(f"- discovered files: `{smoke['discovery_total']}`")
+              print(f"- parse: `{smoke.get('parse_files_passed')}/{smoke.get('parse_files_total')}`")
+              print(f"- compile: `{smoke.get('compile_files_passed')}/{smoke.get('compile_files_total')}`")
+              print(f"- gap map: `{smoke['gap_map']}`")
+              print()
+          PY
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Perl core harness receipts

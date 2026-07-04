@@ -16,7 +16,7 @@ For the current green/yellow/red burndown and next PR order, see the
 | Compile mode | Working | `cargo xtask perl-core-harness run --mode compile --perl-tree <prepared-perl5> --host-perl <perl> --profile base` parses clean files, lowers HIR, projects compile effects, fails on compile-effect dynamic boundaries, and writes a JSON report |
 | Compile-mode base baseline | Ratcheted scaffold | `.ci/perl-core-harness/base-compile-baseline.json` protects the generated two-file base fixture against newly failing files, unknown buckets, bucket growth, and assertion regressions |
 | Real upstream Perl base smoke | Advisory integrated | `perl-core-harness prepare --ref <pinned-ref>` prepares upstream Perl under `target/perl-core`, then `perl-core-harness smoke --profile base --modes parse,compile` writes discovery, parse, compile, gap-map, and smoke receipts |
-| Real upstream Perl comp smoke | Advisory scaffold | `perl-core-harness smoke --profile comp --modes parse,compile` uses the same receipt path for the `comp` profile; first real upstream receipt still needs to be recorded |
+| Real upstream Perl comp smoke | Advisory workflow | `perl-core-harness smoke --profile comp --modes parse,compile` uses the same receipt path for the `comp` profile, and the scheduled/manual harness workflow emits `target/perl-core/smoke/comp/*` receipts; first real upstream receipt still needs to be recorded |
 | Execute mode | Not implemented | Future runtime slice |
 | Upstream Perl tree preparation | Linux advisory | Clone/configure/test_prep automation is Linux-only in this slice; Windows/macOS preparation is future work |
 

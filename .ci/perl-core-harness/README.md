@@ -52,6 +52,10 @@ Run the advisory integrated comp lane against the pinned upstream ref:
 just perl-core-integrated-comp
 ```
 
+The scheduled/manual `Perl Core Harness` workflow prepares the pinned upstream
+tree and emits advisory `base` and `comp` smoke receipts under
+`target/perl-core/smoke/<profile>/`.
+
 Or run the smoke against a user-supplied prepared upstream Perl tree:
 
 ```bash
