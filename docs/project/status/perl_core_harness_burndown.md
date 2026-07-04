@@ -33,8 +33,8 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H7 | First advisory real upstream `base` receipt | Green | [run 28703494602](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28703494602), #3379 | None | Ref, counts, buckets, and artifact link recorded |
 | H8 | Linux-only upstream prepare | Yellow / future | #3316 | Keep explicit until non-Linux prepare exists | Board names platform boundary |
 | H9 | Real upstream `base` runner invocation | Green | #3384, [run 28707735088](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28707735088) | None | Real upstream `base` parse/compile records come from `perl-core-test-runner` |
-| H10 | `comp` compile smoke | Yellow / advisory workflow | #3387, #3394 | Record first real upstream `comp` receipt after workflow run | `comp` smoke writes discovery/parse/compile/smoke/gap-map receipts |
-| H11 | `run` compile smoke | Red | Not started | Start after H10 real receipt is recorded | `run` smoke writes discovery/parse/compile/smoke/gap-map receipts |
+| H10 | `comp` compile smoke | Yellow / bucketed compiler gaps | #3387, #3394, [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840) | None | `comp` smoke writes runner-backed discovery/parse/compile/smoke/gap-map receipts |
+| H11 | `run` compile smoke | Red | Not started | Start after H10 receipt record lands | `run` smoke writes discovery/parse/compile/smoke/gap-map receipts |
 | H12 | Real upstream compile ratchets | Red | Not started | Start after H10/H11 are stable | `base`/`comp`/`run` compile receipts are ratcheted or deferral is explicit |
 | H13 | Execute-one | Red / future | Not started | Start after compile receipts are useful | One tiny `base/*.t` executes real TAP |
 | H14 | Execute-base | Red / future | Not started | Start after H13 lands | `base` runtime receipt exists |
@@ -51,11 +51,11 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `target/perl-core/smoke/base/compile.json` | 6/9 passed, 2 `parse_recovery`, 1 `compile_effect` | [run 28707735088](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28707735088); failures: `base/lex.t`, `base/rs.t`, `base/term.t` |
 | `target/perl-core/smoke/base/gap-map.json` | 13/18 mode-file entries passed; buckets: 4 `parse_recovery`, 1 `compile_effect` | [run 28707735088](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28707735088) |
 | `target/perl-core/smoke/base/smoke.json` | Pass for receipt integrity; structural failures empty | [run 28707735088](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28707735088) |
-| `target/perl-core/smoke/comp/discovery.json` | TBD | Fill after first advisory `comp` workflow run |
-| `target/perl-core/smoke/comp/parse.json` | TBD | Fill after first advisory `comp` workflow run |
-| `target/perl-core/smoke/comp/compile.json` | TBD | Fill after first advisory `comp` workflow run |
-| `target/perl-core/smoke/comp/gap-map.json` | TBD | Fill after first advisory `comp` workflow run |
-| `target/perl-core/smoke/comp/smoke.json` | TBD | Fill after first advisory `comp` workflow run |
+| `target/perl-core/smoke/comp/discovery.json` | 25 files discovered | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840); examples include `comp/require.t`, `comp/use.t`, `comp/parser.t`, `comp/proto.t`, `comp/utf.t` |
+| `target/perl-core/smoke/comp/parse.json` | 18/25 passed, 7 `parse_recovery` | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840); failures: `comp/decl.t`, `comp/final_line_num.t`, `comp/line_debug.t`, `comp/parser.t`, `comp/proto.t`, `comp/require.t`, `comp/use.t` |
+| `target/perl-core/smoke/comp/compile.json` | 8/25 passed, 7 `parse_recovery`, 10 `compile_effect` | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840); compile-effect failures include `comp/filter_exception.t`, `comp/fold.t`, `comp/form_scope.t`, `comp/hints.t`, `comp/multiline.t`, `comp/our.t`, `comp/parser_run.t`, `comp/redef.t`, `comp/retainedlines.t`, `comp/utf.t` |
+| `target/perl-core/smoke/comp/gap-map.json` | 26/50 mode-file entries passed; buckets: 14 `parse_recovery`, 10 `compile_effect` | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840) |
+| `target/perl-core/smoke/comp/smoke.json` | Pass for receipt integrity; structural failures empty | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840) |
 
 ## Gap Buckets
 
@@ -79,7 +79,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 2. Record the first advisory real upstream `base` smoke receipt. Active issue: #3378.
 3. Add `comp` compile-mode smoke. Active issue: #3387.
 4. Record the first advisory real upstream `comp` smoke receipt. Active issue: #3394.
-5. Add `run` compile-mode smoke.
+5. Add `run` compile-mode smoke. Next red.
 6. Ratchet real upstream `base`/`comp`/`run` compile receipts, or record an explicit board decision explaining why ratchet is deferred.
 7. Start execute-one for one tiny upstream `t/base/*.t`.
 8. Plan execute-base from the runtime buckets found by execute-one.
@@ -93,6 +93,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | 2 | `compiler(harness): record first real upstream base smoke receipt` | `docs(perl-core-harness): record first base smoke receipt` | Record ref, discovered count, parse/compile totals, top buckets, and artifact link |
 | 3 | `compiler(harness): make real upstream base smoke invoke test runner` | `fix(perl-core-harness): invoke runner for real base smoke` | Landed in #3384; latest receipt has runner-backed parse/compile records |
 | 4 | `compiler(harness): add Perl core comp compile-mode smoke receipts` | `feat(perl-core-harness): add comp compile smoke receipts` | Add `profile=comp` discovery/parse/compile/smoke/gap-map receipts |
-| 5 | `compiler(harness): add Perl core run compile-mode smoke receipts` | `feat(perl-core-harness): add run compile smoke receipts` | Add `profile=run` discovery/parse/compile/smoke/gap-map receipts |
-| 6 | `compiler(harness): ratchet real upstream compile receipts` | `feat(perl-core-harness): ratchet upstream compile smoke receipts` | Ratchet real upstream `base`/`comp`/`run` compile receipts |
-| 7 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute one tiny upstream `base/*.t` and record runtime buckets |
+| 5 | `compiler(harness): record first real upstream comp smoke receipt` | `docs(perl-core-harness): record first comp smoke receipt` | Record ref, discovered count, parse/compile totals, top buckets, and artifact link |
+| 6 | `compiler(harness): add Perl core run compile-mode smoke receipts` | `feat(perl-core-harness): add run compile smoke receipts` | Add `profile=run` discovery/parse/compile/smoke/gap-map receipts |
+| 7 | `compiler(harness): ratchet real upstream compile receipts` | `feat(perl-core-harness): ratchet upstream compile smoke receipts` | Ratchet real upstream `base`/`comp`/`run` compile receipts |
+| 8 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute one tiny upstream `base/*.t` and record runtime buckets |
