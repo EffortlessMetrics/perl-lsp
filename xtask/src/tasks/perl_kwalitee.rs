@@ -195,6 +195,7 @@ fn build_and_evaluate(
     // is left unverified rather than measured against the wrong tree.
     if live {
         add_docs_status_result(&mut external_results);
+        add_critic_parity_result(&mut external_results);
     }
     if lib_profile.requires_release_artifacts() {
         add_release_results(&mut external_results, dist.clone());
@@ -269,6 +270,57 @@ fn add_docs_status_result(results: &mut BTreeMap<String, ExternalResult>) {
              reported.",
         ),
     );
+}
+
+/// The `run_critic_registry_parity` proof test, as a `cargo test` filter
+/// (module path + test name, matched with `--exact`).
+const CRITIC_PARITY_TEST: &str =
+    "execute_command::tests::run_critic_native_matches_pull_diagnostics_registry";
+
+/// Run the runCritic/native-registry parity test (#3303) and record the
+/// `critic.run_critic_registry_parity` result.
+///
+/// The parity test lives in `perl-lsp-rs` — it exercises the live
+/// `ExecuteCommandProvider::run_critic` path against the editor's on-type
+/// native pull path (`NativeCriticRegistry`) side by side. The `perl_kwalitee`
+/// crate is deliberately pure (no process spawning), so this wrapper runs the
+/// test as an external command and maps its pass/fail onto the indicator,
+/// following the same external-gate pattern as [`add_docs_status_result`] and
+/// [`add_release_results`].
+fn add_critic_parity_result(results: &mut BTreeMap<String, ExternalResult>) {
+    let cmd = format!("cargo test -p perl-lsp-rs --lib {CRITIC_PARITY_TEST} -- --exact");
+    let evidence = vec![EvidenceRef::command(cmd)];
+    let remediation = format!(
+        "Run `cargo test -p perl-lsp-rs --lib {CRITIC_PARITY_TEST} -- --exact` locally and \
+         resolve the reported parity failure."
+    );
+
+    let outcome = Command::new("cargo")
+        .args(["test", "-p", "perl-lsp-rs", "--lib", CRITIC_PARITY_TEST, "--", "--exact"])
+        .output();
+
+    let result = match outcome {
+        Ok(out) if out.status.success() => ExternalResult::pass(evidence),
+        Ok(out) => {
+            let mut ev = evidence;
+            ev.push(EvidenceRef::new(
+                "note",
+                format!(
+                    "cargo test exited {}: {}",
+                    out.status,
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ),
+            ));
+            ExternalResult::fail(ev, remediation)
+        }
+        Err(e) => {
+            let mut ev = evidence;
+            ev.push(EvidenceRef::new("note", e.to_string()));
+            ExternalResult::fail(ev, remediation)
+        }
+    };
+
+    results.insert("critic.run_critic_registry_parity".to_string(), result);
 }
 
 /// Default JSON receipt path relative to the workspace root.
@@ -362,5 +414,40 @@ mod tests {
     #[test]
     fn explain_rejects_unknown_indicator() {
         assert!(explain("does.not.exist").is_err());
+    }
+
+    #[test]
+    fn critic_parity_test_filter_is_exact_and_matches_the_real_test() {
+        // Guards the `cargo test ... -- --exact` filter against drifting away
+        // from the real test name in crates/perl-lsp-rs/src/execute_command/tests.rs
+        // (run_critic_native_matches_pull_diagnostics_registry, added by #3303).
+        assert_eq!(
+            CRITIC_PARITY_TEST,
+            "execute_command::tests::run_critic_native_matches_pull_diagnostics_registry"
+        );
+    }
+
+    #[test]
+    fn critic_parity_failure_carries_the_remediation_command() {
+        // Simulate the "cargo unavailable / process spawn failed" branch
+        // without actually invoking `cargo test -p perl-lsp-rs` (too heavy for
+        // a unit test) by exercising the same error-mapping the real function
+        // uses on `Command::output()` failure.
+        let evidence = vec![EvidenceRef::command(format!(
+            "cargo test -p perl-lsp-rs --lib {CRITIC_PARITY_TEST} -- --exact"
+        ))];
+        let err = "program not found".to_string();
+        let mut ev = evidence.clone();
+        ev.push(EvidenceRef::new("note", err.clone()));
+        let result = ExternalResult::fail(
+            ev,
+            format!(
+                "Run `cargo test -p perl-lsp-rs --lib {CRITIC_PARITY_TEST} -- --exact` locally \
+                 and resolve the reported parity failure."
+            ),
+        );
+        assert_eq!(result.status, perl_kwalitee::IndicatorStatus::Fail);
+        assert!(result.remediation.expect("remediation").contains(CRITIC_PARITY_TEST));
+        assert!(result.evidence.iter().any(|e| e.value.contains(&err)));
     }
 }

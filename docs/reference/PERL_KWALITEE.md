@@ -68,7 +68,7 @@ table**.
 | `release.checksums_valid` | release | yes | external (`release artifact-check`) | release |
 | `formatter.native_default` | formatter | yes | receipt (native-tooling readiness) | all |
 | `critic.native_default` | critic | yes | receipt (native-tooling readiness) | all |
-| `critic.run_critic_registry_parity` | critic | **advisory** | external (parity test) | all |
+| `critic.run_critic_registry_parity` | critic | yes | external (parity test) | all |
 | `quality.no_new_severe_gaps` | quality | yes | receipt (quality-gate) | all |
 | `docs.status_current` | docs | yes | external (`update-status --check`) | all |
 | `formatter.corpus_idempotent` | formatter | **advisory** | receipt (native-format corpus) | nightly |
@@ -165,7 +165,10 @@ one of three ways:
   - `release.*` ← `cargo xtask release artifact-check --dist <dir>` (one run,
     validating binaries present + no external tooling + checksums, mapped onto
     the three release indicators);
-  - `docs.status_current` ← `cargo xtask update-status --check`.
+  - `docs.status_current` ← `cargo xtask update-status --check`;
+  - `critic.run_critic_registry_parity` ← `cargo test -p perl-lsp-rs --lib
+    execute_command::tests::run_critic_native_matches_pull_diagnostics_registry
+    -- --exact` (live-workspace only, same as `docs.status_current`).
 
 The authoritative product-surface CI gate remains
 `cargo xtask check-native-product-surface`; the crate mirrors its surface and
@@ -184,13 +187,16 @@ false-positive on the crate's own regression test.
 
 ### `critic.run_critic_registry_parity`
 
-This indicator is **advisory (non-mandatory) until #3303 lands**, then it
-becomes mandatory. It asserts that the default `perl.runCritic` command and the
-editor's on-type native pull diagnostics agree (both routed through
-`NativeCriticRegistry`). The xtask wrapper does not yet supply a result for it,
-so it evaluates as `unverified` (a soft concern, not a mandatory failure). Once
-#3303 merges, wire its parity-test result into the wrapper's external results
-and flip the catalog entry to mandatory.
+This indicator is **mandatory** (promoted from advisory once #3303 landed the
+`NativeCriticRegistry` routing and its parity test). It asserts that the
+default `perl.runCritic` command and the editor's on-type native pull
+diagnostics agree (both routed through `NativeCriticRegistry`). The xtask
+wrapper supplies the result by running the proof test as an external command —
+`cargo test -p perl-lsp-rs --lib
+execute_command::tests::run_critic_native_matches_pull_diagnostics_registry --
+--exact` — and mapping its exit status onto the indicator, live-workspace only
+(same `--repo-root` exemption as `docs.status_current`). A missing `cargo`/test
+failure reports `fail` with the test command and stderr as evidence.
 
 ## Scoring and verdict
 

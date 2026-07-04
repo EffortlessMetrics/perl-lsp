@@ -418,6 +418,49 @@ mod tests {
     }
 
     #[test]
+    fn critic_parity_is_mandatory_and_unverified_without_external_result() {
+        // The crate never shells out, so with no external result supplied the
+        // indicator resolves Unverified (not Fail) — but it is mandatory
+        // (#3309), so under --strict that Unverified must drive a Fail
+        // verdict, matching every other mandatory external indicator.
+        let dir = fixture_repo();
+        let opts = KwaliteeOptions::new(dir.path(), KwaliteeProfile::Pr);
+        let receipt = evaluate(&opts);
+        let ind = receipt
+            .indicators
+            .iter()
+            .find(|i| i.id == "critic.run_critic_registry_parity")
+            .expect("critic.run_critic_registry_parity");
+        assert!(ind.mandatory, "must be mandatory now that #3303 landed");
+        assert_eq!(ind.status, IndicatorStatus::Unverified);
+
+        let mut strict_opts = KwaliteeOptions::new(dir.path(), KwaliteeProfile::Pr);
+        strict_opts.strict = true;
+        let strict_receipt = evaluate(&strict_opts);
+        assert_eq!(strict_receipt.verdict, crate::KwaliteeVerdict::Fail);
+    }
+
+    #[test]
+    fn critic_parity_external_pass_is_honored() {
+        let dir = fixture_repo();
+        let mut opts = KwaliteeOptions::new(dir.path(), KwaliteeProfile::Pr);
+        opts.external_results.insert(
+            "critic.run_critic_registry_parity".to_string(),
+            ExternalResult::pass(vec![EvidenceRef::command(
+                "cargo test -p perl-lsp-rs --lib \
+                 execute_command::tests::run_critic_native_matches_pull_diagnostics_registry",
+            )]),
+        );
+        let receipt = evaluate(&opts);
+        let ind = receipt
+            .indicators
+            .iter()
+            .find(|i| i.id == "critic.run_critic_registry_parity")
+            .expect("critic.run_critic_registry_parity");
+        assert_eq!(ind.status, IndicatorStatus::Pass);
+    }
+
+    #[test]
     fn unverified_mandatory_fails_under_strict() {
         let dir = fixture_repo();
         let mut opts = KwaliteeOptions::new(dir.path(), KwaliteeProfile::Pr);

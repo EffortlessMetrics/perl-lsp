@@ -300,15 +300,18 @@ pub(crate) const CATALOG: &[IndicatorSpec] = &[
         id: "critic.run_critic_registry_parity",
         area: "critic",
         title: "perl.runCritic matches editor native diagnostics",
-        mandatory: false,
+        mandatory: true,
         weight: 7,
         source: EvalSource::External,
         scope: IndicatorScope::All,
-        remediation: "Land the runCritic native-registry routing (#3303) and supply the \
-                      parity test result.",
+        remediation: "Run `cargo test -p perl-lsp-rs --lib \
+                      execute_command::tests::run_critic_native_matches_pull_diagnostics_registry` \
+                      and resolve the parity failure.",
         rationale: "The `perl.runCritic` command and on-type native pull diagnostics must \
-                    agree; a divergence is a user-visible inconsistency. Advisory until \
-                    #3303 lands, then mandatory.",
+                    agree; a divergence is a user-visible inconsistency. #3303 landed the \
+                    NativeCriticRegistry routing plus the parity test \
+                    (run_critic_native_matches_pull_diagnostics_registry), so this is now a \
+                    mandatory gate rather than an advisory one.",
     },
     IndicatorSpec {
         id: "quality.no_new_severe_gaps",
@@ -477,6 +480,17 @@ mod tests {
             assert!(explain(id).is_some(), "no explanation for {id}");
         }
         assert!(explain("nope.missing").is_none());
+    }
+
+    #[test]
+    fn critic_registry_parity_is_mandatory() {
+        // #3303 landed the NativeCriticRegistry routing plus the parity test
+        // (run_critic_native_matches_pull_diagnostics_registry), so this
+        // indicator is promoted from advisory to mandatory (#3309).
+        let spec =
+            spec_for("critic.run_critic_registry_parity").expect("indicator must be in catalog");
+        assert!(spec.mandatory, "critic.run_critic_registry_parity must be mandatory");
+        assert_eq!(spec.scope, IndicatorScope::All, "must still apply to every profile");
     }
 
     #[test]
