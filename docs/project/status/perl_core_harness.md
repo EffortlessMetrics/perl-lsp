@@ -4,6 +4,9 @@ The Perl core harness lane is scaffolded as an `xtask` control-plane command.
 This status page is intentionally conservative until real upstream Perl tree
 automation and runtime execution exist.
 
+For the current green/yellow/red burndown and next PR order, see the
+[Perl Core Harness Burndown](perl_core_harness_burndown.md).
+
 ## Current Capability
 
 | Capability | Status | Evidence |
