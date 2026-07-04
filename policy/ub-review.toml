@@ -29,13 +29,17 @@ head = "HEAD"
 posting_engine = "review"
 ban_standalone_approval = false
 
-# Keep review bodies concise during the advisory/calibration phase.
+# Review body posture. Promoted from "suppress" to "post_substantive" so
+# actionable findings (severity medium+ or confidence medium-high+) reach
+# the PR; pure lane-status boilerplate stays suppressed. Under "suppress"
+# nothing posts, which structurally zeroes the acted-on-comment metric
+# tracked by the calibration artifact. See ub-review #717 / #718.
 [review_body]
 include_successful_lane_table = false
 include_provider_table = "on_failure"
 include_sensor_table = "on_failure"
 include_execution_summary = "none"
-summary_only_body = "suppress"
+summary_only_body = "post_substantive"
 
 # Core sensors: best-effort, advisory, all non-blocking.
 # Required = false means a missing sensor does not fail the gate.
