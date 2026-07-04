@@ -14,12 +14,18 @@ pub mod capabilities;
 pub mod external_peer;
 pub mod native_perldb;
 pub mod peer_bridge;
+pub mod peer_launch;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub use capabilities::{DebugBackendCapabilities, intersect_dap_capabilities};
 pub use peer_bridge::{DapPeerBridge, run_external_peer_session, run_external_peer_session_stdio};
+pub use peer_launch::{
+    ExternalPeerLaunchConfig, MirrorPeerBridge, PeerListenEndpoint, PeerRendezvousMode,
+    prepare_mirror_listen_session, run_mirror_listen_session_socket,
+    run_mirror_listen_session_stdio, static_mirror_capabilities,
+};
 
 use crate::model::{
     DebugBreakpoint, DebugEvent, DebugFunctionBreakpoint, DebugScope, DebugSource, DebugStackFrame,
@@ -243,6 +249,16 @@ pub trait DebugBackend: Send {
     /// override this to surface events the frontend forwards to the editor.
     fn drain_events(&mut self) -> Vec<DebugEvent> {
         Vec::new()
+    }
+
+    /// Whether the backend's connection to its engine/peer has closed.
+    ///
+    /// The default is `false` (synchronous/in-process backends never "close").
+    /// Backends over an asynchronous transport (e.g. a socket peer) override
+    /// this so a frontend can synthesize a `terminated` when the peer drops
+    /// without sending an explicit terminate event.
+    fn is_closed(&self) -> bool {
+        false
     }
 
     /// Disconnect from the engine.

@@ -411,9 +411,10 @@ function isConnectablePort(port: unknown): port is number {
  * - flat: `externalPeer: "HOST:PORT"`
  * - structured: `debuggerBackend: "external"` + `externalDebugger: { host, port }`
  *   (the shipped ptkdb config). Only the implemented `connect` rendezvous with a
- *   concrete non-zero port yields an address; `listen`/`launchPeer` and `port: 0`
- *   are not wired yet, so they resolve to `undefined` (native adapter) rather
- *   than fabricating an unconnectable `--external-peer host:0`.
+ *   concrete non-zero port yields an address here; `listen` is handled separately
+ *   by {@link resolveExternalPeerListenBind}, and `launchPeer`/`port: 0` (connect)
+ *   resolve to `undefined` (native adapter) rather than fabricating an
+ *   unconnectable `--external-peer host:0`.
  */
 function resolveExternalPeerAddress(
     config: vscode.DebugConfiguration | undefined
@@ -449,19 +450,57 @@ function resolveExternalPeerAddress(
 }
 
 /**
+ * Resolve the `HOST[:PORT]` bind spec for a `mode: "listen"` external-peer
+ * config, or `undefined` when the config is not a listen-mode external config.
+ *
+ * In listen mode `perl-dap` binds a loopback listener and waits for the peer to
+ * connect back (mirror-mode launch wiring). Unlike `connect`, `port: 0` is valid
+ * here — it asks perl-dap to allocate an ephemeral port — so the bind spec is a
+ * bare `HOST` (ephemeral) or `HOST:PORT` (fixed). The host is validated (no `:`
+ * or whitespace) so it cannot smuggle extra argv tokens.
+ */
+function resolveExternalPeerListenBind(
+    config: vscode.DebugConfiguration | undefined
+): string | undefined {
+    if (!config || config.debuggerBackend !== 'external' || !config.externalDebugger
+        || typeof config.externalDebugger !== 'object') {
+        return undefined;
+    }
+    const ext = config.externalDebugger as { host?: unknown; port?: unknown; mode?: unknown };
+    if (ext.mode !== 'listen') {
+        return undefined;
+    }
+    const host = typeof ext.host === 'string' && ext.host.trim() ? ext.host.trim() : '127.0.0.1';
+    if (host.includes(':') || /\s/.test(host)) {
+        return undefined;
+    }
+    // port 0 / absent ⇒ allocate ephemeral (bare host); a concrete port is appended.
+    return isConnectablePort(ext.port) ? `${host}:${ext.port}` : host;
+}
+
+/**
  * Build the argv `perl-dap` is spawned with, from a resolved debug config.
  *
- * When the config requests an external debugger peer (see
- * {@link resolveExternalPeerAddress}), the adapter is launched in external-peer
- * bridge mode (`--external-peer HOST:PORT`) so it drives an external Perl
- * debugger engine (e.g. Devel::ptkdb) over the Perl Debugger Peer Protocol while
- * VS Code speaks DAP over stdio. Any config that does not resolve to a concrete
- * `host:port` runs the native adapter with no extra args rather than passing an
- * unvalidated value through.
+ * When the config requests an external debugger peer, the adapter is launched in
+ * the matching external-peer mode so it drives an external Perl debugger engine
+ * (e.g. Devel::ptkdb) over the Perl Debugger Peer Protocol while VS Code speaks
+ * DAP over stdio:
+ * - `connect` (see {@link resolveExternalPeerAddress}) ⇒ `--external-peer HOST:PORT`
+ * - `listen` (see {@link resolveExternalPeerListenBind}) ⇒ `--external-peer-listen HOST[:PORT]`
+ *
+ * Any config that does not resolve to one of these runs the native adapter with
+ * no extra args rather than passing an unvalidated value through.
  */
 export function buildDapExecutableArgs(config: vscode.DebugConfiguration | undefined): string[] {
     const peer = resolveExternalPeerAddress(config);
-    return peer ? ['--external-peer', peer] : [];
+    if (peer) {
+        return ['--external-peer', peer];
+    }
+    const listen = resolveExternalPeerListenBind(config);
+    if (listen) {
+        return ['--external-peer-listen', listen];
+    }
+    return [];
 }
 
 export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {

@@ -62,6 +62,7 @@ fn spawn_fake_peer(addr: std::net::SocketAddr) -> JoinHandle<()> {
                 peer: "FakePtkdb".to_string(),
                 peer_version: Some("0.1".to_string()),
                 protocol_version: PROTOCOL_VERSION.to_string(),
+                token: None,
                 capabilities: caps,
             })
             .ok(),

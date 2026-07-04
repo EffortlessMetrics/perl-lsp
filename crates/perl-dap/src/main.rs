@@ -8,7 +8,13 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use clap::Parser;
+use perl_dap::backend::capabilities::ControlMode;
 use perl_dap::backend::external_peer::ExternalDebuggerPeerBackend;
+use perl_dap::backend::peer_launch::{
+    DEFAULT_LISTEN_HANDSHAKE_TIMEOUT, ENV_PEER_TOKEN, ExternalPeerLaunchConfig, PeerRendezvousMode,
+    prepare_mirror_listen_session, run_mirror_listen_session_socket,
+    run_mirror_listen_session_stdio,
+};
 use perl_dap::backend::{
     DapPeerBridge, run_external_peer_session, run_external_peer_session_stdio,
 };
@@ -78,6 +84,90 @@ fn run_external_peer_bridge_stdio(peer_addr: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Parse a `HOST` or `HOST:PORT` bind spec for `--external-peer-listen`.
+///
+/// A bare host (or empty string) binds an ephemeral loopback port (`port = 0`).
+/// A `HOST:PORT` binds the given port. An unparseable port falls back to `0`.
+fn parse_listen_bind(spec: &str) -> (String, u16) {
+    let spec = spec.trim();
+    if spec.is_empty() {
+        return ("127.0.0.1".to_string(), 0);
+    }
+    match spec.rsplit_once(':') {
+        Some((host, port)) if !host.is_empty() => {
+            (host.to_string(), port.trim().parse().unwrap_or(0))
+        }
+        _ => (spec.to_string(), 0),
+    }
+}
+
+/// Run a mirror-mode external-peer **listen** session: bind a loopback listener
+/// for a (future) debugger peer to connect back to, expose the env-var contract
+/// the peer reads to find us, and serve DAP to the editor while queueing
+/// breakpoints until the peer handshakes.
+///
+/// The peer process itself is out of scope for this wiring; this establishes the
+/// host side of the mirror session, proven end-to-end against a fake peer in the
+/// crate tests. The editor speaks DAP over stdio by default (add
+/// `--socket`/`--port` for a socket editor connection).
+fn run_external_peer_listen(spec: &str, editor_port: Option<u16>) -> anyhow::Result<()> {
+    let (host, port) = parse_listen_bind(spec);
+    let config = ExternalPeerLaunchConfig {
+        mode: PeerRendezvousMode::Listen,
+        control: ControlMode::Mirror,
+        host,
+        port,
+        ..ExternalPeerLaunchConfig::default()
+    };
+    let (peer_listener, endpoint, bridge) = prepare_mirror_listen_session(&config)
+        .map_err(|e| anyhow::anyhow!("failed to bind peer listener: {e}"))?;
+
+    // Surface the env-var contract the (future) peer process reads to find and
+    // authenticate to this host session. The token is a per-session bearer
+    // secret, so it is masked in the log — logging it in cleartext would hand
+    // any log reader the credential the handshake now enforces. Non-sensitive
+    // keys (address, mode) are logged verbatim.
+    for (key, value) in endpoint.env_vars() {
+        let logged = if key == ENV_PEER_TOKEN { "<redacted>" } else { value.as_str() };
+        tracing::info!(%key, value = %logged, "external-peer listen: peer env contract");
+    }
+    tracing::info!(
+        peer_addr = %endpoint.addr,
+        "external-peer listen: waiting for a debugger peer to connect back"
+    );
+
+    // The peer must present this token in its `peer/hello` to be accepted; the
+    // acceptor rejects any handshake without a match, so the loopback bind is
+    // not the sole access control.
+    let expected_token = Some(endpoint.token.clone());
+
+    match editor_port {
+        Some(port) => {
+            use std::net::TcpListener;
+            let editor_listener = TcpListener::bind(("127.0.0.1", port))?;
+            let (editor, _) = editor_listener.accept()?;
+            run_mirror_listen_session_socket(
+                editor,
+                peer_listener,
+                bridge,
+                DEFAULT_LISTEN_HANDSHAKE_TIMEOUT,
+                EXTERNAL_PEER_POLL,
+                expected_token,
+            )?;
+        }
+        None => {
+            run_mirror_listen_session_stdio(
+                peer_listener,
+                bridge,
+                DEFAULT_LISTEN_HANDSHAKE_TIMEOUT,
+                EXTERNAL_PEER_POLL,
+                expected_token,
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// Build a debug-session packet for `program`, deriving source facts from the
 /// program text when it is readable.
 fn build_session_packet(program: &Path) -> DebugSessionPacket {
@@ -123,6 +213,15 @@ struct Args {
     /// `--socket`/`--port` for a socket editor connection instead.
     #[arg(long, value_name = "HOST:PORT")]
     external_peer: Option<String>,
+
+    /// Listen for a mirror-mode external debugger peer to connect back (the
+    /// `mode: "listen"` external-peer launch). Binds a loopback listener (a bare
+    /// HOST or empty value allocates an ephemeral port), exposes the
+    /// PERL_DAP_PEER* env contract, and serves DAP to the editor — queueing
+    /// breakpoints until the peer handshakes. Editor control is mirror-rejected.
+    /// Uses stdio by default; add `--socket`/`--port` for a socket editor link.
+    #[arg(long, value_name = "HOST[:PORT]")]
+    external_peer_listen: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -153,6 +252,12 @@ fn main() -> anyhow::Result<()> {
             Some(port) => run_external_peer_bridge(port, peer_addr),
             None => run_external_peer_bridge_stdio(peer_addr),
         };
+    }
+
+    // External-peer LISTEN mode (mirror): we bind and wait for the peer to
+    // connect back. Additive path — the native adapter is unchanged.
+    if let Some(spec) = args.external_peer_listen.as_deref() {
+        return run_external_peer_listen(spec, resolve_socket_port(&args.transport));
     }
 
     // The shipped `perl-dap` binary always runs the native adapter. The legacy

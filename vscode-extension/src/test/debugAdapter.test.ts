@@ -470,11 +470,27 @@ describe('buildDapExecutableArgs', () => {
       .toEqual(['--external-peer', '127.0.0.1:9001']);
   });
 
-  test('does not fabricate an address for unimplemented modes or port 0', () => {
-    // listen / launchPeer and port 0 (allocate) are not wired — fall back to native.
-    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen', port: 13604 } } as any)).toEqual([]);
+  test('wires listen mode to --external-peer-listen (port 0 = allocate ephemeral)', () => {
+    // A concrete port binds it; port 0 / absent asks perl-dap to allocate one,
+    // so only the host is passed as the bind spec.
+    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 13604 } } as any))
+      .toEqual(['--external-peer-listen', '127.0.0.1:13604']);
+    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 0 } } as any))
+      .toEqual(['--external-peer-listen', '127.0.0.1']);
+    // Defaults host to 127.0.0.1 when omitted.
+    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen' } } as any))
+      .toEqual(['--external-peer-listen', '127.0.0.1']);
+  });
+
+  test('does not fabricate an address for unimplemented modes or connect port 0', () => {
+    // launchPeer is not wired; connect requires a concrete port — fall back to native.
     expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'launchPeer', port: 13604 } } as any)).toEqual([]);
     expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'connect', port: 0 } } as any)).toEqual([]);
+  });
+
+  test('rejects a listen host that could smuggle extra argv tokens', () => {
+    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen', host: 'host --flag' } } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen', host: 'a:b' } } as any)).toEqual([]);
   });
 
   test('the native backend (or absent debuggerBackend) yields no bridge args', () => {

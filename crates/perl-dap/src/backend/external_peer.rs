@@ -114,6 +114,14 @@ struct Shared {
     closed: AtomicBool,
     host_caps: HostReportedCapabilities,
     session_id: String,
+    /// The per-session token the host minted for this listen session, if any.
+    ///
+    /// When `Some`, the inbound `peer/hello` **must** carry a matching `token`
+    /// or the handshake is rejected (no `go_live`), so a process that reached
+    /// the loopback port but lacks the shared secret cannot become the backend.
+    /// `None` disables enforcement (e.g. connect mode, where the host dialed a
+    /// peer it already trusts and minted no token).
+    expected_token: Option<String>,
 }
 
 impl Shared {
@@ -168,6 +176,16 @@ pub struct ExternalDebuggerPeerBackend {
 impl ExternalDebuggerPeerBackend {
     /// Establish a backend from a connected stream and spawn the reader thread.
     fn from_stream(stream: TcpStream, timeout: Duration) -> BackendResult<Self> {
+        Self::from_stream_with_token(stream, timeout, None)
+    }
+
+    /// Establish a backend from a connected stream, enforcing a session token on
+    /// the peer's `peer/hello` when `expected_token` is `Some`.
+    fn from_stream_with_token(
+        stream: TcpStream,
+        timeout: Duration,
+        expected_token: Option<String>,
+    ) -> BackendResult<Self> {
         let write = stream.try_clone().map_err(|e| BackendError::Transport(e.to_string()))?;
         // Periodic read timeout so the reader can observe `closed`.
         stream
@@ -196,6 +214,7 @@ impl ExternalDebuggerPeerBackend {
                 .peer_addr()
                 .map(|a| format!("perl-dap-peer-{a}"))
                 .unwrap_or_else(|_| "perl-dap-peer".to_string()),
+            expected_token,
         });
 
         let reader_shared = Arc::clone(&shared);
@@ -217,6 +236,26 @@ impl ExternalDebuggerPeerBackend {
     /// Fails if the socket cannot be cloned or configured.
     pub fn from_connected_stream(stream: TcpStream, timeout: Duration) -> BackendResult<Self> {
         Self::from_stream(stream, timeout)
+    }
+
+    /// Build a backend over an already-connected peer stream, enforcing a
+    /// per-session shared-secret token on the peer's `peer/hello`.
+    ///
+    /// When `expected_token` is `Some`, the inbound `peer/hello` must carry a
+    /// `token` equal to it (constant-time compared) or the handshake is rejected
+    /// with a well-formed unsuccessful HELLO response and no session goes live.
+    /// When `None`, no token is enforced (identical to
+    /// [`Self::from_connected_stream`]). Used by the listen-mode acceptor, which
+    /// minted the token and advertised it via `PERL_DAP_PEER_TOKEN`.
+    ///
+    /// # Errors
+    /// Fails if the socket cannot be cloned or configured.
+    pub fn from_connected_stream_with_token(
+        stream: TcpStream,
+        timeout: Duration,
+        expected_token: Option<String>,
+    ) -> BackendResult<Self> {
+        Self::from_stream_with_token(stream, timeout, expected_token)
     }
 
     /// Connect to a running peer (`Connect` mode).
@@ -551,6 +590,10 @@ impl DebugBackend for ExternalDebuggerPeerBackend {
         std::mem::take(&mut *lock(&self.shared.events))
     }
 
+    fn is_closed(&self) -> bool {
+        self.shared.closed.load(Ordering::SeqCst)
+    }
+
     fn disconnect(&mut self, terminate_debuggee: bool) -> BackendResult<()> {
         // Best-effort goodbye; ignore errors since we are tearing down. Thread
         // the editor's terminate intent to the peer in the goodbye arguments so
@@ -664,6 +707,17 @@ fn handle_peer_request(shared: &Arc<Shared>, req: PeerRequest) {
                     "unsupported peer protocol version {:?}; host speaks {:?}",
                     h.protocol_version, PROTOCOL_VERSION
                 )),
+                // When the host minted a session token, the peer MUST present a
+                // matching one. Absence or mismatch is a rejected handshake: the
+                // loopback port alone is not authorization, so a co-resident
+                // process that reached the socket without the shared secret can
+                // never become the mirror backend (and inject stopped/output).
+                Some(h) if !token_matches(shared.expected_token.as_deref(), h.token.as_deref()) => {
+                    Some(
+                        "peer/hello token missing or does not match the host session token"
+                            .to_string(),
+                    )
+                }
                 Some(_) => None,
             };
 
@@ -754,6 +808,40 @@ fn handle_peer_request(shared: &Arc<Shared>, req: PeerRequest) {
             let _ = shared.write_message(&resp);
         }
     }
+}
+
+/// Whether the peer's presented `peer/hello` token satisfies the host's policy.
+///
+/// - `expected == None`: the host minted no token, so nothing is enforced and
+///   any (including an absent) presented token is accepted — the back-compat
+///   path for connect mode and pre-token peers.
+/// - `expected == Some`: the peer **must** present a token that matches exactly;
+///   an absent token is a rejection.
+fn token_matches(expected: Option<&str>, presented: Option<&str>) -> bool {
+    match expected {
+        None => true,
+        Some(exp) => presented.is_some_and(|got| constant_time_eq(exp.as_bytes(), got.as_bytes())),
+    }
+}
+
+/// Constant-time byte-slice equality.
+///
+/// The session token is a shared secret, so comparing it with the standard
+/// short-circuiting `==` would leak a timing side-channel on the length of the
+/// matching prefix. This folds an XOR across every byte so the running time
+/// depends only on the input length, not on the contents. (No `subtle`/`ring`
+/// dependency is available in this crate, so this is a small manual
+/// implementation; the unequal-length early return only leaks the length, which
+/// for a fixed 32-hex-char session token is not secret.)
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }
 
 // ---------------------------------------------------------------------------
@@ -923,6 +1011,27 @@ mod tests {
         caps: PeerReportedCapabilities,
         handler: impl Fn(&PeerRequest) -> Option<PeerResponse> + Send + 'static,
     ) -> JoinHandle<()> {
+        spawn_fake_peer_full(addr, protocol_version, None, caps, handler)
+    }
+
+    /// Fake peer that presents `token` in its `peer/hello` (used by the token
+    /// enforcement tests).
+    fn spawn_fake_peer_token(
+        addr: std::net::SocketAddr,
+        token: Option<String>,
+        caps: PeerReportedCapabilities,
+        handler: impl Fn(&PeerRequest) -> Option<PeerResponse> + Send + 'static,
+    ) -> JoinHandle<()> {
+        spawn_fake_peer_full(addr, PROTOCOL_VERSION.to_string(), token, caps, handler)
+    }
+
+    fn spawn_fake_peer_full(
+        addr: std::net::SocketAddr,
+        protocol_version: String,
+        token: Option<String>,
+        caps: PeerReportedCapabilities,
+        handler: impl Fn(&PeerRequest) -> Option<PeerResponse> + Send + 'static,
+    ) -> JoinHandle<()> {
         std::thread::spawn(move || {
             let stream = match TcpStream::connect(addr) {
                 Ok(s) => s,
@@ -940,6 +1049,7 @@ mod tests {
                     peer: "FakePtkdb".to_string(),
                     peer_version: Some("0.1".to_string()),
                     protocol_version,
+                    token,
                     capabilities: caps,
                 })
                 .ok(),
@@ -1116,6 +1226,92 @@ mod tests {
     }
 
     #[test]
+    fn peer_handshake_accepts_matching_token() {
+        // When the host minted a token and the peer presents the same value, the
+        // handshake completes and the session goes live as usual.
+        let (listener, addr) = bind_ephemeral();
+        let token = "0123456789abcdef0123456789abcdef".to_string();
+        let caps = PeerReportedCapabilities { can_step: true, ..Default::default() };
+        let peer = spawn_fake_peer_token(addr, Some(token.clone()), caps, |_req| None);
+        let mut backend = accept_backend_with_token(listener, DEFAULT_PEER_TIMEOUT, Some(token));
+        backend
+            .initialize(InitializeBackendParams::default())
+            .expect("matching token must complete the handshake");
+        assert!(backend.capabilities().stepping, "capabilities negotiate after a valid handshake");
+        drop(backend);
+        let _ = peer.join();
+    }
+
+    #[test]
+    fn peer_handshake_rejects_missing_token() {
+        // The host minted a token, but the peer presents none: the handshake must
+        // be rejected (no go_live), so an unauthenticated process that merely
+        // reached the loopback port cannot become the backend.
+        let (listener, addr) = bind_ephemeral();
+        let peer =
+            spawn_fake_peer_token(addr, None, PeerReportedCapabilities::default(), |_req| None);
+        let mut backend = accept_backend_with_token(
+            listener,
+            Duration::from_secs(2),
+            Some("expected-session-token".to_string()),
+        );
+        let err = backend
+            .initialize(InitializeBackendParams::default())
+            .expect_err("a missing token must be rejected when the host minted one");
+        assert!(
+            matches!(err, BackendError::Protocol(_)),
+            "expected a clear protocol rejection, got {err:?}"
+        );
+        drop(backend);
+        let _ = peer.join();
+    }
+
+    #[test]
+    fn peer_handshake_rejects_wrong_token() {
+        // The peer presents a token, but it does not match the host's: reject.
+        let (listener, addr) = bind_ephemeral();
+        let peer = spawn_fake_peer_token(
+            addr,
+            Some("wrong-token-abcdef0123456789abcd".to_string()),
+            PeerReportedCapabilities::default(),
+            |_req| None,
+        );
+        let mut backend = accept_backend_with_token(
+            listener,
+            Duration::from_secs(2),
+            Some("right-token-0123456789abcdef0123".to_string()),
+        );
+        let err = backend
+            .initialize(InitializeBackendParams::default())
+            .expect_err("a mismatched token must be rejected");
+        assert!(
+            matches!(err, BackendError::Protocol(_)),
+            "expected a clear protocol rejection, got {err:?}"
+        );
+        drop(backend);
+        let _ = peer.join();
+    }
+
+    #[test]
+    fn constant_time_eq_matches_only_identical_slices() {
+        assert!(constant_time_eq(b"abc", b"abc"));
+        assert!(!constant_time_eq(b"abc", b"abd"));
+        assert!(!constant_time_eq(b"abc", b"ab"), "differing lengths are unequal");
+        assert!(constant_time_eq(b"", b""));
+    }
+
+    #[test]
+    fn token_matches_enforces_only_when_host_minted_one() {
+        // No host token => nothing enforced (back-compat connect path).
+        assert!(token_matches(None, None));
+        assert!(token_matches(None, Some("anything")));
+        // Host token => exact match required; absence is a rejection.
+        assert!(token_matches(Some("secret"), Some("secret")));
+        assert!(!token_matches(Some("secret"), Some("guess")));
+        assert!(!token_matches(Some("secret"), None));
+    }
+
+    #[test]
     fn request_times_out_when_peer_never_answers() {
         let (listener, addr) = bind_ephemeral();
         let caps = PeerReportedCapabilities { can_set_breakpoints: true, ..Default::default() };
@@ -1172,6 +1368,7 @@ mod tests {
                     peer: "FakePtkdb".to_string(),
                     peer_version: Some("0.1".to_string()),
                     protocol_version: PROTOCOL_VERSION.to_string(),
+                    token: None,
                     capabilities: PeerReportedCapabilities::default(),
                 })
                 .ok(),
@@ -1236,6 +1433,7 @@ mod tests {
                     peer: "FakePtkdb".to_string(),
                     peer_version: Some("0.1".to_string()),
                     protocol_version: PROTOCOL_VERSION.to_string(),
+                    token: None,
                     capabilities: initial_caps,
                 })
                 .ok(),
@@ -1272,6 +1470,7 @@ mod tests {
                     peer: "FakePtkdb".to_string(),
                     peer_version: Some("0.1".to_string()),
                     protocol_version: PROTOCOL_VERSION.to_string(),
+                    token: None,
                     capabilities: replay_caps,
                 })
                 .ok(),
@@ -1339,5 +1538,19 @@ mod tests {
     ) -> ExternalDebuggerPeerBackend {
         let (stream, _) = listener.accept().expect("accept");
         ExternalDebuggerPeerBackend::from_stream(stream, timeout).expect("backend")
+    }
+
+    fn accept_backend_with_token(
+        listener: TcpListener,
+        timeout: Duration,
+        expected_token: Option<String>,
+    ) -> ExternalDebuggerPeerBackend {
+        let (stream, _) = listener.accept().expect("accept");
+        ExternalDebuggerPeerBackend::from_connected_stream_with_token(
+            stream,
+            timeout,
+            expected_token,
+        )
+        .expect("backend")
     }
 }

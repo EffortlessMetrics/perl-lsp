@@ -145,6 +145,15 @@ pub struct HelloArgs {
     pub peer_version: Option<String>,
     /// Protocol version the peer speaks.
     pub protocol_version: String,
+    /// Optional per-session shared-secret token.
+    ///
+    /// Present when the host minted one and advertised it via
+    /// `PERL_DAP_PEER_TOKEN` (listen mode). The field is optional on the wire so
+    /// a future peer that predates token auth still parses, but when the host
+    /// minted a token it **requires** an exact match and rejects the handshake
+    /// otherwise. Absent when the host did not mint one (e.g. connect mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
     /// Peer capabilities.
     #[serde(default)]
     pub capabilities: PeerReportedCapabilities,
@@ -364,6 +373,7 @@ mod tests {
             peer: "Devel::ptkdb".to_string(),
             peer_version: Some("1.1091".to_string()),
             protocol_version: super::super::PROTOCOL_VERSION.to_string(),
+            token: Some("deadbeefcafef00ddeadbeefcafef00d".to_string()),
             capabilities: PeerReportedCapabilities {
                 can_continue: true,
                 can_step: true,
@@ -375,9 +385,32 @@ mod tests {
         let json = serde_json::to_value(&args).expect("serialize");
         assert_eq!(json["peerVersion"], "1.1091");
         assert_eq!(json["protocolVersion"], super::super::PROTOCOL_VERSION);
+        assert_eq!(json["token"], "deadbeefcafef00ddeadbeefcafef00d");
         assert_eq!(json["capabilities"]["canSetBreakpoints"], true);
         let back: HelloArgs = serde_json::from_value(json).expect("deserialize");
         assert_eq!(args, back);
+    }
+
+    #[test]
+    fn hello_args_omits_token_when_absent_and_parses_tokenless_peer() {
+        // The token is optional on the wire: a tokenless host omits it entirely
+        // (no `null`), and a hello from a peer that predates token auth still
+        // deserializes with `token: None`.
+        let args = HelloArgs {
+            peer: "Devel::ptkdb".to_string(),
+            peer_version: None,
+            protocol_version: super::super::PROTOCOL_VERSION.to_string(),
+            token: None,
+            capabilities: PeerReportedCapabilities::default(),
+        };
+        let json = serde_json::to_value(&args).expect("serialize");
+        assert!(json.get("token").is_none(), "absent token must not be serialized");
+        let tokenless = serde_json::json!({
+            "peer": "Devel::ptkdb",
+            "protocolVersion": super::super::PROTOCOL_VERSION,
+        });
+        let back: HelloArgs = serde_json::from_value(tokenless).expect("deserialize");
+        assert_eq!(back.token, None);
     }
 
     #[test]
