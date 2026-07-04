@@ -16,8 +16,8 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+perl-core-harness-types.workspace = true
 perl-parser-core.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]

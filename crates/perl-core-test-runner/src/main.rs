@@ -5,9 +5,9 @@
 #![allow(clippy::print_stderr, clippy::print_stdout)]
 
 use anyhow::{Context, Result, bail};
+use perl_core_harness_types::{RUNNER_RECORD_SCHEMA_VERSION, RunnerRecord, RunnerStatus};
 use perl_parser_core::hir::{CompileEffectKind, lower_ast};
 use perl_parser_core::{Parser, RecoverySalvageClass, RecoverySalvageProfile};
-use serde::Serialize;
 use std::env;
 use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
@@ -16,25 +16,6 @@ use std::path::{Path, PathBuf};
 
 const MODE_ENV: &str = "PERL_LSP_HARNESS_MODE";
 const CONTEXT_ENV: &str = "PERL_LSP_HARNESS_CONTEXT";
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum RunnerStatus {
-    Pass,
-    Fail,
-}
-
-#[derive(Debug, Serialize)]
-struct RunnerRecord {
-    schema_version: &'static str,
-    mode: String,
-    path: String,
-    status: RunnerStatus,
-    assertions_passed: usize,
-    assertions_total: usize,
-    bucket: Option<String>,
-    first_diagnostic: Option<String>,
-}
 
 #[derive(Debug)]
 struct Invocation {
@@ -283,7 +264,7 @@ fn write_context_record(
     }
 
     let record = RunnerRecord {
-        schema_version: "perl_core_harness.runner_record.v1",
+        schema_version: RUNNER_RECORD_SCHEMA_VERSION.to_string(),
         mode: mode.to_string(),
         path: display_path.to_string(),
         status: result.status,

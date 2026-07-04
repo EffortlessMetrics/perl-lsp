@@ -1535,12 +1535,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-core-harness-types"
+version = "0.17.0"
+dependencies = [
+ "clap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "perl-core-test-runner"
 version = "0.17.0"
 dependencies = [
  "anyhow",
+ "perl-core-harness-types",
  "perl-parser-core",
- "serde",
  "serde_json",
  "tempfile",
 ]
@@ -3973,6 +3982,7 @@ dependencies = [
  "indicatif",
  "notify",
  "perl-ci-hygiene",
+ "perl-core-harness-types",
  "perl-corpus",
  "perl-kwalitee",
  "perl-lsp-rs-core",
