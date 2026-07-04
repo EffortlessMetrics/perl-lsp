@@ -120,14 +120,19 @@ fn quality_gate_cli_writes_and_checks_patch_gate_receipts() -> TestResult {
     assert_eq!(payload.pointer("/coverage/scope").and_then(Value::as_str), Some("unspecified"));
     assert_eq!(
         payload.pointer("/coverage/codecov_config_status").and_then(Value::as_str),
-        Some("present")
+        Some("patch_policy_not_blocking")
     );
+    let action = next_action(&payload, "codecov_patch_policy_not_blocking")?;
+    assert_eq!(action.get("blocking").and_then(Value::as_bool), Some(false));
+    assert_repair_contract(action)?;
 
     let markdown = fs::read_to_string(&summary)?;
     assert!(markdown.contains("## Quality Gates"), "{markdown}");
     assert!(markdown.contains("patch coverage: `97.10%` / `95.00%`"), "{markdown}");
     assert!(markdown.contains("project coverage: `60.00%` / `95.00%`"), "{markdown}");
     assert!(markdown.contains("coverage scope: `unspecified`"), "{markdown}");
+    assert!(markdown.contains("Codecov patch policy: `patch_policy_not_blocking`"), "{markdown}");
+    assert!(markdown.contains("### codecov_patch_policy_not_blocking"), "{markdown}");
 
     patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?
         .arg("--check")
