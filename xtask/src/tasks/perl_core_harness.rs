@@ -115,11 +115,11 @@ impl HarnessProfile {
         }
     }
 
-    fn runner_args(self, runner: HarnessRunner) -> Vec<String> {
+    fn runner_args(self, t_dir: &Path, runner: HarnessRunner) -> Result<Vec<String>> {
         match runner {
-            HarnessRunner::Test => self.roots().iter().map(|root| (*root).to_string()).collect(),
+            HarnessRunner::Test => explicit_test_runner_args(t_dir, self.roots()),
             HarnessRunner::Harness => {
-                self.roots().iter().map(|root| format!("{root}/*.t")).collect()
+                Ok(self.roots().iter().map(|root| format!("{root}/*.t")).collect())
             }
         }
     }
@@ -129,6 +129,42 @@ impl fmt::Display for HarnessProfile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
+}
+
+fn explicit_test_runner_args(t_dir: &Path, roots: &[&str]) -> Result<Vec<String>> {
+    let mut args = Vec::new();
+    for root in roots {
+        collect_test_files(t_dir, &t_dir.join(root), &mut args)?;
+    }
+    args.sort();
+    args.dedup();
+    Ok(args)
+}
+
+fn collect_test_files(t_dir: &Path, dir: &Path, args: &mut Vec<String>) -> Result<()> {
+    if !dir.exists() {
+        return Ok(());
+    }
+    let entries = fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))?;
+    for entry in entries {
+        let entry = entry.with_context(|| format!("reading entry in {}", dir.display()))?;
+        let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("reading file type for {}", path.display()))?;
+        if file_type.is_dir() {
+            collect_test_files(t_dir, &path, args)?;
+            continue;
+        }
+        if !file_type.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("t") {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(t_dir)
+            .with_context(|| format!("normalizing test path {}", path.display()))?;
+        args.push(relative.display().to_string().replace('\\', "/"));
+    }
+    Ok(())
 }
 
 /// Configuration for `perl-core-harness discover`.
@@ -429,7 +465,7 @@ pub fn discover(config: DiscoverConfig) -> Result<()> {
         &config.host_perl,
         &t_dir,
         &script,
-        &config.profile.runner_args(config.runner),
+        &config.profile.runner_args(&t_dir, config.runner)?,
     )
     .with_context(|| {
         format!("discovering Perl core tests via {} {}", config.runner, config.profile)
@@ -524,7 +560,7 @@ pub fn run_mode(config: RunConfig) -> Result<()> {
     let run_tree = prepare_run_copy(&perl_tree, config.runner, config.mode, config.profile)?;
     let t_dir = run_tree.join("t");
     let script = validate_runner_script(&t_dir, config.runner)?;
-    let dumptests_args = config.profile.runner_args(config.runner);
+    let dumptests_args = config.profile.runner_args(&t_dir, config.runner)?;
     let dumptests_output = invoke_dumptests(&config.host_perl, &t_dir, &script, &dumptests_args)?;
     let discovered = parse_dumptests_output(&dumptests_output.stdout)?;
 
@@ -540,7 +576,7 @@ pub fn run_mode(config: RunConfig) -> Result<()> {
         &config.host_perl,
         &t_dir,
         &script,
-        &config.profile.runner_args(config.runner),
+        &dumptests_args,
         &runner_binary,
         &context_path,
         config.mode,
@@ -2037,13 +2073,28 @@ mod tests {
     }
 
     #[test]
-    fn profile_base_uses_bootstrap_root_for_test_runner() {
-        assert_eq!(HarnessProfile::Base.runner_args(HarnessRunner::Test), vec!["base"]);
+    fn profile_base_expands_test_runner_args_to_explicit_files() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let t_dir = temp.path().join("t");
+        fs::create_dir_all(t_dir.join("base").join("nested"))?;
+        fs::write(t_dir.join("base").join("ok.t"), "1;\n")?;
+        fs::write(t_dir.join("base").join("nested").join("deep.t"), "1;\n")?;
+        fs::write(t_dir.join("base").join("README"), "not a test\n")?;
+
+        let args = HarnessProfile::Base.runner_args(&t_dir, HarnessRunner::Test)?;
+
+        assert_eq!(args, vec!["base/nested/deep.t", "base/ok.t"]);
+        Ok(())
     }
 
     #[test]
-    fn profile_base_uses_glob_for_tap_harness_runner() {
-        assert_eq!(HarnessProfile::Base.runner_args(HarnessRunner::Harness), vec!["base/*.t"]);
+    fn profile_base_uses_glob_for_tap_harness_runner() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let args =
+            HarnessProfile::Base.runner_args(&temp.path().join("t"), HarnessRunner::Harness)?;
+
+        assert_eq!(args, vec!["base/*.t"]);
+        Ok(())
     }
 
     #[test]
