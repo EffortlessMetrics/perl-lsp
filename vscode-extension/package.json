@@ -481,8 +481,8 @@
             "order": 40,
             "deprecationMessage": "Deprecated: use perl-lsp.critic.enabled (with perl-lsp.critic.engine = \"legacy\" for the external binary). This alias still works but perl-lsp.critic.* wins if both are set.",
             "markdownDeprecationMessage": "**Deprecated:** use `perl-lsp.critic.enabled` (with `perl-lsp.critic.engine` = `legacy` for the external binary). This alias still works but `perl-lsp.critic.*` wins if both are set.",
-            "description": "Enable external perlcritic diagnostics. Native critic diagnostics are on by default; this setting only takes effect when the critic engine is set to legacy in .perl-lsp.toml (the perlcritic binary must then be on PATH).",
-            "markdownDescription": "Enable external `perlcritic` diagnostics. Native critic diagnostics are always on by default; this setting only takes effect when `[critic].engine = \"legacy\"` is set in `.perl-lsp.toml`, in which case the `perlcritic` binary must be on `PATH`."
+            "description": "Enable the optional external perlcritic diagnostics for legacy compatibility. Native critic diagnostics are on by default; this setting only takes effect when the critic engine is set to legacy in .perl-lsp.toml (the perlcritic binary must then be on PATH).",
+            "markdownDescription": "Enable the optional external `perlcritic` diagnostics for legacy compatibility. Native critic diagnostics are always on by default; this setting only takes effect when `[critic].engine = \"legacy\"` is set in `.perl-lsp.toml`, in which case the `perlcritic` binary must be on `PATH`."
           },
           "perl-lsp.perlcritic.severity": {
             "type": "number",
@@ -505,8 +505,8 @@
             "order": 41,
             "deprecationMessage": "Deprecated: use perl-lsp.critic.severity. This alias still works but perl-lsp.critic.* wins if both are set.",
             "markdownDeprecationMessage": "**Deprecated:** use `perl-lsp.critic.severity`. This alias still works but `perl-lsp.critic.*` wins if both are set.",
-            "description": "Perl::Critic minimum severity (1 = least severe/reports more, 5 = most severe/reports less).",
-            "markdownDescription": "Perl::Critic minimum severity (`1` = least severe/reports more, `5` = most severe/reports less)."
+            "description": "Critic minimum severity (1 = least severe/reports more, 5 = most severe/reports less). Applies to the native critic; the legacy external engine uses the same scale.",
+            "markdownDescription": "Critic minimum severity (`1` = least severe/reports more, `5` = most severe/reports less). Applies to the native critic; the legacy external engine uses the same scale."
           },
           "perl-lsp.perlcritic.profile": {
             "type": "string",
@@ -1281,7 +1281,7 @@
           {
             "id": "configure-settings",
             "title": "Configure Settings",
-            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. Use `perl-lsp.critic.enabled` and `perl-lsp.critic.severity` for quick local native-critic tuning, or run the `Perl: Run Critic` / `Perl: Set Critic Severity` commands from the palette. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable critic linting (native by default; the legacy external engine additionally uses `perlcritic`)\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
+            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. Use `perl-lsp.critic.enabled` and `perl-lsp.critic.severity` for quick local native-critic tuning, or run the `Perl: Run Critic` / `Perl: Set Critic Severity` commands from the palette. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable critic linting, native by default with the external `perlcritic` binary used only by the opt-in legacy engine\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
             "media": {
               "image": "media/walkthrough/configure-settings.svg",
               "altText": "Configure Settings"

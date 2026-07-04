@@ -24,16 +24,19 @@
 //! e.g. a future "install perlcritic first" that isn't spelled exactly like an
 //! existing banned marker.
 //!
-//! Strict mode deliberately scans `.md` prose only. `package.json` legitimately
-//! contains the tool names inside setting keys (`perl-lsp.perlcritic.enabled`)
-//! and command ids, so a naive bare-name rule there would be all false
-//! positives; its product-surface risk is covered by the default [`DISALLOWED`]
-//! pass. (A prose-value-only JSON scan — checking `description` /
-//! `markdownDescription` / walkthrough / `title` values while skipping keys — is
-//! a planned follow-up once the native command retitle lands, so the live
-//! manifest is prose-clean.) Reference/compatibility/conformance/archive
-//! material and tests are exempt via [`STRICT_PATH_ALLOWLIST`] — that is where
-//! legacy detail is meant to live.
+//! Strict mode scans `.md` surfaces line-by-line and `.json` manifests by their
+//! user-facing **prose values** only. `package.json` legitimately contains the
+//! tool names inside setting keys (`perl-lsp.perlcritic.enabled`) and command
+//! ids, so a naive bare-name rule over the whole file would be all false
+//! positives; instead the JSON scan walks only [`STRICT_PROSE_KEYS`] values
+//! (`description` / `markdownDescription` / `title` / `detail` /
+//! `enumDescriptions` / `deprecationMessage` and their markdown variants) — the
+//! copy a user actually reads in the Settings UI — while leaving keys and ids
+//! untouched. Their
+//! product-surface risk in keys/ids is still covered by the default
+//! [`DISALLOWED`] pass. Reference/compatibility/conformance/archive material and
+//! tests are exempt via [`STRICT_PATH_ALLOWLIST`] — that is where legacy detail
+//! is meant to live.
 
 use color_eyre::eyre::{Result, bail};
 use std::fs;
@@ -124,6 +127,32 @@ const STRICT_PATH_ALLOWLIST: &[&str] = &[
     ".spec",
 ];
 
+/// JSON object keys whose values are user-facing prose on a manifest surface
+/// (`package.json`): setting descriptions, dropdown-option descriptions,
+/// deprecation tooltips, command titles, command-palette categories, walkthrough
+/// copy. Strict mode scans these values for bare external-tool names while
+/// leaving keys, setting ids, and command ids untouched — those legitimately
+/// contain the tool names (`perl-lsp.perlcritic.enabled`) and are covered by the
+/// default [`DISALLOWED`] pass, not the strict bare-name rule.
+///
+/// Both scalar-string values (`description`, `category`) and array-of-string
+/// values (`enumDescriptions`, one entry per dropdown option) are covered — see
+/// [`collect_json_prose`]. All are rendered in the same VS Code Settings UI or
+/// command palette a user reads, so a leak in any of them is as user-visible as
+/// one in `description` (a future `"category": "Perl::Critic"` prefix would show
+/// on every command in the palette).
+const STRICT_PROSE_KEYS: &[&str] = &[
+    "description",
+    "markdowndescription",
+    "title",
+    "detail",
+    "category",
+    "enumdescriptions",
+    "markdownenumdescriptions",
+    "deprecationmessage",
+    "markdowndeprecationmessage",
+];
+
 /// Entry point for `cargo xtask check-native-product-surface`, honoring the
 /// `--strict` flag.
 pub fn run_with(strict: bool) -> Result<()> {
@@ -197,20 +226,26 @@ fn collect_violations(surface: &str, text: &str, violations: &mut Vec<String>) {
     }
 }
 
-/// Strict pass: scan every `.md` first-mile surface for bare external-tool names
-/// lacking a native-first qualifier. Non-`.md` surfaces and allowlisted paths
-/// are skipped (see the module docs for why).
+/// Strict pass: scan first-mile surfaces for bare external-tool names lacking a
+/// native-first qualifier. `.md` surfaces are scanned line-by-line; `.json`
+/// manifests are scanned by their user-facing *prose values* only (setting
+/// descriptions, command titles) so keys and setting/command ids are left
+/// untouched. Allowlisted paths are skipped (see the module docs for why).
 fn scan_strict(root: &Path) -> Result<Vec<String>> {
     let mut violations = Vec::new();
     for surface in SURFACES {
-        if !surface.ends_with(".md") || is_strict_allowlisted(surface) {
+        if is_strict_allowlisted(surface) {
             continue;
         }
         let path = root.join(surface);
         let Ok(text) = fs::read_to_string(&path) else {
             continue;
         };
-        collect_strict_violations(surface, &text, &mut violations);
+        if surface.ends_with(".md") {
+            collect_strict_violations(surface, &text, &mut violations);
+        } else if surface.ends_with(".json") {
+            collect_strict_json_prose_violations(surface, &text, &mut violations);
+        }
     }
     Ok(violations)
 }
@@ -276,6 +311,99 @@ fn collect_strict_violations(surface: &str, text: &str, violations: &mut Vec<Str
                 idx + 1
             ));
         }
+    }
+}
+
+/// Strict scan of a JSON manifest's user-facing prose values. Parses the JSON,
+/// walks every [`STRICT_PROSE_KEYS`] string value, and flags any bare
+/// external-tool marker lacking a native-first qualifier. Keys, setting ids, and
+/// command ids are never inspected — only the human-readable copy. An unparseable
+/// manifest is skipped silently (the default [`DISALLOWED`] pass still greps its
+/// raw text).
+fn collect_strict_json_prose_violations(surface: &str, text: &str, violations: &mut Vec<String>) {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return;
+    };
+    let mut prose = Vec::new();
+    collect_json_prose(&value, &mut prose);
+    for field in prose {
+        // Scope the qualifier check to each sentence/clause, not the whole
+        // value. `unqualified_markers` exempts a segment as soon as any
+        // native-first qualifier appears in it, so checking a whole
+        // multi-sentence value at once would let a qualifier in one sentence
+        // excuse an unqualified requirement in another — e.g. "Legacy mode is
+        // documented below. Install perltidy to enable formatting." must still
+        // flag the second sentence.
+        for segment in prose_segments(&field) {
+            for marker in unqualified_markers(segment) {
+                let snippet: String = segment.trim().chars().take(60).collect();
+                violations.push(format!(
+                    "{surface}: unqualified external-tool name `{marker}` in a user-facing prose field (strict): \"{snippet}\" — reword native-first (optional/legacy/compatibility) or move the detail to reference/compatibility"
+                ));
+            }
+        }
+    }
+}
+
+/// Split a prose value into sentence/clause units for per-segment qualifier
+/// scoping. Breaks on `;` and newlines unconditionally, and on a sentence
+/// terminator (`.` / `!` / `?`) only when it is followed by whitespace or ends
+/// the value. The whitespace condition is deliberate: an intra-token dot in a
+/// config path or filename (`.perl-lsp.toml`, `Foo/Bar.pm`) is *not* followed by
+/// whitespace, so it never fragments a sentence and separates a native-first
+/// qualifier from the marker it qualifies.
+fn prose_segments(field: &str) -> Vec<&str> {
+    let mut segments = Vec::new();
+    let mut start = 0;
+    let mut chars = field.char_indices().peekable();
+    while let Some((i, ch)) = chars.next() {
+        let boundary = match ch {
+            ';' | '\n' => true,
+            '.' | '!' | '?' => chars.peek().is_none_or(|(_, next)| next.is_whitespace()),
+            _ => false,
+        };
+        if boundary {
+            segments.push(&field[start..i]);
+            start = i + ch.len_utf8();
+        }
+    }
+    if start < field.len() {
+        segments.push(&field[start..]);
+    }
+    segments
+}
+
+/// Recursively collect the prose values of every [`STRICT_PROSE_KEYS`] object
+/// key into `out`. Keys are matched case-insensitively so `markdownDescription`
+/// and `markdowndescription` both count.
+///
+/// A prose key's value may be a scalar string (`description`) or an array of
+/// strings (`enumDescriptions` — one entry per dropdown option); both are
+/// flattened into `out`. Values that are neither (numbers, nested objects) are
+/// ignored at the prose-key level but still recursed into, so prose keys nested
+/// deeper in the tree are still found.
+fn collect_json_prose(value: &serde_json::Value, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, v) in map {
+                if STRICT_PROSE_KEYS.contains(&key.to_ascii_lowercase().as_str()) {
+                    match v {
+                        serde_json::Value::String(s) => out.push(s.clone()),
+                        serde_json::Value::Array(arr) => {
+                            out.extend(arr.iter().filter_map(|el| el.as_str().map(String::from)));
+                        }
+                        _ => {}
+                    }
+                }
+                collect_json_prose(v, out);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for v in arr {
+                collect_json_prose(v, out);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -469,10 +597,196 @@ Install `perltidy` only if you selected the external compatibility engine.\n";
         assert!(!is_strict_allowlisted("docs/tutorials/DAP_USER_GUIDE.md"));
     }
 
-    /// The live repository's first-mile `.md` surfaces must pass strict mode.
-    /// This is the enforcement that gives `--strict` teeth: a future edit that
-    /// drops an unqualified `perltidy`/`perlcritic`/`Perl::LanguageServer` onto a
-    /// first-mile prose surface makes `run_with(true)` bail and this fails.
+    #[test]
+    fn json_prose_flags_unqualified_marker_in_description() {
+        // A bare external-tool requirement in a user-facing description value
+        // must flag, even though the surrounding JSON keys/ids are clean.
+        let json = r#"{
+            "contributes": {
+                "configuration": {
+                    "properties": {
+                        "perl-lsp.perlcritic.enabled": {
+                            "type": "boolean",
+                            "description": "Install perltidy to enable formatting."
+                        }
+                    }
+                }
+            }
+        }"#;
+        let mut violations = Vec::new();
+        collect_strict_json_prose_violations("package.json", json, &mut violations);
+        assert_eq!(violations.len(), 1, "unqualified prose value must flag: {violations:?}");
+        assert!(violations[0].contains("perltidy"));
+        assert!(violations[0].contains("prose field"));
+    }
+
+    #[test]
+    fn json_prose_ignores_keys_and_ids() {
+        // Setting ids and command ids legitimately contain the tool name; only
+        // prose VALUES are scanned, so a manifest whose descriptions are all
+        // native-first must pass even with `perlcritic` all over its keys/ids.
+        let json = r#"{
+            "contributes": {
+                "commands": [
+                    { "command": "perl-lsp.runPerlCritic", "title": "Perl: Run Critic" }
+                ],
+                "configuration": {
+                    "properties": {
+                        "perl-lsp.perlcritic.enabled": {
+                            "description": "Enable the native critic (external perlcritic is optional).",
+                            "markdownDescription": "Native critic runs by default; `perlcritic` is not required."
+                        }
+                    }
+                }
+            }
+        }"#;
+        let mut violations = Vec::new();
+        collect_strict_json_prose_violations("package.json", json, &mut violations);
+        assert!(violations.is_empty(), "clean prose + tool-named ids must pass: {violations:?}");
+    }
+
+    #[test]
+    fn json_prose_scans_title_and_detail_and_nested_values() {
+        // All four prose keys are scanned, at any nesting depth (walkthrough
+        // steps, nested config), and each unqualified marker flags once.
+        let json = r#"{
+            "contributes": {
+                "walkthroughs": [{
+                    "steps": [{
+                        "title": "Set up perltidy",
+                        "description": "You must install perlcritic before starting."
+                    }]
+                }],
+                "menus": {
+                    "commandPalette": [{ "detail": "Runs perltidy on save." }]
+                }
+            }
+        }"#;
+        let mut violations = Vec::new();
+        collect_strict_json_prose_violations("package.json", json, &mut violations);
+        // title:perltidy, description:perlcritic, detail:perltidy => 3
+        assert_eq!(violations.len(), 3, "title/description/detail all scanned: {violations:?}");
+    }
+
+    #[test]
+    fn json_prose_scans_enum_descriptions_and_deprecation_messages() {
+        // `enumDescriptions` (array of per-option strings) and
+        // `deprecationMessage` (string) are user-facing Settings-UI copy. A bare
+        // external-tool requirement in either must flag — this is the leak class
+        // a `description`-only key list missed (the live `perl-lsp.critic.engine`
+        // enumDescription names Perl::Critic and is saved only by an incidental
+        // "legacy"; without a qualifier it must be caught).
+        let json = r#"{
+            "contributes": {
+                "configuration": {
+                    "properties": {
+                        "perl-lsp.critic.engine": {
+                            "enum": ["native", "legacy"],
+                            "enumDescriptions": [
+                                "Native built-in critic (no external tools)",
+                                "Requires the perlcritic binary on PATH"
+                            ],
+                            "deprecationMessage": "Install perltidy to format."
+                        }
+                    }
+                }
+            }
+        }"#;
+        let mut violations = Vec::new();
+        collect_strict_json_prose_violations("package.json", json, &mut violations);
+        // enumDescriptions[1]:perlcritic (unqualified), deprecationMessage:perltidy => 2.
+        // enumDescriptions[0] carries no marker; a native-first qualifier is absent
+        // on the two leaking entries, so both flag.
+        assert_eq!(violations.len(), 2, "enum + deprecation prose scanned: {violations:?}");
+        assert!(violations.iter().any(|v| v.contains("perlcritic")));
+        assert!(violations.iter().any(|v| v.contains("perltidy")));
+    }
+
+    #[test]
+    fn json_prose_enum_description_with_legacy_qualifier_passes() {
+        // Mirrors the live manifest: an enumDescription that names the external
+        // tool but frames it as `legacy` is native-first and must NOT flag.
+        let json = r#"{
+            "contributes": {
+                "configuration": {
+                    "properties": {
+                        "perl-lsp.critic.engine": {
+                            "enumDescriptions": [
+                                "Native built-in critic (default, no external tools required)",
+                                "Legacy external Perl::Critic (requires the perlcritic binary on PATH)"
+                            ]
+                        }
+                    }
+                }
+            }
+        }"#;
+        let mut violations = Vec::new();
+        collect_strict_json_prose_violations("package.json", json, &mut violations);
+        assert!(violations.is_empty(), "legacy-qualified enum prose must pass: {violations:?}");
+    }
+
+    #[test]
+    fn json_prose_qualifier_does_not_cross_sentences() {
+        // A native-first qualifier in one sentence must NOT exempt an
+        // unqualified external-tool requirement in another sentence of the same
+        // prose value. The qualifier check is scoped per sentence/clause.
+        let json = r#"{
+            "contributes": {
+                "configuration": {
+                    "properties": {
+                        "perl-lsp.critic.engine": {
+                            "description": "Legacy mode is documented below. Install perltidy to enable formatting."
+                        }
+                    }
+                }
+            }
+        }"#;
+        let mut violations = Vec::new();
+        collect_strict_json_prose_violations("package.json", json, &mut violations);
+        assert_eq!(violations.len(), 1, "cross-sentence leak must flag: {violations:?}");
+        assert!(violations[0].contains("perltidy"));
+        // The snippet must be the offending sentence, not the whole value.
+        assert!(
+            violations[0].contains("Install perltidy"),
+            "snippet is the leaking sentence: {violations:?}"
+        );
+    }
+
+    #[test]
+    fn json_prose_qualifier_in_same_clause_passes() {
+        // A marker framed native-first within its own clause must still pass,
+        // even when other clauses exist.
+        let json = r#"{
+            "contributes": {
+                "configuration": {
+                    "properties": {
+                        "perl-lsp.critic.engine": {
+                            "description": "Native critic is the default; the legacy engine shells out to an external perlcritic binary for compatibility."
+                        }
+                    }
+                }
+            }
+        }"#;
+        let mut violations = Vec::new();
+        collect_strict_json_prose_violations("package.json", json, &mut violations);
+        assert!(violations.is_empty(), "clause-local qualifier must pass: {violations:?}");
+    }
+
+    #[test]
+    fn json_prose_skips_unparseable_manifest() {
+        // A manifest that does not parse is skipped silently (the default
+        // DISALLOWED pass still greps its raw text); no panic, no violations.
+        let mut violations = Vec::new();
+        collect_strict_json_prose_violations("package.json", "{ not valid json", &mut violations);
+        assert!(violations.is_empty());
+    }
+
+    /// The live repository's first-mile `.md` surfaces must pass strict mode,
+    /// and the `package.json` manifest must be prose-clean. This is the
+    /// enforcement that gives `--strict` teeth: a future edit that drops an
+    /// unqualified `perltidy`/`perlcritic`/`Perl::LanguageServer` onto a
+    /// first-mile prose surface — a `.md` line or a manifest description/title —
+    /// makes `run_with(true)` bail and this fails.
     #[test]
     fn live_strict_surface_is_clean() -> Result<()> {
         run_with(true)

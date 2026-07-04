@@ -448,7 +448,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp-rs/tests/lsp_execute_command_tests.rs"]
-description = "Execute commands (Perl::Critic, etc)"
+description = "Execute commands (native critic, code actions, etc)"
 
 [[feature]]
 id = "lsp.workspace_folders"
