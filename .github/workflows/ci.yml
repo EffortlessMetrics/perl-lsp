@@ -149,11 +149,25 @@ jobs:
           fi
           echo "✅ No conflict markers found"
 
-  # ── PR Smoke: fast feedback for every PR (~1-2 min) ──────────────────
+  # ── PR Smoke: advisory fast feedback for every PR ────────────────────
+  # ADVISORY (continue-on-error): this lane runs the `pr-fast` xtask tier, whose
+  # gates (fmt, conflict markers, publish/layer checks, and unit_routed_full) are
+  # already covered — and split for parallelism — by the merge-gate-shards below,
+  # which form the deterministic CI Gate base. Because pr-fast runs the unit tests
+  # in one combined `unit_routed_full` lane, it is the flakier of the two and has
+  # false-reddened green PRs (e.g. PR #3321: unit_routed_full exit 101 while all
+  # seven CI Gate shards passed). It is not a required check and no longer gates
+  # the CI Gate aggregate (removed from merge-gate `needs`). Kept advisory for its
+  # combined-run signal + Codecov test-results upload; full removal is tracked in
+  # the CI lean-down consolidation issue.
   pr-smoke:
-    name: PR Smoke (Fast Feedback)
+    name: PR Smoke (Fast Feedback, advisory)
     runs-on: ubuntu-24.04
     timeout-minutes: 50
+    # Advisory: a pr-fast flake must not present as a hard red on an otherwise
+    # green PR. The deterministic base (CI Gate shards + the two required lanes)
+    # is the real gate.
+    continue-on-error: true
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
@@ -434,15 +448,22 @@ jobs:
         env:
           SHARD_NAME: ${{ matrix.name }}
 
-  # ── Merge Gate: aggregate shard and required job status ───────────────
+  # ── CI Gate aggregate: roll up the deterministic shard + guard lanes ──
+  # NOTE ON NAME: this check is NOT a branch-protection required context. The only
+  # two required contexts are "Perl LSP Rust Small Result" and "ripr+ New Gap Gate"
+  # (see .ci/policies/required-checks.toml). The previous name "CI Gate
+  # (Merge-Blocking)" was a misnomer — it never blocked merge — and it read as a
+  # scary hard-red on green PRs. Renamed to "CI Gate (Advisory Aggregate)" to stop
+  # misleading readers. `pr-smoke` is intentionally NOT in `needs` below: it is an
+  # advisory, flaky, redundant lane (see the pr-smoke job) and must not false-red
+  # this aggregate.
   merge-gate:
-    name: CI Gate (Merge-Blocking)
+    name: CI Gate (Advisory Aggregate)
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     needs:
       - draft-pr-check
       - preflight-latest-check
-      - pr-smoke
       - conflict-markers
       - check-all-targets
       - ux-tests
