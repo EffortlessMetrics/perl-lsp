@@ -560,6 +560,7 @@ pub fn run_mode(config: RunConfig) -> Result<()> {
     let run_tree = prepare_run_copy(&perl_tree, config.runner, config.mode, config.profile)?;
     let t_dir = run_tree.join("t");
     let script = validate_runner_script(&t_dir, config.runner)?;
+    install_t_perl_wrapper(&run_tree)?;
     let dumptests_args = config.profile.runner_args(&t_dir, config.runner)?;
     let dumptests_output = invoke_dumptests(&config.host_perl, &t_dir, &script, &dumptests_args)?;
     let discovered = parse_dumptests_output(&dumptests_output.stdout)?;
@@ -570,7 +571,6 @@ pub fn run_mode(config: RunConfig) -> Result<()> {
         let context = format!("removing stale context {}", context_path.display());
         fs::remove_file(&context_path).context(context)?;
     }
-    install_t_perl_wrapper(&run_tree)?;
 
     let output = invoke_harness_run(
         &config.host_perl,
@@ -3022,6 +3022,32 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn run_mode_installs_wrapper_before_run_copy_dumptests() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let perl_tree = write_fake_perl_tree_requiring_t_perl_for_dumptests(temp.path())?;
+        let runner = write_fake_runner(temp.path(), RunnerStatus::Pass)?;
+        let output = temp.path().join("parse-report.json");
+
+        run_mode(RunConfig {
+            perl_tree: perl_tree.clone(),
+            host_perl: PathBuf::from("/bin/sh"),
+            runner: HarnessRunner::Test,
+            mode: HarnessMode::Parse,
+            profile: HarnessProfile::Base,
+            output: Some(output.clone()),
+            runner_binary: Some(runner),
+        })?;
+
+        let raw = fs::read_to_string(output)?;
+        let report: RunReport = serde_json::from_str(&raw)?;
+        assert_eq!(report.summary.files_total, 1);
+        assert_eq!(report.summary.files_passed, 1);
+        assert!(!perl_tree.join("t").join("perl").exists(), "source Perl tree must not be mutated");
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn run_mode_generated_fixture_smoke_runs_two_compile_tests() -> TestResult {
         let temp = tempfile::tempdir()?;
         let perl_tree = write_fake_perl_tree_with_two_base_tests(temp.path())?;
@@ -3332,6 +3358,28 @@ exit 7
         assert_eq!(report.summary.files_failed, 0);
         assert_eq!(report.harness_status, Some(7));
         Ok(())
+    }
+
+    #[cfg(unix)]
+    fn write_fake_perl_tree_requiring_t_perl_for_dumptests(root: &Path) -> TestResult<PathBuf> {
+        let perl_tree = root.join("prepared-perl-requires-t-perl");
+        let t_dir = perl_tree.join("t");
+        fs::create_dir_all(t_dir.join("base"))?;
+        fs::write(t_dir.join("base").join("ok.t"), "1;\n")?;
+        let script = r#"#!/bin/sh
+set -eu
+if [ "${1:-}" = "--dumptests" ]; then
+  if [ ! -f ./perl ]; then
+    echo 'You need to run "make test_prep" first to set things up.' >&2
+    exit 2
+  fi
+  echo "base/ok.t"
+  exit 0
+fi
+./perl base/ok.t
+"#;
+        fs::write(t_dir.join("TEST"), script)?;
+        Ok(perl_tree)
     }
 
     #[cfg(unix)]

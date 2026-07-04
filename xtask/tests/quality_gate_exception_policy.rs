@@ -55,11 +55,16 @@ fn quality_gate_cli_reports_active_temporary_exceptions_as_final_blockers() -> T
         payload.pointer("/temporary_exceptions/active/0/scope").and_then(Value::as_str),
         Some("ripr_plus_total")
     );
-    assert_eq!(payload.get("next_actions").and_then(Value::as_array).map(Vec::len), Some(0));
+    assert_eq!(payload.get("next_actions").and_then(Value::as_array).map(Vec::len), Some(1));
+    let action = next_action(&payload, "codecov_patch_policy_not_blocking")?;
+    assert_eq!(action.get("blocking").and_then(Value::as_bool), Some(false));
+    assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce-patch-coverage")?;
 
     let markdown = fs::read_to_string(&summary)?;
     assert!(markdown.contains("active temporary exceptions: `2`"), "{markdown}");
     assert!(markdown.contains("final enforcement blocked: `true`"), "{markdown}");
+    assert!(markdown.contains("### codecov_patch_policy_not_blocking"), "{markdown}");
 
     Ok(())
 }
