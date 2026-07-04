@@ -105,6 +105,24 @@ the *production call path* is exercised, not just the function in isolation.
 coverage gate but may fail ripr+ because they aren't production call-observation
 tests.
 
+### What blocks the merge (exposure classes)
+
+The ripr-pr receipt (`repo-exposure.json`) records `summary.severe_gaps`, which
+sums three exposure classes: `weakly_exposed + reachable_unrevealed +
+no_static_path`. The merge gate blocks only on the **actionable** subtotal
+`reachable_unrevealed + no_static_path` — code that is genuinely
+reachable-but-unrevealed, a class a focused test can actually close (capped at
+the producer's post-suppression `severe_gaps` so path/classification
+suppressions are honored, not re-opened). `weakly_exposed` seams are reachable
+*and already observed by a test*; the static grip analysis just cannot confirm
+the observation is *strong* enough. That is an analyzer-confidence limitation,
+not a missing test — it cannot be cleared by adding tests, so it is **advisory,
+not blocking** (see #2015; empirically confirmed on #1914 across unit,
+integration, e2e, and call-presence-observer forms). All three classes remain
+reported in the producer receipt; only the blocking count excludes
+`weakly_exposed`. The count derivation lives in `genuine_new_ripr_gap_count`
+(`xtask/src/tasks/quality_gate.rs`).
+
 ### Diagnosing the exact failing seams
 
 Download the ripr evidence from the CI run:

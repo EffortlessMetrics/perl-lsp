@@ -841,6 +841,53 @@ fn read_ripr_plus_receipt(path: &Path, expected_head: &str) -> RiprPlusReceipt {
     }
 }
 
+/// Count of *genuine* new RIPR gaps on the PR diff, for merge-gate blocking.
+///
+/// The ripr-pr receipt's `summary.severe_gaps` sums three exposure classes:
+/// `weakly_exposed + reachable_unrevealed + no_static_path`. Only the latter
+/// two represent code that is genuinely reachable-but-unrevealed — a class a
+/// focused test can actually close. `weakly_exposed` seams are reachable *and*
+/// already observed by a test; the static grip analysis simply can't confirm
+/// the observation is *strong* enough. That is an analyzer-confidence
+/// limitation, not a missing test, so blocking merge on it is unactionable:
+/// it cannot be cleared by adding tests (empirically confirmed on #1914 across
+/// unit, integration, e2e, and call-presence-observer test forms), and it
+/// wedges otherwise-complete PRs indefinitely.
+///
+/// The merge-blocking count therefore uses only the actionable subtotal
+/// `reachable_unrevealed + no_static_path`. `severe_gaps` keeps its full
+/// meaning in the producer for mutation routing / telemetry — this recalibrates
+/// only what the gate *blocks* on (#2015).
+///
+/// Falls back to `severe_gaps` when the subtotal fields are absent (receipts
+/// predating this summary shape).
+///
+/// Caveat (#2015): on ripr 0.9.x the weak-proof class is emitted as
+/// `weakly_gripped` and folded into the `reachable_unrevealed` bucket by the
+/// producer, so a summary-level subtotal cannot separate it there. A durable
+/// cross-version fix requires the producer to keep weak seams in their own
+/// dedicated bucket; until then this recalibration excludes the 0.5.x-style
+/// `weakly_exposed` count only.
+fn genuine_new_ripr_gap_count(payload: &Value) -> Option<u64> {
+    let severe_gaps = payload.pointer("/summary/severe_gaps").and_then(Value::as_u64);
+    let reachable = payload.pointer("/summary/reachable_unrevealed").and_then(Value::as_u64);
+    let no_static_path = payload.pointer("/summary/no_static_path").and_then(Value::as_u64);
+    match (reachable, no_static_path) {
+        (Some(reachable), Some(no_static_path)) => {
+            let actionable = reachable.saturating_add(no_static_path);
+            // Cap at the producer's post-suppression `severe_gaps`. The bucket
+            // totals do not reflect `suppressed_unclassified`, which the producer
+            // subtracts only from `severe_gaps` (see `ripr_evidence::pr_evidence_packet`);
+            // capping preserves the path/classification suppressions the producer
+            // already applied instead of re-opening them. In the normal
+            // (unsuppressed) case `severe_gaps >= reachable + no_static_path`, so
+            // the cap is a no-op and `weakly_exposed` stays excluded.
+            Some(severe_gaps.map_or(actionable, |cap| actionable.min(cap)))
+        }
+        _ => severe_gaps,
+    }
+}
+
 fn read_ripr_pr_receipt(path: &Path, expected_head: &str) -> RiprPrReceipt {
     match read_json_receipt(path) {
         JsonReceipt::Missing => RiprPrReceipt {
@@ -870,7 +917,7 @@ fn read_ripr_pr_receipt(path: &Path, expected_head: &str) -> RiprPrReceipt {
                 receipt_head_sha,
                 base: payload.get("base").and_then(Value::as_str).map(ToOwned::to_owned),
                 base_sha: payload.get("base_sha").and_then(Value::as_str).map(ToOwned::to_owned),
-                new_unresolved: payload.pointer("/summary/severe_gaps").and_then(Value::as_u64),
+                new_unresolved: genuine_new_ripr_gap_count(&payload),
             }
         }
     }
@@ -1438,9 +1485,9 @@ fn new_ripr_gap_unknown_action(ripr_pr: &RiprPrReceipt, args: &QualityGateArgs) 
         "kind": "new_ripr_gap_unknown",
         "blocking": true,
         "path": display_path(&args.ripr_pr_receipt),
-        "reason": "diff-scoped summary.severe_gaps is not measured",
+        "reason": "diff-scoped RIPR summary (reachable_unrevealed + no_static_path) is not measured",
         "receipt_head_sha": ripr_pr.receipt_head_sha,
-        "repair": "Regenerate the diff-scoped RIPR PR receipt so new-gap count comes from summary.severe_gaps.",
+        "repair": "Regenerate the diff-scoped RIPR PR receipt so the new-gap count can be measured.",
         "verify": ripr_pr_command(args, true),
         "receipt": ripr_pr_command(args, false),
     })
