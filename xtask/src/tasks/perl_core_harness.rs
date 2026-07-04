@@ -253,7 +253,7 @@ pub fn run_mode(config: RunConfig) -> Result<()> {
     )
     .with_context(|| format!("running Perl core tests via {} {}", config.runner, config.profile))?;
 
-    let records = read_runner_records(&context_path)?;
+    let records = read_runner_records_or_empty(&context_path)?;
     let report = build_run_report(BuildRunReportInput {
         config: &config,
         perl_tree: &perl_tree,
@@ -1459,6 +1459,18 @@ fn read_runner_records(path: &Path) -> Result<Vec<RunnerRecord>> {
         bail!("runner context contained no records: {}", path.display());
     }
     Ok(records)
+}
+
+fn read_runner_records_or_empty(path: &Path) -> Result<Vec<RunnerRecord>> {
+    if !path.is_file() {
+        return Ok(Vec::new());
+    }
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("reading runner context {}", path.display()))?;
+    if raw.lines().all(|line| line.trim().is_empty()) {
+        return Ok(Vec::new());
+    }
+    read_runner_records(path)
 }
 
 struct BuildRunReportInput<'a> {
@@ -2998,6 +3010,46 @@ exit 7
         assert_eq!(report.summary.files_passed, 1);
         assert_eq!(report.summary.files_failed, 0);
         assert_eq!(report.harness_status, Some(7));
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_mode_writes_harness_prepare_failures_when_runner_context_is_missing() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let perl_tree = write_fake_perl_tree_with_run_body(
+            temp.path(),
+            r#"# Deliberately do not invoke ./perl; real harness integration bugs must still
+# produce a bucketed receipt instead of aborting before report writing.
+exit 0
+"#,
+        )?;
+        let runner = write_fake_runner(temp.path(), RunnerStatus::Pass)?;
+        let output = temp.path().join("parse-report.json");
+
+        let Err(err) = run_mode(RunConfig {
+            perl_tree,
+            host_perl: PathBuf::from("/bin/sh"),
+            runner: HarnessRunner::Test,
+            mode: HarnessMode::Parse,
+            profile: HarnessProfile::Base,
+            output: Some(output.clone()),
+            runner_binary: Some(runner),
+        }) else {
+            bail!("missing runner context should fail with a bucketed report");
+        };
+
+        assert!(err.to_string().contains("failed for 1 of 1 files"));
+        let raw = fs::read_to_string(output)?;
+        let report: RunReport = serde_json::from_str(&raw)?;
+        assert_eq!(report.summary.files_total, 1);
+        assert_eq!(report.summary.files_passed, 0);
+        assert_eq!(report.summary.files_failed, 1);
+        assert_eq!(report.buckets.get("harness_prepare"), Some(&1));
+        assert_eq!(
+            report.failures[0].first_diagnostic,
+            "test was discovered but produced no runner record"
+        );
         Ok(())
     }
 

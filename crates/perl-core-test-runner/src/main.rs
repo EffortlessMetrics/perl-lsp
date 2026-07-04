@@ -36,7 +36,13 @@ fn main() {
             RunnerStatus::Fail => 1,
         },
         Err(err) => {
+            let mode = env::var(MODE_ENV).unwrap_or_else(|_| "parse".to_string());
+            let args = env::args_os().skip(1).collect::<Vec<_>>();
+            let display_path =
+                infer_display_path(&args).unwrap_or_else(|| "perl-core-test-runner".to_string());
+            let result = ModeRunResult::fail("cli_switch", err.to_string());
             emit_internal_failure(&err);
+            let _ = append_context_record(&mode, &display_path, &result);
             1
         }
     };
@@ -135,6 +141,17 @@ fn file_invocation(path: OsString) -> Result<Invocation> {
     let path = PathBuf::from(path);
     let display_path = path.display().to_string().replace('\\', "/");
     Ok(Invocation { source: SourceInput::File(path), display_path })
+}
+
+fn infer_display_path(args: &[OsString]) -> Option<String> {
+    args.iter()
+        .rev()
+        .map(|arg| arg.to_string_lossy())
+        .find(|arg| {
+            let value = arg.as_ref();
+            !value.starts_with('-') && (value.ends_with(".t") || value.contains(".t "))
+        })
+        .map(|arg| arg.as_ref().replace('\\', "/"))
 }
 
 #[derive(Debug)]
@@ -442,6 +459,22 @@ mod tests {
         };
 
         assert!(err.to_string().contains("unsupported Perl core harness switch"));
+        Ok(())
+    }
+
+    #[test]
+    fn infers_test_path_for_internal_failure_records() -> TestResult {
+        let args = vec![
+            OsString::from("--unsupported"),
+            OsString::from("-I../lib"),
+            OsString::from("base/if.t"),
+        ];
+
+        let Some(display_path) = infer_display_path(&args) else {
+            bail!("expected test path inference");
+        };
+
+        assert_eq!(display_path, "base/if.t");
         Ok(())
     }
 
