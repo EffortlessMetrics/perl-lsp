@@ -70,38 +70,6 @@ impl LspServer {
         Ok(Some(json!({ "data": [] })))
     }
 
-    /// Handle semantic tokens full request (alternative method name)
-    #[allow(dead_code)] // Alternative implementation using SemanticTokensProvider
-    pub(crate) fn handle_semantic_tokens_full(
-        &self,
-        params: Option<Value>,
-    ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let uri = req_uri(&params)?;
-
-            tracing::debug!(uri, "Getting semantic tokens");
-
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
-                    let provider = SemanticTokensProvider::new(doc.text.clone());
-                    let tokens = provider.extract(ast);
-                    let encoded = encode_semantic_tokens(&tokens);
-
-                    tracing::debug!(count = tokens.len(), "Found semantic tokens");
-
-                    return Ok(Some(json!({
-                        "data": encoded
-                    })));
-                }
-            }
-        }
-
-        Ok(Some(json!({
-            "data": []
-        })))
-    }
-
     /// Semantic tokens runtime quality receipt.
     ///
     /// Calls the live `textDocument/semanticTokens/full` handler and captures the result in a

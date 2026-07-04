@@ -83,7 +83,6 @@ use crate::features::{
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
     implementation_provider::ImplementationProvider,
-    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
     type_hierarchy::TypeHierarchyProvider,
 };
 
