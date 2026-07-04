@@ -1178,28 +1178,56 @@ impl LspServer {
                     }
 
                     // Attempt to resolve fully-qualified symbols like Package::sub
+                    //
+                    // When cursor is on a package-prefix component (e.g. `Foo` in
+                    // `Foo::bar`), we must NOT fall through to the AST-based workspace
+                    // lookup below — `symbol_at_cursor_with_source` and
+                    // `DeclarationProvider` always extract the LAST component of a
+                    // qualified name regardless of cursor position and would navigate
+                    // to the wrong symbol.  Track whether the cursor is on a prefix
+                    // and return early if so.
+                    let mut cursor_on_fqn_prefix = false;
                     let fqn_regex = get_fqn_regex()?;
                     for cap in fqn_regex.captures_iter(&text_around) {
                         if let Some(m) = cap.get(1) {
                             if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
                                 let parts: Vec<&str> = m.as_str().split("::").collect();
                                 if parts.len() >= 2 {
-                                    let name = parts.last().copied().unwrap_or("");
-                                    let pkg = parts[..parts.len() - 1].join("::");
+                                    // Determine which component the cursor falls on.
+                                    // Only resolve when the cursor is on the final component
+                                    // (the sub/function name). Resolving when the cursor is
+                                    // on a package prefix (e.g. `Foo` in `Foo::bar`) would
+                                    // silently navigate to the wrong target — the sub — when
+                                    // the user clicked on the package name.
+                                    let cursor_rel = cursor_in_text.saturating_sub(m.start());
+                                    let last_sep_offset =
+                                        m.as_str().rfind("::").map_or(0, |p| p + 2);
 
-                                    if let Some(result) = lookup_workspace_definition(
-                                        self.coordinator(),
-                                        &pkg,
-                                        name,
-                                        Some(uri),
-                                    ) {
-                                        return Ok(Some(result));
+                                    if cursor_rel >= last_sep_offset {
+                                        let name = parts.last().copied().unwrap_or("");
+                                        let pkg = parts[..parts.len() - 1].join("::");
+
+                                        if let Some(result) = lookup_workspace_definition(
+                                            self.coordinator(),
+                                            &pkg,
+                                            name,
+                                            Some(uri),
+                                        ) {
+                                            return Ok(Some(result));
+                                        }
+                                    } else {
+                                        // Cursor is on a package-prefix component.  Block
+                                        // the AST-based fallback paths that ignore cursor
+                                        // position within a qualified name.
+                                        cursor_on_fqn_prefix = true;
                                     }
-                                    // Partial/None: fall through to same-file resolution
                                 }
                                 break;
                             }
                         }
+                    }
+                    if cursor_on_fqn_prefix {
+                        return Ok(None);
                     }
 
                     // Attempt to resolve Package->method calls

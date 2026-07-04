@@ -686,6 +686,20 @@ impl LspServer {
                                                 let parts: Vec<&str> =
                                                     m.as_str().split("::").collect();
                                                 if parts.len() >= 2 {
+                                                    // Only search for references when the cursor
+                                                    // is on the final component (sub/function name).
+                                                    // If the cursor is on a package-prefix component
+                                                    // (e.g. `Foo` in `Foo::bar`), skip this match
+                                                    // so we do not return references to the wrong
+                                                    // symbol.
+                                                    let cursor_rel =
+                                                        cursor_in_text.saturating_sub(m.start());
+                                                    let last_sep_offset =
+                                                        m.as_str().rfind("::").map_or(0, |p| p + 2);
+                                                    if cursor_rel < last_sep_offset {
+                                                        break;
+                                                    }
+
                                                     let name = parts
                                                         .last()
                                                         .copied()
