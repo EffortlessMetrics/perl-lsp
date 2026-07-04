@@ -90,6 +90,61 @@ reads a JSON receipt another xtask task produces; an unhealthy result is a
 - `critic.perlcritic_compat_no_external_only` ← `perlcritic-compat.json`
   (`external_only_count == 0`)
 
+#### Generating the nightly receipts
+
+Because the crate is pure, the nightly indicators are `unverified` unless the
+upstream receipts already exist on disk. The nightly CI job
+(`.github/workflows/ci-nightly.yml`, "Perl Kwalitee (advisory)") generates them
+before `report --profile nightly`. Every generator is native Rust — no
+`perltidy`/`perlcritic` install is required — and `status`/`readiness`
+aggregate the receipts above them, so they run last:
+
+```bash
+# native formatter receipts
+cargo xtask native-format check
+cargo xtask native-format corpus                       # → formatter.corpus_idempotent
+cargo xtask native-format config \
+  --receipt target/receipts/format/native-format-config.json \
+  --summary target/receipts/format/native-format-config.md   # enables formatter.native_default
+cargo xtask native-format perltidy-compat --profile .ci/kwalitee/perltidyrc \
+  --receipt target/receipts/format/native-format-perltidy-compat.json \
+  --summary target/receipts/format/native-format-perltidy-compat.md
+                                                       # → formatter.perltidy_compat_no_external_only
+
+# native critic receipts
+cargo xtask native-critic check                        # default roots (status input)
+cargo xtask native-critic check \
+  --root xtask/tests/fixtures/native-critic/false-positive \
+  --receipt target/receipts/native-tooling/native-critic-false-positive.json \
+  --summary target/receipts/native-tooling/native-critic-false-positive.md
+                                                       # → critic.no_false_positives
+cargo xtask native-tooling perlcritic-compat --profile .ci/kwalitee/perlcriticrc \
+  --receipt target/receipts/native-tooling/perlcritic-compat.json \
+  --summary target/receipts/native-tooling/perlcritic-compat.md
+                                                       # → critic.perlcritic_compat_no_external_only
+
+# aggregation — must come last
+cargo xtask native-tooling status \
+  --receipt target/receipts/native-tooling/status.json
+cargo xtask native-tooling readiness \
+  --status-receipt target/receipts/native-tooling/status.json \
+  --receipt target/receipts/native-tooling/readiness.json
+                                          # → formatter.native_default + critic.native_default
+```
+
+The two `*-compat` commands take a required `--profile` input. They classify a
+`.perltidyrc` / `.perlcriticrc` natively (they never run the real tools), so the
+repo commits reference profiles at `.ci/kwalitee/perltidyrc` and
+`.ci/kwalitee/perlcriticrc` — both chosen so a healthy native surface reports
+`external_only_count == 0`. Keep those profiles in sync when the native
+formatter/critic support surface changes.
+
+`quality.no_new_severe_gaps` (mandatory on every profile) reads
+`quality/quality-gate.json`, which depends on the RIPR receipt chain
+(`cargo xtask quality-gate`) rather than the native-tooling receipts above; the
+nightly job does not yet generate it, so that indicator stays `unverified`
+(a `warn` under the advisory nightly profile). Wiring it is tracked separately.
+
 ### Evidence sources
 
 The crate is **pure** — it never spawns a subprocess. Each indicator is sourced

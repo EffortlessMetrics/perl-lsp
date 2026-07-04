@@ -794,7 +794,55 @@ jobs:
           key: ${{ runner.os }}-kwalitee-${{ hashFiles('Cargo.lock') }}
           cache-on-failure: true
 
+      # The `perl-kwalitee` crate is pure — it never spawns a subprocess and
+      # reads its evidence only from pre-generated JSON receipts. Without these
+      # upstream receipts every nightly receipt-backed indicator resolves as
+      # `unverified`. Generate them first (all native Rust, no perltidy/
+      # perlcritic install needed) so the nightly report reflects real signal.
+      # status/readiness aggregate the receipts above them, so they run last.
+      # See docs/reference/PERL_KWALITEE.md.
+      - name: Generate upstream Kwalitee receipts (native, no external tooling)
+        run: |
+          # Best-effort: this is an advisory report. `native-format check`/`corpus`
+          # return a non-zero exit on a fixture/corpus regression, and Actions runs
+          # `run:` under `set -e`. Without `set +e` the first failing generator would
+          # abort the step, later receipts would never be written, and the report
+          # below would revert those indicators to `unverified` — the exact symptom
+          # this job exists to surface. Disable errexit so every generator runs and
+          # a failing one shows up as a failing/unverified indicator in the report.
+          set +e
+          # --- native formatter receipts ---
+          cargo xtask native-format check
+          cargo xtask native-format corpus
+          cargo xtask native-format config \
+            --receipt target/receipts/format/native-format-config.json \
+            --summary target/receipts/format/native-format-config.md
+          cargo xtask native-format perltidy-compat --profile .ci/kwalitee/perltidyrc \
+            --receipt target/receipts/format/native-format-perltidy-compat.json \
+            --summary target/receipts/format/native-format-perltidy-compat.md
+
+          # --- native critic receipts ---
+          cargo xtask native-critic check
+          cargo xtask native-critic check \
+            --root xtask/tests/fixtures/native-critic/false-positive \
+            --receipt target/receipts/native-tooling/native-critic-false-positive.json \
+            --summary target/receipts/native-tooling/native-critic-false-positive.md
+          cargo xtask native-tooling perlcritic-compat --profile .ci/kwalitee/perlcriticrc \
+            --receipt target/receipts/native-tooling/perlcritic-compat.json \
+            --summary target/receipts/native-tooling/perlcritic-compat.md
+
+          # --- aggregation (reads all receipts above; must come last) ---
+          cargo xtask native-tooling status \
+            --receipt target/receipts/native-tooling/status.json
+          cargo xtask native-tooling readiness \
+            --status-receipt target/receipts/native-tooling/status.json \
+            --receipt target/receipts/native-tooling/readiness.json
+
       - name: Evaluate Perl distribution Kwalitee (nightly profile)
+        # Always run the report, even if a generator above exited non-zero, so the
+        # advisory verdict reflects whatever receipts were produced rather than
+        # being skipped entirely.
+        if: always()
         run: |
           cargo xtask perl-kwalitee report --profile nightly \
             --json target/receipts/kwalitee/perl-kwalitee.json \
@@ -806,9 +854,16 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: perl-kwalitee-${{ github.sha }}
+          # Upload the whole receipt directories rather than enumerating files:
+          # the generation step writes JSON receipts plus their markdown summaries
+          # (idempotence, parse-preservation, corpus-summary, per-command *.md), and
+          # only this job writes under these paths — so a directory glob captures the
+          # full evidence set for debugging without drifting out of sync on each new
+          # receipt.
           path: |
-            target/receipts/kwalitee/perl-kwalitee.json
-            target/receipts/kwalitee/perl-kwalitee.md
+            target/receipts/kwalitee/
+            target/receipts/format/
+            target/receipts/native-tooling/
           if-no-files-found: warn
           retention-days: 30
 

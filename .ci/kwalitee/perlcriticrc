@@ -1,0 +1,24 @@
+# Representative .perlcriticrc profile for the nightly Kwalitee compatibility check.
+#
+# This is NOT a live linter config — it is the reference profile that
+# `cargo xtask native-tooling perlcritic-compat` classifies against the native
+# critic's supported policy surface. Every setting and policy below maps to a
+# native rule, a documented approximation, or a safe no-op, so the resulting
+# receipt reports `external_only_count == 0`, which is what the nightly
+# `critic.perlcritic_compat_no_external_only` indicator requires.
+#
+# When the native critic gains or drops a rule mapping, update this profile so
+# the nightly signal stays meaningful. See docs/reference/PERL_KWALITEE.md.
+
+severity = 3
+include = TestingAndDebugging::RequireUseStrict
+exclude = Documentation::RequirePodSections
+profile-strictness = fatal
+[TestingAndDebugging::RequireUseStrict]
+[-InputOutput::ProhibitTwoArgOpen]
+[InputOutput::RequireCheckedOpen]
+[Variables::ProhibitUnusedVariables]
+[Variables::ProhibitReusedNames]
+[Documentation::RequirePodSections]
+theme = core
+color = 1
