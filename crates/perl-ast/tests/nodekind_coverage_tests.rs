@@ -118,6 +118,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             "String",
             0,
         ),
+        (Node::new(NodeKind::VString { value: "v1.2.3".to_string() }, loc()), "VString", 0),
         (
             Node::new(
                 NodeKind::Heredoc {

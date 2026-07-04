@@ -326,6 +326,7 @@ fn walk_security_node(
         | NodeKind::DataSection { .. }
         | NodeKind::Number { .. }
         | NodeKind::String { .. }
+        | NodeKind::VString { .. }
         | NodeKind::Regex { .. }
         | NodeKind::Match { .. }
         | NodeKind::Substitution { .. }

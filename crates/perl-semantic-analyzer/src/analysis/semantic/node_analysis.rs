@@ -310,6 +310,14 @@ impl SemanticAnalyzer {
                 });
             }
 
+            NodeKind::VString { value: _ } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::String,
+                    modifiers: vec![],
+                });
+            }
+
             NodeKind::Number { value: _ } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
@@ -1242,6 +1250,7 @@ impl SemanticAnalyzer {
         match &node.kind {
             NodeKind::Number { .. } => Some("number".to_string()),
             NodeKind::String { .. } => Some("string".to_string()),
+            NodeKind::VString { .. } => Some("vstring".to_string()),
             NodeKind::ArrayLiteral { .. } => Some("array".to_string()),
             NodeKind::HashLiteral { .. } => Some("hash".to_string()),
 

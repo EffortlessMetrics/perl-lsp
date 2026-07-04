@@ -47,6 +47,7 @@ pub fn all_nodekind_instances() -> Vec<Node> {
     vec![
         Node::new(NodeKind::Number { value: "42".to_string() }, loc()),
         Node::new(NodeKind::String { value: "hello".to_string(), interpolated: false }, loc()),
+        Node::new(NodeKind::VString { value: "1.2.3".to_string() }, loc()),
         Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc()),
         Node::new(NodeKind::Identifier { name: "foo".to_string() }, loc()),
         Node::new(NodeKind::Block { statements: vec![] }, loc()),

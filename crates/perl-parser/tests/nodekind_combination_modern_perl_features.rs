@@ -649,6 +649,7 @@ where
         NodeKind::Typeglob { .. } => {} // No children
         NodeKind::Number { .. } => {}   // No children
         NodeKind::String { .. } => {}   // No children
+        NodeKind::VString { .. } => {}  // No children — leaf literal
         NodeKind::Heredoc { .. } => {}  // No children
         NodeKind::Undef => {}           // No children
         NodeKind::Ellipsis => {}        // No children

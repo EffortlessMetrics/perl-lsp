@@ -340,7 +340,10 @@ impl IncrementalDocument {
         if let Some(node) = self.find_node_at_position(edit.start_byte) {
             matches!(
                 node.kind,
-                NodeKind::Number { .. } | NodeKind::String { .. } | NodeKind::Identifier { .. }
+                NodeKind::Number { .. }
+                    | NodeKind::String { .. }
+                    | NodeKind::VString { .. }
+                    | NodeKind::Identifier { .. }
             )
         } else {
             false
@@ -379,12 +382,12 @@ impl IncrementalDocument {
                         }
                     }
                 }
-                NodeKind::String { value, .. } => {
-                    // Update string content
+                NodeKind::String { value, .. } | NodeKind::VString { value } => {
+                    // Update literal content
                     let delta = edit.byte_shift();
                     let new_end = (node.location.end as isize + delta).max(0) as usize;
 
-                    // Safely extract new string value with bounds checking
+                    // Safely extract new literal value with bounds checking
                     if new_end <= source.len()
                         && source.is_char_boundary(node.location.start)
                         && source.is_char_boundary(new_end)
@@ -920,6 +923,7 @@ impl IncrementalDocument {
         match &node.kind {
             NodeKind::Number { value } => value.hash(&mut hasher),
             NodeKind::String { value, .. } => value.hash(&mut hasher),
+            NodeKind::VString { value } => value.hash(&mut hasher),
             NodeKind::Identifier { name } => name.hash(&mut hasher),
             _ => {}
         }
@@ -1035,7 +1039,9 @@ impl IncrementalDocument {
             NodeKind::Assignment { .. } => SymbolPriority::Medium,
 
             // Low priority for literals and simple expressions
-            NodeKind::Number { .. } | NodeKind::String { .. } => SymbolPriority::Low,
+            NodeKind::Number { .. } | NodeKind::String { .. } | NodeKind::VString { .. } => {
+                SymbolPriority::Low
+            }
             NodeKind::Binary { .. } | NodeKind::Unary { .. } => SymbolPriority::Low,
 
             // Default to medium for unknown types

@@ -639,6 +639,14 @@ pub fn disposition_for(ast_kind: &str) -> Option<LoweringDisposition> {
         "Untie" => disp!(false, false, true, false, false, "No first-slice HIR shell yet."),
         "Class" => disp!(false, false, true, false, false, "No first-slice HIR shell yet."),
         "DataSection" => disp!(false, false, true, false, false, "No first-slice HIR shell yet."),
+        "VString" => disp!(
+            false,
+            false,
+            true,
+            false,
+            false,
+            "No standalone HIR literal shell yet; falls through after parser-level v-string classification."
+        ),
 
         // Unknown — caller detects missing entry and fails the gate.
         _ => None,
@@ -985,6 +993,7 @@ mod tests {
             "Untie",
             "Class",
             "DataSection",
+            "VString",
         ] {
             let d = disposition_for(kind).unwrap_or_else(|| panic!("no disposition for {kind}"));
             assert!(!d.emits_items, "{kind} (NotYetModeled) must NOT emit HIR items");
@@ -1051,6 +1060,7 @@ mod tests {
         assert!(hir_kinds_for("Variable").is_empty());
         assert!(hir_kinds_for("Binary").is_empty());
         assert!(hir_kinds_for("NestedVariableList").is_empty());
+        assert!(hir_kinds_for("VString").is_empty());
     }
 
     #[test]

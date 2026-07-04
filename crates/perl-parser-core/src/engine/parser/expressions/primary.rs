@@ -198,7 +198,7 @@ impl<'a> Parser<'a> {
             TokenKind::VString => {
                 let token = self.tokens.next()?;
                 Ok(Node::new(
-                    NodeKind::String { value: token.text.to_string(), interpolated: false },
+                    NodeKind::VString { value: token.text.to_string() },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }

@@ -429,6 +429,12 @@ impl Node {
                 }
             }
 
+            NodeKind::VString { value } => {
+                // Escape quotes in version string to prevent S-expression parsing issues
+                let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
+                format!("(vstring \"{}\")", escaped_value)
+            }
+
             NodeKind::Heredoc { delimiter, content, interpolated, indented, command, .. } => {
                 let type_str = if *command {
                     "heredoc_command"
@@ -1165,6 +1171,7 @@ impl Node {
             | NodeKind::Identifier { .. }
             | NodeKind::Number { .. }
             | NodeKind::String { .. }
+            | NodeKind::VString { .. }
             | NodeKind::Heredoc { .. }
             | NodeKind::Regex { .. }
             | NodeKind::Readline { .. }
@@ -1425,6 +1432,7 @@ impl Node {
             | NodeKind::Identifier { .. }
             | NodeKind::Number { .. }
             | NodeKind::String { .. }
+            | NodeKind::VString { .. }
             | NodeKind::Heredoc { .. }
             | NodeKind::Regex { .. }
             | NodeKind::Readline { .. }
@@ -1858,6 +1866,15 @@ pub enum NodeKind {
         value: String,
         /// Whether the string supports variable interpolation
         interpolated: bool,
+    },
+
+    /// Version string literal (v-string) like `v1.2.3` or `v5.10.0`
+    ///
+    /// Semantically distinct from regular strings to support version checking
+    /// and special handling in contexts like `use v5.10` and `require v5.8.0`.
+    VString {
+        /// Version string content (e.g., "v1.2.3")
+        value: String,
     },
 
     /// Heredoc string literal for multi-line content
@@ -2438,6 +2455,7 @@ impl NodeKind {
             NodeKind::Typeglob { .. } => "Typeglob",
             NodeKind::Number { .. } => "Number",
             NodeKind::String { .. } => "String",
+            NodeKind::VString { .. } => "VString",
             NodeKind::Heredoc { .. } => "Heredoc",
             NodeKind::ArrayLiteral { .. } => "ArrayLiteral",
             NodeKind::HashLiteral { .. } => "HashLiteral",
@@ -2754,6 +2772,7 @@ mod tests {
             NodeKind::Typeglob { name: String::new() },
             NodeKind::Number { value: String::new() },
             NodeKind::String { value: String::new(), interpolated: false },
+            NodeKind::VString { value: String::new() },
             NodeKind::Heredoc {
                 delimiter: String::new(),
                 content: String::new(),
