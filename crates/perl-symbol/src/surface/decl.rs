@@ -316,8 +316,19 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
         }
 
         // ── Containers: recurse into children ─────────────────────────────
-        NodeKind::Program { statements } | NodeKind::Block { statements } => {
+        NodeKind::Program { statements } => {
             walk_statements(statements, ctx, out);
+        }
+
+        // A bare `{ ... }` block is a lexical scope: a `package Foo;` declared
+        // inside it applies only until the block closes (perlmod), so package
+        // context must be saved on entry and restored on exit — otherwise a
+        // block-local `package` leaks to every following sibling. This mirrors
+        // the save/restore already done for `Package { block: Some(..) }`.
+        NodeKind::Block { statements } => {
+            let saved = ctx.current_package.clone();
+            walk_statements(statements, ctx, out);
+            ctx.current_package = saved;
         }
 
         NodeKind::ExpressionStatement { expression } => {
