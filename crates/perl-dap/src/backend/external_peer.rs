@@ -1143,6 +1143,184 @@ mod tests {
         let _ = peer.join();
     }
 
+    /// Regression test for review-thread #7 of the #3321 post-merge audit: a
+    /// write failure while sending the HELLO response must fail the handshake
+    /// rather than silently reporting success against a dead connection.
+    ///
+    /// The host's own outbound half is shut down *before* the peer's HELLO is
+    /// released (via a rendezvous channel), so the write failure inside
+    /// `handle_peer_request` is deterministic rather than a race against the
+    /// reader thread picking up an early HELLO.
+    #[test]
+    fn hello_write_failure_fails_handshake() {
+        let (listener, addr) = bind_ephemeral();
+        let (release_hello_tx, release_hello_rx) = channel::<()>();
+        let peer = std::thread::spawn(move || {
+            let stream = match TcpStream::connect(addr) {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            // Wait for the test to shut down the host's write half before
+            // sending HELLO, so the host's response write is guaranteed to
+            // fail rather than possibly winning a race.
+            let _ = release_hello_rx.recv();
+            let mut write = stream;
+            let hello = PeerMessage::Request(PeerRequest {
+                seq: 100,
+                command: command::HELLO.to_string(),
+                arguments: serde_json::to_value(HelloArgs {
+                    peer: "FakePtkdb".to_string(),
+                    peer_version: Some("0.1".to_string()),
+                    protocol_version: PROTOCOL_VERSION.to_string(),
+                    capabilities: PeerReportedCapabilities::default(),
+                })
+                .ok(),
+            });
+            let _ = write.write_all(&encode_message(&hello).expect("encode hello"));
+        });
+
+        let mut backend = accept_backend_with_timeout(listener, Duration::from_secs(2));
+        // Shut down the host's own outbound half before HELLO arrives, so the
+        // handshake-response write inside `handle_peer_request` fails
+        // deterministically.
+        lock(&backend.shared.write)
+            .shutdown(std::net::Shutdown::Write)
+            .expect("shutdown write half");
+        let _ = release_hello_tx.send(());
+
+        let err = backend
+            .initialize(InitializeBackendParams::default())
+            .expect_err("handshake must fail when the HELLO response write fails");
+        assert!(
+            matches!(err, BackendError::Protocol(_) | BackendError::NotConnected),
+            "expected a handshake failure, got {err:?}"
+        );
+        assert!(
+            !*lock(&backend.shared.handshake_done),
+            "handshake_done must not be set when the HELLO response write fails"
+        );
+
+        drop(backend);
+        let _ = peer.join();
+    }
+
+    /// Regression test for review-thread #4 of the #3321 post-merge audit: a
+    /// second `peer/hello` sent after a successful handshake must be rejected
+    /// and must NOT overwrite the already-negotiated `peer_caps`.
+    #[test]
+    fn second_hello_is_rejected_and_caps_unchanged() {
+        let (listener, addr) = bind_ephemeral();
+        let initial_caps =
+            PeerReportedCapabilities { can_step: true, can_evaluate: false, ..Default::default() };
+        let replay_caps =
+            PeerReportedCapabilities { can_step: false, can_evaluate: true, ..Default::default() };
+        let (result_tx, result_rx) = channel::<bool>();
+
+        let peer = std::thread::spawn(move || {
+            let stream = match TcpStream::connect(addr) {
+                Ok(s) => s,
+                Err(_) => {
+                    let _ = result_tx.send(false);
+                    return;
+                }
+            };
+            let mut write = stream.try_clone().expect("clone");
+            let mut read = stream;
+            let mut decoder = PeerFrameDecoder::new();
+            let mut buf = [0u8; 4096];
+
+            let hello = PeerMessage::Request(PeerRequest {
+                seq: 100,
+                command: command::HELLO.to_string(),
+                arguments: serde_json::to_value(HelloArgs {
+                    peer: "FakePtkdb".to_string(),
+                    peer_version: Some("0.1".to_string()),
+                    protocol_version: PROTOCOL_VERSION.to_string(),
+                    capabilities: initial_caps,
+                })
+                .ok(),
+            });
+            let _ = write.write_all(&encode_message(&hello).expect("encode hello"));
+
+            // Wait for the host's response to the FIRST hello.
+            let first_ok = 'first: loop {
+                match read.read(&mut buf) {
+                    Ok(0) => break false,
+                    Ok(n) => {
+                        decoder.push(&buf[..n]);
+                        while let Ok(Some(msg)) = decoder.try_next() {
+                            if let PeerMessage::Response(resp) = msg {
+                                if resp.command == command::HELLO {
+                                    break 'first resp.success;
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => break false,
+                }
+            };
+            if !first_ok {
+                let _ = result_tx.send(false);
+                return;
+            }
+
+            // Replay hello with DIFFERENT capabilities; this must be rejected.
+            let hello2 = PeerMessage::Request(PeerRequest {
+                seq: 101,
+                command: command::HELLO.to_string(),
+                arguments: serde_json::to_value(HelloArgs {
+                    peer: "FakePtkdb".to_string(),
+                    peer_version: Some("0.1".to_string()),
+                    protocol_version: PROTOCOL_VERSION.to_string(),
+                    capabilities: replay_caps,
+                })
+                .ok(),
+            });
+            let _ = write.write_all(&encode_message(&hello2).expect("encode hello2"));
+
+            let second_rejected = 'second: loop {
+                match read.read(&mut buf) {
+                    Ok(0) => break false,
+                    Ok(n) => {
+                        decoder.push(&buf[..n]);
+                        while let Ok(Some(msg)) = decoder.try_next() {
+                            if let PeerMessage::Response(resp) = msg {
+                                if resp.command == command::HELLO && resp.request_seq == 101 {
+                                    break 'second !resp.success;
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => break false,
+                }
+            };
+            let _ = result_tx.send(second_rejected);
+        });
+
+        let mut backend = accept_backend_with_timeout(listener, Duration::from_secs(2));
+        backend.initialize(InitializeBackendParams::default()).expect("handshake");
+        // Capabilities from the FIRST hello must be negotiated.
+        assert!(backend.capabilities().stepping, "can_step from first hello must negotiate");
+        assert!(!backend.capabilities().evaluate, "first hello did not advertise evaluate");
+
+        let second_rejected =
+            result_rx.recv_timeout(Duration::from_secs(2)).expect("peer result channel");
+        assert!(second_rejected, "second HELLO (replay) must be rejected by the host");
+
+        // Capabilities must be UNCHANGED after the rejected replay attempt.
+        assert!(
+            backend.capabilities().stepping,
+            "peer_caps must be untouched by a rejected hello replay"
+        );
+        assert!(
+            !backend.capabilities().evaluate,
+            "peer_caps must not pick up the replay's capabilities"
+        );
+
+        drop(backend);
+        let _ = peer.join();
+    }
+
     // --- test rendezvous helpers (host listens, fake peer connects) ---
 
     fn bind_ephemeral() -> (TcpListener, std::net::SocketAddr) {
