@@ -165,4 +165,25 @@ jobs:
               // Don't fail the check for this — it may be a private/internal reference
             }
 
+            // Self-clearing needs-issue-link: this check re-runs on `edited` and
+            // `synchronize`, so once a PR's title carries a real (non-placeholder)
+            // issue reference, drop the label instead of leaving it for a manual
+            // clear at merge time. Per #3356: the title was fixed (a real issue
+            // ref added, this check went green) but `needs-issue-link` survived
+            // and blocked an ops merge under the "no needs-* label may merge"
+            // doctrine — the label-writer never reconciled its own label.
+            if (labels.includes('needs-issue-link')) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  name: 'needs-issue-link',
+                });
+                core.info(`Removed needs-issue-link: title now references real issue #${issueNumber}.`);
+              } catch (e) {
+                core.warning(`Could not remove needs-issue-link label: ${e.message}`);
+              }
+            }
+
             core.info('PR title passes validation.');

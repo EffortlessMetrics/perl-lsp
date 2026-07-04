@@ -245,6 +245,7 @@ The GitHub issue thread is not a report destination — it is the database, the 
 
 - Don't rebase PRs unless merge conflicts exist
 - Merge in batches of 3 (CI cancellation cascade -- rapid merges cancel each other's CI runs)
+- Before merging a batch of green PRs, compare their changed-file lists (`gh pr diff --name-only`); when two PRs in the batch touch the same file, merge the older/smaller one first and expect the other to need a conflict-resolution merge afterward — don't merge same-file PRs back-to-back blind (observed 2026-07-04: #3397 and #3381 both touched `runtime/scheduler.rs`; wrong order created an avoidable conflict)
 - Run `just cpan-corpus-ratchet` after parser fix merges
 - `docs/project/status/*.md` subsystem files are regenerated automatically post-merge (no manual step needed)
 
@@ -407,6 +408,12 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 
 **Worktree stash prohibition**: Never use `git stash` in a worktree agent. The stash list is shared across all worktrees and the main checkout — `git stash pop` may silently restore another agent's changes. Use `git restore <file>` to discard changes, or `git commit -m "wip"` to save work in progress.
 
+**Agent worktree build rules** (learned from repeated field failures):
+- Run cargo builds/tests in the **foreground** with an explicit long timeout; a workflow/background agent that ends its turn waiting on a background build loses the notification and its work.
+- If a long build is killed by a tool timeout, **re-run the same command** — incremental compilation resumes where it stopped.
+- Under concurrent worktree builds, sccache can fail with a bare exit-1 on unrelated crates: use `RUSTC_WRAPPER=""` for agent builds.
+- In a worktree, use `git fetch origin pull/<N>/head:<branch>` to check out a PR — `gh pr checkout` can fail with exit 128 inside worktrees.
+
 ## Truth Sources
 
 Metrics are **computed, not hand-edited**:
@@ -461,6 +468,12 @@ Start with `/swarm all`. Orchestrator spawns scoped agents from the catalog in w
 **Key commands**: `/swarm` (start), `/swarm-protocol` (rules), `/coding-standards` (standards), `/verify` (crate gate), `/parser-fix` (TDD fix).
 
 **PR lifecycle**: Draft PR -> reviewer agent -> `/pr-ready` -> CI -> ops agent merges.
+
+**PR title issue reference (`(#0000)` rule)** — per `.github/workflows/pr-title-check.yml` (issue #724):
+- A title must reference an issue as `(#N)`. The placeholder `(#0000)` (or `(#0)`) is accepted and **non-blocking** — the check passes — when no real (non-zero) issue number is present in the title. Use it only when you genuinely cannot determine the issue number; never guess a real one (a wrong-but-real reference silently pollutes an unrelated issue's thread).
+- Using `(#0000)` auto-applies the `needs-issue-link` label: a **real issue must be linked before merge** — the placeholder is a title-check pass, not a merge pass.
+- `needs-issue-link` **self-clears**: `pr-title-check.yml` re-runs on `edited`/`synchronize`, and once the title is updated to carry a real issue number, the workflow removes `needs-issue-link` itself in the same run — no manual label removal needed. (Before this fix, the label had to be cleared by hand — see the #3356 incident, where the title was fixed but the stale label blocked an ops merge under the "no needs-* label may merge" doctrine.)
+- `skip-title-check` is reserved for maintainer-owned exceptions and bypasses this entirely.
 
 **Files**: `.ops-perl-lsp/` (metrics), `.claude/agents/` (agent defs and catalog), `.claude/commands/` (step skills and shared ops).
 
