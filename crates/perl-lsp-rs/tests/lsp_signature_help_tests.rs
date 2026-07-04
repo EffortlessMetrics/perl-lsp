@@ -712,3 +712,118 @@ my $r = $calc->compute("add", 1, 2);
 
     Ok(())
 }
+
+/// Tests: signature-help parameter labels distinguish parameter KINDS.
+///
+/// Perl 5.44 signature parameters come in distinct kinds — mandatory, optional
+/// (with a default), slurpy, and named — and signature help must render them
+/// distinctly instead of flattening every kind to a bare `sigil+name`. This test
+/// opens an in-document sub whose signature mixes all four kinds and asserts the
+/// rendered `signatures[0].label` shows:
+///   - `$host`          (mandatory — bare)
+///   - `$port = 8080`   (optional — WITH its default, not a bare `$port`)
+///   - `:$secure`       (named — leading colon)
+///   - `@extra`         (slurpy — sigil preserved)
+///
+/// Because the sub is defined in the same document, the provider is guaranteed to
+/// find the signature, so the label assertions are made unconditionally (a
+/// non-null oracle) rather than defensively guarded.
+#[test]
+fn test_signature_help_parameter_labels_distinguish_kinds() -> TestResult {
+    let doc = r#"
+sub configure($host, $port = 8080, $mode = 'fast', :$secure, @extra) {
+    return 1;
+}
+
+my $r = configure("localhost");
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///configure.pl", doc)?;
+
+    // Line 5 (0-based): `my $r = configure("localhost");`
+    // `configure` starts at char 8, `(` is at char 17 — put the cursor just
+    // inside the argument list.
+    let result = harness
+        .request(
+            "textDocument/signatureHelp",
+            json!({
+                "textDocument": {"uri": "file:///configure.pl"},
+                "position": {"line": 5, "character": 18}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(
+        !result.is_null(),
+        "in-document sub with a signature must produce signature help, got null"
+    );
+
+    let signatures = result
+        .get("signatures")
+        .and_then(|s| s.as_array())
+        .ok_or("SignatureHelp must have a 'signatures' array")?;
+    assert!(!signatures.is_empty(), "expected at least one signature, got: {:?}", result);
+
+    let label = signatures[0]
+        .get("label")
+        .and_then(|l| l.as_str())
+        .ok_or("signatures[0].label must be a string")?;
+
+    // Mandatory param renders bare.
+    assert!(label.contains("$host"), "label must contain mandatory param `$host`, got: {}", label);
+
+    // Named param renders with a leading colon — the key user-visible fix.
+    assert!(
+        label.contains(":$secure"),
+        "named param must render as `:$secure` (leading colon), got: {}",
+        label
+    );
+
+    // Optional param renders WITH its default value, not a bare `$port`.
+    assert!(
+        label.contains("$port = 8080"),
+        "optional param must render its default as `$port = 8080`, got: {}",
+        label
+    );
+
+    // Optional param with a STRING default renders the string verbatim (its
+    // source quotes are preserved) — not double-wrapped as `"'fast'"`.
+    assert!(
+        label.contains("$mode = 'fast'"),
+        "optional string-default param must render as `$mode = 'fast'`, got: {}",
+        label
+    );
+    assert!(
+        !label.contains("\"'fast'\""),
+        "string default must not be double-quoted (no `\"'fast'\"`), got: {}",
+        label
+    );
+
+    // Slurpy param keeps its sigil and stays distinct.
+    assert!(label.contains("@extra"), "slurpy param must render as `@extra`, got: {}", label);
+
+    // The named param must NOT appear as a bare `$secure` without the colon
+    // marker anywhere the colon is missing — verify the colon-prefixed form is
+    // the one present by checking the per-parameter labels too.
+    let params = signatures[0]
+        .get("parameters")
+        .and_then(|p| p.as_array())
+        .ok_or("signatures[0].parameters must be an array")?;
+    let param_labels: Vec<&str> =
+        params.iter().filter_map(|p| p.get("label").and_then(|l| l.as_str())).collect();
+    assert!(
+        param_labels.contains(&":$secure"),
+        "a ParameterInformation label must be exactly `:$secure`, got: {:?}",
+        param_labels
+    );
+    assert!(
+        param_labels.contains(&"$port = 8080"),
+        "a ParameterInformation label must be exactly `$port = 8080`, got: {:?}",
+        param_labels
+    );
+
+    harness.shutdown_gracefully();
+    Ok(())
+}
