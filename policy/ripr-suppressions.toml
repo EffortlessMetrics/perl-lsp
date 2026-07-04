@@ -1991,3 +1991,20 @@ reason = "PR #3397 (#3396) adds the PERL_LSP_TIMING instrumentation sink. ripr 0
 created = "2026-07-04"
 review_after = "2026-08-04"
 expires = "2026-10-04"
+
+# -----------------------------------------------------------------------------
+# INDIRECT_METHOD_EXCLUDED const array (PR #1914, #1758): no_static_path on a
+# const-data declaration that ripr cannot trace to a test through `.contains()`.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-indirect-method-excluded-const-no-static-path"
+kind = "const_data_no_static_path"
+paths = ["crates/perl-lsp-rs-core/src/providers/completion/completion/request/dispatch.rs"]
+classification = ["no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/perl-lsp-swarm#1758"
+reason = "PR #1914 (#1758) adds indirect-object method-call completion in dispatch.rs. ripr 0.9.x reports 2 no_static_path severe seams on the `const INDIRECT_METHOD_EXCLUDED: &[&str]` array — dispatch.rs:144 (family field_construction, the `const ... = &[` declaration) and dispatch.rs:145 (family return_value, the string-literal contents) — each reach:no, \"No static test path\", confidence 0.48, severity info. The const IS exercised: is_indirect_method_word gates on `INDIRECT_METHOD_EXCLUDED.contains(&word)` (dispatch.rs:182), and the inline indirect_helper_tests assert is_indirect_method_word(\"print\"), (\"my\"), (\"return\"), (\"croak\") == false plus the through-dispatch tests test_indirect_print_filehandle/die/warn_*_does_not_offer_methods in completion/tests.rs exercise the exclusion end-to-end. But ripr's field-construction/return-value probes on a const *data literal* cannot statically trace a path from a test through `.contains()` to the const's storage — const data has no call path the way a function body does. This is a no_static_path-on-const analyzer artifact of the EffortlessMetrics/ripr#1429 class (tracer cannot connect a direct oracle to a const-data seam), not a missing test. HONEST SCOPE NOTE: like every sibling entry, the matcher (read_ripr_suppression_rules) is PATH-scoped — the `classification` field records intent but is not enforced, so this covers all diff-scoped ripr findings in dispatch.rs, not only the no_static_path pair. Net blocking impact is still exactly those 2 seams: under the merged #3363 (#2015) recalibration only reachable_unrevealed + no_static_path block (weakly_exposed is already advisory-excluded) and this diff has reachable_unrevealed = 0. The accepted, time-boxed residual is that a FUTURE reachable_unrevealed gap introduced in dispatch.rs would be masked for this window — tighten by isolating INDIRECT_METHOD_EXCLUDED into its own file (narrower path) or by the ripr#1429 fix. Remove when ripr can trace const-data references, when targeted mutation replaces this advisory path (#1289), or when the exclusion set is restructured so ripr traces it."
+created = "2026-07-04"
+review_after = "2026-08-04"
+expires = "2026-10-04"
+removal_criteria = "ripr#1429 fixed upstream (const-data seams traceable), OR targeted mutation scheduled for dispatch.rs (#1289), OR INDIRECT_METHOD_EXCLUDED restructured so ripr finds a static path."
