@@ -85,8 +85,19 @@ impl<'a> Parser<'a> {
                     self.expect_closing_delimiter(TokenKind::RightBrace)?;
                     let end = self.previous_position();
                     self.exit_recursion();
+                    // Emit a recovery marker so the AST reflects the incomplete brace
+                    // content instead of a silently-empty block. Without this, an
+                    // incomplete construct like `{ host => "localhost", port =>` parsed
+                    // to `(block )` with no marker, hiding the error from AST consumers
+                    // (the diagnostic itself is recorded by expect_closing_delimiter
+                    // above). We intentionally do NOT enter the block-statement loop —
+                    // that would swallow trailing `sub`/`my` declarations (#1352).
+                    let marker = Node::new(
+                        NodeKind::MissingExpression,
+                        SourceLocation { start, end },
+                    );
                     return Ok(Node::new(
-                        NodeKind::Block { statements: Vec::new() },
+                        NodeKind::Block { statements: vec![marker] },
                         SourceLocation { start, end },
                     ));
                 }
