@@ -1,0 +1,373 @@
+{
+  "schema_version": "perl_core_harness.compile_baseline.v1",
+  "report_schema_version": "perl_core_harness.report.v1",
+  "mode": "compile",
+  "profile": "comp",
+  "files_total": 25,
+  "files_passed": 8,
+  "files_failed": 17,
+  "tap_assertions_total": 25,
+  "tap_assertions_passed": 8,
+  "buckets": {
+    "compile_effect": 10,
+    "parse_recovery": 7
+  },
+  "expected_failures": [
+    {
+      "path": "comp/decl.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "expected '}', found identifier at position 236",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "comp/filter_exception.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "comp/final_line_num.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Recovered from MissingOperand at InfixRhs (position 362)",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "comp/fold.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "comp/form_scope.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "typeglob assignment has a non-static RHS",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "comp/hints.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "comp/line_debug.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "expected ')', found number at position 654",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "comp/multiline.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "comp/our.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "AUTOLOAD declaration makes method dispatch dynamic",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "comp/parser_run.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "comp/parser.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Nesting depth limit exceeded: 129 > 128",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "comp/proto.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Invalid syntax at position 15147: Invalid prototype character(s) '[]' — valid characters are: $, @, %, &, *, \\, ;, +, _ (see perlsub)",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "comp/redef.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "comp/require.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "expected '{', found version string at position 2431",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "comp/retainedlines.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "symbolic reference dereference is not statically known",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "comp/use.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Invalid syntax at position 7933: Unclosed block: expected '}' but reached end of input",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "comp/utf.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    }
+  ],
+  "file_results": [
+    {
+      "path": "comp/bproto.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/cmdopt.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/colon.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/decl.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/filter_exception.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/final_line_num.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/fold.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/form_scope.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/hints.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/line_debug.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/multiline.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/opsubs.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/our.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/package_block.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/package.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/parser_run.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/parser.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/proto.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/redef.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/require.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/retainedlines.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/term.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/uproto.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/use.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/utf.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    }
+  ]
+}

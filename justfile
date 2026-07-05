@@ -2954,6 +2954,26 @@ perl-core-integrated-run REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
           --perl-ref {{REF}} \
           --output-dir target/perl-core/smoke/run
 
+perl-core-upstream-compile-ratchet:
+    cargo run -p xtask -- perl-core-harness baseline \
+          --mode compile \
+          --profile base \
+          --report target/perl-core/smoke/base/compile.json \
+          --baseline .ci/perl-core-harness/upstream-base-compile-baseline.json \
+          --check
+    cargo run -p xtask -- perl-core-harness baseline \
+          --mode compile \
+          --profile comp \
+          --report target/perl-core/smoke/comp/compile.json \
+          --baseline .ci/perl-core-harness/upstream-comp-compile-baseline.json \
+          --check
+    cargo run -p xtask -- perl-core-harness baseline \
+          --mode compile \
+          --profile run \
+          --report target/perl-core/smoke/run/compile.json \
+          --baseline .ci/perl-core-harness/upstream-run-compile-baseline.json \
+          --check
+
 # Bootstrap/update the committed CPAN corpus baseline
 cpan-corpus-baseline-update:
     cargo run -p xtask -- cpan-corpus sweep --output .ci/cpan-corpus-baseline.json

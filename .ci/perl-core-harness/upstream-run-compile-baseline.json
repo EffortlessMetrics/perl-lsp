@@ -1,0 +1,511 @@
+{
+  "schema_version": "perl_core_harness.compile_baseline.v1",
+  "report_schema_version": "perl_core_harness.report.v1",
+  "mode": "compile",
+  "profile": "run",
+  "files_total": 28,
+  "files_passed": 1,
+  "files_failed": 27,
+  "tap_assertions_total": 28,
+  "tap_assertions_passed": 1,
+  "buckets": {
+    "compile_effect": 17,
+    "parse_recovery": 10
+  },
+  "expected_failures": [
+    {
+      "path": "run/cloexec.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/dtrace.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Invalid syntax at position 4986: Unterminated heredoc: MAGIC_OP",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "run/exit.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "expected expression, found ',' at position 1070",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "run/fresh_perl.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/locale.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Invalid syntax at position 2954: Nested quantifiers detected (possible backtracking risk)",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "run/noswitch.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/runenv_hashseed.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/runenv_randseed.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Invalid syntax at position 1908: Unterminated heredoc: EOF_TEST_CODE",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "run/runenv.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "expected '{', found '(' at position 1653",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "run/script.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "expected '{', found ',' at position 274",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "run/switch-I-and-M.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switch0.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switcha.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switchC.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Invalid syntax at position 498: Nested quantifiers detected (possible backtracking risk)",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "run/switchd-78586.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switchd.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Invalid syntax at position 8085: Unterminated heredoc: =",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "run/switchDx.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switches.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Invalid syntax at position 7137: Nested quantifiers detected (possible backtracking risk)",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    },
+    {
+      "path": "run/switchF.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switchF2.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switchI.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switchM.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switchn.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switchp.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switcht.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/switchx.t",
+      "phase": "compile",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
+      "lsp_impact": [
+        "definition",
+        "references",
+        "diagnostics"
+      ]
+    },
+    {
+      "path": "run/todo.t",
+      "phase": "compile",
+      "bucket": "parse_recovery",
+      "first_diagnostic": "Invalid syntax at position 1115: Nested quantifiers detected (possible backtracking risk)",
+      "workstream": "parser_recovery",
+      "lsp_impact": [
+        "diagnostics",
+        "syntax_tree",
+        "semantic_tokens"
+      ]
+    }
+  ],
+  "file_results": [
+    {
+      "path": "run/cloexec.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/dtrace.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/exit.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/fresh_perl.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/locale.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/noswitch.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/runenv_hashseed.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/runenv_randseed.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/runenv.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/script.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switch-I-and-M.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switch0.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switcha.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchC.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchd-78586.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchd.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchDx.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switches.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchF.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchF1.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchF2.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchI.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchM.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchn.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchp.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switcht.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/switchx.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    },
+    {
+      "path": "run/todo.t",
+      "status": "fail",
+      "assertions_passed": 0,
+      "assertions_total": 1
+    }
+  ]
+}

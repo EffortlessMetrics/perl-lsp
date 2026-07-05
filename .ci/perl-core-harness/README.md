@@ -58,9 +58,16 @@ Run the advisory integrated run lane against the pinned upstream ref:
 just perl-core-integrated-run
 ```
 
+Check the advisory real-upstream compile ratchets after smoke receipts exist:
+
+```bash
+just perl-core-upstream-compile-ratchet
+```
+
 The scheduled/manual `Perl Core Harness` workflow prepares the pinned upstream
-tree and emits advisory `base`, `comp`, and `run` smoke receipts under
-`target/perl-core/smoke/<profile>/`.
+tree, emits advisory `base`, `comp`, and `run` smoke receipts under
+`target/perl-core/smoke/<profile>/`, and checks the real-upstream compile
+reports against the checked-in upstream baselines.
 
 Or run the smoke against a user-supplied prepared upstream Perl tree:
 
@@ -79,7 +86,16 @@ base-compile-baseline.json
 ```
 
 It covers the generated two-file base compile fixture only. It does not claim a
-real upstream Perl baseline or runtime execution. Update it explicitly with
-`perl-core-harness baseline --accept` after reviewing an intentional change. The
-real-tree smoke is manual/advisory and produces receipts plus a gap map only; it
-does not run Perl programs, claim runtime conformance, or promote a PR gate.
+real upstream Perl baseline or runtime execution. The real-upstream advisory
+compile ratchets are separate:
+
+```text
+upstream-base-compile-baseline.json
+upstream-comp-compile-baseline.json
+upstream-run-compile-baseline.json
+```
+
+Update any baseline explicitly with `perl-core-harness baseline --accept` after
+reviewing an intentional change. The real-tree smoke and ratchets are
+manual/advisory and produce receipts plus a gap map only; they do not run Perl
+programs, claim runtime conformance, or promote a PR gate.

@@ -18,6 +18,7 @@ For the current green/yellow/red burndown and next PR order, see the
 | Real upstream Perl base smoke | Advisory integrated | `perl-core-harness prepare --ref <pinned-ref>` prepares upstream Perl under `target/perl-core`, then `perl-core-harness smoke --profile base --modes parse,compile` writes discovery, parse, compile, gap-map, and smoke receipts |
 | Real upstream Perl comp smoke | Advisory integrated | `perl-core-harness smoke --profile comp --modes parse,compile` uses the same receipt path for the `comp` profile, and run 28711942840 recorded 25 discovered files, parse 18/25, compile 8/25, and bucketed `parse_recovery` / `compile_effect` gaps |
 | Real upstream Perl run smoke | Advisory integrated | `perl-core-harness smoke --profile run --modes parse,compile` uses the same receipt path for the `run` profile, and run 28726563803 recorded 28 discovered files, parse 18/28, compile 1/28, and bucketed `parse_recovery` / `compile_effect` gaps |
+| Real upstream compile ratchets | Advisory integrated | `.ci/perl-core-harness/upstream-{base,comp,run}-compile-baseline.json` ratchets real upstream compile reports for schema/profile/mode drift, newly failing files, unexpected failures, bucket growth, unknown/unbucketed failures, and assertion regressions |
 | Harness orchestration crate | Extracted | `crates/perl-core-harness` owns discovery, prepare, run, baseline, smoke, and gap-map orchestration; `xtask` remains CLI dispatch glue |
 | Execute mode | Not implemented | Future runtime slice |
 | Upstream Perl tree preparation | Linux advisory | Clone/configure/test_prep automation is Linux-only in this slice; Windows/macOS preparation is future work |
@@ -47,6 +48,7 @@ target/perl-core/prepare/<ref>/prepare.json
 target/perl-core/smoke/<profile>/smoke.json
 target/perl-core/smoke/<profile>/gap-map.json
 .ci/perl-core-harness/base-compile-baseline.json
+.ci/perl-core-harness/upstream-<profile>-compile-baseline.json
 ```
 
 The discovery receipt records the prepared tree, host Perl command, upstream
@@ -55,8 +57,9 @@ reports record file-level TAP assertions and failure buckets such as
 `parse_recovery`, `source_decode`, `compile_effect`, and `cli_switch`.
 The compile baseline is deterministic and order-independent; improvements are
 allowed, but baseline tightening requires an explicit `perl-core-harness
-baseline --accept` update. The smoke summary records the discovery, parse, and
-compile report paths plus per-mode totals and buckets. The gap map groups
-failures by bucket, workstream, impacted LSP surface, and first failure per
-bucket. Bucketed parse/compile failures are preserved as gap data; missing
+baseline --accept` update. The generated fixture baseline and real-upstream
+advisory baselines are separate files. The smoke summary records the discovery,
+parse, and compile report paths plus per-mode totals and buckets. The gap map
+groups failures by bucket, workstream, impacted LSP surface, and first failure
+per bucket. Bucketed parse/compile failures are preserved as gap data; missing
 reports, unbucketed failures, and `unknown` buckets fail the smoke receipt.

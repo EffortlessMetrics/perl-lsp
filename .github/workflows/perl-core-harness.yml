@@ -82,6 +82,17 @@ jobs:
             --perl-ref "${{ steps.upstream.outputs.ref }}" \
             --output-dir target/perl-core/smoke/run
 
+      - name: Check upstream compile ratchets
+        run: |
+          for profile in base comp run; do
+            cargo run -p xtask -- perl-core-harness baseline \
+              --mode compile \
+              --profile "$profile" \
+              --report "target/perl-core/smoke/$profile/compile.json" \
+              --baseline ".ci/perl-core-harness/upstream-$profile-compile-baseline.json" \
+              --check
+          done
+
       - name: Summarize receipts
         if: always()
         shell: bash
