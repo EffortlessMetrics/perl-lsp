@@ -37,7 +37,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H11 | Harness orchestration crate | Green | #3420 | None | `crates/perl-core-harness` owns orchestration; `xtask` is CLI glue |
 | H12 | `run` compile smoke | Yellow / bucketed compiler gaps | #3422, #3424, [run 28726563803](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28726563803) | None | `run` smoke writes runner-backed discovery/parse/compile/smoke/gap-map receipts |
 | H13 | Real upstream compile ratchets | Green / advisory | #3426 | None | `base`/`comp`/`run` compile receipts are ratcheted separately from the generated fixture ratchet |
-| H14 | First bucket burn-down | Red | Not started | Start after H13 lands; prefer `base` `parse_recovery` for `base/lex.t` / `base/term.t` | One named receipt-backed bucket or tight cluster is reduced |
+| H14 | First bucket burn-down | Active | #3428; targeted parser proof for `base/lex.t` / `base/term.t` syntax | Reduce `base` `parse_recovery`; rerun advisory `base` receipt after merge | One named receipt-backed bucket or tight cluster is reduced |
 | H15 | Execute-one | Red / future | Not started | Start after compile receipts are useful and at least one bucket burn-down lands or is explicitly deferred | One tiny `base/*.t` executes real TAP |
 | H16 | Execute-base | Red / future | Not started | Start after H15 lands | `base` runtime receipt exists |
 | H17 | Runtime model | Red / future | Not started | Driven by execute-one receipts | Runtime buckets are named and owned |
@@ -111,5 +111,5 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | 7 | `compiler(harness): add Perl core run compile-mode smoke receipts` | `feat(perl-core-harness): add run compile smoke receipts` | Add `profile=run` discovery/parse/compile/smoke/gap-map receipts |
 | 8 | `compiler(harness): record first real upstream run smoke receipt` | `docs(perl-core-harness): record first run smoke receipt` | Record ref, discovered count, parse/compile totals, top buckets, and artifact link |
 | 9 | `compiler(harness): ratchet real upstream compile receipts` | `feat(perl-core-harness): ratchet upstream compile smoke receipts` | Ratchet real upstream `base`/`comp`/`run` compile receipts |
-| 10 | `compiler(parser): reduce base parse-recovery bucket` | `fix(parser): reduce base parse-recovery harness gaps` | Burn down `base/lex.t` / `base/term.t` or a tighter receipt-backed parse-recovery cluster |
+| 10 | `compiler(parser): reduce base parse-recovery bucket` | `fix(parser): reduce base parse-recovery harness gaps` | Active in #3428; burns down `base/term.t` parse recovery and advances `base/lex.t` to the next parser gap |
 | 11 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute one tiny upstream `base/*.t` and record runtime buckets |

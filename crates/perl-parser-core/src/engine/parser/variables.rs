@@ -314,10 +314,7 @@ impl<'a> Parser<'a> {
 
             // Parse the expression inside the braces
             let expr = if sigil == "$" {
-                match self.try_parse_braced_qualified_scalar()? {
-                    Some(expr) => expr,
-                    None => self.parse_expression()?,
-                }
+                self.parse_braced_scalar_body()?
             } else {
                 self.parse_expression()?
             };
@@ -355,6 +352,29 @@ impl<'a> Parser<'a> {
                 token.start,
             ));
         };
+
+        if matches!(sigil.as_str(), "$" | "@" | "%")
+            && name.is_empty()
+            && self.peek_kind() == Some(TokenKind::LeftBrace)
+        {
+            self.tokens.next()?; // consume {
+
+            let expr = if sigil == "$" {
+                self.parse_braced_scalar_body()?
+            } else {
+                self.parse_expression()?
+            };
+
+            self.consume_deref_body_terminators()?;
+            self.expect(TokenKind::RightBrace)?;
+            let end = self.previous_position();
+
+            let op = format!("{}{{}}", sigil);
+            return Ok(Node::new(
+                NodeKind::Unary { op, operand: Box::new(expr) },
+                SourceLocation { start: token.start, end },
+            ));
+        }
 
         // Handle sigil + partial deref: when the lexer produces e.g. `%{shift` as one
         // token (name starts with `{` but doesn't end with `}`), this is a dereference
@@ -518,6 +538,43 @@ impl<'a> Parser<'a> {
         let first = self.tokens.next()?;
         self.parse_qualified_scalar_tail(first.text.to_string(), first.start, first.end)
             .map(Some)
+    }
+
+    fn parse_braced_scalar_body(&mut self) -> ParseResult<Node> {
+        if let Some(expr) = self.try_parse_braced_caret_special_scalar()? {
+            return Ok(expr);
+        }
+
+        match self.try_parse_braced_qualified_scalar()? {
+            Some(expr) => Ok(expr),
+            None => self.parse_expression(),
+        }
+    }
+
+    fn try_parse_braced_caret_special_scalar(&mut self) -> ParseResult<Option<Node>> {
+        if !matches!(self.peek_kind(), Some(TokenKind::Unknown | TokenKind::BitwiseXor)) {
+            return Ok(None);
+        }
+
+        let caret_token = self.tokens.peek()?;
+        if caret_token.text.as_ref() != "^" {
+            return Ok(None);
+        }
+
+        let caret_token = self.tokens.next()?;
+        let mut name = String::from("^");
+        let mut end = caret_token.end;
+
+        if self.peek_kind() == Some(TokenKind::Identifier) {
+            let ident = self.tokens.next()?;
+            name.push_str(&ident.text);
+            end = ident.end;
+        }
+
+        Ok(Some(Node::new(
+            NodeKind::Variable { sigil: String::from("$"), name },
+            SourceLocation { start: caret_token.start, end },
+        )))
     }
 
     fn parse_qualified_scalar_tail(
@@ -771,7 +828,11 @@ impl<'a> Parser<'a> {
             self.tokens.next()?; // consume {
 
             // Parse the expression inside the braces
-            let expr = self.parse_expression()?;
+            let expr = if sigil == "$" {
+                self.parse_braced_scalar_body()?
+            } else {
+                self.parse_expression()?
+            };
 
             self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;

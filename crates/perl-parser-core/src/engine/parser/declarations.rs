@@ -245,11 +245,8 @@ impl<'a> Parser<'a> {
                 )
             }
         } else if self.peek_kind().is_some_and(Self::can_be_sub_name) {
-            let token = self.tokens.next()?;
-            (
-                Some(token.text.to_string()),
-                Some(SourceLocation { start: token.start, end: token.end }),
-            )
+            let (name, span) = self.parse_subroutine_name()?;
+            (Some(name), Some(span))
         } else {
             // No name - anonymous subroutine (next token is {, (, :, or similar)
             (None, None)
@@ -323,6 +320,50 @@ impl<'a> Parser<'a> {
             },
             SourceLocation { start, end },
         ))
+    }
+
+    fn parse_subroutine_name(&mut self) -> ParseResult<(String, SourceLocation)> {
+        let first = self.tokens.next()?;
+        let mut name = first.text.to_string();
+        let start = first.start;
+        let mut end = first.end;
+
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                let double_colon = self.tokens.next()?;
+                end = double_colon.end;
+            } else {
+                self.tokens.next()?;
+                let second_colon = self.tokens.next()?;
+                end = second_colon.end;
+            }
+            name.push_str("::");
+
+            if self.peek_kind().is_some_and(Self::can_be_sub_name) {
+                let next = self.tokens.next()?;
+                end = next.end;
+                name.push_str(&next.text);
+            } else if self.peek_kind() == Some(TokenKind::DoubleColon)
+                || (self.peek_kind() == Some(TokenKind::Colon)
+                    && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+            {
+                continue;
+            } else {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "identifier after ::".to_string(),
+                    found: self
+                        .peek_kind()
+                        .map(|kind| kind.display_name().to_string())
+                        .unwrap_or_else(|| "EOF".to_string()),
+                    location: self.current_position(),
+                });
+            }
+        }
+
+        Ok((name, SourceLocation { start, end }))
     }
 
     /// Parse class declaration (Perl 5.38+)

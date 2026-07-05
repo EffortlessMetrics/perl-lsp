@@ -522,8 +522,12 @@ impl<'a> Parser<'a> {
             // Note: TokenKind::Sub is handled in the keyword-as-identifier case below
             // This allows 'sub' to be used as a hash key or identifier in expressions
             TokenKind::Try => {
-                // Check for autoquoting: `try => value`
-                if self.is_keyword_hash_key_boundary() {
+                // Check for autoquoting (`try => value`) and old-style
+                // bareword argument uses (`open(try, ...)`).
+                let next_is_arg_boundary = self.tokens.peek_second().ok().is_some_and(|t| {
+                    matches!(t.kind, TokenKind::Comma | TokenKind::RightParen)
+                });
+                if self.is_keyword_hash_key_boundary() || next_is_arg_boundary {
                     let token = self.tokens.next()?;
                     Ok(Node::new(
                         NodeKind::Identifier { name: token.text.to_string() },
