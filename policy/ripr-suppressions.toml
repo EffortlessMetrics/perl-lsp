@@ -2008,3 +2008,24 @@ created = "2026-07-04"
 review_after = "2026-08-04"
 expires = "2026-10-04"
 removal_criteria = "ripr#1429 fixed upstream (const-data seams traceable), OR targeted mutation scheduled for dispatch.rs (#1289), OR INDIRECT_METHOD_EXCLUDED restructured so ripr finds a static path."
+
+# -----------------------------------------------------------------------------
+# perl-core-harness xtask extraction (PR #3421, closes #3420): the old
+# xtask/src/tasks/perl_core_harness.rs implementation was mechanically moved
+# into the private perl-core-harness crate, leaving xtask as CLI glue only.
+# ripr 0.9.x reports deleted/moved seams from the old xtask path as new
+# reachable_unrevealed findings even though the active implementation now lives
+# under crates/perl-core-harness and is covered by the focused harness tests.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-perl-core-harness-xtask-extraction-move"
+kind = "mechanical_move_extraction"
+paths = ["xtask/src/tasks/perl_core_harness.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/perl-lsp-swarm#3420"
+reason = "PR #3421 extracts the active Perl core harness orchestration from xtask/src/tasks/perl_core_harness.rs into the private crates/perl-core-harness crate, leaving the xtask file as a re-export/CLI glue surface. ripr 0.9.x reports 37 reachable_unrevealed findings on deleted/moved old xtask lines (run/prepare/smoke/baseline helper calls and test-helper branches) even though the behavior is preserved and covered by cargo test -p perl-core-harness plus PR Smoke's perl-core-harness unit_scoped path. This suppression is deliberately path-scoped to the old xtask file, which now contains no implementation logic; active harness code in crates/perl-core-harness remains visible to RIPR. Remove if implementation logic returns to this xtask file or when RIPR can classify mechanical moves without re-opening deleted seams."
+created = "2026-07-05"
+review_after = "2026-08-05"
+expires = "2026-10-05"
+removal_criteria = "xtask/src/tasks/perl_core_harness.rs contains implementation logic again, OR ripr correctly treats the #3421 mechanical move/deleted old lines as non-actionable."

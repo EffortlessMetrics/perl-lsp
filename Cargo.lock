@@ -1535,6 +1535,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-core-harness"
+version = "0.17.0"
+dependencies = [
+ "chrono",
+ "color-eyre",
+ "perl-core-harness-types",
+ "perl-tdd-support",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
 name = "perl-core-harness-types"
 version = "0.17.0"
 dependencies = [
@@ -4004,6 +4017,7 @@ dependencies = [
  "indicatif",
  "notify",
  "perl-ci-hygiene",
+ "perl-core-harness",
  "perl-core-harness-types",
  "perl-corpus",
  "perl-kwalitee",

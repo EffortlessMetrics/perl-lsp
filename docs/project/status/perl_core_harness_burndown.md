@@ -34,12 +34,13 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H8 | Linux-only upstream prepare | Yellow / future | #3316 | Keep explicit until non-Linux prepare exists | Board names platform boundary |
 | H9 | Real upstream `base` runner invocation | Green | #3384, [run 28707735088](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28707735088) | None | Real upstream `base` parse/compile records come from `perl-core-test-runner` |
 | H10 | `comp` compile smoke | Yellow / bucketed compiler gaps | #3387, #3394, [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840) | None | `comp` smoke writes runner-backed discovery/parse/compile/smoke/gap-map receipts |
-| H11 | `run` compile smoke | Red | Not started | Start after H10 receipt record lands | `run` smoke writes discovery/parse/compile/smoke/gap-map receipts |
-| H12 | Real upstream compile ratchets | Red | Not started | Start after H10/H11 are stable | `base`/`comp`/`run` compile receipts are ratcheted or deferral is explicit |
-| H13 | Execute-one | Red / future | Not started | Start after compile receipts are useful | One tiny `base/*.t` executes real TAP |
-| H14 | Execute-base | Red / future | Not started | Start after H13 lands | `base` runtime receipt exists |
-| H15 | Runtime model | Red / future | Not started | Driven by execute-one receipts | Runtime buckets are named and owned |
-| H16 | Compiler-backed LSP provider promotion | Red / future | Not started | Start after compiler facts are proven | Provider promotion plan is gated by receipts |
+| H11 | Harness orchestration crate | Green | #3420 | None | `crates/perl-core-harness` owns orchestration; `xtask` is CLI glue |
+| H12 | `run` compile smoke | Red | Not started | Start after H11 lands | `run` smoke writes discovery/parse/compile/smoke/gap-map receipts |
+| H13 | Real upstream compile ratchets | Red | Not started | Start after H10/H12 are stable | `base`/`comp`/`run` compile receipts are ratcheted or deferral is explicit |
+| H14 | Execute-one | Red / future | Not started | Start after compile receipts are useful | One tiny `base/*.t` executes real TAP |
+| H15 | Execute-base | Red / future | Not started | Start after H14 lands | `base` runtime receipt exists |
+| H16 | Runtime model | Red / future | Not started | Driven by execute-one receipts | Runtime buckets are named and owned |
+| H17 | Compiler-backed LSP provider promotion | Red / future | Not started | Start after compiler facts are proven | Provider promotion plan is gated by receipts |
 
 ## Latest Receipt Slots
 
@@ -79,11 +80,12 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 2. Record the first advisory real upstream `base` smoke receipt. Active issue: #3378.
 3. Add `comp` compile-mode smoke. Active issue: #3387.
 4. Record the first advisory real upstream `comp` smoke receipt. Active issue: #3394.
-5. Add `run` compile-mode smoke. Next red.
-6. Ratchet real upstream `base`/`comp`/`run` compile receipts, or record an explicit board decision explaining why ratchet is deferred.
-7. Start execute-one for one tiny upstream `t/base/*.t`.
-8. Plan execute-base from the runtime buckets found by execute-one.
-9. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
+5. Extract the harness orchestration crate. Active issue: #3420.
+6. Add `run` compile-mode smoke. Next red after extraction.
+7. Ratchet real upstream `base`/`comp`/`run` compile receipts, or record an explicit board decision explaining why ratchet is deferred.
+8. Start execute-one for one tiny upstream `t/base/*.t`.
+9. Plan execute-base from the runtime buckets found by execute-one.
+10. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
 
 ## PR Train
 
@@ -94,6 +96,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | 3 | `compiler(harness): make real upstream base smoke invoke test runner` | `fix(perl-core-harness): invoke runner for real base smoke` | Landed in #3384; latest receipt has runner-backed parse/compile records |
 | 4 | `compiler(harness): add Perl core comp compile-mode smoke receipts` | `feat(perl-core-harness): add comp compile smoke receipts` | Add `profile=comp` discovery/parse/compile/smoke/gap-map receipts |
 | 5 | `compiler(harness): record first real upstream comp smoke receipt` | `docs(perl-core-harness): record first comp smoke receipt` | Record ref, discovered count, parse/compile totals, top buckets, and artifact link |
-| 6 | `compiler(harness): add Perl core run compile-mode smoke receipts` | `feat(perl-core-harness): add run compile smoke receipts` | Add `profile=run` discovery/parse/compile/smoke/gap-map receipts |
-| 7 | `compiler(harness): ratchet real upstream compile receipts` | `feat(perl-core-harness): ratchet upstream compile smoke receipts` | Ratchet real upstream `base`/`comp`/`run` compile receipts |
-| 8 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute one tiny upstream `base/*.t` and record runtime buckets |
+| 6 | `compiler(harness): extract Perl core harness orchestration crate` | `refactor(perl-core-harness): extract orchestration crate` | Move discovery/prepare/run/baseline/smoke orchestration from `xtask` into a private crate |
+| 7 | `compiler(harness): add Perl core run compile-mode smoke receipts` | `feat(perl-core-harness): add run compile smoke receipts` | Add `profile=run` discovery/parse/compile/smoke/gap-map receipts |
+| 8 | `compiler(harness): ratchet real upstream compile receipts` | `feat(perl-core-harness): ratchet upstream compile smoke receipts` | Ratchet real upstream `base`/`comp`/`run` compile receipts |
+| 9 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute one tiny upstream `base/*.t` and record runtime buckets |

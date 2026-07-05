@@ -10,6 +10,7 @@ members = [
     "crates/perl-parser",
     "crates/perl-parser-bench",
     "crates/perl-core-harness-types",
+    "crates/perl-core-harness",
     "crates/perl-core-test-runner",
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
@@ -274,6 +275,7 @@ perl-ripr-facts = { path = "crates/perl-ripr-facts", version = "0.17.0" }
 perl-dap = { path = "crates/perl-dap", version = "0.17.0" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.17.0" }
 perl-core-harness-types = { path = "crates/perl-core-harness-types", version = "0.17.0" }
+perl-core-harness = { path = "crates/perl-core-harness", version = "0.17.0" }
 # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.17.0" }

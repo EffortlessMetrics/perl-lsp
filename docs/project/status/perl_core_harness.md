@@ -17,6 +17,7 @@ For the current green/yellow/red burndown and next PR order, see the
 | Compile-mode base baseline | Ratcheted scaffold | `.ci/perl-core-harness/base-compile-baseline.json` protects the generated two-file base fixture against newly failing files, unknown buckets, bucket growth, and assertion regressions |
 | Real upstream Perl base smoke | Advisory integrated | `perl-core-harness prepare --ref <pinned-ref>` prepares upstream Perl under `target/perl-core`, then `perl-core-harness smoke --profile base --modes parse,compile` writes discovery, parse, compile, gap-map, and smoke receipts |
 | Real upstream Perl comp smoke | Advisory integrated | `perl-core-harness smoke --profile comp --modes parse,compile` uses the same receipt path for the `comp` profile, and run 28711942840 recorded 25 discovered files, parse 18/25, compile 8/25, and bucketed `parse_recovery` / `compile_effect` gaps |
+| Harness orchestration crate | Extracted | `crates/perl-core-harness` owns discovery, prepare, run, baseline, smoke, and gap-map orchestration; `xtask` remains CLI dispatch glue |
 | Execute mode | Not implemented | Future runtime slice |
 | Upstream Perl tree preparation | Linux advisory | Clone/configure/test_prep automation is Linux-only in this slice; Windows/macOS preparation is future work |
 
