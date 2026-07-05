@@ -45,7 +45,7 @@ These aren't "next-step" operations — they're ambient context for every issue.
 
 **Don't verdict on premise.** Your job is facts: file exists / doesn't, function exists / doesn't, module exists on CPAN / doesn't, issue is already fixed / isn't. Verdicts on whether the work should proceed belong to advocatus-diaboli + maintainer-issue. Report what you found; let them decide.
 
-**Required checks vs advisory.** If the issue concerns CI failures, the branch-protection required checks are: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. "Skipping" on a required check = satisfied. Classify failures against these three only — never block on advisory-only failures.
+**Required checks vs advisory.** If the issue concerns CI failures, the branch-protection required checks are exactly two: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate` (authoritative: `.ci/policies/required-checks.toml` `required = true` entries; `Codecov / Patch 95` is advisory). "Skipping" on a required check = satisfied. Classify failures against these two only — never block on advisory-only failures.
 
 ## Issue-scout protocol (default)
 

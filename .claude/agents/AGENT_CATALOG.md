@@ -210,7 +210,7 @@ These are cross-cutting rules encoded in individual agent defs. Listed here for 
 - **In-build tracking:** When a builder opens a PR, the source issue is labeled `in-build`. Issues without this label appear unstarted to discovery scouts.
 - **Base ref is `origin/main`:** All `git diff origin/...` calls, branch creation, and merge-base checks use `origin/main` (not `origin/master`). A stale master ref caused a ~2h CI stall (#1310).
 - **RIPR via CI receipt only:** CI pins `RIPR_VERSION=0.5.0` (`ripr.yml`). Local installs may differ. Always verify from the `ripr+ New Gap Gate` CI receipt.
-- **Three required checks:** `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. "Skipping" = satisfied. Advisory checks failing alone never block merge.
+- **Two required checks:** `Perl LSP Rust Small Result`, `ripr+ New Gap Gate` (authoritative: `.ci/policies/required-checks.toml` `required = true` entries). `Codecov / Patch 95` is advisory (`required = false`). "Skipping" = satisfied. Advisory checks failing alone never block merge.
 - **PR body must match the diff.** See `docs/agents/SPEC_UPDATE_CHECKLIST.md` — every product PR answers it before publishing.
 
 ## Design Principles

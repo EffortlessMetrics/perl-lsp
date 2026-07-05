@@ -79,13 +79,13 @@ Merge up to 3 PRs from the candidates identified in step 1.
    - Draft → skip, note "still in review"
    - Missing `deep-reviewed` on a non-docs PR → skip, note "missing deep review signal"
    - **Active `needs-*` label** → skip, note "sign-off contradicted by needs-* routing label; gate has not actually cleared"
-   - mergeStateStatus = UNSTABLE → skip, note "non-required check failing or in flight; verify which before forcing"
+   - mergeStateStatus = UNSTABLE → verify which check is red: if BOTH required checks (`Perl LSP Rust Small Result`, `ripr+ New Gap Gate`) are green on the current HEAD SHA, UNSTABLE from a non-required check is mergeable (per CLAUDE.md "Merge with UNSTABLE is OK"). Skip only if a required check is failing or still in flight.
 
 8. **After each batch of 3** — verify master is genuinely green BEFORE starting the next batch:
    ```bash
-   gh run list --workflow=CI --branch=master --limit=3 --json conclusion,headSha,event,name
+   gh run list --workflow=CI --branch=main --limit=3 --json conclusion,headSha,event,name
    ```
-   > **MCP sessions:** `gh run list` / `gh run view` have no MCP equivalent. Treat as best-effort: in MCP sessions, workflow run listing is unavailable. Use `mcp__github__pull_request_read(method:"get_status")` on any recently-merged PR against master as a proxy signal, or note the limitation and proceed with caution.
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__actions_list(method:"list_workflow_runs", owner, repo, workflow_runs_filter:{branch:"main"}, per_page:5)` — full parity (each run carries `conclusion`, `head_sha`, `event`, workflow name). For failing-run logs use `mcp__github__get_job_logs(owner, repo, run_id:<id>, failed_only:true, return_content:true)`. See [docs/reference/GH_MCP_FALLBACK.md](../../docs/reference/GH_MCP_FALLBACK.md).
    Required: latest master CI run on the merged SHA = SUCCESS. If master goes red post-merge:
    - Halt the queue immediately
    - Report which merge introduced the regression (compare master CI logs to recent merges)

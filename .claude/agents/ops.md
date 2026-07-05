@@ -32,18 +32,18 @@ The 2026-04-25 → 2026-04-26 sessions had 3 separate fmt-cascade master breaks 
 Before each merge, verify:
 
 1. **PR's own CI is GREEN on the current HEAD SHA** — use latest-per-check filter (per `feedback_status_check_rollup_stale_entries.md`); don't trust stale runs
-2. **Required workspace-wide checks SUCCESS**, not just per-crate:
+2. **Workspace-wide health checks SUCCESS**, not just per-crate (these are advisory signals for cascade prevention, NOT branch-protection-required — see the two-required-checks rule below):
    - `Compile All Targets (bit-rot guard)` — workspace `cargo check --all-targets`
    - `PR Smoke (Fast Feedback)` — includes workspace `cargo xtask fmt --check`
    - `Windows Guardrails (compile / module-separator-regressions / sandbox-fail-closed)`
 3. **If any required check failed**: do NOT merge. Route to cascade-update (if stale-base) or pr-responder (if real per-PR). The failure prevention is cheaper than the post-merge fix.
 4. **After a parser/lexer merge specifically**: pause the batch and verify master CI completes green on the merged SHA before continuing the batch. If master goes red post-merge, immediately dispatch a master-fix builder for the regression.
-5. **After every batch of 3**: `gh run list --workflow=CI --branch=master --limit=3` — confirm master is genuinely green before next batch.
-   > **MCP sessions:** `gh run list` has no MCP equivalent. In MCP sessions, workflow run listing is unavailable — treat this step as best-effort and note the limitation.
+5. **After every batch of 3**: `gh run list --workflow=CI --branch=main --limit=3` — confirm main is genuinely green before next batch.
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__actions_list(method:"list_workflow_runs", owner, repo, workflow_runs_filter:{branch:"main"}, per_page:5)` — full parity; check `status`/`conclusion` per run. See [docs/reference/GH_MCP_FALLBACK.md](../../docs/reference/GH_MCP_FALLBACK.md).
 
 Anti-pattern to avoid: "the failure looks shared/systemic so I'll merge anyway." Per `feedback_xtask_fmt_false_cascade.md` and the 2026-04-26 calibration, identical-looking failures across PRs are often N independent issues, not a master cascade. Verify on master first.
 
-**Required checks are three, everything else advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. "Skipping" = satisfied. Advisory checks failing alone are NOT a merge blocker. Only the three required checks (plus draft state and conflicts) block merge.
+**Required checks are two, everything else advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate` (authoritative source: `.ci/policies/required-checks.toml` — `required = true` entries). `Codecov / Patch 95` is advisory (`required = false`), per its policy reason: "Coverage is advisory and expensive; RIPR+ plus focused tests are the required PR proof." "Skipping" = satisfied. Advisory checks failing alone are NOT a merge blocker. Only the two required checks (plus draft state, conflicts, and absence of `needs-*` routing labels) block merge.
 
 ## Todo list
 

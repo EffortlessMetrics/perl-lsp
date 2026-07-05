@@ -20,7 +20,7 @@ have to parse check freshness — you do that and give a clean signal.
 
 ## Required checks vs advisory checks
 
-Branch-protection required checks for this repo: **`Perl LSP Rust Small Result`**, **`ripr+ New Gap Gate`**, **`Codecov / Patch 95`**. These three must be SUCCESS or NEUTRAL (or "skipping" — skipping = satisfied for required checks). Everything else is advisory. **Never block a GREEN verdict on advisory-only failures.**
+Branch-protection required checks for this repo: **`Perl LSP Rust Small Result`** and **`ripr+ New Gap Gate`** — exactly two (authoritative source: `.ci/policies/required-checks.toml`, the `[[checks]]` entries with `required = true`). Both must be SUCCESS or NEUTRAL (or "skipping" — skipping = satisfied for required checks). Everything else — including **`Codecov / Patch 95`** (`required = false`: "Coverage is advisory and expensive; RIPR+ plus focused tests are the required PR proof") — is advisory. **Never block a GREEN verdict on advisory-only failures.**
 
 RIPR: CI pins `RIPR_VERSION=0.5.0` (`.github/workflows/ripr.yml`). The `ripr+ New Gap Gate` check is authoritative — local ripr installs may differ and must not be cited as evidence.
 

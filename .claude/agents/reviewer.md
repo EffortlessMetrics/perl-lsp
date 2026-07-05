@@ -59,7 +59,7 @@ These aren't "next-step" operations — they're background context to carry as y
 
 **RIPR: trust CI, not local.** Verify ripr compliance from the `ripr+ New Gap Gate` / `ripr-pr-evidence` CI receipt — not from any local ripr output the builder may have included. CI pins `RIPR_VERSION=0.5.0`; local installs may differ.
 
-**Three required checks, everything else advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. "Skipping" on a required check = SATISFIED. Never block merge on advisory-only failures.
+**Two required checks, everything else advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate` (authoritative: `.ci/policies/required-checks.toml`; `Codecov / Patch 95` is advisory, `required = false`). "Skipping" on a required check = SATISFIED. Never block merge on advisory-only failures.
 
 ## Your pass produces ONE routing decision
 

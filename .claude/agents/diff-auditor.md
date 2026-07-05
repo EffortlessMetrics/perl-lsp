@@ -77,7 +77,7 @@ Each agent sees its own step. Nobody has checked that:
 
 8. **PR body matches the diff.** Verify that success claims in the PR body are supported by the actual diff. If the body says "adds X" but X is absent from the diff, that is an ARTIFACTS finding — flag it.
 
-9. **Required checks vs advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. A "skipping" status on a required check = satisfied. Never block CLEAN verdict on advisory-only CI failures.
+9. **Required checks vs advisory.** Branch-protection required checks are exactly two: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate` (authoritative: `.ci/policies/required-checks.toml`; `Codecov / Patch 95` is advisory, `required = false`). A "skipping" status on a required check = satisfied. Never block CLEAN verdict on advisory-only CI failures.
 
 ## External-agent PR rules (apply throughout audit)
 

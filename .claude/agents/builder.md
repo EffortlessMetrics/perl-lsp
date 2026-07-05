@@ -71,7 +71,7 @@ If a PR for this issue already exists, improve it — do NOT open a parallel one
 
 **Codecov false-low recipe.** Patch coverage counts only `--lib` profdata; integration tests in `tests/` don't count. If patch coverage is below 95%: add inline `#[cfg(test)]` lib tests that cover the new code paths (NOT padding). `LCOV_EXCL_LINE`/`LCOV_EXCL_START/STOP` only for GENUINELY-unreachable defensive branches.
 
-**Three required checks, everything else advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. A "skipping" status on a required check = SATISFIED. Never block on advisory checks.
+**Two required checks, everything else advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate` (authoritative: `.ci/policies/required-checks.toml`; `Codecov / Patch 95` is advisory, `required = false`). A "skipping" status on a required check = SATISFIED. Never block on advisory checks.
 
 **PR body must match the diff.** `docs/agents/SPEC_UPDATE_CHECKLIST.md` — answer it before publishing.
 

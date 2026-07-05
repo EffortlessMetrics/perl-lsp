@@ -270,6 +270,8 @@ This catches the #1 recurring failure: fmt/clippy drift landing on main through 
 
 See [docs/reference/CI_GATE_PLAYBOOK.md](docs/reference/CI_GATE_PLAYBOOK.md) for the full playbook.
 
+**Web/MCP sessions (no `gh` CLI)** — GitHub access goes through the GitHub MCP server. Every merge-critical `gh` invocation has a mapped `mcp__github__*` equivalent, including workflow-run listing (`actions_list`) and failed-job logs (`get_job_logs`); see [docs/reference/GH_MCP_FALLBACK.md](docs/reference/GH_MCP_FALLBACK.md) (#946). Never classify CI/master state as UNKNOWN before checking that map.
+
 ## Quick Reference
 
 ```bash
