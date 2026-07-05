@@ -2911,6 +2911,13 @@ perl-core-real-comp-smoke PERL_TREE HOST_PERL="perl":
           --profile comp \
           --modes parse,compile
 
+perl-core-real-run-smoke PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile run \
+          --modes parse,compile
+
 perl-core-integrated-base REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
     cargo run -p xtask -- perl-core-harness prepare \
           --ref {{REF}} \
@@ -2934,6 +2941,18 @@ perl-core-integrated-comp REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
           --modes parse,compile \
           --perl-ref {{REF}} \
           --output-dir target/perl-core/smoke/comp
+
+perl-core-integrated-run REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
+    cargo run -p xtask -- perl-core-harness prepare \
+          --ref {{REF}} \
+          --output-dir target/perl-core/upstream/{{REF}}
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree target/perl-core/upstream/{{REF}}/perl5 \
+          --host-perl perl \
+          --profile run \
+          --modes parse,compile \
+          --perl-ref {{REF}} \
+          --output-dir target/perl-core/smoke/run
 
 # Bootstrap/update the committed CPAN corpus baseline
 cpan-corpus-baseline-update:

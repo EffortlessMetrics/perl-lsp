@@ -2911,6 +2911,49 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn smoke_writes_run_profile_receipts() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let perl_tree = write_fake_perl_tree_with_two_run_tests(temp.path())?;
+        let runner = write_fake_runner(temp.path(), RunnerStatus::Pass)?;
+        let output_dir = temp.path().join("smoke-run");
+
+        smoke(SmokeConfig {
+            perl_tree: perl_tree.clone(),
+            host_perl: PathBuf::from("/bin/sh"),
+            runner: HarnessRunner::Test,
+            profile: HarnessProfile::Run,
+            modes: vec![HarnessMode::Parse, HarnessMode::Compile],
+            output_dir: Some(output_dir.clone()),
+            runner_binary: Some(runner),
+            perl_ref: Some("fake-ref".into()),
+        })?;
+
+        for file in ["discovery.json", "parse.json", "compile.json", "gap-map.json", "smoke.json"] {
+            assert!(output_dir.join(file).is_file(), "{file} should be written");
+        }
+
+        let discovery: DiscoveryReport =
+            serde_json::from_str(&fs::read_to_string(output_dir.join("discovery.json"))?)?;
+        assert_eq!(discovery.profile, HarnessProfile::Run);
+        let mut discovered =
+            discovery.tests.iter().map(|test| test.path.as_str()).collect::<Vec<_>>();
+        discovered.sort_unstable();
+        assert_eq!(discovered, vec!["run/import.t", "run/switches.t"]);
+
+        let smoke_report: SmokeReport =
+            serde_json::from_str(&fs::read_to_string(output_dir.join("smoke.json"))?)?;
+        assert_eq!(smoke_report.profile, HarnessProfile::Run);
+        assert_eq!(smoke_report.status, SmokeStatus::Pass);
+        assert_eq!(smoke_report.discovery_total, 2);
+        assert_eq!(smoke_report.parse_files_passed, Some(2));
+        assert_eq!(smoke_report.compile_files_passed, Some(2));
+        assert!(smoke_report.structural_failures.is_empty());
+        assert!(!perl_tree.join("t").join("perl").exists(), "source Perl tree must not be mutated");
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn smoke_preserves_bucketed_parse_failures_as_gap_receipts() -> TestResult {
         let temp = tempfile::tempdir()?;
         let perl_tree = write_fake_perl_tree(temp.path())?;
@@ -3257,6 +3300,27 @@ if [ "${1:-}" = "--dumptests" ]; then
 fi
 ./perl comp/require.t
 ./perl comp/use.t
+"#;
+        fs::write(t_dir.join("TEST"), script)?;
+        Ok(perl_tree)
+    }
+
+    #[cfg(unix)]
+    fn write_fake_perl_tree_with_two_run_tests(root: &Path) -> TestResult<PathBuf> {
+        let perl_tree = root.join("prepared-perl-two-run-tests");
+        let t_dir = perl_tree.join("t");
+        fs::create_dir_all(t_dir.join("run"))?;
+        fs::write(t_dir.join("run").join("import.t"), "1;\n")?;
+        fs::write(t_dir.join("run").join("switches.t"), "1;\n")?;
+        let script = r#"#!/bin/sh
+set -eu
+if [ "${1:-}" = "--dumptests" ]; then
+  echo "run/import.t"
+  echo "run/switches.t"
+  exit 0
+fi
+./perl run/import.t
+./perl run/switches.t
 "#;
         fs::write(t_dir.join("TEST"), script)?;
         Ok(perl_tree)

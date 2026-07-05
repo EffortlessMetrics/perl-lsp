@@ -5,7 +5,7 @@
 The Perl core harness is a compiler-testing integration lane. It can prepare a
 pinned upstream Perl tree on Linux, discover upstream Perl core tests, run
 parse-mode and compile-mode synthetic TAP receipts, and produce advisory
-real-tree `base` smoke and gap-map receipts.
+real-tree `base`, `comp`, and `run` smoke and gap-map receipts.
 
 It does not execute Perl programs as runtime code and does not claim runtime
 conformance. Execute mode remains fail-closed until the execute-one slice lands.
@@ -35,7 +35,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H9 | Real upstream `base` runner invocation | Green | #3384, [run 28707735088](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28707735088) | None | Real upstream `base` parse/compile records come from `perl-core-test-runner` |
 | H10 | `comp` compile smoke | Yellow / bucketed compiler gaps | #3387, #3394, [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840) | None | `comp` smoke writes runner-backed discovery/parse/compile/smoke/gap-map receipts |
 | H11 | Harness orchestration crate | Green | #3420 | None | `crates/perl-core-harness` owns orchestration; `xtask` is CLI glue |
-| H12 | `run` compile smoke | Red | Not started | Start after H11 lands | `run` smoke writes discovery/parse/compile/smoke/gap-map receipts |
+| H12 | `run` compile smoke | Yellow / advisory workflow | #3422 | Record first real upstream `run` receipt after the advisory workflow runs | `run` smoke writes discovery/parse/compile/smoke/gap-map receipts |
 | H13 | Real upstream compile ratchets | Red | Not started | Start after H10/H12 are stable | `base`/`comp`/`run` compile receipts are ratcheted or deferral is explicit |
 | H14 | Execute-one | Red / future | Not started | Start after compile receipts are useful | One tiny `base/*.t` executes real TAP |
 | H15 | Execute-base | Red / future | Not started | Start after H14 lands | `base` runtime receipt exists |
@@ -57,6 +57,11 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `target/perl-core/smoke/comp/compile.json` | 8/25 passed, 7 `parse_recovery`, 10 `compile_effect` | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840); compile-effect failures include `comp/filter_exception.t`, `comp/fold.t`, `comp/form_scope.t`, `comp/hints.t`, `comp/multiline.t`, `comp/our.t`, `comp/parser_run.t`, `comp/redef.t`, `comp/retainedlines.t`, `comp/utf.t` |
 | `target/perl-core/smoke/comp/gap-map.json` | 26/50 mode-file entries passed; buckets: 14 `parse_recovery`, 10 `compile_effect` | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840) |
 | `target/perl-core/smoke/comp/smoke.json` | Pass for receipt integrity; structural failures empty | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840) |
+| `target/perl-core/smoke/run/discovery.json` | TBD | Fill after first advisory `run` receipt |
+| `target/perl-core/smoke/run/parse.json` | TBD | Fill after first advisory `run` receipt |
+| `target/perl-core/smoke/run/compile.json` | TBD | Fill after first advisory `run` receipt |
+| `target/perl-core/smoke/run/gap-map.json` | TBD | Fill after first advisory `run` receipt |
+| `target/perl-core/smoke/run/smoke.json` | TBD | Fill after first advisory `run` receipt |
 
 ## Gap Buckets
 
@@ -81,11 +86,12 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 3. Add `comp` compile-mode smoke. Active issue: #3387.
 4. Record the first advisory real upstream `comp` smoke receipt. Active issue: #3394.
 5. Extract the harness orchestration crate. Active issue: #3420.
-6. Add `run` compile-mode smoke. Next red after extraction.
-7. Ratchet real upstream `base`/`comp`/`run` compile receipts, or record an explicit board decision explaining why ratchet is deferred.
-8. Start execute-one for one tiny upstream `t/base/*.t`.
-9. Plan execute-base from the runtime buckets found by execute-one.
-10. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
+6. Add `run` compile-mode smoke. Active issue: #3422.
+7. Record the first advisory real upstream `run` smoke receipt.
+8. Ratchet real upstream `base`/`comp`/`run` compile receipts, or record an explicit board decision explaining why ratchet is deferred.
+9. Start execute-one for one tiny upstream `t/base/*.t`.
+10. Plan execute-base from the runtime buckets found by execute-one.
+11. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
 
 ## PR Train
 
@@ -98,5 +104,6 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | 5 | `compiler(harness): record first real upstream comp smoke receipt` | `docs(perl-core-harness): record first comp smoke receipt` | Record ref, discovered count, parse/compile totals, top buckets, and artifact link |
 | 6 | `compiler(harness): extract Perl core harness orchestration crate` | `refactor(perl-core-harness): extract orchestration crate` | Move discovery/prepare/run/baseline/smoke orchestration from `xtask` into a private crate |
 | 7 | `compiler(harness): add Perl core run compile-mode smoke receipts` | `feat(perl-core-harness): add run compile smoke receipts` | Add `profile=run` discovery/parse/compile/smoke/gap-map receipts |
-| 8 | `compiler(harness): ratchet real upstream compile receipts` | `feat(perl-core-harness): ratchet upstream compile smoke receipts` | Ratchet real upstream `base`/`comp`/`run` compile receipts |
-| 9 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute one tiny upstream `base/*.t` and record runtime buckets |
+| 8 | `compiler(harness): record first real upstream run smoke receipt` | `docs(perl-core-harness): record first run smoke receipt` | Record ref, discovered count, parse/compile totals, top buckets, and artifact link |
+| 9 | `compiler(harness): ratchet real upstream compile receipts` | `feat(perl-core-harness): ratchet upstream compile smoke receipts` | Ratchet real upstream `base`/`comp`/`run` compile receipts |
+| 10 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute one tiny upstream `base/*.t` and record runtime buckets |
