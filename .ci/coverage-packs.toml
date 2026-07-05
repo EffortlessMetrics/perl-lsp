@@ -102,6 +102,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-xtask-ci-explain"
+files = [
+  "xtask/src/tasks/ci_explain.rs",
+  "xtask/tests/ci_explain_cli.rs",
+]
+commands = [
+  "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked ci_explain -- --nocapture",
+  "cargo test -p xtask --test ci_explain_cli --profile agent --locked -- --nocapture",
+]
+coverage_filters = [
+  "ci_explain",
+]
+
+[[pack]]
 id = "patch-coverage-xtask-file-policy"
 files = [
   "xtask/src/tasks/file_policy.rs",

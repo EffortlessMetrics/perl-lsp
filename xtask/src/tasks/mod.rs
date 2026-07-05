@@ -21,6 +21,7 @@ pub mod check_version_sync;
 pub mod ci;
 pub mod ci_audit_workflows;
 pub mod ci_doctor;
+pub mod ci_explain;
 pub mod ci_hygiene;
 pub mod ci_measure;
 pub mod ci_metrics;
