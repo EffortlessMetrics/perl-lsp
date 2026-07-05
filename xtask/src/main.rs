@@ -2156,6 +2156,10 @@ enum PerlCoreHarnessCommand {
         #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
         profile: perl_core_harness::HarnessProfile,
 
+        /// Explicit Perl core test path to run. Execute-one currently requires `base/if.t`.
+        #[arg(long = "test")]
+        tests: Vec<String>,
+
         /// Run report JSON output path.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -3666,6 +3670,7 @@ fn run_cli(cli: Cli) -> Result<()> {
                 host_perl,
                 runner,
                 profile,
+                tests,
                 output,
                 runner_binary,
             } => perl_core_harness::run_mode(perl_core_harness::RunConfig {
@@ -3674,6 +3679,7 @@ fn run_cli(cli: Cli) -> Result<()> {
                 runner,
                 mode,
                 profile,
+                tests,
                 output,
                 runner_binary,
             }),
@@ -4231,10 +4237,11 @@ mod tests {
                     host_perl: PathBuf::from("perl"),
                     runner: perl_core_harness::HarnessRunner::Test,
                     profile: perl_core_harness::HarnessProfile::Base,
+                    tests: Vec::new(),
                     output: None,
                     runner_binary: None,
                 },
-                "run --mode execute is not implemented yet",
+                "requires exactly --test base/if.t",
             ),
             (PerlCoreHarnessCommand::Report, "report is not implemented"),
         ];

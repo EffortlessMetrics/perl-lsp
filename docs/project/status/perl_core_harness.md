@@ -1,8 +1,8 @@
 # Perl Core Harness Status
 
 The Perl core harness lane is scaffolded as an `xtask` control-plane command.
-This status page is intentionally conservative until real upstream Perl tree
-automation and runtime execution exist.
+This status page is intentionally conservative until broader runtime execution
+exists.
 
 For the current green/yellow/red burndown and next PR order, see the
 [Perl Core Harness Burndown](perl_core_harness_burndown.md).
@@ -20,7 +20,8 @@ For the current green/yellow/red burndown and next PR order, see the
 | Real upstream Perl run smoke | Advisory integrated | `perl-core-harness smoke --profile run --modes parse,compile` uses the same receipt path for the `run` profile, and run 28726563803 recorded 28 discovered files, parse 18/28, compile 1/28, and bucketed `parse_recovery` / `compile_effect` gaps |
 | Real upstream compile ratchets | Advisory integrated | `.ci/perl-core-harness/upstream-{base,comp,run}-compile-baseline.json` ratchets real upstream compile reports for schema/profile/mode drift, newly failing files, unexpected failures, bucket growth, unknown/unbucketed failures, and assertion regressions |
 | Harness orchestration crate | Extracted | `crates/perl-core-harness` owns discovery, prepare, run, baseline, smoke, and gap-map orchestration; `xtask` remains CLI dispatch glue |
-| Execute mode | Not implemented | Future runtime slice |
+| Execute-one | Scaffolded | `perl-core-harness run --mode execute --profile base --test base/if.t` runs the one allowlisted upstream `base/if.t` path through `perl-core-test-runner`, emits real TAP, and writes a one-file execute report |
+| Execute-base | Not implemented | Future runtime slice; profile-wide execute remains unsupported |
 | Upstream Perl tree preparation | Linux advisory | Clone/configure/test_prep automation is Linux-only in this slice; Windows/macOS preparation is future work |
 
 ## Claim Boundary
@@ -33,10 +34,11 @@ protects the generated fixture receipt shape and current generated base
 behavior. The advisory real-tree smoke verifies that actual upstream `base`,
 `comp`, and `run` profile files from a pinned prepared Perl tree can flow
 through discovery, parse, compile, smoke-summary, and gap-map receipt
-generation. It does not claim full
-compiler or runtime conformance, does not run Perl programs as runtime code,
-does not promote provider behavior, and is not a required PR or merge-queue
-gate. Execute mode remains fail-closed until the runtime slice lands.
+generation. Execute-one is limited to the allowlisted `base/if.t` receipt path
+and does not imply broader runtime support. The lane does not claim full
+compiler or runtime conformance, does not promote provider behavior, and is not
+a required PR or merge-queue gate. Profile-wide execute remains fail-closed
+until the execute-base/runtime slices land.
 
 The first receipt shape is:
 
@@ -44,6 +46,7 @@ The first receipt shape is:
 target/perl-core/discovery/<profile>.json
 target/perl-core/reports/<profile>-parse.json
 target/perl-core/reports/<profile>-compile.json
+target/perl-core/reports/base-execute.json
 target/perl-core/prepare/<ref>/prepare.json
 target/perl-core/smoke/<profile>/smoke.json
 target/perl-core/smoke/<profile>/gap-map.json

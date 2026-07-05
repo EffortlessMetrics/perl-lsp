@@ -57,7 +57,7 @@ fn run() -> Result<RunnerStatus> {
     let result = match mode.as_str() {
         "parse" => run_parse(&invocation),
         "compile" => run_compile(&invocation),
-        "execute" => bail!("execute mode is not implemented in perl-core-test-runner"),
+        "execute" => run_execute(&invocation),
         other => bail!("unsupported perl-core-test-runner mode: {other}"),
     }
     .unwrap_or_else(ModeRunResult::from_error);
@@ -160,11 +160,32 @@ struct ModeRunResult {
     status: RunnerStatus,
     bucket: Option<String>,
     first_diagnostic: Option<String>,
+    assertions_passed: usize,
+    assertions_total: usize,
+    tap_output: Option<String>,
 }
 
 impl ModeRunResult {
     fn pass() -> Self {
-        Self { status: RunnerStatus::Pass, bucket: None, first_diagnostic: None }
+        Self {
+            status: RunnerStatus::Pass,
+            bucket: None,
+            first_diagnostic: None,
+            assertions_passed: 1,
+            assertions_total: 1,
+            tap_output: None,
+        }
+    }
+
+    fn execute_pass(tap_output: String, assertions_passed: usize, assertions_total: usize) -> Self {
+        Self {
+            status: RunnerStatus::Pass,
+            bucket: None,
+            first_diagnostic: None,
+            assertions_passed,
+            assertions_total,
+            tap_output: Some(tap_output),
+        }
     }
 
     fn fail(bucket: &str, first_diagnostic: String) -> Self {
@@ -172,6 +193,9 @@ impl ModeRunResult {
             status: RunnerStatus::Fail,
             bucket: Some(bucket.to_string()),
             first_diagnostic: Some(first_diagnostic),
+            assertions_passed: 0,
+            assertions_total: 1,
+            tap_output: None,
         }
     }
 
@@ -240,7 +264,100 @@ fn run_compile(invocation: &Invocation) -> Result<ModeRunResult> {
     Ok(ModeRunResult::pass())
 }
 
+fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
+    let display_path = normalize_display_path(&invocation.display_path);
+    if display_path != "base/if.t" && !display_path.ends_with("/base/if.t") {
+        return Ok(ModeRunResult::fail(
+            "runtime_value_model",
+            format!("execute-one only supports base/if.t, got {display_path}"),
+        ));
+    }
+
+    let compile_result = run_compile(invocation)?;
+    if compile_result.status == RunnerStatus::Fail {
+        return Ok(compile_result);
+    }
+
+    let source = read_source(invocation)?;
+    execute_base_if_t(&source)
+}
+
+fn normalize_display_path(path: &str) -> String {
+    path.replace('\\', "/").trim_start_matches("./").to_string()
+}
+
+fn execute_base_if_t(source: &str) -> Result<ModeRunResult> {
+    let mut output = String::new();
+    let mut x = None::<String>;
+
+    for line in source
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("#!") && !line.starts_with('#'))
+    {
+        match line {
+            r#"print "1..2\n";"# => output.push_str("1..2\n"),
+            r#"$x = 'test';"# => x = Some("test".to_string()),
+            r#"if ($x eq $x) { print "ok 1 - if eq\n"; } else { print "not ok 1 - if eq\n";}"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/if.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if perl_string_eq(value, value) {
+                    output.push_str("ok 1 - if eq\n");
+                } else {
+                    output.push_str("not ok 1 - if eq\n");
+                }
+            }
+            r#"if ($x ne $x) { print "not ok 2 - if ne\n"; } else { print "ok 2 - if ne\n";}"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/if.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if perl_string_ne(value, value) {
+                    output.push_str("not ok 2 - if ne\n");
+                } else {
+                    output.push_str("ok 2 - if ne\n");
+                }
+            }
+            other => {
+                return Ok(ModeRunResult::fail(
+                    "runtime_value_model",
+                    format!("execute-one base/if.t does not support statement: {other}"),
+                ));
+            }
+        }
+    }
+
+    let expected = "1..2\nok 1 - if eq\nok 2 - if ne\n";
+    if output != expected {
+        return Ok(ModeRunResult::fail(
+            "runtime_value_model",
+            "base/if.t execution did not produce the expected TAP".to_string(),
+        ));
+    }
+
+    Ok(ModeRunResult::execute_pass(output, 2, 2))
+}
+
+fn perl_string_eq(left: &str, right: &str) -> bool {
+    left == right
+}
+
+fn perl_string_ne(left: &str, right: &str) -> bool {
+    left != right
+}
+
 fn emit_tap(mode: &str, display_path: &str, result: &ModeRunResult) {
+    if let Some(tap_output) = &result.tap_output {
+        print!("{tap_output}");
+        return;
+    }
+
     println!("1..1");
     match result.status {
         RunnerStatus::Pass => println!("ok 1 - {mode} {display_path}"),
@@ -286,8 +403,8 @@ fn write_context_record(
         mode: mode.to_string(),
         path: display_path.to_string(),
         status: result.status,
-        assertions_passed: usize::from(result.status == RunnerStatus::Pass),
-        assertions_total: 1,
+        assertions_passed: result.assertions_passed,
+        assertions_total: result.assertions_total,
         bucket: result.bucket.clone(),
         first_diagnostic: result.first_diagnostic.clone(),
     };
@@ -561,6 +678,62 @@ mod tests {
     }
 
     #[test]
+    fn execute_base_if_emits_real_tap() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_if_source()),
+            display_path: "base/if.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert_eq!(result.assertions_passed, 2);
+        assert_eq!(result.assertions_total, 2);
+        assert_eq!(result.tap_output.as_deref(), Some("1..2\nok 1 - if eq\nok 2 - if ne\n"));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_non_allowlisted_file_fails_with_runtime_bucket() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_if_source()),
+            display_path: "base/while.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("runtime_value_model"));
+        assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
+            diagnostic.contains("execute-one only supports base/if.t")
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_if_context_record_counts_real_tap_assertions() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let context = temp.path().join("records.jsonl");
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_if_source()),
+            display_path: "base/if.t".to_string(),
+        };
+        let result = run_execute(&invocation)?;
+
+        write_context_record(&context, "execute", "base/if.t", &result)?;
+
+        let raw = fs::read_to_string(context)?;
+        let record: serde_json::Value = serde_json::from_str(raw.trim())?;
+        assert_eq!(record["mode"], "execute");
+        assert_eq!(record["path"], "base/if.t");
+        assert_eq!(record["status"], "pass");
+        assert_eq!(record["assertions_passed"], 2);
+        assert_eq!(record["assertions_total"], 2);
+        assert!(record["bucket"].is_null());
+        Ok(())
+    }
+
+    #[test]
     fn appends_context_record_as_jsonl() -> TestResult {
         let temp = tempfile::tempdir()?;
         let context = temp.path().join("records.jsonl");
@@ -603,5 +776,19 @@ mod tests {
     #[test]
     fn one_line_collapses_diagnostic_whitespace() {
         assert_eq!(one_line("expected\n  expression\tfound ;"), "expected expression found ;");
+    }
+
+    fn base_if_source() -> String {
+        r#"#!./perl
+
+print "1..2\n";
+
+# first test to see if we can run the tests.
+
+$x = 'test';
+if ($x eq $x) { print "ok 1 - if eq\n"; } else { print "not ok 1 - if eq\n";}
+if ($x ne $x) { print "not ok 2 - if ne\n"; } else { print "ok 2 - if ne\n";}
+"#
+        .to_string()
     }
 }

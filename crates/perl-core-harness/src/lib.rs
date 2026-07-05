@@ -2,7 +2,7 @@
 //!
 //! The scaffold can discover tests from a prepared Perl source tree and run the
 //! staged profile through a `t/perl` compatibility wrapper in parse and compile
-//! modes. Execute mode remains fail-closed for later slices.
+//! modes. Execute mode is limited to explicit execute-one selections.
 
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result, bail};
@@ -82,6 +82,61 @@ fn collect_test_files(t_dir: &Path, dir: &Path, args: &mut Vec<String>) -> Resul
     Ok(())
 }
 
+fn normalize_selected_tests(profile: HarnessProfile, tests: &[String]) -> Result<Vec<String>> {
+    let allowed_roots = profile.roots().iter().copied().collect::<BTreeSet<_>>();
+    let mut normalized = Vec::new();
+    for test in tests {
+        let path = normalize_test_path(test)
+            .ok_or_else(|| color_eyre::eyre::eyre!("invalid Perl core test path: {test}"))?;
+        if path.contains("..") || path.starts_with('/') || !path.ends_with(".t") {
+            bail!("invalid Perl core test path: {test}");
+        }
+        let Some((root, _rest)) = path.split_once('/') else {
+            bail!("selected Perl core test must include a profile root: {test}");
+        };
+        if !allowed_roots.contains(root) {
+            bail!(
+                "selected Perl core test {path} is outside profile {} roots {:?}",
+                profile,
+                profile.roots()
+            );
+        }
+        normalized.push(path);
+    }
+    normalized.sort();
+    normalized.dedup();
+    Ok(normalized)
+}
+
+fn validate_execute_selection(mode: HarnessMode, selected_tests: &[String]) -> Result<()> {
+    if mode != HarnessMode::Execute {
+        return Ok(());
+    }
+    if selected_tests.len() != 1 || selected_tests.first().map(String::as_str) != Some("base/if.t")
+    {
+        bail!("perl-core-harness run --mode execute currently requires exactly --test base/if.t");
+    }
+    Ok(())
+}
+
+fn filter_discovered_tests(
+    tests: Vec<DiscoveredTest>,
+    selected_tests: &[String],
+) -> Result<Vec<DiscoveredTest>> {
+    if selected_tests.is_empty() {
+        return Ok(tests);
+    }
+
+    let selected = selected_tests.iter().cloned().collect::<BTreeSet<_>>();
+    let filtered =
+        tests.into_iter().filter(|test| selected.contains(&test.path)).collect::<Vec<_>>();
+    let found = filtered.iter().map(|test| test.path.clone()).collect::<BTreeSet<_>>();
+    if let Some(missing) = selected.iter().find(|path| !found.contains(*path)) {
+        bail!("selected Perl core test {missing} was not discovered by upstream harness");
+    }
+    Ok(filtered)
+}
+
 /// Configuration for `perl-core-harness discover`.
 #[derive(Debug, Clone)]
 pub struct DiscoverConfig {
@@ -107,6 +162,7 @@ pub struct RunConfig {
     pub runner: HarnessRunner,
     pub mode: HarnessMode,
     pub profile: HarnessProfile,
+    pub tests: Vec<String>,
     pub output: Option<PathBuf>,
     pub runner_binary: Option<PathBuf>,
 }
@@ -229,21 +285,24 @@ pub fn prepare(config: PrepareConfig) -> Result<()> {
 
 /// Run upstream Perl core tests through the compatibility runner.
 pub fn run_mode(config: RunConfig) -> Result<()> {
-    if config.mode == HarnessMode::Execute {
-        bail!(
-            "perl-core-harness run --mode {} is not implemented yet; this slice supports parse and compile only",
-            config.mode
-        );
-    }
+    let selected_tests = normalize_selected_tests(config.profile, &config.tests)?;
+    validate_execute_selection(config.mode, &selected_tests)?;
 
     let perl_tree = canonicalize_existing_dir(&config.perl_tree, "prepared Perl tree")?;
     let run_tree = prepare_run_copy(&perl_tree, config.runner, config.mode, config.profile)?;
     let t_dir = run_tree.join("t");
     let script = validate_runner_script(&t_dir, config.runner)?;
     install_t_perl_wrapper(&run_tree)?;
-    let dumptests_args = profile_runner_args(config.profile, &t_dir, config.runner)?;
+    let dumptests_args = if selected_tests.is_empty() {
+        profile_runner_args(config.profile, &t_dir, config.runner)?
+    } else {
+        selected_tests.clone()
+    };
     let dumptests_output = invoke_dumptests(&config.host_perl, &t_dir, &script, &dumptests_args)?;
-    let discovered = parse_dumptests_output(&dumptests_output.stdout)?;
+    let discovered = filter_discovered_tests(
+        parse_dumptests_output(&dumptests_output.stdout)?,
+        &selected_tests,
+    )?;
 
     let runner_binary = resolve_runner_binary(config.runner_binary.as_deref())?;
     let context_path = run_tree.join("target").join("perl-lsp-runner-records.jsonl");
@@ -407,6 +466,7 @@ pub fn smoke(config: SmokeConfig) -> Result<()> {
             runner: config.runner,
             mode: *mode,
             profile: config.profile,
+            tests: Vec::new(),
             output: Some(report_path.clone()),
             runner_binary: config.runner_binary.clone(),
         });
@@ -1848,22 +1908,44 @@ mod tests {
     }
 
     #[test]
-    fn execute_mode_remains_fail_closed() -> TestResult {
+    fn execute_mode_requires_explicit_if_test_selection() -> TestResult {
         let config = RunConfig {
             perl_tree: PathBuf::from("unused"),
             host_perl: PathBuf::from("perl"),
             runner: HarnessRunner::Test,
             mode: HarnessMode::Execute,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: None,
             runner_binary: None,
         };
 
         let Err(err) = run_mode(config) else {
-            bail!("execute mode should remain fail-closed in compile slice");
+            bail!("execute mode without a selected test should fail");
         };
 
-        assert!(err.to_string().contains("run --mode execute is not implemented yet"));
+        assert!(err.to_string().contains("requires exactly --test base/if.t"));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_mode_rejects_non_allowlisted_test_selection() -> TestResult {
+        let config = RunConfig {
+            perl_tree: PathBuf::from("unused"),
+            host_perl: PathBuf::from("perl"),
+            runner: HarnessRunner::Test,
+            mode: HarnessMode::Execute,
+            profile: HarnessProfile::Base,
+            tests: vec!["base/while.t".into()],
+            output: None,
+            runner_binary: None,
+        };
+
+        let Err(err) = run_mode(config) else {
+            bail!("execute mode should reject non-allowlisted tests");
+        };
+
+        assert!(err.to_string().contains("requires exactly --test base/if.t"));
         Ok(())
     }
 
@@ -1876,6 +1958,7 @@ mod tests {
             runner: HarnessRunner::Test,
             mode: HarnessMode::Parse,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: None,
             runner_binary: Some(PathBuf::from("runner")),
         };
@@ -2544,6 +2627,7 @@ mod tests {
             runner: HarnessRunner::Test,
             mode: HarnessMode::Parse,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: Some(run_path.clone()),
             runner_binary: Some(PathBuf::from("runner")),
         };
@@ -2724,6 +2808,7 @@ mod tests {
             runner: HarnessRunner::Test,
             mode: HarnessMode::Parse,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: Some(output.clone()),
             runner_binary: Some(runner),
         })?;
@@ -2753,6 +2838,7 @@ mod tests {
             runner: HarnessRunner::Test,
             mode: HarnessMode::Parse,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: Some(output.clone()),
             runner_binary: Some(runner),
         })?;
@@ -2785,6 +2871,7 @@ mod tests {
             runner: HarnessRunner::Test,
             mode: HarnessMode::Parse,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: Some(output.clone()),
             runner_binary: Some(runner),
         })?;
@@ -2811,6 +2898,7 @@ mod tests {
             runner: HarnessRunner::Test,
             mode: HarnessMode::Compile,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: Some(output.clone()),
             runner_binary: Some(runner),
         })?;
@@ -2826,6 +2914,39 @@ mod tests {
         paths.sort_unstable();
         assert_eq!(paths, vec!["base/lex.t", "base/ok.t"]);
         assert!(report.file_results.iter().all(|result| result.status == RunnerStatus::Pass));
+        assert!(!perl_tree.join("t").join("perl").exists(), "source Perl tree must not be mutated");
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_mode_execute_runs_selected_base_if_test() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let perl_tree = write_fake_perl_tree_with_base_if_test(temp.path())?;
+        let runner = write_fake_execute_runner(temp.path())?;
+        let output = temp.path().join("execute-report.json");
+
+        run_mode(RunConfig {
+            perl_tree: perl_tree.clone(),
+            host_perl: PathBuf::from("/bin/sh"),
+            runner: HarnessRunner::Test,
+            mode: HarnessMode::Execute,
+            profile: HarnessProfile::Base,
+            tests: vec!["base/if.t".into()],
+            output: Some(output.clone()),
+            runner_binary: Some(runner),
+        })?;
+
+        let raw = fs::read_to_string(output)?;
+        let report: RunReport = serde_json::from_str(&raw)?;
+        assert_eq!(report.mode, HarnessMode::Execute);
+        assert_eq!(report.summary.files_total, 1);
+        assert_eq!(report.summary.files_passed, 1);
+        assert_eq!(report.summary.files_failed, 0);
+        assert_eq!(report.summary.tap_assertions_total, 2);
+        assert_eq!(report.summary.tap_assertions_passed, 2);
+        assert_eq!(report.file_results[0].path, "base/if.t");
+        assert_eq!(report.file_results[0].assertions_total, 2);
         assert!(!perl_tree.join("t").join("perl").exists(), "source Perl tree must not be mutated");
         Ok(())
     }
@@ -3142,6 +3263,7 @@ mod tests {
             runner: HarnessRunner::Test,
             mode: HarnessMode::Parse,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: Some(output.clone()),
             runner_binary: Some(runner),
         }) else {
@@ -3182,6 +3304,7 @@ exit 7
             runner: HarnessRunner::Test,
             mode: HarnessMode::Parse,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: Some(output.clone()),
             runner_binary: Some(runner),
         }) else {
@@ -3217,6 +3340,7 @@ exit 7
             runner: HarnessRunner::Test,
             mode: HarnessMode::Parse,
             profile: HarnessProfile::Base,
+            tests: Vec::new(),
             output: Some(output.clone()),
             runner_binary: Some(runner),
         })?;
@@ -3279,6 +3403,24 @@ if [ "${1:-}" = "--dumptests" ]; then
 fi
 ./perl base/ok.t
 ./perl base/lex.t
+"#;
+        fs::write(t_dir.join("TEST"), script)?;
+        Ok(perl_tree)
+    }
+
+    #[cfg(unix)]
+    fn write_fake_perl_tree_with_base_if_test(root: &Path) -> TestResult<PathBuf> {
+        let perl_tree = root.join("prepared-perl-base-if");
+        let t_dir = perl_tree.join("t");
+        fs::create_dir_all(t_dir.join("base"))?;
+        fs::write(t_dir.join("base").join("if.t"), "1;\n")?;
+        let script = r#"#!/bin/sh
+set -eu
+if [ "${1:-}" = "--dumptests" ]; then
+  echo "base/if.t"
+  exit 0
+fi
+./perl base/if.t
 "#;
         fs::write(t_dir.join("TEST"), script)?;
         Ok(perl_tree)
@@ -3354,6 +3496,24 @@ fi
     #[cfg(unix)]
     fn write_fake_runner(root: &Path, status: RunnerStatus) -> TestResult<PathBuf> {
         write_fake_runner_with_bucket(root, status, Some("parse_recovery"))
+    }
+
+    #[cfg(unix)]
+    fn write_fake_execute_runner(root: &Path) -> TestResult<PathBuf> {
+        let runner = root.join("fake-runner-execute-pass.sh");
+        let body = r#"#!/bin/sh
+set -eu
+script="${1:-unknown.t}"
+mode="${PERL_LSP_HARNESS_MODE:-execute}"
+mkdir -p "$(dirname "$PERL_LSP_HARNESS_CONTEXT")"
+printf '1..2\n'
+printf 'ok 1 - if eq\n'
+printf 'ok 2 - if ne\n'
+printf '{"schema_version":"perl_core_harness.runner_record.v1","mode":"%s","path":"%s","status":"pass","assertions_passed":2,"assertions_total":2,"bucket":null,"first_diagnostic":null}\n' "$mode" "$script" >> "$PERL_LSP_HARNESS_CONTEXT"
+"#;
+        fs::write(&runner, body)?;
+        set_executable(&runner)?;
+        Ok(runner)
     }
 
     #[cfg(unix)]

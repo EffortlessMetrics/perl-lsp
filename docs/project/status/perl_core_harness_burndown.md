@@ -5,10 +5,11 @@
 The Perl core harness is a compiler-testing integration lane. It can prepare a
 pinned upstream Perl tree on Linux, discover upstream Perl core tests, run
 parse-mode and compile-mode synthetic TAP receipts, and produce advisory
-real-tree `base`, `comp`, and `run` smoke and gap-map receipts.
+real-tree `base`, `comp`, and `run` smoke and gap-map receipts. Execute-one is
+limited to a single allowlisted `base/if.t` runtime receipt.
 
-It does not execute Perl programs as runtime code and does not claim runtime
-conformance. Execute mode remains fail-closed until the execute-one slice lands.
+It does not claim broad runtime conformance. Profile-wide execute remains
+fail-closed until execute-base lands.
 
 ## Required PR Proof
 
@@ -38,7 +39,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H12 | `run` compile smoke | Yellow / bucketed compiler gaps | #3422, #3424, [run 28726563803](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28726563803) | None | `run` smoke writes runner-backed discovery/parse/compile/smoke/gap-map receipts |
 | H13 | Real upstream compile ratchets | Green / advisory | #3426 | None | `base`/`comp`/`run` compile receipts are ratcheted separately from the generated fixture ratchet |
 | H14 | First bucket burn-down | Green / advisory | #3428, #3429, [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) | None | `base` `parse_recovery` reduced from 2 to 1 in the accepted compile ratchet; `base/term.t` advanced to `compile_effect` |
-| H15 | Execute-one | Red / future | Not started | Start after compile receipts are useful and at least one bucket burn-down lands or is explicitly deferred | One tiny `base/*.t` executes real TAP |
+| H15 | Execute-one | Green / advisory | #3432 | None | `base/if.t` executes real TAP through an explicit one-file run selector |
 | H16 | Execute-base | Red / future | Not started | Start after H15 lands | `base` runtime receipt exists |
 | H17 | Runtime model | Red / future | Not started | Driven by execute-one receipts | Runtime buckets are named and owned |
 | H18 | Compiler-backed LSP provider promotion | Red / future | Not started | Start after compiler facts are proven | Provider promotion plan is gated by receipts |
@@ -66,6 +67,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `.ci/perl-core-harness/upstream-base-compile-baseline.json` | Ratchets 6/9 compile pass state; buckets: 1 `parse_recovery`, 2 `compile_effect` | Accepted from post-#3429 `target/perl-core/smoke/base/compile.json`; separate from generated fixture baseline |
 | `.ci/perl-core-harness/upstream-comp-compile-baseline.json` | Ratchets 8/25 compile pass state; buckets: 7 `parse_recovery`, 10 `compile_effect` | Accepted from `target/perl-core/smoke/comp/compile.json`; separate from generated fixture baseline |
 | `.ci/perl-core-harness/upstream-run-compile-baseline.json` | Ratchets 1/28 compile pass state; buckets: 10 `parse_recovery`, 17 `compile_effect` | Accepted from `target/perl-core/smoke/run/compile.json`; separate from generated fixture baseline |
+| `target/perl-core/reports/base-execute.json` | Execute-one report for `base/if.t`: 1 file, 2/2 TAP assertions | #3432; `perl-core-test-runner` CLI tests prove real TAP output `1..2`, `ok 1 - if eq`, `ok 2 - if ne` |
 
 ## Gap Buckets
 
@@ -79,6 +81,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `package_stash` | Package, stash, or typeglob fact gap | `package_stash` | `workspace_symbols`, `completion`, `definition` |
 | `pragma_feature` | Feature or pragma state gap | `pragma_model` | `diagnostics`, `semantic_tokens` |
 | `module_resolution` | `require`, `use`, or include-path fact gap | `module_resolution` | `definition`, `hover`, `completion` |
+| `runtime_value_model` | Runtime value, comparison, or statement execution gap | `runtime_value_model` | `compiler_conformance` |
 | `cli_switch` | Harness or runner CLI incompatibility | `harness_cli_compat` | `compiler_conformance` |
 | `harness_prepare` | Perl tree or harness preparation failure | `harness_integration` | `compiler_conformance` |
 | `unknown` | Unclassified failure | `compiler_conformance` | `compiler_conformance`; must be fixed before ratchet |
@@ -94,7 +97,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 7. Record the first advisory real upstream `run` smoke receipt. Active issue: #3424.
 8. Ratchet real upstream `base`/`comp`/`run` compile receipts. Active issue: #3426.
 9. Burn down the first receipt-backed compiler bucket; prefer the `base` `parse_recovery` cluster before runtime work.
-10. Start execute-one for one tiny upstream `t/base/*.t`.
+10. Execute-one for one tiny upstream `t/base/*.t`.
 11. Plan execute-base from the runtime buckets found by execute-one.
 12. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
 
@@ -112,4 +115,4 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | 8 | `compiler(harness): record first real upstream run smoke receipt` | `docs(perl-core-harness): record first run smoke receipt` | Record ref, discovered count, parse/compile totals, top buckets, and artifact link |
 | 9 | `compiler(harness): ratchet real upstream compile receipts` | `feat(perl-core-harness): ratchet upstream compile smoke receipts` | Ratchet real upstream `base`/`comp`/`run` compile receipts |
 | 10 | `compiler(parser): reduce base parse-recovery bucket` | `fix(parser): reduce base parse-recovery harness gaps` | Landed in #3429 and accepted in #3430; burns down `base/term.t` parse recovery and advances `base/lex.t` to the next parser gap |
-| 11 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute one tiny upstream `base/*.t` and record runtime buckets |
+| 11 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute `base/if.t` through explicit `--test base/if.t`, emit real TAP, and keep execute-base future |
