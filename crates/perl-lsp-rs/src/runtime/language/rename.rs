@@ -404,7 +404,7 @@ impl LspServer {
                     {
                         continue;
                     }
-                    let Ok(text) = std::fs::read_to_string(&path) else {
+                    let Ok(text) = crate::util::read_text_file_with_encoding(&path) else {
                         continue;
                     };
                     let edit_uri = workspace_edit_uri_key(&uri);

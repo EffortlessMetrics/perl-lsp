@@ -10,6 +10,7 @@ package-lock.json
 # Debug and build artifacts
 /debug_parse/
 /target/
+crates/*/target/
 /target-tests/
 .build/
 *.a

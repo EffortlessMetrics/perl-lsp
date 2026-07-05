@@ -9,7 +9,6 @@ use crate::documentation_targets::PerlDocumentationTarget;
 use perl_lsp_rs_core::config::PerlOracleEnv;
 use perl_lsp_rs_core::config::WorkspaceConfig;
 use std::collections::BTreeSet;
-use std::fs;
 use std::path::Path;
 
 impl LspServer {
@@ -93,7 +92,7 @@ impl LspServer {
 
         let module_name = target.name();
         let path = self.resolve_module_path(module_name, None)?;
-        let source = match fs::read_to_string(&path) {
+        let source = match crate::util::read_text_file_with_encoding(&path) {
             Ok(source) => source,
             Err(error) => {
                 tracing::warn!(module = module_name, path = %path.display(), %error, "Failed to read local POD");

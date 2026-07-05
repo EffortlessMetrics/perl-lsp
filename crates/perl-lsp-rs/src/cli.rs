@@ -217,7 +217,7 @@ fn run_check(command_name: &str, files: &[String]) -> i32 {
 
     for path in files {
         total += 1;
-        let source = match std::fs::read_to_string(path) {
+        let source = match crate::util::read_text_file_with_encoding(std::path::Path::new(path)) {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("{path}: error reading file: {e}");
