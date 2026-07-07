@@ -115,8 +115,9 @@ base-execute-baseline.json
 ```
 
 It covers only the explicit selected `base/if.t`, `base/cond.t`, `base/num.t`,
-`base/pat.t`, and `base/while.t` execute receipt. It does not claim profile-wide execute,
-execute-base conformance, or a broad runtime model.
+`base/pat.t`, `base/translate.t`, and `base/while.t` execute receipt. It does
+not claim profile-wide execute, execute-base conformance, or a broad runtime
+model.
 
 Update any baseline explicitly with `perl-core-harness baseline --accept` after
 reviewing an intentional change. The real-tree smoke and ratchets are

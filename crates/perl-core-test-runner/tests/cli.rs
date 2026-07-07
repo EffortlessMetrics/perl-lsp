@@ -40,6 +40,8 @@ fn cli_parse_inline_source_emits_tap_and_context() -> Result<()> {
 }
 
 #[test]
+// This test intentionally passes attached `-eSOURCE` as one Perl-style argument.
+#[allow(clippy::suspicious_command_arg_space)]
 fn cli_attached_inline_source_emits_tap_and_context() -> Result<()> {
     let temp = tempfile::tempdir()?;
     let context = temp.path().join("nested").join("records.jsonl");
@@ -441,6 +443,39 @@ fn cli_execute_base_pat_emits_real_tap_and_context() -> Result<()> {
 }
 
 #[test]
+fn cli_execute_base_translate_emits_real_tap_and_context() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let script = temp.path().join("base").join("translate.t");
+    std::fs::create_dir_all(script.parent().ok_or_else(|| anyhow::anyhow!("missing parent"))?)?;
+    std::fs::write(&script, base_translate_source())?;
+    let context = temp.path().join("records.jsonl");
+
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "execute")
+        .env("PERL_LSP_HARNESS_CONTEXT", &context)
+        .arg(&script)
+        .output()?;
+
+    if !output.status.success() {
+        bail!("runtime value-model unicode round-trip slice should pass for base/translate.t");
+    }
+    assert_eq!(String::from_utf8(output.stdout)?, base_translate_expected_stdout());
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+
+    let record = read_record(&context)?;
+    assert_eq!(record["mode"], "execute");
+    let path = record["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("runner record path should be a string"))?
+        .replace('\\', "/");
+    assert!(path.ends_with("base/translate.t"));
+    assert_eq!(record["status"], "pass");
+    assert_eq!(record["assertions_passed"], 257);
+    assert_eq!(record["assertions_total"], 257);
+    Ok(())
+}
+
+#[test]
 fn cli_unknown_mode_reports_internal_failure() -> Result<()> {
     let output = Command::new(runner())
         .env("PERL_LSP_HARNESS_MODE", "typo-mode")
@@ -697,4 +732,43 @@ fn base_num_expected_stdout() -> String {
 fn base_pat_source() -> &'static str {
     r#"#!./perl print "1..2\n"; # first test to see if we can run the tests. $_ = 'test'; if (/^test/) { print "ok 1 - match regex\n"; } else { print "not ok 1 - match regex\n";} if (/^foo/) { print "not ok 2 - match regex\n"; } else { print "ok 2 - match regex\n";}
 "#
+}
+
+fn base_translate_source() -> &'static str {
+    r#"#!./perl
+
+# Verify round trip of translations from the native character set to unicode
+# and back work.  If this is wrong, nothing will be reliable.
+
+print "1..257\n";   # 0-255 plus one beyond
+
+for my $i (0 .. 255) {
+    my $uni = utf8::native_to_unicode($i);
+    if ($uni < 0 || $uni >= 256) {
+        print "not ";
+    }
+    elsif (utf8::unicode_to_native(utf8::native_to_unicode($i)) != $i) {
+        print "not ";
+    }
+    print "ok ";
+    print $i + 1 . " - native_to_unicode $i";
+    print "\n";
+}
+
+# Choose a largish number that might cause a seg fault if inappropriate array
+# lookup
+if (utf8::unicode_to_native(utf8::native_to_unicode(100000)) != 100000) {
+    print "not ";
+}
+print "ok 257 - native_to_unicode of large number\n";
+"#
+}
+
+fn base_translate_expected_stdout() -> String {
+    let mut output = String::from("1..257\n");
+    for i in 0..=255 {
+        output.push_str(&format!("ok {} - native_to_unicode {i}\n", i + 1));
+    }
+    output.push_str("ok 257 - native_to_unicode of large number\n");
+    output
 }

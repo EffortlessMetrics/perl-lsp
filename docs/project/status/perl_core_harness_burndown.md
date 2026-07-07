@@ -47,8 +47,8 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H13 | Real upstream compile ratchets | Green / advisory | #3426 | None | `base`/`comp`/`run` compile receipts are ratcheted separately from the generated fixture ratchet |
 | H14 | First bucket burn-down | Green / advisory | #3428, #3429, #3474, [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) | None | `base` `parse_recovery` reduced to 0 in the accepted compile ratchet; `base/term.t` and `base/lex.t` advanced to `compile_effect` |
 | H15 | Execute-one | Green / advisory | #3432 | None | `base/if.t` executes real TAP through an explicit one-file run selector |
-| H16 | Execute-base | Green / selected ratchet | #3446, #3448, #3450, #3454 | None | Selected `base/if.t`, `base/cond.t`, `base/num.t`, `base/pat.t`, and `base/while.t` execute receipt is ratcheted at 5/5 files and 68/68 TAP assertions |
-| H17 | Runtime model | Green / model | #3452, #3454 | None | Runtime buckets are named; `runtime_value_model` is represented by `base/num.t`, `runtime_control_flow` by `base/while.t`, and the first selected `runtime_regex` slice by `base/pat.t` |
+| H16 | Execute-base | Green / selected ratchet | #3446, #3448, #3450, #3454, #3479 | None | Selected `base/if.t`, `base/cond.t`, `base/num.t`, `base/pat.t`, `base/translate.t`, and `base/while.t` execute receipt is ratcheted at 6/6 files and 325/325 TAP assertions |
+| H17 | Runtime model | Green / model | #3452, #3454, #3479 | None | Runtime buckets are named; `runtime_value_model` is represented by `base/num.t` and `base/translate.t`, `runtime_control_flow` by `base/while.t`, and the first selected `runtime_regex` slice by `base/pat.t` |
 | H18 | Compiler-backed LSP provider promotion | Green / gated plan | #3457 | Select one provider fact class only after matching evidence is present | Promotion gates are named and tied to harness receipts, provider confidence docs, shadow/oracle proof, and rollback strategy |
 
 ## Latest Receipt Slots
@@ -74,8 +74,8 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `.ci/perl-core-harness/upstream-base-compile-baseline.json` | Ratchets 6/9 compile pass state; buckets: 3 `compile_effect` | Accepted from #3474 focused compile-runner proof; separate from generated fixture baseline |
 | `.ci/perl-core-harness/upstream-comp-compile-baseline.json` | Ratchets 8/25 compile pass state; buckets: 7 `parse_recovery`, 10 `compile_effect` | Accepted from `target/perl-core/smoke/comp/compile.json`; separate from generated fixture baseline |
 | `.ci/perl-core-harness/upstream-run-compile-baseline.json` | Ratchets 1/28 compile pass state; buckets: 10 `parse_recovery`, 17 `compile_effect` | Accepted from `target/perl-core/smoke/run/compile.json`; separate from generated fixture baseline |
-| `target/perl-core/reports/base-execute.json` | 5/5 selected files passed, 68/68 TAP assertions, no runtime buckets | Local receipt generated from pinned upstream Perl artifact [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) and expanded by P2 selected-execute proof; selected files: `base/cond.t` 4/4, `base/if.t` 2/2, `base/num.t` 56/56, `base/pat.t` 2/2, and `base/while.t` 4/4 |
-| `.ci/perl-core-harness/base-execute-baseline.json` | Ratchets selected execute-base state: 5/5 files, 68/68 TAP assertions, no runtime buckets | Accepted from `target/perl-core/reports/base-execute.json`; selected execute only, separate from profile-wide parse/compile ratchets |
+| `target/perl-core/reports/base-execute.json` | 6/6 selected files passed, 325/325 TAP assertions, no runtime buckets | Local receipt generated from pinned upstream Perl artifact [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) and expanded by P2/P4 selected-execute proof; selected files: `base/cond.t` 4/4, `base/if.t` 2/2, `base/num.t` 56/56, `base/pat.t` 2/2, `base/translate.t` 257/257, and `base/while.t` 4/4 |
+| `.ci/perl-core-harness/base-execute-baseline.json` | Ratchets selected execute-base state: 6/6 files, 325/325 TAP assertions, no runtime buckets | Accepted from `target/perl-core/reports/base-execute.json`; selected execute only, separate from profile-wide parse/compile ratchets |
 
 ## Gap Buckets
 
@@ -108,7 +108,7 @@ Profile-wide execute remains fail-closed.
 
 | Runtime bucket | Workstream owner | First use | Candidate files |
 |---|---|---|---|
-| `runtime_value_model` | scalar/string/number values, truthiness, comparisons, assignment, expression results | value or comparison mismatch after parse/compile-clean input reaches execute mode | `base/if.t`, `base/cond.t`, `base/num.t` |
+| `runtime_value_model` | scalar/string/number values, truthiness, comparisons, assignment, expression results, native/unicode value round trips | value or comparison mismatch after parse/compile-clean input reaches execute mode | `base/if.t`, `base/cond.t`, `base/num.t`, `base/translate.t` |
 | `runtime_control_flow` | statement sequencing, conditional predicates, loop control, short-circuiting, exit status | selected file reaches execute mode but branches, loops, or statement order diverge | `base/while.t`, `base/cond.t` |
 | `runtime_io` | TAP-safe stdout/stderr, `print`, filehandles, filesystem, layers, environment-sensitive IO | selected file needs emitted TAP, diagnostic text, file IO, or process IO beyond the current runner path | next parse/compile-clean file requiring `print` or file IO |
 | `runtime_regex` | match, substitution, transliteration-adjacent runtime behavior | selected file reaches a regex operator that cannot be evaluated correctly | `base/pat.t` |
@@ -131,6 +131,7 @@ Current selected execute-base status:
 | `base/num.t` | clean | 56/56 TAP assertions pass | first `runtime_value_model` burn-down |
 | `base/while.t` | clean | 4/4 TAP assertions pass | first `runtime_control_flow` burn-down |
 | `base/pat.t` | clean | 2/2 TAP assertions pass | first selected `runtime_regex` slice |
+| `base/translate.t` | clean | 257/257 TAP assertions pass | native/unicode `runtime_value_model` round-trip slice |
 
 ## Provider Promotion Gates
 
@@ -207,4 +208,5 @@ provider(<surface>): promote <fact-class> behind receipt gates
 | 15 | `compiler(runtime): publish execute-base runtime bucket model` | `docs(runtime): publish execute-base runtime bucket model` | Name runtime buckets, workstreams, selected-file entry rules, and next candidate files |
 | 16 | `compiler(runtime): execute base while control-flow receipt` | `feat(runtime): execute base while control flow` | Add selected `base/while.t` execute support, burn down the first `runtime_control_flow` candidate, and ratchet 10/10 selected TAP assertions |
 | 17 | `compiler(runtime): execute base pat regex receipt` | `feat(runtime): execute base pat regex slice` | Add selected `base/pat.t` execute support, prove the first bounded `runtime_regex` slice, and ratchet 68/68 selected TAP assertions |
-| 18 | `compiler(lsp): publish compiler-backed provider promotion gates` | `docs(lsp): publish provider promotion gates` | Turn H18 from future red into a gated promotion plan tied to harness receipts and provider proof docs |
+| 18 | `compiler(runtime): execute base translate unicode round-trip receipt` | `feat(runtime): execute base translate unicode round trip` | Add selected `base/translate.t` execute support, prove the native/unicode `runtime_value_model` slice, and ratchet 325/325 selected TAP assertions |
+| 19 | `compiler(lsp): publish compiler-backed provider promotion gates` | `docs(lsp): publish provider promotion gates` | Turn H18 from future red into a gated promotion plan tied to harness receipts and provider proof docs |

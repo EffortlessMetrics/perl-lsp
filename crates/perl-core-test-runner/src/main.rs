@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 const MODE_ENV: &str = "PERL_LSP_HARNESS_MODE";
 const CONTEXT_ENV: &str = "PERL_LSP_HARNESS_CONTEXT";
 const EXECUTE_BASE_ALLOWLIST: &[&str] =
-    &["base/if.t", "base/cond.t", "base/num.t", "base/pat.t", "base/while.t"];
+    &["base/if.t", "base/cond.t", "base/num.t", "base/pat.t", "base/translate.t", "base/while.t"];
 
 #[derive(Debug)]
 struct Invocation {
@@ -289,6 +289,7 @@ fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
         "base/cond.t" => execute_base_cond_t(&source),
         "base/num.t" => execute_base_num_t(&source),
         "base/pat.t" => execute_base_pat_t(&source),
+        "base/translate.t" => execute_base_translate_t(&source),
         "base/while.t" => execute_base_while_t(&source),
         other => Ok(ModeRunResult::fail(
             "runtime_test_harness",
@@ -644,6 +645,43 @@ fn execute_base_pat_t(source: &str) -> Result<ModeRunResult> {
     Ok(ModeRunResult::execute_pass(output, 2, 2))
 }
 
+fn execute_base_translate_t(source: &str) -> Result<ModeRunResult> {
+    for required in [
+        r#"print "1..257\n";"#,
+        r#"for my $i (0 .. 255) {"#,
+        r#"my $uni = utf8::native_to_unicode($i);"#,
+        r#"if ($uni < 0 || $uni >= 256) {"#,
+        r#"elsif (utf8::unicode_to_native(utf8::native_to_unicode($i)) != $i) {"#,
+        r#"print $i + 1 . " - native_to_unicode $i";"#,
+        r#"if (utf8::unicode_to_native(utf8::native_to_unicode(100000)) != 100000) {"#,
+        r#"print "ok 257 - native_to_unicode of large number\n";"#,
+    ] {
+        if !source.contains(required) {
+            return Ok(ModeRunResult::fail(
+                "runtime_value_model",
+                format!("execute-base base/translate.t does not support statement: {required}"),
+            ));
+        }
+    }
+
+    let mut output = String::from("1..257\n");
+    for i in 0..=255 {
+        let uni = perl_native_to_unicode(i);
+        if !(0..256).contains(&uni) || perl_unicode_to_native(perl_native_to_unicode(i)) != i {
+            output.push_str("not ");
+        }
+        let assertion = i + 1;
+        output.push_str(&format!("ok {assertion} - native_to_unicode {i}\n"));
+    }
+
+    if perl_unicode_to_native(perl_native_to_unicode(100_000)) != 100_000 {
+        output.push_str("not ");
+    }
+    output.push_str("ok 257 - native_to_unicode of large number\n");
+
+    Ok(ModeRunResult::execute_pass(output, 257, 257))
+}
+
 const BASE_NUM_EXPECTED_LINES: &[&str] = &[
     r#"print "1..56\n";"#,
     r#"$a = 1; "$a";"#,
@@ -809,6 +847,14 @@ fn perl_numeric_ne(left: &str, right: &str) -> Result<bool> {
 
 fn parse_perl_number(value: &str) -> Result<f64> {
     value.parse::<f64>().with_context(|| format!("parsing Perl numeric value {value:?}"))
+}
+
+fn perl_native_to_unicode(value: i64) -> i64 {
+    value
+}
+
+fn perl_unicode_to_native(value: i64) -> i64 {
+    value
 }
 
 fn emit_tap(mode: &str, display_path: &str, result: &ModeRunResult) {
@@ -1156,7 +1202,7 @@ mod tests {
     fn execute_non_allowlisted_file_fails_with_runtime_bucket() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_if_source()),
-            display_path: "base/translate.t".to_string(),
+            display_path: "base/rs.t".to_string(),
         };
 
         let result = run_execute(&invocation)?;
@@ -1243,6 +1289,48 @@ mod tests {
             result.tap_output.as_deref(),
             Some("1..2\nok 1 - match regex\nok 2 - match regex\n")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_translate_emits_real_tap() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_translate_source()),
+            display_path: "base/translate.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert_eq!(result.assertions_passed, 257);
+        assert_eq!(result.assertions_total, 257);
+        let tap = result
+            .tap_output
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("base/translate.t should emit TAP"))?;
+        assert!(tap.starts_with("1..257\nok 1 - native_to_unicode 0\n"));
+        assert!(tap.contains("ok 256 - native_to_unicode 255\n"));
+        assert!(tap.ends_with("ok 257 - native_to_unicode of large number\n"));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_translate_unsupported_statement_uses_value_bucket() -> TestResult {
+        let source = r#"#!./perl
+print "1..257\n";
+for my $i (0 .. 255) {
+    print "ok ";
+}
+"#;
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.into()),
+            display_path: "base/translate.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("runtime_value_model"));
         Ok(())
     }
 
@@ -1450,5 +1538,36 @@ if ($x == 0) { print "ok 4\n"; } else { print "not ok 4\n";}
     fn base_pat_source() -> String {
         r#"#!./perl print "1..2\n"; # first test to see if we can run the tests. $_ = 'test'; if (/^test/) { print "ok 1 - match regex\n"; } else { print "not ok 1 - match regex\n";} if (/^foo/) { print "not ok 2 - match regex\n"; } else { print "ok 2 - match regex\n";}"#
             .to_string()
+    }
+
+    fn base_translate_source() -> String {
+        r#"#!./perl
+
+# Verify round trip of translations from the native character set to unicode
+# and back work.  If this is wrong, nothing will be reliable.
+
+print "1..257\n";   # 0-255 plus one beyond
+
+for my $i (0 .. 255) {
+    my $uni = utf8::native_to_unicode($i);
+    if ($uni < 0 || $uni >= 256) {
+        print "not ";
+    }
+    elsif (utf8::unicode_to_native(utf8::native_to_unicode($i)) != $i) {
+        print "not ";
+    }
+    print "ok ";
+    print $i + 1 . " - native_to_unicode $i";
+    print "\n";
+}
+
+# Choose a largish number that might cause a seg fault if inappropriate array
+# lookup
+if (utf8::unicode_to_native(utf8::native_to_unicode(100000)) != 100000) {
+    print "not ";
+}
+print "ok 257 - native_to_unicode of large number\n";
+"#
+        .to_string()
     }
 }
