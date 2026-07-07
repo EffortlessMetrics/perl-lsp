@@ -75,6 +75,43 @@ required_receipts = [
 ]
 
 [[provider_class]]
+surface = "References"
+fact_class = "PIR-A initialized same-file lexical reference"
+current_state = "promotion-prep gated shadow"
+decision = "defer"
+next_proof = "P8 gated live flip after maintainer sign-off and project-shaped risky-shape receipts"
+promotion_conditions = [
+  "fresh_high_confidence_source_backed_pir_a_same_file_initialized_lexical_reference",
+  "include_declaration_false",
+  "exact_p5_p6_p7_proof",
+  "default_rollback_gate_preserved",
+]
+fallback_conditions = [
+  "feature_gate_off",
+  "shadow_only",
+  "proof_incomplete",
+  "request_shape_outside_selected_slice",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "ambiguous_identity",
+  "typeglob_alias",
+  "autoload",
+  "symbolic_ref",
+  "dynamic_require",
+  "unsupported_fact_class",
+  "fallback_policy",
+]
+required_receipts = [
+  "crates/perl-lsp-rs-core/tests/references_promotion_test.rs",
+  "docs/project/status/compiler_backed_lsp_burndown.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+
+[[provider_class]]
 surface = "Type definition"
 fact_class = "Direct source-backed class receiver"
 current_state = "safe subset"
