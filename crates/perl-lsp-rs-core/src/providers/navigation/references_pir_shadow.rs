@@ -47,6 +47,10 @@
 use std::collections::BTreeSet;
 
 use perl_parser_core::pir::LexicalExtractorReceipt;
+use perl_semantic_facts::{
+    Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFactTrace,
+    ProviderFallbackState, ProviderSurface,
+};
 
 /// Latency sample from one shadow-compare run.
 ///
@@ -144,6 +148,8 @@ pub struct PirShadowCompareReceipt {
     pub provider_behavior_changed: bool,
     /// Optional latency sample (`None` unless the caller supplies one).
     pub latency: Option<PirShadowLatency>,
+    /// Typed fact-source traces for provider cutover proof.
+    pub fact_source_traces: Vec<ProviderFactTrace>,
 }
 
 /// Maximum byte distance between two range starts for them to be treated as a
@@ -162,7 +168,41 @@ impl PirShadowCompareReceipt {
             refusal_reason: Some(reason),
             provider_behavior_changed: false,
             latency: None,
+            fact_source_traces: vec![trace_for_refusal(reason)],
         }
+    }
+}
+
+fn references_trace(
+    source: ProviderFactSourceKind,
+    provenance: Provenance,
+    fallback_state: ProviderFallbackState,
+) -> ProviderFactTrace {
+    ProviderFactTrace::new(
+        ProviderSurface::References,
+        source,
+        provenance,
+        Confidence::High,
+        ProviderFactFreshness::Fresh,
+        fallback_state,
+        None,
+        None,
+        Some(1),
+    )
+}
+
+fn trace_for_refusal(reason: PirShadowRefusalReason) -> ProviderFactTrace {
+    match reason {
+        PirShadowRefusalReason::DynamicBoundary => references_trace(
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            ProviderFallbackState::Blocked,
+        ),
+        _ => references_trace(
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            ProviderFallbackState::Fallback,
+        ),
     }
 }
 
@@ -312,6 +352,11 @@ pub fn shadow_references_with_pir(
         refusal_reason: None,
         provider_behavior_changed: false,
         latency: None,
+        fact_source_traces: vec![references_trace(
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ExactAst,
+            ProviderFallbackState::Shadow,
+        )],
     }
 }
 

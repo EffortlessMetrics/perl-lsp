@@ -32,7 +32,7 @@
 //! Note: latency is tracked via benchmarks/receipts, not wall-clock unit tests.
 
 use perl_lsp_rs_core::providers::navigation::references_pir_shadow::{
-    PirShadowRefusalReason, PromotionMode, ReferenceOptions,
+    PirShadowRefusalReason, PromotionMode, ReferenceOptions, shadow_references_with_pir,
 };
 use perl_lsp_rs_core::providers::navigation::{
     DEFAULT_PROMOTION_MODE, ReferencesPirPromoteOutcome, find_references_single_file,
@@ -40,6 +40,14 @@ use perl_lsp_rs_core::providers::navigation::{
 };
 use perl_parser_core::{Parser, hir::lower_ast, pir::extract_lexical_facts};
 use perl_position_tracking::PositionMapper;
+use perl_semantic_facts::{
+    AnchorId, Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind,
+    ProviderFactTrace, ProviderFallbackState, ProviderSurface,
+};
+use perl_workspace::semantic_shadow_compare::{
+    SemanticShadowCompareReceipt, ShadowCompareVerdict, ShadowQueryInput, ShadowQueryName,
+    summarize_identities,
+};
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
@@ -192,6 +200,40 @@ fn assert_curated_ranges(
     .into())
 }
 
+fn range_identity(range: &lsp_types::Range) -> String {
+    format!(
+        "{}:{}-{}:{}",
+        range.start.line, range.start.character, range.end.line, range.end.character
+    )
+}
+
+fn range_identities(ranges: &[lsp_types::Range]) -> Vec<String> {
+    ranges.iter().map(range_identity).collect()
+}
+
+fn references_trace(
+    source: ProviderFactSourceKind,
+    provenance: Provenance,
+    fallback_state: ProviderFallbackState,
+    anchor_id: u64,
+) -> ProviderFactTrace {
+    ProviderFactTrace::new(
+        ProviderSurface::References,
+        source,
+        provenance,
+        Confidence::High,
+        ProviderFactFreshness::Fresh,
+        fallback_state,
+        Some("pira-curated-references-slice".to_string()),
+        Some(AnchorId(anchor_id)),
+        Some(1),
+    )
+}
+
+fn note_contains(receipt: &SemanticShadowCompareReceipt, needle: &str) -> bool {
+    receipt.notes.iter().any(|note| note.contains(needle))
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // P5: Curated expected LSP Range corpus for #2674
 //
@@ -295,6 +337,198 @@ fn p5_curated_expected_lsp_range_corpus_for_initialized_lexicals() -> TestResult
     ];
     let unicode_actual = exact_ranges_for("p5_utf16_astral", F7_SOURCE, "$", "v", 0, true)?;
     assert_curated_ranges("p5_utf16_astral", unicode_actual, unicode_expected)?;
+
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P6: Provider shadow receipt for the selected references slice
+//
+// This is a no-live-behavior-change provider-shadow proof for the Phase 2 board.
+// It compares the PIR-A candidate against the P5 curated expected ranges and
+// records fallback mode, confidence, freshness, and dynamic-boundary blocking in
+// the shared semantic shadow receipt shape.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn p6_provider_shadow_receipt_for_curated_references_slice() -> TestResult {
+    let source = "my $a = 1;\nprint $a;\n";
+    let mapper = PositionMapper::new(source);
+    let expected = vec![nth_lsp_range(source, &mapper, "$a", 1)?];
+    let actual =
+        exact_ranges_for("p6_single_scalar_without_declaration", source, "$", "a", 0, false)?;
+    assert_curated_ranges(
+        "p6_single_scalar_without_declaration",
+        actual.clone(),
+        expected.clone(),
+    )?;
+
+    let receipt = receipt_for(source);
+    let (legacy_start, legacy_end) = nth_byte_range(source, "$a", 1)?;
+    let legacy = vec![(legacy_start, legacy_end)];
+    let pir_shadow_receipt = shadow_references_with_pir(&receipt, &legacy, "a", 0);
+    assert_eq!(pir_shadow_receipt.compiler_candidate_count, 2);
+    assert_eq!(pir_shadow_receipt.legacy_candidate_count, 1);
+    assert!(pir_shadow_receipt.missing_from_compiler.is_empty());
+    assert_eq!(pir_shadow_receipt.extra_in_compiler, vec![(3usize, 5usize)]);
+    assert!(pir_shadow_receipt.range_disagreements.is_empty());
+    assert_eq!(pir_shadow_receipt.refusal_reason, None);
+    assert!(
+        !pir_shadow_receipt.provider_behavior_changed,
+        "shadow receipt must preserve live provider behavior"
+    );
+    let pir_trace = pir_shadow_receipt
+        .fact_source_traces
+        .first()
+        .ok_or("PIR shadow receipt missing references fact-source trace")?;
+    assert_eq!(pir_trace.surface, ProviderSurface::References);
+    assert_eq!(pir_trace.source, ProviderFactSourceKind::CompilerFact);
+    assert_eq!(pir_trace.provenance, Provenance::ExactAst);
+    assert_eq!(pir_trace.confidence, Confidence::High);
+    assert_eq!(pir_trace.freshness, ProviderFactFreshness::Fresh);
+    assert_eq!(pir_trace.fallback_state, ProviderFallbackState::Shadow);
+
+    let shadow_outcome = references_pir_promote(
+        PromotionMode::Shadow,
+        "$",
+        "a",
+        &receipt,
+        &legacy,
+        0,
+        &|start, end| lsp_range_from_bytes(&mapper, start, end),
+        ReferenceOptions { include_declaration: false },
+    );
+    match shadow_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, legacy, "shadow mode must preserve live legacy output");
+            assert_eq!(
+                reason,
+                PirShadowRefusalReason::ShadowObserved,
+                "shadow mode must report observed fallback rather than changing live behavior"
+            );
+        }
+        other => return Err(format!("expected shadow LegacyFallback, got {other:?}").into()),
+    }
+
+    let shadow_receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
+        ShadowQueryName::FindReferences,
+        ShadowQueryInput { symbol: "PIR-A:$a:includeDeclaration=false".to_string() },
+        summarize_identities(Some(range_identities(&expected))),
+        summarize_identities(Some(range_identities(&actual))),
+        vec![
+            "candidate=textDocument/references:PIR-A initialized same-file lexical".to_string(),
+            "fallback=legacy_preserved:shadow_observed".to_string(),
+            "blockers=none".to_string(),
+            "confidence=high".to_string(),
+            "freshness=fresh".to_string(),
+            "dynamic_boundary_blockers=0".to_string(),
+            "live_behavior_change=false".to_string(),
+        ],
+        vec![references_trace(
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ExactAst,
+            ProviderFallbackState::Shadow,
+            1,
+        )],
+    );
+
+    assert_eq!(shadow_receipt.query, ShadowQueryName::FindReferences);
+    assert_eq!(shadow_receipt.verdict, ShadowCompareVerdict::Same);
+    assert!(note_contains(&shadow_receipt, "candidate=textDocument/references:PIR-A"));
+    assert!(note_contains(&shadow_receipt, "fallback=legacy_preserved"));
+    assert!(note_contains(&shadow_receipt, "blockers=none"));
+    assert!(note_contains(&shadow_receipt, "confidence=high"));
+    assert!(note_contains(&shadow_receipt, "freshness=fresh"));
+    assert!(note_contains(&shadow_receipt, "dynamic_boundary_blockers=0"));
+    assert!(note_contains(&shadow_receipt, "live_behavior_change=false"));
+    let trace = shadow_receipt
+        .fact_source_traces
+        .first()
+        .ok_or("shadow receipt missing references fact-source trace")?;
+    assert_eq!(trace.surface, ProviderSurface::References);
+    assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+    assert_eq!(trace.provenance, Provenance::ExactAst);
+    assert_eq!(trace.confidence, Confidence::High);
+    assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+    assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+
+    let dynamic_source = "my $x = 1;\nmy $code = 'print $x';\neval $code;\nprint $x;\n";
+    let dynamic_receipt = receipt_for(dynamic_source);
+    assert_eq!(
+        dynamic_receipt.dynamic_boundary_count, 1,
+        "fixture must expose one dynamic boundary"
+    );
+    let dynamic_legacy = vec![(3usize, 5usize), (26usize, 28usize), (51usize, 53usize)];
+    let pir_dynamic_receipt = shadow_references_with_pir(&dynamic_receipt, &dynamic_legacy, "x", 0);
+    assert_eq!(pir_dynamic_receipt.refusal_reason, Some(PirShadowRefusalReason::DynamicBoundary));
+    assert!(
+        !pir_dynamic_receipt.provider_behavior_changed,
+        "dynamic blocker receipt must preserve live provider behavior"
+    );
+    let pir_dynamic_trace = pir_dynamic_receipt
+        .fact_source_traces
+        .first()
+        .ok_or("PIR dynamic blocker receipt missing fact-source trace")?;
+    assert_eq!(pir_dynamic_trace.surface, ProviderSurface::References);
+    assert_eq!(pir_dynamic_trace.source, ProviderFactSourceKind::DynamicBoundary);
+    assert_eq!(pir_dynamic_trace.provenance, Provenance::DynamicBoundary);
+    assert_eq!(pir_dynamic_trace.confidence, Confidence::High);
+    assert_eq!(pir_dynamic_trace.freshness, ProviderFactFreshness::Fresh);
+    assert_eq!(pir_dynamic_trace.fallback_state, ProviderFallbackState::Blocked);
+
+    let dynamic_outcome = references_pir_promote(
+        PromotionMode::PromoteExact,
+        "$",
+        "x",
+        &dynamic_receipt,
+        &dynamic_legacy,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match dynamic_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, dynamic_legacy, "dynamic boundary must preserve legacy output");
+            assert_eq!(reason, PirShadowRefusalReason::DynamicBoundary);
+        }
+        other => return Err(format!("expected DynamicBoundary fallback, got {other:?}").into()),
+    }
+
+    let dynamic_blocker_receipt =
+        SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
+            ShadowQueryName::FindReferences,
+            ShadowQueryInput { symbol: "PIR-A:$x:dynamic-boundary".to_string() },
+            summarize_identities(Some(Vec::new())),
+            summarize_identities(Some(Vec::new())),
+            vec![
+                "candidate=textDocument/references:PIR-A initialized same-file lexical".to_string(),
+                "fallback=legacy_preserved:dynamic_boundary".to_string(),
+                "blockers=dynamic_boundary:1".to_string(),
+                "confidence=high".to_string(),
+                "freshness=fresh".to_string(),
+                "dynamic_boundary_blockers=1".to_string(),
+                "live_behavior_change=false".to_string(),
+            ],
+            vec![references_trace(
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                ProviderFallbackState::Blocked,
+                2,
+            )],
+        );
+
+    assert_eq!(dynamic_blocker_receipt.verdict, ShadowCompareVerdict::Same);
+    assert!(note_contains(&dynamic_blocker_receipt, "fallback=legacy_preserved"));
+    assert!(note_contains(&dynamic_blocker_receipt, "blockers=dynamic_boundary:1"));
+    assert!(note_contains(&dynamic_blocker_receipt, "dynamic_boundary_blockers=1"));
+    let dynamic_trace = dynamic_blocker_receipt
+        .fact_source_traces
+        .first()
+        .ok_or("dynamic blocker receipt missing fact-source trace")?;
+    assert_eq!(dynamic_trace.surface, ProviderSurface::References);
+    assert_eq!(dynamic_trace.source, ProviderFactSourceKind::DynamicBoundary);
+    assert_eq!(dynamic_trace.provenance, Provenance::DynamicBoundary);
+    assert_eq!(dynamic_trace.fallback_state, ProviderFallbackState::Blocked);
 
     Ok(())
 }
