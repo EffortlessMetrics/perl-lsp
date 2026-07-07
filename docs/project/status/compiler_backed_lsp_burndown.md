@@ -44,8 +44,8 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | P4 | Runtime bucket burn-down | Yellow / ongoing | `runtime_control_flow` has one selected-file burn-down through `base/while.t`; broader runtime remains selected only | Add runtime behavior only when a selected execute receipt demands it | One runtime bucket shrinks and the selected execute baseline is updated |
 | P5 | Curated-gold / oracle alignment | Green / curated corpus exists | `references_promotion_test::p5_curated_expected_lsp_range_corpus_for_initialized_lexicals` checks expected LSP `Range` sets for the PIR-A initialized same-file lexical slice; existing provider references receipts remain support evidence only | Feed this corpus into P6 provider shadow comparison | Candidate fact class has independent correctness evidence beyond harness receipts |
 | P6 | Provider shadow comparison | Green / receipt exists | `references_promotion_test::p6_provider_shadow_receipt_for_curated_references_slice` compares the selected PIR-A candidate to the P5 curated ranges and asserts the PIR shadow receipt records fallback, confidence, freshness, and dynamic-boundary blocker behavior | None | Shadow receipt records candidate, fallback, blockers, confidence, freshness, and dynamic-boundary behavior |
-| P7 | First provider promotion prep | Red | Provider gates exist; no Phase 2 promotion-prep PR is recorded here | Prepare rollback/feature-gate/no-output-change proof for the selected candidate | Promotion-prep proof lands without broad live behavior change |
-| P8 | First gated provider promotion | Red / future | No Phase 2 provider promotion is selected yet | Promote only after P1, P5, P6, and P7 are green for one fact class | One provider surface/fact class changes live behavior with rollback/fallback proof |
+| P7 | First provider promotion prep | Green / prep proof | `references_promotion_test::p7_promotion_prep_preserves_feature_gate_and_no_output_change` proves the rollback/off anchor, legacy-output preservation in shadow mode, and dynamic-boundary fallback for the selected PIR-A references slice | None | Promotion-prep proof lands without broad live behavior change |
+| P8 | First gated provider promotion | Red / future | P1, P5, P6, and P7 are green for the selected PIR-A references fact class; no Phase 2 provider promotion is selected yet | Promote only in a separate cutover PR after rechecking all gates | One provider surface/fact class changes live behavior with rollback/fallback proof |
 
 ## Selected Provider Candidate
 
@@ -61,7 +61,7 @@ P1 selects one candidate only. This is not a live-behavior promotion.
 | Why first | References already have a partial live/ranked-shadowed source-backed tier; the selected slice is same-file and lexical; #2674 preserves the corrected measurement-first roadmap without reviving the dark wrapper path |
 | Harness evidence | Real upstream `base`/`comp`/`run` parse/compile receipts and ratchets are green advisory substrate for source/compiler fact work; selected execute-base is not required for this static reference slice |
 | Provider evidence already present | [provider cutover](provider_cutover.md#cutover-matrix) and [provider confidence matrix](provider_confidence_matrix.md#matrix) record references as partial-live exact/imported with legacy fallback and dynamic/stale blockers; this is support evidence, not PIR-A lexical promotion proof |
-| Still required before promotion | P5 semantic scorecard/curated/oracle evidence for this exact slice; P6 shadow receipt with candidate/fallback/blocker/freshness/dynamic-boundary behavior; P7 rollback or feature-gate proof |
+| Still required before promotion | A separate P8 cutover PR that rechecks P1/P5/P6/P7, keeps rollback/fallback explicit, and proves any live behavior change |
 | Explicit non-goals | No generated/no-source, coderef, typeglob, declaration-including, stale, ambiguous, dynamic-boundary, module/import, workspace-wide, rename, or runtime-derived references |
 
 ## Selected Correctness Evidence Source
@@ -134,10 +134,10 @@ Avoid first:
 2. Select the first provider/fact-class candidate with explicit gates and no behavior change. Done for `textDocument/references` PIR-A initialized same-file lexical references.
 3. Build the P5 curated expected LSP range corpus for the selected references slice. Done in `references_promotion_test::p5_curated_expected_lsp_range_corpus_for_initialized_lexicals`.
 4. Add or refresh provider shadow comparison for the selected references slice. Done in `references_promotion_test::p6_provider_shadow_receipt_for_curated_references_slice`.
-5. Land promotion-prep proof with rollback, fallback, or no-output-change invariant. Next red: P7.
+5. Land promotion-prep proof with rollback, fallback, or no-output-change invariant. Done in `references_promotion_test::p7_promotion_prep_preserves_feature_gate_and_no_output_change`.
 6. Expand selected execute-base by one parse/compile-clean `base/*.t` file, or record a deliberate deferral.
 7. Reduce one compile bucket or tight cluster and update the harness board/receipts.
-8. Promote one provider surface/fact class only after the gates are green.
+8. Promote one provider surface/fact class only after the gates are green. Next red: P8.
 9. Return to this board and choose the next red.
 
 ## PR Rules

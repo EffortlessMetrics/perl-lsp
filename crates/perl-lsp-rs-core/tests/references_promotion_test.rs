@@ -537,6 +537,123 @@ fn p6_provider_shadow_receipt_for_curated_references_slice() -> TestResult {
 // Confirm the rollback anchor is off by default
 // ─────────────────────────────────────────────────────────────────────────────
 
+// P7: Promotion-prep no-output-change / rollback proof for #2674.
+//
+// This is the Phase 2 promotion-prep proof. It does not activate live provider
+// behavior. It proves:
+// - the default rollback anchor is still `Off`;
+// - `Off` returns the caller's legacy result unchanged;
+// - `Shadow` observes a real compiler candidate while preserving legacy output;
+// - dynamic-boundary promotion attempts fall back unchanged.
+#[test]
+fn p7_promotion_prep_preserves_feature_gate_and_no_output_change() -> TestResult {
+    assert_eq!(
+        DEFAULT_PROMOTION_MODE,
+        PromotionMode::Off,
+        "P7 rollback anchor must remain Off until a separate cutover PR"
+    );
+
+    let receipt = receipt_for(F1_SOURCE);
+    let legacy_scope_blind = (0..4)
+        .map(|occurrence| nth_byte_range(F1_SOURCE, "$x", occurrence))
+        .collect::<Result<Vec<_>, _>>()?;
+    let exact_expected = sorted_ranges(f1_expected_outer_x_ranges());
+
+    let exact_candidate = references_pir_promote(
+        PromotionMode::PromoteExact,
+        "$",
+        "x",
+        &receipt,
+        &legacy_scope_blind,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match exact_candidate {
+        ReferencesPirPromoteOutcome::Exact(ranges) => {
+            assert_eq!(
+                sorted_ranges(ranges),
+                exact_expected,
+                "P7 fixture must have a real scope-exact compiler candidate"
+            );
+        }
+        other => return Err(format!("expected P7 exact candidate, got {other:?}").into()),
+    }
+
+    let pir_shadow_receipt = shadow_references_with_pir(&receipt, &legacy_scope_blind, "x", 0);
+    assert_eq!(pir_shadow_receipt.compiler_candidate_count, exact_expected.len());
+    assert_eq!(pir_shadow_receipt.legacy_candidate_count, legacy_scope_blind.len());
+    assert!(
+        !pir_shadow_receipt.missing_from_compiler.is_empty(),
+        "P7 fixture must prove the compiler candidate is observed, not silently ignored"
+    );
+    assert!(
+        !pir_shadow_receipt.provider_behavior_changed,
+        "P7 shadow receipt must preserve live provider behavior"
+    );
+
+    let off_outcome = references_pir_promote(
+        DEFAULT_PROMOTION_MODE,
+        "$",
+        "x",
+        &receipt,
+        &legacy_scope_blind,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match off_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, legacy_scope_blind, "Off mode must preserve legacy output");
+            assert_eq!(reason, PirShadowRefusalReason::FeatureDisabled);
+        }
+        other => return Err(format!("expected Off legacy fallback, got {other:?}").into()),
+    }
+
+    let shadow_outcome = references_pir_promote(
+        PromotionMode::Shadow,
+        "$",
+        "x",
+        &receipt,
+        &legacy_scope_blind,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match shadow_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, legacy_scope_blind, "Shadow mode must preserve legacy output");
+            assert_eq!(reason, PirShadowRefusalReason::ShadowObserved);
+        }
+        other => return Err(format!("expected Shadow legacy fallback, got {other:?}").into()),
+    }
+
+    let dynamic_source = "my $x = 1;\nmy $code = 'print $x';\neval $code;\nprint $x;\n";
+    let dynamic_receipt = receipt_for(dynamic_source);
+    let dynamic_legacy = (0..3)
+        .map(|occurrence| nth_byte_range(dynamic_source, "$x", occurrence))
+        .collect::<Result<Vec<_>, _>>()?;
+    let dynamic_outcome = references_pir_promote(
+        PromotionMode::PromoteExact,
+        "$",
+        "x",
+        &dynamic_receipt,
+        &dynamic_legacy,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match dynamic_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, dynamic_legacy, "dynamic blocker must preserve legacy output");
+            assert_eq!(reason, PirShadowRefusalReason::DynamicBoundary);
+        }
+        other => return Err(format!("expected dynamic-boundary fallback, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
 #[test]
 fn default_promotion_mode_is_off() -> TestResult {
     assert_eq!(DEFAULT_PROMOTION_MODE, PromotionMode::Off);
