@@ -21,7 +21,7 @@ For the current green/yellow/red burndown and next PR order, see the
 | Real upstream compile ratchets | Advisory integrated | `.ci/perl-core-harness/upstream-{base,comp,run}-compile-baseline.json` ratchets real upstream compile reports for schema/profile/mode drift, newly failing files, unexpected failures, bucket growth, unknown/unbucketed failures, and assertion regressions |
 | Harness orchestration crate | Extracted | `crates/perl-core-harness` owns discovery, prepare, run, baseline, smoke, and gap-map orchestration; `xtask` remains CLI dispatch glue |
 | Execute-one | Scaffolded | `perl-core-harness run --mode execute --profile base --test base/if.t` runs the first allowlisted upstream `base/if.t` path through `perl-core-test-runner`, emits real TAP, and writes an execute report |
-| Execute-base | Scaffolded / selected subset | `perl-core-harness run --mode execute --profile base --test base/if.t --test base/cond.t` runs explicit allowlisted `base` files and writes a selected-subset execute report; profile-wide execute remains unsupported |
+| Execute-base | Advisory selected subset | `perl-core-harness run --mode execute --profile base --test base/if.t --test base/cond.t` runs explicit allowlisted `base` files and writes `target/perl-core/reports/base-execute.json`; the first selected receipt recorded 2/2 files and 6/6 TAP assertions, while profile-wide execute remains unsupported |
 | Upstream Perl tree preparation | Linux advisory | Clone/configure/test_prep automation is Linux-only in this slice; Windows/macOS preparation is future work |
 
 ## Claim Boundary
@@ -35,11 +35,11 @@ behavior. The advisory real-tree smoke verifies that actual upstream `base`,
 `comp`, and `run` profile files from a pinned prepared Perl tree can flow
 through discovery, parse, compile, smoke-summary, and gap-map receipt
 generation. Execute-one proves the allowlisted `base/if.t` receipt path, and
-execute-base is scaffolded as an explicit selected subset of allowlisted
+execute-base now has an advisory selected-subset receipt for allowlisted
 `base/*.t` files. The lane does not claim full compiler or runtime conformance,
 does not promote provider behavior, and is not a required PR or merge-queue
-gate. Profile-wide execute remains fail-closed until runtime buckets are reduced
-enough to widen safely.
+gate. Profile-wide execute remains fail-closed until selected execute receipts
+are ratcheted and runtime buckets are reduced enough to widen safely.
 
 The first receipt shape is:
 
