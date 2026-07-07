@@ -639,7 +639,17 @@ impl<'a> Parser<'a> {
             if self.peek_kind() == Some(TokenKind::FatArrow) {
                 self.consume_token()?; // consume redundant chained =>
             }
-            expressions.push(self.parse_assignment()?);
+            if !matches!(
+                self.peek_kind(),
+                Some(
+                    TokenKind::Semicolon
+                        | TokenKind::RightParen
+                        | TokenKind::RightBrace
+                        | TokenKind::RightBracket
+                ) | None
+            ) {
+                expressions.push(self.parse_assignment()?);
+            }
         }
 
         while self.peek_kind() == Some(TokenKind::Comma)
@@ -1348,5 +1358,35 @@ impl<'a> Parser<'a> {
             | TokenKind::WordXor    // sub xor { ... }
             | TokenKind::StringCompare // sub cmp { ... }
         )
+    }
+}
+
+#[cfg(test)]
+mod helper_tests {
+    use crate::parser::Parser;
+
+    fn assert_clean_parse(source: &str) -> Result<(), String> {
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().map_err(|err| format!("parse failed for `{source}`: {err:?}"))?;
+        let sexp = ast.to_sexp();
+        if sexp.contains("ERROR") {
+            return Err(format!("parse of `{source}` produced ERROR nodes:\n{sexp}"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn terminal_fat_arrow_continuation_stops_at_right_paren() -> Result<(), String> {
+        assert_clean_parse("my $x = (time =>);")
+    }
+
+    #[test]
+    fn terminal_fat_arrow_continuation_stops_at_right_brace() -> Result<(), String> {
+        assert_clean_parse("do { time => }")
+    }
+
+    #[test]
+    fn terminal_fat_arrow_continuation_stops_at_right_bracket() -> Result<(), String> {
+        assert_clean_parse("my $x = [time =>];")
     }
 }

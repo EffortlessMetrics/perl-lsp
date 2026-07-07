@@ -292,7 +292,18 @@ impl<'a> Parser<'a> {
                 );
             }
             self.tokens.next()?; // consume =>
-            elements.push(self.parse_assignment()?);
+            if !matches!(
+                self.peek_kind(),
+                Some(
+                    TokenKind::Colon
+                        | TokenKind::Semicolon
+                        | TokenKind::RightParen
+                        | TokenKind::RightBrace
+                        | TokenKind::RightBracket
+                ) | None
+            ) {
+                elements.push(self.parse_assignment()?);
+            }
         }
 
         // Continue collecting comma/fat-arrow separated elements until we see

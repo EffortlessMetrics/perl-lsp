@@ -245,24 +245,14 @@ impl<'a> Parser<'a> {
                     0
                 };
                 if op_len > 0 {
-                    let after_op = text[op_len..].trim_start();
-                    if let Some(open) = after_op.chars().next() {
-                        let close = match open {
-                            '(' => ')',
-                            '[' => ']',
-                            '{' => '}',
-                            '<' => '>',
-                            c => c, // symmetric delimiter closes with itself
-                        };
-                        if !after_op.ends_with(close) {
-                            self.record_error(ParseError::syntax(
-                                format!(
-                                    "Unclosed {} delimiter in string operator before end of file",
-                                    open
-                                ),
-                                token.start,
-                            ));
-                        }
+                    let operator = &text[..op_len];
+                    if quote_parser::parse_quote_operator_content(text, operator).is_none() {
+                        self.record_error(ParseError::syntax(
+                            format!(
+                                "Unclosed {operator} delimiter in string operator before end of file"
+                            ),
+                            token.start,
+                        ));
                     }
                 }
 
@@ -279,38 +269,19 @@ impl<'a> Parser<'a> {
 
                 // Parse qw(...) to extract words
                 if let Some(content) = text.strip_prefix("qw") {
-                    let content = content.trim_start();
-                    // Find the delimiter and extract content.
-                    // Track whether the closing delimiter was present so we can record an error
-                    // when the qw() is unclosed (e.g. qw(one two three at EOF).
-                    let (content_str, _delimiter, delim_closed) =
-                        if let Some(rest) = content.strip_prefix('(') {
-                            let closed = rest.strip_suffix(')').is_some();
-                            (rest.strip_suffix(')').unwrap_or(rest), '(', closed)
-                        } else if let Some(rest) = content.strip_prefix('[') {
-                            let closed = rest.strip_suffix(']').is_some();
-                            (rest.strip_suffix(']').unwrap_or(rest), '[', closed)
-                        } else if let Some(rest) = content.strip_prefix('{') {
-                            let closed = rest.strip_suffix('}').is_some();
-                            (rest.strip_suffix('}').unwrap_or(rest), '{', closed)
-                        } else if let Some(rest) = content.strip_prefix('<') {
-                            let closed = rest.strip_suffix('>').is_some();
-                            (rest.strip_suffix('>').unwrap_or(rest), '<', closed)
+                    let content_str =
+                        if let Some(content_str) = quote_parser::parse_quote_operator_content(
+                            text,
+                            "qw",
+                        ) {
+                            content_str
                         } else {
-                            // Other delimiter - find matching pair
-                            let delim = content.chars().next().unwrap_or(' ');
-                            let inner = &content[delim.len_utf8()..];
-                            let trimmed = inner.trim_end_matches(delim);
-                            let closed = trimmed.len() < inner.len();
-                            (trimmed, delim, closed)
-                        };
-
-                    if !delim_closed {
                         self.record_error(ParseError::syntax(
                             "Unclosed qw() delimiter: missing closing delimiter before end of file",
                             start,
                         ));
-                    }
+                            content
+                        };
 
                     // Split into words, stripping # line comments first (perlop).
                     let cleaned = strip_qw_comments(content_str);
@@ -963,10 +934,12 @@ impl<'a> Parser<'a> {
                         if self.peek_kind() == Some(TokenKind::FatArrow) {
                             self.tokens.next()?; // consume redundant chained =>
                         }
-                        // The value after => may be followed by a word operator inside the list:
-                        // e.g. `(key => $val or "default")`.
-                        let val = self.parse_assignment_or_declaration()?;
-                        elements.push(self.parse_word_or_expr(val)?);
+                        if self.peek_kind() != Some(TokenKind::RightParen) {
+                            // The value after => may be followed by a word operator inside the list:
+                            // e.g. `(key => $val or "default")`.
+                            let val = self.parse_assignment_or_declaration()?;
+                            elements.push(self.parse_word_or_expr(val)?);
+                        }
                     }
 
                     while self.peek_kind() == Some(TokenKind::Comma)
@@ -996,6 +969,9 @@ impl<'a> Parser<'a> {
                             self.consume_token()?; // consume =>
                             if self.peek_kind() == Some(TokenKind::FatArrow) {
                                 self.consume_token()?; // consume redundant chained =>
+                            }
+                            if self.peek_kind() == Some(TokenKind::RightParen) {
+                                break;
                             }
                         }
 

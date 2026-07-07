@@ -9,20 +9,19 @@
   "tap_assertions_total": 9,
   "tap_assertions_passed": 6,
   "buckets": {
-    "compile_effect": 2,
-    "parse_recovery": 1
+    "compile_effect": 3
   },
   "expected_failures": [
     {
       "path": "base/lex.t",
       "phase": "compile",
-      "bucket": "parse_recovery",
-      "first_diagnostic": "Invalid syntax at position 10735: Paired-delimiter substitution should be handled by TokenKind::Substitution",
-      "workstream": "parser_recovery",
+      "bucket": "compile_effect",
+      "first_diagnostic": "symbolic reference dereference is not statically known",
+      "workstream": "compile_time_effects",
       "lsp_impact": [
-        "diagnostics",
-        "syntax_tree",
-        "semantic_tokens"
+        "definition",
+        "references",
+        "diagnostics"
       ]
     },
     {
