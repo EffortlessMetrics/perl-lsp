@@ -6,7 +6,7 @@
 //! that RIPR fact production sits **below** the editor/LSP stack and **above**
 //! the raw parser — see `README.md` for the dependency contract.
 //!
-//! Two entry points:
+//! Three entry points:
 //!
 //! - [`build_ripr_facts_packet`] is the **structured batch API** (#3293 PR 2):
 //!   it validates a [`RiprFactsRequest`], runs the (currently conservative,
@@ -16,6 +16,8 @@
 //!   `ripr-facts` subcommand calls: it forwards CLI-shaped args to the batch
 //!   API, then validates the output path, writes the packet to disk, and maps
 //!   the outcome to a process exit code.
+//! - [`run_cli`] is the standalone `perl-ripr-facts` binary entry point. It
+//!   accepts RIPR's managed-producer command shape, including `--diff`.
 //!
 //! Later slices replace the remaining string scans with fuller parser- and
 //! semantic-backed extraction (using leaf crates like `perl-parser-core` /
@@ -25,12 +27,42 @@
 mod emitter;
 
 use emitter::{
-    content_fingerprint, emit_boundaries_and_commands, emit_changes_from_diff,
-    emit_files_and_owners, emit_relations_and_discriminators, emit_tests_and_oracles,
+    emit_boundaries_and_commands, emit_changes_from_diff, emit_files_and_owners,
+    emit_relations_and_discriminators, emit_tests_and_oracles,
 };
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 /// Expected schema version for `ripr-perl-facts-v1` packets.
 const EXPECTED_RIPR_FACTS_SCHEMA: &str = "ripr-perl-facts-v1";
+const DEFAULT_FACT_CLASSES: &str = "files,owners,changes,tests,oracles,relations,dynamic_boundaries,verify_commands,limitations,provenance";
+const DEFAULT_OUT: &str = "target/ripr/reports/perl-facts.json";
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct RiprFactsCli {
+    schema: String,
+    root: String,
+    base: Option<String>,
+    head: Option<String>,
+    fact_classes: String,
+    diff_path: Option<String>,
+    out: String,
+}
+
+impl Default for RiprFactsCli {
+    fn default() -> Self {
+        Self {
+            schema: EXPECTED_RIPR_FACTS_SCHEMA.to_string(),
+            root: ".".to_string(),
+            base: None,
+            head: None,
+            fact_classes: DEFAULT_FACT_CLASSES.to_string(),
+            diff_path: None,
+            out: DEFAULT_OUT.to_string(),
+        }
+    }
+}
 
 /// A structured request to the `ripr-facts` batch exporter.
 ///
@@ -146,7 +178,7 @@ pub fn build_ripr_facts_packet(
 
     let (relations, _changed_observables, _observed_sinks, relation_limitations) =
         emit_relations_and_discriminators(root, &tests, &oracles);
-    let has_relation_facts = !relations.is_empty();
+    let has_relation_candidates = !relations.is_empty();
 
     // Emit `tests[]`/`oracles[]` only for the specifically-requested classes; the
     // facts computed above may exist solely to feed `relations`. But referential
@@ -157,10 +189,10 @@ pub fn build_ripr_facts_packet(
     // this slice), then keep `tests[]` whenever a relation OR an oracle references
     // one. This preserves the referential integrity origin/main had by always
     // populating `tests[]`.
-    let oracles = if wants_oracles { oracles } else { Vec::new() };
+    let mut oracles = if wants_oracles { oracles } else { Vec::new() };
     let has_oracle_facts = !oracles.is_empty();
     let tests =
-        if wants_tests || has_relation_facts || has_oracle_facts { tests } else { Vec::new() };
+        if wants_tests || has_relation_candidates || has_oracle_facts { tests } else { Vec::new() };
     let has_test_facts = !tests.is_empty();
 
     let (boundaries, boundary_limitations, verify_commands) = emit_boundaries_and_commands(root);
@@ -186,7 +218,7 @@ pub fn build_ripr_facts_packet(
     // whenever files/owners/provenance or changes are requested, or a relation
     // was emitted, mirroring how PR 4 kept `tests[]` for a relation's `test_id`.
     let (files, owners, file_provenance, file_limitations) =
-        if wants_file_facts_explicit || wants_changes || has_relation_facts {
+        if wants_file_facts_explicit || wants_changes || has_relation_candidates {
             emit_files_and_owners(root)
         } else {
             (Vec::new(), Vec::new(), Vec::new(), Vec::new())
@@ -216,6 +248,9 @@ pub fn build_ripr_facts_packet(
         (Vec::new(), Vec::new())
     };
     let has_change_facts = !changes.is_empty();
+    let mut relations = bind_relations_to_changes(relations, &changes);
+    annotate_oracles_for_bound_relations(&mut oracles, &mut relations, &changes);
+    let has_relation_facts = !relations.is_empty();
 
     // Referential integrity: a change's `file_id`/`owner_id` — and an
     // `unattributable-change` limitation's file `evidence_refs` — point at a
@@ -232,7 +267,7 @@ pub fn build_ripr_facts_packet(
             l["limitation_id"].as_str().is_some_and(|id| id.starts_with("unattributable-change:"))
         });
     let (files, owners) =
-        if wants_file_facts_explicit || changes_reference_known_file || has_relation_facts {
+        if wants_file_facts_explicit || changes_reference_known_file || has_relation_candidates {
             (files, owners)
         } else {
             (Vec::new(), Vec::new())
@@ -240,11 +275,11 @@ pub fn build_ripr_facts_packet(
     let has_file_facts = !files.is_empty();
     let has_owner_facts = !owners.is_empty();
 
-    // File-walk limitations (the `digest-algorithm` schema note, parse/read
-    // failures) describe or reference `files[]` facts, so only surface them when
-    // `files[]` are actually in the packet. A `changes`-only request that cleared
-    // `files[]` would otherwise ship a note about digests that aren't present —
-    // the same orphaned-limitation class as `oracle-representation`.
+    // File-walk limitations (parse/read failures) describe or reference
+    // `files[]` facts, so only surface them when `files[]` are actually in the
+    // packet. A `changes`-only request that cleared `files[]` would otherwise
+    // ship notes about files that aren't present — the same orphaned-limitation
+    // class as `oracle-representation`.
     let file_limitations =
         if wants_file_facts_explicit || has_file_facts { file_limitations } else { Vec::new() };
 
@@ -360,22 +395,329 @@ pub fn build_ripr_facts_packet(
         }
     }
 
-    // #3293 PR 7: deterministic content fingerprint over the fully-assembled
-    // packet. Computed while `packet_fingerprint` is still `null`, so the
-    // fingerprint is a hash of the whole packet-with-null-fingerprint and is
-    // reproducible: recomputing `content_fingerprint` over the packet with
-    // `packet_fingerprint` reset to `null` yields the same value. serde_json
-    // serializes object keys in sorted (BTreeMap) order, so the string is
-    // canonical; the same request always produces the same fingerprint. This
-    // relies on `serde_json`'s `preserve_order` feature being OFF for this crate
-    // (it's pulled only by a `tree-sitter` *build*-dependency elsewhere, which
-    // resolver-v2 keeps out of this crate's normal build — verified via
-    // `cargo build -p perl-ripr-facts -v`); a future *normal* dep enabling it
-    // would switch to insertion order and must re-verify this.
-    let fingerprint = content_fingerprint(&packet.to_string());
+    // RIPR-SPEC-0064: match RIPR's consumer-side packet integrity recipe. The
+    // fingerprint covers stable semantic identity tuples, not host paths, temp
+    // dirs, timestamps, or serde_json object ordering.
+    let fingerprint = ripr_packet_fingerprint(&packet);
     packet["packet_fingerprint"] = serde_json::Value::String(fingerprint);
 
     Ok(packet)
+}
+
+fn bind_relations_to_changes(relations: Vec<Value>, changes: &[Value]) -> Vec<Value> {
+    let mut bound = Vec::new();
+    let mut changes_by_owner: HashMap<&str, Vec<&Value>> = HashMap::new();
+    for change in changes {
+        if let Some(owner_id) = change["owner_id"].as_str() {
+            changes_by_owner.entry(owner_id).or_default().push(change);
+        }
+    }
+
+    for relation in &relations {
+        let Some(relation_owner_id) = relation["owner_id"].as_str() else {
+            bound.push(relation.clone());
+            continue;
+        };
+        let Some(base_relation_id) = relation["relation_id"].as_str() else {
+            bound.push(relation.clone());
+            continue;
+        };
+        let Some(matching_changes) = changes_by_owner.get(relation_owner_id) else {
+            bound.push(relation.clone());
+            continue;
+        };
+        let mut emitted_bound_relation = false;
+        for change in matching_changes {
+            let Some(change_id) = change["change_id"].as_str() else {
+                continue;
+            };
+            let mut bound_relation = relation.clone();
+            bound_relation["change_id"] = Value::String(change_id.to_owned());
+            bound_relation["relation_id"] =
+                Value::String(format!("{base_relation_id}:{change_id}"));
+            bound.push(bound_relation);
+            emitted_bound_relation = true;
+        }
+        if !emitted_bound_relation {
+            bound.push(relation.clone());
+        }
+    }
+    bound.sort_by(|a, b| a["relation_id"].as_str().cmp(&b["relation_id"].as_str()));
+    bound
+}
+
+fn annotate_oracles_for_bound_relations(
+    oracles: &mut [Value],
+    relations: &mut [Value],
+    changes: &[Value],
+) {
+    let changes_by_id: HashMap<&str, &Value> = changes
+        .iter()
+        .filter_map(|change| change["change_id"].as_str().map(|change_id| (change_id, change)))
+        .collect();
+
+    for relation in relations {
+        let Some(owner_id) = relation["owner_id"].as_str() else {
+            continue;
+        };
+        let Some(test_id) = relation["test_id"].as_str() else {
+            continue;
+        };
+        let Some(change_id) = relation["change_id"].as_str() else {
+            continue;
+        };
+        let Some(change) = changes_by_id.get(change_id) else {
+            continue;
+        };
+        let Some(callable_name) = callable_name_from_owner_id(owner_id) else {
+            continue;
+        };
+        let exact_index = oracles.iter().position(|oracle| {
+            oracle["test_id"].as_str() == Some(test_id)
+                && oracle["kind"].as_str() == Some("exact_return_assertion")
+                && oracle_expression_mentions_callable(oracle, callable_name)
+        });
+        let fallback_index = || {
+            oracles.iter().position(|oracle| {
+                oracle["test_id"].as_str() == Some(test_id)
+                    && oracle_expression_mentions_callable(oracle, callable_name)
+            })
+        };
+        let Some(oracle_index) = exact_index.or_else(fallback_index) else {
+            continue;
+        };
+        let oracle = &mut oracles[oracle_index];
+        let Some(oracle_id) = oracle["oracle_id"].as_str().map(str::to_owned) else {
+            continue;
+        };
+        oracle["target_owner_id"] = Value::String(owner_id.to_owned());
+        if oracle["kind"].as_str() == Some("exact_return_assertion")
+            && let Some(changed_observable) = change["changed_observable"].as_str()
+        {
+            oracle["observed_sink"] = Value::String(changed_observable.to_owned());
+        }
+        relation["oracle_id"] = Value::String(oracle_id);
+    }
+}
+
+fn oracle_expression_mentions_callable(oracle: &Value, callable_name: &str) -> bool {
+    oracle["expression"].as_str().is_some_and(|expression| expression.contains(callable_name))
+}
+
+fn callable_name_from_owner_id(owner_id: &str) -> Option<&str> {
+    let (without_span, _) = owner_id.rsplit_once(':')?;
+    for (kind_marker, is_callable) in [
+        (":package:", false),
+        (":class:", false),
+        (":role:", false),
+        (":sub:", true),
+        (":method:", true),
+    ] {
+        let Some((_, qualified_name)) = without_span.split_once(kind_marker) else {
+            continue;
+        };
+        let callable =
+            if is_callable { qualified_name.rsplit("::").next()? } else { qualified_name };
+        return if callable.is_empty() { None } else { Some(callable) };
+    }
+    None
+}
+
+fn ripr_packet_fingerprint(packet: &Value) -> String {
+    let mut hasher = Sha256::new();
+
+    let mut files_sorted: Vec<(String, String)> = packet_array(packet, "files")
+        .map(|file| {
+            (
+                string_field(file, "file_id").to_owned(),
+                normalize_repo_relative(string_field(file, "path")),
+            )
+        })
+        .collect();
+    files_sorted.sort();
+    for (file_id, path) in &files_sorted {
+        hasher.update(b"file\0");
+        hasher.update(file_id.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(path.as_bytes());
+        hasher.update(b"\0");
+    }
+
+    let mut owner_ids: Vec<String> = packet_array(packet, "owners")
+        .map(|owner| string_field(owner, "owner_id").to_owned())
+        .collect();
+    owner_ids.sort();
+    for owner_id in &owner_ids {
+        hasher.update(b"owner\0");
+        hasher.update(owner_id.as_bytes());
+        hasher.update(b"\0");
+    }
+
+    let mut change_ids: Vec<String> = packet_array(packet, "changes")
+        .map(|change| string_field(change, "change_id").to_owned())
+        .collect();
+    change_ids.sort();
+    for change_id in &change_ids {
+        hasher.update(b"change\0");
+        hasher.update(change_id.as_bytes());
+        hasher.update(b"\0");
+    }
+
+    let mut oracle_tuples: Vec<(String, String, String, String)> = packet_array(packet, "oracles")
+        .map(|oracle| {
+            (
+                string_field(oracle, "oracle_id").to_owned(),
+                string_field(oracle, "target_owner_id").to_owned(),
+                string_field(oracle, "observed_sink").to_owned(),
+                string_field(oracle, "expected_expression").to_owned(),
+            )
+        })
+        .collect();
+    oracle_tuples.sort();
+    for (oracle_id, target, sink, expected) in &oracle_tuples {
+        hasher.update(b"oracle\0");
+        hasher.update(oracle_id.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(target.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(sink.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(expected.as_bytes());
+        hasher.update(b"\0");
+    }
+
+    let mut relation_tuples: Vec<(String, String, String, String, String)> =
+        packet_array(packet, "relations")
+            .map(|relation| {
+                (
+                    string_field(relation, "relation_id").to_owned(),
+                    string_field(relation, "change_id").to_owned(),
+                    string_field(relation, "owner_id").to_owned(),
+                    string_field(relation, "test_id").to_owned(),
+                    string_field(relation, "oracle_id").to_owned(),
+                )
+            })
+            .collect();
+    relation_tuples.sort();
+    for (relation_id, change_id, owner_id, test_id, oracle_id) in &relation_tuples {
+        hasher.update(b"relation\0");
+        hasher.update(relation_id.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(change_id.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(owner_id.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(test_id.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(oracle_id.as_bytes());
+        hasher.update(b"\0");
+    }
+
+    let digest = hasher.finalize();
+    format!("sha256:{}", hex_bytes(&digest))
+}
+
+fn packet_array<'a>(packet: &'a Value, key: &str) -> impl Iterator<Item = &'a Value> {
+    packet.get(key).and_then(Value::as_array).into_iter().flatten()
+}
+
+fn string_field<'a>(value: &'a Value, key: &str) -> &'a str {
+    value.get(key).and_then(Value::as_str).unwrap_or("")
+}
+
+fn normalize_repo_relative(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+#[expect(
+    clippy::print_stderr,
+    reason = "ripr-facts is a batch CLI unit — user-facing diagnostics intentionally use stderr"
+)]
+pub fn run_cli<I, S>(args: I) -> i32
+where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+{
+    let args: Vec<String> = args.into_iter().map(Into::into).collect();
+    let cli = match parse_ripr_facts_cli(&args) {
+        Ok(cli) => cli,
+        Err(reason) => {
+            eprintln!("ripr-facts: {reason}");
+            eprintln!("{}", ripr_facts_usage());
+            return 1;
+        }
+    };
+
+    let diff_text = match cli.diff_path.as_deref() {
+        Some(path) => match read_diff_text(&cli.root, path) {
+            Ok(text) => Some(text),
+            Err(reason) => {
+                eprintln!("ripr-facts: {reason}");
+                return 1;
+            }
+        },
+        None => None,
+    };
+
+    run_ripr_facts_with_diff(
+        &cli.schema,
+        &cli.root,
+        cli.base.as_deref(),
+        cli.head.as_deref(),
+        &cli.fact_classes,
+        diff_text.as_deref(),
+        &cli.out,
+    )
+}
+
+fn parse_ripr_facts_cli(args: &[String]) -> Result<RiprFactsCli, String> {
+    let mut iter = args.iter();
+    let _program = iter.next();
+    match iter.next().map(String::as_str) {
+        Some("ripr-facts") => {}
+        Some("--help" | "-h") => return Err("missing subcommand `ripr-facts`".to_string()),
+        Some(other) => return Err(format!("unexpected subcommand or option `{other}`")),
+        None => return Err("missing subcommand `ripr-facts`".to_string()),
+    }
+
+    let rest: Vec<&str> = iter.map(String::as_str).collect();
+    let mut cli = RiprFactsCli::default();
+    let mut index = 0usize;
+    while index < rest.len() {
+        let flag = rest[index];
+        let value = rest.get(index + 1).ok_or_else(|| format!("missing value for `{flag}`"))?;
+        match flag {
+            "--schema" => cli.schema = (*value).to_string(),
+            "--root" => cli.root = (*value).to_string(),
+            "--base" => cli.base = Some((*value).to_string()),
+            "--head" => cli.head = Some((*value).to_string()),
+            "--fact-classes" => cli.fact_classes = (*value).to_string(),
+            "--diff" => cli.diff_path = Some((*value).to_string()),
+            "--out" => cli.out = (*value).to_string(),
+            other => return Err(format!("unknown option `{other}`")),
+        }
+        index += 2;
+    }
+
+    Ok(cli)
+}
+
+fn ripr_facts_usage() -> &'static str {
+    "usage: perl-ripr-facts ripr-facts --schema ripr-perl-facts-v1 --root <root> \
+     [--base <base>] [--head <head>] [--fact-classes <classes>] \
+     [--diff <cwd-relative-diff>] --out <out>"
+}
+
+fn read_diff_text(root: &str, diff_path: &str) -> Result<String, String> {
+    validate_ripr_facts_path(root, "root")?;
+    validate_ripr_facts_path(diff_path, "diff")?;
+    let path = std::path::Path::new(diff_path);
+    std::fs::read_to_string(path)
+        .map_err(|error| format!("failed to read diff `{}`: {error}", path.display()))
 }
 
 /// Run the `ripr-facts` exporter (Campaign 31, ripr-swarm#1379).
@@ -390,16 +732,28 @@ pub fn build_ripr_facts_packet(
 /// packet) is validated first: it is the cheapest check, so failing on it before
 /// building the packet avoids a needless workspace scan when the write
 /// destination is invalid.
-#[expect(
-    clippy::print_stderr,
-    reason = "ripr-facts is a batch CLI unit — user-facing diagnostics intentionally use stderr"
-)]
 pub fn run_ripr_facts(
     schema: &str,
     root: &str,
     base: Option<&str>,
     head: Option<&str>,
     fact_classes: &str,
+    out: &str,
+) -> i32 {
+    run_ripr_facts_with_diff(schema, root, base, head, fact_classes, None, out)
+}
+
+#[expect(
+    clippy::print_stderr,
+    reason = "ripr-facts is a batch CLI unit — user-facing diagnostics intentionally use stderr"
+)]
+pub fn run_ripr_facts_with_diff(
+    schema: &str,
+    root: &str,
+    base: Option<&str>,
+    head: Option<&str>,
+    fact_classes: &str,
+    diff: Option<&str>,
     out: &str,
 ) -> i32 {
     // Validate the output path first — the cheapest check — so an invalid write
@@ -415,8 +769,7 @@ pub fn run_ripr_facts(
         base,
         head,
         fact_classes,
-        // The CLI wrapper does not yet supply a diff (#3293 PR 5 scope).
-        diff: None,
+        diff,
     }) {
         Ok(packet) => packet,
         Err(error) => {
@@ -497,6 +850,15 @@ fn normalize_fact_classes(raw: &str) -> Result<Vec<String>, String> {
     Ok(seen)
 }
 
+fn producer_capabilities(fact_classes: &[String]) -> Vec<String> {
+    let mut capabilities = fact_classes.to_vec();
+    let has_test_facts = fact_classes.iter().any(|class| class == "tests" || class == "oracles");
+    if has_test_facts && !capabilities.iter().any(|capability| capability == "test_facts") {
+        capabilities.push("test_facts".to_string());
+    }
+    capabilities
+}
+
 /// Build a schema-valid `unavailable` packet (the honest state until the full
 /// emitter body lands).
 fn build_unavailable_packet(
@@ -506,6 +868,7 @@ fn build_unavailable_packet(
     head: Option<&str>,
     fact_classes: &[String],
 ) -> serde_json::Value {
+    let capabilities = producer_capabilities(fact_classes);
     serde_json::json!({
         "schema_version": schema,
         // M1 contract convergence: deterministic packet ID (no timestamp).
@@ -520,7 +883,7 @@ fn build_unavailable_packet(
         "producer": {
             "name": "perl-lsp",
             "version": env!("CARGO_PKG_VERSION"),
-            "capabilities": fact_classes,
+            "capabilities": capabilities,
         },
         "root": {
             "repo_relative": root,
@@ -569,8 +932,8 @@ fn write_packet(out: &str, packet: &serde_json::Value) -> std::io::Result<()> {
 mod tests {
     use super::{
         RiprFactsError, RiprFactsRequest, build_ripr_facts_packet, build_unavailable_packet,
-        content_fingerprint, normalize_fact_classes, run_ripr_facts, validate_ripr_facts_path,
-        write_packet,
+        callable_name_from_owner_id, normalize_fact_classes, ripr_packet_fingerprint, run_cli,
+        run_ripr_facts, validate_ripr_facts_path, write_packet,
     };
 
     /// A valid request against the crate root (`"."`, no `t/` dir → unavailable).
@@ -704,7 +1067,7 @@ mod tests {
         let f = files.iter().find(|f| f["path"] == "lib/Widget.pm").expect(".pm file fact");
         assert_eq!(f["role"], serde_json::json!(["source"]));
         assert_eq!(f["file_id"], "file:lib/Widget.pm");
-        assert!(f["digest"].as_str().unwrap().starts_with("fnv64:"), "fnv64 digest");
+        assert!(f["digest"].as_str().unwrap().starts_with("sha256:"), "sha256 digest");
     }
 
     #[test]
@@ -1116,7 +1479,7 @@ mod tests {
 
     #[test]
     fn build_packet_relations_request_keeps_referenced_test_facts() {
-        // A `relations`-only request still parses tests to build relations. Every
+        // A `relations,changes` request parses tests to build relations. Every
         // relation carries a required `test_id`; dropping the test facts would
         // leave `relation.test_id` dangling into an empty `tests[]`. Regression
         // guard for the fact-class gating added in #3293 PR 4.
@@ -1125,17 +1488,21 @@ mod tests {
         std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
         std::fs::create_dir_all(format!("{root}/t")).expect("create t/");
         // pm basename "foo" appears in test path "t/foo.t" → file_references_package.
-        std::fs::write(format!("{root}/lib/foo.pm"), "package Foo;\nsub run { }\n1;\n")
-            .expect("write pm");
+        std::fs::write(
+            format!("{root}/lib/foo.pm"),
+            "package Foo;\nsub run {\n    return 1;\n}\n1;\n",
+        )
+        .expect("write pm");
         std::fs::write(format!("{root}/t/foo.t"), "use Test::More;\nuse Foo;\nok(Foo::run());\n")
             .expect("write t");
+        let diff = "--- a/lib/foo.pm\n+++ b/lib/foo.pm\n@@ -2,3 +2,4 @@\n sub run {\n+    return 2;\n     return 1;\n }\n";
         let p = build_ripr_facts_packet(&RiprFactsRequest {
             schema: "ripr-perl-facts-v1",
             root,
             base: None,
             head: None,
-            fact_classes: "relations",
-            diff: None,
+            fact_classes: "relations,changes",
+            diff: Some(diff),
         })
         .expect("valid request builds a packet");
         let _ = std::fs::remove_dir_all(root);
@@ -1154,27 +1521,118 @@ mod tests {
     }
 
     #[test]
-    fn build_packet_relation_owner_id_resolves_to_owner_fact() {
-        // #3342: a relation's `owner_id` must resolve to a present `owners[]`
-        // fact — the same referential-closure guard as relation→test_id, but for
-        // the owner cross-reference that previously dangled (`owner:{path}:{pkg}`
-        // never matched the `owner:{path}:{kind}:{name}:{span}` owner id). Even a
-        // `relations`-only request must force `owners[]` into the packet.
-        let root = "target/ripr-3342-fixtures/relation-owner-refint";
+    fn build_packet_preserves_unbound_relations_when_diff_targets_other_owner() {
+        let root = "target/ripr-p4-relations-unbound-preserved";
         let _ = std::fs::remove_dir_all(root);
         std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
         std::fs::create_dir_all(format!("{root}/t")).expect("create t/");
-        std::fs::write(format!("{root}/lib/Foo.pm"), "package Foo;\nsub run { }\n1;\n")
-            .expect("write pm");
+        std::fs::write(
+            format!("{root}/lib/Foo.pm"),
+            "package Foo;\nsub run {\n    return 1;\n}\n1;\n",
+        )
+        .expect("write Foo.pm");
+        std::fs::write(
+            format!("{root}/lib/Bar.pm"),
+            "package Bar;\nsub other {\n    return 1;\n}\n1;\n",
+        )
+        .expect("write Bar.pm");
         std::fs::write(format!("{root}/t/Foo.t"), "use Test::More;\nuse Foo;\nok(Foo::run());\n")
             .expect("write t");
+        let diff = "--- a/lib/Bar.pm\n+++ b/lib/Bar.pm\n@@ -2,3 +2,4 @@\n sub other {\n+    return 2;\n     return 1;\n }\n";
         let p = build_ripr_facts_packet(&RiprFactsRequest {
             schema: "ripr-perl-facts-v1",
             root,
             base: None,
             head: None,
-            fact_classes: "relations",
-            diff: None,
+            fact_classes: "relations,changes",
+            diff: Some(diff),
+        })
+        .expect("valid request builds a packet");
+        let _ = std::fs::remove_dir_all(root);
+
+        let relations = p["relations"].as_array().expect("relations[]");
+        assert!(
+            relations.iter().any(|relation| relation["change_id"] == "change:unresolved"),
+            "relation-only facts must survive when no change owner matches: {relations:?}"
+        );
+    }
+
+    #[test]
+    fn build_packet_replaces_unbound_relation_when_change_owner_matches() {
+        let root = "target/ripr-p4-relations-bound-replaces-unbound";
+        let _ = std::fs::remove_dir_all(root);
+        std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
+        std::fs::create_dir_all(format!("{root}/t")).expect("create t/");
+        std::fs::write(
+            format!("{root}/lib/Foo.pm"),
+            "package Foo;\nsub run {\n    return 1;\n}\n1;\n",
+        )
+        .expect("write Foo.pm");
+        std::fs::write(format!("{root}/t/Foo.t"), "use Test::More;\nuse Foo;\nok(Foo::run());\n")
+            .expect("write t");
+        let diff = "--- a/lib/Foo.pm\n+++ b/lib/Foo.pm\n@@ -2,3 +2,4 @@\n sub run {\n+    return 2;\n     return 1;\n }\n";
+        let p = build_ripr_facts_packet(&RiprFactsRequest {
+            schema: "ripr-perl-facts-v1",
+            root,
+            base: None,
+            head: None,
+            fact_classes: "relations,changes",
+            diff: Some(diff),
+        })
+        .expect("valid request builds a packet");
+        let _ = std::fs::remove_dir_all(root);
+
+        let relations = p["relations"].as_array().expect("relations[]");
+        let changes = p["changes"].as_array().expect("changes[]");
+        let changed_owner_ids: std::collections::HashSet<&str> =
+            changes.iter().filter_map(|change| change["owner_id"].as_str()).collect();
+        let changed_relation_count = relations
+            .iter()
+            .filter(|relation| {
+                relation["owner_id"]
+                    .as_str()
+                    .is_some_and(|owner_id| changed_owner_ids.contains(owner_id))
+            })
+            .count();
+
+        assert!(changed_relation_count > 0, "fixture must bind at least one relation");
+        assert!(
+            relations.iter().all(|relation| {
+                let owner_matches = relation["owner_id"]
+                    .as_str()
+                    .is_some_and(|owner_id| changed_owner_ids.contains(owner_id));
+                !owner_matches || relation["change_id"] != "change:unresolved"
+            }),
+            "matched owner relations must not keep a conflicting unresolved duplicate: {relations:?}"
+        );
+    }
+
+    #[test]
+    fn build_packet_relation_owner_id_resolves_to_owner_fact() {
+        // #3342: a relation's `owner_id` must resolve to a present `owners[]`
+        // fact — the same referential-closure guard as relation→test_id, but for
+        // the owner cross-reference that previously dangled (`owner:{path}:{pkg}`
+        // never matched the `owner:{path}:{kind}:{name}:{span}` owner id). Even a
+        // A relation request with changes must force `owners[]` into the packet.
+        let root = "target/ripr-3342-fixtures/relation-owner-refint";
+        let _ = std::fs::remove_dir_all(root);
+        std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
+        std::fs::create_dir_all(format!("{root}/t")).expect("create t/");
+        std::fs::write(
+            format!("{root}/lib/Foo.pm"),
+            "package Foo;\nsub run {\n    return 1;\n}\n1;\n",
+        )
+        .expect("write pm");
+        std::fs::write(format!("{root}/t/Foo.t"), "use Test::More;\nuse Foo;\nok(Foo::run());\n")
+            .expect("write t");
+        let diff = "--- a/lib/Foo.pm\n+++ b/lib/Foo.pm\n@@ -2,3 +2,4 @@\n sub run {\n+    return 2;\n     return 1;\n }\n";
+        let p = build_ripr_facts_packet(&RiprFactsRequest {
+            schema: "ripr-perl-facts-v1",
+            root,
+            base: None,
+            head: None,
+            fact_classes: "relations,changes",
+            diff: Some(diff),
         })
         .expect("valid request builds a packet");
         let _ = std::fs::remove_dir_all(root);
@@ -1182,7 +1640,7 @@ mod tests {
         let relations = p["relations"].as_array().expect("relations[]");
         assert!(!relations.is_empty(), "fixture must produce at least one relation");
         let owners = p["owners"].as_array().expect("owners[]");
-        assert!(!owners.is_empty(), "relations-only request must force owners[] into the packet");
+        assert!(!owners.is_empty(), "relations request must force owners[] into the packet");
         let owner_ids: std::collections::HashSet<&str> =
             owners.iter().filter_map(|o| o["owner_id"].as_str()).collect();
         for rel in relations {
@@ -1206,17 +1664,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
         std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
         std::fs::create_dir_all(format!("{root}/t")).expect("create t/");
-        std::fs::write(format!("{root}/lib/Foo.pm"), "package Foo;\nsub run { }\n1;\n")
-            .expect("write pm");
+        std::fs::write(
+            format!("{root}/lib/Foo.pm"),
+            "package Foo;\nsub run {\n    return 1;\n}\n1;\n",
+        )
+        .expect("write pm");
         std::fs::write(format!("{root}/t/Foo.t"), "use Test::More;\nuse Foo;\nok(Foo::run());\n")
             .expect("write t");
+        let diff = "--- a/lib/Foo.pm\n+++ b/lib/Foo.pm\n@@ -2,3 +2,4 @@\n sub run {\n+    return 2;\n     return 1;\n }\n";
         let p = build_ripr_facts_packet(&RiprFactsRequest {
             schema: "ripr-perl-facts-v1",
             root,
             base: None,
             head: None,
-            fact_classes: "relations",
-            diff: None,
+            fact_classes: "relations,changes",
+            diff: Some(diff),
         })
         .expect("valid request builds a packet");
         let _ = std::fs::remove_dir_all(root);
@@ -1608,6 +2070,12 @@ mod tests {
             tests[0]["framework"], "Test::More",
             "framework must be detected from `use Test::More`"
         );
+        let capabilities =
+            parsed["producer"]["capabilities"].as_array().expect("capabilities[] is an array");
+        assert!(
+            capabilities.iter().any(|capability| capability == "test_facts"),
+            "packets carrying tests/oracles must advertise test_facts"
+        );
 
         // Clean up the synthetic tree.
         let _ = std::fs::remove_dir_all(root);
@@ -1736,6 +2204,96 @@ mod tests {
     /// A diff adding a line inside `sub discount` (0-based head line 3).
     const APP_DIFF: &str = "+++ b/lib/App.pm\n@@ -3,2 +3,3 @@\n     my ($amount) = @_;\n+    return $amount / 2;\n     return $amount;\n";
 
+    #[test]
+    fn ripr_facts_cli_reads_diff_file_and_emits_changes() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let root = format!("target/ripr-facts-cli-diff-{}", std::process::id());
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(format!("{root}/lib"))?;
+        std::fs::write(
+            format!("{root}/lib/App.pm"),
+            "package App;\nsub discount {\n    my ($amount) = @_;\n    return $amount;\n}\n1;\n",
+        )?;
+        let diff_path = format!("{root}/diff.patch");
+        std::fs::write(&diff_path, APP_DIFF)?;
+        let out = format!("{root}/packet.json");
+
+        let rc = run_cli(vec![
+            "perl-ripr-facts".to_string(),
+            "ripr-facts".to_string(),
+            "--schema".to_string(),
+            "ripr-perl-facts-v1".to_string(),
+            "--root".to_string(),
+            root.clone(),
+            "--base".to_string(),
+            "origin/main".to_string(),
+            "--head".to_string(),
+            "HEAD".to_string(),
+            "--fact-classes".to_string(),
+            "files,owners,changes".to_string(),
+            "--diff".to_string(),
+            diff_path,
+            "--out".to_string(),
+            out.clone(),
+        ]);
+        assert_eq!(rc, 0, "canonical CLI path should write a packet");
+
+        let packet: serde_json::Value = serde_json::from_slice(&std::fs::read(&out)?)?;
+        assert!(!changes_of(&packet).is_empty(), "diff file should populate changes[]");
+        assert!(
+            !has_limitation(&packet, "no-diff-supplied"),
+            "a supplied diff file must not report no-diff-supplied"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_facts_cli_reads_diff_relative_to_process_cwd_not_root()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let base = format!("target/ripr-facts-cli-cwd-diff-{}", std::process::id());
+        let root = format!("{base}/workspace");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(format!("{root}/lib"))?;
+        std::fs::write(
+            format!("{root}/lib/App.pm"),
+            "package App;\nsub discount {\n    my ($amount) = @_;\n    return $amount;\n}\n1;\n",
+        )?;
+        let diff_path = format!("{base}/diff.patch");
+        std::fs::write(&diff_path, APP_DIFF)?;
+        let out = format!("{root}/packet.json");
+
+        let rc = run_cli(vec![
+            "perl-ripr-facts".to_string(),
+            "ripr-facts".to_string(),
+            "--schema".to_string(),
+            "ripr-perl-facts-v1".to_string(),
+            "--root".to_string(),
+            root.clone(),
+            "--base".to_string(),
+            "origin/main".to_string(),
+            "--head".to_string(),
+            "HEAD".to_string(),
+            "--fact-classes".to_string(),
+            "files,owners,changes".to_string(),
+            "--diff".to_string(),
+            diff_path,
+            "--out".to_string(),
+            out.clone(),
+        ]);
+        assert_eq!(
+            rc, 0,
+            "managed producer --diff is repo/process-cwd relative, not --root relative"
+        );
+
+        let packet: serde_json::Value = serde_json::from_slice(&std::fs::read(&out)?)?;
+        assert!(!changes_of(&packet).is_empty(), "diff file should populate changes[]");
+
+        let _ = std::fs::remove_dir_all(&base);
+        Ok(())
+    }
+
     fn changes_of(p: &serde_json::Value) -> Vec<serde_json::Value> {
         p["changes"].as_array().expect("changes[]").clone()
     }
@@ -1828,13 +2386,13 @@ mod tests {
     #[test]
     fn build_packet_changes_only_no_diff_has_no_orphan_file_limitation() {
         // `changes` with no diff clears files[] (nothing references them); the
-        // file-walk's `digest-algorithm` note must not linger describing files
-        // that aren't in the packet (orphaned-limitation class).
+        // file-walk limitations must not linger describing files that aren't in
+        // the packet (orphaned-limitation class).
         let p = packet_for_diff("orphan-digest", "changes", None);
         assert!(p["files"].as_array().expect("files[]").is_empty(), "files[] cleared");
         assert!(
-            !has_limitation(&p, "digest-algorithm"),
-            "no digest-algorithm note when files[] is absent"
+            !has_limitation(&p, "read-failed:") && !has_limitation(&p, "parse-failed:"),
+            "no file-walk limitation when files[] is absent"
         );
         // The intended limitation is still surfaced.
         assert!(has_limitation(&p, "no-diff-supplied"), "no-diff-supplied still present");
@@ -1893,11 +2451,16 @@ mod tests {
     // ── #3293 PR 7: deterministic packet fingerprint ──
 
     #[test]
-    fn build_packet_fingerprint_is_non_null_fnv64() {
+    fn build_packet_fingerprint_is_consumer_compatible_sha256() {
         let p = build_ripr_facts_packet(&valid_request("files,owners,tests,oracles"))
             .expect("valid request builds a packet");
         let fp = p["packet_fingerprint"].as_str().expect("fingerprint is a string, not null");
-        assert!(fp.starts_with("fnv64:"), "fingerprint uses the fnv64: prefix, got {fp}");
+        assert!(fp.starts_with("sha256:"), "fingerprint uses the sha256: prefix, got {fp}");
+        assert_eq!(
+            fp.len(),
+            "sha256:".len() + 64,
+            "fingerprint must carry a full SHA-256 hex digest"
+        );
     }
 
     #[test]
@@ -1924,19 +2487,47 @@ mod tests {
     }
 
     #[test]
-    fn build_packet_fingerprint_is_reproducible_over_null_placeholder() {
-        // Documents the exact definition: the fingerprint is the content hash of
-        // the packet with `packet_fingerprint` set to null. Recomputing it must
-        // reproduce the emitted value.
+    fn build_packet_fingerprint_matches_consumer_semantic_recipe() {
+        // RIPR validates the fingerprint from semantic identity tuples rather
+        // than a whole-packet serde_json string. Recomputing that recipe over
+        // the emitted packet must reproduce the stored fingerprint.
         let p = build_ripr_facts_packet(&valid_request("files,owners,tests,oracles"))
             .expect("valid request");
-        let mut without = p.clone();
-        without["packet_fingerprint"] = serde_json::Value::Null;
-        let recomputed = content_fingerprint(&without.to_string());
         assert_eq!(
             p["packet_fingerprint"].as_str(),
-            Some(recomputed.as_str()),
-            "fingerprint must be reproducible as the hash of the null-placeholder packet"
+            Some(ripr_packet_fingerprint(&p).as_str()),
+            "fingerprint must match RIPR's consumer-side packet validator"
+        );
+    }
+
+    #[test]
+    fn packet_fingerprint_hashes_semantic_tuples_once() {
+        let empty_semantic_packet = serde_json::json!({
+            "files": [],
+            "owners": [],
+            "changes": [],
+            "oracles": [],
+            "relations": []
+        });
+
+        assert_eq!(
+            ripr_packet_fingerprint(&empty_semantic_packet),
+            "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "empty semantic tuples should hash to SHA-256(empty), not SHA-256(SHA-256(empty))"
+        );
+    }
+
+    #[test]
+    fn callable_name_from_owner_id_keeps_package_owner_qualified() {
+        assert_eq!(
+            callable_name_from_owner_id("owner:lib/My/App.pm:package:My::App:10-50"),
+            Some("My::App"),
+            "package owners need the full package name; the trailing `App` segment is too broad"
+        );
+        assert_eq!(
+            callable_name_from_owner_id("owner:lib/My/App.pm:sub:My::App::run:20-40"),
+            Some("run"),
+            "callable owners still match assertion expressions by callable name"
         );
     }
 }

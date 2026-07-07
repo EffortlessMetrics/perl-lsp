@@ -23,17 +23,24 @@ avoided because it transitively pulls `lsp-types`.
 
 ## API
 
-Two entry points:
+Three entry points:
 
 - **`build_ripr_facts_packet(&RiprFactsRequest) -> Result<serde_json::Value,
   RiprFactsError>`** — the structured batch API. It validates the request,
   runs the emitter, and returns the assembled `ripr-perl-facts-v1` packet.
   It performs **no I/O**: no disk write, no stderr, no process-exit mapping.
+- **`perl-ripr-facts ripr-facts --schema ripr-perl-facts-v1 --root <root>
+  --diff <diff> --out <out>`** — the canonical batch CLI used by RIPR proof
+  harnesses. `root`, `diff`, and `out` are validated as repo-style relative
+  paths and resolved by the process current working directory; `diff` is not
+  rebased onto `--root`. The diff file is read as unified diff text and
+  forwarded to `RiprFactsRequest.diff`.
 - **`run_ripr_facts(schema, root, base, head, fact_classes, out) -> i32`** —
   the thin CLI wrapper the `perl-lsp` / `perllsp` `ripr-facts` subcommand
   calls. It forwards its args to `build_ripr_facts_packet`, then validates the
   output path, writes the packet to `out`, and maps the outcome to a process
-  exit code (`0` success, `1` on any validation or write failure).
+  exit code (`0` success, `1` on any validation or write failure). Use
+  `run_ripr_facts_with_diff` when the caller already has diff text.
 
 ```rust
 use perl_ripr_facts::{build_ripr_facts_packet, RiprFactsRequest};
@@ -44,6 +51,7 @@ let packet = build_ripr_facts_packet(&RiprFactsRequest {
     base: None,
     head: Some("HEAD"),
     fact_classes: "tests,oracles,relations",
+    diff: None,
 })?;
 assert_eq!(packet["schema_version"], "ripr-perl-facts-v1");
 ```
@@ -58,10 +66,10 @@ parser-backed `direct_owner_call` relations (PR 6), diff-owned `changes[]`
 (PR 5), tests/oracles (PR 4), and files/owners (PR 3). `files[]`/`owners[]`,
 `tests[]`/`oracles[]`, and `changes[]` come from parsing, not string scans;
 `relations[]` classify `direct_owner_call` from parsed call nodes; and the packet
-now carries a deterministic `packet_fingerprint` (an `fnv64:` content hash of the
-assembled packet, reproducible for identical inputs) instead of `null`:
+now carries a deterministic `packet_fingerprint` (a `sha256:` hash matching
+RIPR's semantic packet-fingerprint recipe) instead of `null`:
 
-- `files[]` — repo-relative path, role, a deterministic FNV-1a `digest`, and the
+- `files[]` — repo-relative path, role, a deterministic SHA-256 `digest`, and the
   declared package names, for each `.pm` / `.pl` / `.psgi` / `.t` file.
 - `owners[]` — one fact per `package` / `class` / `role` / `sub` / `method`
   declaration, carrying the parser's source range.
@@ -91,11 +99,13 @@ This uses the clean leaf crates `perl-parser-core` (parse + `LineIndex`
 byte→line/column) and `perl-symbol` (`extract_symbol_decls` /
 `extract_symbol_refs`) — not `perl-workspace` (which pulls `lsp-types`).
 Relations (including a heuristic `direct_owner_call`) and dynamic boundaries
-remain from earlier conservative slices. The `ripr-facts` CLI does not yet
-supply a diff (so `perllsp ripr-facts … --fact-classes changes` yields an empty
-`changes[]` + a `no-diff-supplied` limitation); the managed-producer diff source,
-the parser-backed/semantic relations that will replace the string-heuristic
-`direct_owner_call`, and the packet fingerprint land in later slices.
+remain from earlier conservative slices. The canonical `perl-ripr-facts
+ripr-facts` CLI accepts `--diff <cwd-relative-file>` and supplies that unified
+diff text to the packet builder. Compatibility wrappers that call
+`run_ripr_facts` without diff text still yield an empty `changes[]` plus a
+`no-diff-supplied` limitation when `changes` is requested. The managed-producer
+diff source and the parser-backed/semantic relations that will replace the
+string-heuristic `direct_owner_call` land in later slices.
 
 The `perl-lsp` / `perllsp` binaries retain the `ripr-facts` subcommand as a
 thin wrapper that calls [`run_ripr_facts`].

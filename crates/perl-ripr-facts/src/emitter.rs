@@ -14,6 +14,7 @@ use perl_parser_core::{Node, NodeKind, Parser};
 use perl_symbol::SymbolKind;
 use perl_symbol::surface::{SymbolRefKind, extract_symbol_decls, extract_symbol_refs};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
 /// Recognized test frameworks, most-specific first. Maps a module name (as it
 /// appears in a parsed `use`) to the ripr `test.framework` wire enum. Order
@@ -470,24 +471,24 @@ pub(crate) fn emit_relations_and_discriminators(
     // The same parse also resolves the package's real `owners[]` `owner_id`
     // (#3342) so a relation can carry a resolvable cross-reference; `None` means
     // the parse exposed no matching container decl (unparsed/name-mismatched).
-    type PmFact = (String, String, std::collections::HashSet<String>, Option<String>);
+    type PmFact = (String, String, std::collections::BTreeMap<String, String>, Option<String>);
     let pm_facts: Vec<PmFact> = pm_files
         .iter()
         .map(|(pm_path, pm_content)| {
             let package_name = extract_package_name(pm_content);
-            let (declared_subs, owner_id) = if package_name.is_empty() {
-                (std::collections::HashSet::new(), None)
+            let (declared_sub_owner_ids, owner_id) = if package_name.is_empty() {
+                (std::collections::BTreeMap::new(), None)
             } else {
                 match Parser::new(pm_content).parse() {
                     Ok(ast) => (
-                        declared_sub_names(&ast, &package_name),
+                        declared_sub_owner_ids(&ast, pm_path, &package_name),
                         resolve_package_owner_id(&ast, pm_path, &package_name),
                     ),
                     // parse failure → cannot prove calls or resolve an owner
-                    Err(_) => (std::collections::HashSet::new(), None),
+                    Err(_) => (std::collections::BTreeMap::new(), None),
                 }
             };
-            (pm_path.clone(), package_name, declared_subs, owner_id)
+            (pm_path.clone(), package_name, declared_sub_owner_ids, owner_id)
         })
         .collect();
 
@@ -513,19 +514,31 @@ pub(crate) fn emit_relations_and_discriminators(
         let test_file_id = test["file_id"].as_str().unwrap_or("");
         let test_path = test["name"].as_str().unwrap_or("");
 
-        for (pm_path, package_name, declared_subs, owner_id) in &pm_facts {
+        for (pm_path, package_name, declared_sub_owner_ids, package_owner_id) in &pm_facts {
             if package_name.is_empty() {
                 continue;
             }
 
             // Check if the test file references the package.
-            if !test_file_id.is_empty() && file_references_package(test_path, &[], pm_path) {
+            if !test_file_id.is_empty()
+                && test_references_package(
+                    test_path,
+                    t_call_facts.get(test_path),
+                    pm_path,
+                    package_name,
+                )
+            {
                 // #3342: a relation's `owner_id` must resolve to a real
-                // `owners[]` fact. Resolve the package's actual owner id from
-                // the same parse the owner emitter uses; if the package exposed
-                // no container decl (unparsed/name-mismatched), omit the
-                // relation with a limitation rather than dangle the reference.
-                let Some(resolved_owner_id) = owner_id else {
+                // `owners[]` fact. Prefer the called sub/method owner only for
+                // qualified call evidence; fall back to the package owner for
+                // coarse file-proximity evidence.
+                let relation_owners = relation_owners_for_test(
+                    t_call_facts.get(test_path),
+                    package_name,
+                    declared_sub_owner_ids,
+                    package_owner_id.as_ref(),
+                );
+                if relation_owners.is_empty() {
                     limitations.push(json!({
                         "limitation_id": format!("relation-owner-unresolved:{pm_path}"),
                         "kind": "unresolved_owner",
@@ -535,30 +548,27 @@ pub(crate) fn emit_relations_and_discriminators(
                         "evidence_refs": []
                     }));
                     continue;
-                };
+                }
 
-                // #3293 PR 6: upgrade to direct_owner_call only when the
-                // test file's parsed call graph provably includes a call to
-                // a sub the candidate package's AST actually declares.
-                let is_direct = t_call_facts.get(test_path).is_some_and(|facts| {
-                    test_calls_declared_sub(facts, package_name, declared_subs)
-                });
+                for (resolved_owner_id, is_direct) in relation_owners {
+                    let relation_kind =
+                        if is_direct { "direct_owner_call" } else { "file_proximity" };
+                    let reachability = if is_direct { "reachable" } else { "weakly_reachable" };
+                    let owner_suffix = relation_owner_suffix(&resolved_owner_id);
 
-                let relation_kind = if is_direct { "direct_owner_call" } else { "file_proximity" };
-                let reachability = if is_direct { "reachable" } else { "weakly_reachable" };
-
-                let relation_id = format!("relation:{test_file_id}:{pm_path}");
-                relations.push(json!({
-                    "relation_id": relation_id,
-                    "change_id": "change:unresolved",
-                    "owner_id": resolved_owner_id,
-                    "test_id": test["test_id"],
-                    "oracle_id": null,
-                    "relation_kind": relation_kind,
-                    "reachability_hint": reachability,
-                    "confidence": "medium",
-                    "provenance_refs": []
-                }));
+                    let relation_id = format!("relation:{test_file_id}:{pm_path}:{owner_suffix}");
+                    relations.push(json!({
+                        "relation_id": relation_id,
+                        "change_id": "change:unresolved",
+                        "owner_id": resolved_owner_id,
+                        "test_id": test["test_id"],
+                        "oracle_id": null,
+                        "relation_kind": relation_kind,
+                        "reachability_hint": reachability,
+                        "confidence": "medium",
+                        "provenance_refs": []
+                    }));
+                }
             }
         }
     }
@@ -655,12 +665,28 @@ fn extract_package_name(content: &str) -> String {
     String::new()
 }
 
-/// Check if a test file references a .pm file (simple heuristic: same basename).
+fn test_references_package(
+    test_path: &str,
+    facts: Option<&TestCallFacts>,
+    pm_path: &str,
+    package_name: &str,
+) -> bool {
+    facts.is_some_and(|facts| {
+        facts.used_modules.contains(package_name)
+            || facts
+                .calls
+                .iter()
+                .any(|call| call.package_qualifier.as_deref() == Some(package_name))
+    }) || file_references_package(test_path, &[], pm_path)
+}
+
+/// Check if a test file references a .pm file (fallback heuristic: same basename).
 fn file_references_package(test_path: &str, _all_pm_paths: &[&str], pm_path: &str) -> bool {
     // Simple heuristic: if the .pm basename appears in the test path.
     // E.g. t/app.t references lib/My/App.pm if "App" appears in both.
-    let pm_basename = pm_path.rsplit('/').next().unwrap_or("").trim_end_matches(".pm");
-    !pm_basename.is_empty() && test_path.contains(pm_basename)
+    let pm_basename = pm_path.rsplit(['/', '\\']).next().unwrap_or("").trim_end_matches(".pm");
+    !pm_basename.is_empty()
+        && test_path.to_ascii_lowercase().contains(&pm_basename.to_ascii_lowercase())
 }
 
 /// Per-`.t`-file facts computed once (parse + call/`use` extraction) and
@@ -669,16 +695,20 @@ fn file_references_package(test_path: &str, _all_pm_paths: &[&str], pm_path: &st
 struct TestCallFacts {
     /// Subroutine/method/static-method call sites from the test file.
     calls: Vec<perl_symbol::surface::SymbolRef>,
+    /// Modules imported by parsed `use` statements in the test file.
+    used_modules: std::collections::HashSet<String>,
 }
 
 impl TestCallFacts {
     /// Conservative fallback for a test file that failed to parse: proves
     /// nothing, so [`test_calls_declared_sub`] always degrades for it.
     fn unparsed() -> Self {
-        Self { calls: Vec::new() }
+        Self { calls: Vec::new(), used_modules: std::collections::HashSet::new() }
     }
 
     fn from_ast(ast: &Node) -> Self {
+        let mut used_modules = std::collections::HashSet::new();
+        collect_used_modules(ast, &mut used_modules);
         let calls = extract_symbol_refs(ast)
             .into_iter()
             .filter(|reference| {
@@ -690,8 +720,15 @@ impl TestCallFacts {
                 )
             })
             .collect();
-        Self { calls }
+        Self { calls, used_modules }
     }
+}
+
+fn collect_used_modules(node: &Node, used_modules: &mut std::collections::HashSet<String>) {
+    if let NodeKind::Use { module, .. } = &node.kind {
+        used_modules.insert(module.clone());
+    }
+    node.for_each_child(|child| collect_used_modules(child, used_modules));
 }
 
 /// Bare sub/method names a `.pm`'s AST declares *inside* `package_name`.
@@ -699,6 +736,7 @@ impl TestCallFacts {
 /// Filters [`extract_symbol_decls`] to callables whose `container` matches the
 /// package being evaluated for this relation, so a multi-package file only
 /// credits the package actually being checked.
+#[cfg(test)]
 fn declared_sub_names(pm_ast: &Node, package_name: &str) -> std::collections::HashSet<String> {
     extract_symbol_decls(pm_ast, Some("main"))
         .into_iter()
@@ -706,6 +744,64 @@ fn declared_sub_names(pm_ast: &Node, package_name: &str) -> std::collections::Ha
         .filter(|decl| decl.container.as_deref() == Some(package_name))
         .map(|decl| decl.name)
         .collect()
+}
+
+fn declared_sub_owner_ids(
+    pm_ast: &Node,
+    pm_path: &str,
+    package_name: &str,
+) -> std::collections::BTreeMap<String, String> {
+    extract_symbol_decls(pm_ast, Some("main"))
+        .into_iter()
+        .filter(|decl| matches!(decl.kind, SymbolKind::Subroutine | SymbolKind::Method))
+        .filter(|decl| decl.container.as_deref() == Some(package_name))
+        .filter_map(|decl| {
+            let kind = owner_kind(&decl.kind)?;
+            let (start_byte, end_byte) = decl.full_span;
+            Some((
+                decl.name,
+                owner_fact_id(pm_path, kind, &decl.qualified_name, start_byte, end_byte),
+            ))
+        })
+        .collect()
+}
+
+fn relation_owners_for_test(
+    facts: Option<&TestCallFacts>,
+    package_name: &str,
+    declared_sub_owner_ids: &std::collections::BTreeMap<String, String>,
+    package_owner_id: Option<&String>,
+) -> Vec<(String, bool)> {
+    let Some(facts) = facts else {
+        return package_owner_id.iter().map(|owner_id| ((*owner_id).clone(), false)).collect();
+    };
+
+    let mut direct_owner_ids = Vec::new();
+    for call in &facts.calls {
+        if call.kind != SymbolRefKind::SubroutineCall
+            || call.package_qualifier.as_deref() != Some(package_name)
+        {
+            continue;
+        }
+        if let Some(owner_id) = declared_sub_owner_ids.get(&call.name)
+            && !direct_owner_ids.iter().any(|existing| existing == owner_id)
+        {
+            direct_owner_ids.push(owner_id.clone());
+        }
+    }
+    if !direct_owner_ids.is_empty() {
+        return direct_owner_ids.into_iter().map(|owner_id| (owner_id, true)).collect();
+    }
+
+    // Bare calls after `use Package` are export-unproven. They can keep a
+    // package-level file_proximity relation, but must not point at the sub
+    // owner or downstream consumers can mistake weak evidence for sub-specific
+    // reachability.
+    package_owner_id.iter().map(|owner_id| ((*owner_id).clone(), false)).collect()
+}
+
+fn relation_owner_suffix(owner_id: &str) -> String {
+    owner_id.replace('\\', "/").replace(':', "_")
 }
 
 /// Parser-backed replacement for the former string-heuristic
@@ -737,6 +833,7 @@ fn declared_sub_names(pm_ast: &Node, package_name: &str) -> std::collections::Ha
 /// This is a lexical call-graph proof, not a control-flow-verified one: a call
 /// inside a dead branch or a `SKIP:` block still counts, matching this crate's
 /// convention that every other "reachable"-adjacent claim here is also lexical.
+#[cfg(test)]
 fn test_calls_declared_sub(
     facts: &TestCallFacts,
     package_name: &str,
@@ -785,6 +882,65 @@ const DYNAMIC_BOUNDARY_PATTERNS: &[(&str, &str)] = &[
     ("require $", "module_resolution_unknown"),
 ];
 
+#[derive(Debug)]
+struct BoundaryOwner {
+    owner_id: String,
+    start_byte: usize,
+    end_byte: usize,
+}
+
+fn boundary_owner_index(relative_path: &str, content: &str) -> Vec<BoundaryOwner> {
+    let mut parser = Parser::new(content);
+    let Ok(ast) = parser.parse() else {
+        return Vec::new();
+    };
+    extract_symbol_decls(&ast, Some("main"))
+        .into_iter()
+        .filter_map(|decl| {
+            let kind = owner_kind(&decl.kind)?;
+            let (start_byte, end_byte) = decl.full_span;
+            Some(BoundaryOwner {
+                owner_id: owner_fact_id(
+                    relative_path,
+                    kind,
+                    &decl.qualified_name,
+                    start_byte,
+                    end_byte,
+                ),
+                start_byte,
+                end_byte,
+            })
+        })
+        .collect()
+}
+
+fn enclosing_boundary_owner(owners: &[BoundaryOwner], offset: usize) -> Option<&BoundaryOwner> {
+    owners
+        .iter()
+        .filter(|owner| owner.start_byte <= offset && offset < owner.end_byte)
+        .min_by_key(|owner| owner.end_byte.saturating_sub(owner.start_byte))
+}
+
+fn boundary_evidence_refs(owner_id: Option<&str>, file_id: &str) -> Vec<Value> {
+    match owner_id {
+        Some(owner_id) => vec![json!(owner_id)],
+        None => vec![json!(file_id)],
+    }
+}
+
+fn dynamic_boundaries_in_lines(lines: &[String]) -> Vec<(&'static str, &'static str)> {
+    let mut seen_kinds = std::collections::HashSet::new();
+    let mut boundaries = Vec::new();
+    for line in lines {
+        for &(pattern, boundary_kind) in DYNAMIC_BOUNDARY_PATTERNS {
+            if line.contains(pattern) && seen_kinds.insert(boundary_kind) {
+                boundaries.push((pattern, boundary_kind));
+            }
+        }
+    }
+    boundaries
+}
+
 /// Emit dynamic-boundary facts + limitations + typed verify-command candidates.
 ///
 /// Campaign 31 Phase B PR 8 (perl-lsp-swarm#2595). The final Phase B slice:
@@ -823,17 +979,29 @@ pub(crate) fn emit_boundaries_and_commands(root: &str) -> (Vec<Value>, Vec<Value
 
     for (file_path, content) in &all_files {
         let file_id = format!("file:{file_path}");
+        let owner_index = boundary_owner_index(file_path, content);
+        let line_index = LineIndex::new(content.clone());
         for (pattern, boundary_kind) in DYNAMIC_BOUNDARY_PATTERNS {
-            if content.contains(pattern) {
+            for (offset, _) in content.match_indices(pattern) {
                 boundary_counter += 1;
                 let boundary_id =
                     format!("boundary:{file_path}:{boundary_kind}:{boundary_counter}");
+                let owner_id = enclosing_boundary_owner(&owner_index, offset)
+                    .map(|owner| owner.owner_id.as_str());
+                let ((start_line, start_column), (end_line, end_column)) =
+                    line_index.range(offset, offset + pattern.len());
+                let evidence_refs = boundary_evidence_refs(owner_id, &file_id);
                 boundaries.push(json!({
                     "boundary_id": boundary_id,
                     "kind": boundary_kind,
-                    "file_id": file_id,
-                    "owner_id": null,
-                    "range": {"start_line": 1, "start_column": 1, "end_line": 1, "end_column": 1},
+                    "file_id": file_id.clone(),
+                    "owner_id": owner_id,
+                    "range": {
+                        "start_line": start_line,
+                        "start_column": start_column,
+                        "end_line": end_line,
+                        "end_column": end_column,
+                    },
                     "confidence": "high",
                     "provenance_refs": []
                 }));
@@ -841,7 +1009,7 @@ pub(crate) fn emit_boundaries_and_commands(root: &str) -> (Vec<Value>, Vec<Value
                     "limitation_id": format!("limitation:{boundary_id}"),
                     "kind": boundary_kind,
                     "message": format!("Dynamic boundary `{pattern}` detected in {file_path}; ripr fails closed on this boundary kind."),
-                    "evidence_refs": []
+                    "evidence_refs": evidence_refs
                 }));
             }
         }
@@ -872,15 +1040,6 @@ pub(crate) fn emit_boundaries_and_commands(root: &str) -> (Vec<Value>, Vec<Value
 /// Map a content_hash (u64) to a hex digest string for the packet.
 fn content_hash_to_digest(hash: u64) -> String {
     format!("fnv64:{hash:016x}")
-}
-
-/// Deterministic content fingerprint (`fnv64:` prefix) of a serialized packet
-/// (#3293 PR 7). Non-cryptographic FNV-1a — a content/identity hash the consumer
-/// can dedup or cache on, not a security digest; it keeps the crate's
-/// no-crypto-dependency contract and matches the `fnv64:` style used by file
-/// `digest`s.
-pub(crate) fn content_fingerprint(serialized: &str) -> String {
-    content_hash_to_digest(fnv1a_hash(serialized))
 }
 
 /// Strip a `file:///` prefix from a source URI and normalize to forward-slash.
@@ -1141,10 +1300,12 @@ pub(crate) fn emit_changes_from_diff(
         let changed_observable =
             if behavior_hint == "unknown" { Value::Null } else { Value::String(discriminator) };
 
+        let change_id = format!("change:{file_id}:{}:{}", hunk.start_line, hunk.end_line);
+        let owner_id = owner["owner_id"].clone();
         changes.push(json!({
-            "change_id": format!("change:{file_id}:{}:{}", hunk.start_line, hunk.end_line),
-            "file_id": file_id,
-            "owner_id": owner["owner_id"].clone(),
+            "change_id": change_id.clone(),
+            "file_id": file_id.clone(),
+            "owner_id": owner_id.clone(),
             "range": {
                 "start_line": hunk.start_line,
                 "start_column": 0,
@@ -1157,6 +1318,17 @@ pub(crate) fn emit_changes_from_diff(
             "missing_discriminator": Value::Null,
             "provenance_refs": [],
         }));
+        for (pattern, boundary_kind) in dynamic_boundaries_in_lines(&hunk.lines) {
+            limitations.push(json!({
+                "limitation_id": format!("diff-dynamic-boundary:{change_id}:{boundary_kind}"),
+                "kind": boundary_kind,
+                "message": format!(
+                    "diff-added dynamic boundary `{pattern}` detected in `{}`; ripr fails closed on this boundary kind.",
+                    hunk.file_path
+                ),
+                "evidence_refs": [change_id, owner_id, file_id],
+            }));
+        }
     }
 
     // Packet-level honesty notes — once each, only when changes were emitted.
@@ -1270,12 +1442,20 @@ fn fnv1a_hash(text: &str) -> u64 {
     hash
 }
 
+fn content_sha256_digest(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    format!("sha256:{hex}")
+}
+
 /// Emit `files[]`, `owners[]`, per-file `provenance[]`, and parse/read
 /// `limitations[]` by parsing every Perl source/test file under `root`
 /// (#3293 PR 3).
 ///
 /// For each discovered `.pm` / `.pl` / `.psgi` / `.t` file this produces:
-/// - one `file` fact (repo-relative path, role, deterministic FNV-1a digest,
+/// - one `file` fact (repo-relative path, role, SHA-256 content digest,
 ///   parser-derived package names);
 /// - one `owner` fact per `package` / `class` / `role` / `sub` / `method`
 ///   declaration, carrying the parser's real source range and a byte-span-derived
@@ -1324,7 +1504,7 @@ pub(crate) fn emit_files_and_owners(
             }
         };
 
-        let digest = content_hash_to_digest(fnv1a_hash(&content));
+        let digest = content_sha256_digest(content.as_bytes());
         let role = file_role_from_path(&relative_path);
         let provenance_id = format!("prov:syntax:{file_id}");
         let mut package_names: Vec<String> = Vec::new();
@@ -1411,18 +1591,6 @@ pub(crate) fn emit_files_and_owners(
             "digest": digest,
             "package_names": package_names,
             "provenance_refs": [provenance_id],
-        }));
-    }
-
-    // Honest digest note: the packet digest is a deterministic FNV-1a hash
-    // (`fnv64:` prefix), not SHA-256 — a SHA-256 digest would require adding a
-    // hashing dependency the crate's dep contract keeps out for now.
-    if !files.is_empty() {
-        limitations.push(json!({
-            "limitation_id": "digest-algorithm",
-            "kind": "digest_algorithm",
-            "message": "file digests are deterministic FNV-1a (fnv64:), not SHA-256; a SHA-256 digest would require an added hashing dependency.",
-            "evidence_refs": [],
         }));
     }
 
@@ -1540,6 +1708,14 @@ mod tests {
     #[test]
     fn framework_from_ast_returns_unknown_for_non_test() {
         assert_eq!(framework_from_ast(&parse_src("use strict;\nprint 1;\n")).0, "unknown");
+    }
+
+    #[test]
+    fn file_references_package_accepts_windows_path_separators() {
+        assert!(
+            file_references_package("t/App.t", &[], "lib\\My\\App.pm"),
+            "fallback basename matching must handle Windows-style .pm paths"
+        );
     }
 
     #[test]
@@ -1710,6 +1886,39 @@ mod tests {
     }
 
     #[test]
+    fn emit_relations_uses_imported_package_when_test_filename_case_differs() {
+        let root = std::env::temp_dir().join("perl-B7-import-relations-root");
+        let lib_dir = root.join("lib");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(
+            lib_dir.join("Pricing.pm"),
+            "package Pricing;\nsub calculate_discount { }\n1;",
+        )
+        .unwrap();
+        std::fs::write(
+            t_dir.join("pricing.t"),
+            "use Test::More;\nuse Pricing;\nok(calculate_discount(100));\n",
+        )
+        .unwrap();
+
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
+        let (relations, _observables, _sinks, _relation_limitations) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        assert!(
+            relations.iter().any(|relation| relation["owner_id"]
+                .as_str()
+                .is_some_and(|owner_id| owner_id.contains("Pricing"))),
+            "use Pricing should relate t/pricing.t to lib/Pricing.pm despite filename casing"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn emit_discriminators_from_is_assertions() {
         let root = std::env::temp_dir().join("perl-B7-discriminators-root");
         let t_dir = root.join("t");
@@ -1766,14 +1975,45 @@ mod tests {
         )
         .unwrap();
 
-        let (boundaries, _limitations, _cmds) =
-            emit_boundaries_and_commands(root.to_str().unwrap());
+        let (boundaries, limitations, _cmds) = emit_boundaries_and_commands(root.to_str().unwrap());
+        let boundary = boundaries
+            .iter()
+            .find(|b| b["kind"] == "dynamic_dispatch")
+            .expect("->$method() must produce a dynamic_dispatch boundary");
+        let owner_id = boundary["owner_id"].as_str().expect("dynamic boundary is owner-scoped");
+        assert!(owner_id.contains(":call:"), "boundary owner should be the enclosing sub");
+        let limitation = limitations
+            .iter()
+            .find(|l| l["kind"] == "dynamic_dispatch")
+            .expect("dynamic boundary has a matching limitation");
         assert!(
-            boundaries.iter().any(|b| b["kind"] == "dynamic_dispatch"),
-            "->$method() must produce a dynamic_dispatch boundary"
+            limitation["evidence_refs"]
+                .as_array()
+                .expect("evidence refs")
+                .iter()
+                .any(|r| r.as_str() == Some(owner_id)),
+            "limitation should be scoped to the dynamic boundary owner"
         );
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn enclosing_boundary_owner_treats_end_byte_as_exclusive() {
+        let owners = vec![BoundaryOwner {
+            owner_id: "owner:lib/App.pm:sub:App::run:10-20".to_string(),
+            start_byte: 10,
+            end_byte: 20,
+        }];
+
+        assert!(
+            enclosing_boundary_owner(&owners, 19).is_some(),
+            "offset inside [start, end) belongs to the owner"
+        );
+        assert!(
+            enclosing_boundary_owner(&owners, 20).is_none(),
+            "offset at end_byte must not be attributed to the owner"
+        );
     }
 
     #[test]
@@ -1947,6 +2187,58 @@ mod tests {
             changes[0]["changed_observable"].as_str().unwrap_or("").contains("$amount"),
             "changed_observable carries the return expression"
         );
+    }
+
+    #[test]
+    fn emit_changes_from_diff_dynamic_dispatch_records_scoped_limitation() {
+        let (files, owners) = app_files_and_owners();
+        let diff = "\
+--- a/lib/My/App.pm
++++ b/lib/My/App.pm
+@@ -5,3 +5,5 @@
+ sub discount {
+     my ($amount) = @_;
++    my $method = 'discount';
++    return shift->$method();
+ }
+";
+        let (changes, limitations) = emit_changes_from_diff(diff, ".", &files, &owners);
+        assert_eq!(changes.len(), 1, "dynamic diff still emits the changed owner fact");
+        let change_id = changes[0]["change_id"].as_str().expect("change_id");
+        let owner_id = changes[0]["owner_id"].as_str().expect("owner_id");
+        let limitation = limitations
+            .iter()
+            .find(|l| l["kind"] == "dynamic_dispatch")
+            .expect("diff-added dynamic dispatch should record a blocking limitation");
+        let refs = limitation["evidence_refs"].as_array().expect("evidence_refs");
+        assert!(
+            refs.iter().any(|r| r.as_str() == Some(change_id))
+                && refs.iter().any(|r| r.as_str() == Some(owner_id)),
+            "dynamic limitation should be scoped to the emitted change and owner"
+        );
+    }
+
+    #[test]
+    fn emit_changes_from_diff_records_each_dynamic_boundary_kind_in_hunk() {
+        let (files, owners) = app_files_and_owners();
+        let diff = "\
+--- a/lib/My/App.pm
++++ b/lib/My/App.pm
+@@ -5,3 +5,7 @@
+ sub discount {
+     my ($amount) = @_;
++    eval { $amount };
++    our @ISA = ('Base');
++    return shift->$method();
+ }
+";
+        let (_changes, limitations) = emit_changes_from_diff(diff, ".", &files, &owners);
+        let kinds: std::collections::HashSet<&str> =
+            limitations.iter().filter_map(|limitation| limitation["kind"].as_str()).collect();
+
+        assert!(kinds.contains("eval_or_string_code"), "eval boundary missing: {limitations:?}");
+        assert!(kinds.contains("role_composition"), "role boundary missing: {limitations:?}");
+        assert!(kinds.contains("dynamic_dispatch"), "dispatch boundary missing: {limitations:?}");
     }
 
     #[test]
@@ -2214,6 +2506,58 @@ mod tests {
 
     // ── #3293 PR 6: parser-backed `test_calls_declared_sub` predicate ──
 
+    #[test]
+    fn emit_relations_emits_each_direct_owner_call() {
+        let root = std::env::temp_dir().join("perl-P6-multiple-direct-call-root");
+        let _ = std::fs::remove_dir_all(&root);
+        let lib_dir = root.join("lib/My");
+        let t_dir = root.join("t");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::create_dir_all(&t_dir).unwrap();
+        std::fs::write(
+            lib_dir.join("App.pm"),
+            "package My::App;\nsub setup { }\nsub target { }\n1;\n",
+        )
+        .unwrap();
+        std::fs::write(
+            t_dir.join("App.t"),
+            "use My::App;\nMy::App::setup();\nMy::App::target();\n",
+        )
+        .unwrap();
+
+        let (tests, _oracles, _provenance, _limitations) =
+            emit_tests_and_oracles(root.to_str().unwrap());
+        let (relations, _observables, _sinks, _relation_limitations) =
+            emit_relations_and_discriminators(root.to_str().unwrap(), &tests, &[]);
+
+        let direct: Vec<_> = relations
+            .iter()
+            .filter(|relation| relation["relation_kind"] == "direct_owner_call")
+            .collect();
+        assert_eq!(direct.len(), 2, "each qualified called owner gets a relation: {relations:?}");
+        assert!(
+            direct.iter().any(|relation| {
+                relation["owner_id"]
+                    .as_str()
+                    .is_some_and(|owner_id| owner_id.contains(":sub:My::App::setup:"))
+            }),
+            "setup owner relation missing: {direct:?}"
+        );
+        assert!(
+            direct.iter().any(|relation| {
+                relation["owner_id"]
+                    .as_str()
+                    .is_some_and(|owner_id| owner_id.contains(":sub:My::App::target:"))
+            }),
+            "target owner relation missing: {direct:?}"
+        );
+        let relation_ids: std::collections::HashSet<_> =
+            direct.iter().filter_map(|relation| relation["relation_id"].as_str()).collect();
+        assert_eq!(relation_ids.len(), direct.len(), "direct relation IDs must be unique");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// Build `TestCallFacts` directly from source, mirroring what
     /// `emit_relations_and_discriminators` does per `.t` file.
     fn facts_from_src(src: &str) -> TestCallFacts {
@@ -2374,6 +2718,15 @@ mod tests {
             relations.iter().all(|r| r["relation_kind"] != "direct_owner_call"),
             "a bare (export-unproven) call must NOT be direct_owner_call, got: {relations:?}"
         );
+        let relation_owner = relations[0]["owner_id"].as_str().expect("relation owner_id");
+        assert!(
+            relation_owner.contains(":package:My::App:"),
+            "a bare export-unproven call must stay package-scoped, got {relation_owner}"
+        );
+        assert!(
+            !relation_owner.contains(":sub:"),
+            "a bare export-unproven call must not bind weak evidence to a sub owner, got {relation_owner}"
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -2506,7 +2859,7 @@ mod tests {
         std::fs::create_dir_all(&lib_dir).unwrap();
         std::fs::create_dir_all(&t_dir).unwrap();
         std::fs::write(lib_dir.join("App.pm"), "package My::App;\nsub discount { }\n1;\n").unwrap();
-        std::fs::write(t_dir.join("App.t"), "use My::App;\ndiscount(100);\n").unwrap();
+        std::fs::write(t_dir.join("App.t"), "use My::App;\nMy::App::discount(100);\n").unwrap();
 
         let (tests, _oracles, _provenance, _limitations) =
             emit_tests_and_oracles(root.to_str().unwrap());
@@ -2517,10 +2870,10 @@ mod tests {
 
         assert!(!relations.is_empty());
         let owner_id = relations[0]["owner_id"].as_str().unwrap();
-        // New shape: `owner:{path}:package:{qualified_name}:{span}` (not the bare
+        // New shape: `owner:{path}:sub:{qualified_name}:{span}` (not the bare
         // package name), with a byte span so it is not hard-pinned here.
         assert!(
-            owner_id.starts_with("owner:lib/My/App.pm:package:My::App:"),
+            owner_id.starts_with("owner:lib/My/App.pm:sub:My::App::discount:"),
             "relation owner_id should use the resolvable owners[] shape, got {owner_id}"
         );
         // And it must actually resolve to an emitted `owners[]` fact.
@@ -2546,14 +2899,14 @@ mod tests {
         let (files, owners, provenance, limitations) =
             emit_files_and_owners(root.to_str().unwrap());
 
-        // One file fact for the .pm — source role, an fnv64 digest, the package name.
+        // One file fact for the .pm — source role, a SHA-256 digest, the package name.
         assert_eq!(files.len(), 1, "one .pm file → one file fact");
         let file = &files[0];
         assert_eq!(file["path"], "lib/My/App.pm");
         assert_eq!(file["role"], json!(["source"]));
         assert!(
-            file["digest"].as_str().unwrap().starts_with("fnv64:"),
-            "digest is an fnv64 hex string, got {:?}",
+            file["digest"].as_str().unwrap().starts_with("sha256:"),
+            "digest is a SHA-256 hex string, got {:?}",
             file["digest"]
         );
         assert_eq!(file["package_names"], json!(["My::App"]));
@@ -2581,17 +2934,14 @@ mod tests {
         let owner_id = sub["owner_id"].as_str().unwrap();
         assert!(owner_id.contains("discount"), "owner id names the decl: {owner_id}");
 
-        // A per-file `syntax` provenance fact exists, plus the digest-algorithm note.
+        // A per-file `syntax` provenance fact exists without file-digest limitations.
         assert!(
             provenance
                 .iter()
                 .any(|p| p["source"] == "syntax" && p["file_id"] == "file:lib/My/App.pm"),
             "a per-file syntax provenance entry must exist"
         );
-        assert!(
-            limitations.iter().any(|l| l["limitation_id"] == "digest-algorithm"),
-            "the fnv64 digest limitation must be recorded"
-        );
+        assert!(limitations.is_empty(), "valid file digesting should add no limitations");
 
         let _ = std::fs::remove_dir_all(&root);
     }

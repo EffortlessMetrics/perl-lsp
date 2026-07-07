@@ -18,8 +18,13 @@ include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 name = "perl_ripr_facts"
 path = "src/lib.rs"
 
+[[bin]]
+name = "perl-ripr-facts"
+path = "src/main.rs"
+
 [dependencies]
 serde_json.workspace = true
+sha2.workspace = true
 # Parser-backed fact extraction (#3293 PR 3). Both are leaf crates with no
 # forbidden deps — perl-parser-core parses source and converts byte spans to
 # line/column (LineIndex); perl-symbol projects the AST into declaration facts.

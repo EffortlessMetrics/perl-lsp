@@ -111,7 +111,7 @@ allow = [
     "perl-regex",
     "perl-pod",
     "tree-sitter-perl-c",
-    # Batch RIPR facts exporter — leaf crate (serde_json only, no workspace deps).
+    # Batch RIPR facts exporter - no LSP/server runtime deps.
     "perl-ripr-facts",
     # (perl-heredoc-anti-patterns absorbed into perl-parser — Wave D)
 
@@ -269,8 +269,8 @@ perl-workspace-core = { path = "crates/perl-workspace-core", version = "0.17.0" 
 perl-tree-sitter-compat = { path = "crates/perl-tree-sitter-compat", version = "0.17.0" }
 perl-pod = { path = "crates/perl-pod", version = "0.17.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.17.0" }
-# Batch RIPR facts exporter — deliberately depends on neither the LSP server
-# runtime nor the raw parser stack (contract enforced in crates/perl-ripr-facts).
+# Batch RIPR facts exporter - deliberately depends on no LSP/server runtime or
+# workspace/LSP facade crates. Parser leaf crates are allowed for batch facts.
 perl-ripr-facts = { path = "crates/perl-ripr-facts", version = "0.17.0" }
 perl-dap = { path = "crates/perl-dap", version = "0.17.0" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.17.0" }
@@ -337,6 +337,7 @@ tree-sitter = "0.26.9"
 ropey = "1.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
+sha2 = "0.11.0"
 strum = { version = "0.28", features = ["derive"] }
 regex = "1.12.2"
 thiserror = "2.0.18"
