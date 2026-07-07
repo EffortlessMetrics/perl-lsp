@@ -23,6 +23,7 @@ For the current green/yellow/red burndown and next PR order, see the
 | Execute-one | Scaffolded | `perl-core-harness run --mode execute --profile base --test base/if.t` runs the first allowlisted upstream `base/if.t` path through `perl-core-test-runner`, emits real TAP, and writes an execute report |
 | Execute-base | Ratcheted selected subset | `perl-core-harness run --mode execute --profile base --test base/if.t --test base/cond.t --test base/while.t` runs explicit allowlisted `base` files and writes `target/perl-core/reports/base-execute.json`; `.ci/perl-core-harness/base-execute-baseline.json` ratchets 3/3 files and 10/10 TAP assertions, while profile-wide execute remains unsupported |
 | Runtime bucket model | Published | The burndown board maps supported runtime buckets to workstreams, selected-file entry rules, candidate `base/*.t` files, and receipt-integrity rules before runtime burn-down starts |
+| Provider promotion gates | Published | The burndown board names the evidence required before any compiler-backed provider cutover: harness receipts, semantic scorecard or oracle proof, shadow comparison, fallback / rollback strategy, and real-workspace receipts |
 | Upstream Perl tree preparation | Linux advisory | Clone/configure/test_prep automation is Linux-only in this slice; Windows/macOS preparation is future work |
 
 ## Claim Boundary
@@ -40,10 +41,13 @@ execute-base now has a ratcheted selected-subset receipt for allowlisted
 `base/*.t` files. The lane does not claim full compiler or runtime conformance,
 does not promote provider behavior, and is not a required PR or merge-queue
 gate. Profile-wide execute remains fail-closed until runtime buckets are
-reduced enough to widen safely. The runtime bucket model is documented in the
-burndown board and is constrained to bucket names already understood by the
-shared harness receipt types; finer-grained runtime categories can be added only
-with matching receipt classification support.
+reduced enough to widen safely. Provider-promotion gates are documented in the
+burndown board and require provider-specific semantic scorecard or oracle
+evidence, shadow comparison, fallback or rollback strategy, and real-workspace
+receipts before any user-visible LSP cutover. The runtime bucket model is
+documented in the burndown board and is constrained to bucket names already
+understood by the shared harness receipt types; finer-grained runtime categories
+can be added only with matching receipt classification support.
 
 The first receipt shape is:
 

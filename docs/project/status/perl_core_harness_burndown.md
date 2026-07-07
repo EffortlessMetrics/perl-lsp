@@ -43,7 +43,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H15 | Execute-one | Green / advisory | #3432 | None | `base/if.t` executes real TAP through an explicit one-file run selector |
 | H16 | Execute-base | Green / selected ratchet | #3446, #3448, #3450, #3454 | None | Selected `base/if.t`, `base/cond.t`, and `base/while.t` execute receipt is ratcheted at 3/3 files and 10/10 TAP assertions |
 | H17 | Runtime model | Green / model | #3452, #3454 | None | Runtime buckets are named and the first `runtime_control_flow` candidate is burned down by selected `base/while.t` |
-| H18 | Compiler-backed LSP provider promotion | Red / future | Not started | Start after compiler facts are proven | Provider promotion plan is gated by receipts |
+| H18 | Compiler-backed LSP provider promotion | Green / gated plan | #3457 | Select one provider fact class only after matching evidence is present | Promotion gates are named and tied to harness receipts, provider confidence docs, shadow/oracle proof, and rollback strategy |
 
 ## Latest Receipt Slots
 
@@ -126,6 +126,41 @@ Current selected execute-base status:
 | `base/while.t` | clean | 4/4 TAP assertions pass | first `runtime_control_flow` burn-down |
 | `base/pat.t` | verify before selecting; may pull regex forward | not selected | defer behind simpler value/control files |
 
+## Provider Promotion Gates
+
+Compiler-backed provider promotion is not unlocked by a green harness row alone.
+The harness receipts prove compiler/runtime substrate behavior; provider rows
+must still prove user-visible LSP behavior before cutover. Existing provider
+evidence remains tracked in [provider cutover](provider_cutover.md), the
+[provider confidence matrix](provider_confidence_matrix.md), the
+[provider promotion ledger](provider_promotion_ledger.md), and
+[semantic shadow compare](semantic_shadow_compare.md).
+
+Every provider-promotion PR must name exactly one provider surface and one fact
+class. It may change live behavior only when all gates below are satisfied:
+
+| Gate | Required evidence | Source |
+|---|---|---|
+| Harness substrate | Relevant parse/compile or selected execute receipt is ratcheted or explicitly bucketed with no `unknown` / unbucketed failures | this board; `.ci/perl-core-harness/*baseline.json`; `target/perl-core/*` receipts |
+| Semantic correctness | Curated-gold, semantic scorecard, or oracle evidence covers the fact class | [semantic scorecard](semantic_scorecard.md), [semantic shadow compare](semantic_shadow_compare.md), oracle receipts where available |
+| Provider shadow | Shadow comparison records the candidate, fallback, blocker, confidence, freshness, and dynamic-boundary behavior | [semantic shadow compare](semantic_shadow_compare.md), provider-specific receipt tests |
+| Live safety | The live provider has an explicit fallback, blocker, feature gate, rollback strategy, or no-output-change invariant | [provider cutover](provider_cutover.md), [provider confidence matrix](provider_confidence_matrix.md) |
+| Real workspace | At least one project-shaped receipt proves useful behavior or preserves fallback for risky generated/dynamic/stale shapes | UX scenario receipts and real-workspace baselines linked from provider status docs |
+
+Initial promotion candidates should be chosen from already-shadowed, low-risk
+surfaces: diagnostics explanation, semantic-token classes that preserve
+existing output, source-backed definition/reference slices, or explicitly
+labeled generated workspace-symbol/document-symbol pilots. Do not promote
+module/import hover, broad completion, broad rename, package-wide edits, or
+runtime-derived facts until their fact class has matching harness, scorecard,
+shadow, and real-workspace evidence.
+
+The first follow-up should be a provider-specific issue, not another umbrella:
+
+```text
+provider(<surface>): promote <fact-class> behind receipt gates
+```
+
 ## Burndown Order
 
 1. Publish this board. Active issue: #3376.
@@ -142,7 +177,8 @@ Current selected execute-base status:
 12. Ratchet selected execute-base receipts.
 13. Publish the runtime bucket model.
 14. Burn down the first receipt-backed runtime bucket.
-15. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
+15. Publish compiler-backed provider-promotion gates.
+16. Promote compiler-backed provider facts only one surface/fact class at a time after the gates above are met.
 
 ## PR Train
 
@@ -164,3 +200,4 @@ Current selected execute-base status:
 | 14 | `compiler(harness): ratchet selected execute-base receipts` | `feat(perl-core-harness): ratchet execute-base receipts` | Add the selected execute-base baseline and manual/advisory ratchet command |
 | 15 | `compiler(runtime): publish execute-base runtime bucket model` | `docs(runtime): publish execute-base runtime bucket model` | Name runtime buckets, workstreams, selected-file entry rules, and next candidate files |
 | 16 | `compiler(runtime): execute base while control-flow receipt` | `feat(runtime): execute base while control flow` | Add selected `base/while.t` execute support, burn down the first `runtime_control_flow` candidate, and ratchet 10/10 selected TAP assertions |
+| 17 | `compiler(lsp): publish compiler-backed provider promotion gates` | `docs(lsp): publish provider promotion gates` | Turn H18 from future red into a gated promotion plan tied to harness receipts and provider proof docs |
