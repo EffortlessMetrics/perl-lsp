@@ -21,7 +21,7 @@ For the current green/yellow/red burndown and next PR order, see the
 | Real upstream compile ratchets | Advisory integrated | `.ci/perl-core-harness/upstream-{base,comp,run}-compile-baseline.json` ratchets real upstream compile reports for schema/profile/mode drift, newly failing files, unexpected failures, bucket growth, unknown/unbucketed failures, and assertion regressions |
 | Harness orchestration crate | Extracted | `crates/perl-core-harness` owns discovery, prepare, run, baseline, smoke, and gap-map orchestration; `xtask` remains CLI dispatch glue |
 | Execute-one | Scaffolded | `perl-core-harness run --mode execute --profile base --test base/if.t` runs the first allowlisted upstream `base/if.t` path through `perl-core-test-runner`, emits real TAP, and writes an execute report |
-| Execute-base | Ratcheted selected subset | `perl-core-harness run --mode execute --profile base --test base/if.t --test base/cond.t` runs explicit allowlisted `base` files and writes `target/perl-core/reports/base-execute.json`; `.ci/perl-core-harness/base-execute-baseline.json` ratchets 2/2 files and 6/6 TAP assertions, while profile-wide execute remains unsupported |
+| Execute-base | Ratcheted selected subset | `perl-core-harness run --mode execute --profile base --test base/if.t --test base/cond.t --test base/while.t` runs explicit allowlisted `base` files and writes `target/perl-core/reports/base-execute.json`; `.ci/perl-core-harness/base-execute-baseline.json` ratchets 3/3 files and 10/10 TAP assertions, while profile-wide execute remains unsupported |
 | Runtime bucket model | Published | The burndown board maps supported runtime buckets to workstreams, selected-file entry rules, candidate `base/*.t` files, and receipt-integrity rules before runtime burn-down starts |
 | Upstream Perl tree preparation | Linux advisory | Clone/configure/test_prep automation is Linux-only in this slice; Windows/macOS preparation is future work |
 
@@ -92,5 +92,6 @@ cargo xtask perl-core-harness run \
   --mode execute \
   --profile base \
   --test base/if.t \
-  --test base/cond.t
+  --test base/cond.t \
+  --test base/while.t
 ```

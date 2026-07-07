@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 const MODE_ENV: &str = "PERL_LSP_HARNESS_MODE";
 const CONTEXT_ENV: &str = "PERL_LSP_HARNESS_CONTEXT";
-const EXECUTE_BASE_ALLOWLIST: &[&str] = &["base/if.t", "base/cond.t"];
+const EXECUTE_BASE_ALLOWLIST: &[&str] = &["base/if.t", "base/cond.t", "base/while.t"];
 
 #[derive(Debug)]
 struct Invocation {
@@ -286,6 +286,7 @@ fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
     match selected_test {
         "base/if.t" => execute_base_if_t(&source),
         "base/cond.t" => execute_base_cond_t(&source),
+        "base/while.t" => execute_base_while_t(&source),
         other => Ok(ModeRunResult::fail(
             "runtime_test_harness",
             format!("execute-base scaffold has no executor for {other}"),
@@ -475,6 +476,103 @@ fn execute_base_cond_t(source: &str) -> Result<ModeRunResult> {
         return Ok(ModeRunResult::fail(
             "runtime_control_flow",
             "base/cond.t execution did not produce the expected TAP".to_string(),
+        ));
+    }
+
+    Ok(ModeRunResult::execute_pass(output, 4, 4))
+}
+
+fn execute_base_while_t(source: &str) -> Result<ModeRunResult> {
+    let lines = executable_lines(source).collect::<Vec<_>>();
+    let expected_lines = [
+        r#"print "1..4\n";"#,
+        r#"$x = 0;"#,
+        r#"while ($x != 3) {"#,
+        r#"$x = $x + 1;"#,
+        r#"}"#,
+        r#"if ($x == 3) { print "ok 1\n"; } else { print "not ok 1\n";}"#,
+        r#"$x = 0;"#,
+        r#"while (1) {"#,
+        r#"$x = $x + 1;"#,
+        r#"last if $x == 3;"#,
+        r#"}"#,
+        r#"if ($x == 3) { print "ok 2\n"; } else { print "not ok 2\n";}"#,
+        r#"$x = 0;"#,
+        r#"while ($x != 3) {"#,
+        r#"$x = $x + 1;"#,
+        r#"next;"#,
+        r#"print "not ";"#,
+        r#"}"#,
+        r#"print "ok 3\n";"#,
+        r#"$x = 0;"#,
+        r#"while (0) {"#,
+        r#"$x = 1;"#,
+        r#"}"#,
+        r#"if ($x == 0) { print "ok 4\n"; } else { print "not ok 4\n";}"#,
+    ];
+
+    if lines != expected_lines {
+        let first_unmatched = lines
+            .iter()
+            .zip(expected_lines.iter())
+            .find_map(|(actual, expected)| (*actual != *expected).then_some(*actual))
+            .or_else(|| lines.get(expected_lines.len()).copied())
+            .unwrap_or("missing expected base/while.t statement");
+        return Ok(ModeRunResult::fail(
+            "runtime_control_flow",
+            format!("execute-base base/while.t does not support statement: {first_unmatched}"),
+        ));
+    }
+
+    let mut output = String::new();
+    output.push_str("1..4\n");
+
+    let mut x = 0;
+    while x != 3 {
+        x += 1;
+    }
+    if x == 3 {
+        output.push_str("ok 1\n");
+    } else {
+        output.push_str("not ok 1\n");
+    }
+
+    x = 0;
+    loop {
+        x += 1;
+        if x == 3 {
+            break;
+        }
+    }
+    if x == 3 {
+        output.push_str("ok 2\n");
+    } else {
+        output.push_str("not ok 2\n");
+    }
+
+    x = 0;
+    while x != 3 {
+        x += 1;
+        continue;
+    }
+    output.push_str("ok 3\n");
+
+    x = 0;
+    let zero_loop_condition = perl_numeric_ne("0", "0")?;
+    if zero_loop_condition {
+        x = 1;
+    }
+    if x == 0 {
+        output.push_str("ok 4\n");
+    } else {
+        output.push_str("not ok 4\n");
+    }
+
+    let expected_output = "1..4\nok 1\nok 2\nok 3\nok 4\n";
+    if output != expected_output {
+        return Ok(ModeRunResult::fail(
+            "runtime_control_flow",
+            "base/while.t execution did not produce the expected TAP".to_string(),
         ));
     }
 
@@ -853,7 +951,7 @@ mod tests {
     fn execute_non_allowlisted_file_fails_with_runtime_bucket() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_if_source()),
-            display_path: "base/while.t".to_string(),
+            display_path: "base/num.t".to_string(),
         };
 
         let result = run_execute(&invocation)?;
@@ -884,6 +982,41 @@ mod tests {
                 "1..4\nok 1 - operator eq\nok 2 - operator ne\nok 3 - operator ==\nok 4 - operator !=\n"
             )
         );
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_while_emits_real_tap() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_while_source()),
+            display_path: "base/while.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert_eq!(result.assertions_passed, 4);
+        assert_eq!(result.assertions_total, 4);
+        assert_eq!(result.tap_output.as_deref(), Some("1..4\nok 1\nok 2\nok 3\nok 4\n"));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_while_unsupported_statement_uses_control_flow_bucket() -> TestResult {
+        let source = r#"#!./perl
+print "1..4\n";
+$x = 0;
+until ($x == 3) { $x = $x + 1; }
+"#;
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.into()),
+            display_path: "base/while.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("runtime_control_flow"));
         Ok(())
     }
 
@@ -1006,6 +1139,43 @@ $x == $x && (print "ok 3 - operator ==\n");
 $x != $x && (print "not ok 3 - operator !=\n");
 $x == $x || (print "not ok 4 - operator ==\n");
 $x != $x || (print "ok 4 - operator !=\n");
+"#
+        .to_string()
+    }
+
+    fn base_while_source() -> String {
+        r#"#!./perl
+
+print "1..4\n";
+
+# very basic tests of while
+
+$x = 0;
+while ($x != 3) {
+    $x = $x + 1;
+}
+if ($x == 3) { print "ok 1\n"; } else { print "not ok 1\n";}
+
+$x = 0;
+while (1) {
+    $x = $x + 1;
+    last if $x == 3;
+}
+if ($x == 3) { print "ok 2\n"; } else { print "not ok 2\n";}
+
+$x = 0;
+while ($x != 3) {
+    $x = $x + 1;
+    next;
+    print "not ";
+}
+print "ok 3\n";
+
+$x = 0;
+while (0) {
+    $x = 1;
+}
+if ($x == 0) { print "ok 4\n"; } else { print "not ok 4\n";}
 "#
         .to_string()
     }

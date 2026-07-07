@@ -22,7 +22,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const PERL_SOURCE_URL: &str = "https://github.com/Perl/perl5";
-const EXECUTE_BASE_ALLOWLIST: &[&str] = &["base/if.t", "base/cond.t"];
+const EXECUTE_BASE_ALLOWLIST: &[&str] = &["base/if.t", "base/cond.t", "base/while.t"];
 static RUN_COPY_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn project_root() -> Result<PathBuf> {
@@ -1947,7 +1947,7 @@ mod tests {
             runner: HarnessRunner::Test,
             mode: HarnessMode::Execute,
             profile: HarnessProfile::Base,
-            tests: vec!["base/while.t".into()],
+            tests: vec!["base/num.t".into()],
             output: None,
             runner_binary: None,
         };
@@ -1959,6 +1959,7 @@ mod tests {
         assert!(err.to_string().contains("supports only selected base tests"));
         assert!(err.to_string().contains("base/if.t"));
         assert!(err.to_string().contains("base/cond.t"));
+        assert!(err.to_string().contains("base/while.t"));
         Ok(())
     }
 
@@ -2500,7 +2501,7 @@ mod tests {
             .find(|result| result.path == "base/cond.t")
             .ok_or_else(|| color_eyre::eyre::eyre!("missing base/cond.t result"))?;
         cond.assertions_passed = 3;
-        report.summary.tap_assertions_passed = 5;
+        report.summary.tap_assertions_passed = 9;
 
         let comparison = compare_baseline(&baseline, &report);
 
@@ -2770,11 +2771,11 @@ mod tests {
             profile: HarnessProfile::Base,
             harness_status: Some(1),
             summary: RunSummary {
-                files_total: 2,
-                files_passed: 2,
+                files_total: 3,
+                files_passed: 3,
                 files_failed: 0,
-                tap_assertions_total: 6,
-                tap_assertions_passed: 6,
+                tap_assertions_total: 10,
+                tap_assertions_passed: 10,
             },
             buckets: BTreeMap::new(),
             file_results: vec![
@@ -2789,6 +2790,12 @@ mod tests {
                     status: RunnerStatus::Pass,
                     assertions_passed: 2,
                     assertions_total: 2,
+                },
+                RunFileResult {
+                    path: "base/while.t".into(),
+                    status: RunnerStatus::Pass,
+                    assertions_passed: 4,
+                    assertions_total: 4,
                 },
             ],
             failures: Vec::new(),
@@ -3059,7 +3066,7 @@ mod tests {
             runner: HarnessRunner::Test,
             mode: HarnessMode::Execute,
             profile: HarnessProfile::Base,
-            tests: vec!["base/if.t".into(), "base/cond.t".into()],
+            tests: vec!["base/if.t".into(), "base/cond.t".into(), "base/while.t".into()],
             output: Some(output.clone()),
             runner_binary: Some(runner),
         })?;
@@ -3067,15 +3074,15 @@ mod tests {
         let raw = fs::read_to_string(output)?;
         let report: RunReport = serde_json::from_str(&raw)?;
         assert_eq!(report.mode, HarnessMode::Execute);
-        assert_eq!(report.summary.files_total, 2);
-        assert_eq!(report.summary.files_passed, 2);
+        assert_eq!(report.summary.files_total, 3);
+        assert_eq!(report.summary.files_passed, 3);
         assert_eq!(report.summary.files_failed, 0);
-        assert_eq!(report.summary.tap_assertions_total, 6);
-        assert_eq!(report.summary.tap_assertions_passed, 6);
+        assert_eq!(report.summary.tap_assertions_total, 10);
+        assert_eq!(report.summary.tap_assertions_passed, 10);
         let mut paths =
             report.file_results.iter().map(|result| result.path.as_str()).collect::<Vec<_>>();
         paths.sort_unstable();
-        assert_eq!(paths, vec!["base/cond.t", "base/if.t"]);
+        assert_eq!(paths, vec!["base/cond.t", "base/if.t", "base/while.t"]);
         assert!(!perl_tree.join("t").join("perl").exists(), "source Perl tree must not be mutated");
         Ok(())
     }
@@ -3562,15 +3569,18 @@ fi
         fs::create_dir_all(t_dir.join("base"))?;
         fs::write(t_dir.join("base").join("if.t"), "1;\n")?;
         fs::write(t_dir.join("base").join("cond.t"), "1;\n")?;
+        fs::write(t_dir.join("base").join("while.t"), "1;\n")?;
         let script = r#"#!/bin/sh
 set -eu
 if [ "${1:-}" = "--dumptests" ]; then
   echo "base/cond.t"
   echo "base/if.t"
+  echo "base/while.t"
   exit 0
 fi
 ./perl base/cond.t
 ./perl base/if.t
+./perl base/while.t
 "#;
         fs::write(t_dir.join("TEST"), script)?;
         Ok(perl_tree)
@@ -3663,6 +3673,14 @@ case "$script" in
     printf 'ok 2 - operator ne\n'
     printf 'ok 3 - operator ==\n'
     printf 'ok 4 - operator !=\n'
+    printf '{"schema_version":"perl_core_harness.runner_record.v1","mode":"%s","path":"%s","status":"pass","assertions_passed":4,"assertions_total":4,"bucket":null,"first_diagnostic":null}\n' "$mode" "$script" >> "$PERL_LSP_HARNESS_CONTEXT"
+    ;;
+  *base/while.t)
+    printf '1..4\n'
+    printf 'ok 1\n'
+    printf 'ok 2\n'
+    printf 'ok 3\n'
+    printf 'ok 4\n'
     printf '{"schema_version":"perl_core_harness.runner_record.v1","mode":"%s","path":"%s","status":"pass","assertions_passed":4,"assertions_total":4,"bucket":null,"first_diagnostic":null}\n' "$mode" "$script" >> "$PERL_LSP_HARNESS_CONTEXT"
     ;;
   *)

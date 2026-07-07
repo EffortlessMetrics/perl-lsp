@@ -342,6 +342,39 @@ fn cli_execute_base_cond_emits_real_tap_and_context() -> Result<()> {
 }
 
 #[test]
+fn cli_execute_base_while_emits_real_tap_and_context() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let script = temp.path().join("base").join("while.t");
+    std::fs::create_dir_all(script.parent().ok_or_else(|| anyhow::anyhow!("missing parent"))?)?;
+    std::fs::write(&script, base_while_source())?;
+    let context = temp.path().join("records.jsonl");
+
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "execute")
+        .env("PERL_LSP_HARNESS_CONTEXT", &context)
+        .arg(&script)
+        .output()?;
+
+    if !output.status.success() {
+        bail!("runtime control-flow burn-down should pass for base/while.t");
+    }
+    assert_eq!(String::from_utf8(output.stdout)?, "1..4\nok 1\nok 2\nok 3\nok 4\n");
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+
+    let record = read_record(&context)?;
+    assert_eq!(record["mode"], "execute");
+    let path = record["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("runner record path should be a string"))?
+        .replace('\\', "/");
+    assert!(path.ends_with("base/while.t"));
+    assert_eq!(record["status"], "pass");
+    assert_eq!(record["assertions_passed"], 4);
+    assert_eq!(record["assertions_total"], 4);
+    Ok(())
+}
+
+#[test]
 fn cli_unknown_mode_reports_internal_failure() -> Result<()> {
     let output = Command::new(runner())
         .env("PERL_LSP_HARNESS_MODE", "typo-mode")
@@ -405,5 +438,41 @@ $x == $x && (print "ok 3 - operator ==\n");
 $x != $x && (print "not ok 3 - operator !=\n");
 $x == $x || (print "not ok 4 - operator ==\n");
 $x != $x || (print "ok 4 - operator !=\n");
+"#
+}
+
+fn base_while_source() -> &'static str {
+    r#"#!./perl
+
+print "1..4\n";
+
+# very basic tests of while
+
+$x = 0;
+while ($x != 3) {
+    $x = $x + 1;
+}
+if ($x == 3) { print "ok 1\n"; } else { print "not ok 1\n";}
+
+$x = 0;
+while (1) {
+    $x = $x + 1;
+    last if $x == 3;
+}
+if ($x == 3) { print "ok 2\n"; } else { print "not ok 2\n";}
+
+$x = 0;
+while ($x != 3) {
+    $x = $x + 1;
+    next;
+    print "not ";
+}
+print "ok 3\n";
+
+$x = 0;
+while (0) {
+    $x = 1;
+}
+if ($x == 0) { print "ok 4\n"; } else { print "not ok 4\n";}
 "#
 }
