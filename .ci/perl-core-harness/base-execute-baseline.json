@@ -3,11 +3,11 @@
   "report_schema_version": "perl_core_harness.report.v1",
   "mode": "execute",
   "profile": "base",
-  "files_total": 3,
-  "files_passed": 3,
+  "files_total": 4,
+  "files_passed": 4,
   "files_failed": 0,
-  "tap_assertions_total": 10,
-  "tap_assertions_passed": 10,
+  "tap_assertions_total": 66,
+  "tap_assertions_passed": 66,
   "buckets": {},
   "expected_failures": [],
   "file_results": [
@@ -22,6 +22,12 @@
       "status": "pass",
       "assertions_passed": 2,
       "assertions_total": 2
+    },
+    {
+      "path": "base/num.t",
+      "status": "pass",
+      "assertions_passed": 56,
+      "assertions_total": 56
     },
     {
       "path": "base/while.t",

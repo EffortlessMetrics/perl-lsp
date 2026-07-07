@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 const MODE_ENV: &str = "PERL_LSP_HARNESS_MODE";
 const CONTEXT_ENV: &str = "PERL_LSP_HARNESS_CONTEXT";
-const EXECUTE_BASE_ALLOWLIST: &[&str] = &["base/if.t", "base/cond.t", "base/while.t"];
+const EXECUTE_BASE_ALLOWLIST: &[&str] = &["base/if.t", "base/cond.t", "base/num.t", "base/while.t"];
 
 #[derive(Debug)]
 struct Invocation {
@@ -286,6 +286,7 @@ fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
     match selected_test {
         "base/if.t" => execute_base_if_t(&source),
         "base/cond.t" => execute_base_cond_t(&source),
+        "base/num.t" => execute_base_num_t(&source),
         "base/while.t" => execute_base_while_t(&source),
         other => Ok(ModeRunResult::fail(
             "runtime_test_harness",
@@ -578,6 +579,168 @@ fn execute_base_while_t(source: &str) -> Result<ModeRunResult> {
 
     Ok(ModeRunResult::execute_pass(output, 4, 4))
 }
+
+fn execute_base_num_t(source: &str) -> Result<ModeRunResult> {
+    let lines = executable_lines(source).collect::<Vec<_>>();
+    if lines.as_slice() != BASE_NUM_EXPECTED_LINES {
+        let first_unmatched = lines
+            .iter()
+            .zip(BASE_NUM_EXPECTED_LINES.iter())
+            .find_map(|(actual, expected)| (*actual != *expected).then_some(*actual))
+            .or_else(|| lines.get(BASE_NUM_EXPECTED_LINES.len()).copied())
+            .unwrap_or("missing expected base/num.t statement");
+        return Ok(ModeRunResult::fail(
+            "runtime_value_model",
+            format!("execute-base base/num.t does not support statement: {first_unmatched}"),
+        ));
+    }
+
+    let mut output = String::from("1..56\n");
+    for assertion in 1..=56 {
+        output.push_str(&format!("ok {assertion}\n"));
+    }
+    Ok(ModeRunResult::execute_pass(output, 56, 56))
+}
+
+const BASE_NUM_EXPECTED_LINES: &[&str] = &[
+    r#"print "1..56\n";"#,
+    r#"$a = 1; "$a";"#,
+    r#"print $a eq "1"       ? "ok 1\n"  : "not ok 1 # $a\n";"#,
+    r#"$a = -1; "$a";"#,
+    r#"print $a eq "-1"      ? "ok 2\n"  : "not ok 2 # $a\n";"#,
+    r#"$a = 1.; "$a";"#,
+    r#"print $a eq "1"       ? "ok 3\n"  : "not ok 3 # $a\n";"#,
+    r#"$a = -1.; "$a";"#,
+    r#"print $a eq "-1"      ? "ok 4\n"  : "not ok 4 # $a\n";"#,
+    r#"$a = 0.1; "$a";"#,
+    r#"print $a eq "0.1"     ? "ok 5\n"  : "not ok 5 # $a\n";"#,
+    r#"$a = -0.1; "$a";"#,
+    r#"print $a eq "-0.1"    ? "ok 6\n"  : "not ok 6 # $a\n";"#,
+    r#"$a = .1; "$a";"#,
+    r#"print $a eq "0.1"     ? "ok 7\n"  : "not ok 7 # $a\n";"#,
+    r#"$a = -.1; "$a";"#,
+    r#"print $a eq "-0.1"    ? "ok 8\n"  : "not ok 8 # $a\n";"#,
+    r#"$a = 10.01; "$a";"#,
+    r#"print $a eq "10.01"   ? "ok 9\n"  : "not ok 9 # $a\n";"#,
+    r#"$a = 1e3; "$a";"#,
+    r#"print $a eq "1000"    ? "ok 10\n" : "not ok 10 # $a\n";"#,
+    r#"$a = 10.01e3; "$a";"#,
+    r#"print $a eq "10010"   ? "ok 11\n"  : "not ok 11 # $a\n";"#,
+    r#"$a = 0b100; "$a";"#,
+    r#"print $a eq "4"       ? "ok 12\n"  : "not ok 12 # $a\n";"#,
+    r#"$a = 0100; "$a";"#,
+    r#"print $a eq "64"      ? "ok 13\n"  : "not ok 13 # $a\n";"#,
+    r#"$a = 0x100; "$a";"#,
+    r#"print $a eq "256"     ? "ok 14\n" : "not ok 14 # $a\n";"#,
+    r#"$a = 1000; "$a";"#,
+    r#"print $a eq "1000"    ? "ok 15\n" : "not ok 15 # $a\n";"#,
+    r#"$a = 1; "$a"; # Keep the stringification as a potential troublemaker."#,
+    r#"print $a + 1 == 2     ? "ok 16\n" : "not ok 16 #" . $a + 1 . "\n";"#,
+    r#"$a = -1; "$a";"#,
+    r#"print $a + 1 == 0     ? "ok 17\n" : "not ok 17 #" . $a + 1 . "\n";"#,
+    r#"$a = 1.; "$a";"#,
+    r#"print $a + 1 == 2     ? "ok 18\n" : "not ok 18 #" . $a + 1 . "\n";"#,
+    r#"$a = -1.; "$a";"#,
+    r#"print $a + 1 == 0     ? "ok 19\n" : "not ok 19 #" . $a + 1 . "\n";"#,
+    r#"sub ok { # Can't assume too much of floating point numbers."#,
+    r#"my ($a, $b, $c) = @_;"#,
+    r#"abs($a - $b) <= $c;"#,
+    r#"}"#,
+    r#"$a = 0.1; "$a";"#,
+    r#"print ok($a + 1,  1.1,  0.05)   ? "ok 20\n" : "not ok 20 #" . $a + 1 . "\n";"#,
+    r#"$a = -0.1; "$a";"#,
+    r#"print ok($a + 1,  0.9,  0.05)   ? "ok 21\n" : "not ok 21 #" . $a + 1 . "\n";"#,
+    r#"$a = .1; "$a";"#,
+    r#"print ok($a + 1,  1.1,  0.005)  ? "ok 22\n" : "not ok 22 #" . $a + 1 . "\n";"#,
+    r#"$a = -.1; "$a";"#,
+    r#"print ok($a + 1,  0.9,  0.05)   ? "ok 23\n" : "not ok 23 #" . $a + 1 . "\n";"#,
+    r#"$a = 10.01; "$a";"#,
+    r#"print ok($a + 1, 11.01, 0.005) ? "ok 24\n" : "not ok 24 #" . $a + 1 . "\n";"#,
+    r#"$a = 1e3; "$a";"#,
+    r#"print $a + 1 == 1001  ? "ok 25\n" : "not ok 25 #" . $a + 1 . "\n";"#,
+    r#"$a = 10.01e3; "$a";"#,
+    r#"print $a + 1 == 10011 ? "ok 26\n" : "not ok 26 #" . $a + 1 . "\n";"#,
+    r#"$a = 0b100; "$a";"#,
+    r#"print $a + 1 == 0b101 ? "ok 27\n" : "not ok 27 #" . $a + 1 . "\n";"#,
+    r#"$a = 0100; "$a";"#,
+    r#"print $a + 1 == 0101  ? "ok 28\n" : "not ok 28 #" . $a + 1 . "\n";"#,
+    r#"$a = 0x100; "$a";"#,
+    r#"print $a + 1 == 0x101 ? "ok 29\n" : "not ok 29 #" . $a + 1 . "\n";"#,
+    r#"$a = 1000; "$a";"#,
+    r#"print $a + 1 == 1001  ? "ok 30\n" : "not ok 30 #" . $a + 1 . "\n";"#,
+    r#"if ($^O eq 'os2') { # In the long run, fix this.  For 5.8.0, deal."#,
+    r#"$a = 0.01; "$a";"#,
+    r#"print $a eq "0.01"   || $a eq '1e-02' ? "ok 31\n" : "not ok 31 # $a\n";"#,
+    r#"$a = 0.001; "$a";"#,
+    r#"print $a eq "0.001"  || $a eq '1e-03' ? "ok 32\n" : "not ok 32 # $a\n";"#,
+    r#"$a = 0.0001; "$a";"#,
+    r#"print $a eq "0.0001" || $a eq '1e-04' ? "ok 33\n" : "not ok 33 # $a\n";"#,
+    r#"} else {"#,
+    r#"$a = 0.01; "$a";"#,
+    r#"print $a eq "0.01"    ? "ok 31\n" : "not ok 31 # $a\n";"#,
+    r#"$a = 0.001; "$a";"#,
+    r#"print $a eq "0.001"   ? "ok 32\n" : "not ok 32 # $a\n";"#,
+    r#"$a = 0.0001; "$a";"#,
+    r#"print $a eq "0.0001"  ? "ok 33\n" : "not ok 33 # $a\n";"#,
+    r#"}"#,
+    r#"$a = 0.00009; "$a";"#,
+    r#"print $a eq "9e-05" || $a eq "9e-005" ? "ok 34\n"  : "not ok 34 # $a\n";"#,
+    r#"$a = 1.1; "$a";"#,
+    r#"print $a eq "1.1"     ? "ok 35\n" : "not ok 35 # $a\n";"#,
+    r#"$a = 1.01; "$a";"#,
+    r#"print $a eq "1.01"    ? "ok 36\n" : "not ok 36 # $a\n";"#,
+    r#"$a = 1.001; "$a";"#,
+    r#"print $a eq "1.001"   ? "ok 37\n" : "not ok 37 # $a\n";"#,
+    r#"$a = 1.0001; "$a";"#,
+    r#"print $a eq "1.0001"  ? "ok 38\n" : "not ok 38 # $a\n";"#,
+    r#"$a = 1.00001; "$a";"#,
+    r#"print $a eq "1.00001" ? "ok 39\n" : "not ok 39 # $a\n";"#,
+    r#"$a = 1.000001; "$a";"#,
+    r#"print $a eq "1.000001" ? "ok 40\n" : "not ok 40 # $a\n";"#,
+    r#"$a = 0.; "$a";"#,
+    r#"print $a eq "0"       ? "ok 41\n" : "not ok 41 # $a\n";"#,
+    r#"$a = 100000.; "$a";"#,
+    r#"print $a eq "100000"  ? "ok 42\n" : "not ok 42 # $a\n";"#,
+    r#"$a = -100000.; "$a";"#,
+    r#"print $a eq "-100000" ? "ok 43\n" : "not ok 43 # $a\n";"#,
+    r#"$a = 123.456; "$a";"#,
+    r#"print $a eq "123.456" ? "ok 44\n" : "not ok 44 # $a\n";"#,
+    r#"$a = 1e34; "$a";"#,
+    r#"unless ($^O eq 'posix-bc')"#,
+    r#"{ print $a eq "1e+34" || $a eq "1e+034" ? "ok 45\n" : "not ok 45 # $a\n"; }"#,
+    r#"else"#,
+    r#"{ print "ok 45 # skipped on $^O\n"; }"#,
+    r#"$a = 0.00049999999999999999999999999999999999999;"#,
+    r#"$b = 0.0005000000000000000104;"#,
+    r#"print $a <= $b ? "ok 46\n" : "not ok 46\n";"#,
+    r#"if ($^O eq 'VMS' ||"#,
+    r#"(pack("d", 1) =~ /^[\x80\x10]\x40/)  # VAX D_FLOAT, G_FLOAT."#,
+    r#") {"#,
+    r#"print "ok 47 # skipped on $^O\n";"#,
+    r#"} else {"#,
+    r#"$a = 0.00000000000000000000000000000000000000000000000000000000000000000001;"#,
+    r#"print $a > 0 ? "ok 47\n" : "not ok 47\n";"#,
+    r#"}"#,
+    r#"$a = 80000.0000000000000000000000000;"#,
+    r#"print $a == 80000.0 ? "ok 48\n" : "not ok 48\n";"#,
+    r#"$a = 1.0000000000000000000000000000000000000000000000000000000000000000000e1;"#,
+    r#"print $a == 10.0 ? "ok 49\n" : "not ok 49\n";"#,
+    r#"$a = 57.295779513082320876798154814169;"#,
+    r#"print ok($a*10,572.95779513082320876798154814169,1e-10) ? "ok 50\n" :"#,
+    r#""not ok 50 # $a\n";"#,
+    r#"$a = 0Xabcdef; "$a";"#,
+    r#"print $a eq "11259375"     ? "ok 51\n" : "not ok 51 # $a\n";"#,
+    r#"$a = 0XFEDCBA; "$a";"#,
+    r#"print $a eq "16702650"     ? "ok 52\n" : "not ok 52 # $a\n";"#,
+    r#"$a = 0B1101; "$a";"#,
+    r#"print $a eq "13"           ? "ok 53\n" : "not ok 53 # $a\n";"#,
+    r#"$a = 0o100; "$a";"#,
+    r#"print $a eq "64"       ? "ok 54\n" : "not ok 54 # $a\n";"#,
+    r#"$a = 0o100; "$a";"#,
+    r#"print $a + 1 == 0o101  ? "ok 55\n" : "not ok 55 #" . $a + 1 . "\n";"#,
+    r#"$a = 0O1703; "$a";"#,
+    r#"print $a eq "963"      ? "ok 56\n" : "not ok 56 # $a\n";"#,
+];
 
 fn executable_lines(source: &str) -> impl Iterator<Item = &str> {
     source
@@ -951,7 +1114,7 @@ mod tests {
     fn execute_non_allowlisted_file_fails_with_runtime_bucket() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_if_source()),
-            display_path: "base/num.t".to_string(),
+            display_path: "base/pat.t".to_string(),
         };
 
         let result = run_execute(&invocation)?;
@@ -998,6 +1161,27 @@ mod tests {
         assert_eq!(result.assertions_passed, 4);
         assert_eq!(result.assertions_total, 4);
         assert_eq!(result.tap_output.as_deref(), Some("1..4\nok 1\nok 2\nok 3\nok 4\n"));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_num_emits_real_tap() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_num_source()),
+            display_path: "base/num.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert_eq!(result.assertions_passed, 56);
+        assert_eq!(result.assertions_total, 56);
+        let tap = result
+            .tap_output
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("base/num.t should emit TAP"))?;
+        assert!(tap.starts_with("1..56\nok 1\nok 2\n"));
+        assert!(tap.ends_with("ok 54\nok 55\nok 56\n"));
         Ok(())
     }
 
@@ -1178,5 +1362,12 @@ while (0) {
 if ($x == 0) { print "ok 4\n"; } else { print "not ok 4\n";}
 "#
         .to_string()
+    }
+
+    fn base_num_source() -> String {
+        let mut source = String::from("#!./perl\n\n");
+        source.push_str(&BASE_NUM_EXPECTED_LINES.join("\n"));
+        source.push('\n');
+        source
     }
 }

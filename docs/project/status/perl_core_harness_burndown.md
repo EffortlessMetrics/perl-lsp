@@ -74,8 +74,8 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `.ci/perl-core-harness/upstream-base-compile-baseline.json` | Ratchets 6/9 compile pass state; buckets: 1 `parse_recovery`, 2 `compile_effect` | Accepted from post-#3429 `target/perl-core/smoke/base/compile.json`; separate from generated fixture baseline |
 | `.ci/perl-core-harness/upstream-comp-compile-baseline.json` | Ratchets 8/25 compile pass state; buckets: 7 `parse_recovery`, 10 `compile_effect` | Accepted from `target/perl-core/smoke/comp/compile.json`; separate from generated fixture baseline |
 | `.ci/perl-core-harness/upstream-run-compile-baseline.json` | Ratchets 1/28 compile pass state; buckets: 10 `parse_recovery`, 17 `compile_effect` | Accepted from `target/perl-core/smoke/run/compile.json`; separate from generated fixture baseline |
-| `target/perl-core/reports/base-execute.json` | 3/3 selected files passed, 10/10 TAP assertions, no runtime buckets | Local receipt generated from pinned upstream Perl artifact [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077); selected files: `base/cond.t` 4/4, `base/if.t` 2/2, and `base/while.t` 4/4 |
-| `.ci/perl-core-harness/base-execute-baseline.json` | Ratchets selected execute-base state: 3/3 files, 10/10 TAP assertions, no runtime buckets | Accepted from `target/perl-core/reports/base-execute.json`; selected execute only, separate from profile-wide parse/compile ratchets |
+| `target/perl-core/reports/base-execute.json` | 4/4 selected files passed, 66/66 TAP assertions, no runtime buckets | Local receipt generated from pinned upstream Perl artifact [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) and expanded by P2 selected-execute proof; selected files: `base/cond.t` 4/4, `base/if.t` 2/2, `base/num.t` 56/56, and `base/while.t` 4/4 |
+| `.ci/perl-core-harness/base-execute-baseline.json` | Ratchets selected execute-base state: 4/4 files, 66/66 TAP assertions, no runtime buckets | Accepted from `target/perl-core/reports/base-execute.json`; selected execute only, separate from profile-wide parse/compile ratchets |
 
 ## Gap Buckets
 
@@ -128,7 +128,7 @@ Current selected execute-base status:
 |---|---|---|---|
 | `base/if.t` | clean | 2/2 TAP assertions pass | none |
 | `base/cond.t` | clean | 4/4 TAP assertions pass | none |
-| `base/num.t` | verify against current receipts before selecting | not selected | next candidate |
+| `base/num.t` | clean | 56/56 TAP assertions pass | first `runtime_value_model` burn-down |
 | `base/while.t` | clean | 4/4 TAP assertions pass | first `runtime_control_flow` burn-down |
 | `base/pat.t` | verify before selecting; may pull regex forward | not selected | defer behind simpler value/control files |
 
