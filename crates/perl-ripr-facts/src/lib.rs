@@ -668,7 +668,7 @@ mod tests {
     /// root, then clean the fixture up. `files` is a slice of
     /// `(repo-relative path, content)`.
     fn packet_for_fixture(dir: &str, files: &[(&str, &str)]) -> serde_json::Value {
-        let root = format!("target/ripr-p3-fixtures/{dir}");
+        let root = format!("target/ripr-p3-{dir}");
         let _ = std::fs::remove_dir_all(&root);
         for (rel, content) in files {
             let path = format!("{root}/{rel}");
@@ -917,7 +917,7 @@ mod tests {
     /// Build a packet from a single synthetic `t/foo.t` file with the given
     /// requested fact classes, then clean the fixture up.
     fn packet_for_t(dir: &str, t_content: &str, fact_classes: &str) -> serde_json::Value {
-        let root = format!("target/ripr-p4-fixtures/{dir}");
+        let root = format!("target/ripr-p4-{dir}");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(format!("{root}/t")).expect("create t/ dir");
         std::fs::write(format!("{root}/t/foo.t"), t_content).expect("write t file");
@@ -1120,7 +1120,7 @@ mod tests {
         // relation carries a required `test_id`; dropping the test facts would
         // leave `relation.test_id` dangling into an empty `tests[]`. Regression
         // guard for the fact-class gating added in #3293 PR 4.
-        let root = "target/ripr-p4-fixtures/relations-refint";
+        let root = "target/ripr-p4-relations-refint";
         let _ = std::fs::remove_dir_all(root);
         std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
         std::fs::create_dir_all(format!("{root}/t")).expect("create t/");
@@ -1712,7 +1712,7 @@ mod tests {
     /// Build a packet over a fixture with `lib/App.pm` (a `sub discount`) and a
     /// caller-supplied `diff`.
     fn packet_for_diff(dir: &str, fact_classes: &str, diff: Option<&str>) -> serde_json::Value {
-        let root = format!("target/ripr-p5-fixtures/{dir}");
+        let root = format!("target/ripr-p5-{dir}");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
         std::fs::write(
@@ -1846,7 +1846,7 @@ mod tests {
         // owners. A diff hunk in it is unattributable — the limitation's
         // evidence_ref (a real parsed file) must resolve, so files[] is
         // force-included even though no change fact was emitted.
-        let root = "target/ripr-p5-fixtures/unattributable";
+        let root = "target/ripr-p5-unattributable";
         let _ = std::fs::remove_dir_all(root);
         std::fs::create_dir_all(format!("{root}/lib")).expect("create lib/");
         std::fs::write(format!("{root}/lib/Script.pm"), "my $x = 1;\n$x++;\n1;\n")
