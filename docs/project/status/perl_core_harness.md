@@ -21,7 +21,7 @@ For the current green/yellow/red burndown and next PR order, see the
 | Real upstream compile ratchets | Advisory integrated | `.ci/perl-core-harness/upstream-{base,comp,run}-compile-baseline.json` ratchets real upstream compile reports for schema/profile/mode drift, newly failing files, unexpected failures, bucket growth, unknown/unbucketed failures, and assertion regressions |
 | Harness orchestration crate | Extracted | `crates/perl-core-harness` owns discovery, prepare, run, baseline, smoke, and gap-map orchestration; `xtask` remains CLI dispatch glue |
 | Execute-one | Scaffolded | `perl-core-harness run --mode execute --profile base --test base/if.t` runs the first allowlisted upstream `base/if.t` path through `perl-core-test-runner`, emits real TAP, and writes an execute report |
-| Execute-base | Advisory selected subset | `perl-core-harness run --mode execute --profile base --test base/if.t --test base/cond.t` runs explicit allowlisted `base` files and writes `target/perl-core/reports/base-execute.json`; the first selected receipt recorded 2/2 files and 6/6 TAP assertions, while profile-wide execute remains unsupported |
+| Execute-base | Ratcheted selected subset | `perl-core-harness run --mode execute --profile base --test base/if.t --test base/cond.t` runs explicit allowlisted `base` files and writes `target/perl-core/reports/base-execute.json`; `.ci/perl-core-harness/base-execute-baseline.json` ratchets 2/2 files and 6/6 TAP assertions, while profile-wide execute remains unsupported |
 | Upstream Perl tree preparation | Linux advisory | Clone/configure/test_prep automation is Linux-only in this slice; Windows/macOS preparation is future work |
 
 ## Claim Boundary
@@ -35,11 +35,11 @@ behavior. The advisory real-tree smoke verifies that actual upstream `base`,
 `comp`, and `run` profile files from a pinned prepared Perl tree can flow
 through discovery, parse, compile, smoke-summary, and gap-map receipt
 generation. Execute-one proves the allowlisted `base/if.t` receipt path, and
-execute-base now has an advisory selected-subset receipt for allowlisted
+execute-base now has a ratcheted selected-subset receipt for allowlisted
 `base/*.t` files. The lane does not claim full compiler or runtime conformance,
 does not promote provider behavior, and is not a required PR or merge-queue
-gate. Profile-wide execute remains fail-closed until selected execute receipts
-are ratcheted and runtime buckets are reduced enough to widen safely.
+gate. Profile-wide execute remains fail-closed until runtime buckets are
+reduced enough to widen safely.
 
 The first receipt shape is:
 
@@ -53,20 +53,22 @@ target/perl-core/smoke/<profile>/smoke.json
 target/perl-core/smoke/<profile>/gap-map.json
 .ci/perl-core-harness/base-compile-baseline.json
 .ci/perl-core-harness/upstream-<profile>-compile-baseline.json
+.ci/perl-core-harness/base-execute-baseline.json
 ```
 
 The discovery receipt records the prepared tree, host Perl command, upstream
 runner, staged profile, and normalized test paths. The parse and compile
 reports record file-level TAP assertions and failure buckets such as
 `parse_recovery`, `source_decode`, `compile_effect`, and `cli_switch`.
-The compile baseline is deterministic and order-independent; improvements are
+The baseline files are deterministic and order-independent; improvements are
 allowed, but baseline tightening requires an explicit `perl-core-harness
-baseline --accept` update. The generated fixture baseline and real-upstream
-advisory baselines are separate files. The smoke summary records the discovery,
-parse, and compile report paths plus per-mode totals and buckets. The gap map
-groups failures by bucket, workstream, impacted LSP surface, and first failure
-per bucket. Bucketed parse/compile failures are preserved as gap data; missing
-reports, unbucketed failures, and `unknown` buckets fail the smoke receipt.
+baseline --accept` update. The generated fixture baseline, real-upstream
+advisory compile baselines, and selected execute-base baseline are separate
+files. The smoke summary records the discovery, parse, and compile report paths
+plus per-mode totals and buckets. The gap map groups failures by bucket,
+workstream, impacted LSP surface, and first failure per bucket. Bucketed
+parse/compile failures are preserved as gap data; missing reports, unbucketed
+failures, and `unknown` buckets fail the smoke receipt.
 
 The current execute receipt commands are explicit and allowlisted:
 

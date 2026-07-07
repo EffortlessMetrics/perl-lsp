@@ -18,6 +18,12 @@ target/perl-core/reports/<profile>-parse.json
 target/perl-core/reports/<profile>-compile.json
 ```
 
+Selected execute-mode reports are written to:
+
+```text
+target/perl-core/reports/base-execute.json
+```
+
 The pinned advisory upstream smoke config is:
 
 ```text
@@ -64,6 +70,13 @@ Check the advisory real-upstream compile ratchets after smoke receipts exist:
 just perl-core-upstream-compile-ratchet
 ```
 
+Check the selected execute-base ratchet after the explicit execute receipt
+exists:
+
+```bash
+just perl-core-execute-base-ratchet
+```
+
 The scheduled/manual `Perl Core Harness` workflow prepares the pinned upstream
 tree, emits advisory `base`, `comp`, and `run` smoke receipts under
 `target/perl-core/smoke/<profile>/`, and checks the real-upstream compile
@@ -95,7 +108,18 @@ upstream-comp-compile-baseline.json
 upstream-run-compile-baseline.json
 ```
 
+The selected execute-base ratchet is:
+
+```text
+base-execute-baseline.json
+```
+
+It covers only the explicit selected `base/if.t` and `base/cond.t` execute
+receipt. It does not claim profile-wide execute, execute-base conformance, or a
+broad runtime model.
+
 Update any baseline explicitly with `perl-core-harness baseline --accept` after
 reviewing an intentional change. The real-tree smoke and ratchets are
-manual/advisory and produce receipts plus a gap map only; they do not run Perl
-programs, claim runtime conformance, or promote a PR gate.
+manual/advisory and produce receipts plus a gap map only; selected execute
+ratchets run only allowlisted Perl programs and still do not claim runtime
+conformance or promote a PR gate.

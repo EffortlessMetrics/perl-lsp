@@ -41,7 +41,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H13 | Real upstream compile ratchets | Green / advisory | #3426 | None | `base`/`comp`/`run` compile receipts are ratcheted separately from the generated fixture ratchet |
 | H14 | First bucket burn-down | Green / advisory | #3428, #3429, [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) | None | `base` `parse_recovery` reduced from 2 to 1 in the accepted compile ratchet; `base/term.t` advanced to `compile_effect` |
 | H15 | Execute-one | Green / advisory | #3432 | None | `base/if.t` executes real TAP through an explicit one-file run selector |
-| H16 | Execute-base | Yellow / advisory receipt | #3446; local receipt 2026-07-07 | Ratchet selected execute-base receipts | `base/if.t` and `base/cond.t` execute through explicit selectors with 6/6 TAP assertions and no runtime buckets |
+| H16 | Execute-base | Green / selected ratchet | #3446, #3448, #3450 | None | Selected `base/if.t` and `base/cond.t` execute receipt is ratcheted at 2/2 files and 6/6 TAP assertions |
 | H17 | Runtime model | Red / future | Not started | Burn down runtime buckets from H16 receipts | Runtime buckets are named and owned |
 | H18 | Compiler-backed LSP provider promotion | Red / future | Not started | Start after compiler facts are proven | Provider promotion plan is gated by receipts |
 
@@ -69,6 +69,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `.ci/perl-core-harness/upstream-comp-compile-baseline.json` | Ratchets 8/25 compile pass state; buckets: 7 `parse_recovery`, 10 `compile_effect` | Accepted from `target/perl-core/smoke/comp/compile.json`; separate from generated fixture baseline |
 | `.ci/perl-core-harness/upstream-run-compile-baseline.json` | Ratchets 1/28 compile pass state; buckets: 10 `parse_recovery`, 17 `compile_effect` | Accepted from `target/perl-core/smoke/run/compile.json`; separate from generated fixture baseline |
 | `target/perl-core/reports/base-execute.json` | 2/2 selected files passed, 6/6 TAP assertions, no runtime buckets | Local receipt generated 2026-07-07 from pinned upstream Perl artifact [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077); selected files: `base/cond.t` 4/4 and `base/if.t` 2/2 |
+| `.ci/perl-core-harness/base-execute-baseline.json` | Ratchets selected execute-base state: 2/2 files, 6/6 TAP assertions, no runtime buckets | Accepted from `target/perl-core/reports/base-execute.json`; selected execute only, separate from profile-wide parse/compile ratchets |
 
 ## Gap Buckets
 
@@ -106,7 +107,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 10. Execute-one for one tiny upstream `t/base/*.t`.
 11. Scaffold execute-base with explicit selected base tests and record the first advisory receipt.
 12. Ratchet selected execute-base receipts.
-13. Burn down the first receipt-backed runtime bucket.
+13. Publish the runtime bucket model and burn down the first receipt-backed runtime bucket.
 14. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
 
 ## PR Train
@@ -126,3 +127,4 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | 11 | `compiler(harness): execute one tiny Perl core base test` | `feat(perl-core-harness): execute one base test` | Execute `base/if.t` through explicit `--test base/if.t`, emit real TAP, and keep execute-base future |
 | 12 | `compiler(harness): add advisory execute-base receipt scaffold` | `feat(perl-core-harness): add execute-base receipt scaffold` | Execute an explicit selected `base` subset, preserve profile-wide fail-closed behavior, and seed runtime buckets |
 | 13 | `compiler(harness): record selected execute-base receipt` | `docs(perl-core-harness): record execute-base receipt` | Record the first selected execute-base receipt for real upstream `base/if.t` and `base/cond.t` |
+| 14 | `compiler(harness): ratchet selected execute-base receipts` | `feat(perl-core-harness): ratchet execute-base receipts` | Add the selected execute-base baseline and manual/advisory ratchet command |

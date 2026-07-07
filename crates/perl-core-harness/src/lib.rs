@@ -2474,6 +2474,48 @@ mod tests {
     }
 
     #[test]
+    fn selected_execute_base_report_passes_checked_in_baseline() -> TestResult {
+        let root = project_root()?;
+        let baseline = read_compile_baseline(
+            &root.join(".ci").join("perl-core-harness").join("base-execute-baseline.json"),
+        )?;
+        let report = sample_execute_report();
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert!(
+            comparison.is_clean(),
+            "checked-in execute baseline should match selected base report: {comparison:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn selected_execute_base_baseline_fails_on_assertion_regression() -> TestResult {
+        let baseline = baseline_from_report(&sample_execute_report())?;
+        let mut report = sample_execute_report();
+        let cond = report
+            .file_results
+            .iter_mut()
+            .find(|result| result.path == "base/cond.t")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing base/cond.t result"))?;
+        cond.assertions_passed = 3;
+        report.summary.tap_assertions_passed = 5;
+
+        let comparison = compare_baseline(&baseline, &report);
+
+        assert!(
+            comparison
+                .violations
+                .iter()
+                .any(|violation| violation.kind == BaselineViolationKind::AssertionRegression
+                    && violation.path.as_deref() == Some("base/cond.t")),
+            "expected selected execute assertion regression: {comparison:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn non_git_perl_tree_has_unknown_ref() -> TestResult {
         let dir = tempfile::tempdir()?;
 
@@ -2712,6 +2754,45 @@ mod tests {
         let mut report = sample_compile_report();
         report.mode = HarnessMode::Parse;
         report
+    }
+
+    fn sample_execute_report() -> RunReport {
+        RunReport {
+            schema_version: RUN_REPORT_SCHEMA_VERSION.into(),
+            commit: "abc".into(),
+            timestamp: "2026-07-02T00:00:00Z".into(),
+            perl_ref: "unknown".into(),
+            prepared_tree: "/tmp/perl".into(),
+            run_tree: "/tmp/run".into(),
+            host_perl: "perl".into(),
+            runner: HarnessRunner::Test,
+            mode: HarnessMode::Execute,
+            profile: HarnessProfile::Base,
+            harness_status: Some(1),
+            summary: RunSummary {
+                files_total: 2,
+                files_passed: 2,
+                files_failed: 0,
+                tap_assertions_total: 6,
+                tap_assertions_passed: 6,
+            },
+            buckets: BTreeMap::new(),
+            file_results: vec![
+                RunFileResult {
+                    path: "base/cond.t".into(),
+                    status: RunnerStatus::Pass,
+                    assertions_passed: 4,
+                    assertions_total: 4,
+                },
+                RunFileResult {
+                    path: "base/if.t".into(),
+                    status: RunnerStatus::Pass,
+                    assertions_passed: 2,
+                    assertions_total: 2,
+                },
+            ],
+            failures: Vec::new(),
+        }
     }
 
     fn sample_discovery_report() -> DiscoveryReport {

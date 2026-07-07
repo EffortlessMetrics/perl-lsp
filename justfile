@@ -2974,6 +2974,14 @@ perl-core-upstream-compile-ratchet:
           --baseline .ci/perl-core-harness/upstream-run-compile-baseline.json \
           --check
 
+perl-core-execute-base-ratchet:
+    cargo run -p xtask -- perl-core-harness baseline \
+          --mode execute \
+          --profile base \
+          --report target/perl-core/reports/base-execute.json \
+          --baseline .ci/perl-core-harness/base-execute-baseline.json \
+          --check
+
 # Bootstrap/update the committed CPAN corpus baseline
 cpan-corpus-baseline-update:
     cargo run -p xtask -- cpan-corpus sweep --output .ci/cpan-corpus-baseline.json

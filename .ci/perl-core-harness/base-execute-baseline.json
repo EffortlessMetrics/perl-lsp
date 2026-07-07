@@ -1,0 +1,27 @@
+{
+  "schema_version": "perl_core_harness.compile_baseline.v1",
+  "report_schema_version": "perl_core_harness.report.v1",
+  "mode": "execute",
+  "profile": "base",
+  "files_total": 2,
+  "files_passed": 2,
+  "files_failed": 0,
+  "tap_assertions_total": 6,
+  "tap_assertions_passed": 6,
+  "buckets": {},
+  "expected_failures": [],
+  "file_results": [
+    {
+      "path": "base/cond.t",
+      "status": "pass",
+      "assertions_passed": 4,
+      "assertions_total": 4
+    },
+    {
+      "path": "base/if.t",
+      "status": "pass",
+      "assertions_passed": 2,
+      "assertions_total": 2
+    }
+  ]
+}
