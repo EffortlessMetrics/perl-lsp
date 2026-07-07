@@ -71,12 +71,12 @@ $obj->
     harness.barrier();
 
     // Request completion at the end of "$obj->"
-    // Line 5 (0-indexed), character 7 (after "->")
+    // Line 5 (0-indexed), character 6 (after "->")
     let response = harness.request(
         "textDocument/completion",
         json!({
             "textDocument": { "uri": "file:///test.pl" },
-            "position": { "line": 5, "character": 7 }
+            "position": { "line": 5, "character": 6 }
         }),
     )?;
 
@@ -125,7 +125,7 @@ $obj->
         "textDocument/completion",
         json!({
             "textDocument": { "uri": "file:///test.pl" },
-            "position": { "line": 5, "character": 7 }
+            "position": { "line": 5, "character": 6 }
         }),
     )?;
 
@@ -136,7 +136,10 @@ $obj->
         destroy_item.get("documentation").ok_or("DESTROY completion item missing documentation")?;
 
     // Verify documentation describes the GC/last-reference-released hook.
-    let doc_str = doc.as_str().ok_or("Documentation should be a string")?;
+    let doc_str = doc
+        .get("value")
+        .and_then(Value::as_str)
+        .ok_or("Documentation should include markdown value")?;
 
     assert!(
         doc_str.contains("released") || doc_str.contains("garbage collected"),
@@ -173,7 +176,7 @@ $obj->
         "textDocument/completion",
         json!({
             "textDocument": { "uri": "file:///test.pl" },
-            "position": { "line": 5, "character": 7 }
+            "position": { "line": 5, "character": 6 }
         }),
     )?;
 
@@ -184,7 +187,10 @@ $obj->
         .get("documentation")
         .ok_or("AUTOLOAD completion item missing documentation")?;
 
-    let doc_str = doc.as_str().ok_or("Documentation should be a string")?;
+    let doc_str = doc
+        .get("value")
+        .and_then(Value::as_str)
+        .ok_or("Documentation should include markdown value")?;
 
     assert!(
         doc_str.contains("AUTOLOAD")
@@ -286,7 +292,7 @@ $obj->isa('MyPackage');
         "textDocument/definition",
         json!({
             "textDocument": { "uri": "file:///test.pl" },
-            "position": { "line": 14, "character": 10 }  // On "isa"
+            "position": { "line": 14, "character": 7 }  // On "isa"
         }),
     )?;
     let isa_locations = isa_response.as_array().ok_or("Expected array result for definition")?;
@@ -339,7 +345,7 @@ $obj->DESTROY;
         "textDocument/completion",
         json!({
             "textDocument": { "uri": "file:///test.pl" },
-            "position": { "line": 18, "character": 7 }  // After "$obj->"
+            "position": { "line": 19, "character": 6 }  // After "$obj->"
         }),
     )?;
 

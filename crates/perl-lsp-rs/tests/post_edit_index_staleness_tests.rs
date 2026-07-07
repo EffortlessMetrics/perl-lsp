@@ -40,6 +40,25 @@ sub caller {
 1;
 "#;
 
+const FRAMEWORK_URI: &str = "file:///workspace/lib/Edit/FrameworkStale.pm";
+
+const FRAMEWORK_BEFORE_EDIT: &str = r#"package Edit::Consumer;
+use Moo;
+with 'Edit::Target';
+
+package Edit::Target;
+use Moo::Role;
+
+1;
+"#;
+
+const FRAMEWORK_AFTER_EDIT: &str = r#"package Edit::Consumer;
+use Moo;
+with 'Edit::Target';
+
+1;
+"#;
+
 fn position_of(text: &str, needle: &str) -> TestResult<(u32, u32)> {
     for (line_idx, line) in text.lines().enumerate() {
         if let Some(character) = line.find(needle) {
@@ -83,6 +102,35 @@ fn definition_does_not_answer_from_stale_current_file_index() -> TestResult {
     assert!(
         !contains_location_start(result.as_ref(), old_target_line, old_target_character),
         "definition must not return the removed pre-edit target from a stale workspace index; got {result:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn quoted_framework_definition_does_not_answer_from_stale_current_file_index() -> TestResult {
+    let server = LspServer::new();
+
+    server.test_apply_did_open(FRAMEWORK_URI, FRAMEWORK_BEFORE_EDIT, 1)?;
+    server.test_replace_document_without_index(FRAMEWORK_URI, FRAMEWORK_AFTER_EDIT, 2)?;
+
+    let (line, character) = position_of(FRAMEWORK_AFTER_EDIT, "Edit::Target")?;
+    let (old_target_line, old_target_character) =
+        position_of(FRAMEWORK_BEFORE_EDIT, "package Edit::Target")?;
+    let result = server.test_handle_definition(Some(json!({
+        "textDocument": {
+            "uri": FRAMEWORK_URI,
+            "version": 2
+        },
+        "position": {
+            "line": line,
+            "character": character
+        }
+    })))?;
+
+    assert!(
+        !contains_location_start(result.as_ref(), old_target_line, old_target_character),
+        "quoted framework definition must not return the removed pre-edit package from a stale workspace index; got {result:?}"
     );
 
     Ok(())

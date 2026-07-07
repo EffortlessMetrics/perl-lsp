@@ -28,10 +28,12 @@ use perl_lsp::cancellation::{
     ProviderCleanupContext,
 };
 use perl_lsp_rs_core::protocol::JsonRpcId;
+use perl_lsp_rs_core::runtime::cancellation::GLOBAL_CANCELLATION_REGISTRY;
 
 /// Test fixture for cancellation scenarios
 struct CancellationTestFixture {
     server: LspServer,
+    registered_request_ids: Vec<JsonRpcId>,
 }
 
 impl CancellationTestFixture {
@@ -97,11 +99,16 @@ print "Results: $result, $other, $complex\n";
         };
         drain_until_quiet(&server, Duration::from_millis(200), indexing_timeout);
 
-        Self { server }
+        Self { server, registered_request_ids: Vec::new() }
     }
 
     fn setup_test_file(&mut self, uri: &str, content: &str) {
         setup_test_file(&self.server, uri, content);
+    }
+
+    fn track_request_id(&mut self, request_id: i64) -> i64 {
+        self.registered_request_ids.push(JsonRpcId::Integer(request_id));
+        request_id
     }
 }
 
@@ -1549,15 +1556,136 @@ impl Drop for CancellationTestFixture {
     fn drop(&mut self) {
         // Graceful cleanup
         shutdown_and_exit(&self.server);
+        for request_id in self.registered_request_ids.drain(..) {
+            GLOBAL_CANCELLATION_REGISTRY.remove_request(&request_id);
+        }
     }
 }
 
-// Test scaffolding is now established for AC1-AC5
-// All tests are designed to:
-// 1. Compile successfully (meeting TDD scaffolding requirements)
-// 2. Fail initially due to missing cancellation infrastructure implementation
-// 3. Provide clear patterns for enhanced cancellation feature development
-// 4. Include comprehensive error handling and edge case validation
-// 5. Integrate with existing LSP test infrastructure and patterns
+// ============================================================================
+// Type Hierarchy Cancellation Tests (Issue #1774)
+// ============================================================================
 
-// Next phase: Implement the missing cancellation infrastructure to make tests pass
+#[test]
+fn test_type_hierarchy_prepare_cancellation() -> Result<(), Box<dyn std::error::Error>> {
+    let mut fixture = CancellationTestFixture::new();
+
+    run_type_hierarchy_pre_cancel_test(
+        &mut fixture,
+        7010,
+        "textDocument/prepareTypeHierarchy",
+        json!({
+            "textDocument": { "uri": "file:///main.pl" },
+            "position": { "line": 0, "character": 5 }
+        }),
+    )
+}
+
+#[test]
+fn test_type_hierarchy_supertypes_cancellation() -> Result<(), Box<dyn std::error::Error>> {
+    let mut fixture = CancellationTestFixture::new();
+
+    run_type_hierarchy_pre_cancel_test(
+        &mut fixture,
+        7012,
+        "typeHierarchy/supertypes",
+        json!({
+            "item": type_hierarchy_test_item()
+        }),
+    )
+}
+
+#[test]
+fn test_type_hierarchy_subtypes_cancellation() -> Result<(), Box<dyn std::error::Error>> {
+    let mut fixture = CancellationTestFixture::new();
+
+    run_type_hierarchy_pre_cancel_test(
+        &mut fixture,
+        7014,
+        "typeHierarchy/subtypes",
+        json!({
+            "item": type_hierarchy_test_item()
+        }),
+    )
+}
+
+fn type_hierarchy_test_item() -> Value {
+    json!({
+        "name": "TestModule",
+        "kind": 5,
+        "uri": "file:///lib/TestModule.pm",
+        "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 5, "character": 0 }
+        },
+        "selectionRange": {
+            "start": { "line": 0, "character": 8 },
+            "end": { "line": 0, "character": 18 }
+        },
+        "data": {
+            "uri": "file:///lib/TestModule.pm",
+            "name": "TestModule"
+        }
+    })
+}
+
+fn run_type_hierarchy_pre_cancel_test(
+    fixture: &mut CancellationTestFixture,
+    request_id: i64,
+    method: &str,
+    params: Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let request_id = fixture.track_request_id(request_id);
+    send_notification(
+        &fixture.server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": { "id": request_id }
+        }),
+    );
+
+    send_request_no_wait(
+        &fixture.server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": method,
+            "params": params
+        }),
+    );
+
+    let response = read_response_matching_i64(&fixture.server, request_id, Duration::from_secs(1))
+        .ok_or_else(|| std::io::Error::other(format!("{method} must respond to a cancelled id")))?;
+    validate_request_cancelled(&response, method)?;
+    if !fixture.server.is_alive() {
+        return Err(std::io::Error::other(
+            "server must remain alive after type hierarchy cancellation",
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn validate_request_cancelled(
+    response: &Value,
+    operation: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let error = response
+        .get("error")
+        .ok_or_else(|| std::io::Error::other(format!("{operation} should be cancelled")))?;
+    let code = error.get("code").and_then(Value::as_i64);
+    if code != Some(-32800) {
+        return Err(std::io::Error::other(format!(
+            "{operation} cancellation should return RequestCancelled code"
+        ))
+        .into());
+    }
+    if error.get("message").and_then(Value::as_str).is_none() {
+        return Err(std::io::Error::other(format!(
+            "{operation} cancellation should include error message"
+        ))
+        .into());
+    }
+    Ok(())
+}

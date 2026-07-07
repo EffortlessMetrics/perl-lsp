@@ -1779,6 +1779,68 @@ builder {
     Ok(())
 }
 
+#[test]
+fn plack_builder_middleware_enable_ignores_misplaced_index_package() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/Plack/Middleware/Static.pm",
+        r#"package Plack::Middleware::Static;
+
+1;
+"#,
+    )?;
+    workspace.write(
+        "lib/Other/Static.pm",
+        r#"package Plack::Middleware::Static;
+
+1;
+"#,
+    )?;
+    workspace.write(
+        "app.psgi",
+        r#"use Plack::Builder;
+
+builder {
+    enable 'Static';
+};
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let misplaced_uri = workspace.uri("lib/Other/Static.pm");
+    let misplaced_content =
+        std::fs::read_to_string(workspace.dir.path().join("lib/Other/Static.pm"))?;
+    harness.open(&misplaced_uri, &misplaced_content)?;
+
+    let app_uri = workspace.uri("app.psgi");
+    let app_content = std::fs::read_to_string(workspace.dir.path().join("app.psgi"))?;
+    harness.open(&app_uri, &app_content)?;
+
+    harness.barrier();
+
+    let static_uri = workspace.uri("lib/Plack/Middleware/Static.pm");
+    let (static_line, static_character) = find_pos(&app_content, "Static", 3)?;
+    let static_def = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": app_uri},
+            "position": {"line": static_line, "character": static_character}
+        }),
+    )?;
+    let static_location = first_location(&static_def)?;
+    assert_valid_location(static_location);
+    assert_eq!(
+        static_location["uri"].as_str(),
+        Some(static_uri.as_str()),
+        "Plack middleware navigation must prefer the canonical module path over a misplaced indexed package"
+    );
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Tests 7+: Moose/Moo role composition goto-definition (Issue #2325)
 // ---------------------------------------------------------------------------

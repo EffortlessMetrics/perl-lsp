@@ -9,6 +9,7 @@ use crate::protocol::{req_position, req_uri};
 use crate::util::{read_text_file_with_encoding, token_under_cursor};
 use perl_parser_core::source_file::is_binary_content;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::OnceLock;
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_lsp_rs_core::providers::navigation::definition_shadow::{
@@ -21,8 +22,6 @@ use perl_workspace::semantic::queries::QueryContext;
 use crate::runtime::readiness::IndexReadinessPolicy;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
-#[cfg(feature = "workspace")]
-use std::sync::OnceLock;
 
 mod core_modules;
 #[cfg(feature = "workspace")]
@@ -54,6 +53,8 @@ static GOTO_LABEL_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::n
 
 #[cfg(feature = "workspace")]
 static LABEL_DECLARATION_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+static QUOTED_FRAMEWORK_MODULE_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 fn lsp_location_count(value: Option<&Value>) -> usize {
     match value {
@@ -344,6 +345,92 @@ fn get_label_declaration_regex() -> Result<&'static regex::Regex, JsonRpcError> 
         })
 }
 
+fn get_quoted_framework_module_regex() -> Result<&'static regex::Regex, JsonRpcError> {
+    QUOTED_FRAMEWORK_MODULE_RE
+        .get_or_init(|| {
+            regex::Regex::new(
+                r#"\b(with|extends|enable)\s+(?:'([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)'|"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")"#,
+            )
+        })
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize framework module regex: {err}"
+            ))
+        })
+}
+
+fn quoted_framework_module_at_cursor(
+    text: &str,
+    cursor: usize,
+) -> Result<Option<FrameworkModuleReference>, JsonRpcError> {
+    for cap in get_quoted_framework_module_regex()?.captures_iter(text) {
+        let Some(keyword) = cap.get(1) else {
+            continue;
+        };
+        let Some(module_match) = cap.get(2).or_else(|| cap.get(3)) else {
+            continue;
+        };
+        if cursor < module_match.start() || cursor > module_match.end() {
+            continue;
+        }
+
+        return Ok(Some(normalize_framework_module_reference(
+            keyword.as_str(),
+            module_match.as_str(),
+        )));
+    }
+
+    Ok(None)
+}
+
+fn normalize_framework_module_reference(
+    keyword: &str,
+    module_name: &str,
+) -> FrameworkModuleReference {
+    let module_name = if keyword == "enable" && !module_name.contains("::") {
+        format!("Plack::Middleware::{module_name}")
+    } else {
+        module_name.to_string()
+    };
+    let kind = if keyword == "enable" && module_name.starts_with("Plack::Middleware::") {
+        FrameworkModuleKind::PlackMiddleware
+    } else {
+        FrameworkModuleKind::Package
+    };
+
+    FrameworkModuleReference { module_name, kind }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FrameworkModuleKind {
+    Package,
+    PlackMiddleware,
+}
+
+#[derive(Debug, Clone)]
+struct FrameworkModuleReference {
+    module_name: String,
+    kind: FrameworkModuleKind,
+}
+
+#[cfg(feature = "workspace")]
+impl FrameworkModuleReference {
+    fn definition_location(
+        &self,
+        workspace_index: &crate::workspace_index::WorkspaceIndex,
+    ) -> Option<crate::workspace_index::Location> {
+        match self.kind {
+            FrameworkModuleKind::Package => {
+                find_package_definition_location(workspace_index, &self.module_name)
+            }
+            FrameworkModuleKind::PlackMiddleware => {
+                find_plack_middleware_definition_location(workspace_index, &self.module_name)
+            }
+        }
+    }
+}
+
 #[cfg(feature = "workspace")]
 fn find_label_declaration_span(
     text: &str,
@@ -365,6 +452,9 @@ enum EarlyDefinitionTarget {
     /// Cursor is on a bare `Package->method` reference.
     /// @INC filtering does not apply — workspace-index method lookup is correct.
     Module(String),
+    /// Cursor is on a quoted framework package reference, such as Moo/Moose
+    /// `with`/`extends` or Plack Builder `enable`.
+    FrameworkModule(FrameworkModuleReference),
     XsBootstrap(String),
 }
 
@@ -435,6 +525,22 @@ fn find_plack_middleware_definition_location(
     }
 
     None
+}
+
+#[cfg(feature = "workspace")]
+fn find_package_definition_location(
+    workspace_index: &crate::workspace_index::WorkspaceIndex,
+    module_name: &str,
+) -> Option<crate::workspace_index::Location> {
+    workspace_index
+        .all_symbols()
+        .into_iter()
+        .find(|symbol| {
+            symbol.kind == crate::workspace_index::SymbolKind::Package
+                && (symbol.name == module_name
+                    || symbol.qualified_name.as_deref() == Some(module_name))
+        })
+        .map(|symbol| crate::workspace_index::Location { uri: symbol.uri, range: symbol.range })
 }
 
 #[cfg(feature = "workspace")]
@@ -928,6 +1034,14 @@ impl LspServer {
                             doc.text.clone(),
                             offset,
                         ))
+                    } else if let Some(module_name) =
+                        quoted_framework_module_at_cursor(&text_around, cursor_in_text)?
+                    {
+                        Some((
+                            EarlyDefinitionTarget::FrameworkModule(module_name),
+                            doc.text.clone(),
+                            offset,
+                        ))
                     } else {
                         // Also check if we're on a package name followed by ->
                         let mut package_name_result = None;
@@ -1022,6 +1136,39 @@ impl LspServer {
                     EarlyDefinitionTarget::Module(module_name) => {
                         if let Some(module_path) = self.resolve_module_to_path_with_doc_at_offset(
                             &module_name,
+                            Some(&doc_text),
+                            Some(uri),
+                            Some(doc_offset),
+                        ) {
+                            return Ok(Some(json!([{
+                                "uri": module_path,
+                                "range": {
+                                    "start": {
+                                        "line": 0,
+                                        "character": 0,
+                                    },
+                                    "end": {
+                                        "line": 0,
+                                        "character": 0,
+                                    },
+                                },
+                            }])));
+                        }
+                    }
+                    EarlyDefinitionTarget::FrameworkModule(module_ref) => {
+                        #[cfg(feature = "workspace")]
+                        if !workspace_index_stale_for_document
+                            && let Some(coordinator) = self.coordinator()
+                            && let Some(def_location) =
+                                module_ref.definition_location(coordinator.index())
+                            && let Some(lsp_location) =
+                                crate::workspace_index::lsp_adapter::to_lsp_location(&def_location)
+                        {
+                            return Ok(Some(json!([lsp_location])));
+                        }
+
+                        if let Some(module_path) = self.resolve_module_to_path_with_doc_at_offset(
+                            &module_ref.module_name,
                             Some(&doc_text),
                             Some(uri),
                             Some(doc_offset),
