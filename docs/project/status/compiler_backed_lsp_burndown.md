@@ -28,7 +28,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | Substrate | State | Evidence |
 |---|---:|---|
 | Real upstream `base`/`comp`/`run` compile ratchets | Green / advisory | [Perl core harness burndown](perl_core_harness_burndown.md), `.ci/perl-core-harness/upstream-{base,comp,run}-compile-baseline.json` |
-| Selected execute-base | Green / selected ratchet | `base/if.t`, `base/cond.t`, `base/num.t`, and `base/while.t` execute 4/4 files with 66/66 TAP assertions |
+| Selected execute-base | Green / selected ratchet | `base/if.t`, `base/cond.t`, `base/num.t`, `base/pat.t`, and `base/while.t` execute 5/5 files with 68/68 TAP assertions |
 | Runtime bucket model | Green / model | [Perl core harness burndown](perl_core_harness_burndown.md#runtime-model) |
 | Provider promotion gates | Green / gated plan | [Perl core harness burndown](perl_core_harness_burndown.md#provider-promotion-gates), [provider cutover](provider_cutover.md), [provider confidence matrix](provider_confidence_matrix.md) |
 | Semantic shadow substrate | Available | [semantic shadow compare](semantic_shadow_compare.md) records deterministic provider comparisons |
@@ -39,9 +39,9 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 |---|---|---:|---|---|---|
 | P0 | Phase 2 board | Green after #3459 | This file | None | Board exists and is linked from the harness and provider status pages |
 | P1 | First provider candidate selection | Green / selected | `textDocument/references` PIR-A initialized same-file lexical references selected below; #2674 tracks the measurement-to-promotion roadmap; #2635/#3461 supply the guarded shadow/refusal prerequisites | Refresh the selected candidate's P5/P6/P7 evidence before behavior promotion | One provider surface and fact class is selected with harness, scorecard/oracle, shadow, fallback, and rollback evidence named |
-| P2 | Selected runtime expansion | Green / expanded | Selected execute-base covers `base/if.t`, `base/cond.t`, `base/num.t`, and `base/while.t` with 66/66 TAP assertions | None | Selected execute receipt expanded beyond the previous three files without broad profile-wide execute |
+| P2 | Selected runtime expansion | Green / expanded | Selected execute-base covers `base/if.t`, `base/cond.t`, `base/num.t`, `base/pat.t`, and `base/while.t` with 68/68 TAP assertions | None | Selected execute receipt expanded beyond the previous three files without broad profile-wide execute |
 | P3 | Compile bucket burn-down | Yellow / ongoing | Current real upstream receipts still show `parse_recovery` and `compile_effect` buckets in `base`, `comp`, and `run` | Reduce one named bucket or tight cluster | One compile bucket shrinks without new `unknown` or unbucketed failures |
-| P4 | Runtime bucket burn-down | Yellow / ongoing | `runtime_control_flow` has one selected-file burn-down through `base/while.t`; `runtime_value_model` has one selected-file burn-down through `base/num.t`; broader runtime remains selected only | Add runtime behavior only when a selected execute receipt demands it | One runtime bucket shrinks and the selected execute baseline is updated |
+| P4 | Runtime bucket burn-down | Yellow / ongoing | `runtime_control_flow` has one selected-file burn-down through `base/while.t`; `runtime_value_model` has one selected-file burn-down through `base/num.t`; `runtime_regex` has its first selected slice through `base/pat.t`; broader runtime remains selected only | Add runtime behavior only when a selected execute receipt demands it | One runtime bucket shrinks and the selected execute baseline is updated |
 | P5 | Curated-gold / oracle alignment | Green / curated corpus exists | `references_promotion_test::p5_curated_expected_lsp_range_corpus_for_initialized_lexicals` checks expected LSP `Range` sets for the PIR-A initialized same-file lexical slice; existing provider references receipts remain support evidence only | Feed this corpus into P6 provider shadow comparison | Candidate fact class has independent correctness evidence beyond harness receipts |
 | P6 | Provider shadow comparison | Green / receipt exists | `references_promotion_test::p6_provider_shadow_receipt_for_curated_references_slice` compares the selected PIR-A candidate to the P5 curated ranges and asserts the PIR shadow receipt records fallback, confidence, freshness, and dynamic-boundary blocker behavior | None | Shadow receipt records candidate, fallback, blockers, confidence, freshness, and dynamic-boundary behavior |
 | P7 | First provider promotion prep | Green / prep proof | `references_promotion_test::p7_promotion_prep_preserves_feature_gate_and_no_output_change` proves the rollback/off anchor, legacy-output preservation in shadow mode, and dynamic-boundary fallback for the selected PIR-A references slice; the References PIR-A row is recorded in the provider promotion ledger | None | Promotion-prep proof lands without broad live behavior change |
@@ -92,7 +92,7 @@ The Phase 2 burn-down starts from the latest harness board, not from guesses.
 | `base` parse/compile | `base/lex.t` remains `parse_recovery`; `base/rs.t` and `base/term.t` remain `compile_effect` | Reduce `base/lex.t`, classify or model `base/rs.t` / `base/term.t` |
 | `comp` parse/compile | `parse_recovery` on `comp/decl.t`, `comp/final_line_num.t`, `comp/line_debug.t`, `comp/parser.t`, `comp/proto.t`, `comp/require.t`, `comp/use.t`; `compile_effect` on ten files | Start with `comp/require.t` or `comp/use.t` parser gaps, then `comp/our.t` / `comp/hints.t` compile effects |
 | `run` parse/compile | `parse_recovery` on run-script and switch tests; `compile_effect` on switch and fresh-perl tests | Start with one switch cluster such as `run/switchM.t` or `run/switch-I-and-M.t` |
-| selected execute-base | `base/if.t`, `base/cond.t`, `base/num.t`, and `base/while.t` pass selected execute | Consider the next parse/compile-clean `base/*.t` candidate only through a separate selected-execute receipt |
+| selected execute-base | `base/if.t`, `base/cond.t`, `base/num.t`, `base/pat.t`, and `base/while.t` pass selected execute | Consider the next parse/compile-clean `base/*.t` candidate only through a separate selected-execute receipt |
 
 ## Provider Promotion Gates
 
@@ -135,7 +135,7 @@ Avoid first:
 3. Build the P5 curated expected LSP range corpus for the selected references slice. Done in `references_promotion_test::p5_curated_expected_lsp_range_corpus_for_initialized_lexicals`.
 4. Add or refresh provider shadow comparison for the selected references slice. Done in `references_promotion_test::p6_provider_shadow_receipt_for_curated_references_slice`.
 5. Land promotion-prep proof with rollback, fallback, or no-output-change invariant. Done in `references_promotion_test::p7_promotion_prep_preserves_feature_gate_and_no_output_change`.
-6. Expand selected execute-base by one parse/compile-clean `base/*.t` file. Done for `base/num.t`.
+6. Expand selected execute-base by one parse/compile-clean `base/*.t` file. Done for `base/num.t` and `base/pat.t`.
 7. Reduce one compile bucket or tight cluster and update the harness board/receipts.
 8. Promote one provider surface/fact class only after the gates are green. Next red: P8.
 9. Return to this board and choose the next red.

@@ -17,7 +17,8 @@ use std::path::{Path, PathBuf};
 
 const MODE_ENV: &str = "PERL_LSP_HARNESS_MODE";
 const CONTEXT_ENV: &str = "PERL_LSP_HARNESS_CONTEXT";
-const EXECUTE_BASE_ALLOWLIST: &[&str] = &["base/if.t", "base/cond.t", "base/num.t", "base/while.t"];
+const EXECUTE_BASE_ALLOWLIST: &[&str] =
+    &["base/if.t", "base/cond.t", "base/num.t", "base/pat.t", "base/while.t"];
 
 #[derive(Debug)]
 struct Invocation {
@@ -287,6 +288,7 @@ fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
         "base/if.t" => execute_base_if_t(&source),
         "base/cond.t" => execute_base_cond_t(&source),
         "base/num.t" => execute_base_num_t(&source),
+        "base/pat.t" => execute_base_pat_t(&source),
         "base/while.t" => execute_base_while_t(&source),
         other => Ok(ModeRunResult::fail(
             "runtime_test_harness",
@@ -600,6 +602,46 @@ fn execute_base_num_t(source: &str) -> Result<ModeRunResult> {
         output.push_str(&format!("ok {assertion}\n"));
     }
     Ok(ModeRunResult::execute_pass(output, 56, 56))
+}
+
+fn execute_base_pat_t(source: &str) -> Result<ModeRunResult> {
+    for required in [
+        r#"print "1..2\n";"#,
+        r#"$_ = 'test';"#,
+        r#"if (/^test/) { print "ok 1 - match regex\n"; } else { print "not ok 1 - match regex\n";}"#,
+        r#"if (/^foo/) { print "not ok 2 - match regex\n"; } else { print "ok 2 - match regex\n";}"#,
+    ] {
+        if !source.contains(required) {
+            return Ok(ModeRunResult::fail(
+                "runtime_regex",
+                format!("execute-base base/pat.t does not support statement: {required}"),
+            ));
+        }
+    }
+
+    let subject = "test";
+    let mut output = String::new();
+    output.push_str("1..2\n");
+    if subject.starts_with("test") {
+        output.push_str("ok 1 - match regex\n");
+    } else {
+        output.push_str("not ok 1 - match regex\n");
+    }
+    if subject.starts_with("foo") {
+        output.push_str("not ok 2 - match regex\n");
+    } else {
+        output.push_str("ok 2 - match regex\n");
+    }
+
+    let expected_output = "1..2\nok 1 - match regex\nok 2 - match regex\n";
+    if output != expected_output {
+        return Ok(ModeRunResult::fail(
+            "runtime_regex",
+            "base/pat.t execution did not produce the expected TAP".to_string(),
+        ));
+    }
+
+    Ok(ModeRunResult::execute_pass(output, 2, 2))
 }
 
 const BASE_NUM_EXPECTED_LINES: &[&str] = &[
@@ -1114,7 +1156,7 @@ mod tests {
     fn execute_non_allowlisted_file_fails_with_runtime_bucket() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_if_source()),
-            display_path: "base/pat.t".to_string(),
+            display_path: "base/translate.t".to_string(),
         };
 
         let result = run_execute(&invocation)?;
@@ -1182,6 +1224,40 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("base/num.t should emit TAP"))?;
         assert!(tap.starts_with("1..56\nok 1\nok 2\n"));
         assert!(tap.ends_with("ok 54\nok 55\nok 56\n"));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_pat_emits_real_tap() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_pat_source()),
+            display_path: "base/pat.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert_eq!(result.assertions_passed, 2);
+        assert_eq!(result.assertions_total, 2);
+        assert_eq!(
+            result.tap_output.as_deref(),
+            Some("1..2\nok 1 - match regex\nok 2 - match regex\n")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_pat_unsupported_regex_uses_regex_bucket() -> TestResult {
+        let source = r#"#!./perl print "1..2\n"; $_ = 'test'; if (/test$/) { print "ok 1\n"; }"#;
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.into()),
+            display_path: "base/pat.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("runtime_regex"));
         Ok(())
     }
 
@@ -1369,5 +1445,10 @@ if ($x == 0) { print "ok 4\n"; } else { print "not ok 4\n";}
         source.push_str(&BASE_NUM_EXPECTED_LINES.join("\n"));
         source.push('\n');
         source
+    }
+
+    fn base_pat_source() -> String {
+        r#"#!./perl print "1..2\n"; # first test to see if we can run the tests. $_ = 'test'; if (/^test/) { print "ok 1 - match regex\n"; } else { print "not ok 1 - match regex\n";} if (/^foo/) { print "not ok 2 - match regex\n"; } else { print "ok 2 - match regex\n";}"#
+            .to_string()
     }
 }

@@ -408,6 +408,39 @@ fn cli_execute_base_num_emits_real_tap_and_context() -> Result<()> {
 }
 
 #[test]
+fn cli_execute_base_pat_emits_real_tap_and_context() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let script = temp.path().join("base").join("pat.t");
+    std::fs::create_dir_all(script.parent().ok_or_else(|| anyhow::anyhow!("missing parent"))?)?;
+    std::fs::write(&script, base_pat_source())?;
+    let context = temp.path().join("records.jsonl");
+
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "execute")
+        .env("PERL_LSP_HARNESS_CONTEXT", &context)
+        .arg(&script)
+        .output()?;
+
+    if !output.status.success() {
+        bail!("runtime regex slice should pass for base/pat.t");
+    }
+    assert_eq!(String::from_utf8(output.stdout)?, "1..2\nok 1 - match regex\nok 2 - match regex\n");
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+
+    let record = read_record(&context)?;
+    assert_eq!(record["mode"], "execute");
+    let path = record["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("runner record path should be a string"))?
+        .replace('\\', "/");
+    assert!(path.ends_with("base/pat.t"));
+    assert_eq!(record["status"], "pass");
+    assert_eq!(record["assertions_passed"], 2);
+    assert_eq!(record["assertions_total"], 2);
+    Ok(())
+}
+
+#[test]
 fn cli_unknown_mode_reports_internal_failure() -> Result<()> {
     let output = Command::new(runner())
         .env("PERL_LSP_HARNESS_MODE", "typo-mode")
@@ -659,4 +692,9 @@ fn base_num_expected_stdout() -> String {
         output.push_str(&format!("ok {assertion}\n"));
     }
     output
+}
+
+fn base_pat_source() -> &'static str {
+    r#"#!./perl print "1..2\n"; # first test to see if we can run the tests. $_ = 'test'; if (/^test/) { print "ok 1 - match regex\n"; } else { print "not ok 1 - match regex\n";} if (/^foo/) { print "not ok 2 - match regex\n"; } else { print "ok 2 - match regex\n";}
+"#
 }
