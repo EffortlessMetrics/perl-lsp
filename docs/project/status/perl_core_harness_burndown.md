@@ -42,7 +42,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H14 | First bucket burn-down | Green / advisory | #3428, #3429, [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) | None | `base` `parse_recovery` reduced from 2 to 1 in the accepted compile ratchet; `base/term.t` advanced to `compile_effect` |
 | H15 | Execute-one | Green / advisory | #3432 | None | `base/if.t` executes real TAP through an explicit one-file run selector |
 | H16 | Execute-base | Green / selected ratchet | #3446, #3448, #3450 | None | Selected `base/if.t` and `base/cond.t` execute receipt is ratcheted at 2/2 files and 6/6 TAP assertions |
-| H17 | Runtime model | Red / future | Not started | Burn down runtime buckets from H16 receipts | Runtime buckets are named and owned |
+| H17 | Runtime model | Green / model | #3452 | Burn down first receipt-backed runtime bucket | Runtime buckets are named, mapped to workstreams, and tied to selected execute-base entry rules |
 | H18 | Compiler-backed LSP provider promotion | Red / future | Not started | Start after compiler facts are proven | Provider promotion plan is gated by receipts |
 
 ## Latest Receipt Slots
@@ -93,6 +93,39 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `harness_prepare` | Perl tree or harness preparation failure | `harness_integration` | `compiler_conformance` |
 | `unknown` | Unclassified failure | `compiler_conformance` | `compiler_conformance`; must be fixed before ratchet |
 
+## Runtime Model
+
+The runtime lane is selected and receipt-driven. It starts from allowlisted
+`base/*.t` files that already pass parse and compile receipts, then widens only
+when a selected execute receipt proves the next runtime bucket is classified.
+Profile-wide execute remains fail-closed.
+
+| Runtime bucket | Workstream owner | First use | Candidate files |
+|---|---|---|---|
+| `runtime_value_model` | scalar/string/number values, truthiness, comparisons, assignment, expression results | value or comparison mismatch after parse/compile-clean input reaches execute mode | `base/if.t`, `base/cond.t`, `base/num.t` |
+| `runtime_control_flow` | statement sequencing, conditional predicates, loop control, short-circuiting, exit status | selected file reaches execute mode but branches, loops, or statement order diverge | `base/while.t`, `base/cond.t` |
+| `runtime_io` | TAP-safe stdout/stderr, `print`, filehandles, filesystem, layers, environment-sensitive IO | selected file needs emitted TAP, diagnostic text, file IO, or process IO beyond the current runner path | next parse/compile-clean file requiring `print` or file IO |
+| `runtime_regex` | match, substitution, transliteration-adjacent runtime behavior | selected file reaches a regex operator that cannot be evaluated correctly | `base/pat.t` after simpler value/control files |
+| `runtime_require_use` | `require`, `use`, `@INC`, `%INC`, `$^X` re-entry | runtime module loading or interpreter re-entry blocks a selected file | defer until `comp`/`run` execute planning |
+| `runtime_test_harness` | execute selector, allowlist, TAP harness, runner invocation | the runner cannot invoke, record, or classify a selected execute file | any selected execute receipt missing runner records |
+| `unknown` | receipt integrity failure | any unclassified runtime failure | must be classified before ratchet or semantic burn-down |
+
+Runtime burn-down PRs must reduce one named bucket or one tight cluster, rerun
+the selected execute receipt, update this board or generated report output, and
+avoid provider behavior. Compile precondition reds still stay separate:
+`base/lex.t` remains `parse_recovery`, while `base/rs.t` and `base/term.t`
+remain `compile_effect` until compiler receipts say otherwise.
+
+Current selected execute-base status:
+
+| File | Parse/compile precondition | Execute receipt | Runtime bucket |
+|---|---|---|---|
+| `base/if.t` | clean | 2/2 TAP assertions pass | none |
+| `base/cond.t` | clean | 4/4 TAP assertions pass | none |
+| `base/num.t` | verify against current receipts before selecting | not selected | next candidate |
+| `base/while.t` | verify against current receipts before selecting | not selected | next candidate |
+| `base/pat.t` | verify before selecting; may pull regex forward | not selected | defer behind simpler value/control files |
+
 ## Burndown Order
 
 1. Publish this board. Active issue: #3376.
@@ -107,8 +140,9 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 10. Execute-one for one tiny upstream `t/base/*.t`.
 11. Scaffold execute-base with explicit selected base tests and record the first advisory receipt.
 12. Ratchet selected execute-base receipts.
-13. Publish the runtime bucket model and burn down the first receipt-backed runtime bucket.
-14. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
+13. Publish the runtime bucket model.
+14. Burn down the first receipt-backed runtime bucket.
+15. Promote compiler-backed provider facts only after receipt-backed compiler facts are proven.
 
 ## PR Train
 
@@ -128,3 +162,4 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | 12 | `compiler(harness): add advisory execute-base receipt scaffold` | `feat(perl-core-harness): add execute-base receipt scaffold` | Execute an explicit selected `base` subset, preserve profile-wide fail-closed behavior, and seed runtime buckets |
 | 13 | `compiler(harness): record selected execute-base receipt` | `docs(perl-core-harness): record execute-base receipt` | Record the first selected execute-base receipt for real upstream `base/if.t` and `base/cond.t` |
 | 14 | `compiler(harness): ratchet selected execute-base receipts` | `feat(perl-core-harness): ratchet execute-base receipts` | Add the selected execute-base baseline and manual/advisory ratchet command |
+| 15 | `compiler(runtime): publish execute-base runtime bucket model` | `docs(runtime): publish execute-base runtime bucket model` | Name runtime buckets, workstreams, selected-file entry rules, and next candidate files |
