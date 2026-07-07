@@ -41,7 +41,7 @@ use perl_lsp_rs_core::providers::navigation::{
 use perl_parser_core::{Parser, hir::lower_ast, pir::extract_lexical_facts};
 use perl_position_tracking::PositionMapper;
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 /// Identity URI mapper: converts byte offsets to a trivial single-line `lsp_types::Range`.
 ///
@@ -173,16 +173,10 @@ fn assert_curated_ranges(
 ) -> TestResult {
     let actual_ranges = sorted_ranges(actual);
     let expected_ranges = sorted_ranges(expected);
-    let missing_ranges: Vec<_> = expected_ranges
-        .iter()
-        .filter(|range| !actual_ranges.contains(range))
-        .copied()
-        .collect();
-    let extra_ranges: Vec<_> = actual_ranges
-        .iter()
-        .filter(|range| !expected_ranges.contains(range))
-        .copied()
-        .collect();
+    let missing_ranges: Vec<_> =
+        expected_ranges.iter().filter(|range| !actual_ranges.contains(range)).copied().collect();
+    let extra_ranges: Vec<_> =
+        actual_ranges.iter().filter(|range| !expected_ranges.contains(range)).copied().collect();
 
     if missing_ranges.is_empty() && extra_ranges.is_empty() {
         return Ok(());
@@ -263,8 +257,7 @@ fn p5_curated_expected_lsp_range_corpus_for_initialized_lexicals() -> TestResult
     }
 
     // Same bare lexical name in separate sub bodies: query each body separately.
-    let separate_subs =
-        "sub first { my $v = 1; print $v; }\nsub second { my $v = 2; print $v; }\n";
+    let separate_subs = "sub first { my $v = 1; print $v; }\nsub second { my $v = 2; print $v; }\n";
     let separate_receipt = receipt_for(separate_subs);
     let separate_mapper = PositionMapper::new(separate_subs);
     let first_body = body_idx_for_occurrence(&separate_receipt, separate_subs, "$v", 0)?;
@@ -279,14 +272,8 @@ fn p5_curated_expected_lsp_range_corpus_for_initialized_lexicals() -> TestResult
     ];
     let first_actual =
         exact_ranges_for("p5_same_name_first_sub", separate_subs, "$", "v", first_body, true)?;
-    let second_actual = exact_ranges_for(
-        "p5_same_name_second_sub",
-        separate_subs,
-        "$",
-        "v",
-        second_body,
-        true,
-    )?;
+    let second_actual =
+        exact_ranges_for("p5_same_name_second_sub", separate_subs, "$", "v", second_body, true)?;
     assert_curated_ranges("p5_same_name_first_sub", first_actual, first_expected)?;
     assert_curated_ranges("p5_same_name_second_sub", second_actual, second_expected)?;
 

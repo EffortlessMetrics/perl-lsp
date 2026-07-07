@@ -1605,14 +1605,12 @@ Not found in workspace or configured include paths.
             return None;
         }
 
-        // Find the sigil: either at offset or one position before
-        let sigil_pos = if matches!(bytes[offset], b'$' | b'@' | b'%') {
-            Some(offset)
-        } else if offset > 0 && matches!(bytes[offset - 1], b'$' | b'@' | b'%') {
-            Some(offset - 1)
-        } else {
-            None
-        };
+        // Find the sigil at the cursor, under the cursor, or immediately before
+        // the token boundary after two-byte punctuation variables such as `@+;`.
+        let sigil_pos = [Some(offset), offset.checked_sub(1), offset.checked_sub(2)]
+            .into_iter()
+            .flatten()
+            .find(|pos| *pos < len && matches!(bytes[*pos], b'$' | b'@' | b'%'));
         let sigil_pos = sigil_pos?;
         let sigil = bytes[sigil_pos] as char;
         let next_pos = sigil_pos + 1;
@@ -1647,6 +1645,14 @@ Not found in workspace or configured include paths.
             ) {
                 return Some(format!("${}", punct));
             }
+        }
+
+        if sigil == '@' && matches!(next_ch, b'+' | b'-') {
+            return Some(format!("@{}", next_ch as char));
+        }
+
+        if sigil == '%' && next_ch == b'!' {
+            return Some("%!".to_string());
         }
 
         None
