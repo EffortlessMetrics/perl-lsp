@@ -31,6 +31,16 @@ use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 static QUALIFIED_NAME_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
+/// Rollback anchor for the first Phase 2 references provider promotion.
+///
+/// When enabled, only same-file lexical variable requests that explicitly set
+/// `includeDeclaration=false` may enter the live semantic source-backed tier.
+/// Declaration-including variable requests and all unsupported shapes keep the
+/// existing fallback cascade. Flip to `false` to restore the pre-P8 routing
+/// boundary without changing the fallback tiers.
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+const ENABLE_PIR_A_LEXICAL_REFERENCES_LIVE: bool = true;
+
 fn lsp_location_count(value: Option<&Value>) -> usize {
     match value {
         Some(Value::Array(items)) => items.len(),
@@ -154,6 +164,27 @@ pub(crate) fn classify_combined_tier(
         (true, false) => ReferencesAnsweringTier::WorkspaceExact,
         _ => ReferencesAnsweringTier::WorkspaceText,
     }
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn may_use_source_backed_references(symbol_is_variable: bool, include_declaration: bool) -> bool {
+    !symbol_is_variable || (ENABLE_PIR_A_LEXICAL_REFERENCES_LIVE && !include_declaration)
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn line_has_initialized_lexical_declaration(line: &str, sigil: char, name: &str) -> bool {
+    let my_pattern = format!("my {sigil}{name}");
+    let state_pattern = format!("state {sigil}{name}");
+    for pattern in [my_pattern, state_pattern] {
+        let Some(start) = line.find(&pattern) else {
+            continue;
+        };
+        let tail = &line[start + pattern.len()..];
+        if tail.contains('=') {
+            return true;
+        }
+    }
+    false
 }
 
 fn get_qualified_name_regex() -> Option<&'static regex::Regex> {
@@ -439,25 +470,26 @@ impl LspServer {
                             IndexAccessMode::Full(coordinator) => {
                                 let index = coordinator.index();
                                 if let Some(symbol_key) = workspace_symbol_key.as_ref() {
-                                    // Guard: for sigil-prefixed symbols (lexical variables) with
-                                    // include_declaration=true, skip the semantic tier.  Variable
-                                    // references are not "compiler-source-backed" in the sense
-                                    // required by the SemanticSourceBacked tier; they belong in
-                                    // the workspace-index tier regardless of include_declaration.
-                                    //
-                                    // Subroutine references (no sigil) may use the semantic tier
-                                    // with include_declaration=true — that is exactly the #2673
-                                    // fix: VS Code defaults to includeDeclaration=true and we now
-                                    // serve those requests from the high-fidelity source-backed
-                                    // path instead of falling back to the workspace-index tier.
+                                    // Guard: sigil-prefixed lexical variables may use the semantic
+                                    // source-backed tier only for the Phase 2 P8 slice:
+                                    // includeDeclaration=false and the rollback gate enabled.
+                                    // Declaration-including lexical requests remain on the
+                                    // existing fallback cascade. Subroutine references (no sigil)
+                                    // may use the semantic tier with includeDeclaration=true —
+                                    // that is the #2673 fix for VS Code's default request shape.
                                     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
                                     let symbol_is_variable = symbol_key.sigil.is_some();
                                     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-                                    if !symbol_is_variable {
+                                    if may_use_source_backed_references(
+                                        symbol_is_variable,
+                                        include_declaration,
+                                    ) {
                                         if let Some(mut live_locations) = self
                                             .live_source_backed_reference_locations(
                                                 uri,
                                                 symbol_key.name.as_ref(),
+                                                doc.text.as_str(),
+                                                symbol_key.sigil,
                                                 offset,
                                                 include_declaration,
                                             )
@@ -981,14 +1013,17 @@ impl LspServer {
         &self,
         uri: &str,
         symbol: &str,
+        source: &str,
+        sigil: Option<char>,
         byte_offset: usize,
         include_declaration: bool,
     ) -> Option<Vec<Value>> {
         let byte_offset = u32::try_from(byte_offset).ok()?;
         let workspace_index = self.workspace_index()?;
 
-        // Resolve the semantic outcome plus, when the caller wants the
-        // declaration included, the anchor that points at the definition site.
+        // Resolve the semantic outcome plus the declaration anchor when either
+        // the caller wants it included or the P8 lexical slice needs to prove
+        // this entity is an initialized lexical declaration.
         let (outcome, decl_anchor) = workspace_index
             .with_semantic_queries_for_uri(uri, |file_id, queries| {
                 let ctx = QueryContext::new(file_id, None, Some(byte_offset));
@@ -1023,11 +1058,11 @@ impl LspServer {
                         },
                     )?;
 
-                // Find the declaration anchor for this entity, used when
-                // `include_declaration` is true.  We accept the anchor from
-                // `symbol_at` if the occurrence is a definition kind, or look
-                // up a high-confidence definition candidate otherwise.
-                let decl_anchor: Option<AnchorId> = if include_declaration {
+                // Find the declaration anchor for this entity.  We accept the
+                // anchor from `symbol_at` if the occurrence is a definition
+                // kind, or look up a high-confidence definition candidate
+                // otherwise.
+                let decl_anchor: Option<AnchorId> = if include_declaration || sigil.is_some() {
                     use perl_semantic_facts::OccurrenceKind;
                     let from_symbol_at = symbol_at
                         .as_ref()
@@ -1064,6 +1099,16 @@ impl LspServer {
         let ReferencesCutoverResult::Exact(occurrences) = outcome.result else {
             return None;
         };
+
+        if let Some(sigil) = sigil {
+            let decl_anchor = decl_anchor?;
+            let wire_location = workspace_index.semantic_anchor_wire_location(decl_anchor)?;
+            let decl_line = usize::try_from(wire_location.range.start.line).ok()?;
+            let line = source.lines().nth(decl_line)?;
+            if !line_has_initialized_lexical_declaration(line, sigil, symbol) {
+                return None;
+            }
+        }
 
         let mut locations = Vec::with_capacity(occurrences.len() + 1);
         for occurrence in occurrences {
@@ -1401,6 +1446,42 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    #[test]
+    fn source_backed_references_gate_only_opens_declaration_excluding_variables()
+    -> Result<(), Box<dyn Error>> {
+        assert!(
+            may_use_source_backed_references(false, true),
+            "subroutine references keep the existing includeDeclaration=true source-backed path"
+        );
+        assert!(
+            may_use_source_backed_references(true, false),
+            "P8 lexical references promotion is limited to includeDeclaration=false"
+        );
+        assert!(
+            !may_use_source_backed_references(true, true),
+            "declaration-including lexical references must keep the fallback cascade"
+        );
+        Ok(())
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    #[test]
+    fn initialized_lexical_gate_requires_assignment_on_declaration_line()
+    -> Result<(), Box<dyn Error>> {
+        assert!(line_has_initialized_lexical_declaration("my $value = 1;", '$', "value"));
+        assert!(line_has_initialized_lexical_declaration("state $value = 1;", '$', "value"));
+        assert!(
+            !line_has_initialized_lexical_declaration("my $value;", '$', "value"),
+            "bare lexical declarations stay outside the selected P8 slice"
+        );
+        assert!(
+            !line_has_initialized_lexical_declaration("my $other = $value;", '$', "value"),
+            "RHS usages do not make the target variable's declaration initialized"
+        );
+        Ok(())
+    }
+
     #[test]
     fn should_skip_text_reference_match_omits_variable_declarations_when_requested()
     -> Result<(), Box<dyn Error>> {
@@ -1613,6 +1694,131 @@ mod tests {
             receipt.get("latency_us").and_then(serde_json::Value::as_u64).is_some(),
             "latency_us field must be present and numeric"
         );
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn handle_references_lexical_variable_without_declaration_uses_source_backed_tier()
+    -> Result<(), Box<dyn Error>> {
+        use crate::runtime::LspServer;
+        use parking_lot::Mutex;
+        use std::io::Cursor;
+        use std::sync::Arc;
+
+        let output = Arc::new(Mutex::new(
+            Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>
+        ));
+        let server = LspServer::with_output(output);
+
+        let uri = "file:///test/scalar-no-decl.pl";
+        let text = "my $value = 1;\nmy $other = $value;\n";
+        server.test_apply_did_open(uri, text, 1)?;
+
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 1, "character": 12},
+            "context": {"includeDeclaration": false}
+        });
+        let result = server.test_handle_references(Some(params))?;
+
+        let explanation = server
+            .handle_execute_command(Some(serde_json::json!({
+                "command": "perl.explainProviderDecision",
+                "arguments": [{"provider": "references"}]
+            })))?
+            .ok_or("missing explain-provider-decision response")?;
+        let receipt = explanation
+            .get("request_receipt")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("missing request_receipt")?;
+
+        assert_eq!(
+            receipt.get("answering_tier").and_then(serde_json::Value::as_str),
+            Some("semantic_source_backed"),
+            "includeDeclaration=false lexical references must use the P8 source-backed tier"
+        );
+        assert_eq!(
+            receipt.get("source_backed").and_then(serde_json::Value::as_bool),
+            Some(true),
+            "P8 lexical references result must be recorded as source-backed"
+        );
+        assert_eq!(
+            receipt.get("include_declaration").and_then(serde_json::Value::as_bool),
+            Some(false),
+            "provider trace must record includeDeclaration=false"
+        );
+
+        let locations = result
+            .as_ref()
+            .and_then(serde_json::Value::as_array)
+            .ok_or("textDocument/references must return an array")?;
+        if locations.is_empty() {
+            return Err("P8 lexical references cutover must return at least one usage".into());
+        }
+        for location in locations {
+            let line = location
+                .pointer("/range/start/line")
+                .and_then(serde_json::Value::as_u64)
+                .ok_or("missing location start line")?;
+            if line == 0 {
+                return Err(format!(
+                    "includeDeclaration=false must not return declaration location: {locations:?}"
+                )
+                .into());
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn handle_references_bare_lexical_without_initializer_keeps_fallback_tier()
+    -> Result<(), Box<dyn Error>> {
+        use crate::runtime::LspServer;
+        use parking_lot::Mutex;
+        use std::io::Cursor;
+        use std::sync::Arc;
+
+        let output = Arc::new(Mutex::new(
+            Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>
+        ));
+        let server = LspServer::with_output(output);
+
+        let uri = "file:///test/scalar-bare-decl.pl";
+        let text = "my $value;\n$value = 1;\n";
+        server.test_apply_did_open(uri, text, 1)?;
+
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 1, "character": 1},
+            "context": {"includeDeclaration": false}
+        });
+        server.test_handle_references(Some(params))?;
+
+        let explanation = server
+            .handle_execute_command(Some(serde_json::json!({
+                "command": "perl.explainProviderDecision",
+                "arguments": [{"provider": "references"}]
+            })))?
+            .ok_or("missing explain-provider-decision response")?;
+        let receipt = explanation
+            .get("request_receipt")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("missing request_receipt")?;
+
+        assert_ne!(
+            receipt.get("answering_tier").and_then(serde_json::Value::as_str),
+            Some("semantic_source_backed"),
+            "bare lexical declarations are not in the selected initialized P8 slice"
+        );
+        assert_eq!(
+            receipt.get("source_backed").and_then(serde_json::Value::as_bool),
+            Some(false),
+            "bare lexical fallback must not be recorded as source-backed"
+        );
+
         Ok(())
     }
 

@@ -11,7 +11,7 @@ schema_version = 1
 policy = "provider-promotion-ledger"
 owner = "perl-lsp maintainers"
 status = "advisory"
-updated = "2026-05-22"
+updated = "2026-07-07"
 spec = "docs/specs/PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md"
 human_ledger = "docs/project/status/provider_promotion_ledger.md"
 
@@ -77,18 +77,17 @@ required_receipts = [
 [[provider_class]]
 surface = "References"
 fact_class = "PIR-A initialized same-file lexical reference"
-current_state = "promotion-prep gated shadow"
-decision = "defer"
-next_proof = "P8 gated live flip after maintainer sign-off and project-shaped risky-shape receipts"
+current_state = "narrow live gated"
+decision = "promote"
+next_proof = "Keep risky-shape receipts fresh before broadening beyond the selected lexical slice"
 promotion_conditions = [
   "fresh_high_confidence_source_backed_pir_a_same_file_initialized_lexical_reference",
   "include_declaration_false",
   "exact_p5_p6_p7_proof",
-  "default_rollback_gate_preserved",
+  "runtime_rollback_gate_preserved",
 ]
 fallback_conditions = [
-  "feature_gate_off",
-  "shadow_only",
+  "rollback_gate_off",
   "proof_incomplete",
   "request_shape_outside_selected_slice",
 ]
@@ -107,6 +106,7 @@ blocker_conditions = [
 ]
 required_receipts = [
   "crates/perl-lsp-rs-core/tests/references_promotion_test.rs",
+  "crates/perl-lsp-rs/src/runtime/language/references.rs",
   "docs/project/status/compiler_backed_lsp_burndown.md",
   "docs/project/status/provider_confidence_matrix.md",
 ]

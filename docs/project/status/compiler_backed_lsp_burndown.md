@@ -45,7 +45,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | P5 | Curated-gold / oracle alignment | Green / curated corpus exists | `references_promotion_test::p5_curated_expected_lsp_range_corpus_for_initialized_lexicals` checks expected LSP `Range` sets for the PIR-A initialized same-file lexical slice; existing provider references receipts remain support evidence only | Feed this corpus into P6 provider shadow comparison | Candidate fact class has independent correctness evidence beyond harness receipts |
 | P6 | Provider shadow comparison | Green / receipt exists | `references_promotion_test::p6_provider_shadow_receipt_for_curated_references_slice` compares the selected PIR-A candidate to the P5 curated ranges and asserts the PIR shadow receipt records fallback, confidence, freshness, and dynamic-boundary blocker behavior | None | Shadow receipt records candidate, fallback, blockers, confidence, freshness, and dynamic-boundary behavior |
 | P7 | First provider promotion prep | Green / prep proof | `references_promotion_test::p7_promotion_prep_preserves_feature_gate_and_no_output_change` proves the rollback/off anchor, legacy-output preservation in shadow mode, and dynamic-boundary fallback for the selected PIR-A references slice; the References PIR-A row is recorded in the provider promotion ledger | None | Promotion-prep proof lands without broad live behavior change |
-| P8 | First gated provider promotion | Red / future | P1, P5, P6, and P7 are green for the selected PIR-A references fact class; no Phase 2 provider promotion is selected yet | Promote only in a separate cutover PR after rechecking all gates | One provider surface/fact class changes live behavior with rollback/fallback proof |
+| P8 | First gated provider promotion | Green / bounded live | `textDocument/references` now allows the selected lexical slice to reach the semantic source-backed tier when `includeDeclaration=false`; `handle_references_lexical_variable_without_declaration_uses_source_backed_tier` proves the live receipt, `handle_references_workspace_variable_answering_tier_in_trace` proves declaration-including lexical fallback, and `p7_promotion_prep_preserves_feature_gate_and_no_output_change` preserves the rollback/off proof | Return to P3/P4 bucket burn-down before any broader provider promotion | One provider surface/fact class changes live behavior with rollback/fallback proof |
 
 ## Selected Provider Candidate
 
@@ -61,7 +61,7 @@ P1 selects one candidate only. This is not a live-behavior promotion.
 | Why first | References already have a partial live/ranked-shadowed source-backed tier; the selected slice is same-file and lexical; #2674 preserves the corrected measurement-first roadmap without reviving the dark wrapper path |
 | Harness evidence | Real upstream `base`/`comp`/`run` parse/compile receipts and ratchets are green advisory substrate for source/compiler fact work; selected execute-base is not required for this static reference slice |
 | Provider evidence already present | [provider cutover](provider_cutover.md#cutover-matrix) and [provider confidence matrix](provider_confidence_matrix.md#matrix) record references as partial-live exact/imported with legacy fallback and dynamic/stale blockers; this is support evidence, not PIR-A lexical promotion proof |
-| Still required before promotion | A separate P8 cutover PR that rechecks P1/P5/P6/P7, keeps rollback/fallback explicit, and proves any live behavior change |
+| Current live boundary | The P8 cutover is live only for fresh, source-backed, high-confidence same-file lexical variable references when `includeDeclaration=false`; declaration-including and unsupported shapes keep fallback behavior |
 | Explicit non-goals | No generated/no-source, coderef, typeglob, declaration-including, stale, ambiguous, dynamic-boundary, module/import, workspace-wide, rename, or runtime-derived references |
 
 ## Selected Correctness Evidence Source
@@ -137,7 +137,7 @@ Avoid first:
 5. Land promotion-prep proof with rollback, fallback, or no-output-change invariant. Done in `references_promotion_test::p7_promotion_prep_preserves_feature_gate_and_no_output_change`.
 6. Expand selected execute-base by one parse/compile-clean `base/*.t` file. Done for `base/num.t` and `base/pat.t`.
 7. Reduce one compile bucket or tight cluster and update the harness board/receipts.
-8. Promote one provider surface/fact class only after the gates are green. Next red: P8.
+8. Promote one provider surface/fact class only after the gates are green. Done for the bounded `textDocument/references` lexical slice.
 9. Return to this board and choose the next red.
 
 ## PR Rules
