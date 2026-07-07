@@ -38,7 +38,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | ID | Work item | State | Current evidence | Next action | Stop condition |
 |---|---|---:|---|---|---|
 | P0 | Phase 2 board | Green after #3459 | This file | None | Board exists and is linked from the harness and provider status pages |
-| P1 | First provider candidate selection | Red | Provider gates are published, but no Phase 2 candidate row has been selected here | Open one provider-specific selection issue/PR | One provider surface and fact class is selected with harness, scorecard/oracle, shadow, fallback, and rollback evidence named |
+| P1 | First provider candidate selection | Green / selected | `textDocument/references` PIR-A initialized same-file lexical references selected below; #2674 tracks the measurement-to-promotion roadmap; #2635/#3461 supply the guarded shadow/refusal prerequisites | Refresh the selected candidate's P5/P6/P7 evidence before behavior promotion | One provider surface and fact class is selected with harness, scorecard/oracle, shadow, fallback, and rollback evidence named |
 | P2 | Selected runtime expansion | Red | Selected execute-base covers `base/if.t`, `base/cond.t`, and `base/while.t` | Verify current parse/compile receipts, then add one clean `base/*.t` candidate such as `base/num.t` if still clean | Selected execute receipt expands beyond the current three files or records a deliberate deferral |
 | P3 | Compile bucket burn-down | Yellow / ongoing | Current real upstream receipts still show `parse_recovery` and `compile_effect` buckets in `base`, `comp`, and `run` | Reduce one named bucket or tight cluster | One compile bucket shrinks without new `unknown` or unbucketed failures |
 | P4 | Runtime bucket burn-down | Yellow / ongoing | `runtime_control_flow` has one selected-file burn-down through `base/while.t`; broader runtime remains selected only | Add runtime behavior only when a selected execute receipt demands it | One runtime bucket shrinks and the selected execute baseline is updated |
@@ -46,6 +46,23 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | P6 | Provider shadow comparison | Red | Shadow substrate exists, but no Phase 2 candidate has a board row here | Add or refresh shadow comparison for the selected provider/fact class | Shadow receipt records candidate, fallback, blockers, confidence, freshness, and dynamic-boundary behavior |
 | P7 | First provider promotion prep | Red | Provider gates exist; no Phase 2 promotion-prep PR is recorded here | Prepare rollback/feature-gate/no-output-change proof for the selected candidate | Promotion-prep proof lands without broad live behavior change |
 | P8 | First gated provider promotion | Red / future | No Phase 2 provider promotion is selected yet | Promote only after P1, P5, P6, and P7 are green for one fact class | One provider surface/fact class changes live behavior with rollback/fallback proof |
+
+## Selected Provider Candidate
+
+P1 selects one candidate only. This is not a live-behavior promotion.
+
+| Field | Selection |
+|---|---|
+| Provider surface | `textDocument/references` |
+| Fact class | PIR-A initialized same-file lexical references |
+| Roadmap issue | [#2674](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/2674) |
+| Prerequisite context | [#2635](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/2635) guarded shadow/promotion history; [#3461](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/3461) dynamic-boundary refusal prerequisite |
+| Claim boundary | Prepare promotion evidence only for fresh, source-backed, high-confidence, same-file initialized lexical variable references when declaration inclusion is off and the request has no stale, ambiguous, generated/no-source, coderef, typeglob, declaration-including, or dynamic-boundary shape |
+| Why first | References already have a partial live/ranked-shadowed source-backed tier; the selected slice is same-file and lexical; #2674 preserves the corrected measurement-first roadmap without reviving the dark wrapper path |
+| Harness evidence | Real upstream `base`/`comp`/`run` parse/compile receipts and ratchets are green advisory substrate for source/compiler fact work; selected execute-base is not required for this static reference slice |
+| Provider evidence already present | [provider cutover](provider_cutover.md#cutover-matrix) and [provider confidence matrix](provider_confidence_matrix.md#matrix) record references as partial-live exact/imported with legacy fallback and dynamic/stale blockers; this is support evidence, not PIR-A lexical promotion proof |
+| Still required before promotion | P5 semantic scorecard/curated/oracle evidence for this exact slice; P6 shadow receipt with candidate/fallback/blocker/freshness/dynamic-boundary behavior; P7 rollback or feature-gate proof |
+| Explicit non-goals | No generated/no-source, coderef, typeglob, declaration-including, stale, ambiguous, dynamic-boundary, module/import, workspace-wide, rename, or runtime-derived references |
 
 ## Current Gap Inputs
 
@@ -95,13 +112,14 @@ Avoid first:
 ## Burndown Order
 
 1. Publish this Phase 2 board and link it from the harness and provider status pages. Active issue: #3459.
-2. Select the first provider/fact-class candidate with explicit gates and no behavior change.
-3. Expand selected execute-base by one parse/compile-clean `base/*.t` file, or record a deliberate deferral.
-4. Reduce one compile bucket or tight cluster and update the harness board/receipts.
-5. Add or refresh provider shadow comparison for the selected candidate.
-6. Land promotion-prep proof with rollback, fallback, or no-output-change invariant.
-7. Promote one provider surface/fact class only after the gates are green.
-8. Return to this board and choose the next red.
+2. Select the first provider/fact-class candidate with explicit gates and no behavior change. Done for `textDocument/references` PIR-A initialized same-file lexical references.
+3. Refresh P5 semantic scorecard/curated/oracle evidence for the selected references slice.
+4. Add or refresh provider shadow comparison for the selected references slice.
+5. Land promotion-prep proof with rollback, fallback, or no-output-change invariant.
+6. Expand selected execute-base by one parse/compile-clean `base/*.t` file, or record a deliberate deferral.
+7. Reduce one compile bucket or tight cluster and update the harness board/receipts.
+8. Promote one provider surface/fact class only after the gates are green.
+9. Return to this board and choose the next red.
 
 ## PR Rules
 
@@ -111,4 +129,3 @@ Avoid first:
 - Do not mix provider promotion with runtime expansion.
 - Do not mix parser/compiler bucket burn-down with provider behavior.
 - Do not turn the advisory Perl core harness workflow into a required PR gate.
-
