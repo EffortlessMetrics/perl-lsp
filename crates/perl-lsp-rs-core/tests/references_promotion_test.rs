@@ -27,6 +27,7 @@
 //! | F10 | scope_shadow_exact_range_set | outer `$x` + inner `my $x`: find-refs on outer returns only outer ranges, as exact set |
 //! | F11 | include_declaration_note | promotion returns all occurrences incl. declaration when opts.include_declaration=true |
 //! | F12 | cross_file_fallback | package-qualified target → LegacyFallback, not Exact |
+//! | F13 | dynamic_boundary_fallback | dynamic PIR boundary → LegacyFallback(DynamicBoundary), not Exact |
 //!
 //! Note: latency is tracked via benchmarks/receipts, not wall-clock unit tests.
 
@@ -679,6 +680,57 @@ fn f12_cross_file_package_qualified_returns_legacy_fallback() -> TestResult {
             return Err(format!(
                 "F12: package-qualified name must NOT produce Exact result;\
                  \ngot Exact({r:?}) — the guard failed to refuse"
+            )
+            .into());
+        }
+    }
+
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F13: Dynamic PIR boundaries refuse exact promotion
+//
+// Dynamic constructs such as string eval mean the lexical-only PIR slice cannot
+// safely claim exactness. The receipt should preserve that source fact, and the
+// promotion contract should return the legacy result with a visible
+// DynamicBoundary reason instead of silently returning Exact.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn f13_dynamic_boundary_returns_explicit_fallback() -> TestResult {
+    let source = "my $x = 1;\nmy $code = 'print $x';\neval $code;\nprint $x;\n";
+    let receipt = receipt_for(source);
+
+    assert_eq!(
+        receipt.dynamic_boundary_count, 1,
+        "receipt must expose the compiler-observed eval boundary"
+    );
+
+    let legacy = vec![(3usize, 5usize), (26usize, 28usize), (51usize, 53usize)];
+    let outcome = references_pir_promote(
+        PromotionMode::PromoteExact,
+        "$",
+        "x",
+        &receipt,
+        &legacy,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+
+    match outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, legacy, "legacy result must be returned unmodified");
+            assert_eq!(
+                reason,
+                PirShadowRefusalReason::DynamicBoundary,
+                "dynamic source facts must refuse exact promotion"
+            );
+        }
+        ReferencesPirPromoteOutcome::Exact(ranges) => {
+            return Err(format!(
+                "F13: dynamic boundary must NOT produce Exact result; got Exact({ranges:?})"
             )
             .into());
         }
