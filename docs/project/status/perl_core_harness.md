@@ -6,6 +6,8 @@ exists.
 
 For the current green/yellow/red burndown and next PR order, see the
 [Perl Core Harness Burndown](perl_core_harness_burndown.md).
+For the post-harness runtime and provider-promotion phase, see the
+[Compiler-Backed LSP Burndown](compiler_backed_lsp_burndown.md).
 
 ## Current Capability
 

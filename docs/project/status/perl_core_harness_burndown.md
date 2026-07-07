@@ -12,6 +12,12 @@ scaffolded as an explicit selected-subset runtime receipt for allowlisted
 It does not claim broad runtime conformance. Profile-wide execute remains
 fail-closed until the runtime gap map proves it can be widened safely.
 
+The next phase is tracked in the
+[compiler-backed LSP burndown](compiler_backed_lsp_burndown.md), which starts
+after this board's harness rows are green and governs selected runtime
+expansion, compiler/runtime bucket burn-down, provider candidate selection,
+shadow comparison, and gated provider promotion.
+
 ## Required PR Proof
 
 Normal PRs are governed by:
