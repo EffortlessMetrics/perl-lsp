@@ -42,7 +42,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | P2 | Selected runtime expansion | Red | Selected execute-base covers `base/if.t`, `base/cond.t`, and `base/while.t` | Verify current parse/compile receipts, then add one clean `base/*.t` candidate such as `base/num.t` if still clean | Selected execute receipt expands beyond the current three files or records a deliberate deferral |
 | P3 | Compile bucket burn-down | Yellow / ongoing | Current real upstream receipts still show `parse_recovery` and `compile_effect` buckets in `base`, `comp`, and `run` | Reduce one named bucket or tight cluster | One compile bucket shrinks without new `unknown` or unbucketed failures |
 | P4 | Runtime bucket burn-down | Yellow / ongoing | `runtime_control_flow` has one selected-file burn-down through `base/while.t`; broader runtime remains selected only | Add runtime behavior only when a selected execute receipt demands it | One runtime bucket shrinks and the selected execute baseline is updated |
-| P5 | Curated-gold / oracle alignment | Red | Provider gates require semantic scorecard, curated-gold, or oracle proof before cutover | Pick the evidence source required by P1's chosen fact class | Candidate fact class has independent correctness evidence beyond harness receipts |
+| P5 | Curated-gold / oracle alignment | Yellow / evidence source selected | Selected below: curated expected LSP reference ranges for the PIR-A initialized same-file lexical slice, cross-checked by provider shadow comparison; existing provider references receipts are support evidence only | Build the curated expected-range corpus for #2674 without comparing against legacy equality | Candidate fact class has independent correctness evidence beyond harness receipts |
 | P6 | Provider shadow comparison | Red | Shadow substrate exists, but no Phase 2 candidate has a board row here | Add or refresh shadow comparison for the selected provider/fact class | Shadow receipt records candidate, fallback, blockers, confidence, freshness, and dynamic-boundary behavior |
 | P7 | First provider promotion prep | Red | Provider gates exist; no Phase 2 promotion-prep PR is recorded here | Prepare rollback/feature-gate/no-output-change proof for the selected candidate | Promotion-prep proof lands without broad live behavior change |
 | P8 | First gated provider promotion | Red / future | No Phase 2 provider promotion is selected yet | Promote only after P1, P5, P6, and P7 are green for one fact class | One provider surface/fact class changes live behavior with rollback/fallback proof |
@@ -63,6 +63,22 @@ P1 selects one candidate only. This is not a live-behavior promotion.
 | Provider evidence already present | [provider cutover](provider_cutover.md#cutover-matrix) and [provider confidence matrix](provider_confidence_matrix.md#matrix) record references as partial-live exact/imported with legacy fallback and dynamic/stale blockers; this is support evidence, not PIR-A lexical promotion proof |
 | Still required before promotion | P5 semantic scorecard/curated/oracle evidence for this exact slice; P6 shadow receipt with candidate/fallback/blocker/freshness/dynamic-boundary behavior; P7 rollback or feature-gate proof |
 | Explicit non-goals | No generated/no-source, coderef, typeglob, declaration-including, stale, ambiguous, dynamic-boundary, module/import, workspace-wide, rename, or runtime-derived references |
+
+## Selected Correctness Evidence Source
+
+P5 selects the independent correctness evidence source for the references
+candidate. It does not claim the evidence corpus exists yet.
+
+| Field | Selection |
+|---|---|
+| Evidence source | Curated expected LSP `Range` sets for PIR-A initialized same-file lexical references |
+| Execution issue | [#2674](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/2674) |
+| Why this source | #2674's corrected roadmap calls for a curated correctness corpus with expected ranges, not equality against legacy references behavior |
+| Required fixture shape | Same-file lexical references with initialized declarations, reads, writes, CRLF, Unicode, and UTF-16 range conversion coverage |
+| Required negative shape | Bare declarations until separately proven, generated/no-source candidates, coderef/typeglob/dynamic-boundary candidates, stale facts, ambiguous facts, and declaration-including requests |
+| Shadow relationship | P6 must compare the selected PIR-A candidate against these expected ranges and record candidate/fallback/blocker/freshness/dynamic-boundary behavior |
+| Existing support evidence | Provider cutover and confidence matrix references rows, semantic-shadow `FindReferences`, Mojolicious navigation quality receipt, #2635 guarded history, and #3461 dynamic-boundary refusal |
+| Not enough by itself | Legacy equality, broad existing references pass/fail, or harness parse/compile receipts alone cannot authorize promotion |
 
 ## Current Gap Inputs
 
@@ -113,7 +129,7 @@ Avoid first:
 
 1. Publish this Phase 2 board and link it from the harness and provider status pages. Active issue: #3459.
 2. Select the first provider/fact-class candidate with explicit gates and no behavior change. Done for `textDocument/references` PIR-A initialized same-file lexical references.
-3. Refresh P5 semantic scorecard/curated/oracle evidence for the selected references slice.
+3. Build the P5 curated expected LSP range corpus for the selected references slice.
 4. Add or refresh provider shadow comparison for the selected references slice.
 5. Land promotion-prep proof with rollback, fallback, or no-output-change invariant.
 6. Expand selected execute-base by one parse/compile-clean `base/*.t` file, or record a deliberate deferral.
