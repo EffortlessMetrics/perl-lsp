@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 
 const MODE_ENV: &str = "PERL_LSP_HARNESS_MODE";
 const CONTEXT_ENV: &str = "PERL_LSP_HARNESS_CONTEXT";
+const EXECUTE_BASE_ALLOWLIST: &[&str] = &["base/if.t", "base/cond.t"];
 
 #[derive(Debug)]
 struct Invocation {
@@ -266,12 +267,15 @@ fn run_compile(invocation: &Invocation) -> Result<ModeRunResult> {
 
 fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
     let display_path = normalize_display_path(&invocation.display_path);
-    if display_path != "base/if.t" && !display_path.ends_with("/base/if.t") {
+    let Some(selected_test) = selected_execute_test(&display_path) else {
         return Ok(ModeRunResult::fail(
-            "runtime_value_model",
-            format!("execute-one only supports base/if.t, got {display_path}"),
+            "runtime_test_harness",
+            format!(
+                "execute-base scaffold supports only selected base tests {}, got {display_path}",
+                EXECUTE_BASE_ALLOWLIST.join(", ")
+            ),
         ));
-    }
+    };
 
     let compile_result = run_compile(invocation)?;
     if compile_result.status == RunnerStatus::Fail {
@@ -279,11 +283,27 @@ fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
     }
 
     let source = read_source(invocation)?;
-    execute_base_if_t(&source)
+    match selected_test {
+        "base/if.t" => execute_base_if_t(&source),
+        "base/cond.t" => execute_base_cond_t(&source),
+        other => Ok(ModeRunResult::fail(
+            "runtime_test_harness",
+            format!("execute-base scaffold has no executor for {other}"),
+        )),
+    }
 }
 
 fn normalize_display_path(path: &str) -> String {
     path.replace('\\', "/").trim_start_matches("./").to_string()
+}
+
+fn selected_execute_test(display_path: &str) -> Option<&'static str> {
+    EXECUTE_BASE_ALLOWLIST.iter().copied().find(|allowed| {
+        if display_path == *allowed {
+            return true;
+        }
+        display_path.strip_suffix(*allowed).is_some_and(|prefix| prefix.ends_with('/'))
+    })
 }
 
 fn execute_base_if_t(source: &str) -> Result<ModeRunResult> {
@@ -344,12 +364,148 @@ fn execute_base_if_t(source: &str) -> Result<ModeRunResult> {
     Ok(ModeRunResult::execute_pass(output, 2, 2))
 }
 
+fn execute_base_cond_t(source: &str) -> Result<ModeRunResult> {
+    let mut output = String::new();
+    let mut x = None::<String>;
+
+    for line in executable_lines(source) {
+        match line {
+            r#"print "1..4\n";"# => output.push_str("1..4\n"),
+            r#"$x = '0';"# => x = Some("0".to_string()),
+            r#"$x eq $x && (print "ok 1 - operator eq\n");"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/cond.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if perl_string_eq(value, value) {
+                    output.push_str("ok 1 - operator eq\n");
+                }
+            }
+            r#"$x ne $x && (print "not ok 1 - operator ne\n");"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/cond.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if perl_string_ne(value, value) {
+                    output.push_str("not ok 1 - operator ne\n");
+                }
+            }
+            r#"$x eq $x || (print "not ok 2 - operator eq\n");"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/cond.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if !perl_string_eq(value, value) {
+                    output.push_str("not ok 2 - operator eq\n");
+                }
+            }
+            r#"$x ne $x || (print "ok 2 - operator ne\n");"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/cond.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if !perl_string_ne(value, value) {
+                    output.push_str("ok 2 - operator ne\n");
+                }
+            }
+            r#"$x == $x && (print "ok 3 - operator ==\n");"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/cond.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if perl_numeric_eq(value, value)? {
+                    output.push_str("ok 3 - operator ==\n");
+                }
+            }
+            r#"$x != $x && (print "not ok 3 - operator !=\n");"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/cond.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if perl_numeric_ne(value, value)? {
+                    output.push_str("not ok 3 - operator !=\n");
+                }
+            }
+            r#"$x == $x || (print "not ok 4 - operator ==\n");"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/cond.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if !perl_numeric_eq(value, value)? {
+                    output.push_str("not ok 4 - operator ==\n");
+                }
+            }
+            r#"$x != $x || (print "ok 4 - operator !=\n");"# => {
+                let Some(value) = x.as_deref() else {
+                    return Ok(ModeRunResult::fail(
+                        "runtime_value_model",
+                        "base/cond.t referenced $x before assignment".to_string(),
+                    ));
+                };
+                if !perl_numeric_ne(value, value)? {
+                    output.push_str("ok 4 - operator !=\n");
+                }
+            }
+            other => {
+                return Ok(ModeRunResult::fail(
+                    "runtime_control_flow",
+                    format!("execute-base base/cond.t does not support statement: {other}"),
+                ));
+            }
+        }
+    }
+
+    let expected =
+        "1..4\nok 1 - operator eq\nok 2 - operator ne\nok 3 - operator ==\nok 4 - operator !=\n";
+    if output != expected {
+        return Ok(ModeRunResult::fail(
+            "runtime_control_flow",
+            "base/cond.t execution did not produce the expected TAP".to_string(),
+        ));
+    }
+
+    Ok(ModeRunResult::execute_pass(output, 4, 4))
+}
+
+fn executable_lines(source: &str) -> impl Iterator<Item = &str> {
+    source
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("#!") && !line.starts_with('#'))
+}
+
 fn perl_string_eq(left: &str, right: &str) -> bool {
     left == right
 }
 
 fn perl_string_ne(left: &str, right: &str) -> bool {
     left != right
+}
+
+fn perl_numeric_eq(left: &str, right: &str) -> Result<bool> {
+    Ok(parse_perl_number(left)? == parse_perl_number(right)?)
+}
+
+fn perl_numeric_ne(left: &str, right: &str) -> Result<bool> {
+    Ok(parse_perl_number(left)? != parse_perl_number(right)?)
+}
+
+fn parse_perl_number(value: &str) -> Result<f64> {
+    value.parse::<f64>().with_context(|| format!("parsing Perl numeric value {value:?}"))
 }
 
 fn emit_tap(mode: &str, display_path: &str, result: &ModeRunResult) {
@@ -703,10 +859,50 @@ mod tests {
         let result = run_execute(&invocation)?;
 
         assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("runtime_value_model"));
+        assert_eq!(result.bucket.as_deref(), Some("runtime_test_harness"));
         assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
-            diagnostic.contains("execute-one only supports base/if.t")
+            diagnostic.contains("execute-base scaffold supports only selected base tests")
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_cond_emits_real_tap() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_cond_source()),
+            display_path: "base/cond.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert_eq!(result.assertions_passed, 4);
+        assert_eq!(result.assertions_total, 4);
+        assert_eq!(
+            result.tap_output.as_deref(),
+            Some(
+                "1..4\nok 1 - operator eq\nok 2 - operator ne\nok 3 - operator ==\nok 4 - operator !=\n"
+            )
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_cond_unsupported_statement_uses_control_flow_bucket() -> TestResult {
+        let source = r#"#!./perl
+print "1..4\n";
+$x = '0';
+while ($x != 1) { $x = 1; }
+"#;
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.into()),
+            display_path: "base/cond.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("runtime_control_flow"));
         Ok(())
     }
 
@@ -788,6 +984,28 @@ print "1..2\n";
 $x = 'test';
 if ($x eq $x) { print "ok 1 - if eq\n"; } else { print "not ok 1 - if eq\n";}
 if ($x ne $x) { print "not ok 2 - if ne\n"; } else { print "ok 2 - if ne\n";}
+"#
+        .to_string()
+    }
+
+    fn base_cond_source() -> String {
+        r#"#!./perl
+
+# make sure conditional operators work
+
+print "1..4\n";
+
+$x = '0';
+
+$x eq $x && (print "ok 1 - operator eq\n");
+$x ne $x && (print "not ok 1 - operator ne\n");
+$x eq $x || (print "not ok 2 - operator eq\n");
+$x ne $x || (print "ok 2 - operator ne\n");
+
+$x == $x && (print "ok 3 - operator ==\n");
+$x != $x && (print "not ok 3 - operator !=\n");
+$x == $x || (print "not ok 4 - operator ==\n");
+$x != $x || (print "ok 4 - operator !=\n");
 "#
         .to_string()
     }

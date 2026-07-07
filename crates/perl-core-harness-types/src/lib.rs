@@ -358,6 +358,11 @@ pub fn workstream_for_bucket(bucket: &str) -> &'static str {
         "pragma_feature" => "pragma_model",
         "module_resolution" => "module_resolution",
         "runtime_value_model" => "runtime_value_model",
+        "runtime_control_flow" => "runtime_control_flow",
+        "runtime_io" => "runtime_io",
+        "runtime_regex" => "runtime_regex",
+        "runtime_require_use" => "runtime_require_use",
+        "runtime_test_harness" => "runtime_test_harness",
         "cli_switch" => "harness_cli_compat",
         "harness_prepare" => "harness_integration",
         "unknown" => "compiler_conformance",
@@ -375,7 +380,12 @@ pub fn lsp_impact_for_bucket(bucket: &str) -> Vec<&'static str> {
         "package_stash" => vec!["workspace_symbols", "completion", "definition"],
         "pragma_feature" => vec!["diagnostics", "semantic_tokens"],
         "module_resolution" => vec!["definition", "hover", "completion"],
-        "runtime_value_model" => vec!["compiler_conformance"],
+        "runtime_value_model"
+        | "runtime_control_flow"
+        | "runtime_io"
+        | "runtime_regex"
+        | "runtime_require_use"
+        | "runtime_test_harness" => vec!["compiler_conformance"],
         "cli_switch" | "harness_prepare" => vec!["compiler_conformance"],
         _ => vec!["compiler_conformance"],
     }
@@ -422,6 +432,11 @@ mod tests {
         assert_eq!(workstream_for_bucket("pragma_feature"), "pragma_model");
         assert_eq!(workstream_for_bucket("module_resolution"), "module_resolution");
         assert_eq!(workstream_for_bucket("runtime_value_model"), "runtime_value_model");
+        assert_eq!(workstream_for_bucket("runtime_control_flow"), "runtime_control_flow");
+        assert_eq!(workstream_for_bucket("runtime_io"), "runtime_io");
+        assert_eq!(workstream_for_bucket("runtime_regex"), "runtime_regex");
+        assert_eq!(workstream_for_bucket("runtime_require_use"), "runtime_require_use");
+        assert_eq!(workstream_for_bucket("runtime_test_harness"), "runtime_test_harness");
         assert_eq!(workstream_for_bucket("cli_switch"), "harness_cli_compat");
         assert_eq!(workstream_for_bucket("harness_prepare"), "harness_integration");
         assert_eq!(workstream_for_bucket("unknown_bucket"), "compiler_conformance");
@@ -435,6 +450,11 @@ mod tests {
             vec!["definition", "hover", "completion"]
         );
         assert_eq!(lsp_impact_for_bucket("runtime_value_model"), vec!["compiler_conformance"]);
+        assert_eq!(lsp_impact_for_bucket("runtime_control_flow"), vec!["compiler_conformance"]);
+        assert_eq!(lsp_impact_for_bucket("runtime_io"), vec!["compiler_conformance"]);
+        assert_eq!(lsp_impact_for_bucket("runtime_regex"), vec!["compiler_conformance"]);
+        assert_eq!(lsp_impact_for_bucket("runtime_require_use"), vec!["compiler_conformance"]);
+        assert_eq!(lsp_impact_for_bucket("runtime_test_harness"), vec!["compiler_conformance"]);
         assert_eq!(lsp_impact_for_bucket("cli_switch"), vec!["compiler_conformance"]);
         assert_eq!(lsp_impact_for_bucket("harness_prepare"), vec!["compiler_conformance"]);
         assert_eq!(lsp_impact_for_bucket("unknown_bucket"), vec!["compiler_conformance"]);

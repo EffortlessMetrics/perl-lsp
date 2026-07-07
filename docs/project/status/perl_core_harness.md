@@ -20,8 +20,8 @@ For the current green/yellow/red burndown and next PR order, see the
 | Real upstream Perl run smoke | Advisory integrated | `perl-core-harness smoke --profile run --modes parse,compile` uses the same receipt path for the `run` profile, and run 28726563803 recorded 28 discovered files, parse 18/28, compile 1/28, and bucketed `parse_recovery` / `compile_effect` gaps |
 | Real upstream compile ratchets | Advisory integrated | `.ci/perl-core-harness/upstream-{base,comp,run}-compile-baseline.json` ratchets real upstream compile reports for schema/profile/mode drift, newly failing files, unexpected failures, bucket growth, unknown/unbucketed failures, and assertion regressions |
 | Harness orchestration crate | Extracted | `crates/perl-core-harness` owns discovery, prepare, run, baseline, smoke, and gap-map orchestration; `xtask` remains CLI dispatch glue |
-| Execute-one | Scaffolded | `perl-core-harness run --mode execute --profile base --test base/if.t` runs the one allowlisted upstream `base/if.t` path through `perl-core-test-runner`, emits real TAP, and writes a one-file execute report |
-| Execute-base | Not implemented | Future runtime slice; profile-wide execute remains unsupported |
+| Execute-one | Scaffolded | `perl-core-harness run --mode execute --profile base --test base/if.t` runs the first allowlisted upstream `base/if.t` path through `perl-core-test-runner`, emits real TAP, and writes an execute report |
+| Execute-base | Scaffolded / selected subset | `perl-core-harness run --mode execute --profile base --test base/if.t --test base/cond.t` runs explicit allowlisted `base` files and writes a selected-subset execute report; profile-wide execute remains unsupported |
 | Upstream Perl tree preparation | Linux advisory | Clone/configure/test_prep automation is Linux-only in this slice; Windows/macOS preparation is future work |
 
 ## Claim Boundary
@@ -34,11 +34,12 @@ protects the generated fixture receipt shape and current generated base
 behavior. The advisory real-tree smoke verifies that actual upstream `base`,
 `comp`, and `run` profile files from a pinned prepared Perl tree can flow
 through discovery, parse, compile, smoke-summary, and gap-map receipt
-generation. Execute-one is limited to the allowlisted `base/if.t` receipt path
-and does not imply broader runtime support. The lane does not claim full
-compiler or runtime conformance, does not promote provider behavior, and is not
-a required PR or merge-queue gate. Profile-wide execute remains fail-closed
-until the execute-base/runtime slices land.
+generation. Execute-one proves the allowlisted `base/if.t` receipt path, and
+execute-base is scaffolded as an explicit selected subset of allowlisted
+`base/*.t` files. The lane does not claim full compiler or runtime conformance,
+does not promote provider behavior, and is not a required PR or merge-queue
+gate. Profile-wide execute remains fail-closed until runtime buckets are reduced
+enough to widen safely.
 
 The first receipt shape is:
 
@@ -66,3 +67,24 @@ parse, and compile report paths plus per-mode totals and buckets. The gap map
 groups failures by bucket, workstream, impacted LSP surface, and first failure
 per bucket. Bucketed parse/compile failures are preserved as gap data; missing
 reports, unbucketed failures, and `unknown` buckets fail the smoke receipt.
+
+The current execute receipt commands are explicit and allowlisted:
+
+```bash
+cargo xtask perl-core-harness run \
+  --perl-tree <prepared-perl5> \
+  --host-perl perl \
+  --runner test \
+  --mode execute \
+  --profile base \
+  --test base/if.t
+
+cargo xtask perl-core-harness run \
+  --perl-tree <prepared-perl5> \
+  --host-perl perl \
+  --runner test \
+  --mode execute \
+  --profile base \
+  --test base/if.t \
+  --test base/cond.t
+```

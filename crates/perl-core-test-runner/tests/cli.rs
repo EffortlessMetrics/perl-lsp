@@ -299,9 +299,45 @@ fn cli_execute_non_allowlisted_file_reports_runtime_bucket() -> Result<()> {
     }
     let stdout = String::from_utf8(output.stdout)?;
     assert!(stdout.contains("1..1\nnot ok 1 - execute -e\n"));
-    assert!(stdout.contains("# bucket: runtime_value_model"));
-    assert!(stdout.contains("execute-one only supports base/if.t"));
+    assert!(stdout.contains("# bucket: runtime_test_harness"));
+    assert!(stdout.contains("execute-base scaffold supports only selected base tests"));
     assert_eq!(String::from_utf8(output.stderr)?, "");
+    Ok(())
+}
+
+#[test]
+fn cli_execute_base_cond_emits_real_tap_and_context() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let script = temp.path().join("base").join("cond.t");
+    std::fs::create_dir_all(script.parent().ok_or_else(|| anyhow::anyhow!("missing parent"))?)?;
+    std::fs::write(&script, base_cond_source())?;
+    let context = temp.path().join("records.jsonl");
+
+    let output = Command::new(runner())
+        .env("PERL_LSP_HARNESS_MODE", "execute")
+        .env("PERL_LSP_HARNESS_CONTEXT", &context)
+        .arg(&script)
+        .output()?;
+
+    if !output.status.success() {
+        bail!("execute-base scaffold should pass for base/cond.t");
+    }
+    assert_eq!(
+        String::from_utf8(output.stdout)?,
+        "1..4\nok 1 - operator eq\nok 2 - operator ne\nok 3 - operator ==\nok 4 - operator !=\n"
+    );
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+
+    let record = read_record(&context)?;
+    assert_eq!(record["mode"], "execute");
+    let path = record["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("runner record path should be a string"))?
+        .replace('\\', "/");
+    assert!(path.ends_with("base/cond.t"));
+    assert_eq!(record["status"], "pass");
+    assert_eq!(record["assertions_passed"], 4);
+    assert_eq!(record["assertions_total"], 4);
     Ok(())
 }
 
@@ -348,5 +384,26 @@ print "1..2\n";
 $x = 'test';
 if ($x eq $x) { print "ok 1 - if eq\n"; } else { print "not ok 1 - if eq\n";}
 if ($x ne $x) { print "not ok 2 - if ne\n"; } else { print "ok 2 - if ne\n";}
+"#
+}
+
+fn base_cond_source() -> &'static str {
+    r#"#!./perl
+
+# make sure conditional operators work
+
+print "1..4\n";
+
+$x = '0';
+
+$x eq $x && (print "ok 1 - operator eq\n");
+$x ne $x && (print "not ok 1 - operator ne\n");
+$x eq $x || (print "not ok 2 - operator eq\n");
+$x ne $x || (print "ok 2 - operator ne\n");
+
+$x == $x && (print "ok 3 - operator ==\n");
+$x != $x && (print "not ok 3 - operator !=\n");
+$x == $x || (print "not ok 4 - operator ==\n");
+$x != $x || (print "ok 4 - operator !=\n");
 "#
 }

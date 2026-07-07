@@ -2156,7 +2156,7 @@ enum PerlCoreHarnessCommand {
         #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
         profile: perl_core_harness::HarnessProfile,
 
-        /// Explicit Perl core test path to run. Execute-one currently requires `base/if.t`.
+        /// Explicit Perl core test path to run. Execute mode currently requires selected base tests.
         #[arg(long = "test")]
         tests: Vec<String>,
 
@@ -4241,7 +4241,7 @@ mod tests {
                     output: None,
                     runner_binary: None,
                 },
-                "requires exactly --test base/if.t",
+                "requires one or more explicit --test",
             ),
             (PerlCoreHarnessCommand::Report, "report is not implemented"),
         ];
