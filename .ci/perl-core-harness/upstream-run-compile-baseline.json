@@ -4,12 +4,12 @@
   "mode": "compile",
   "profile": "run",
   "files_total": 28,
-  "files_passed": 12,
-  "files_failed": 16,
+  "files_passed": 13,
+  "files_failed": 15,
   "tap_assertions_total": 28,
-  "tap_assertions_passed": 12,
+  "tap_assertions_passed": 13,
   "buckets": {
-    "compile_effect": 6,
+    "compile_effect": 5,
     "parse_recovery": 10
   },
   "expected_failures": [
@@ -182,18 +182,6 @@
       ]
     },
     {
-      "path": "run/switchI.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
-    {
       "path": "run/todo.t",
       "phase": "compile",
       "bucket": "parse_recovery",
@@ -335,8 +323,8 @@
     },
     {
       "path": "run/switchI.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {

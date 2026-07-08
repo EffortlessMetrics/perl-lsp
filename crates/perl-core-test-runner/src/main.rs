@@ -288,6 +288,7 @@ fn is_unsupported_compile_boundary(
         && !is_comp_our_tieall_autoload_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
+        && !is_run_switch_i_setup_boundary(effect, invocation, source)
         && !is_run_data_argv_setup_boundary(effect, invocation, source)
         && !is_run_switchp_data_setup_boundary(effect, invocation, source)
 }
@@ -463,6 +464,27 @@ fn is_run_test_pl_setup_boundary(
     let normalized = slice.replace("\r\n", "\n");
     normalized
         == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    require './test.pl';\n}"
+}
+
+fn is_run_switch_i_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "run/switchI.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized
+        == "BEGIN {\n    chdir 't' if -d 't';\n    unshift @INC, '../lib';\n    require './test.pl';\n    plan(4);\n}"
 }
 
 fn is_run_data_argv_setup_boundary(
@@ -1753,6 +1775,51 @@ mod tests {
     }
 
     #[test]
+    fn compile_run_switch_i_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_switch_i_setup_source()),
+            display_path: "run/switchI.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_switch_i_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_switch_i_setup_source()),
+            display_path: "run/switchM.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_switch_i_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    unshift @INC, '../lib';\n    require './test.pl';\n    plan(5);\n}\n"
+                    .to_string(),
+            ),
+            display_path: "run/switchI.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_run_data_argv_setup_boundary_passes_for_selected_files() -> TestResult {
         for (display_path, plan) in [
             ("run/switcha.t", "2"),
@@ -2277,6 +2344,19 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require './test.pl';
+}
+"#
+        .to_string()
+    }
+
+    fn run_switch_i_setup_source() -> String {
+        r#"#!./perl -IFoo::Bar -IBla
+
+BEGIN {
+    chdir 't' if -d 't';
+    unshift @INC, '../lib';
+    require './test.pl';
+    plan(4);
 }
 "#
         .to_string()
