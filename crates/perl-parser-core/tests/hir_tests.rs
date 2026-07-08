@@ -809,6 +809,7 @@ fn hir_stash_graph_records_package_slots_inheritance_and_dynamic_boundaries()
          our @EXPORT_OK;\n\
          our %CACHE;\n\
          *alias = \\&foo;\n\
+         *array_alias = \\@EXPORT_OK;\n\
          *dynamic = $target;\n\
          sub AUTOLOAD { our $AUTOLOAD; }\n",
     );
@@ -835,6 +836,7 @@ fn hir_stash_graph_records_package_slots_inheritance_and_dynamic_boundaries()
          Child::EXPORT_OK Array OurDeclaration ExactAst High target=<none>\n\
          Child::CACHE Hash OurDeclaration ExactAst High target=<none>\n\
          Child::alias Code TypeglobAlias ExactAst Medium target=foo\n\
+         Child::array_alias Array TypeglobAlias ExactAst Medium target=EXPORT_OK\n\
          Child::AUTOLOAD Code SubDeclaration ExactAst High target=<none>\n\
          Child::AUTOLOAD Scalar OurDeclaration ExactAst High target=<none>\n\
          Other::ISA Array PackageAssignment ExactAst High target=<none>\n\

@@ -4,27 +4,12 @@
   "mode": "compile",
   "profile": "base",
   "files_total": 9,
-  "files_passed": 8,
-  "files_failed": 1,
+  "files_passed": 9,
+  "files_failed": 0,
   "tap_assertions_total": 9,
-  "tap_assertions_passed": 8,
-  "buckets": {
-    "compile_effect": 1
-  },
-  "expected_failures": [
-    {
-      "path": "base/lex.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "symbolic reference dereference is not statically known",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    }
-  ],
+  "tap_assertions_passed": 9,
+  "buckets": {},
+  "expected_failures": [],
   "file_results": [
     {
       "path": "base/cond.t",
@@ -40,8 +25,8 @@
     },
     {
       "path": "base/lex.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {

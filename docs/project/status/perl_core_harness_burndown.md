@@ -45,7 +45,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | H11 | Harness orchestration crate | Green | #3420 | None | `crates/perl-core-harness` owns orchestration; `xtask` is CLI glue |
 | H12 | `run` compile smoke | Yellow / bucketed compiler gaps | #3422, #3424, [run 28726563803](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28726563803) | None | `run` smoke writes runner-backed discovery/parse/compile/smoke/gap-map receipts |
 | H13 | Real upstream compile ratchets | Green / advisory | #3426 | None | `base`/`comp`/`run` compile receipts are ratcheted separately from the generated fixture ratchet |
-| H14 | First bucket burn-down | Green / advisory | #3428, #3429, #3474, #3481, #3483, #3485, #3487, #3490, #3492, #3494, [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) | None | `base` `parse_recovery` reduced to 0 in the accepted compile ratchet; `base/term.t` and `base/rs.t` now compile cleanly; `comp/decl.t` now compiles cleanly; `comp/require.t`, `comp/use.t`, `comp/proto.t`, and `comp/line_debug.t` moved from compile-mode `parse_recovery` to `compile_effect`; `base/lex.t` remains `compile_effect` |
+| H14 | First bucket burn-down | Green / advisory | #3428, #3429, #3474, #3481, #3483, #3485, #3487, #3490, #3492, #3494, #3496, [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) | None | `base` `parse_recovery` reduced to 0 in the accepted compile ratchet; all nine upstream `base/*.t` files now compile cleanly; `comp/decl.t` now compiles cleanly; `comp/require.t`, `comp/use.t`, `comp/proto.t`, and `comp/line_debug.t` moved from compile-mode `parse_recovery` to `compile_effect` |
 | H15 | Execute-one | Green / advisory | #3432 | None | `base/if.t` executes real TAP through an explicit one-file run selector |
 | H16 | Execute-base | Green / selected ratchet | #3446, #3448, #3450, #3454, #3479 | None | Selected `base/if.t`, `base/cond.t`, `base/num.t`, `base/pat.t`, `base/translate.t`, and `base/while.t` execute receipt is ratcheted at 6/6 files and 325/325 TAP assertions |
 | H17 | Runtime model | Green / model | #3452, #3454, #3479 | None | Runtime buckets are named; `runtime_value_model` is represented by `base/num.t` and `base/translate.t`, `runtime_control_flow` by `base/while.t`, and the first selected `runtime_regex` slice by `base/pat.t` |
@@ -58,8 +58,8 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `target/perl-core/prepare/<ref>/prepare.json` | Pass for `b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed` | [run 28707735088](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28707735088), artifact `perl-core-harness-db5f879540e2d31d39e975ddb1228d12fa5cb838` |
 | `target/perl-core/smoke/base/discovery.json` | 9 files discovered | [run 28707735088](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28707735088), `base/cond.t`, `base/if.t`, `base/lex.t`, `base/num.t`, `base/pat.t`, `base/rs.t`, `base/term.t`, `base/translate.t`, `base/while.t` |
 | `target/perl-core/smoke/base/parse.json` | 9/9 passed | Focused compile-runner proof in #3474 moves `base/lex.t` past parse recovery; next advisory workflow refresh should publish the full smoke receipt |
-| `target/perl-core/smoke/base/compile.json` | 8/9 passed, 1 `compile_effect` | Focused compile-runner proof in #3483; accepted by `.ci/perl-core-harness/upstream-base-compile-baseline.json`; failure: `base/lex.t` |
-| `target/perl-core/smoke/base/gap-map.json` | 17/18 mode-file entries passed; buckets: 1 `compile_effect` | Focused runner records confirm `base/term.t` and `base/rs.t` moved from `compile_effect` to compile pass; next advisory workflow refresh should publish the full gap-map receipt |
+| `target/perl-core/smoke/base/compile.json` | 9/9 passed, no buckets | Focused compile-runner proof in #3496; accepted by `.ci/perl-core-harness/upstream-base-compile-baseline.json`; all upstream `base/*.t` files now compile cleanly |
+| `target/perl-core/smoke/base/gap-map.json` | 18/18 mode-file entries passed; no buckets | Focused runner records confirm `base/term.t`, `base/rs.t`, and `base/lex.t` moved from `compile_effect` to compile pass; next advisory workflow refresh should publish the full gap-map receipt |
 | `target/perl-core/smoke/base/smoke.json` | Pass for receipt integrity; structural failures empty | [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) |
 | `target/perl-core/smoke/comp/discovery.json` | 25 files discovered | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840); examples include `comp/require.t`, `comp/use.t`, `comp/parser.t`, `comp/proto.t`, `comp/utf.t` |
 | `target/perl-core/smoke/comp/parse.json` | 18/25 passed, 7 `parse_recovery` | [run 28711942840](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28711942840); failures: `comp/decl.t`, `comp/final_line_num.t`, `comp/line_debug.t`, `comp/parser.t`, `comp/proto.t`, `comp/require.t`, `comp/use.t` |
@@ -71,7 +71,7 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | `target/perl-core/smoke/run/compile.json` | 1/28 passed, 10 `parse_recovery`, 17 `compile_effect` | [run 28726563803](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28726563803); compile-effect failures include `run/cloexec.t`, `run/fresh_perl.t`, `run/noswitch.t`, `run/runenv_hashseed.t`, `run/switch-I-and-M.t`, `run/switch0.t`, `run/switchDx.t`, `run/switchF.t`, `run/switchM.t`, `run/switchx.t` |
 | `target/perl-core/smoke/run/gap-map.json` | 19/56 mode-file entries passed; buckets: 20 `parse_recovery`, 17 `compile_effect` | [run 28726563803](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28726563803) |
 | `target/perl-core/smoke/run/smoke.json` | Pass for receipt integrity; structural failures empty | [run 28726563803](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28726563803) |
-| `.ci/perl-core-harness/upstream-base-compile-baseline.json` | Ratchets 8/9 compile pass state; buckets: 1 `compile_effect` | Accepted from #3483 focused compile-runner proof; separate from generated fixture baseline |
+| `.ci/perl-core-harness/upstream-base-compile-baseline.json` | Ratchets 9/9 compile pass state; buckets: none | Accepted from #3496 focused compile-runner proof; separate from generated fixture baseline |
 | `.ci/perl-core-harness/upstream-comp-compile-baseline.json` | Ratchets 9/25 compile pass state; buckets: 2 `parse_recovery`, 14 `compile_effect` | Updated by focused #3485, #3487, #3490, #3492, and #3494 proofs for `comp/decl.t`, `comp/line_debug.t`, `comp/require.t`, `comp/use.t`, and `comp/proto.t`; separate from generated fixture baseline |
 | `.ci/perl-core-harness/upstream-run-compile-baseline.json` | Ratchets 1/28 compile pass state; buckets: 10 `parse_recovery`, 17 `compile_effect` | Accepted from `target/perl-core/smoke/run/compile.json`; separate from generated fixture baseline |
 | `target/perl-core/reports/base-execute.json` | 6/6 selected files passed, 325/325 TAP assertions, no runtime buckets | Local receipt generated from pinned upstream Perl artifact [run 28730071077](https://github.com/EffortlessMetrics/perl-lsp-swarm/actions/runs/28730071077) and expanded by P2/P4 selected-execute proof; selected files: `base/cond.t` 4/4, `base/if.t` 2/2, `base/num.t` 56/56, `base/pat.t` 2/2, `base/translate.t` 257/257, and `base/while.t` 4/4 |
@@ -118,9 +118,9 @@ Profile-wide execute remains fail-closed.
 
 Runtime burn-down PRs must reduce one named bucket or one tight cluster, rerun
 the selected execute receipt, update this board or generated report output, and
-avoid provider behavior. Compile precondition reds still stay separate:
-`base/lex.t` remains `compile_effect` until
-compiler receipts say otherwise.
+avoid provider behavior. Compile precondition reds still stay separate; the
+current upstream `base` compile ratchet is clean, so remaining unselected
+`base/*.t` files are runtime-entry decisions rather than compile blockers.
 
 Current selected execute-base status:
 
