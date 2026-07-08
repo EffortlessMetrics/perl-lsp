@@ -4,27 +4,15 @@
   "mode": "compile",
   "profile": "run",
   "files_total": 28,
-  "files_passed": 14,
-  "files_failed": 14,
+  "files_passed": 15,
+  "files_failed": 13,
   "tap_assertions_total": 28,
-  "tap_assertions_passed": 14,
+  "tap_assertions_passed": 15,
   "buckets": {
-    "compile_effect": 4,
+    "compile_effect": 3,
     "parse_recovery": 10
   },
   "expected_failures": [
-    {
-      "path": "run/cloexec.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
     {
       "path": "run/dtrace.t",
       "phase": "compile",
@@ -185,8 +173,8 @@
   "file_results": [
     {
       "path": "run/cloexec.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
