@@ -4,12 +4,12 @@
   "mode": "compile",
   "profile": "comp",
   "files_total": 25,
-  "files_passed": 19,
-  "files_failed": 6,
+  "files_passed": 20,
+  "files_failed": 5,
   "tap_assertions_total": 25,
-  "tap_assertions_passed": 19,
+  "tap_assertions_passed": 20,
   "buckets": {
-    "compile_effect": 6
+    "compile_effect": 5
   },
   "expected_failures": [
     {
@@ -62,18 +62,6 @@
     },
     {
       "path": "comp/require.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
-    {
-      "path": "comp/use.t",
       "phase": "compile",
       "bucket": "compile_effect",
       "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
@@ -226,8 +214,8 @@
     },
     {
       "path": "comp/use.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
