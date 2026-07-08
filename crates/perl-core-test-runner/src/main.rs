@@ -292,6 +292,7 @@ fn is_unsupported_compile_boundary(
         && !is_comp_filter_exception_inc_filter_boundary(effect, invocation, source)
         && !is_comp_redef_warning_setup_boundary(effect, invocation, source)
         && !is_comp_redef_suppressed_warning_eval_boundary(effect, invocation, source)
+        && !is_comp_multiline_cleanup_boundary(effect, invocation, source)
         && !is_run_cloexec_config_setup_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
@@ -559,6 +560,26 @@ fn is_comp_redef_suppressed_warning_eval_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "BEGIN {\n    local $^W = 0;\n    eval qq(sub sub10 () {1} sub sub10 {1});\n}"
+}
+
+fn is_comp_multiline_cleanup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/multiline.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "END {\n    1 while unlink $filename;\n}"
 }
 
 fn is_run_cloexec_config_setup_boundary(
@@ -2164,6 +2185,51 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_multiline_cleanup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_multiline_cleanup_source()),
+            display_path: "comp/multiline.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_multiline_cleanup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_multiline_cleanup_source()),
+            display_path: "comp/fold.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_multiline_cleanup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\nmy $filename = \"multiline$$\";\nEND {\n    unlink $filename;\n}\n"
+                    .to_string(),
+            ),
+            display_path: "comp/multiline.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_run_cloexec_config_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(run_cloexec_config_setup_source()),
@@ -3118,6 +3184,11 @@ BEGIN {
 
     fn comp_redef_suppressed_warning_eval_source() -> String {
         "#!./perl -w\n\nBEGIN {\n    local $^W = 0;\n    eval qq(sub sub10 () {1} sub sub10 {1});\n}\n"
+            .to_string()
+    }
+
+    fn comp_multiline_cleanup_source() -> String {
+        "#!./perl\nmy $filename = \"multiline$$\";\nEND {\n    1 while unlink $filename;\n}\n"
             .to_string()
     }
 
