@@ -82,6 +82,12 @@ fn test_sub_qualified_still_works() {
 }
 
 #[test]
+fn test_sub_legacy_tick_package_separator_with_prototype() {
+    assert_clean_parse(r#"sub 'Hello'_he_said (_);"#);
+    assert_eq!(sub_name(r#"sub 'Hello'_he_said (_);"#), Some("Hello::_he_said".to_string()));
+}
+
+#[test]
 fn test_sub_keyword_named_still_works() {
     // Keyword-named subs — the original fix from issue #2149
     assert_clean_parse(r#"sub return { 1 }"#);

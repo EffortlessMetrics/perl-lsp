@@ -65,6 +65,9 @@ impl<'a> Parser<'a> {
 
     /// Parse a single statement
     fn parse_statement(&mut self) -> ParseResult<Node> {
+        if self.peek_kind() == Some(TokenKind::LeftBrace) {
+            return self.parse_statement_inner();
+        }
         self.with_recursion_guard(|s| s.parse_statement_inner())
     }
 
@@ -1104,7 +1107,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a block statement
     fn parse_block(&mut self) -> ParseResult<Node> {
-        self.with_recursion_guard(|s| {
+        self.with_block_recursion_guard(|s| {
             let start = s.current_position();
 
             s.expect(TokenKind::LeftBrace)?;
@@ -1199,12 +1202,13 @@ impl<'a> Parser<'a> {
     /// - `:` — ternary else-part (always follows the then-branch)
     /// - `,` — comma separator (expression continuation)
     /// - `=>` — fat arrow (hash key-value context)
-    /// - `)` / `]` / `}` — closing delimiters (orphan, not a statement)
+    /// - `)` / `]` — closing delimiters (orphan, not a statement)
     /// - EOF — nothing follows the colon
     ///
-    /// Notably absent: `TokenKind::Semicolon`.  In Perl, `LABEL: ;` is a valid
-    /// labeled empty-statement, so `;` as the third token must be allowed through
-    /// as a potential label start.
+    /// Notably absent: `TokenKind::Semicolon` and `TokenKind::RightBrace`.  In
+    /// Perl, `LABEL: ;` and a final `LABEL:` before a block end are valid
+    /// labeled empty-statements, so both must be allowed through as potential
+    /// label starts.
     fn third_token_cannot_start_statement(kind: TokenKind) -> bool {
         matches!(
             kind,
@@ -1214,7 +1218,6 @@ impl<'a> Parser<'a> {
             | TokenKind::FatArrow   // hash key-value context
             | TokenKind::RightParen // closing paren
             | TokenKind::RightBracket // closing bracket
-            | TokenKind::RightBrace // orphan closing brace
             | TokenKind::Eof        // end of input
         )
     }

@@ -142,6 +142,21 @@ impl<'a> Parser<'a> {
         self.recursion_depth = self.recursion_depth.saturating_sub(1);
     }
 
+    fn check_block_recursion(&mut self) -> ParseResult<()> {
+        self.block_depth += 1;
+        if self.block_depth > MAX_BLOCK_NESTING_DEPTH {
+            return Err(ParseError::NestingTooDeep {
+                depth: self.block_depth,
+                max_depth: MAX_BLOCK_NESTING_DEPTH,
+            });
+        }
+        Ok(())
+    }
+
+    fn exit_block_recursion(&mut self) {
+        self.block_depth = self.block_depth.saturating_sub(1);
+    }
+
     /// Run `f` under the recursion depth budget.
     ///
     /// - `check_recursion()` increments depth (and may error)
@@ -157,6 +172,25 @@ impl<'a> Parser<'a> {
         impl<'p, 'src> Drop for Guard<'p, 'src> {
             fn drop(&mut self) {
                 self.0.exit_recursion();
+            }
+        }
+
+        let guard = Guard(self);
+        f(guard.0)
+    }
+
+    /// Run `f` under the structural block nesting budget.
+    #[inline]
+    fn with_block_recursion_guard<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> ParseResult<T>,
+    ) -> ParseResult<T> {
+        self.check_block_recursion()?;
+
+        struct Guard<'p, 'src>(&'p mut Parser<'src>);
+        impl<'p, 'src> Drop for Guard<'p, 'src> {
+            fn drop(&mut self) {
+                self.0.exit_block_recursion();
             }
         }
 
@@ -1184,8 +1218,18 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        // Must not already be at a statement end or followed by a binary operator
-        if self.is_at_statement_end() || self.peek_kind().is_some_and(Self::is_binary_operator) {
+        let has_typeglob_first_arg = self.peek_kind() == Some(TokenKind::Star)
+            && matches!(
+                name,
+                "is" | "isnt" | "like" | "unlike" | "cmp_ok" | "isa_ok" | "can_ok"
+            );
+
+        // Must not already be at a statement end or followed by a binary operator.
+        // Test helpers are commonly imported as list operators and may take a
+        // typeglob slot expression as their first argument: `is *BEGIN{CODE}, ...`.
+        if self.is_at_statement_end()
+            || (self.peek_kind().is_some_and(Self::is_binary_operator) && !has_typeglob_first_arg)
+        {
             return false;
         }
 
@@ -1205,6 +1249,12 @@ impl<'a> Parser<'a> {
                 true
             }
             TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil => true,
+
+            // Imported Test::More-style helpers can take typeglob expressions
+            // as list arguments. Keep this scoped to known helper names so
+            // ordinary lowercase barewords followed by `*` still prefer infix
+            // multiplication.
+            TokenKind::Star if has_typeglob_first_arg => true,
 
             // `func "string"` or `func 'string'` — bare function call with a string literal arg.
             // Handles: `croak "error message"`, `_estr "fmt"`, `die "msg"`, etc.

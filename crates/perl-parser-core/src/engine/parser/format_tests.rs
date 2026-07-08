@@ -80,6 +80,64 @@ $val
     }
 
     #[test]
+    fn quoted_format_name_parses() -> Result<(), String> {
+        let source = r#"format 'one =
+ok @<< - format 'foo still works
+$test
+.
+"#;
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().map_err(|e| e.to_string())?;
+        if !parser.errors().is_empty() {
+            return Err(format!("expected clean parse, got {:?}", parser.errors()));
+        }
+
+        let NodeKind::Program { statements } = &ast.kind else {
+            return Err(format!("expected Program, got {:?}", ast.kind));
+        };
+        let Some(NodeKind::Format { name, body, .. }) = statements.first().map(|stmt| &stmt.kind)
+        else {
+            return Err(format!("expected first statement to be Format, got {:?}", statements));
+        };
+        if name != "one" {
+            return Err(format!("expected quoted format name one, got {name}"));
+        }
+        if !body.contains("format '") {
+            return Err(format!("expected format body, got {body:?}"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn leading_double_colon_format_name_parses() -> Result<(), String> {
+        let source = r#"format ::two =
+ok @<< - format ::foo still works
+$test
+.
+"#;
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().map_err(|e| e.to_string())?;
+        if !parser.errors().is_empty() {
+            return Err(format!("expected clean parse, got {:?}", parser.errors()));
+        }
+
+        let NodeKind::Program { statements } = &ast.kind else {
+            return Err(format!("expected Program, got {:?}", ast.kind));
+        };
+        let Some(NodeKind::Format { name, body, .. }) = statements.first().map(|stmt| &stmt.kind)
+        else {
+            return Err(format!("expected first statement to be Format, got {:?}", statements));
+        };
+        if name != "::two" {
+            return Err(format!("expected format name ::two, got {name}"));
+        }
+        if !body.contains("format ::foo still works") {
+            return Err(format!("expected format body, got {body:?}"));
+        }
+        Ok(())
+    }
+
+    #[test]
     fn format_followed_by_if_starts_new_statement() -> Result<(), String> {
         let source = r#"format three =
 ok 8

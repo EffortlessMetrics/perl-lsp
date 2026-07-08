@@ -557,6 +557,10 @@ fn test_valid_regex_patterns_no_false_positive() {
     let valid_patterns = vec![
         (r#"$x =~ /(?:pattern)+/;"#, "non-capturing group with literal"),
         (r#"$x =~ /(?:ab)+/;"#, "non-capturing group with two-char literal"),
+        (
+            r#"my $this_file = qr/parser\.t(?:\.[bl]eb?)?$/;"#,
+            "optional non-capturing group with inner optional atom",
+        ),
     ];
 
     for (code, desc) in valid_patterns {

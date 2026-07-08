@@ -247,6 +247,9 @@ impl<'a> Parser<'a> {
         } else if self.peek_kind().is_some_and(Self::can_be_sub_name) {
             let (name, span) = self.parse_subroutine_name()?;
             (Some(name), Some(span))
+        } else if self.is_legacy_tick_subroutine_name_start() {
+            let (name, span) = self.parse_legacy_tick_subroutine_name()?;
+            (Some(name), Some(span))
         } else {
             // No name - anonymous subroutine (next token is {, (, :, or similar)
             (None, None)
@@ -364,6 +367,26 @@ impl<'a> Parser<'a> {
         }
 
         Ok((name, SourceLocation { start, end }))
+    }
+
+    fn is_legacy_tick_subroutine_name_start(&mut self) -> bool {
+        self.peek_kind() == Some(TokenKind::String)
+            && self.tokens.peek().ok().is_some_and(|token| {
+                token.text.starts_with('\'') && token.text.ends_with('\'')
+            })
+            && self
+                .tokens
+                .peek_second()
+                .ok()
+                .is_some_and(|token| Self::can_be_sub_name(token.kind))
+    }
+
+    fn parse_legacy_tick_subroutine_name(&mut self) -> ParseResult<(String, SourceLocation)> {
+        let package = self.tokens.next()?;
+        let package_name = package.text.trim_matches('\'');
+        let sub_name = self.tokens.next()?;
+        let name = format!("{package_name}::{}", sub_name.text);
+        Ok((name, SourceLocation { start: package.start, end: sub_name.end }))
     }
 
     /// Parse class declaration (Perl 5.38+)
@@ -516,10 +539,117 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'format'
 
+        if self.tokens.peek().ok().is_some_and(|token| {
+            matches!(token.kind, TokenKind::String | TokenKind::Unknown)
+                && token.text.starts_with('\'')
+                && token.text.contains('=')
+        }) {
+            let token = self.tokens.next()?;
+            let raw = token.text.as_ref();
+            let Some(assign_index) = raw.find('=') else {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "format assignment".to_string(),
+                    found: token.kind.display_name().to_string(),
+                    location: token.start,
+                });
+            };
+            let name = raw[1..assign_index].trim().to_string();
+            let mut body = raw[assign_index + 1..].to_string();
+            let mut end = token.end;
+            if let Some(terminator_start) = body.find("\n.") {
+                body.truncate(terminator_start + 1);
+            } else {
+                while !self.tokens.is_eof() {
+                    let body_token = self.tokens.next()?;
+                    end = body_token.end;
+                    if body_token.text.as_ref() == "." {
+                        break;
+                    }
+                    body.push_str(body_token.text.as_ref());
+                }
+            }
+            let name_span = Some(SourceLocation {
+                start: token.start,
+                end: token.start + assign_index,
+            });
+            return Ok(Node::new(
+                NodeKind::Format { name, name_span, body },
+                SourceLocation { start, end },
+            ));
+        }
+
+        if self.tokens.peek().ok().is_some_and(|token| {
+            let text = token.text.as_ref();
+            text.starts_with('\'') && text.len() > 1
+        }) && self.tokens.peek_second().ok().is_some_and(|token| token.kind == TokenKind::Assign)
+        {
+            let name_token = self.tokens.next()?;
+            let assign = self.tokens.next()?;
+            let mut body = String::new();
+            let mut end = assign.end;
+            while !self.tokens.is_eof() {
+                let body_token = self.tokens.next()?;
+                end = body_token.end;
+                if body_token.text.as_ref() == "." {
+                    break;
+                }
+                body.push_str(body_token.text.as_ref());
+            }
+            let name_span = Some(SourceLocation {
+                start: name_token.start,
+                end: name_token.end,
+            });
+            return Ok(Node::new(
+                NodeKind::Format {
+                    name: name_token.text.trim_start_matches('\'').to_string(),
+                    name_span,
+                    body,
+                },
+                SourceLocation { start, end },
+            ));
+        }
+
         // Parse format name (optional - can be anonymous)
         let (name, name_span) = if self.peek_kind() == Some(TokenKind::Assign) {
             // Anonymous format
             (String::new(), None)
+        } else if self.peek_kind() == Some(TokenKind::DoubleColon) {
+            let double_colon = self.tokens.next()?;
+            let name_token = self.expect(TokenKind::Identifier)?;
+            let span = SourceLocation {
+                start: double_colon.start,
+                end: name_token.end,
+            };
+            (format!("::{}", name_token.text), Some(span))
+        } else if self
+            .tokens
+            .peek()
+            .ok()
+            .is_some_and(|token| token.text.as_ref() == "'")
+            && self
+                .tokens
+                .peek_second()
+                .ok()
+                .is_some_and(|token| Self::can_be_sub_name(token.kind))
+        {
+            let tick = self.tokens.next()?;
+            let name_token = self.tokens.next()?;
+            let span = SourceLocation {
+                start: tick.start,
+                end: name_token.end,
+            };
+            (name_token.text.to_string(), Some(span))
+        } else if self.peek_kind() == Some(TokenKind::String)
+            && self.tokens.peek().ok().is_some_and(|token| {
+                token.text.starts_with('\'') && token.text.ends_with('\'')
+            })
+        {
+            let name_token = self.tokens.next()?;
+            let span = SourceLocation {
+                start: name_token.start,
+                end: name_token.end,
+            };
+            (name_token.text.trim_matches('\'').to_string(), Some(span))
         } else {
             // Named format
             let name_token = self.expect(TokenKind::Identifier)?;

@@ -94,6 +94,11 @@ fn test_typeglob_in_local_regression() {
     assert_clean_parse("local (*TO_CHLD_R, *TO_CHLD_W);");
 }
 
+#[test]
+fn test_typeglob_slot_as_imported_test_helper_arg() {
+    assert_clean_parse("is *BEGIN{CODE}, undef, 'BEGIN leaves no stub after compilation error';");
+}
+
 // Disambiguation: *<EXPR> must NOT be parsed as a typeglob.
 // The 2-token lookahead must detect that an expression follows the `<`,
 // and fall through to let the operand be parsed as a readline/glob.
