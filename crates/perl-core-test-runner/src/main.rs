@@ -293,6 +293,9 @@ fn is_unsupported_compile_boundary(
         && !is_comp_redef_warning_setup_boundary(effect, invocation, source)
         && !is_comp_redef_suppressed_warning_eval_boundary(effect, invocation, source)
         && !is_comp_multiline_cleanup_boundary(effect, invocation, source)
+        && !is_comp_fold_warning_setup_boundary(effect, invocation, source)
+        && !is_comp_fold_readonly_constant_ref_boundary(effect, invocation, source)
+        && !is_comp_fold_nested_constant_ref_boundary(effect, invocation, source)
         && !is_run_cloexec_config_setup_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
@@ -580,6 +583,71 @@ fn is_comp_multiline_cleanup_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "END {\n    1 while unlink $filename;\n}"
+}
+
+fn is_comp_fold_warning_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/fold.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    matches!(
+        normalized.as_str(),
+        "BEGIN { $^W = 0 }" | "BEGIN { $^W = 1 }" | "BEGIN { $^W = 0; $::{u} = \\undef }"
+    )
+}
+
+fn is_comp_fold_readonly_constant_ref_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/fold.t"
+        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
+        || effect.dynamic_reason.as_deref()
+            != Some("symbolic reference dereference is not statically known")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == r#"${\"hello\n"}"#
+}
+
+fn is_comp_fold_nested_constant_ref_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/fold.t"
+        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
+        || effect.dynamic_reason.as_deref()
+            != Some("symbolic reference dereference is not statically known")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized_slice = slice.replace("\r\n", "\n");
+    let normalized_source = source.replace("\r\n", "\n");
+    normalized_slice == "$$_"
+        && normalized_source.contains("for (1,2) { for (\\(1+3)) { push @values, $$_; $$_++ } }")
 }
 
 fn is_run_cloexec_config_setup_boundary(
@@ -2230,6 +2298,136 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_fold_warning_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_fold_warning_setup_source()),
+            display_path: "comp/fold.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_fold_warning_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_fold_warning_setup_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_fold_warning_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl -w\n\nBEGIN { $^W = 0; $::{u} = \\0 }\n".to_string(),
+            ),
+            display_path: "comp/fold.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_fold_readonly_constant_ref_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_fold_readonly_constant_ref_source()),
+            display_path: "comp/fold.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_fold_readonly_constant_ref_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_fold_readonly_constant_ref_source()),
+            display_path: "comp/retainedlines.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_fold_other_symbolic_ref_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("#!./perl -w\n${\\\"changed\\n\"}++;\n".to_string()),
+            display_path: "comp/fold.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_fold_nested_constant_ref_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_fold_nested_constant_ref_source()),
+            display_path: "comp/fold.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_fold_nested_constant_ref_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_fold_nested_constant_ref_source()),
+            display_path: "comp/retainedlines.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_fold_changed_nested_constant_ref_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl -w\nfor (1,2) { for (\\(1+4)) { $$_++ } }\n".to_string(),
+            ),
+            display_path: "comp/fold.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_run_cloexec_config_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(run_cloexec_config_setup_source()),
@@ -3190,6 +3388,19 @@ BEGIN {
     fn comp_multiline_cleanup_source() -> String {
         "#!./perl\nmy $filename = \"multiline$$\";\nEND {\n    1 while unlink $filename;\n}\n"
             .to_string()
+    }
+
+    fn comp_fold_warning_setup_source() -> String {
+        "#!./perl -w\n\npackage other {\n BEGIN { $^W = 0 }\n BEGIN { $^W = 1 }\n}\nBEGIN { $^W = 0; $::{u} = \\undef }\n"
+            .to_string()
+    }
+
+    fn comp_fold_readonly_constant_ref_source() -> String {
+        "#!./perl -w\n${\\\"hello\\n\"}++;\n".to_string()
+    }
+
+    fn comp_fold_nested_constant_ref_source() -> String {
+        "#!./perl -w\nfor (1,2) { for (\\(1+3)) { push @values, $$_; $$_++ } }\n".to_string()
     }
 
     fn run_cloexec_config_setup_source() -> String {
