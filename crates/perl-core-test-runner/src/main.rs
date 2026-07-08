@@ -247,6 +247,12 @@ fn run_compile(invocation: &Invocation) -> Result<ModeRunResult> {
             .map(ToString::to_string)
             .or(profile.first_unrecovered_error_node)
             .unwrap_or_else(|| format!("parse salvage class {:?}", profile.class));
+        if is_comp_final_line_num_syntax_error_probe(invocation, &source, &first_diagnostic) {
+            return Ok(ModeRunResult::fail(
+                "compile_effect",
+                "compile-time __DIE__ line-number syntax-error probe is not evaluated".to_string(),
+            ));
+        }
         return Ok(ModeRunResult::fail("parse_recovery", first_diagnostic));
     }
 
@@ -279,6 +285,24 @@ fn is_unsupported_compile_boundary(
         && !is_base_lex_map_begin_boundary(effect, invocation, source)
         && !is_base_rs_end_cleanup_boundary(effect, invocation, source)
         && !is_base_rs_filehandle_alias_boundary(effect, invocation, source)
+}
+
+fn is_comp_final_line_num_syntax_error_probe(
+    invocation: &Invocation,
+    source: &str,
+    first_diagnostic: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/final_line_num.t"
+        || !first_diagnostic.contains("MissingOperand")
+        || !first_diagnostic.contains("InfixRhs")
+    {
+        return false;
+    }
+
+    let normalized = source.replace("\r\n", "\n");
+    normalized.contains(r#"$SIG{__DIE__} = sub {"#)
+        && normalized.contains(r#"$last_line_num = __LINE__;"#)
+        && normalized.trim_end().ends_with("BEGIN { $last_line_num = __LINE__; } print 1+")
 }
 
 fn is_base_term_cwd_setup_boundary(
@@ -1270,6 +1294,51 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_final_line_num_probe_fails_with_compile_effect_bucket() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_final_line_num_probe_source()),
+            display_path: "comp/final_line_num.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
+            diagnostic.contains("__DIE__") && diagnostic.contains("line-number")
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_same_trailing_infix_other_file_stays_parse_recovery() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_final_line_num_probe_source()),
+            display_path: "comp/other.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("parse_recovery"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_final_line_num_unrelated_missing_rhs_stays_parse_recovery() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("my $x = ;\n".to_string()),
+            display_path: "comp/final_line_num.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("parse_recovery"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_dynamic_boundary_fails_with_compile_effect_bucket() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline("require $module;\n".to_string()),
@@ -1739,6 +1808,24 @@ while ($x != 1) { $x = 1; }
     #[test]
     fn one_line_collapses_diagnostic_whitespace() {
         assert_eq!(one_line("expected\n  expression\tfound ;"), "expected expression found ;");
+    }
+
+    fn comp_final_line_num_probe_source() -> String {
+        r#"#!./perl
+
+BEGIN { print "1..1\n"; }
+
+BEGIN { $SIG{__DIE__} = sub {
+    $_[0] =~ /\Asyntax error at [^ ]+ line ([0-9]+), at EOF/ or exit 1;
+    my $error_line_num = $1;
+    print $error_line_num == $last_line_num ? "ok 1\n" : "not ok 1\n";
+    exit 0;
+}; }
+
+# the next line causes a syntax error at end of file, to be caught above
+BEGIN { $last_line_num = __LINE__; } print 1+
+"#
+        .to_string()
     }
 
     fn base_term_cwd_setup_source() -> String {
