@@ -286,6 +286,7 @@ fn is_unsupported_compile_boundary(
         && !is_base_rs_end_cleanup_boundary(effect, invocation, source)
         && !is_base_rs_filehandle_alias_boundary(effect, invocation, source)
         && !is_comp_our_tieall_autoload_boundary(effect, invocation, source)
+        && !is_run_switch_setup_boundary(effect, invocation, source)
 }
 
 fn is_comp_final_line_num_syntax_error_probe(
@@ -416,6 +417,27 @@ fn is_comp_our_tieall_autoload_boundary(
         && normalized.contains("for ($AUTOLOAD =~ /TieAll::(.*)/)")
         && normalized.contains("elsif (/calls/) { return join ',', splice @calls }")
         && normalized.contains("return 1 if /FETCHSIZE|FIRSTKEY/;")
+}
+
+fn is_run_switch_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    let display_path = normalize_display_path(&invocation.display_path);
+    if !matches!(display_path.as_str(), "run/switch-I-and-M.t" | "run/switchM.t")
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n}"
 }
 
 fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
@@ -1537,6 +1559,65 @@ mod tests {
     }
 
     #[test]
+    fn compile_run_switch_i_and_m_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_switch_setup_source()),
+            display_path: "run/switch-I-and-M.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_switch_m_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_switch_setup_source()),
+            display_path: "run/switchM.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_switch_setup_boundary_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_switch_setup_source()),
+            display_path: "run/switch0.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_switch_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\n\nBEGIN {\n    chdir 'x' if -d 'x';\n    @INC = '../lib';\n}\n"
+                    .to_string(),
+            ),
+            display_path: "run/switchM.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_base_lex_symbolic_reference_boundaries_pass() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_lex_symbolic_reference_source()),
@@ -1948,6 +2029,17 @@ sub test_record {
 
 tie $x, 'TieAll';
 {our $x;}
+"#
+        .to_string()
+    }
+
+    fn run_switch_setup_source() -> String {
+        r#"#!./perl
+
+BEGIN {
+    chdir 't' if -d 't';
+    @INC = '../lib';
+}
 "#
         .to_string()
     }
