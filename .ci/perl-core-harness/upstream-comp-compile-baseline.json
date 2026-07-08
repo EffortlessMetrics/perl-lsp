@@ -4,26 +4,14 @@
   "mode": "compile",
   "profile": "comp",
   "files_total": 25,
-  "files_passed": 21,
-  "files_failed": 4,
+  "files_passed": 22,
+  "files_failed": 3,
   "tap_assertions_total": 25,
-  "tap_assertions_passed": 21,
+  "tap_assertions_passed": 22,
   "buckets": {
-    "compile_effect": 4
+    "compile_effect": 3
   },
   "expected_failures": [
-    {
-      "path": "comp/final_line_num.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "compile-time __DIE__ line-number syntax-error probe is not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
     {
       "path": "comp/form_scope.t",
       "phase": "compile",
@@ -94,8 +82,8 @@
     },
     {
       "path": "comp/final_line_num.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {

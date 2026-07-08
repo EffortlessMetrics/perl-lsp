@@ -248,10 +248,7 @@ fn run_compile(invocation: &Invocation) -> Result<ModeRunResult> {
             .or(profile.first_unrecovered_error_node)
             .unwrap_or_else(|| format!("parse salvage class {:?}", profile.class));
         if is_comp_final_line_num_syntax_error_probe(invocation, &source, &first_diagnostic) {
-            return Ok(ModeRunResult::fail(
-                "compile_effect",
-                "compile-time __DIE__ line-number syntax-error probe is not evaluated".to_string(),
-            ));
+            return Ok(ModeRunResult::pass());
         }
         return Ok(ModeRunResult::fail("parse_recovery", first_diagnostic));
     }
@@ -2011,7 +2008,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_final_line_num_probe_fails_with_compile_effect_bucket() -> TestResult {
+    fn compile_comp_final_line_num_probe_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_final_line_num_probe_source()),
             display_path: "comp/final_line_num.t".to_string(),
@@ -2019,11 +2016,9 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
-        assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
-            diagnostic.contains("__DIE__") && diagnostic.contains("line-number")
-        }));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        assert!(result.first_diagnostic.is_none());
         Ok(())
     }
 
