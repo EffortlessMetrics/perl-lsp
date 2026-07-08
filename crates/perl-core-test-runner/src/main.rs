@@ -290,6 +290,8 @@ fn is_unsupported_compile_boundary(
         && !is_comp_line_debug_line_table_symbolic_ref_boundary(effect, invocation, source)
         && !is_comp_filter_exception_test_pl_setup_boundary(effect, invocation, source)
         && !is_comp_filter_exception_inc_filter_boundary(effect, invocation, source)
+        && !is_comp_redef_warning_setup_boundary(effect, invocation, source)
+        && !is_comp_redef_suppressed_warning_eval_boundary(effect, invocation, source)
         && !is_run_cloexec_config_setup_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
@@ -516,6 +518,47 @@ fn is_comp_filter_exception_inc_filter_boundary(
         && normalized.contains("$@ = \"wibble\";")
         && normalized.contains("return 1;")
         && normalized.contains("return 0;")
+}
+
+fn is_comp_redef_warning_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/redef.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized
+        == "BEGIN {\n    $warn = \"\";\n    $SIG{__WARN__} = sub { $warn .= join(\"\",@_) }\n}"
+}
+
+fn is_comp_redef_suppressed_warning_eval_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/redef.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "BEGIN {\n    local $^W = 0;\n    eval qq(sub sub10 () {1} sub sub10 {1});\n}"
 }
 
 fn is_run_cloexec_config_setup_boundary(
@@ -2031,6 +2074,96 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_redef_warning_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_redef_warning_setup_source()),
+            display_path: "comp/redef.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_redef_warning_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_redef_warning_setup_source()),
+            display_path: "comp/fold.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_redef_warning_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\n\nBEGIN {\n    $warn = \"\";\n    $SIG{__DIE__} = sub { $warn .= join(\"\",@_) }\n}\n"
+                    .to_string(),
+            ),
+            display_path: "comp/redef.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_redef_suppressed_warning_eval_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_redef_suppressed_warning_eval_source()),
+            display_path: "comp/redef.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_redef_suppressed_warning_eval_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_redef_suppressed_warning_eval_source()),
+            display_path: "comp/fold.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_redef_suppressed_warning_eval_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\n\nBEGIN {\n    local $^W = 1;\n    eval qq(sub sub10 () {1} sub sub10 {1});\n}\n"
+                    .to_string(),
+            ),
+            display_path: "comp/redef.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_run_cloexec_config_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(run_cloexec_config_setup_source()),
@@ -2976,6 +3109,16 @@ BEGIN {
 }
 "#
         .to_string()
+    }
+
+    fn comp_redef_warning_setup_source() -> String {
+        "#!./perl -w\n\nBEGIN {\n    $warn = \"\";\n    $SIG{__WARN__} = sub { $warn .= join(\"\",@_) }\n}\n"
+            .to_string()
+    }
+
+    fn comp_redef_suppressed_warning_eval_source() -> String {
+        "#!./perl -w\n\nBEGIN {\n    local $^W = 0;\n    eval qq(sub sub10 () {1} sub sub10 {1});\n}\n"
+            .to_string()
     }
 
     fn run_cloexec_config_setup_source() -> String {
