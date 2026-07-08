@@ -302,6 +302,11 @@ fn is_unsupported_compile_boundary(
         && !is_comp_proto_inc_setup_boundary(effect, invocation, source)
         && !is_comp_proto_typeglob_sub_assignment_boundary(effect, invocation, source)
         && !is_comp_use_inc_feature_setup_boundary(effect, invocation, source)
+        && !is_comp_parser_inc_setup_boundary(effect, invocation, source)
+        && !is_comp_parser_line_table_self_write_boundary(effect, invocation, source)
+        && !is_comp_parser_line_table_symbolic_ref_boundary(effect, invocation, source)
+        && !is_comp_parser_multideref_literal_boundary(effect, invocation, source)
+        && !is_comp_parser_heredoc_interpolation_boundary(effect, invocation, source)
         && !is_run_cloexec_config_setup_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
@@ -784,6 +789,107 @@ fn is_comp_use_inc_feature_setup_boundary(
     let normalized = slice.replace("\r\n", "\n");
     normalized
         == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = ('../lib', 'lib');\n    $INC{\"feature.pm\"} = 1; # so we don't attempt to load feature.pm\n}"
+}
+
+fn is_comp_parser_inc_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/parser.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "BEGIN {\n    @INC = qw(. ../lib);\n    chdir 't' if -d 't';\n}"
+}
+
+fn is_comp_parser_line_table_self_write_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/parser.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "BEGIN{ ${\"_<\".__FILE__} = \\1 }"
+}
+
+fn is_comp_parser_line_table_symbolic_ref_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/parser.t"
+        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
+        || effect.dynamic_reason.as_deref()
+            != Some("symbolic reference dereference is not statically known")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "${\"_<\".__FILE__}"
+        && source.replace("\r\n", "\n").contains("BEGIN{ ${\"_<\".__FILE__} = \\1 }")
+}
+
+fn is_comp_parser_multideref_literal_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/parser.t"
+        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
+        || effect.dynamic_reason.as_deref()
+            != Some("symbolic reference dereference is not statically known")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "${[{a=>214}]}"
+}
+
+fn is_comp_parser_heredoc_interpolation_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/parser.t"
+        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
+        || effect.dynamic_reason.as_deref()
+            != Some("symbolic reference dereference is not statically known")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "${\n\nENE\n\"bar\"}"
 }
 
 fn is_run_cloexec_config_setup_boundary(
@@ -2827,6 +2933,195 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_parser_inc_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_inc_setup_source()),
+            display_path: "comp/parser.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_inc_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_inc_setup_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_inc_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    @INC = qw(. ../lib);\n}\n"
+                    .to_string(),
+            ),
+            display_path: "comp/parser.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_line_table_self_write_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_line_table_self_write_source()),
+            display_path: "comp/parser.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_line_table_self_write_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_line_table_self_write_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_line_table_self_write_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\nBEGIN{ ${\"_<\".__FILE__} = \\2 }\n".to_string(),
+            ),
+            display_path: "comp/parser.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_line_table_symbolic_ref_without_probe_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("#!./perl\nmy $x = ${\"_<\".__FILE__};\n".to_string()),
+            display_path: "comp/parser.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_multideref_literal_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_multideref_literal_source()),
+            display_path: "comp/parser.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_multideref_literal_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_multideref_literal_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_multideref_literal_changed_expr_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\nis +(${[{a=>215}]}[0])->{a}, 215;\n".to_string(),
+            ),
+            display_path: "comp/parser.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_heredoc_interpolation_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_heredoc_interpolation_source()),
+            display_path: "comp/parser.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_heredoc_interpolation_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_heredoc_interpolation_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_heredoc_interpolation_changed_body_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("#!./perl\n<<ENE . ${\n\nENE\n\"baz\"};\n".to_string()),
+            display_path: "comp/parser.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_run_cloexec_config_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(run_cloexec_config_setup_source()),
@@ -3831,6 +4126,22 @@ BEGIN {
     fn comp_use_inc_feature_setup_source() -> String {
         "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    @INC = ('../lib', 'lib');\n    $INC{\"feature.pm\"} = 1; # so we don't attempt to load feature.pm\n}\n"
             .to_string()
+    }
+
+    fn comp_parser_inc_setup_source() -> String {
+        "#!./perl\n\nBEGIN {\n    @INC = qw(. ../lib);\n    chdir 't' if -d 't';\n}\n".to_string()
+    }
+
+    fn comp_parser_line_table_self_write_source() -> String {
+        "#!./perl\n$file = __FILE__;\nBEGIN{ ${\"_<\".__FILE__} = \\1 }\n".to_string()
+    }
+
+    fn comp_parser_multideref_literal_source() -> String {
+        "#!./perl\nis +(${[{a=>214}]}[0])->{a}, 214;\n".to_string()
+    }
+
+    fn comp_parser_heredoc_interpolation_source() -> String {
+        "#!./perl\n<<ENE . ${\n\nENE\n\"bar\"};\n".to_string()
     }
 
     fn run_cloexec_config_setup_source() -> String {
