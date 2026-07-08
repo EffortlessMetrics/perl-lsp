@@ -1457,11 +1457,7 @@ impl<'a> PerlLexer<'a> {
 
         loop {
             let mut saw_whitespace = false;
-            loop {
-                let ch = match self.input.get(offset..).and_then(|suffix| suffix.chars().next()) {
-                    Some(c) => c,
-                    None => break,
-                };
+            while let Some(ch) = self.input.get(offset..).and_then(|suffix| suffix.chars().next()) {
                 if ch.is_whitespace() {
                     offset += ch.len_utf8();
                     saw_whitespace = true;
@@ -1474,12 +1470,9 @@ impl<'a> PerlLexer<'a> {
             if comment_eligible
                 && self.input.get(offset..).is_some_and(|suffix| suffix.starts_with('#'))
             {
-                loop {
-                    let ch = match self.input.get(offset..).and_then(|suffix| suffix.chars().next())
-                    {
-                        Some(c) => c,
-                        None => break,
-                    };
+                while let Some(ch) =
+                    self.input.get(offset..).and_then(|suffix| suffix.chars().next())
+                {
                     offset += ch.len_utf8();
                     if matches!(ch, '\n' | '\r') {
                         break;
@@ -1498,7 +1491,7 @@ impl<'a> PerlLexer<'a> {
         };
         let next_offset = offset + c.len_utf8();
         let following = self.input.get(next_offset..).and_then(|suffix| suffix.chars().next());
-        return (Some(c), following);
+        (Some(c), following)
     }
 
     /// Is `c` a valid quote-like delimiter? (non-alnum, including paired)

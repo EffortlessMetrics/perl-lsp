@@ -1311,6 +1311,9 @@ impl<'a> Parser<'a> {
             kind,
             // Regular identifiers
             TokenKind::Identifier
+            // Single-component version strings can also be subroutine names:
+            // `sub v5 { ... }` is legal and appears in Perl core tests.
+            | TokenKind::VString
             // All keyword tokens (valid sub names in Perl)
             | TokenKind::If
             | TokenKind::Unless

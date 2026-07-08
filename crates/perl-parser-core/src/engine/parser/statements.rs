@@ -186,7 +186,9 @@ impl<'a> Parser<'a> {
             // Check for optional semicolon
             if self.peek_kind() == Some(TokenKind::Semicolon) {
                 let semi_token = self.consume_token()?;
-                self.byte_cursor = semi_token.end;
+                if self.pending_heredocs.is_empty() {
+                    self.byte_cursor = semi_token.end;
+                }
             }
             self.drain_pending_heredocs(&mut stmt);
             return Ok(stmt);
@@ -490,7 +492,9 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Semicolon) {
             let semi_token = self.consume_token()?;
             // Track cursor after semicolon for heredoc content collection
-            self.byte_cursor = semi_token.end;
+            if self.pending_heredocs.is_empty() {
+                self.byte_cursor = semi_token.end;
+            }
         }
 
         // Drain pending heredocs after statement completion (attach content to AST)
