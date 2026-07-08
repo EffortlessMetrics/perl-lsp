@@ -133,7 +133,7 @@ fn brace_quantifier_len(bytes: &[u8], start: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{quantifier_at, Quantifier};
+    use super::{Quantifier, quantifier_at};
 
     #[test]
     fn question_quantifier_is_not_repeatable() {
