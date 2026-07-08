@@ -4,12 +4,12 @@
   "mode": "compile",
   "profile": "run",
   "files_total": 28,
-  "files_passed": 6,
-  "files_failed": 22,
+  "files_passed": 9,
+  "files_failed": 19,
   "tap_assertions_total": 28,
-  "tap_assertions_passed": 6,
+  "tap_assertions_passed": 9,
   "buckets": {
-    "compile_effect": 12,
+    "compile_effect": 9,
     "parse_recovery": 10
   },
   "expected_failures": [
@@ -74,18 +74,6 @@
       ]
     },
     {
-      "path": "run/noswitch.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
-    {
       "path": "run/runenv_hashseed.t",
       "phase": "compile",
       "bucket": "compile_effect",
@@ -131,18 +119,6 @@
         "diagnostics",
         "syntax_tree",
         "semantic_tokens"
-      ]
-    },
-    {
-      "path": "run/switcha.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
       ]
     },
     {
@@ -203,18 +179,6 @@
         "diagnostics",
         "syntax_tree",
         "semantic_tokens"
-      ]
-    },
-    {
-      "path": "run/switchF.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
       ]
     },
     {
@@ -311,8 +275,8 @@
     },
     {
       "path": "run/noswitch.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
@@ -353,8 +317,8 @@
     },
     {
       "path": "run/switcha.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
@@ -389,8 +353,8 @@
     },
     {
       "path": "run/switchF.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {

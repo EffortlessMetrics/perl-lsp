@@ -288,6 +288,7 @@ fn is_unsupported_compile_boundary(
         && !is_comp_our_tieall_autoload_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
+        && !is_run_data_argv_setup_boundary(effect, invocation, source)
 }
 
 fn is_comp_final_line_num_syntax_error_probe(
@@ -461,6 +462,34 @@ fn is_run_test_pl_setup_boundary(
     let normalized = slice.replace("\r\n", "\n");
     normalized
         == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    require './test.pl';\n}"
+}
+
+fn is_run_data_argv_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    let display_path = normalize_display_path(&invocation.display_path);
+    let expected_plan = match display_path.as_str() {
+        "run/switcha.t" | "run/switchF.t" => "2",
+        "run/noswitch.t" => "3",
+        _ => return false,
+    };
+    if effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized
+        == format!(
+            "BEGIN {{\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    require './test.pl';\n    *ARGV = *DATA;\n    plan(tests => {expected_plan});\n}}"
+        )
 }
 
 fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
@@ -1688,6 +1717,52 @@ mod tests {
     }
 
     #[test]
+    fn compile_run_data_argv_setup_boundary_passes_for_selected_files() -> TestResult {
+        for (display_path, plan) in
+            [("run/switcha.t", "2"), ("run/switchF.t", "2"), ("run/noswitch.t", "3")]
+        {
+            let invocation = Invocation {
+                source: SourceInput::Inline(run_data_argv_setup_source(plan)),
+                display_path: display_path.to_string(),
+            };
+
+            let result = run_compile(&invocation)?;
+
+            assert_eq!(result.status, RunnerStatus::Pass, "{display_path}");
+            assert!(result.bucket.is_none(), "{display_path}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_data_argv_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_data_argv_setup_source("3")),
+            display_path: "run/switchn.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_data_argv_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_data_argv_setup_source("4")),
+            display_path: "run/noswitch.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_base_lex_symbolic_reference_boundaries_pass() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_lex_symbolic_reference_source()),
@@ -2124,6 +2199,21 @@ BEGIN {
 }
 "#
         .to_string()
+    }
+
+    fn run_data_argv_setup_source(plan: &str) -> String {
+        format!(
+            r#"#!./perl
+
+BEGIN {{
+    chdir 't' if -d 't';
+    @INC = '../lib';
+    require './test.pl';
+    *ARGV = *DATA;
+    plan(tests => {plan});
+}}
+"#
+        )
     }
 
     fn base_lex_symbolic_reference_source() -> String {
