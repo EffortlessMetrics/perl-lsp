@@ -4,12 +4,12 @@
   "mode": "compile",
   "profile": "run",
   "files_total": 28,
-  "files_passed": 3,
-  "files_failed": 25,
+  "files_passed": 6,
+  "files_failed": 22,
   "tap_assertions_total": 28,
-  "tap_assertions_passed": 3,
+  "tap_assertions_passed": 6,
   "buckets": {
-    "compile_effect": 15,
+    "compile_effect": 12,
     "parse_recovery": 10
   },
   "expected_failures": [
@@ -134,18 +134,6 @@
       ]
     },
     {
-      "path": "run/switch0.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
-    {
       "path": "run/switcha.t",
       "phase": "compile",
       "bucket": "compile_effect",
@@ -230,18 +218,6 @@
       ]
     },
     {
-      "path": "run/switchF2.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
-    {
       "path": "run/switchI.t",
       "phase": "compile",
       "bucket": "compile_effect",
@@ -267,18 +243,6 @@
     },
     {
       "path": "run/switchp.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
-    {
-      "path": "run/switcht.t",
       "phase": "compile",
       "bucket": "compile_effect",
       "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
@@ -383,8 +347,8 @@
     },
     {
       "path": "run/switch0.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
@@ -437,8 +401,8 @@
     },
     {
       "path": "run/switchF2.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
@@ -467,8 +431,8 @@
     },
     {
       "path": "run/switcht.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {

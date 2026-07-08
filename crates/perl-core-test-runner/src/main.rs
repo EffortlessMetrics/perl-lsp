@@ -287,6 +287,7 @@ fn is_unsupported_compile_boundary(
         && !is_base_rs_filehandle_alias_boundary(effect, invocation, source)
         && !is_comp_our_tieall_autoload_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
+        && !is_run_test_pl_setup_boundary(effect, invocation, source)
 }
 
 fn is_comp_final_line_num_syntax_error_probe(
@@ -438,6 +439,28 @@ fn is_run_switch_setup_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n}"
+}
+
+fn is_run_test_pl_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    let display_path = normalize_display_path(&invocation.display_path);
+    if !matches!(display_path.as_str(), "run/switch0.t" | "run/switchF2.t" | "run/switcht.t")
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized
+        == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    require './test.pl';\n}"
 }
 
 fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
@@ -1618,6 +1641,53 @@ mod tests {
     }
 
     #[test]
+    fn compile_run_test_pl_setup_boundary_passes_for_selected_files() -> TestResult {
+        for display_path in ["run/switch0.t", "run/switchF2.t", "run/switcht.t"] {
+            let invocation = Invocation {
+                source: SourceInput::Inline(run_test_pl_setup_source()),
+                display_path: display_path.to_string(),
+            };
+
+            let result = run_compile(&invocation)?;
+
+            assert_eq!(result.status, RunnerStatus::Pass, "{display_path}");
+            assert!(result.bucket.is_none(), "{display_path}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_test_pl_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_test_pl_setup_source()),
+            display_path: "run/switcha.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_test_pl_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    require './other.pl';\n}\n"
+                    .to_string(),
+            ),
+            display_path: "run/switch0.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_base_lex_symbolic_reference_boundaries_pass() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_lex_symbolic_reference_source()),
@@ -2039,6 +2109,18 @@ tie $x, 'TieAll';
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
+}
+"#
+        .to_string()
+    }
+
+    fn run_test_pl_setup_source() -> String {
+        r#"#!./perl
+
+BEGIN {
+    chdir 't' if -d 't';
+    @INC = '../lib';
+    require './test.pl';
 }
 "#
         .to_string()
