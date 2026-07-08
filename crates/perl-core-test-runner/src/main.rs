@@ -288,6 +288,7 @@ fn is_unsupported_compile_boundary(
         && !is_comp_our_tieall_autoload_boundary(effect, invocation, source)
         && !is_comp_line_debug_inc_setup_boundary(effect, invocation, source)
         && !is_comp_line_debug_line_table_symbolic_ref_boundary(effect, invocation, source)
+        && !is_comp_retainedlines_line_table_symbolic_ref_boundary(effect, invocation, source)
         && !is_comp_filter_exception_test_pl_setup_boundary(effect, invocation, source)
         && !is_comp_filter_exception_inc_filter_boundary(effect, invocation, source)
         && !is_comp_redef_warning_setup_boundary(effect, invocation, source)
@@ -478,6 +479,29 @@ fn is_comp_line_debug_line_table_symbolic_ref_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized.contains("\"_<comp/line_debug_0.aux\"")
+}
+
+fn is_comp_retainedlines_line_table_symbolic_ref_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/retainedlines.t"
+        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
+        || effect.dynamic_reason.as_deref()
+            != Some("symbolic reference dereference is not statically known")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized.contains("$::{$keys[0]}")
+        || normalized.contains("$::{\"_<hash-line-eval\"}")
+        || normalized.contains("$::{\"_<doggo\"}")
+        || normalized.contains("$::{\"_<copfilesv-modified\"}")
 }
 
 fn is_comp_filter_exception_test_pl_setup_boundary(
@@ -2115,6 +2139,48 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_retainedlines_symbolic_line_table_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_retainedlines_symbolic_line_table_source()),
+            display_path: "comp/retainedlines.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_retainedlines_symbolic_line_table_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_retainedlines_symbolic_line_table_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_retainedlines_other_symbolic_ref_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_line_debug_symbolic_line_table_source()),
+            display_path: "comp/retainedlines.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_comp_filter_exception_test_pl_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_filter_exception_test_pl_setup_source()),
@@ -3476,6 +3542,15 @@ tie $x, 'TieAll';
     fn comp_line_debug_symbolic_line_table_source() -> String {
         r#"ok 1, scalar(@{"_<comp/line_debug_0.aux"}) == 1+$nlines;
 ok 2, !defined(${"_<comp/line_debug_0.aux"}[0]);
+"#
+        .to_string()
+    }
+
+    fn comp_retainedlines_symbolic_line_table_source() -> String {
+        r#"my @got_lines = @{$::{$keys[0]}};
+is $::{"_<hash-line-eval"}[42], " labadalabada()\n";
+is $::{"_<doggo"}[85], " labadalabada()\n";
+is $::{"_<copfilesv-modified"}[52], "    abcdefg();\n";
 "#
         .to_string()
     }

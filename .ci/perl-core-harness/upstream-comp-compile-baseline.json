@@ -4,12 +4,12 @@
   "mode": "compile",
   "profile": "comp",
   "files_total": 25,
-  "files_passed": 17,
-  "files_failed": 8,
+  "files_passed": 18,
+  "files_failed": 7,
   "tap_assertions_total": 25,
-  "tap_assertions_passed": 17,
+  "tap_assertions_passed": 18,
   "buckets": {
-    "compile_effect": 8
+    "compile_effect": 7
   },
   "expected_failures": [
     {
@@ -77,18 +77,6 @@
       "phase": "compile",
       "bucket": "compile_effect",
       "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
-    {
-      "path": "comp/retainedlines.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "symbolic reference dereference is not statically known",
       "workstream": "compile_time_effects",
       "lsp_impact": [
         "definition",
@@ -232,8 +220,8 @@
     },
     {
       "path": "comp/retainedlines.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
