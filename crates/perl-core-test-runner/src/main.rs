@@ -297,6 +297,7 @@ fn is_unsupported_compile_boundary(
         && !is_comp_fold_readonly_constant_ref_boundary(effect, invocation, source)
         && !is_comp_fold_nested_constant_ref_boundary(effect, invocation, source)
         && !is_comp_utf_cleanup_boundary(effect, invocation, source)
+        && !is_comp_parser_run_test_pl_setup_boundary(effect, invocation, source)
         && !is_run_cloexec_config_setup_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
@@ -669,6 +670,27 @@ fn is_comp_utf_cleanup_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "END {\n    1 while unlink \"tmputf$$.pl\";\n}"
+}
+
+fn is_comp_parser_run_test_pl_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/parser_run.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized
+        == "BEGIN {\n    chdir 't' if -d 't';\n    require './test.pl';\n    set_up_inc( qw(. ../lib ) );\n}"
 }
 
 fn is_run_cloexec_config_setup_boundary(
@@ -2493,6 +2515,51 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_parser_run_test_pl_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_run_test_pl_setup_source()),
+            display_path: "comp/parser_run.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_run_test_pl_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_parser_run_test_pl_setup_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_parser_run_test_pl_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    require './test.pl';\n    set_up_inc(qw(. ../lib));\n}\n"
+                    .to_string(),
+            ),
+            display_path: "comp/parser_run.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_run_cloexec_config_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(run_cloexec_config_setup_source()),
@@ -3470,6 +3537,11 @@ BEGIN {
 
     fn comp_utf_cleanup_source() -> String {
         "#!./perl -w\nEND {\n    1 while unlink \"tmputf$$.pl\";\n}\n".to_string()
+    }
+
+    fn comp_parser_run_test_pl_setup_source() -> String {
+        "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    require './test.pl';\n    set_up_inc( qw(. ../lib ) );\n}\n"
+            .to_string()
     }
 
     fn run_cloexec_config_setup_source() -> String {
