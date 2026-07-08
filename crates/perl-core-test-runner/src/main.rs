@@ -473,8 +473,10 @@ fn is_run_test_pl_setup_boundary(
     source: &str,
 ) -> bool {
     let display_path = normalize_display_path(&invocation.display_path);
-    if !matches!(display_path.as_str(), "run/switch0.t" | "run/switchF2.t" | "run/switcht.t")
-        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+    if !matches!(
+        display_path.as_str(),
+        "run/runenv_hashseed.t" | "run/switch0.t" | "run/switchF2.t" | "run/switcht.t"
+    ) || effect.source_kind != CompileEffectSourceKind::PhaseBlock
         || effect.dynamic_reason.as_deref()
             != Some("phase block compile-time execution is recorded but not evaluated")
     {
@@ -1818,7 +1820,9 @@ mod tests {
 
     #[test]
     fn compile_run_test_pl_setup_boundary_passes_for_selected_files() -> TestResult {
-        for display_path in ["run/switch0.t", "run/switchF2.t", "run/switcht.t"] {
+        for display_path in
+            ["run/runenv_hashseed.t", "run/switch0.t", "run/switchF2.t", "run/switcht.t"]
+        {
             let invocation = Invocation {
                 source: SourceInput::Inline(run_test_pl_setup_source()),
                 display_path: display_path.to_string(),
@@ -1829,6 +1833,20 @@ mod tests {
             assert_eq!(result.status, RunnerStatus::Pass, "{display_path}");
             assert!(result.bucket.is_none(), "{display_path}");
         }
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_test_pl_setup_fresh_perl_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_test_pl_setup_source()),
+            display_path: "run/fresh_perl.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
         Ok(())
     }
 

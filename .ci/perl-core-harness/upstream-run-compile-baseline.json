@@ -4,12 +4,12 @@
   "mode": "compile",
   "profile": "run",
   "files_total": 28,
-  "files_passed": 15,
-  "files_failed": 13,
+  "files_passed": 16,
+  "files_failed": 12,
   "tap_assertions_total": 28,
-  "tap_assertions_passed": 15,
+  "tap_assertions_passed": 16,
   "buckets": {
-    "compile_effect": 3,
+    "compile_effect": 2,
     "parse_recovery": 10
   },
   "expected_failures": [
@@ -59,18 +59,6 @@
         "diagnostics",
         "syntax_tree",
         "semantic_tokens"
-      ]
-    },
-    {
-      "path": "run/runenv_hashseed.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
       ]
     },
     {
@@ -209,8 +197,8 @@
     },
     {
       "path": "run/runenv_hashseed.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
