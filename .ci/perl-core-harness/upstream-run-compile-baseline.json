@@ -4,12 +4,12 @@
   "mode": "compile",
   "profile": "run",
   "files_total": 28,
-  "files_passed": 10,
-  "files_failed": 18,
+  "files_passed": 11,
+  "files_failed": 17,
   "tap_assertions_total": 28,
-  "tap_assertions_passed": 10,
+  "tap_assertions_passed": 11,
   "buckets": {
-    "compile_effect": 8,
+    "compile_effect": 7,
     "parse_recovery": 10
   },
   "expected_failures": [
@@ -194,18 +194,6 @@
       ]
     },
     {
-      "path": "run/switchp.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    },
-    {
       "path": "run/switchx.t",
       "phase": "compile",
       "bucket": "compile_effect",
@@ -377,8 +365,8 @@
     },
     {
       "path": "run/switchp.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
