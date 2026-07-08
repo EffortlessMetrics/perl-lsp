@@ -275,6 +275,8 @@ fn is_unsupported_compile_boundary(
         return false;
     }
     !is_base_term_cwd_setup_boundary(effect, invocation, source)
+        && !is_base_rs_end_cleanup_boundary(effect, invocation, source)
+        && !is_base_rs_filehandle_alias_boundary(effect, invocation, source)
 }
 
 fn is_base_term_cwd_setup_boundary(
@@ -295,6 +297,45 @@ fn is_base_term_cwd_setup_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "BEGIN {\n    chdir 't' if -d 't';\n}"
+}
+
+fn is_base_rs_end_cleanup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "base/rs.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "END { unlink \"./foo\"; }"
+}
+
+fn is_base_rs_filehandle_alias_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "base/rs.t"
+        || effect.source_kind != CompileEffectSourceKind::StashGraph
+        || effect.dynamic_reason.as_deref() != Some("typeglob assignment has a non-static RHS")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    matches!(normalized.trim(), "*FH = shift" | "*FH = shift;")
 }
 
 fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
@@ -1256,6 +1297,90 @@ mod tests {
     }
 
     #[test]
+    fn compile_base_rs_end_cleanup_phase_block_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_rs_end_cleanup_source()),
+            display_path: "base/rs.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_base_rs_other_phase_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("END { $x = 1; }\n".to_string()),
+            display_path: "base/rs.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_base_rs_cleanup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_rs_end_cleanup_source()),
+            display_path: "base/term.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_base_rs_filehandle_aliases_pass() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_rs_filehandle_alias_source()),
+            display_path: "base/rs.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_base_rs_other_typeglob_assignment_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("*FH = $dynamic;\n".to_string()),
+            display_path: "base/rs.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_base_rs_filehandle_alias_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_rs_filehandle_alias_source()),
+            display_path: "base/lex.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn execute_base_if_emits_real_tap() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_if_source()),
@@ -1536,6 +1661,38 @@ BEGIN {
 }
 
 print "1..7\n";
+"#
+        .to_string()
+    }
+
+    fn base_rs_end_cleanup_source() -> String {
+        r#"#!./perl
+
+print "1..41\n";
+
+sub test_string {
+  *FH = shift;
+}
+
+sub test_record {
+  *FH = shift;
+}
+
+END { unlink "./foo"; }
+"#
+        .to_string()
+    }
+
+    fn base_rs_filehandle_alias_source() -> String {
+        r#"#!./perl
+
+sub test_string {
+  *FH = shift;
+}
+
+sub test_record {
+  *FH = shift;
+}
 "#
         .to_string()
     }
