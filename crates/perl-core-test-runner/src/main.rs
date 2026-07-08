@@ -428,7 +428,7 @@ fn is_run_switch_setup_boundary(
     source: &str,
 ) -> bool {
     let display_path = normalize_display_path(&invocation.display_path);
-    if !matches!(display_path.as_str(), "run/switch-I-and-M.t" | "run/switchM.t")
+    if !matches!(display_path.as_str(), "run/switch-I-and-M.t" | "run/switchM.t" | "run/switchx.t")
         || effect.source_kind != CompileEffectSourceKind::PhaseBlock
         || effect.dynamic_reason.as_deref()
             != Some("phase block compile-time execution is recorded but not evaluated")
@@ -1651,6 +1651,20 @@ mod tests {
         let invocation = Invocation {
             source: SourceInput::Inline(run_switch_setup_source()),
             display_path: "run/switchM.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_switchx_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_switch_setup_source()),
+            display_path: "run/switchx.t".to_string(),
         };
 
         let result = run_compile(&invocation)?;
