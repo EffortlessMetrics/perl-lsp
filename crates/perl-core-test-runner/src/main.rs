@@ -472,7 +472,7 @@ fn is_run_data_argv_setup_boundary(
     let display_path = normalize_display_path(&invocation.display_path);
     let expected_plan = match display_path.as_str() {
         "run/switcha.t" | "run/switchF.t" => "2",
-        "run/noswitch.t" => "3",
+        "run/noswitch.t" | "run/switchn.t" => "3",
         _ => return false,
     };
     if effect.source_kind != CompileEffectSourceKind::PhaseBlock
@@ -1718,9 +1718,12 @@ mod tests {
 
     #[test]
     fn compile_run_data_argv_setup_boundary_passes_for_selected_files() -> TestResult {
-        for (display_path, plan) in
-            [("run/switcha.t", "2"), ("run/switchF.t", "2"), ("run/noswitch.t", "3")]
-        {
+        for (display_path, plan) in [
+            ("run/switcha.t", "2"),
+            ("run/switchF.t", "2"),
+            ("run/noswitch.t", "3"),
+            ("run/switchn.t", "3"),
+        ] {
             let invocation = Invocation {
                 source: SourceInput::Inline(run_data_argv_setup_source(plan)),
                 display_path: display_path.to_string(),
@@ -1738,7 +1741,7 @@ mod tests {
     fn compile_run_data_argv_setup_other_file_stays_bucketed() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(run_data_argv_setup_source("3")),
-            display_path: "run/switchn.t".to_string(),
+            display_path: "run/switchp.t".to_string(),
         };
 
         let result = run_compile(&invocation)?;
