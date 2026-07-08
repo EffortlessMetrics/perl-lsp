@@ -77,6 +77,22 @@ fn test_use_module_with_empty_import() {
 }
 
 #[test]
+fn test_use_module_inside_block_without_semicolon() {
+    assert_clean_parse("{ use test_use }");
+}
+
+#[test]
+fn test_use_module_brace_import_after_semicolonless_block_use() {
+    assert_clean_parse(
+        r#"
+{ use test_use }
+use test_use { () };
+is ref $test_use::got[0], 'HASH', 'use parses arguments in term lexing cx';
+"#,
+    );
+}
+
+#[test]
 fn test_use_overload() {
     assert_clean_parse("use overload;");
 }

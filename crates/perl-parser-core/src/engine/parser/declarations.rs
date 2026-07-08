@@ -1140,7 +1140,9 @@ impl<'a> Parser<'a> {
                     None => break,
                 }
             }
-        } else if !Self::is_statement_terminator(self.peek_kind()) {
+        } else if !Self::is_statement_terminator(self.peek_kind())
+            && self.peek_kind() != Some(TokenKind::RightBrace)
+        {
             // Complex `use` arguments can start with tokens outside the bare-arg
             // fast path, such as sigils in `use warnings $ENV{X} ? ...`.
             while !Self::is_statement_terminator(self.peek_kind()) && !self.tokens.is_eof() {
