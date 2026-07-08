@@ -9,8 +9,8 @@
   "tap_assertions_total": 25,
   "tap_assertions_passed": 9,
   "buckets": {
-    "compile_effect": 13,
-    "parse_recovery": 3
+    "compile_effect": 14,
+    "parse_recovery": 2
   },
   "expected_failures": [
     {
@@ -76,13 +76,13 @@
     {
       "path": "comp/line_debug.t",
       "phase": "compile",
-      "bucket": "parse_recovery",
-      "first_diagnostic": "expected ')', found number at position 654",
-      "workstream": "parser_recovery",
+      "bucket": "compile_effect",
+      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
+      "workstream": "compile_time_effects",
       "lsp_impact": [
-        "diagnostics",
-        "syntax_tree",
-        "semantic_tokens"
+        "definition",
+        "references",
+        "diagnostics"
       ]
     },
     {
