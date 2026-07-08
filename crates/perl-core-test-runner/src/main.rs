@@ -7,7 +7,7 @@
 
 use anyhow::{Context, Result, bail};
 use perl_core_harness_types::{RUNNER_RECORD_SCHEMA_VERSION, RunnerRecord, RunnerStatus};
-use perl_parser_core::hir::{CompileEffectKind, lower_ast};
+use perl_parser_core::hir::{CompileEffect, CompileEffectKind, CompileEffectSourceKind, lower_ast};
 use perl_parser_core::{Parser, RecoverySalvageClass, RecoverySalvageProfile};
 use std::env;
 use std::ffi::OsString;
@@ -253,7 +253,7 @@ fn run_compile(invocation: &Invocation) -> Result<ModeRunResult> {
     let hir = lower_ast(&output.ast);
     let effects = hir.compile_effects();
     if let Some(effect) =
-        effects.iter().find(|effect| effect.kind == CompileEffectKind::EmitDynamicBoundary)
+        effects.iter().find(|effect| is_unsupported_compile_boundary(effect, invocation, &source))
     {
         let first_diagnostic = effect
             .dynamic_reason
@@ -264,6 +264,37 @@ fn run_compile(invocation: &Invocation) -> Result<ModeRunResult> {
     }
 
     Ok(ModeRunResult::pass())
+}
+
+fn is_unsupported_compile_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if effect.kind != CompileEffectKind::EmitDynamicBoundary {
+        return false;
+    }
+    !is_base_term_cwd_setup_boundary(effect, invocation, source)
+}
+
+fn is_base_term_cwd_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "base/term.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "BEGIN {\n    chdir 't' if -d 't';\n}"
 }
 
 fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
@@ -1183,6 +1214,48 @@ mod tests {
     }
 
     #[test]
+    fn compile_base_term_cwd_setup_phase_block_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_term_cwd_setup_source()),
+            display_path: "base/term.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_base_term_other_phase_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("BEGIN {\n    $x = 1;\n}\n".to_string()),
+            display_path: "base/term.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_same_phase_block_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(base_term_cwd_setup_source()),
+            display_path: "base/rs.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn execute_base_if_emits_real_tap() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_if_source()),
@@ -1453,6 +1526,18 @@ while ($x != 1) { $x = 1; }
     #[test]
     fn one_line_collapses_diagnostic_whitespace() {
         assert_eq!(one_line("expected\n  expression\tfound ;"), "expected expression found ;");
+    }
+
+    fn base_term_cwd_setup_source() -> String {
+        r#"#!./perl
+
+BEGIN {
+    chdir 't' if -d 't';
+}
+
+print "1..7\n";
+"#
+        .to_string()
     }
 
     fn base_if_source() -> String {

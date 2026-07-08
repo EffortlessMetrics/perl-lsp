@@ -202,6 +202,38 @@ fn cli_compile_inline_source_emits_tap_and_context() -> Result<()> {
 }
 
 #[test]
+fn cli_compile_base_term_cwd_setup_emits_tap_and_context() -> Result<()> {
+    let temp = tempfile::tempdir()?;
+    let script = temp.path().join("base").join("term.t");
+    std::fs::create_dir_all(script.parent().ok_or_else(|| anyhow::anyhow!("missing parent"))?)?;
+    std::fs::write(&script, base_term_source())?;
+    let context = temp.path().join("records.jsonl");
+
+    let output = Command::new(runner())
+        .current_dir(temp.path())
+        .env("PERL_LSP_HARNESS_MODE", "compile")
+        .env("PERL_LSP_HARNESS_CONTEXT", &context)
+        .args(["base/term.t"])
+        .output()?;
+
+    if !output.status.success() {
+        bail!("base/term.t cwd setup should pass compile mode");
+    }
+    let display = "base/term.t";
+    assert_eq!(String::from_utf8(output.stdout)?, "1..1\nok 1 - compile base/term.t\n");
+    assert_eq!(String::from_utf8(output.stderr)?, "");
+
+    let record = read_record(&context)?;
+    assert_eq!(record["mode"], "compile");
+    assert_eq!(record["path"], display);
+    assert_eq!(record["status"], "pass");
+    assert_eq!(record["assertions_passed"], 1);
+    assert_eq!(record["assertions_total"], 1);
+    assert!(record["bucket"].is_null());
+    Ok(())
+}
+
+#[test]
 fn cli_compile_failure_returns_nonzero_with_bucket() -> Result<()> {
     let output = Command::new(runner())
         .env("PERL_LSP_HARNESS_MODE", "compile")
@@ -518,6 +550,17 @@ print "1..2\n";
 $x = 'test';
 if ($x eq $x) { print "ok 1 - if eq\n"; } else { print "not ok 1 - if eq\n";}
 if ($x ne $x) { print "not ok 2 - if ne\n"; } else { print "ok 2 - if ne\n";}
+"#
+}
+
+fn base_term_source() -> &'static str {
+    r#"#!./perl
+
+BEGIN {
+    chdir 't' if -d 't';
+}
+
+print "1..7\n";
 "#
 }
 
