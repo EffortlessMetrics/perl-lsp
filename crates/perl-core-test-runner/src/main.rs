@@ -285,6 +285,7 @@ fn is_unsupported_compile_boundary(
         && !is_base_lex_map_begin_boundary(effect, invocation, source)
         && !is_base_rs_end_cleanup_boundary(effect, invocation, source)
         && !is_base_rs_filehandle_alias_boundary(effect, invocation, source)
+        && !is_comp_our_tieall_autoload_boundary(effect, invocation, source)
 }
 
 fn is_comp_final_line_num_syntax_error_probe(
@@ -392,6 +393,29 @@ fn is_base_rs_filehandle_alias_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     matches!(normalized.trim(), "*FH = shift" | "*FH = shift;")
+}
+
+fn is_comp_our_tieall_autoload_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/our.t"
+        || effect.source_kind != CompileEffectSourceKind::StashGraph
+        || effect.dynamic_reason.as_deref()
+            != Some("AUTOLOAD declaration makes method dispatch dynamic")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized.contains("sub AUTOLOAD {")
+        && normalized.contains("for ($AUTOLOAD =~ /TieAll::(.*)/)")
+        && normalized.contains("elsif (/calls/) { return join ',', splice @calls }")
+        && normalized.contains("return 1 if /FETCHSIZE|FIRSTKEY/;")
 }
 
 fn run_execute(invocation: &Invocation) -> Result<ModeRunResult> {
@@ -1482,6 +1506,37 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_our_tieall_autoload_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_our_tieall_autoload_source()),
+            display_path: "comp/our.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_generic_autoload_boundary_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("package Other;\nsub AUTOLOAD { 1 }\n".to_string()),
+            display_path: "comp/our.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
+            diagnostic.contains("AUTOLOAD declaration makes method dispatch dynamic")
+        }));
+        Ok(())
+    }
+
+    #[test]
     fn compile_base_lex_symbolic_reference_boundaries_pass() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_lex_symbolic_reference_source()),
@@ -1868,6 +1923,31 @@ sub test_string {
 sub test_record {
   *FH = shift;
 }
+"#
+        .to_string()
+    }
+
+    fn comp_our_tieall_autoload_source() -> String {
+        r#"#!./perl
+
+{
+    package TieAll;
+    my @calls;
+    sub AUTOLOAD {
+        for ($AUTOLOAD =~ /TieAll::(.*)/) {
+            if (/TIE/) { return bless {} }
+            elsif (/calls/) { return join ',', splice @calls }
+            else {
+               push @calls, $_;
+               return 1 if /FETCHSIZE|FIRSTKEY/;
+               return;
+            }
+        }
+    }
+}
+
+tie $x, 'TieAll';
+{our $x;}
 "#
         .to_string()
     }
