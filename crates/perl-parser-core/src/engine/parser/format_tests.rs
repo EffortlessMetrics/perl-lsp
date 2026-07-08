@@ -78,4 +78,37 @@ $val
         }
         Ok(())
     }
+
+    #[test]
+    fn format_followed_by_if_starts_new_statement() -> Result<(), String> {
+        let source = r#"format three =
+ok 8
+.
+
+if ($x eq $x) {
+    goto quux;
+}
+quux:
+sub five { print "ok 5\n"; }
+"#;
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().map_err(|e| e.to_string())?;
+        if !parser.errors().is_empty() {
+            return Err(format!("expected clean parse, got {:?}", parser.errors()));
+        }
+
+        let NodeKind::Program { statements } = &ast.kind else {
+            return Err(format!("expected Program, got {:?}", ast.kind));
+        };
+        if !matches!(statements.first().map(|stmt| &stmt.kind), Some(NodeKind::Format { .. })) {
+            return Err(format!(
+                "expected first statement to be Format, got {:?}",
+                statements.first()
+            ));
+        }
+        if !statements.iter().any(|stmt| matches!(stmt.kind, NodeKind::If { .. })) {
+            return Err(format!("expected following if statement, got {:?}", statements));
+        }
+        Ok(())
+    }
 }
