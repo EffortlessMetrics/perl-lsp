@@ -4,12 +4,11 @@
   "mode": "compile",
   "profile": "run",
   "files_total": 28,
-  "files_passed": 17,
-  "files_failed": 11,
+  "files_passed": 18,
+  "files_failed": 10,
   "tap_assertions_total": 28,
-  "tap_assertions_passed": 17,
+  "tap_assertions_passed": 18,
   "buckets": {
-    "compile_effect": 1,
     "parse_recovery": 10
   },
   "expected_failures": [
@@ -35,18 +34,6 @@
         "diagnostics",
         "syntax_tree",
         "semantic_tokens"
-      ]
-    },
-    {
-      "path": "run/fresh_perl.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
       ]
     },
     {
@@ -167,8 +154,8 @@
     },
     {
       "path": "run/fresh_perl.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
