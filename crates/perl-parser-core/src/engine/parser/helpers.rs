@@ -1211,6 +1211,9 @@ impl<'a> Parser<'a> {
             // Imported functions that behave like builtins often take string args without parens.
             TokenKind::String => true,
 
+            // `func 0` — Perl list-operator style calls may take literal numeric args.
+            TokenKind::Number => true,
+
             // `func other_func(args)` — identifier followed by `(`
             // `func bareword => value` — identifier followed by fat arrow (auto-quoted arg)
             // Also: `func Qualified::Name->method(...)` — qualified name as arg (Sub-pattern A).

@@ -1340,7 +1340,7 @@ impl<'a> Parser<'a> {
         }
 
         // Validate every character in the collected prototype string.
-        // Perl only allows: $ @ % & * \ ; + _ and ASCII space.
+        // Perl allows: $ @ % & * \ ; + _ bracketed ref groups, and ASCII space.
         // Anything else triggers Perl's "Illegal character in prototype" warning.
         // We emit a SyntaxError diagnostic (collected as a warning by the LSP layer
         // via DiagnosticCode::InvalidPrototype / PL302) but do NOT abort parsing —
@@ -1374,9 +1374,9 @@ impl<'a> Parser<'a> {
 /// Return `true` if `c` is a character that Perl permits in old-style prototypes.
 ///
 /// Valid characters (from perlsub):
-/// `$` `@` `%` `&` `*` `\` `;` `+` `_` and ASCII space.
+/// `$` `@` `%` `&` `*` `\` `;` `+` `_`, bracketed ref groups, and ASCII space.
 fn is_valid_prototype_char(c: char) -> bool {
-    matches!(c, '$' | '@' | '%' | '&' | '*' | '\\' | ';' | '+' | '_' | ' ')
+    matches!(c, '$' | '@' | '%' | '&' | '*' | '\\' | ';' | '+' | '_' | '[' | ']' | ' ')
 }
 
 #[cfg(test)]

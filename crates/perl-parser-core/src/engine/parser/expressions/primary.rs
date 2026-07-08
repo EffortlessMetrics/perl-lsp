@@ -870,22 +870,14 @@ impl<'a> Parser<'a> {
                             // Could be an operator like 'or', 'and', etc.
                             // Also detect no-paren function calls inside parens:
                             //   (func KEY => VALUE or ...)
-                            // When the first element is a bare identifier and the
-                            // next tokens are IDENT => , the identifier is a
-                            // function being called with fat-comma arguments.
-                            let is_no_paren_call =
-                                matches!(&expr.kind, NodeKind::Identifier { .. })
-                                    && self.peek_kind() == Some(TokenKind::Identifier)
-                                    && self.tokens
-                                        .peek_second()
-                                        .ok()
-                                        .map(|t| t.kind)
-                                        == Some(TokenKind::FatArrow);
-                            if is_no_paren_call {
-                                let NodeKind::Identifier { name } = &expr.kind else {
-                                    return self.parse_word_or_expr(expr);
-                                };
-                                let name = name.clone();
+                            //   (func 0 || 5)
+                            let bare_call_name = match &expr.kind {
+                                NodeKind::Identifier { name } if self.looks_like_bare_call(name) => {
+                                    Some(name.clone())
+                                }
+                                _ => None,
+                            };
+                            if let Some(name) = bare_call_name {
                                 let call_start = expr.location.start;
                                 let first_arg = self.parse_assignment_or_declaration()?;
                                 let args_node =
