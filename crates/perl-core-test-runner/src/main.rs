@@ -1511,18 +1511,9 @@ fn execute_base_num_t(source: &str) -> Result<ModeRunResult> {
 }
 
 fn execute_base_pat_t(source: &str) -> Result<ModeRunResult> {
-    for required in [
-        r#"print "1..2\n";"#,
-        r#"$_ = 'test';"#,
-        r#"if (/^test/) { print "ok 1 - match regex\n"; } else { print "not ok 1 - match regex\n";}"#,
-        r#"if (/^foo/) { print "not ok 2 - match regex\n"; } else { print "ok 2 - match regex\n";}"#,
-    ] {
-        if !source.contains(required) {
-            return Ok(ModeRunResult::fail(
-                "runtime_regex",
-                format!("execute-base base/pat.t does not support statement: {required}"),
-            ));
-        }
+    let lines = executable_lines(source).collect::<Vec<_>>();
+    if lines.as_slice() != BASE_PAT_EXPECTED_LINES {
+        return Ok(ModeRunResult::fail("runtime_regex", base_pat_mismatch_diagnostic(&lines)));
     }
 
     let subject = "test";
@@ -1548,6 +1539,44 @@ fn execute_base_pat_t(source: &str) -> Result<ModeRunResult> {
     }
 
     Ok(ModeRunResult::execute_pass(output, 2, 2))
+}
+
+const BASE_PAT_EXPECTED_LINES: &[&str] = &[
+    r#"print "1..2\n";"#,
+    r#"$_ = 'test';"#,
+    r#"if (/^test/) { print "ok 1 - match regex\n"; } else { print "not ok 1 - match regex\n";}"#,
+    r#"if (/^foo/) { print "not ok 2 - match regex\n"; } else { print "ok 2 - match regex\n";}"#,
+];
+
+fn base_pat_mismatch_diagnostic(lines: &[&str]) -> String {
+    for (index, expected) in BASE_PAT_EXPECTED_LINES.iter().enumerate() {
+        match lines.get(index) {
+            Some(actual) if actual == expected => {}
+            Some(actual) => {
+                return format!(
+                    "execute-base base/pat.t does not support statement at executable line {}: {} (expected: {})",
+                    index + 1,
+                    actual,
+                    expected
+                );
+            }
+            None => {
+                return format!(
+                    "execute-base base/pat.t is missing expected statement at executable line {}: {}",
+                    index + 1,
+                    expected
+                );
+            }
+        }
+    }
+
+    if let Some(extra) = lines.get(BASE_PAT_EXPECTED_LINES.len()) {
+        return format!(
+            "execute-base base/pat.t has unexpected statement after expected slice: {extra}"
+        );
+    }
+
+    "execute-base base/pat.t source does not match the selected executable slice".to_string()
 }
 
 fn execute_base_translate_t(source: &str) -> Result<ModeRunResult> {
@@ -4032,7 +4061,11 @@ for my $i (0 .. 255) {
 
     #[test]
     fn execute_base_pat_unsupported_regex_uses_regex_bucket() -> TestResult {
-        let source = r#"#!./perl print "1..2\n"; $_ = 'test'; if (/test$/) { print "ok 1\n"; }"#;
+        let source = r#"#!./perl
+print "1..2\n";
+$_ = 'test';
+if (/test$/) { print "ok 1\n"; }
+"#;
         let invocation = Invocation {
             source: SourceInput::Inline(source.into()),
             display_path: "base/pat.t".to_string(),
@@ -4042,6 +4075,50 @@ for my $i (0 .. 255) {
 
         assert_eq!(result.status, RunnerStatus::Fail);
         assert_eq!(result.bucket.as_deref(), Some("runtime_regex"));
+        assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
+            diagnostic.contains("does not support statement at executable line 3")
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_pat_missing_statement_uses_regex_bucket() -> TestResult {
+        let source = r#"#!./perl
+print "1..2\n";
+$_ = 'test';
+if (/^test/) { print "ok 1 - match regex\n"; } else { print "not ok 1 - match regex\n";}
+"#;
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.into()),
+            display_path: "base/pat.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("runtime_regex"));
+        assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
+            diagnostic.contains("is missing expected statement at executable line 4")
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn execute_base_pat_unexpected_statement_uses_regex_bucket() -> TestResult {
+        let mut source = base_pat_source();
+        source.push_str("$extra = 1;\n");
+        let invocation = Invocation {
+            source: SourceInput::Inline(source),
+            display_path: "base/pat.t".to_string(),
+        };
+
+        let result = run_execute(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("runtime_regex"));
+        assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
+            diagnostic.contains("has unexpected statement after expected slice: $extra = 1;")
+        }));
         Ok(())
     }
 
@@ -4588,8 +4665,10 @@ if ($x == 0) { print "ok 4\n"; } else { print "not ok 4\n";}
     }
 
     fn base_pat_source() -> String {
-        r#"#!./perl print "1..2\n"; # first test to see if we can run the tests. $_ = 'test'; if (/^test/) { print "ok 1 - match regex\n"; } else { print "not ok 1 - match regex\n";} if (/^foo/) { print "not ok 2 - match regex\n"; } else { print "ok 2 - match regex\n";}"#
-            .to_string()
+        let mut source = String::from("#!./perl\n\n");
+        source.push_str(&BASE_PAT_EXPECTED_LINES.join("\n"));
+        source.push('\n');
+        source
     }
 
     fn base_translate_source() -> String {
