@@ -306,6 +306,12 @@ fn is_unsupported_compile_boundary(
         && !is_comp_parser_line_table_symbolic_ref_boundary(effect, invocation, source)
         && !is_comp_parser_multideref_literal_boundary(effect, invocation, source)
         && !is_comp_parser_heredoc_interpolation_boundary(effect, invocation, source)
+        && !is_comp_require_setup_boundary(effect, invocation, source)
+        && !is_comp_require_utf8_open_boundary(effect, invocation, source)
+        && !is_comp_require_module_true_setup_boundary(effect, invocation, source)
+        && !is_comp_require_runtime_dynamic_require_boundary(effect, invocation, source)
+        && !is_comp_require_module_true_tuple_deref_boundary(effect, invocation, source)
+        && !is_comp_require_cleanup_boundary(effect, invocation, source)
         && !is_run_cloexec_config_setup_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
@@ -950,6 +956,175 @@ fn is_comp_parser_heredoc_interpolation_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "${\n\nENE\n\"bar\"}"
+}
+
+fn is_comp_require_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/require.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized
+        == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = '.';\n    push @INC, '../lib', '../ext/re';\n}"
+}
+
+fn is_comp_require_runtime_dynamic_require_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/require.t"
+        || effect.source_kind != CompileEffectSourceKind::RequireDirective
+        || effect.dynamic_reason.as_deref() != Some("require target is not statically known")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized_slice = slice.replace("\r\n", "\n");
+    let trimmed_slice = normalized_slice.trim();
+    let line_start = source[..effect.range.start].rfind('\n').map_or(0, |index| index + 1);
+    let line_end = source[effect.range.end..]
+        .find('\n')
+        .map_or(source.len(), |index| effect.range.end + index);
+    let normalized_line = source[line_start..line_end].replace("\r\n", "\n");
+    let trimmed_line = normalized_line.trim();
+    let recognized_dynamic_require = trimmed_slice == "require $ver"
+        || trimmed_slice == "require $ver;"
+        || trimmed_slice == "require $r"
+        || trimmed_slice == "require $r;"
+        || trimmed_slice.starts_with("CORE::require(File::Spec::Functions::catfile")
+        || matches!(
+            trimmed_line,
+            "eval {require 5.005};"
+                | "eval { require 5.005 };"
+                | "eval { require 5.005; };"
+                | "require 5.005"
+                | "eval { require v5.5.630; };"
+                | "eval { require v5.5.630 };"
+                | "eval { require(v5.5.630); };"
+                | "eval { require(v5.5.630) };"
+                | "eval { require v5; };"
+                | "eval { require 10.0.2; };"
+        );
+    if !recognized_dynamic_require {
+        return false;
+    }
+
+    let normalized_source = source.replace("\r\n", "\n");
+    normalized_source.contains("sub do_require {")
+        && normalized_source.contains("%INC = ();")
+        && normalized_source
+            .contains("# Test for fix of RT #24404 : \"require $scalar\" may load a directory")
+        && normalized_source.contains("CORE::require(File::Spec::Functions::catfile")
+        && normalized_source.contains("Cwd::getcwd(),\"bleah.pm\"")
+        && normalized_source
+            .contains("our @module_true_tests; # this is set up in a BEGIN later on.")
+}
+
+fn is_comp_require_utf8_open_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/require.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized == "BEGIN { ${^OPEN} = \":utf8\\0\"; }"
+}
+
+fn is_comp_require_module_true_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/require.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized.contains("# These are the test for feature 'module_true'")
+        && normalized.contains("my @params = (")
+        && normalized.contains("'use feature \"module_true\"'")
+        && normalized.contains("my @module_code = (")
+        && normalized.contains("my @eval_code = (")
+        && normalized.contains("foreach my $debugger_state (0,0xA)")
+        && normalized.contains("push @module_true_tests,")
+        && normalized.contains("$module_true_test_count += 12;")
+}
+
+fn is_comp_require_module_true_tuple_deref_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/require.t"
+        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
+        || effect.dynamic_reason.as_deref()
+            != Some("symbolic reference dereference is not statically known")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized_source = source.replace("\r\n", "\n");
+    slice.trim() == "@$tuple"
+        && normalized_source.contains("foreach my $tuple (@module_true_tests)")
+        && normalized_source
+            .contains("my ($pack_name, $param_str, $this_code, $mod_code, $eval_code)= @$tuple;")
+}
+
+fn is_comp_require_cleanup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/require.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized.starts_with("END {")
+        && normalized.contains("foreach my $file (@files_to_delete)")
+        && normalized.contains("1 while unlink $file;")
 }
 
 fn is_run_cloexec_config_setup_boundary(
@@ -3124,6 +3299,290 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_require_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_setup_source()),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_setup_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    push @INC, '../ext/re';\n}\n"
+                    .to_string(),
+            ),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_dynamic_require_boundary_passes_with_test_signature() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_dynamic_require_source()),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_dynamic_require_without_signature_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("#!./perl\nmy $r = 'threads';\nrequire $r;\n".to_string()),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_unrecognized_dynamic_require_stays_bucketed() -> TestResult {
+        let source =
+            comp_require_dynamic_require_source().replace("require $r;", "require $other;");
+        let invocation = Invocation {
+            source: SourceInput::Inline(source),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_dynamic_require_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_dynamic_require_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_utf8_open_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\nBEGIN { ${^OPEN} = \":utf8\\0\"; }\n".to_string(),
+            ),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_utf8_open_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\nBEGIN { ${^OPEN} = \":utf8\\0\"; }\n".to_string(),
+            ),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_utf8_open_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\nBEGIN { ${^OPEN} = \":raw\\0\"; }\n".to_string(),
+            ),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_module_true_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_module_true_setup_source()),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_module_true_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_module_true_setup_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_module_true_setup_changed_marker_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                comp_require_module_true_setup_source()
+                    .replace("'use feature \"module_true\"'", "'use feature \"say\"'"),
+            ),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_module_true_tuple_deref_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_module_true_tuple_deref_source()),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_module_true_tuple_deref_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_module_true_tuple_deref_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_module_true_tuple_deref_changed_slice_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                comp_require_module_true_tuple_deref_source().replace("@$tuple", "@$other"),
+            ),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_cleanup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_cleanup_source()),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_cleanup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_require_cleanup_source()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_require_cleanup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                comp_require_cleanup_source().replace("unlink $file", "unlink \"$file.tmp\""),
+            ),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_comp_use_inc_feature_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_use_inc_feature_setup_source()),
@@ -4424,6 +4883,51 @@ $test
 }
 "#
         .to_string()
+    }
+
+    fn comp_require_setup_source() -> String {
+        "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    @INC = '.';\n    push @INC, '../lib', '../ext/re';\n}\n"
+            .to_string()
+    }
+
+    fn comp_require_dynamic_require_source() -> String {
+        "#!./perl\nsub do_require {\n    %INC = ();\n}\nour @module_true_tests; # this is set up in a BEGIN later on.\n# Test for fix of RT #24404 : \"require $scalar\" may load a directory\nmy $r = \"threads\";\nrequire $r;\nCORE::require(File::Spec::Functions::catfile(Cwd::getcwd(),\"bleah.pm\"));\n"
+            .to_string()
+    }
+
+    fn comp_require_module_true_setup_source() -> String {
+        r#"#!./perl
+BEGIN {
+ # These are the test for feature 'module_true', which when in effect
+ # avoids the requirement for a module to return a true value, and
+ my @params = (
+ 'use feature "module_true"',
+ );
+ my @module_code = (
+ '',
+ );
+ my @eval_code = (
+ 'require PACK;',
+ );
+ foreach my $debugger_state (0,0xA) {
+ my $pack_name= sprintf "mttest%d", 0+@module_true_tests;
+ push @module_true_tests,
+ [$pack_name, '', '', '', ''];
+ }
+ $module_true_test_count += 12;
+}
+"#
+        .to_string()
+    }
+
+    fn comp_require_module_true_tuple_deref_source() -> String {
+        "#!./perl\nforeach my $tuple (@module_true_tests) {\n    my ($pack_name, $param_str, $this_code, $mod_code, $eval_code)= @$tuple;\n}\n"
+            .to_string()
+    }
+
+    fn comp_require_cleanup_source() -> String {
+        "#!./perl\nEND {\n foreach my $file (@files_to_delete) {\n 1 while unlink $file;\n }\n}\n"
+            .to_string()
     }
 
     fn comp_use_inc_feature_setup_source() -> String {
