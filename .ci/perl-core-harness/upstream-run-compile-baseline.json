@@ -4,12 +4,12 @@
   "mode": "compile",
   "profile": "run",
   "files_total": 28,
-  "files_passed": 18,
-  "files_failed": 10,
+  "files_passed": 19,
+  "files_failed": 9,
   "tap_assertions_total": 28,
-  "tap_assertions_passed": 18,
+  "tap_assertions_passed": 19,
   "buckets": {
-    "parse_recovery": 10
+    "parse_recovery": 9
   },
   "expected_failures": [
     {
@@ -65,18 +65,6 @@
       "phase": "compile",
       "bucket": "parse_recovery",
       "first_diagnostic": "expected '{', found '(' at position 1653",
-      "workstream": "parser_recovery",
-      "lsp_impact": [
-        "diagnostics",
-        "syntax_tree",
-        "semantic_tokens"
-      ]
-    },
-    {
-      "path": "run/script.t",
-      "phase": "compile",
-      "bucket": "parse_recovery",
-      "first_diagnostic": "expected '{', found ',' at position 274",
       "workstream": "parser_recovery",
       "lsp_impact": [
         "diagnostics",
@@ -190,8 +178,8 @@
     },
     {
       "path": "run/script.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
