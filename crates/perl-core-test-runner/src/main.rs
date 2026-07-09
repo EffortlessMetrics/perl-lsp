@@ -298,6 +298,8 @@ fn is_unsupported_compile_boundary(
         && !is_comp_parser_run_test_pl_setup_boundary(effect, invocation, source)
         && !is_comp_proto_inc_setup_boundary(effect, invocation, source)
         && !is_comp_proto_typeglob_sub_assignment_boundary(effect, invocation, source)
+        && !is_comp_form_scope_format_stdout_alias_boundary(effect, invocation, source)
+        && !is_comp_form_scope_terminal_phase_boundary(effect, invocation, source)
         && !is_comp_use_inc_feature_setup_boundary(effect, invocation, source)
         && !is_comp_parser_inc_setup_boundary(effect, invocation, source)
         && !is_comp_parser_line_table_self_write_boundary(effect, invocation, source)
@@ -764,6 +766,67 @@ fn is_comp_proto_typeglob_sub_assignment_boundary(
             | "*X::foo3 = sub {'ok'};"
             | "*X::foo4 = sub ($) {'ok'}"
             | "*X::foo4 = sub ($) {'ok'};"
+    )
+}
+
+fn is_comp_form_scope_format_stdout_alias_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/form_scope.t"
+        || effect.source_kind != CompileEffectSourceKind::StashGraph
+        || effect.dynamic_reason.as_deref() != Some("typeglob assignment has a non-static RHS")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized_slice = slice.replace("\r\n", "\n");
+    let trimmed = normalized_slice.trim();
+    let Some(format_name) = trimmed
+        .strip_prefix("*STDOUT = *")
+        .and_then(|rest| rest.strip_suffix("{FORMAT};").or_else(|| rest.strip_suffix("{FORMAT}")))
+    else {
+        return false;
+    };
+
+    matches!(
+        format_name,
+        "STDOUT2"
+            | "STDOUT3"
+            | "STDOUT4"
+            | "STDOUT5"
+            | "STDOUT6"
+            | "STDOUT7"
+            | "STDOUT8"
+            | "STDOUT13"
+    ) && source.replace("\r\n", "\n").contains(&format!("format {format_name} ="))
+}
+
+fn is_comp_form_scope_terminal_phase_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/form_scope.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    matches!(
+        normalized.as_str(),
+        "BEGIN { \\&END }"
+            | "END {\n  my $test = \"ok 14\";\n  *STDOUT = *STDOUT5{FORMAT};\n  write;\n  format STDOUT5 =\n@<<<<<<<\n$test\n.\n}"
     )
 }
 
@@ -2883,6 +2946,155 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_form_scope_format_alias_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_form_scope_format_alias_source()),
+            display_path: "comp/form_scope.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_form_scope_format_alias_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_form_scope_format_alias_source()),
+            display_path: "comp/proto.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_form_scope_format_alias_changed_rhs_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\nformat STDOUT2 =\n@<<<<<<<\n$x\n.\n*STDOUT = *STDOUT2{IO};\n"
+                    .to_string(),
+            ),
+            display_path: "comp/form_scope.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_form_scope_format_alias_changed_lhs_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\nformat STDOUT2 =\n@<<<<<<<\n$x\n.\n*STDERR = *STDOUT2{FORMAT};\n"
+                    .to_string(),
+            ),
+            display_path: "comp/form_scope.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_form_scope_format_alias_dynamic_rhs_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("#!./perl\n*STDOUT = $runtime_format;\n".to_string()),
+            display_path: "comp/form_scope.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_form_scope_end_reference_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("#!./perl\nBEGIN { \\&END }\n".to_string()),
+            display_path: "comp/form_scope.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_form_scope_end_reference_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("#!./perl\nBEGIN { \\&END }\n".to_string()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_form_scope_end_reference_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("#!./perl\nBEGIN { \\&CHECK }\n".to_string()),
+            display_path: "comp/form_scope.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_form_scope_end_format_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_form_scope_end_format_source()),
+            display_path: "comp/form_scope.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_form_scope_end_format_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                comp_form_scope_end_format_source()
+                    .replace("my $test = \"ok 14\";", "my $test = \"not ok 14\";"),
+            ),
+            display_path: "comp/form_scope.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_comp_use_inc_feature_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_use_inc_feature_setup_source()),
@@ -4116,6 +4328,25 @@ BEGIN {
 
     fn comp_proto_typeglob_sub_assignment_source() -> String {
         "#!./perl\n*X::foo3 = sub {'ok'};\n*X::foo4 = sub ($) {'ok'};\n".to_string()
+    }
+
+    fn comp_form_scope_format_alias_source() -> String {
+        "#!./perl\nformat STDOUT2 =\n@<<<<<<<\n$x\n.\n*STDOUT = *STDOUT2{FORMAT};\n".to_string()
+    }
+
+    fn comp_form_scope_end_format_source() -> String {
+        r#"#!./perl
+END {
+  my $test = "ok 14";
+  *STDOUT = *STDOUT5{FORMAT};
+  write;
+  format STDOUT5 =
+@<<<<<<<
+$test
+.
+}
+"#
+        .to_string()
     }
 
     fn comp_use_inc_feature_setup_source() -> String {
