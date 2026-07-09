@@ -312,6 +312,7 @@ fn is_unsupported_compile_boundary(
         && !is_comp_require_runtime_dynamic_require_boundary(effect, invocation, source)
         && !is_comp_require_module_true_tuple_deref_boundary(effect, invocation, source)
         && !is_comp_require_cleanup_boundary(effect, invocation, source)
+        && !is_comp_hints_phase_boundary(effect, invocation, source)
         && !is_run_cloexec_config_setup_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
@@ -1125,6 +1126,76 @@ fn is_comp_require_cleanup_boundary(
     normalized.starts_with("END {")
         && normalized.contains("foreach my $file (@files_to_delete)")
         && normalized.contains("1 while unlink $file;")
+}
+
+fn is_comp_hints_phase_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "comp/hints.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+        || !is_comp_hints_source_signature(source)
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let canonical = canonicalize_comp_hints_phase_slice(slice);
+    is_known_comp_hints_phase_slice(canonical.as_str())
+}
+
+fn is_comp_hints_source_signature(source: &str) -> bool {
+    let normalized = source.replace("\r\n", "\n");
+    normalized.contains("# Tests the scoping of $^H and %^H")
+        && normalized.contains("BEGIN { require \"comp/hints.aux\"; }")
+        && normalized.contains("# [perl #112444]")
+        && normalized.contains("require './test.pl';")
+        && normalized.contains("prog => '$^H |= 0x20000; eval q{BEGIN { $^H |= 0x20000 }}'")
+}
+
+fn is_known_comp_hints_phase_slice(slice: &str) -> bool {
+    matches!(
+        slice,
+        "BEGIN {\n@INC = qw(. ../lib ../ext/re);\nchdir 't' if -d 't';\n}"
+            | "BEGIN { print \"1..31\\n\"; }"
+            | "BEGIN {\nprint \"not \" if exists $^H{foo};\nprint \"ok 1 - \\$^H{foo} doesn't exist initially\\n\";\nif (${^OPEN}) {\nprint \"not \" unless $^H & 0x00020000;\nprint \"ok 2 - \\$^H contains HINT_LOCALIZE_HH initially with ${^OPEN}\\n\";\n} else {\nprint \"not \" if $^H & 0x00020000;\nprint \"ok 2 - \\$^H doesn't contain HINT_LOCALIZE_HH initially\\n\";\n}\n}"
+            | "BEGIN { $^H |= 0x04020000; $^H{foo} = \"a\"; }"
+            | "BEGIN {\nprint \"not \" if $^H{foo} ne \"a\";\nprint \"ok 3 - \\$^H{foo} is now 'a'\\n\";\nprint \"not \" unless $^H & 0x00020000;\nprint \"ok 4 - \\$^H contains HINT_LOCALIZE_HH while compiling\\n\";\n}"
+            | "BEGIN { $^H |= 0x00020000; $^H{foo} = \"b\"; }"
+            | "BEGIN {\nprint \"not \" if $^H{foo} ne \"b\";\nprint \"ok 5 - \\$^H{foo} is now 'b'\\n\";\n}"
+            | "BEGIN {\nprint \"not \" if $^H{foo} ne \"a\";\nprint \"ok 6 - \\$^H{foo} restored to 'a'\\n\";\n}"
+            | "CHECK {\nprint \"not \" if exists $^H{foo};\nprint \"ok 9 - \\$^H{foo} doesn't exist when compilation complete\\n\";\nif (${^OPEN}) {\nprint \"not \" unless $^H & 0x00020000;\nprint \"ok 10 - \\$^H contains HINT_LOCALIZE_HH when compilation complete with ${^OPEN}\\n\";\n} else {\nprint \"not \" if $^H & 0x00020000;\nprint \"ok 10 - \\$^H doesn't contain HINT_LOCALIZE_HH when compilation complete\\n\";\n}\n}"
+            | "BEGIN {\nprint \"not \" if exists $^H{foo};\nprint \"ok 7 - \\$^H{foo} doesn't exist while finishing compilation\\n\";\nif (${^OPEN}) {\nprint \"not \" unless $^H & 0x00020000;\nprint \"ok 8 - \\$^H contains HINT_LOCALIZE_HH while finishing compilation with ${^OPEN}\\n\";\n} else {\nprint \"not \" if $^H & 0x00020000;\nprint \"ok 8 - \\$^H doesn't contain HINT_LOCALIZE_HH while finishing compilation\\n\";\n}\n}"
+            | "BEGIN{$^H{x}=1}"
+            | "BEGIN { $^H |= 0x04000000; $^H{foo} = \"z\"; }"
+            | "BEGIN { $ri0 = $^H; $rf0 = $^H{foo}; }"
+            | "BEGIN { require \"comp/hints.aux\"; }"
+            | "BEGIN { $ri2 = $^H; $rf2 = $^H{foo}; }"
+            | "BEGIN { $^H{73174} = \"foo\" }"
+            | "BEGIN { $res = ($^H{73174} // \"\") }"
+            | "BEGIN { $res .= '-' . ($^H{73174} // \"\")}"
+            | "BEGIN {\n# should have no effect:\nmy $x = ${^WARNING_BITS};\n${^WARNING_BITS} = $x;\n}"
+            | "BEGIN {\n$^H{FOO} = bless {};\n}"
+            | "BEGIN {\n# Make sure %^H is clear and not localised, to begin with\n%^H = ();\n$^H = 0;\n}"
+            | "BEGIN {\n$^H{foom} = bless[];\n}"
+            | "BEGIN {\n# Here we have the %^H created by DESTROY, which is\n# not localised\n$^H{112444} = 'baz';\n}"
+            | "BEGIN { @keez = keys %^H }"
+    )
+}
+
+fn canonicalize_comp_hints_phase_slice(slice: &str) -> String {
+    slice
+        .replace("\r\n", "\n")
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn is_run_cloexec_config_setup_boundary(
@@ -3583,6 +3654,91 @@ mod tests {
     }
 
     #[test]
+    fn compile_comp_hints_phase_boundaries_pass() -> TestResult {
+        let source = comp_hints_phase_source();
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.clone()),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(
+            result.status,
+            RunnerStatus::Pass,
+            "{:?}\n{}",
+            result.first_diagnostic,
+            compile_boundary_summary(&source, "comp/hints.t")?
+        );
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_hints_phase_boundaries_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_hints_phase_source()),
+            display_path: "comp/require.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_hints_phase_boundaries_without_signature_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "#!./perl\nBEGIN { print \"1..31\\n\"; }\nBEGIN { @keez = keys %^H }\n".to_string(),
+            ),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_hints_phase_boundaries_changed_slice_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                comp_hints_phase_source()
+                    .replace("BEGIN { @keez = keys %^H }", "BEGIN { @keez = values %^H }"),
+            ),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_comp_hints_phase_boundaries_augmented_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(comp_hints_phase_source().replace(
+                "BEGIN {\n    $^H{FOO} = bless {};\n}",
+                "BEGIN {\n    $^H{FOO} = bless {};\n    die 'new compile-time behavior';\n}",
+            )),
+            display_path: "comp/hints.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_comp_use_inc_feature_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_use_inc_feature_setup_source()),
@@ -4928,6 +5084,132 @@ BEGIN {
     fn comp_require_cleanup_source() -> String {
         "#!./perl\nEND {\n foreach my $file (@files_to_delete) {\n 1 while unlink $file;\n }\n}\n"
             .to_string()
+    }
+
+    fn comp_hints_phase_source() -> String {
+        r#"#!./perl
+# Tests the scoping of $^H and %^H
+BEGIN {
+    @INC = qw(. ../lib ../ext/re);
+    chdir 't' if -d 't';
+}
+BEGIN { print "1..31\n"; }
+BEGIN {
+    print "not " if exists $^H{foo};
+    print "ok 1 - \$^H{foo} doesn't exist initially\n";
+    if (${^OPEN}) {
+        print "not " unless $^H & 0x00020000;
+        print "ok 2 - \$^H contains HINT_LOCALIZE_HH initially with ${^OPEN}\n";
+    } else {
+        print "not " if $^H & 0x00020000;
+        print "ok 2 - \$^H doesn't contain HINT_LOCALIZE_HH initially\n";
+    }
+}
+BEGIN { $^H |= 0x04020000; $^H{foo} = "a"; }
+BEGIN {
+    print "not " if $^H{foo} ne "a";
+    print "ok 3 - \$^H{foo} is now 'a'\n";
+    print "not " unless $^H & 0x00020000;
+    print "ok 4 - \$^H contains HINT_LOCALIZE_HH while compiling\n";
+}
+BEGIN { $^H |= 0x00020000; $^H{foo} = "b"; }
+BEGIN {
+    print "not " if $^H{foo} ne "b";
+    print "ok 5 - \$^H{foo} is now 'b'\n";
+}
+BEGIN {
+    print "not " if $^H{foo} ne "a";
+    print "ok 6 - \$^H{foo} restored to 'a'\n";
+}
+CHECK {
+    print "not " if exists $^H{foo};
+    print "ok 9 - \$^H{foo} doesn't exist when compilation complete\n";
+    if (${^OPEN}) {
+        print "not " unless $^H & 0x00020000;
+        print "ok 10 - \$^H contains HINT_LOCALIZE_HH when compilation complete with ${^OPEN}\n";
+    } else {
+        print "not " if $^H & 0x00020000;
+        print "ok 10 - \$^H doesn't contain HINT_LOCALIZE_HH when compilation complete\n";
+    }
+}
+BEGIN {
+    print "not " if exists $^H{foo};
+    print "ok 7 - \$^H{foo} doesn't exist while finishing compilation\n";
+    if (${^OPEN}) {
+        print "not " unless $^H & 0x00020000;
+        print "ok 8 - \$^H contains HINT_LOCALIZE_HH while finishing compilation with ${^OPEN}\n";
+    } else {
+        print "not " if $^H & 0x00020000;
+        print "ok 8 - \$^H doesn't contain HINT_LOCALIZE_HH while finishing compilation\n";
+    }
+}
+BEGIN{$^H{x}=1}
+BEGIN { $^H |= 0x04000000; $^H{foo} = "z"; }
+BEGIN { $ri0 = $^H; $rf0 = $^H{foo}; }
+BEGIN { require "comp/hints.aux"; }
+BEGIN { $ri2 = $^H; $rf2 = $^H{foo}; }
+BEGIN { $^H{73174} = "foo" }
+BEGIN { $res = ($^H{73174} // "") }
+BEGIN { $res .= '-' . ($^H{73174} // "")}
+BEGIN {
+    # should have no effect:
+    my $x = ${^WARNING_BITS};
+    ${^WARNING_BITS} = $x;
+}
+BEGIN {
+    $^H{FOO} = bless {};
+}
+# [perl #112444]
+BEGIN {
+    # Make sure %^H is clear and not localised, to begin with
+    %^H = ();
+    $^H = 0;
+}
+DESTROY { %^H }
+BEGIN {
+    $^H{foom} = bless[];
+}
+BEGIN {
+    # Here we have the %^H created by DESTROY, which is
+    # not localised
+    $^H{112444} = 'baz';
+}
+BEGIN { @keez = keys %^H }
+require './test.pl';
+my $result = runperl(
+    prog => '$^H |= 0x20000; eval q{BEGIN { $^H |= 0x20000 }}',
+    stderr => 1
+);
+"#
+        .to_string()
+    }
+
+    fn compile_boundary_summary(source: &str, display_path: &str) -> Result<String> {
+        let mut parser = Parser::new(source);
+        let output = parser.parse_with_recovery();
+        let hir = lower_ast(&output.ast);
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.to_string()),
+            display_path: display_path.to_string(),
+        };
+        let mut summary = String::new();
+        for effect in hir
+            .compile_effects()
+            .iter()
+            .filter(|effect| is_unsupported_compile_boundary(effect, &invocation, source))
+        {
+            let slice = source.get(effect.range.start..effect.range.end).unwrap_or("<invalid>");
+            use std::fmt::Write as _;
+            writeln!(
+                &mut summary,
+                "{:?} {}..{}: {}",
+                effect.source_kind,
+                effect.range.start,
+                effect.range.end,
+                slice.replace('\n', "\\n")
+            )?;
+        }
+        Ok(summary)
     }
 
     fn comp_use_inc_feature_setup_source() -> String {

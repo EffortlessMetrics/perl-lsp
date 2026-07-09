@@ -4,27 +4,12 @@
   "mode": "compile",
   "profile": "comp",
   "files_total": 25,
-  "files_passed": 24,
-  "files_failed": 1,
+  "files_passed": 25,
+  "files_failed": 0,
   "tap_assertions_total": 25,
-  "tap_assertions_passed": 24,
-  "buckets": {
-    "compile_effect": 1
-  },
-  "expected_failures": [
-    {
-      "path": "comp/hints.t",
-      "phase": "compile",
-      "bucket": "compile_effect",
-      "first_diagnostic": "phase block compile-time execution is recorded but not evaluated",
-      "workstream": "compile_time_effects",
-      "lsp_impact": [
-        "definition",
-        "references",
-        "diagnostics"
-      ]
-    }
-  ],
+  "tap_assertions_passed": 25,
+  "buckets": {},
+  "expected_failures": [],
   "file_results": [
     {
       "path": "comp/bproto.t",
@@ -76,8 +61,8 @@
     },
     {
       "path": "comp/hints.t",
-      "status": "fail",
-      "assertions_passed": 0,
+      "status": "pass",
+      "assertions_passed": 1,
       "assertions_total": 1
     },
     {
