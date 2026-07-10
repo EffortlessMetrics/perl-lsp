@@ -76,7 +76,8 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     // Source-backed compiler document symbols are live for fresh,
                     // high-confidence parser syntax facts. Astless documents keep
                     // the legacy text fallback below.
@@ -183,7 +184,8 @@ impl LspServer {
                     push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, "region");
                 }
 
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     // Extract folding ranges from AST
                     let mut extractor = crate::folding::FoldingRangeExtractor::new();
                     let ranges = extractor.extract(ast);
@@ -525,7 +527,8 @@ impl LspServer {
         let Some(doc) = self.get_document(&documents, uri) else {
             return Ok((document_symbols_empty_compiler_receipt("unknown_uri"), 0));
         };
-        let Some(ast) = doc.ast.as_ref() else {
+        let parsed = doc.current_parsed();
+        let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) else {
             return Ok((document_symbols_empty_compiler_receipt("ast_unavailable"), 0));
         };
 

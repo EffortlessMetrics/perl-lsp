@@ -937,7 +937,8 @@ impl LspServer {
             let documents = self.documents_guard();
             self.get_document(&documents, uri)
                 .and_then(|doc| {
-                    let ast = doc.ast.as_ref()?;
+                    let parsed = doc.current_parsed();
+                    let ast = parsed.as_ref().and_then(|p| p.ast())?;
                     let offset = self.pos16_to_offset(doc, line, character);
                     let current_package = crate::declaration::current_package_at(ast, offset);
                     crate::declaration::symbol_at_cursor_with_source(
@@ -1084,7 +1085,8 @@ impl LspServer {
             let documents = self.documents_guard();
             self.get_document(&documents, uri)
                 .and_then(|doc| {
-                    let ast = doc.ast.as_ref()?;
+                    let parsed = doc.current_parsed();
+                    let ast = parsed.as_ref().and_then(|p| p.ast())?;
                     let offset = self.pos16_to_offset(doc, line, character);
                     let current_package = crate::declaration::current_package_at(ast, offset);
                     crate::declaration::symbol_at_cursor_with_source(

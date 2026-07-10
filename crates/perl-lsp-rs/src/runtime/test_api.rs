@@ -104,28 +104,31 @@ impl LspServer {
         };
         let errors = parser.errors().to_vec();
 
-        let mut parent_map = perl_parser::declaration::ParentMap::default();
-        if let Some(ref ast) = ast {
-            crate::declaration::DeclarationProvider::build_parent_map(ast, &mut parent_map, None);
-        }
-
         let rope = ropey::Rope::from_str(text);
-        let line_starts = perl_parser::position::LineStartsCache::new_rope(&rope);
-        let degradation_tier = crate::state::DegradationTier::from_parse_result(&ast, &errors);
 
         let mut documents = self.documents.lock();
         let doc = documents
             .get_mut(&normalized_uri)
             .ok_or_else(|| format!("document not open: {uri}"))?;
-        doc.rope = rope;
-        doc.text = text.to_string();
-        doc.version = version;
-        doc.ast = ast;
-        doc.parse_errors = errors;
-        doc.parent_map = parent_map;
-        doc.line_starts = line_starts;
         doc.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        doc.degradation_tier = degradation_tier;
+        let new_generation = doc.current_generation();
+        *doc = crate::state::DocumentState::from_parts(
+            rope,
+            text.to_string(),
+            version,
+            doc.generation.clone(),
+        );
+        // Publish the parse result as a single ParsedSnapshot -- see
+        // `state::ParsedSnapshot`. Mirrors the real didChange publication
+        // sequence in `runtime/text_sync.rs`. `from_parse_result` derives
+        // content_hash/parent_map/degradation_tier internally.
+        let snapshot = std::sync::Arc::new(crate::state::ParsedSnapshot::from_parse_result(
+            new_generation,
+            text,
+            ast,
+            errors,
+        ));
+        doc.publish_parsed_if_current(new_generation, snapshot);
         #[cfg(feature = "incremental")]
         {
             doc.incremental_doc = None;

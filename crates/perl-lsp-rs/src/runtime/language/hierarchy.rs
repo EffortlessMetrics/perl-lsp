@@ -231,7 +231,8 @@ impl LspServer {
                 let offset = self.pos16_to_offset(doc, line, character);
 
                 // Try AST-based approach first
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     // Create type hierarchy provider
                     let provider = TypeHierarchyProvider::new();
 
@@ -366,7 +367,8 @@ impl LspServer {
 
                 let documents = self.documents_guard();
                 if let Some(doc) = documents.get(uri) {
-                    if let Some(ref ast) = doc.ast {
+                    let parsed = doc.current_parsed();
+                    if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                         // Create type hierarchy provider
                         let provider = TypeHierarchyProvider::new();
 
@@ -465,7 +467,8 @@ impl LspServer {
 
                 let documents = self.documents_guard();
                 if let Some(doc) = documents.get(uri) {
-                    if let Some(ref ast) = doc.ast {
+                    let parsed = doc.current_parsed();
+                    if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                         // Create type hierarchy provider
                         let provider = TypeHierarchyProvider::new();
 
@@ -570,7 +573,8 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
                     if let Some(items) = provider.prepare(ast, line, character) {
                         // Wait for the workspace index to finish building before enriching items.
@@ -665,7 +669,9 @@ impl LspServer {
                 documents
                     .iter()
                     .filter_map(|(doc_uri, doc)| {
-                        doc.ast.as_ref().map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
+                        doc.current_parsed()
+                            .and_then(|p| p.ast().cloned())
+                            .map(|ast| (doc_uri.clone(), doc.text.clone(), ast))
                     })
                     .collect();
             drop(documents);
@@ -712,13 +718,16 @@ impl LspServer {
                 documents
                     .iter()
                     .filter_map(|(doc_uri, doc)| {
-                        doc.ast.as_ref().map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
+                        doc.current_parsed()
+                            .and_then(|p| p.ast().cloned())
+                            .map(|ast| (doc_uri.clone(), doc.text.clone(), ast))
                     })
                     .collect();
 
             // Find outgoing calls within the target function's file.
             let mut calls = if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
                     provider.outgoing_calls(ast, &ch_item)
                 } else {

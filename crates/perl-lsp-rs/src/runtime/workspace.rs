@@ -440,7 +440,12 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
+            documents
+                .iter()
+                .map(|(k, v)| {
+                    (k.clone(), v.text.clone(), v.current_parsed().and_then(|p| p.ast().cloned()))
+                })
+                .collect()
         };
 
         let mut provider =
@@ -769,7 +774,12 @@ impl LspServer {
         // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
         let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
+            documents
+                .iter()
+                .map(|(k, v)| {
+                    (k.clone(), v.text.clone(), v.current_parsed().and_then(|p| p.ast().cloned()))
+                })
+                .collect()
         };
 
         // Build source map and index documents with WorkspaceSymbolsProvider.
@@ -834,7 +844,8 @@ impl LspServer {
             let doc_opt = documents.get(&uri_key).or_else(|| documents.get(uri)); // try raw as a fallback
 
             if let Some(doc) = doc_opt {
-                if let Some(ast) = &doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     // Find the symbol in the AST to get more accurate information
                     let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.text);
                     let symbol_table = extractor.extract(ast);
@@ -1301,8 +1312,14 @@ impl LspServer {
                     if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                         doc.text = content;
                         doc.version += 1;
-                        // Clear cached AST so it is regenerated on next access.
-                        doc.ast = None;
+                        // Invalidate the cached parse so it is regenerated on
+                        // next access. Bumping the generation (rather than
+                        // reaching into the private `parsed` field) makes
+                        // `current_parsed()` correctly report "no fresh
+                        // parse yet" until a new `ParsedSnapshot` is
+                        // published for this generation -- see
+                        // `state::ParsedSnapshot`.
+                        doc.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     }
                 }
             }
@@ -2193,8 +2210,10 @@ impl LspServer {
                                 coordinator.notify_parse_complete(uri);
                             }
 
-                            // Clear cached AST
-                            doc.ast = None;
+                            // Invalidate the cached parse (see the
+                            // generation-bump comment above; `parsed` is
+                            // private -- state::ParsedSnapshot).
+                            doc.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         }
                     }
                 }

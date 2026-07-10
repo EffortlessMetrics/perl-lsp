@@ -860,16 +860,21 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let offset = self.pos16_to_offset(doc, line, character);
 
-                    // Use the Declaration provider - ast is already an Arc
+                    // Use the Declaration provider - ast is already an Arc.
+                    // `parsed` is guaranteed `Some` here since `ast` was
+                    // derived from it.
+                    let empty_parent_map = ParentMap::default();
+                    let parent_map = parsed.as_ref().map_or(&empty_parent_map, |p| p.parent_map());
                     let provider = crate::declaration::DeclarationProvider::new(
                         Arc::clone(ast),
                         doc.text.clone(),
                         uri.to_string(),
                     )
-                    .with_parent_map(&doc.parent_map)
+                    .with_parent_map(parent_map)
                     .with_doc_version(doc.version);
 
                     // Find declaration at the position
@@ -1013,10 +1018,11 @@ impl LspServer {
                     let (text_start, text_around) =
                         self.get_text_window_around_offset(&doc.text, offset, radius);
                     let cursor_in_text = offset.min(doc.text.len()).saturating_sub(text_start);
-                    let current_package = doc.ast.as_ref().map_or_else(
-                        || "main".to_string(),
-                        |ast| crate::declaration::current_package_at(ast, offset).to_string(),
-                    );
+                    let current_package =
+                        doc.current_parsed().and_then(|p| p.ast().cloned()).map_or_else(
+                            || "main".to_string(),
+                            |ast| crate::declaration::current_package_at(&ast, offset).to_string(),
+                        );
 
                     if let Some(module_name) =
                         extract_xs_bootstrap_target(&text_around, cursor_in_text, &current_package)
@@ -1237,7 +1243,8 @@ impl LspServer {
 
                 #[cfg(feature = "workspace")]
                 if !workspace_index_stale_for_document {
-                    if let Some(ref ast) = doc.ast {
+                    let parsed = doc.current_parsed();
+                    if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                         if let Some(coordinator) = self.coordinator() {
                             let workspace_index = coordinator.index();
                             let current_package =
@@ -1261,9 +1268,9 @@ impl LspServer {
 
                     // Attempt to resolve `SUPER::method` calls using the current package's
                     // inheritance chain before falling back to generic fully-qualified lookup.
-                    let current_package = doc
-                        .ast
+                    let current_package = parsed
                         .as_ref()
+                        .and_then(|p| p.ast())
                         .map(|ast| {
                             let byte_offset = self.pos16_to_offset(doc, line, character);
                             crate::declaration::current_package_at(ast, byte_offset)
@@ -1276,7 +1283,8 @@ impl LspServer {
                             && cursor_in_text >= method_match.start()
                             && cursor_in_text <= method_match.end()
                         {
-                            if let Some(ref ast) = doc.ast {
+                            let parsed = doc.current_parsed();
+                            if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                                 let analyzer =
                                     crate::semantic::SemanticAnalyzer::analyze_with_source(
                                         ast, &doc.text,
@@ -1441,7 +1449,10 @@ impl LspServer {
 
                                 // For $self/$this/$class, resolve using current package
                                 if var_name == "self" || var_name == "this" || var_name == "class" {
-                                    if let Some(ref ast) = doc.ast {
+                                    let self_method_parsed = doc.current_parsed();
+                                    if let Some(ast) =
+                                        self_method_parsed.as_ref().and_then(|p| p.ast())
+                                    {
                                         let byte_offset =
                                             self.pos16_to_offset(doc, line, character);
                                         let current_package =
@@ -1493,7 +1504,8 @@ impl LspServer {
                     }
                 }
 
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let offset = self.pos16_to_offset(doc, line, character);
 
                     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -1540,13 +1552,17 @@ impl LspServer {
                         }
                     }
 
-                    // Try DeclarationProvider first (it handles function calls properly)
+                    // Try DeclarationProvider first (it handles function calls properly).
+                    // `current_parsed()` is guaranteed `Some` here since `ast`
+                    // (above) was derived from it.
+                    let empty_parent_map = ParentMap::default();
+                    let parent_map = parsed.as_ref().map_or(&empty_parent_map, |p| p.parent_map());
                     let provider = crate::declaration::DeclarationProvider::new(
                         Arc::clone(ast),
                         doc.text.clone(),
                         uri.to_string(),
                     )
-                    .with_parent_map(&doc.parent_map)
+                    .with_parent_map(parent_map)
                     .with_doc_version(doc.version);
 
                     if let Some(location_links) = provider.find_declaration(offset, doc.version) {
@@ -1805,7 +1821,8 @@ impl LspServer {
         let doc = self.get_document(&documents, uri)?;
         let offset = self.pos16_to_offset(doc, line, character);
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(ast) = doc.ast.as_ref() {
+        let parsed = doc.current_parsed();
+        if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
             let current_package = crate::declaration::current_package_at(ast, offset);
             if let Some(symbol_key) = crate::declaration::symbol_at_cursor_with_source(
                 ast,
@@ -1905,7 +1922,7 @@ impl LspServer {
                     );
                     return Ok(Some(json!([])));
                 };
-                let Some(ast) = doc.ast.as_ref() else {
+                let Some(ast) = doc.current_parsed().and_then(|p| p.ast().cloned()) else {
                     self.record_type_definition_provider_decision_trace(
                         &trace_context,
                         0,
@@ -1913,7 +1930,7 @@ impl LspServer {
                     );
                     return Ok(Some(json!([])));
                 };
-                (ast.clone(), doc.text.clone())
+                (ast, doc.text.clone())
             };
 
             // Build doc_map outside the lock using snapshot helper
@@ -2052,10 +2069,10 @@ impl LspServer {
                 let Some(doc) = self.get_document(&documents, uri) else {
                     return Ok(Some(json!([])));
                 };
-                let Some(ast) = doc.ast.as_ref() else {
+                let Some(ast) = doc.current_parsed().and_then(|p| p.ast().cloned()) else {
                     return Ok(Some(json!([])));
                 };
-                ast.clone()
+                ast
             };
 
             #[cfg(feature = "workspace")]

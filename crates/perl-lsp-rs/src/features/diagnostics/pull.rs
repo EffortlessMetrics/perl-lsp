@@ -622,7 +622,14 @@ impl PullDiagnosticsProvider {
         doc_state: &DocumentState,
         context: &PullDiagnosticsContext,
     ) -> Vec<LspDiagnostic> {
-        if let Some(ast) = &doc_state.ast {
+        // No published snapshot at all (e.g. a document that never parsed --
+        // large-file/binary/template guards) behaves like the pre-migration
+        // default: no AST, no parse errors, nothing to report.
+        let Some(parsed) = doc_state.current_parsed() else {
+            return Vec::new();
+        };
+        if let Some(ast) = parsed.ast() {
+            let parse_errors = parsed.parse_errors();
             let provider = DiagnosticsProvider::new(ast, doc_state.text.clone());
             let source_path =
                 url::Url::parse(&uri.to_string()).ok().and_then(|value| value.to_file_path().ok());
@@ -664,7 +671,7 @@ impl PullDiagnosticsProvider {
                     workspace_index.with_semantic_queries_for_uri(&uri_str, |file_id, queries| {
                         provider.get_diagnostics_with_path_and_semantics(
                             ast,
-                            &doc_state.parse_errors,
+                            parse_errors,
                             &doc_state.text,
                             Some(&resolver),
                             &search_paths,
@@ -678,7 +685,7 @@ impl PullDiagnosticsProvider {
                     .unwrap_or_else(|| {
                         provider.get_diagnostics_with_path(
                             ast,
-                            &doc_state.parse_errors,
+                            parse_errors,
                             &doc_state.text,
                             Some(&resolver),
                             &search_paths,
@@ -693,7 +700,7 @@ impl PullDiagnosticsProvider {
             let base_diagnostics: Vec<_> = provider
                 .get_diagnostics_with_path(
                     ast,
-                    &doc_state.parse_errors,
+                    parse_errors,
                     &doc_state.text,
                     Some(&resolver),
                     &search_paths,
@@ -737,11 +744,11 @@ impl PullDiagnosticsProvider {
             }
 
             diagnostics
-        } else if doc_state.parse_errors.is_empty() {
+        } else if parsed.parse_errors().is_empty() {
             Vec::new()
         } else {
-            doc_state
-                .parse_errors
+            parsed
+                .parse_errors()
                 .iter()
                 .map(|error| {
                     self.parse_error_to_diagnostic_with_context(

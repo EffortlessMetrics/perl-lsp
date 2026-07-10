@@ -491,14 +491,20 @@ impl LspServer {
             None => return Ok(Some(json!([]))),
         };
 
-        if let Some(ast) = &doc.ast {
+        let parsed = doc.current_parsed();
+        if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
             let start_offset = self.pos16_to_offset(doc, start_line, start_char);
             let end_offset = self.pos16_to_offset(doc, end_line, end_char);
 
-            // Get diagnostics from the document
+            // Get diagnostics from the document. `parsed` is guaranteed `Some`
+            // here since `ast` was derived from it.
+            let empty_errors: std::sync::Arc<[perl_parser::error::ParseError]> =
+                std::sync::Arc::from([]);
+            let parse_errors =
+                parsed.as_ref().map_or_else(|| empty_errors.clone(), |p| p.parse_errors_arc());
             let diag_provider = DiagnosticsProvider::new(ast, doc.text.clone());
             let mut diagnostics =
-                diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, None);
+                diag_provider.get_diagnostics(ast, &parse_errors, &doc.text, None);
             diagnostics.extend(self.context_diagnostics_for_code_actions(&params, doc));
 
             // Get code actions from both providers
@@ -1517,7 +1523,17 @@ mod tests {
         {
             let mut docs = server.documents.lock();
             let doc = docs.get_mut(uri).ok_or("missing opened document")?;
-            doc.ast = None;
+            // Simulate "no AST available" by rebuilding the document state
+            // with no `ParsedSnapshot` published, rather than mutating a
+            // field directly (parsed state is private -- see
+            // `state::ParsedSnapshot`). Same rope/text/version/generation,
+            // just no snapshot.
+            *doc = crate::state::DocumentState::from_parts(
+                doc.rope.clone(),
+                doc.text.clone(),
+                doc.version,
+                doc.generation.clone(),
+            );
         }
 
         let response = server.handle_code_action(Some(json!({

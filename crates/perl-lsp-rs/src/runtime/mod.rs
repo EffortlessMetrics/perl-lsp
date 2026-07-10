@@ -60,7 +60,6 @@ use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
     declaration::ParentMap,
-    position::LineStartsCache,
     tdd_basic::TestGenerator,
     test_runner::{TestKind, TestRunner},
 };
@@ -1046,7 +1045,7 @@ impl LspServer {
             .map(|(k, v)| DocumentScanView {
                 uri: k.clone(),
                 text: v.text.clone(),
-                ast: v.ast.clone(),
+                ast: v.current_parsed().and_then(|p| p.ast().cloned()),
             })
             .collect()
     }
@@ -1553,24 +1552,9 @@ mod tests {
         let uri = "file:///test.pl";
         let text = "package Foo;"; // No trailing newline
         let rope = Rope::from_str(text);
-        let line_starts = LineStartsCache::new_rope(&rope);
         server.documents.lock().insert(
             uri.to_string(),
-            DocumentState {
-                rope,
-                text: text.to_string(),
-                version: 1,
-                ast: None,
-                parse_errors: Vec::new(),
-                parent_map: ParentMap::default(),
-                line_starts,
-                generation: Arc::new(AtomicU32::new(0)),
-                degradation_tier: crate::state::DegradationTier::Minimal,
-                #[cfg(feature = "incremental")]
-                incremental_doc: None,
-                #[cfg(feature = "incremental")]
-                incremental_state: None,
-            },
+            DocumentState::from_parts(rope, text.to_string(), 1, Arc::new(AtomicU32::new(0))),
         );
 
         let result =

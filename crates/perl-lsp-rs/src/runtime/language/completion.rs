@@ -922,11 +922,12 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
-                let ast_available = doc.ast.is_some();
+                let ast_available = doc.current_parsed().is_some_and(|p| p.ast().is_some());
 
                 // Get completions, with fallback for missing AST
+                let parsed = doc.current_parsed();
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
-                let mut completions = if let Some(ast) = &doc.ast {
+                let mut completions = if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let (include_paths, system_inc_paths, include_system_inc) =
                         self.module_completion_roots_for_doc(uri, &doc.text, offset);
                     // Only provide workspace index when Full access is available
@@ -1151,7 +1152,7 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
-                let ast_available = doc.ast.is_some();
+                let ast_available = doc.current_parsed().is_some_and(|p| p.ast().is_some());
 
                 // Create optimized cancellation callback with reduced frequency
                 // Performance optimization: reduced overhead from 16.66% to <10%
@@ -1168,7 +1169,8 @@ impl LspServer {
                 };
 
                 // Get completions with optimized cancellation support
-                let mut completions = if let Some(ast) = &doc.ast {
+                let parsed = doc.current_parsed();
+                let mut completions = if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let (include_paths, system_inc_paths, include_system_inc) =
                         self.module_completion_roots_for_doc(uri, &doc.text, offset);
                     // Only provide workspace index when Full access is available
