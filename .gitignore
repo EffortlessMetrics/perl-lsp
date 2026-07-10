@@ -215,6 +215,8 @@ plans/*
 !plans/compiler-program/implementation-plan.md
 !plans/lsp-freshness/
 !plans/lsp-freshness/implementation-plan.md
+!plans/spec-governance/
+!plans/spec-governance/implementation-plan.md
 scanner_comparison/
 issue_updates/
 

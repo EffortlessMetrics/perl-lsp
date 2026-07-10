@@ -38,6 +38,7 @@ these files but should not copy generated tables or point-in-time counts:
 |----------|--------|---------|-------|
 | [PLSP-PROP-0001](PLSP-PROP-0001-real-perl-editor-trust.md) | proposed | 2026-05-13 | Real Perl Editor Trust |
 | [PLSP-PROP-0002](PLSP-PROP-0002-compiler-program.md) | proposed | 2026-06-21 | Repo-native compiler-program contracts |
+| [PLSP-PROP-0003](PLSP-PROP-0003-spec-governance.md) | proposed | 2026-07-10 | Spec-governance via cargo-allow |
 
 ## Template
 
