@@ -186,6 +186,9 @@ fn test_build_incremental_edits_negative_shift_uses_checked_add() {
 #[test]
 fn test_incremental_path_taken_on_ranged_change() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    // Opt into the dormant incremental fast-path this test exercises (#3396):
+    // it is off by default because nothing on the read path consumes it.
+    server.set_incremental_eager(true);
     let uri = "file:///test_incremental.pl";
     let text = "my $x = 42;\nmy $y = 99;\n";
 
@@ -252,6 +255,7 @@ fn test_incremental_path_taken_on_ranged_change() -> Result<(), Box<dyn std::err
 #[test]
 fn test_full_replace_reinitializes_incremental_doc() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    server.set_incremental_eager(true);
     let uri = "file:///test_inc_replace.pl";
     let text = "my $x = 1;\n";
 
@@ -307,6 +311,7 @@ fn test_incremental_fallback_on_parse_error() -> Result<(), Box<dyn std::error::
 #[test]
 fn test_incremental_empty_content_changes() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    server.set_incremental_eager(true);
     let uri = "file:///test_inc_empty_changes.pl";
     let text = "my $x = 1;\n";
 
@@ -357,6 +362,7 @@ fn test_did_change_ranged_edit_ignored_for_unopened_document()
 #[test]
 fn test_incremental_insert_at_end_of_document() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    server.set_incremental_eager(true);
     let uri = "file:///test_inc_insert_end.pl";
     let text = "my $x = 1;\n";
 
@@ -433,6 +439,7 @@ fn test_incremental_utf16_multi_byte_character_positions() -> Result<(), Box<dyn
 #[test]
 fn test_incremental_state_wired_into_did_change() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    server.set_incremental_eager(true);
     let uri = "file:///test_inc_state_gap_a.pl";
 
     // Build a document large enough to have checkpoints before the edit site.
@@ -489,6 +496,72 @@ fn test_incremental_state_wired_into_did_change() -> Result<(), Box<dyn std::err
             "incremental_state.source must reflect edit; got: {:?}",
             &state.source[state.source.len().saturating_sub(50)..]
         );
+    }
+
+    Ok(())
+}
+
+/// Regression guard for #3396: with the default (non-eager) configuration the
+/// incremental parsing state is NOT maintained on the `didChange` hot path, yet
+/// the committed AST, parse errors, and updated text are fully correct because
+/// they come from the full parse. This proves the incremental machinery is off
+/// the critical section by default without affecting what providers read.
+#[cfg(feature = "incremental")]
+#[test]
+fn test_incremental_state_off_by_default_on_did_change() -> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::new();
+    // NOTE: no `set_incremental_eager(true)` — exercise the default path.
+    let uri = "file:///test_inc_default_off.pl";
+    let text = "my $x = 42;\nmy $y = 99;\n";
+
+    server.did_open(json!({
+        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+    }))?;
+
+    // On didOpen the incremental fields must be absent by default.
+    {
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after didOpen")?;
+        assert!(
+            doc.incremental_doc.is_none(),
+            "incremental_doc must be None by default (off the hot path)"
+        );
+        assert!(
+            doc.incremental_state.is_none(),
+            "incremental_state must be None by default (off the hot path)"
+        );
+        // The full-parse AST is still present — providers read this.
+        assert!(doc.ast.is_some(), "committed AST must be present after didOpen");
+    }
+
+    // A ranged edit: replace "42" with "43".
+    server.handle_did_change(Some(json!({
+        "textDocument": { "uri": uri, "version": 2 },
+        "contentChanges": [{
+            "range": {
+                "start": { "line": 0, "character": 8 },
+                "end":   { "line": 0, "character": 10 }
+            },
+            "text": "43"
+        }]
+    })))?;
+
+    // After didChange: incremental fields stay None, but the committed AST and
+    // text are correct (produced by the full parse, unaffected by the gate).
+    {
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after didChange")?;
+        assert!(
+            doc.incremental_doc.is_none(),
+            "incremental_doc must stay None by default after a ranged edit"
+        );
+        assert!(
+            doc.incremental_state.is_none(),
+            "incremental_state must stay None by default after a ranged edit"
+        );
+        assert!(doc.text.contains("43"), "document text must be updated by the full parse path");
+        assert!(!doc.text.contains("42"), "old value must be gone from committed text");
+        assert!(doc.ast.is_some(), "committed AST must be present after the ranged edit");
     }
 
     Ok(())

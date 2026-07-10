@@ -348,6 +348,19 @@ pub struct LspServer {
     pub(crate) ai_inline_backend: Mutex<
         Option<Arc<dyn perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend>>,
     >,
+    /// When `true`, eagerly maintain the per-document incremental parsing state
+    /// (`incremental_doc` / `incremental_state`) inside the `didChange` mutation
+    /// critical section.
+    ///
+    /// Defaults to `false`. The committed AST that every provider reads is always
+    /// produced by the full parse; the incremental machinery does **not** feed
+    /// that AST (see `docs`/#3396). Keeping it updated on every keystroke costs
+    /// ~14x the full parse while contributing nothing to the read path, so it is
+    /// opt-in: enable it only when exercising the (dormant) incremental fast-path
+    /// itself. Toggling this changes neither the committed AST, parse errors,
+    /// parent map, nor the stale-read generation semantics.
+    #[cfg(feature = "incremental")]
+    pub(crate) incremental_eager: AtomicBool,
 }
 
 #[derive(Clone)]

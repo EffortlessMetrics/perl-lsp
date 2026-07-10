@@ -102,7 +102,24 @@ impl LspServer {
             #[cfg(test)]
             diagnostic_after_snapshot_hook: Mutex::new(None),
             ai_inline_backend: Mutex::new(None),
+            #[cfg(feature = "incremental")]
+            incremental_eager: AtomicBool::new(false),
         }
+    }
+
+    /// Opt into eagerly maintaining the per-document incremental parsing state
+    /// (`incremental_doc` / `incremental_state`) inside the `didChange` mutation
+    /// critical section.
+    ///
+    /// Off by default. The committed AST that providers read always comes from
+    /// the full parse; the incremental fields feed nothing on the read path, so
+    /// maintaining them on every keystroke is pure overhead unless the dormant
+    /// incremental fast-path is itself being exercised. Enabling it changes
+    /// neither the committed AST, parse errors, parent map, nor the stale-read
+    /// generation semantics — only whether those two fields are kept populated.
+    #[cfg(feature = "incremental")]
+    pub fn set_incremental_eager(&self, enabled: bool) {
+        self.incremental_eager.store(enabled, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Create a new LSP server with custom I/O (for testing)
@@ -243,6 +260,8 @@ impl LspServer {
             #[cfg(test)]
             diagnostic_after_snapshot_hook: Mutex::new(None),
             ai_inline_backend: Mutex::new(None),
+            #[cfg(feature = "incremental")]
+            incremental_eager: AtomicBool::new(false),
         }
     }
 
@@ -340,6 +359,8 @@ impl LspServer {
             #[cfg(test)]
             diagnostic_after_snapshot_hook: Mutex::new(None),
             ai_inline_backend: Mutex::new(None),
+            #[cfg(feature = "incremental")]
+            incremental_eager: AtomicBool::new(false),
         }
     }
 }

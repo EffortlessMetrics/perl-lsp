@@ -222,13 +222,21 @@ impl LspServer {
             let normalized_uri = self.normalize_uri_key(uri);
             let generation = Arc::new(AtomicU32::new(0));
 
-            // Initialize incremental document from the already-parsed text (didOpen).
+            // Initialize the incremental parsing state from the already-parsed
+            // text (didOpen). Off by default (#3396): the committed AST that
+            // providers read comes from the full parse above, and nothing on the
+            // read path consumes these fields, so they are only maintained when
+            // `set_incremental_eager(true)` opts into the dormant fast-path.
             // code_slice is applied here to match what the full parser sees.
             #[cfg(feature = "incremental")]
-            let incremental_doc = {
+            let (incremental_doc, incremental_state) = if self
+                .incremental_eager
+                .load(Ordering::Relaxed)
+            {
+                use perl_parser::incremental::IncrementalState;
                 use perl_parser::incremental::incremental_document::IncrementalDocument;
                 let code_text = crate::util::code_slice(text);
-                match IncrementalDocument::new(code_text.to_string()) {
+                let inc_doc = match IncrementalDocument::new(code_text.to_string()) {
                     Ok(doc) => Some(doc),
                     Err(e) => {
                         tracing::warn!(
@@ -238,17 +246,13 @@ impl LspServer {
                         );
                         None
                     }
-                }
-            };
-
-            // Initialize IncrementalState for the didChange checkpoint fast-path (Gap A, #2080).
-            // This state tracks lexer checkpoints so that small ranged edits re-lex from the
-            // nearest safe boundary rather than offset 0.
-            #[cfg(feature = "incremental")]
-            let incremental_state = {
-                use perl_parser::incremental::IncrementalState;
-                let code_text = crate::util::code_slice(text);
-                Some(IncrementalState::new(code_text.to_string()))
+                };
+                // IncrementalState tracks lexer checkpoints (Gap A, #2080) so
+                // small ranged edits re-lex from the nearest safe boundary.
+                let inc_state = Some(IncrementalState::new(code_text.to_string()));
+                (inc_doc, inc_state)
+            } else {
+                (None, None)
             };
 
             self.documents.lock().insert(
@@ -696,110 +700,128 @@ impl LspServer {
                 let degradation_tier = DegradationTier::from_parse_result(&ast_arc, &errors);
 
                 let t_incremental_start = std::time::Instant::now();
-                // Update or reinitialize IncrementalDocument for the new text.
-                // - Ranged edits: apply to existing incremental_doc (fast path).
-                // - Full replace or no existing doc: reinitialize from new text (fallback).
-                // Clone the edit set so that the incremental_state block below can also use it.
+                // Maintain the per-document incremental parsing state — but only
+                // when eagerly opted in (#3396). The committed AST that every
+                // provider reads was produced by the full `Parser::new` parse
+                // above; `incremental_doc` / `incremental_state` feed nothing on
+                // the read path, so on the default keystroke path we skip this
+                // work entirely (it measured ~14x the full parse while committing
+                // nothing to the AST). The stale prior state, if any, is dropped
+                // when `doc_state` is reassigned below. Toggling this changes
+                // neither the committed AST, parse errors, parent map, nor the
+                // stale-read generation semantics.
                 #[cfg(feature = "incremental")]
-                let incremental_edits_opt_clone = incremental_edits_opt.clone();
-                #[cfg(feature = "incremental")]
-                let incremental_doc = {
-                    use perl_parser::incremental::incremental_document::IncrementalDocument;
-                    let code_text = crate::util::code_slice(&text);
-                    match (doc_state.incremental_doc.take(), incremental_edits_opt) {
-                        (Some(mut inc), Some(edits)) => {
-                            // Try applying the incremental edits to the existing tree
-                            match inc.apply_edits(&edits) {
-                                Ok(()) => Some(inc),
-                                Err(e) => {
-                                    // Fallback: reinitialize from the post-change source
-                                    tracing::warn!(
-                                        "Incremental edit application failed for {}, reinitializing: {}",
-                                        uri,
-                                        e
-                                    );
-                                    match IncrementalDocument::new(code_text.to_string()) {
-                                        Ok(doc) => Some(doc),
-                                        Err(e2) => {
-                                            tracing::warn!(
-                                                "Incremental parsing reinit failed for {}, falling back to full parsing: {}",
-                                                uri,
-                                                e2
-                                            );
-                                            None
+                let (incremental_doc, incremental_state) = if self
+                    .incremental_eager
+                    .load(Ordering::Relaxed)
+                {
+                    // Update or reinitialize IncrementalDocument for the new text.
+                    // - Ranged edits: apply to existing incremental_doc (fast path).
+                    // - Full replace or no existing doc: reinitialize from new text (fallback).
+                    // Clone the edit set so the incremental_state block below can also use it.
+                    let incremental_edits_opt_clone = incremental_edits_opt.clone();
+                    let incremental_doc = {
+                        use perl_parser::incremental::incremental_document::IncrementalDocument;
+                        let code_text = crate::util::code_slice(&text);
+                        match (doc_state.incremental_doc.take(), incremental_edits_opt) {
+                            (Some(mut inc), Some(edits)) => {
+                                // Try applying the incremental edits to the existing tree
+                                match inc.apply_edits(&edits) {
+                                    Ok(()) => Some(inc),
+                                    Err(e) => {
+                                        // Fallback: reinitialize from the post-change source
+                                        tracing::warn!(
+                                            "Incremental edit application failed for {}, reinitializing: {}",
+                                            uri,
+                                            e
+                                        );
+                                        match IncrementalDocument::new(code_text.to_string()) {
+                                            Ok(doc) => Some(doc),
+                                            Err(e2) => {
+                                                tracing::warn!(
+                                                    "Incremental parsing reinit failed for {}, falling back to full parsing: {}",
+                                                    uri,
+                                                    e2
+                                                );
+                                                None
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                        // Full-document replace or no prior incremental state: reinitialize
-                        _ => match IncrementalDocument::new(code_text.to_string()) {
-                            Ok(doc) => Some(doc),
-                            Err(e) => {
-                                tracing::warn!(
-                                    "Incremental parsing reinit failed for {}, falling back to full parsing: {}",
-                                    uri,
-                                    e
-                                );
-                                None
-                            }
-                        },
-                    }
-                };
-
-                // Apply edits to the checkpoint-based IncrementalState (Gap A, #2080).
-                //
-                // On a ranged edit we try to apply via `perl_parser::incremental::apply_edits`,
-                // which re-lexes from the nearest checkpoint rather than offset 0. This speeds
-                // up the token stream used by downstream passes for large files. On failure
-                // (edit > 64 KB, > 10 changed lines, or no prior state) we reinitialize the
-                // state from the already-parsed `text` so future edits can use checkpoints.
-                //
-                // The AST for this change still comes from the `Parser::new` call above —
-                // `IncrementalState` speeds up the lexer pass only; the parser pass is unchanged.
-                #[cfg(feature = "incremental")]
-                let incremental_state = {
-                    use perl_parser::incremental::{
-                        Edit as IncEdit, IncrementalState, apply_edits as inc_apply_edits,
-                    };
-                    let code_text = crate::util::code_slice(&text);
-                    match (doc_state.incremental_state.take(), &incremental_edits_opt_clone) {
-                        (Some(mut inc_state), Some(edit_set)) => {
-                            // Convert IncrementalEditSet -> Vec<IncEdit> for apply_edits
-                            let edits: Vec<IncEdit> = edit_set
-                                .edits
-                                .iter()
-                                .map(|e| IncEdit {
-                                    start_byte: e.start_byte,
-                                    old_end_byte: e.old_end_byte,
-                                    new_end_byte: e.start_byte + e.new_text.len(),
-                                    new_text: e.new_text.clone(),
-                                })
-                                .collect();
-                            match inc_apply_edits(&mut inc_state, &edits) {
-                                Ok(result) => {
-                                    tracing::debug!(
-                                        "Incremental state fast-path for {}: reparsed {} of {} bytes",
-                                        uri,
-                                        result.reparsed_bytes,
-                                        inc_state.source.len()
-                                    );
-                                    Some(inc_state)
-                                }
+                            // Full-document replace or no prior incremental state: reinitialize
+                            _ => match IncrementalDocument::new(code_text.to_string()) {
+                                Ok(doc) => Some(doc),
                                 Err(e) => {
-                                    // Fast-path failed (e.g. large edit); reinitialize checkpoints
-                                    tracing::debug!(
-                                        "Incremental state apply_edits failed for {}, reinitializing: {}",
+                                    tracing::warn!(
+                                        "Incremental parsing reinit failed for {}, falling back to full parsing: {}",
                                         uri,
                                         e
                                     );
-                                    Some(IncrementalState::new(code_text.to_string()))
+                                    None
+                                }
+                            },
+                        }
+                    };
+
+                    // Apply edits to the checkpoint-based IncrementalState (Gap A, #2080).
+                    //
+                    // On a ranged edit we try to apply via `perl_parser::incremental::apply_edits`,
+                    // which re-lexes from the nearest checkpoint rather than offset 0. This speeds
+                    // up the token stream used by downstream passes for large files. On failure
+                    // (edit > 64 KB, > 10 changed lines, or no prior state) we reinitialize the
+                    // state from the already-parsed `text` so future edits can use checkpoints.
+                    //
+                    // The AST for this change still comes from the `Parser::new` call above —
+                    // `IncrementalState` speeds up the lexer pass only; the parser pass is unchanged.
+                    let incremental_state = {
+                        use perl_parser::incremental::{
+                            Edit as IncEdit, IncrementalState, apply_edits as inc_apply_edits,
+                        };
+                        let code_text = crate::util::code_slice(&text);
+                        match (doc_state.incremental_state.take(), &incremental_edits_opt_clone) {
+                            (Some(mut inc_state), Some(edit_set)) => {
+                                // Convert IncrementalEditSet -> Vec<IncEdit> for apply_edits
+                                let edits: Vec<IncEdit> = edit_set
+                                    .edits
+                                    .iter()
+                                    .map(|e| IncEdit {
+                                        start_byte: e.start_byte,
+                                        old_end_byte: e.old_end_byte,
+                                        new_end_byte: e.start_byte + e.new_text.len(),
+                                        new_text: e.new_text.clone(),
+                                    })
+                                    .collect();
+                                match inc_apply_edits(&mut inc_state, &edits) {
+                                    Ok(result) => {
+                                        tracing::debug!(
+                                            "Incremental state fast-path for {}: reparsed {} of {} bytes",
+                                            uri,
+                                            result.reparsed_bytes,
+                                            inc_state.source.len()
+                                        );
+                                        Some(inc_state)
+                                    }
+                                    Err(e) => {
+                                        // Fast-path failed (e.g. large edit); reinitialize checkpoints
+                                        tracing::debug!(
+                                            "Incremental state apply_edits failed for {}, reinitializing: {}",
+                                            uri,
+                                            e
+                                        );
+                                        Some(IncrementalState::new(code_text.to_string()))
+                                    }
                                 }
                             }
+                            // Full-document replace or no prior state: reinitialize checkpoints
+                            _ => Some(IncrementalState::new(code_text.to_string())),
                         }
-                        // Full-document replace or no prior state: reinitialize checkpoints
-                        _ => Some(IncrementalState::new(code_text.to_string())),
-                    }
+                    };
+                    (incremental_doc, incremental_state)
+                } else {
+                    // Default path: the incremental edit set and any prior
+                    // incremental state are simply dropped — nothing reads them.
+                    (None, None)
                 };
                 let incremental_doc_update_ms =
                     crate::runtime::timing::elapsed_ms(t_incremental_start);

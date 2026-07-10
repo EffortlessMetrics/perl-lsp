@@ -133,22 +133,29 @@ pub struct DocumentState {
     /// providers should check this before attempting AST-dependent operations.
     pub degradation_tier: DegradationTier,
 
-    /// Incremental document state for fast re-parsing on keystrokes.
+    /// Incremental document state for the (dormant) keystroke fast-path.
     ///
-    /// Initialized on didOpen and updated on every didChange. When `None`
-    /// the LSP falls back to a full reparse. Only compiled when the
-    /// `incremental` feature is enabled.
+    /// Off by default (#3396): the committed AST that every provider reads is
+    /// always produced by the full `Parser::new` parse, and nothing on the read
+    /// path consumes this field, so it is `None` unless
+    /// `LspServer::set_incremental_eager(true)` opts in. When opted in it is
+    /// initialized on didOpen and updated on every didChange. Only compiled when
+    /// the `incremental` feature is enabled.
     #[cfg(feature = "incremental")]
     pub incremental_doc:
         Option<perl_parser::incremental::incremental_document::IncrementalDocument>,
 
-    /// Checkpoint-based incremental lexer state for the didChange fast path.
+    /// Checkpoint-based incremental lexer state for the (dormant) didChange
+    /// fast path.
     ///
-    /// On every ranged edit, the LSP server first attempts to apply the edit
-    /// via `perl_parser::incremental::apply_edits`, which resumes
-    /// lexing from the nearest checkpoint before the edit site instead of
-    /// re-lexing from offset 0. On success the updated AST replaces the full
-    /// parse result. Falls back to a full `Parser::new` parse when:
+    /// Off by default (#3396) for the same reason as `incremental_doc`: it feeds
+    /// nothing on the read path, so it is only maintained when
+    /// `LspServer::set_incremental_eager(true)` opts in. When opted in, each
+    /// ranged edit attempts `perl_parser::incremental::apply_edits`, which
+    /// resumes lexing from the nearest checkpoint before the edit site instead
+    /// of re-lexing from offset 0. This accelerates the lexer pass only — the
+    /// committed AST still comes from the full parse. Falls back to a full
+    /// reinitialization when:
     /// - The field is `None` (not yet initialized or previous apply failed).
     /// - The edit is a full-document replace (no range).
     /// - `apply_edits` returns `Err` (e.g. edit > 64 KB or > 10 changed lines).
