@@ -51,9 +51,42 @@ jobs:
           echo "::endgroup::"
           git checkout -- . ':!badges'
           git clean -fd -- . ':!badges'
-          echo "::group::git status after drift cleanup"
+          echo "::group::git status/diff after drift cleanup (should be limited to badges/)"
           git status --porcelain
+          git diff -- policy/ub-review.toml
+          echo "(empty diff above == policy/ub-review.toml is clean going into the next steps)"
           echo "::endgroup::"
+
+      - name: Reset stale automation branch to avoid a divergent checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Root cause of the recurring "local changes to policy/ub-review.toml
+          # would be overwritten" failure (#3576): it is NOT this job's working
+          # tree. `automation/badge-endpoints` is a long-lived branch that
+          # create-pull-request reuses across runs. When it falls behind `main`
+          # (it was last touched at 16204f9e4 on 2026-07-03, ~173 commits
+          # behind current main -- confirmed via
+          # `git diff origin/main origin/automation/badge-endpoints -- policy/ub-review.toml`
+          # showing the branch's copy is byte-identical to that old commit and
+          # unrelated to main's current copy), create-pull-request's own
+          # internal `git checkout automation/badge-endpoints` step brings that
+          # stale committed content into the working tree. The very next
+          # internal step, `git checkout -B automation/badge-endpoints <base
+          # sha>`, then refuses to overwrite it, because git sees the
+          # newly-checked-out stale blob as a "local change" relative to the
+          # base commit it is about to reset onto.
+          #
+          # Delete the remote branch before every run so create-pull-request
+          # always builds it fresh from the current base. This only recreates
+          # the branch (and re-links any existing open PR under the same
+          # branch name) when there is an actual badges/ diff to commit; if
+          # there is nothing to update, create-pull-request is a no-op and no
+          # branch is created at all.
+          echo "::group::automation/badge-endpoints before reset"
+          git ls-remote origin refs/heads/automation/badge-endpoints || echo "(no remote ref)"
+          echo "::endgroup::"
+          git push origin --delete automation/badge-endpoints || echo "automation/badge-endpoints did not exist remotely (or delete failed); continuing -- create-pull-request will create it fresh if needed"
 
       - name: Open badge refresh PR
         uses: peter-evans/create-pull-request@v8
