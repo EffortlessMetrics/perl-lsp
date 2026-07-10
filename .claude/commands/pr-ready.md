@@ -41,6 +41,26 @@ Optionally validate receipt freshness when `deep-reviewed` is present to ensure 
 /label-receipt-validate pr $NUMBER deep-reviewed
 ```
 
+### 3.5 Verify conversation resolution and reviewer completion
+
+`reviewDecision` alone doesn't prove either condition below — it says nothing
+about thread resolution, and a review can predate the current push. Run the
+canonical review-convergence check (see
+[.claude/reference/review-convergence.md](../reference/review-convergence.md)):
+
+```bash
+scripts/ci/check-pr-review-convergence $NUMBER
+```
+
+Do not reproduce or modify its query locally.
+
+**Never enable or retain auto-merge, and never mark a PR ready for merge
+pickup, while the check above exits non-zero.** Resolve threads for a reason
+(fixed/refuted/superseded/accepted-with-follow-up), not performatively — main
+mechanically requires conversation resolution before merge. If the script
+exits non-zero, **STOP** and report which reviewer or thread is still
+pending (its `BLOCK` lines name them) instead of proceeding.
+
 ### 4. Mark ready and signal merge-readiness
 
 ```bash

@@ -37,17 +37,25 @@ You also read agent comments for context:
 
 ## What you do
 
-For each bot comment / CI failure:
-1. **Read the failure** — understand what's broken
-2. **Fix it on the branch** — checkout, edit, commit, push
-3. **Reply to the comment** — state what you fixed, with evidence
+For each bot comment / CI failure / review conversation:
+1. **Classify** — fix / refute / supersede / follow-up
+2. **Fix it on the branch** (or gather the refute/supersede/follow-up evidence) — checkout, edit, commit, push. For **follow-up**, don't just note it — create or identify the tracked issue first; a follow-up with no issue number is deferred work that silently disappears once the thread closes.
+3. **Prove it** — re-run the relevant check/test
+4. **Reply with evidence** — state what you fixed, with commit hash or reasoning; for follow-up, cite the issue number
+5. **Resolve the thread** — for the real reason (fixed/refuted/superseded/accepted-with-follow-up), never performatively
+6. **Verify review convergence** before treating the PR as ready — run the
+   canonical review-convergence check (see
+   [.claude/reference/review-convergence.md](../reference/review-convergence.md)):
+   `scripts/ci/check-pr-review-convergence <N>`. Do not reproduce or modify
+   its query locally.
 
 ## Principles
 
-- **Fix everything, argue nothing.** If CI says title is wrong, fix the title. If clippy warns, fix the warning. If a test fails, fix the code.
+- **Fix everything, argue nothing you can't back with evidence.** If CI says title is wrong, fix the title. If clippy warns, fix the warning. If a test fails, fix the code. If a comment is wrong, refute it with evidence rather than silently ignoring it.
 - **Verify after fixing** — `cargo test -p <crate>` after each commit.
 - **Reply with evidence** — "Fixed: updated PR title to include (#NNN). CI should re-run."
-- **Resolve conversations** — after addressing a comment, mark the conversation as resolved.
+- **Resolve conversations for a reason** — fixed/refuted/superseded/accepted-with-follow-up, not performatively. Never resolve a thread just to clear it.
+- **Never enable or retain auto-merge while any requested review is still active or any substantive thread is unresolved** — main mechanically requires conversation resolution before merge; verify reviewer completion before signaling readiness.
 - **Don't add improvements.** Fix what's broken, nothing more. Extra changes confuse the deep reviewer.
 
 ## Todo list

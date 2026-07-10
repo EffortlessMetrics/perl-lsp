@@ -144,15 +144,16 @@ default preference:
   [SPEC_TEMPLATE.md](../reference/SPEC_TEMPLATE.md)).
 - **Teams** — reserved for cases where workers must actually communicate or challenge
   each other mid-task (not just hand off sequentially). Most of the pipeline is
-  sequential handoff, not a team — see *Sequencing within a gate* in root CLAUDE.md.
-  Reach for a team only when the task genuinely needs live cross-talk, since teams cost
-  more coordination overhead than a relay.
+  sequential handoff, not a team — see [Within-Gate Ordering](../reference/PIPELINE_GATES.md#within-gate-ordering)
+  in PIPELINE_GATES.md. Reach for a team only when the task genuinely needs live
+  cross-talk, since teams cost more coordination overhead than a relay.
 
-**Independent review approaches the seam from a different direction**, per the
-*Adversarial review is seam-anchored* principle in root CLAUDE.md: the value of a
-second pass is the different angle (what feeds this? what consumes this? what happens
-on `None`/`Err`/empty?), not merely a separate agent instance with a clean context.
-Re-aim a warm agent across angles rather than spinning up a new one for its own sake.
+**Independent review approaches the seam from a different direction** — the same
+principle stated inline in root [CLAUDE.md § Delegation](../../CLAUDE.md#delegation):
+the value of a second pass is the different angle (what feeds this? what consumes
+this? what happens on `None`/`Err`/empty?), not merely a separate agent instance with
+a clean context. Re-aim a warm agent across angles rather than spinning up a new one
+for its own sake.
 
 **Model routing note:** leave `CLAUDE_CODE_SUBAGENT_MODEL` **unset**. Each agent
 definition's own `model:` frontmatter (haiku/sonnet/opus) encodes the delegation

@@ -1,0 +1,328 @@
+#!/usr/bin/env bash
+# check-pr-review-convergence — CANONICAL review-convergence authority
+#
+# Answers exactly one question, in exactly one place: "has this PR converged
+# on review, as of the CURRENT head commit?" Every skill/agent surface that
+# needs to gate on reviewer completion or thread resolution MUST call this
+# script instead of re-deriving the GraphQL query locally.
+#
+# ── Why this exists ─────────────────────────────────────────────────────────
+#
+# `latestReviews` alone is NOT sufficient. It proves each reviewer's most
+# recent review *state* (APPROVED / CHANGES_REQUESTED / COMMENTED) and the
+# commit they reviewed at — nothing more. Thread resolution is a SEPARATE
+# axis: a reviewer can APPROVE while leaving inline comment threads open,
+# and `reviewDecision` does not surface that at all. A correct convergence
+# check must look at BOTH axes:
+#
+#   1. Reviewer completion at HEAD — every HUMAN reviewer's latest review has
+#      a `commit.oid` equal to the PR's current `headRefOid`. Earlier reviews
+#      (submitted before the latest push) are superseded and do not count, no
+#      matter how recent their `state`. Bot-authored reviews (author
+#      `__typename == "Bot"` — sourcery-ai, coderabbitai,
+#      chatgpt-codex-connector, cubic-dev-ai, factory-droid, etc.) are
+#      EXCLUDED from this blocking check: they're unrequested auto-review
+#      apps, never appear in `reviewRequests`, aren't required by branch
+#      protection, and don't reliably re-run on every push (rate limits). A
+#      stale bot review is reported ADVISORY, not BLOCK — see the #3621
+#      self-check incident below.
+#   2. Thread resolution — every review thread that is still ACTIVE (not
+#      resolved AND not outdated — see below) has been resolved for a real
+#      reason (fixed/refuted/superseded/accepted-with-follow-up).
+#
+# This exact check was re-inlined independently across pr-ready.md,
+# pr-respond.md, ops-merge-batch.md, pr-responder.md, and ops.md, and drifted
+# across three separate review rounds (see PR #3621, which fixed #3598). This
+# script is the fix: ONE authority, everything else points at it.
+#
+# The bot-exclusion above was itself found by running this script against
+# #3621's own PR: five auto-review bots (none requested, all `Bot`-typed)
+# had commented on an earlier push, and treating their staleness as blocking
+# meant the PR could never converge again without a human re-triggering each
+# bot — the exact over-block class this script exists to eliminate, just one
+# axis over (bot review staleness instead of `reviews` vs `latestReviews`).
+#
+# ── ACTIVE vs outdated vs resolved threads ──────────────────────────────────
+#
+# `reviewThreads` has two independently-set booleans per thread:
+#   - `isResolved`  — a human/bot explicitly resolved the conversation
+#   - `isOutdated`  — the commented-on diff hunk no longer exists at HEAD
+#                      (the code moved/changed underneath the comment)
+# A thread only BLOCKS convergence when it is ACTIVE: isResolved == false
+# AND isOutdated == false. An outdated-but-unresolved thread is not
+# automatically safe to ignore for a human, but for machine-gating purposes
+# it no longer points at live code, so it does not block this script's
+# merge-ready verdict; the diff-auditor / reviewer-deep pass is responsible
+# for judging whether an outdated thread's concern still applies. This
+# script reports outdated threads separately (as ADVISORY) so a human/agent
+# reading its output isn't blind to them — it just doesn't gate on them.
+#
+# ── Pagination ───────────────────────────────────────────────────────────────
+#
+# Both `reviewThreads` and `latestReviews`/`reviews` can exceed a single
+# page (GitHub's GraphQL default/max page sizes). This script pages through
+# BOTH connections with `hasNextPage`/`endCursor` until exhausted — a PR
+# with more than 50 threads or more than 50 review submissions must not
+# silently truncate.
+#
+# ── Usage ────────────────────────────────────────────────────────────────────
+#
+#   scripts/ci/check-pr-review-convergence <pr-number> [owner/repo]
+#
+# If [owner/repo] is omitted, it is resolved from the current git remote via
+# `gh repo view`.
+#
+# ── Exit codes ───────────────────────────────────────────────────────────────
+#
+#   0  CONVERGED — no pending review requests, every human reviewer's latest
+#      review is at the current HEAD SHA, and no ACTIVE thread remains
+#      unresolved. (Stale bot reviews do not block — see bot-exclusion note
+#      above.) Merge-ready from a review-convergence standpoint (other gates
+#      — CI, labels — are separate and NOT checked by this script).
+#   1  NOT CONVERGED — one or more blocking conditions found; reasons are
+#      printed to stderr, one per line, prefixed "BLOCK".
+#   2  USAGE / FETCH ERROR — bad arguments, `gh`/`jq` missing, or the GraphQL
+#      call failed. Not a review-convergence verdict either way.
+#
+# ── Output ───────────────────────────────────────────────────────────────────
+#
+# stdout: a short human-readable summary line + a machine-readable JSON
+# object on the final line (for callers that want structured output):
+#   {"pr":N,"headRefOid":"...","converged":true|false,
+#    "pending_reviewers":[...],"stale_reviews":[...],"stale_bot_reviews":[...],
+#    "active_threads":N,"outdated_threads":N,"resolved_threads":N}
+# ("stale_reviews" is human reviewers only — BLOCKING. "stale_bot_reviews" is
+# auto-review-app reviewers whose latest review predates HEAD — ADVISORY,
+# never blocking; see the bot-exclusion note above.)
+# stderr: BLOCK lines for anything that fails convergence; ADVISORY lines
+# for outdated threads that don't block but are worth a human glance.
+#
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+    echo "usage: $0 <pr-number> [owner/repo]" >&2
+    exit 2
+fi
+PR="$1"
+
+if ! command -v gh >/dev/null 2>&1; then
+    echo "ERROR: gh CLI not found on PATH" >&2
+    exit 2
+fi
+if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq not found on PATH" >&2
+    exit 2
+fi
+
+REPO_SLUG="${2:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+OWNER="${REPO_SLUG%%/*}"
+REPO="${REPO_SLUG##*/}"
+
+if [[ -z "$OWNER" || -z "$REPO" ]]; then
+    echo "ERROR: could not resolve owner/repo (pass it explicitly as arg 2)" >&2
+    exit 2
+fi
+
+PAGE_SIZE=50
+
+# ── GraphQL: page through a connection field on pullRequest ────────────────
+#
+# $1 = field name (reviewThreads | latestReviews)
+# $2 = inner node selection (GraphQL selection set, no braces needed beyond
+#      what's passed)
+# Prints one JSON array (concatenation of every page's `nodes`) to stdout.
+paginate_pr_connection() {
+    local field="$1"
+    local node_selection="$2"
+    local cursor="null"
+    local all_nodes="[]"
+    local has_next="true"
+
+    while [[ "$has_next" == "true" ]]; do
+        local after_arg
+        if [[ "$cursor" == "null" ]]; then
+            after_arg=""
+        else
+            after_arg=", after: \"$cursor\""
+        fi
+
+        local query
+        query=$(cat <<EOF
+query {
+  repository(owner: "$OWNER", name: "$REPO") {
+    pullRequest(number: $PR) {
+      $field(first: $PAGE_SIZE$after_arg) {
+        nodes { $node_selection }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}
+EOF
+)
+        local page
+        if ! page=$(gh api graphql -f query="$query" 2>&1); then
+            echo "ERROR: GraphQL fetch failed for $field: $page" >&2
+            exit 2
+        fi
+
+        local page_nodes
+        page_nodes=$(printf '%s' "$page" | jq ".data.repository.pullRequest.${field}.nodes")
+        all_nodes=$(jq -n --argjson a "$all_nodes" --argjson b "$page_nodes" '$a + $b')
+
+        has_next=$(printf '%s' "$page" | jq -r ".data.repository.pullRequest.${field}.pageInfo.hasNextPage")
+        cursor=$(printf '%s' "$page" | jq -r ".data.repository.pullRequest.${field}.pageInfo.endCursor")
+    done
+
+    printf '%s' "$all_nodes"
+}
+
+# ── Fetch headRefOid + reviewRequests (small, rarely paginated, but still
+#    read via the REST-ish `gh pr view` for simplicity — reviewRequests over
+#    50 simultaneous requested reviewers is not a realistic case for this
+#    repo's review model) ─────────────────────────────────────────────────
+if ! PR_META="$(gh pr view "$PR" --repo "$OWNER/$REPO" --json headRefOid,reviewRequests 2>&1)"; then
+    echo "ERROR: could not fetch PR #$PR metadata: $PR_META" >&2
+    exit 2
+fi
+HEAD_REF_OID="$(printf '%s' "$PR_META" | jq -r '.headRefOid')"
+# NOTE: reviewRequests mixes User nodes (have `.login`) and Team nodes (have
+# `.name`, no `.login`). The fallback MUST be applied per-element — piping
+# each node through `(.login // .name // empty)` individually — not across
+# the whole generator. `[.reviewRequests[]?.login // .reviewRequests[]?.name
+# // empty]` looks equivalent but isn't: jq's `//` operator evaluates its
+# right side only when the LEFT side produces zero truthy outputs across ALL
+# of `.reviewRequests[]?.login`'s results, so a single requested User in the
+# list makes `//` skip `.name` entirely and any co-requested Team is silently
+# dropped from the pending-reviewer set — the exact "reports CONVERGED with a
+# team review still pending" bug this script exists to prevent.
+PENDING_REVIEWERS="$(printf '%s' "$PR_META" | jq -c '[.reviewRequests[]? | (.login // .name // empty)]')"
+PENDING_REVIEWER_COUNT="$(printf '%s' "$PENDING_REVIEWERS" | jq 'length')"
+
+if [[ -z "$HEAD_REF_OID" || "$HEAD_REF_OID" == "null" ]]; then
+    echo "ERROR: could not resolve headRefOid for PR #$PR" >&2
+    exit 2
+fi
+
+# ── Fetch latestReviews (paginated) — latest review PER REVIEWER only.
+#    This is deliberately `latestReviews`, not the full historical `reviews`
+#    connection: superseded reviews from before the current push must not
+#    count as "finished". ──────────────────────────────────────────────────
+#
+#    Bot-authored reviews (sourcery-ai, coderabbitai, chatgpt-codex-connector,
+#    cubic-dev-ai, factory-droid, etc.) are EXCLUDED from staleness blocking.
+#    These are unrequested auto-review apps — they never appear in
+#    `reviewRequests`, this repo's branch protection does not require their
+#    approval, and they don't reliably re-run on every push (rate limits).
+#    Blocking on their staleness means a PR can never converge once ANY
+#    auto-review bot's last run predates the latest push — the same
+#    over-block class this script exists to eliminate (see #3621 self-test:
+#    every push after a bot's last comment permanently fails convergence).
+#    A stale bot review is reported as ADVISORY, same treatment as an
+#    outdated thread: visible, not blocking. Only non-bot (human) reviewers'
+#    staleness blocks convergence.
+LATEST_REVIEWS="$(paginate_pr_connection "latestReviews" "author { login __typename } state commit { oid }")"
+
+HUMAN_REVIEWS="$(printf '%s' "$LATEST_REVIEWS" | jq -c '[.[] | select((.author.__typename // "User") != "Bot")]')"
+BOT_REVIEWS="$(printf '%s' "$LATEST_REVIEWS" | jq -c '[.[] | select(.author.__typename == "Bot")]')"
+
+STALE_REVIEWS="$(printf '%s' "$HUMAN_REVIEWS" | jq -c --arg head "$HEAD_REF_OID" \
+    '[.[] | select(.commit.oid != $head) | {login: .author.login, reviewedAt: .commit.oid, state: .state}]')"
+STALE_REVIEW_COUNT="$(printf '%s' "$STALE_REVIEWS" | jq 'length')"
+
+STALE_BOT_REVIEWS="$(printf '%s' "$BOT_REVIEWS" | jq -c --arg head "$HEAD_REF_OID" \
+    '[.[] | select(.commit.oid != $head) | {login: .author.login, reviewedAt: .commit.oid, state: .state}]')"
+STALE_BOT_REVIEW_COUNT="$(printf '%s' "$STALE_BOT_REVIEWS" | jq 'length')"
+
+# ── Fetch reviewThreads (paginated) — classify ACTIVE vs outdated vs
+#    resolved. Only ACTIVE (isResolved==false && isOutdated==false) blocks
+#    convergence. ──────────────────────────────────────────────────────────
+REVIEW_THREADS="$(paginate_pr_connection "reviewThreads" "id isResolved isOutdated path")"
+
+ACTIVE_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '[.[] | select(.isResolved == false and .isOutdated == false)]')"
+ACTIVE_THREAD_COUNT="$(printf '%s' "$ACTIVE_THREADS" | jq 'length')"
+
+OUTDATED_UNRESOLVED_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '[.[] | select(.isResolved == false and .isOutdated == true)]')"
+OUTDATED_THREAD_COUNT="$(printf '%s' "$OUTDATED_UNRESOLVED_THREADS" | jq 'length')"
+
+RESOLVED_THREAD_COUNT="$(printf '%s' "$REVIEW_THREADS" | jq '[.[] | select(.isResolved == true)] | length')"
+
+# ── Verdict — the ONE place the merge-ready condition is computed ──────────
+#
+# Converged iff:
+#   (a) no pending (unfulfilled) review requests, AND
+#   (b) no reviewer's latest review is stale relative to headRefOid, AND
+#   (c) no ACTIVE (unresolved, non-outdated) thread remains
+CONVERGED="true"
+
+if [[ "$PENDING_REVIEWER_COUNT" -gt 0 ]]; then
+    CONVERGED="false"
+    while IFS= read -r reviewer; do
+        echo "BLOCK PR #$PR: review still requested from '$reviewer' — not yet reviewed" >&2
+    done < <(printf '%s' "$PENDING_REVIEWERS" | jq -r '.[]')
+fi
+
+if [[ "$STALE_REVIEW_COUNT" -gt 0 ]]; then
+    CONVERGED="false"
+    while IFS= read -r row; do
+        login="$(printf '%s' "$row" | jq -r '.login')"
+        state="$(printf '%s' "$row" | jq -r '.state')"
+        echo "BLOCK PR #$PR: '$login's latest review ($state) predates the current HEAD ($HEAD_REF_OID) — needs a fresh review on this push" >&2
+    done < <(printf '%s' "$STALE_REVIEWS" | jq -c '.[]')
+fi
+
+if [[ "$ACTIVE_THREAD_COUNT" -gt 0 ]]; then
+    CONVERGED="false"
+    while IFS= read -r row; do
+        path="$(printf '%s' "$row" | jq -r '.path')"
+        id="$(printf '%s' "$row" | jq -r '.id')"
+        echo "BLOCK PR #$PR: unresolved review thread on '$path' (id=$id) — resolve for a real reason (fixed/refuted/superseded/accepted-with-follow-up)" >&2
+    done < <(printf '%s' "$ACTIVE_THREADS" | jq -c '.[]')
+fi
+
+if [[ "$OUTDATED_THREAD_COUNT" -gt 0 ]]; then
+    while IFS= read -r row; do
+        path="$(printf '%s' "$row" | jq -r '.path')"
+        id="$(printf '%s' "$row" | jq -r '.id')"
+        echo "ADVISORY PR #$PR: thread on '$path' (id=$id) is unresolved but outdated (diff moved) — not blocking, but worth a human glance" >&2
+    done < <(printf '%s' "$OUTDATED_UNRESOLVED_THREADS" | jq -c '.[]')
+fi
+
+if [[ "$STALE_BOT_REVIEW_COUNT" -gt 0 ]]; then
+    while IFS= read -r row; do
+        login="$(printf '%s' "$row" | jq -r '.login')"
+        state="$(printf '%s' "$row" | jq -r '.state')"
+        echo "ADVISORY PR #$PR: bot reviewer '$login's latest review ($state) predates the current HEAD — not blocking (auto-review bots aren't required reviewers and don't reliably re-run per push)" >&2
+    done < <(printf '%s' "$STALE_BOT_REVIEWS" | jq -c '.[]')
+fi
+
+# ── Report ───────────────────────────────────────────────────────────────────
+
+if [[ "$CONVERGED" == "true" ]]; then
+    echo "OK   PR #$PR: review convergence achieved at $HEAD_REF_OID (0 pending reviewers, 0 stale human reviews, $ACTIVE_THREAD_COUNT active threads, $RESOLVED_THREAD_COUNT resolved, $OUTDATED_THREAD_COUNT outdated-unresolved, $STALE_BOT_REVIEW_COUNT stale-bot-advisory)"
+else
+    # Per the documented output contract (script header + review-convergence.md):
+    # stdout always carries a human-readable summary line + the JSON verdict,
+    # on BOTH the converged and not-converged paths. This line previously went
+    # to stderr only, so a caller reading stdout for the summary got just the
+    # bare JSON object on a non-converged PR.
+    echo "FAIL PR #$PR: review convergence NOT achieved at $HEAD_REF_OID — see BLOCK lines above"
+fi
+
+jq -n \
+    --argjson pr "$PR" \
+    --arg head "$HEAD_REF_OID" \
+    --argjson converged "$CONVERGED" \
+    --argjson pending "$PENDING_REVIEWERS" \
+    --argjson stale "$STALE_REVIEWS" \
+    --argjson staleBot "$STALE_BOT_REVIEWS" \
+    --argjson active "$ACTIVE_THREAD_COUNT" \
+    --argjson outdated "$OUTDATED_THREAD_COUNT" \
+    --argjson resolved "$RESOLVED_THREAD_COUNT" \
+    '{pr: $pr, headRefOid: $head, converged: $converged, pending_reviewers: $pending, stale_reviews: $stale, stale_bot_reviews: $staleBot, active_threads: $active, outdated_threads: $outdated, resolved_threads: $resolved}'
+
+if [[ "$CONVERGED" == "true" ]]; then
+    exit 0
+else
+    exit 1
+fi

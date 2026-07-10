@@ -66,7 +66,7 @@ Reachable/Promoted/Consolidated is **inventory, not product**. Background:
 
 **Each agent's pass produces exactly ONE routing decision**: sign off (`<gate>-reviewed`)
 OR bounce back (`needs-*`) — never both in the same pass. Per the 2026-04-26 #6780
-incident, applying both confused the merge gate and let unfixed bugs ride to master.
+incident, applying both confused the merge gate and let unfixed bugs ride to main.
 
 **No `needs-*` label on a PR may merge**, even with `merge-ready` present — the label
 means unaddressed work exists. **Main must stay green; merge requires green**
@@ -121,6 +121,11 @@ conflict-resolution merge afterward — don't merge same-file PRs back-to-back b
 created an avoidable conflict). Local preflight, timing, and the Codecov false-low
 recipe: [CI_GATE_PLAYBOOK.md](docs/reference/CI_GATE_PLAYBOOK.md).
 
+**Never enable or retain auto-merge while any requested review is still active or any
+substantive review conversation remains unresolved.** Resolve threads for a reason
+(fixed/refuted/superseded/accepted-with-follow-up), not performatively — main
+mechanically requires conversation resolution before merge.
+
 ## Quick reference
 
 ```bash
@@ -130,8 +135,9 @@ cargo test --workspace --lib          # run all tests
 ```
 
 Full command catalog: [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) and
-the `justfile`. Crate map (39 workspace members, ~30 post-collapse crates):
-[AGENTS.md § Project shape](AGENTS.md#project-shape) or `cargo metadata --no-deps`.
+the `justfile`. Crate map (~30 post-collapse crates; run `cargo metadata --no-deps` for
+the current member count — do not hardcode it, it drifts):
+[AGENTS.md § Project shape](AGENTS.md#project-shape).
 Key paths, parser-version notes, workspace exclusions:
 [AGENTS.md](AGENTS.md) and [WORKSPACE_ARCHITECTURE.md](docs/project/WORKSPACE_ARCHITECTURE.md).
 
