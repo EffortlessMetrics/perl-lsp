@@ -228,6 +228,27 @@ impl PullDiagnosticsProvider {
             let result_id = format!("{:x}", md5::compute(&doc_state.text));
             let report = if prev_id.as_deref() == Some(&result_id) {
                 self.build_unchanged_report(result_id)
+            } else if doc_state.current_parsed().is_none() {
+                // Pending-parse gap (#3396 PR4): the document's text generation
+                // is ahead of the last published parse snapshot, so
+                // `collect_diagnostics_for_state_with_context` would report an
+                // empty diagnostics set computed from no current-generation
+                // AST at all -- a false "nothing wrong" claim that would
+                // replace whatever the client is currently displaying for
+                // this file. When we know the client's last resultId, tell it
+                // nothing changed (keep displaying what it has) instead of
+                // asserting freshness we don't have. With no known prior
+                // result there is nothing cached client-side to protect, so
+                // fall through to the normal (still-safe, just possibly
+                // AST-less) computation.
+                match prev_id {
+                    Some(id) => self.build_unchanged_report(id),
+                    None => {
+                        let diagnostics = self
+                            .collect_diagnostics_for_state_with_context(&uri, doc_state, context);
+                        self.build_full_report(result_id, diagnostics)
+                    }
+                }
             } else {
                 let diagnostics =
                     self.collect_diagnostics_for_state_with_context(&uri, doc_state, context);
@@ -2032,5 +2053,76 @@ mod tests {
         let data = diagnostic.data.as_ref().ok_or("data should be populated")?;
         assert_eq!(data["code"], "PL002");
         Ok(())
+    }
+
+    // ── pending-parse gap (#3396 PR4) ─────────────────────────────────────
+    //
+    // `get_workspace_diagnostics_with_context` is not reachable from the live
+    // `workspace/diagnostic` JSON-RPC dispatch today (the hand-rolled
+    // `LspServer::handle_workspace_diagnostic` in `runtime/diagnostics.rs`
+    // handles that request directly and is exercised in
+    // `tests/pull_diagnostics_freshness_tests.rs`). It remains public API on
+    // `PullDiagnosticsProvider`, so it must uphold the same pending-parse
+    // policy: a `DocumentState` with no current-generation `ParsedSnapshot`
+    // must never be reported as a false-fresh empty/full diagnostics set.
+    // `DocumentState::new` never publishes a snapshot, so `current_parsed()`
+    // is `None` by construction -- exactly the gap state.
+
+    #[test]
+    fn workspace_diagnostics_reports_unchanged_for_gapped_doc_with_known_result_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let doc = DocumentState::new("my $x = 1;\n", 1);
+        assert!(doc.current_parsed().is_none(), "fresh DocumentState must have no snapshot yet");
+
+        let mut documents = HashMap::new();
+        documents.insert("file:///gap_known.pl".to_string(), doc);
+        let previous_result_ids =
+            vec![("file:///gap_known.pl".parse()?, "stale-result-id".to_string())];
+
+        let provider = PullDiagnosticsProvider::new();
+        let report = provider.get_workspace_diagnostics(&documents, previous_result_ids);
+        assert_eq!(report.items.len(), 1);
+        match &report.items[0] {
+            WorkspaceDocumentDiagnosticReport::Unchanged(unchanged) => {
+                assert_eq!(
+                    unchanged.unchanged_document_diagnostic_report.result_id, "stale-result-id",
+                    "gap with a known previous resultId must echo it back unchanged"
+                );
+                Ok(())
+            }
+            other => Err(format!(
+                "expected Unchanged report for a pending-parse-gap document with a known \
+                 previous resultId, got: {other:?}"
+            )
+            .into()),
+        }
+    }
+
+    #[test]
+    fn workspace_diagnostics_falls_through_for_gapped_doc_without_known_result_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let doc = DocumentState::new("my $x = 1;\n", 1);
+        assert!(doc.current_parsed().is_none(), "fresh DocumentState must have no snapshot yet");
+
+        let mut documents = HashMap::new();
+        documents.insert("file:///gap_unknown.pl".to_string(), doc);
+
+        let provider = PullDiagnosticsProvider::new();
+        let report = provider.get_workspace_diagnostics(&documents, Vec::new());
+        assert_eq!(report.items.len(), 1);
+        match &report.items[0] {
+            WorkspaceDocumentDiagnosticReport::Full(full) => {
+                assert!(
+                    full.full_document_diagnostic_report.items.is_empty(),
+                    "no current-generation AST means no diagnostics can be computed"
+                );
+                Ok(())
+            }
+            other => Err(format!(
+                "expected a (empty) Full report when there is no previous resultId to \
+                 protect, got: {other:?}"
+            )
+            .into()),
+        }
     }
 }

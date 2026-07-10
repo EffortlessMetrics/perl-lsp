@@ -382,3 +382,156 @@ fn pull_document_diagnostic_syntax_only_concurrent_didchange_does_not_panic() ->
 
     Ok(())
 }
+
+// ── pending-parse gap tests (#3396 PR4) ───────────────────────────────────────
+//
+// These exercise the seam a future async parse worker will open: text
+// generation ahead of the last published `ParsedSnapshot`, i.e.
+// `DocumentState::current_parsed()` returns `None`. Production parsing is
+// synchronous today so this state is otherwise unreachable; the
+// `test_apply_text_change_without_reparse` / `test_publish_parse_for_current_generation`
+// helpers force and then close the gap deterministically.
+
+/// Single-document pull (`textDocument/diagnostic`) always re-parses the
+/// text it is given from scratch -- it never reads the cached
+/// `ParsedSnapshot` -- so it is immune to the pending-parse gap by
+/// construction. This is *more* conservative than the policy requires
+/// (always fresh), which is why no production change was needed here.
+#[test]
+fn pull_document_diagnostic_stays_fresh_during_pending_parse_gap() -> TestResult {
+    let server = fresh_server();
+    let uri = "file:///pull_diag_pending_gap.pl";
+
+    server.test_apply_did_open(uri, "my $x = 1;\n", 1)?;
+    server.test_apply_text_change_without_reparse(uri, "my $x =;\n", 2)?;
+    assert_eq!(
+        server.test_document_generation(uri),
+        Some(1),
+        "helper must bump the generation without republishing"
+    );
+
+    let resp = server.test_handle_document_diagnostic(Some(json!({
+        "textDocument": { "uri": uri }
+    })))?;
+    let items = pull_items(resp).ok_or("response must carry items array")?;
+    assert!(
+        !items.is_empty(),
+        "single-document pull re-parses live text on every request, so it must \
+         surface the syntax error in the gapped text even though the cached \
+         ParsedSnapshot is stale; got: {items:?}"
+    );
+
+    Ok(())
+}
+
+/// Workspace pull (`workspace/diagnostic`, `LspServer::handle_workspace_diagnostic`)
+/// reads the cached `ParsedSnapshot` directly (`doc.current_parsed()`) rather
+/// than re-parsing. During a pending-parse gap it already skips the document
+/// (`let Some(parsed) = doc.current_parsed() else { continue };`) instead of
+/// reporting a false-fresh empty/full diagnostics set -- the entry is simply
+/// omitted from `items` for this response, which leaves whatever the client
+/// is currently displaying for that URI untouched. This test proves that
+/// omission behavior holds, independent of whether the client sent a known
+/// previous resultId.
+#[test]
+fn pull_workspace_diagnostic_omits_gapped_doc_from_items() -> TestResult {
+    let server = fresh_server();
+    let uri = "file:///pull_ws_pending_gap.pl";
+
+    server.test_apply_did_open(uri, "my $x =;\n", 1)?;
+
+    // First pull establishes a resultId the client would echo back next time
+    // -- included in this test to prove the gap omits the entry regardless
+    // of whether a previous resultId is known.
+    let first = server.test_handle_workspace_diagnostic(Some(json!({})))?;
+    let outer = first
+        .as_ref()
+        .and_then(|v| v.get("items"))
+        .and_then(|v| v.as_array())
+        .ok_or("first response must carry outer items array")?;
+    let entry = outer
+        .iter()
+        .find(|e| e.get("uri").and_then(|u| u.as_str()) == Some(uri))
+        .ok_or("first response must include the open document")?;
+    let prev_result_id = entry
+        .get("resultId")
+        .and_then(|v| v.as_str())
+        .ok_or("first full report must carry a resultId")?
+        .to_string();
+
+    // Open the pending-parse gap without changing the text's parse-error
+    // content, so a leaked stale/empty report would be observably wrong.
+    server.test_apply_text_change_without_reparse(uri, "my $x =;\n", 2)?;
+    assert_eq!(server.test_document_generation(uri), Some(1));
+
+    let resp = server.test_handle_workspace_diagnostic(Some(json!({
+        "previousResultIds": [ { "uri": uri, "value": prev_result_id } ]
+    })))?;
+    let outer = resp
+        .as_ref()
+        .and_then(|v| v.get("items"))
+        .and_then(|v| v.as_array())
+        .ok_or("response must carry outer items array")?;
+
+    assert!(
+        !outer.iter().any(|e| e.get("uri").and_then(|u| u.as_str()) == Some(uri)),
+        "pending-parse gap must omit the document from workspace/diagnostic items \
+         rather than reporting a false-fresh empty/full diagnostics set; got: {outer:?}"
+    );
+
+    Ok(())
+}
+
+/// Once the gap closes (a snapshot is published for the current
+/// generation), workspace pull resumes reporting fresh AST-backed
+/// diagnostics for the document normally.
+#[test]
+fn pull_workspace_diagnostic_resumes_after_pending_parse_gap_closes() -> TestResult {
+    let server = fresh_server();
+    let uri = "file:///pull_ws_gap_closes.pl";
+
+    server.test_apply_did_open(uri, "my $x =;\n", 1)?;
+    server.test_apply_text_change_without_reparse(uri, "my $x = 1;\n", 2)?;
+
+    // While the gap is open, the document is omitted entirely.
+    let gapped = server.test_handle_workspace_diagnostic(Some(json!({})))?;
+    let gapped_outer = gapped
+        .as_ref()
+        .and_then(|v| v.get("items"))
+        .and_then(|v| v.as_array())
+        .ok_or("gapped response must carry outer items array")?;
+    assert!(
+        !gapped_outer.iter().any(|e| e.get("uri").and_then(|u| u.as_str()) == Some(uri)),
+        "document must still be omitted before the gap closes; got: {gapped_outer:?}"
+    );
+
+    server.test_publish_parse_for_current_generation(uri)?;
+
+    let resp = server.test_handle_workspace_diagnostic(Some(json!({})))?;
+    let outer = resp
+        .as_ref()
+        .and_then(|v| v.get("items"))
+        .and_then(|v| v.as_array())
+        .ok_or("response must carry outer items array")?;
+    let entry = outer
+        .iter()
+        .find(|e| e.get("uri").and_then(|u| u.as_str()) == Some(uri))
+        .ok_or("response must include the resumed document once the gap closes")?;
+
+    assert_eq!(
+        entry.get("kind").and_then(|v| v.as_str()),
+        Some("full"),
+        "gap closed by publication must resume normal full-report computation; got: {entry:?}"
+    );
+    let items = entry
+        .get("items")
+        .and_then(|v| v.as_array())
+        .ok_or("full report must carry an items array")?;
+    assert!(
+        !items.iter().any(|d| d.get("code").and_then(|c| c.as_str()) == Some("PL001")),
+        "the syntax error was fixed before the gap closed, so the resumed report \
+         must not carry a parse-error (PL001) diagnostic; got: {items:?}"
+    );
+
+    Ok(())
+}

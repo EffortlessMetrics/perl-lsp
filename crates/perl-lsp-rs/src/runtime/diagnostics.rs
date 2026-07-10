@@ -9,7 +9,6 @@ use crate::features::diagnostics::{
     Diagnostic as InternalDiagnostic, DiagnosticTag as InternalDiagnosticTag,
     PullDiagnosticsContext,
 };
-use crate::state::DegradationTier;
 use perl_diagnostics::codes::DiagnosticCode;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -458,21 +457,31 @@ impl LspServer {
         // because parking_lot::Mutex is not reentrant.
         let snapshot = {
             let documents = self.documents.lock();
-            documents.get(&normalized_uri).or_else(|| documents.get(uri)).map(|doc| {
-                let parsed = doc.current_parsed();
-                (
-                    parsed.as_ref().and_then(|p| p.ast().cloned()),
+            documents.get(&normalized_uri).or_else(|| documents.get(uri)).and_then(|doc| {
+                // `current_parsed()` is `None` when the document's text
+                // generation is ahead of the last published parse snapshot
+                // (#3396 PR4 -- the pending-parse gap a future async parse
+                // worker can open). Skip the push entirely in that case
+                // rather than falling through to the `ast: None` branch
+                // below: that would publish an empty (or parse-error-only)
+                // diagnostics set computed from no current-generation AST at
+                // all, silently overwriting whatever the client is currently
+                // displaying with a false "nothing wrong" claim. Preserve the
+                // client's last-known-good display instead -- the debounced
+                // publish (or the next didChange's publish) fires again once
+                // a fresh snapshot lands for this generation.
+                let parsed = doc.current_parsed()?;
+                Some((
+                    parsed.ast().cloned(),
                     doc.text.clone(),
-                    parsed
-                        .as_ref()
-                        .map_or_else(|| Arc::from([]) as Arc<[_]>, |p| p.parse_errors_arc()),
+                    parsed.parse_errors_arc(),
                     doc.version,
-                    parsed.as_ref().map_or(DegradationTier::Minimal, |p| p.degradation_tier()),
+                    parsed.degradation_tier(),
                     doc.line_starts.clone(),
                     doc.rope.clone(),
                     Arc::clone(&doc.generation),
                     doc.generation.load(Ordering::SeqCst),
-                )
+                ))
             })
             // lock is released here
         };
@@ -773,19 +782,22 @@ impl LspServer {
 
         let snapshot = {
             let documents = self.documents.lock();
-            documents.get(&normalized_uri).or_else(|| documents.get(uri)).map(|doc| {
-                let parse_errors = doc
-                    .current_parsed()
-                    .map_or_else(|| Arc::from([]) as Arc<[_]>, |p| p.parse_errors_arc());
-                (
-                    parse_errors,
+            documents.get(&normalized_uri).or_else(|| documents.get(uri)).and_then(|doc| {
+                // Pending-parse gap guard (#3396 PR4) -- mirrors `publish_diagnostics`.
+                // Skip the push entirely rather than publishing an empty
+                // parse-errors set computed from no current-generation
+                // snapshot; that would overwrite whatever the client is
+                // currently displaying with a false "no errors" claim.
+                let parsed = doc.current_parsed()?;
+                Some((
+                    parsed.parse_errors_arc(),
                     doc.text.clone(),
                     doc.version,
                     doc.line_starts.clone(),
                     doc.rope.clone(),
                     Arc::clone(&doc.generation),
                     doc.generation.load(Ordering::SeqCst),
-                )
+                ))
             })
         };
 
@@ -853,6 +865,14 @@ impl LspServer {
         let snapshot = {
             let documents = self.documents.lock();
             documents.get(&normalized_uri).or_else(|| documents.get(uri)).map(|doc| {
+                // Pending-parse gap (#3396 PR4): `current_parsed()` is `None`
+                // when the text generation is ahead of the last published
+                // snapshot. `parse_errors` deliberately collapses to empty in
+                // that case rather than falling back to a stale generation's
+                // errors -- the empty-check right below then skips the fast
+                // publish entirely, which is exactly the desired "don't
+                // publish a claim for a generation we haven't parsed yet"
+                // behavior (same policy as `publish_diagnostics`).
                 let parse_errors = doc
                     .current_parsed()
                     .map_or_else(|| Arc::from([]) as Arc<[_]>, |p| p.parse_errors_arc());
@@ -868,7 +888,8 @@ impl LspServer {
         };
         let Some((parse_errors, version, line_starts, rope, text)) = snapshot else { return };
 
-        // Nothing to fast-publish when there are no parse errors.
+        // Nothing to fast-publish when there are no parse errors (this also
+        // covers the pending-parse gap -- see comment above).
         if parse_errors.is_empty() {
             return;
         }
@@ -2162,40 +2183,104 @@ mod tests {
         );
     }
 
-    /// Guard wire test: advancing the generation counter before `publish_diagnostics`
-    /// is called must not suppress publication â€” the snapshot captures the CURRENT
-    /// generation, so stable-during-computation is still the common case.
-    /// This confirms the guard does not false-positive.
+    /// Pending-parse gap (#3396 PR4): bumping the generation counter WITHOUT
+    /// publishing a new `ParsedSnapshot` for it forces `current_parsed()` to
+    /// return `None` -- exactly the state a future async parse worker can
+    /// leave the document in between a fast text update and a slower parse
+    /// completion. `publish_diagnostics` must skip the push entirely in that
+    /// state rather than publishing an empty/parse-error-only diagnostics set
+    /// computed from no current-generation AST: that would silently overwrite
+    /// whatever the client is currently displaying with a false "nothing
+    /// wrong" claim.
+    ///
+    /// Before #3396 PR4 this scenario (deliberately) published anyway, because
+    /// the only guard was "did the generation change during computation" --
+    /// it never checked whether the snapshot was already stale *before*
+    /// computation started. This test replaces the old
+    /// `pre_advanced_generation_does_not_suppress_publish` assertion, which
+    /// encoded the pre-ParsedSnapshot-seam behavior that this PR corrects.
     #[test]
-    fn pre_advanced_generation_does_not_suppress_publish() {
+    fn pending_parse_gap_suppresses_push_publish() -> Result<(), Box<dyn std::error::Error>> {
         let (server, buf) = make_server_with_capture();
         let uri = "file:///pre_advanced_gen_test.pl";
-        server
-            .test_handle_did_open(Some(json!({
-                "textDocument": {"uri": uri, "languageId": "perl", "version": 1, "text": "my $y = 2;\n"}
-            })))
-            .unwrap();
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {"uri": uri, "languageId": "perl", "version": 1, "text": "my $y = 2;\n"}
+        })))?;
+        // `didOpen` publishes once via the outbound notification channel,
+        // which flushes to `buf` on a background writer thread -- wait for
+        // it to land before clearing, otherwise the clear can race ahead of
+        // the write and this test would flakily "see" the didOpen publish
+        // instead of the (correctly suppressed) publish under test.
+        std::thread::sleep(Duration::from_millis(50));
+        buf.lock().clear();
 
-        // Advance generation BEFORE calling publish_diagnostics (simulates a prior
-        // didChange that already completed). The snapshot will read this new value,
-        // computation runs, and the guard check sees the same value â†’ publishes.
-        {
-            let docs = server.documents.lock();
-            if let Some(doc) = docs.get(uri) {
-                doc.generation.fetch_add(1, Ordering::SeqCst);
-            }
-        }
+        // Advance generation BEFORE calling publish_diagnostics, WITHOUT
+        // republishing a snapshot for it -- this opens the pending-parse gap.
+        server
+            .test_apply_text_change_without_reparse(uri, "my $y = 2;\n", 2)
+            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
         server.publish_diagnostics(uri);
         drop(server);
         std::thread::sleep(Duration::from_millis(50));
 
         let bytes = buf.lock().clone();
-        let text = String::from_utf8(bytes).unwrap_or_default();
+        let text = String::from_utf8(bytes)?;
+        assert!(
+            !text.contains("publishDiagnostics"),
+            "pending-parse gap (current_parsed() == None) must suppress the push publish \
+             instead of overwriting the client's display with an empty/parse-error-only \
+             diagnostics set; got: {text:?}"
+        );
+        Ok(())
+    }
+
+    /// Companion to `pending_parse_gap_suppresses_push_publish`: once a
+    /// snapshot is published for the current generation, `publish_diagnostics`
+    /// resumes normally -- the gap is transient, not a permanent suppression.
+    #[test]
+    fn publish_resumes_once_generation_gap_closes() -> Result<(), Box<dyn std::error::Error>> {
+        let (server, buf) = make_server_with_capture();
+        let uri = "file:///gap_closes_publish_test.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {"uri": uri, "languageId": "perl", "version": 1, "text": "my $y = 2;\n"}
+        })))?;
+        // Wait for didOpen's own publish to flush through the outbound
+        // channel before clearing, so the clear can't race ahead of it (see
+        // the identical comment in `pending_parse_gap_suppresses_push_publish`).
+        std::thread::sleep(Duration::from_millis(50));
+
+        server
+            .test_apply_text_change_without_reparse(uri, "my $y = 3;\n", 2)
+            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+        buf.lock().clear();
+
+        // While the gap is open, nothing is published.
+        server.publish_diagnostics(uri);
+        {
+            let bytes = buf.lock().clone();
+            let text = String::from_utf8(bytes)?;
+            assert!(
+                !text.contains("publishDiagnostics"),
+                "gap must still suppress publish before republication; got: {text:?}"
+            );
+        }
+
+        // Close the gap by publishing a snapshot for the current generation.
+        server
+            .test_publish_parse_for_current_generation(uri)
+            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+        server.publish_diagnostics(uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes)?;
         assert!(
             text.contains("publishDiagnostics"),
-            "pre-advanced generation must not suppress publish (guard must not false-positive); got: {text:?}"
+            "publish must resume once a fresh snapshot closes the pending-parse gap; got: {text:?}"
         );
+        Ok(())
     }
 
     #[test]

@@ -138,6 +138,92 @@ impl LspServer {
         Ok(())
     }
 
+    /// Test-only helper that forces the pending-parse generation gap (#3396 PR4).
+    ///
+    /// Updates a document's rope/text/version and bumps its generation counter
+    /// -- exactly like a real `didChange` -- but deliberately does **not**
+    /// re-parse or publish a new [`crate::state::ParsedSnapshot`]. Immediately
+    /// after this call, [`crate::state::DocumentState::current_parsed`] returns
+    /// `None` (the last published snapshot's generation now trails the text
+    /// generation) while [`crate::state::DocumentState::latest_parsed`] still
+    /// returns the *previous* generation's snapshot.
+    ///
+    /// This simulates the seam a future async parse worker will introduce:
+    /// text updates land on the fast path, but the AST/parse-errors/parent-map
+    /// snapshot for that generation is not ready yet. Production parsing is
+    /// fully synchronous today, so this state is otherwise unreachable outside
+    /// tests -- this method exists purely to prove providers behave correctly
+    /// on that future gap without adding a real async worker.
+    ///
+    /// Pair with [`Self::test_publish_parse_for_current_generation`] to close
+    /// the gap once pending-parse assertions are done; otherwise the document
+    /// is left permanently un-parsed for any further requests in the same test.
+    pub fn test_apply_text_change_without_reparse(
+        &self,
+        uri: &str,
+        new_text: &str,
+        version: i32,
+    ) -> Result<(), String> {
+        let normalized_uri = self.normalize_uri_key(uri);
+        let rope = ropey::Rope::from_str(new_text);
+        let line_starts = perl_parser::position::LineStartsCache::new(new_text);
+
+        let mut documents = self.documents.lock();
+        let doc = documents
+            .get_mut(&normalized_uri)
+            .ok_or_else(|| format!("document not open: {uri}"))?;
+        doc.rope = rope;
+        doc.text = new_text.to_string();
+        doc.version = version;
+        doc.line_starts = line_starts;
+        doc.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        // Deliberately do NOT call `publish_parsed_if_current` here: the whole
+        // point of this helper is to leave the previously published snapshot
+        // stale relative to the bumped generation, forcing `current_parsed()`
+        // to return `None` until a caller explicitly republishes via
+        // `test_publish_parse_for_current_generation`.
+        #[cfg(feature = "incremental")]
+        {
+            doc.incremental_doc = None;
+            doc.incremental_state = None;
+        }
+        Ok(())
+    }
+
+    /// Test-only helper that closes a pending-parse gap opened by
+    /// [`Self::test_apply_text_change_without_reparse`].
+    ///
+    /// Parses the document's *current* text and publishes the result as a
+    /// [`crate::state::ParsedSnapshot`] for the document's *current*
+    /// generation -- mirroring what a future async parse worker would do on
+    /// completion. After this call, `current_parsed()` is `Some` again and its
+    /// generation equals the document's text generation.
+    pub fn test_publish_parse_for_current_generation(&self, uri: &str) -> Result<(), String> {
+        let normalized_uri = self.normalize_uri_key(uri);
+        let mut documents = self.documents.lock();
+        let doc = documents
+            .get_mut(&normalized_uri)
+            .ok_or_else(|| format!("document not open: {uri}"))?;
+
+        let mut parser = perl_parser::Parser::new(&doc.text);
+        let ast = match parser.parse() {
+            Ok(ast) => Some(std::sync::Arc::new(ast)),
+            Err(err) => return Err(format!("Parse error: {err}")),
+        };
+        let errors = parser.errors().to_vec();
+        let generation = doc.current_generation();
+        // `ParsedSnapshot::from_parse_result` derives content_hash/parent_map/
+        // degradation_tier internally -- see `state::ParsedSnapshot`.
+        let snapshot = std::sync::Arc::new(crate::state::ParsedSnapshot::from_parse_result(
+            generation,
+            &doc.text,
+            ast,
+            errors,
+        ));
+        doc.publish_parsed_if_current(generation, snapshot);
+        Ok(())
+    }
+
     /// Test-only entrypoint for LSP `initialize`.
     pub fn test_handle_initialize_dispatch(
         &self,
@@ -629,6 +715,25 @@ impl LspServer {
         self.handle_semantic_tokens(params)
     }
 
+    /// Test-only entrypoint for LSP `textDocument/semanticTokens/range`.
+    ///
+    /// Exercises range-scoped semantic token generation in tests.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri` and `range`.
+    ///
+    /// # Returns
+    /// - `Ok(Some({"data": [...]}))`: Semantic token data for the range.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid.
+    pub fn test_handle_semantic_tokens_range(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_semantic_tokens_range(params)
+    }
+
     /// Test-only receipt for semantic tokens runtime quality proof.
     ///
     /// Calls the live `textDocument/semanticTokens/full` handler and captures the
@@ -751,6 +856,18 @@ impl LspServer {
     /// is set, so the wait line is unreachable without enabling it.
     pub fn test_enable_call_hierarchy(&self) {
         self.advertised_features.lock().call_hierarchy = true;
+    }
+
+    /// Test-only entrypoint for LSP `textDocument/prepareCallHierarchy`.
+    ///
+    /// Pair with [`Self::test_enable_call_hierarchy`] -- the handler gates on
+    /// the `callHierarchy` advertised feature and returns method-not-advertised
+    /// otherwise.
+    pub fn test_handle_prepare_call_hierarchy(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_prepare_call_hierarchy(params)
     }
 
     /// Test-only: begin capturing `PERL_LSP_TIMING` spans into an in-process
