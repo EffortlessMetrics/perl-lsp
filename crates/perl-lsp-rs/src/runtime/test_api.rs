@@ -215,10 +215,7 @@ impl LspServer {
         // `ParsedSnapshot::from_parse_result` derives content_hash/parent_map/
         // degradation_tier internally -- see `state::ParsedSnapshot`.
         let snapshot = std::sync::Arc::new(crate::state::ParsedSnapshot::from_parse_result(
-            generation,
-            &doc.text,
-            ast,
-            errors,
+            generation, &doc.text, ast, errors,
         ));
         doc.publish_parsed_if_current(generation, snapshot);
         Ok(())
