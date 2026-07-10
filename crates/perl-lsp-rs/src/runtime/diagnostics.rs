@@ -639,6 +639,9 @@ impl LspServer {
                         crate::error::ParseError::SyntaxError { location, message } => {
                             (*location, message.clone())
                         }
+                        crate::error::ParseError::Advisory { location, message } => {
+                            (*location, message.clone())
+                        }
                         crate::error::ParseError::UnexpectedEof => {
                             (text.len(), "Unexpected end of input".to_string())
                         }
@@ -664,7 +667,7 @@ impl LspServer {
                             "start": {"line": line, "character": character},
                             "end": {"line": line, "character": character + 1},
                         },
-                        "severity": 1, // Error
+                        "severity": if e.blocks_clean_parse() { 1 } else { 2 },
                         "code": DiagnosticCode::ParseError.as_str(),
                         "source": "perl-parser",
                         "message": message,
@@ -733,6 +736,9 @@ impl LspServer {
                     crate::error::ParseError::SyntaxError { location, message } => {
                         (*location, message.clone())
                     }
+                    crate::error::ParseError::Advisory { location, message } => {
+                        (*location, message.clone())
+                    }
                     crate::error::ParseError::UnexpectedEof => {
                         (text.len(), "Unexpected end of input".to_string())
                     }
@@ -762,7 +768,7 @@ impl LspServer {
                         "start": {"line": line, "character": character},
                         "end": {"line": line, "character": character + 1},
                     },
-                    "severity": 1, // Error
+                    "severity": if e.blocks_clean_parse() { 1 } else { 2 },
                     "code": DiagnosticCode::ParseError.as_str(),
                     "source": "perl-parser",
                     "message": Self::diagnostic_message_value(
@@ -907,6 +913,9 @@ impl LspServer {
                         crate::error::ParseError::SyntaxError { location, message } => {
                             (*location, message.clone())
                         }
+                        crate::error::ParseError::Advisory { location, message } => {
+                            (*location, message.clone())
+                        }
                         crate::error::ParseError::UnexpectedEof => {
                             (text.len(), "Unexpected end of input".to_string())
                         }
@@ -927,7 +936,7 @@ impl LspServer {
                             "start": {"line": line, "character": character},
                             "end": {"line": line, "character": character + 1},
                         },
-                        "severity": 1,
+                        "severity": if e.blocks_clean_parse() { 1 } else { 2 },
                         "code": DiagnosticCode::ParseError.as_str(),
                         "source": "perl-parser",
                         "message": message,

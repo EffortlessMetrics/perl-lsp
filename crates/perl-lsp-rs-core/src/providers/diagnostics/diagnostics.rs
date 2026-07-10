@@ -298,6 +298,7 @@ impl DiagnosticsProvider {
                     (*location, msg)
                 }
                 ParseError::SyntaxError { location, message } => (*location, message.clone()),
+                ParseError::Advisory { location, message } => (*location, message.clone()),
                 ParseError::UnexpectedEof => (source.len(), "Unexpected end of input".to_string()),
                 ParseError::LexerError { message } => (0, message.clone()),
                 _ => (0, error.to_string()),
@@ -551,7 +552,7 @@ pub fn build_parse_error_hint(error: &ParseError, base_message: &str) -> Option<
         ParseError::UnclosedDelimiter { delimiter } => {
             Some(format!("Add a matching closing '{delimiter}'"))
         }
-        ParseError::SyntaxError { message, .. } => {
+        ParseError::SyntaxError { message, .. } | ParseError::Advisory { message, .. } => {
             // Provide targeted suggestions for known syntax error patterns.
             // Check both the stored message and the pre-formatted base_message.
             let msg_lower = message.to_lowercase();

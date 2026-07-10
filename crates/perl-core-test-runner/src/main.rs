@@ -219,14 +219,14 @@ fn run_parse(invocation: &Invocation) -> Result<ModeRunResult> {
     let mut parser = Parser::new(&source);
     let output = parser.parse_with_recovery();
     let profile = RecoverySalvageProfile::from_parse(&output.ast, &output.diagnostics, false);
+    let blocking_diagnostic =
+        output.diagnostics.iter().find(|diagnostic| diagnostic.blocks_clean_parse());
 
-    if output.diagnostics.is_empty() && profile.class == RecoverySalvageClass::Clean {
+    if blocking_diagnostic.is_none() && profile.class == RecoverySalvageClass::Clean {
         return Ok(ModeRunResult::pass());
     }
 
-    let first_diagnostic = output
-        .diagnostics
-        .first()
+    let first_diagnostic = blocking_diagnostic
         .map(ToString::to_string)
         .or(profile.first_unrecovered_error_node)
         .unwrap_or_else(|| format!("parse salvage class {:?}", profile.class));
@@ -239,11 +239,11 @@ fn run_compile(invocation: &Invocation) -> Result<ModeRunResult> {
     let mut parser = Parser::new(&source);
     let output = parser.parse_with_recovery();
     let profile = RecoverySalvageProfile::from_parse(&output.ast, &output.diagnostics, false);
+    let blocking_diagnostic =
+        output.diagnostics.iter().find(|diagnostic| diagnostic.blocks_clean_parse());
 
-    if !output.diagnostics.is_empty() || profile.class != RecoverySalvageClass::Clean {
-        let first_diagnostic = output
-            .diagnostics
-            .first()
+    if blocking_diagnostic.is_some() || profile.class != RecoverySalvageClass::Clean {
+        let first_diagnostic = blocking_diagnostic
             .map(ToString::to_string)
             .or(profile.first_unrecovered_error_node)
             .unwrap_or_else(|| format!("parse salvage class {:?}", profile.class));
@@ -2215,6 +2215,34 @@ mod tests {
 
         assert_eq!(result.status, RunnerStatus::Pass);
         assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_nested_quantifier_advisory_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(r#""abab" =~ /(?:[^b]*(?=(b)|(a))ab)*/;"#.to_string()),
+            display_path: "run/valid_nested_quantifier.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_malformed_source_stays_parse_recovery() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline("my $value = ;".to_string()),
+            display_path: "run/malformed.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("parse_recovery"));
         Ok(())
     }
 

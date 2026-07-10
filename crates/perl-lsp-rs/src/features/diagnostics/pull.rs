@@ -1087,6 +1087,7 @@ impl PullDiagnosticsProvider {
                 (*location, format!("Expected {expected}, found {found}"))
             }
             ParseError::SyntaxError { location, message } => (*location, message.clone()),
+            ParseError::Advisory { location, message } => (*location, message.clone()),
             ParseError::UnexpectedEof => (text.len(), "Unexpected end of input".to_string()),
             ParseError::LexerError { message } => (0, message.clone()),
             _ => (0, error.to_string()),
