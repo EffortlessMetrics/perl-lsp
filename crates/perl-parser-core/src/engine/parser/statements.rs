@@ -323,7 +323,14 @@ impl<'a> Parser<'a> {
             TokenKind::Foreach => self.parse_foreach_statement(),
             TokenKind::Given => self.parse_given_statement(),
             TokenKind::Default => self.parse_default_statement(),
-            TokenKind::Try => self.parse_try(),
+            // `try` can be a user-defined subroutine name. Only the block form
+            // is the try/catch construct; `try(...)` is an ordinary call.
+            TokenKind::Try
+                if self
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .is_some_and(|token| token.kind == TokenKind::LeftBrace) => self.parse_try(),
                 TokenKind::Defer => self.parse_defer(),
 
             // Loop control — next/last/redo can be followed by a word operator at statement level,

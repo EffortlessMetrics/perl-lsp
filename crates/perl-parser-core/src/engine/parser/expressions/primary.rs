@@ -495,10 +495,16 @@ impl<'a> Parser<'a> {
             TokenKind::Try => {
                 // Check for autoquoting (`try => value`) and old-style
                 // bareword argument uses (`open(try, ...)`).
-                let next_is_arg_boundary = self.tokens.peek_second().ok().is_some_and(|t| {
+                let second_token = self.tokens.peek_second().ok();
+                let next_is_arg_boundary = second_token.as_ref().is_some_and(|t| {
                     matches!(t.kind, TokenKind::Comma | TokenKind::RightParen)
                 });
-                if self.is_keyword_hash_key_boundary() || next_is_arg_boundary {
+                let next_is_parenthesized_call =
+                    second_token.as_ref().is_some_and(|t| t.kind == TokenKind::LeftParen);
+                if self.is_keyword_hash_key_boundary()
+                    || next_is_arg_boundary
+                    || next_is_parenthesized_call
+                {
                     let token = self.tokens.next()?;
                     Ok(Node::new(
                         NodeKind::Identifier { name: token.text.to_string() },
