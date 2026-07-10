@@ -33,10 +33,33 @@ jobs:
       - name: Refresh badge endpoints
         run: cargo xtask badges
 
+      - name: Discard unrelated working tree drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Earlier steps in this job (toolchain install, `cargo install ripr`,
+          # `cargo xtask badges`) have, in practice, left tracked files outside
+          # `badges/` showing as modified in the working tree (observed:
+          # policy/ub-review.toml) even though nothing in this job's own code
+          # writes that file. Whatever the upstream cause, this job's only
+          # legitimate payload is the generated JSON under `badges/` -- so
+          # make it resilient to any incidental drift rather than let it
+          # abort `git checkout -B` in the next step with "local changes
+          # would be overwritten".
+          echo "::group::git status before drift cleanup"
+          git status --porcelain
+          echo "::endgroup::"
+          git checkout -- . ':!badges'
+          git clean -fd -- . ':!badges'
+          echo "::group::git status after drift cleanup"
+          git status --porcelain
+          echo "::endgroup::"
+
       - name: Open badge refresh PR
         uses: peter-evans/create-pull-request@v8
         with:
           branch: automation/badge-endpoints
+          add-paths: badges
           title: "chore(badges): refresh public endpoints (#8820)"
           commit-message: "chore(badges): refresh public endpoints (#8820)"
           body: |
