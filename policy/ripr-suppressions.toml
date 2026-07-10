@@ -2047,3 +2047,50 @@ created = "2026-07-05"
 review_after = "2026-08-05"
 expires = "2026-10-05"
 removal_criteria = "xtask/src/tasks/perl_core_harness.rs contains implementation logic again, OR ripr correctly treats the #3421 mechanical move/deleted old lines as non-actionable."
+
+# -----------------------------------------------------------------------------
+# navigation_same_document_toctou_regression_tests.rs: Result<()> test-helper
+# error_path/side_effect seams flagged as new production seams (ripr#1428
+# class).
+#
+# PR #3622 (fix #3613) is a Result<()>-returning integration test file per
+# this repo's own mandated test convention ("Tests: Result<()> returns or
+# perl_tdd_support::must/must_some" -- CLAUDE.md Coding Standards). ripr 0.9.x
+# reports 17 severe-gap findings entirely within this one test file:
+#   - 16 `error_path` findings on the `?`-terminated closing braces of
+#     `.ok_or_else(...)`/`.map_err(...)` chains that convert a channel
+#     recv/send failure or an unexpected non-array handler result into the
+#     test's own `Err(String)` -- pure test-assertion plumbing, not
+#     exploitable production behavior.
+#   - 1 `side_effect` finding on a `resume_tx.send(())?` call -- the
+#     test-only signal that releases a handler paused at the
+#     `wait_at_same_doc_fallback_gap` hook.
+#
+# ripr's own reach/infect/propagate fields report "yes" (the tests do reach
+# and exercise this code), but "observe"/"discriminate" report "no" because
+# each finding's guarded failure condition is exactly what the test's own
+# `assert!`/`assert_eq!` immediately following it already proves does not
+# happen. This is the same ripr#1428 class (test-harness plumbing flagged as
+# production seams) as ripr-suppress-seam-proof-tests and
+# ripr-suppress-quote-operator-conformance-test-helpers above. All findings
+# sit inside `#[test]` functions in a `tests/` integration file, not
+# production code; the behavior under test (same-document TOCTOU pinning
+# across a racing didChange/didClose, and the raw/normalized URI-key
+# deduplication in `pinned_doc_map_for`) is proven by the assert! calls
+# immediately following each flagged line.
+#
+# Suppression is narrow: single test file, one PR. Remove when ripr#1428 is
+# fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-navigation-toctou-regression-test-helpers"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs/tests/navigation_same_document_toctou_regression_tests.rs"]
+classification = ["reachable_unrevealed", "weakly_exposed", "error_path", "side_effect"]
+owner = "lsp-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "PR #3622 (fix #3613) adds/extends navigation_same_document_toctou_regression_tests.rs, a Result<()>-returning integration test file per this repo's mandated test convention. ripr 0.9.x reports 17 severe-gap findings entirely within this file: 16 error_path findings on `?`-terminated .ok_or_else(...)/.map_err(...) chains, and 1 side_effect finding on a resume_tx.send(())? handshake call -- all pure test-assertion/synchronization plumbing. ripr reports reach/infect/propagate=yes but observe/discriminate=no because it cannot recognize that the immediately-following assert!/assert_eq! already proves the guarded failure condition does not occur. Same ripr#1428 class (test-harness plumbing flagged as production seams) as ripr-suppress-seam-proof-tests and ripr-suppress-quote-operator-conformance-test-helpers. Suppression is narrow: single test file, one PR. Remove when ripr#1428 is fixed upstream."
+created = "2026-07-10"
+review_after = "2026-08-10"
+expires = "2026-09-30"
+removal_criteria = "ripr correctly recognizes the guarding assert!/assert_eq! as the discriminator for a preceding `?`/send() in Result<()> test functions, OR ripr#1428 is fixed upstream."

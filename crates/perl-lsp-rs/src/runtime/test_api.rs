@@ -84,6 +84,18 @@ impl LspServer {
         self.handle_did_change(Some(params))
     }
 
+    /// Convenience helper: apply a `didClose` for a document.
+    ///
+    /// Used by same-document TOCTOU regression tests (#3613) to simulate a
+    /// racing close between a navigation handler's up-front capture and its
+    /// later `documents_text_snapshot()` re-read.
+    pub fn test_apply_did_close(&self, uri: &str) -> Result<(), JsonRpcError> {
+        let params = serde_json::json!({
+            "textDocument": { "uri": uri },
+        });
+        self.handle_did_close(Some(params))
+    }
+
     /// Test-only helper that updates an open document snapshot without touching
     /// the workspace index.
     ///
