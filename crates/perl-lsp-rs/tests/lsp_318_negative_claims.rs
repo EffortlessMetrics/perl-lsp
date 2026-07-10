@@ -8,7 +8,6 @@ mod support;
 
 use parking_lot::Mutex;
 use perl_lsp::LspServer;
-use perl_lsp::protocol::METHOD_NOT_FOUND;
 use perl_lsp::server::MessageType;
 use perl_lsp_rs_core::runtime::tuning::RuntimeTuning;
 use perl_lsp_rs_core::transport::framing::ContentLengthFramer;
@@ -58,7 +57,6 @@ fn initialize_does_not_advertise_unimplemented_318_capabilities() -> TestResult 
         .get("capabilities")
         .ok_or_else(|| format!("initialize response missing capabilities: {init}"))?;
 
-    assert_absent(caps, "/semanticTokensProvider/full/delta")?;
     assert_absent(caps, "/documentRangesFormattingProvider")?;
     assert_absent(caps, "/experimental/inlineCompletionProvider")?;
     assert_absent(caps, "/codeActionProvider/documentation")?;
@@ -130,7 +128,10 @@ fn code_action_documentation_advertised_when_supported() -> TestResult {
 }
 
 #[test]
-fn semantic_tokens_delta_request_returns_method_not_found() -> TestResult {
+fn semantic_tokens_delta_request_returns_real_response() -> TestResult {
+    // Delta is now a supported surface (LSP 3.17): the server mints result-ids on
+    // full results and answers `textDocument/semanticTokens/full/delta` with a real
+    // response (edits, or a full fallback) instead of method-not-found.
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready("file:///workspace", Some(json!({})))?;
     harness.open("file:///test.pl", "use strict;\n")?;
@@ -145,7 +146,23 @@ fn semantic_tokens_delta_request_returns_method_not_found() -> TestResult {
         }
     }));
 
-    assert_error_code(&response, METHOD_NOT_FOUND)
+    assert!(
+        response.get("error").is_none(),
+        "delta is implemented and must not return an error: {response}"
+    );
+    let result = response
+        .get("result")
+        .ok_or_else(|| format!("delta response missing result: {response}"))?;
+    assert!(
+        result.get("resultId").and_then(Value::as_str).is_some(),
+        "delta response must carry a fresh resultId: {result}"
+    );
+    // An unknown previousResultId falls back to a full token set.
+    assert!(
+        result.get("data").is_some() || result.get("edits").is_some(),
+        "delta response must carry either full data or edits: {result}"
+    );
+    Ok(())
 }
 
 #[test]
@@ -803,15 +820,6 @@ sub reset {
 
 fn assert_absent(value: &Value, pointer: &str) -> TestResult {
     assert!(value.pointer(pointer).is_none(), "{pointer} must be absent from {value}");
-    Ok(())
-}
-
-fn assert_error_code(response: &Value, expected_code: i32) -> TestResult {
-    let code = response
-        .pointer("/error/code")
-        .and_then(Value::as_i64)
-        .ok_or_else(|| format!("expected JSON-RPC error code in response: {response}"))?;
-    assert_eq!(code, i64::from(expected_code), "response: {response}");
     Ok(())
 }
 

@@ -138,6 +138,9 @@ impl LspServer {
             "textDocument/semanticTokens/range" => {
                 self.handle_semantic_tokens_range_dispatch(request.params)
             }
+            "textDocument/semanticTokens/full/delta" => {
+                self.handle_semantic_tokens_delta_dispatch(request.params)
+            }
             "workspace/executeCommand" => self.handle_execute_command_dispatch(request.params),
             "textDocument/typeDefinition" => self.handle_type_definition_dispatch(request.params),
             "textDocument/implementation" => self.handle_implementation_dispatch(request.params),

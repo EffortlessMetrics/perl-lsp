@@ -83,6 +83,7 @@ impl LspServer {
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             type_inference_engine_cache: Arc::new(Mutex::new(HashMap::new())),
             provider_decision_traces: Arc::new(Mutex::new(HashMap::new())),
+            semantic_tokens_cache: Arc::new(Mutex::new(HashMap::new())),
             module_scan_cache: Arc::new(
                 perl_lsp_rs_core::providers::completion::module_scan_cache::ModuleCompletionScanCache::new(),
             ),
@@ -241,6 +242,7 @@ impl LspServer {
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             type_inference_engine_cache: Arc::new(Mutex::new(HashMap::new())),
             provider_decision_traces: Arc::new(Mutex::new(HashMap::new())),
+            semantic_tokens_cache: Arc::new(Mutex::new(HashMap::new())),
             module_scan_cache: Arc::new(
                 perl_lsp_rs_core::providers::completion::module_scan_cache::ModuleCompletionScanCache::new(),
             ),
@@ -340,6 +342,7 @@ impl LspServer {
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             type_inference_engine_cache: Arc::new(Mutex::new(HashMap::new())),
             provider_decision_traces: Arc::new(Mutex::new(HashMap::new())),
+            semantic_tokens_cache: Arc::new(Mutex::new(HashMap::new())),
             module_scan_cache: Arc::new(
                 perl_lsp_rs_core::providers::completion::module_scan_cache::ModuleCompletionScanCache::new(),
             ),
