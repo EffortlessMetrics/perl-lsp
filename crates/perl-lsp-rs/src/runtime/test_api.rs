@@ -394,6 +394,27 @@ impl LspServer {
         self.handle_hover(params)
     }
 
+    /// Test-only entrypoint for LSP `textDocument/signatureHelp`.
+    ///
+    /// Exercises signature-help functionality in tests. Returns parameter
+    /// hints for the function call at the given position.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri` and `position`.
+    ///
+    /// # Returns
+    /// - `Ok(Some(signature_help))`: Signature information found.
+    /// - `Ok(None)`: No signature help available at position.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or document not found.
+    pub fn test_handle_signature_help(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_signature_help(params)
+    }
+
     /// Test-only entrypoint for LSP `textDocument/codeAction`.
     ///
     /// Exercises quick-fix and refactor code-action generation in tests,

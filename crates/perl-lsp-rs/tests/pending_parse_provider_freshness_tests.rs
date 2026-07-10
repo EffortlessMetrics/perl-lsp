@@ -17,6 +17,7 @@
 //! |---|---|
 //! | Completion | bounded text/syntax fallback (may still answer) |
 //! | Hover | no exact semantic answer from the stale AST |
+//! | Signature help | no exact answer from stale current-file facts (falls back to the name-only builtin table, never the AST) |
 //! | Definition / References | no exact answer from stale current-file facts |
 //! | Semantic tokens | no fresh current-generation semantic-token claim |
 //! | Rename | FAIL CLOSED (produces no edits) |
@@ -238,6 +239,19 @@ fn sub_foo_to_bar_cross_provider_freshness_canary() -> TestResult {
         "gap: rename must fail closed (zero edits) rather than rename a stale/absent AST; got: {rename_gap:?}"
     );
 
+    // Signature help: the user-defined-function branch requires the AST
+    // (`current_parsed()`), which is unavailable during the gap, so it must
+    // never surface the stale `foo` signature; the name-only builtin-function
+    // fallback does not recognize `foo`.
+    let sig_gap = server.test_handle_signature_help(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 4 }
+    })))?;
+    assert!(
+        !json_contains(&sig_gap, "foo"),
+        "gap: signature help must never surface the stale `foo` fact; got: {sig_gap:?}"
+    );
+
     // Completion may still answer, but only from its declared bounded
     // text/syntax fallback -- never a claim requiring the (unavailable) AST.
     let completion_gap = server.test_handle_completion(Some(json!({
@@ -296,6 +310,20 @@ fn sub_foo_to_bar_cross_provider_freshness_canary() -> TestResult {
         "post-publish: references result must not mention `foo`"
     );
 
+    let sig1 = server.test_handle_signature_help(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 4 }
+    })))?;
+    assert!(
+        json_contains(&sig1, "bar"),
+        "post-publish: signature help must resolve `bar` once the generation-1 \
+         snapshot is current; got: {sig1:?}"
+    );
+    assert!(
+        !json_contains(&sig1, "foo"),
+        "post-publish: signature help result must not mention `foo`; got: {sig1:?}"
+    );
+
     Ok(())
 }
 
@@ -323,6 +351,118 @@ fn hover_degrades_during_pending_parse_gap() -> TestResult {
     assert!(
         !json_contains(&hover, "foo"),
         "gap: hover must never surface the stale `foo` fact; got: {hover:?}"
+    );
+
+    Ok(())
+}
+
+/// Signature help: falls back to the name-only builtin-function table (never
+/// consults the stale AST) when `current_parsed()` is `None` --
+/// `get_user_function_signature` requires `doc.current_parsed().ast()`, so
+/// that branch is skipped entirely during the gap. Mirrors
+/// `hover_degrades_during_pending_parse_gap`'s "no error, no stale claim"
+/// contract: `foo` is not a Perl builtin, so the fallback does not know it
+/// either.
+#[test]
+fn signature_help_no_stale_claim_during_pending_parse_gap() -> TestResult {
+    let server = fresh_server();
+    let uri = "file:///gap_signature_help.pl";
+
+    server.test_apply_did_open(uri, BEFORE_TEXT, 1)?;
+    server.test_apply_text_change_without_reparse(uri, AFTER_TEXT, 2)?;
+
+    let sig = server.test_handle_signature_help(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 4 }
+    })))?;
+    assert!(
+        !json_contains(&sig, "foo"),
+        "gap: signature help must never surface the stale `foo` fact; got: {sig:?}"
+    );
+
+    Ok(())
+}
+
+/// Signature help must never answer from the stale AST even when the
+/// function *name* is unchanged across the gap-opening edit.
+///
+/// `signature_help_no_stale_claim_during_pending_parse_gap` (above) and the
+/// headline canary both rename the function (`foo` -> `bar`), so a
+/// regression that swapped `current_parsed()` for `latest_parsed()` (reading
+/// the stale N-1 AST instead of honestly reporting no fresh answer) would
+/// look up `bar` in an AST that only defines `foo` -- the lookup misses by
+/// name regardless of which snapshot is consulted, and the assertion passes
+/// either way. That makes those tests unable to distinguish "gap handled
+/// honestly" from "gap handled by silently falling back to the stale AST"
+/// for a same-named function. This test closes that gap: the function name
+/// (`calc`) is stable across the edit, only its signature changes, so a
+/// stale-AST answer is name-matchable but observably wrong (0 parameters)
+/// versus the honest "no answer" the gap policy requires.
+#[test]
+fn signature_help_never_answers_from_stale_ast_with_matching_name_during_pending_parse_gap()
+-> TestResult {
+    let server = fresh_server();
+    let uri = "file:///gap_signature_help_same_name.pl";
+
+    const BEFORE: &str = "sub calc { return 1; }\ncalc();\n";
+    const AFTER: &str = "sub calc($x, $y) { return $x + $y; }\ncalc(1, 2);\n";
+
+    server.test_apply_did_open(uri, BEFORE, 1)?;
+    server.test_apply_text_change_without_reparse(uri, AFTER, 2)?;
+    assert_eq!(
+        server.test_document_generation(uri),
+        Some(1),
+        "helper must bump the text generation without republishing a snapshot"
+    );
+
+    let sig = server.test_handle_signature_help(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 5 }
+    })))?;
+
+    // The honest gap answer has no user-defined-function signature at all:
+    // the AST-gated branch (`get_user_function_signature`) is skipped
+    // because `current_parsed()` is `None`, and `calc` is not a Perl
+    // builtin. A regression that reads `latest_parsed()` instead would
+    // match `calc` by name in the stale (0-parameter) AST and return the
+    // label `"sub calc"` -- distinguishably wrong once the live text
+    // defines a 2-parameter `calc`.
+    let stale_zero_param_label_present =
+        sig.as_ref().and_then(|v| v.get("signatures")).and_then(Value::as_array).is_some_and(
+            |sigs| sigs.iter().any(|s| s.get("label").and_then(Value::as_str) == Some("sub calc")),
+        );
+    assert!(
+        !stale_zero_param_label_present,
+        "gap: signature help must never surface the stale 0-parameter `calc` \
+         signature from the N-1 AST just because the name still matches; got: {sig:?}"
+    );
+
+    // Post-publish: once the gap-closing snapshot is published, the fresh
+    // *2-parameter* `calc` signature must resolve -- proving the honest "no
+    // answer" above was a gap-time policy, not a provider that can never
+    // find `calc` at all. Checking `parameters.len() == 2` (not merely that
+    // the response mentions "calc") is deliberate: a 0-parameter match would
+    // also contain the substring "calc" and would silently pass a substring
+    // check, undermining the very asymmetry this assertion exists to prove.
+    server.test_publish_parse_for_current_generation(uri)?;
+    let sig_fresh = server.test_handle_signature_help(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 5 }
+    })))?;
+    let fresh_param_count = sig_fresh
+        .as_ref()
+        .and_then(|v| v.get("signatures"))
+        .and_then(Value::as_array)
+        .and_then(|sigs| sigs.first())
+        .and_then(|s| s.get("parameters"))
+        .and_then(Value::as_array)
+        .map(Vec::len);
+    assert_eq!(
+        fresh_param_count,
+        Some(2),
+        "post-publish: signature help must resolve the fresh 2-parameter `calc` \
+         signature once the generation-1 snapshot is current, not a 0-parameter \
+         (stale-shaped) or missing signature; got: {sig_fresh:?}"
     );
 
     Ok(())

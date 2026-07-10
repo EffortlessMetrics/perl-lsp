@@ -424,6 +424,59 @@ fn pull_document_diagnostic_stays_fresh_during_pending_parse_gap() -> TestResult
     Ok(())
 }
 
+/// User-facing honesty canary, opposite direction: an edit that FIXES a
+/// syntax error must not leave the now-stale PL001 diagnostic visible to a
+/// pull request issued DURING the pending-parse gap. Single-document pull
+/// re-parses live text on every call (proven above), so the fixed text's
+/// diagnostics are what a client requesting `textDocument/diagnostic` mid-gap
+/// would actually see -- this pins that the fix is honestly reflected rather
+/// than the pre-edit (stale N-1 AST) syntax error surviving as a
+/// false-current diagnostic.
+#[test]
+fn pull_document_diagnostic_does_not_report_a_fixed_syntax_error_as_current_during_pending_parse_gap(
+) -> TestResult {
+    let server = fresh_server();
+    let uri = "file:///pull_diag_fix_during_gap.pl";
+
+    // BEFORE: the syntax error is present and reported.
+    server.test_apply_did_open(uri, "my $x =;\n", 1)?;
+    let before = server.test_handle_document_diagnostic(Some(json!({
+        "textDocument": { "uri": uri }
+    })))?;
+    let before_items = pull_items(before).ok_or("response must carry items array")?;
+    assert!(
+        before_items.iter().any(|d| d.get("code").and_then(|c| c.as_str()) == Some("PL001")),
+        "baseline: the syntax error must be reported before the fix; got: {before_items:?}"
+    );
+
+    // Apply an edit that FIXES the syntax error, but withhold republication
+    // of the parse snapshot -- current_parsed() stays None (the pending-parse
+    // gap the async worker will open).
+    server.test_apply_text_change_without_reparse(uri, "my $x = 1;\n", 2)?;
+    assert_eq!(
+        server.test_document_generation(uri),
+        Some(1),
+        "helper must bump the generation without republishing"
+    );
+
+    // DURING the gap: the diagnostic a client would see must reflect the
+    // current (fixed) text, never a stale gen-N-clean-or-dirty claim derived
+    // from the N-1 AST's cached (and now superseded) syntax error.
+    let during_gap = server.test_handle_document_diagnostic(Some(json!({
+        "textDocument": { "uri": uri }
+    })))?;
+    let gap_items =
+        pull_items(during_gap).ok_or("response must carry items array during the gap")?;
+    assert!(
+        !gap_items.iter().any(|d| d.get("code").and_then(|c| c.as_str()) == Some("PL001")),
+        "gap: pull diagnostics must not report the now-fixed syntax error as current \
+         (would mean it presented the stale N-1 AST's diagnostic instead of the current \
+         text's); got: {gap_items:?}"
+    );
+
+    Ok(())
+}
+
 /// Workspace pull (`workspace/diagnostic`, `LspServer::handle_workspace_diagnostic`)
 /// reads the cached `ParsedSnapshot` directly (`doc.current_parsed()`) rather
 /// than re-parsing. During a pending-parse gap it already skips the document
