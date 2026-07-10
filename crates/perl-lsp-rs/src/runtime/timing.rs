@@ -186,28 +186,33 @@ pub(crate) fn uri_tail(uri: &str) -> String {
 /// drop semantics, not a special case -- so starting one of these at the top
 /// of an off-lock analysis block and letting it fall out of scope naturally
 /// captures the elapsed time regardless of which `return` the block takes.
-/// A no-op (zero-cost past the initial `is_enabled` check) when timing is off.
+/// Zero-cost past the initial `is_enabled` check when timing is off -- no
+/// `Instant` captured, no `String` allocated.
 pub(crate) struct ScopedSpan {
     span: &'static str,
-    detail: String,
-    start: std::time::Instant,
-    enabled: bool,
+    detail: Option<String>,
+    start: Option<std::time::Instant>,
 }
 
 impl ScopedSpan {
     /// Start a scoped span for `uri`, active only while [`is_enabled`] is true.
+    ///
+    /// When timing is disabled, this constructor avoids taking an `Instant`
+    /// and does not allocate a `String`, matching the "zero-cost past the
+    /// initial `is_enabled` check" guarantee.
     pub(crate) fn start(span: &'static str, uri: &str) -> Self {
-        let enabled = is_enabled();
-        let detail = if enabled { uri_tail(uri) } else { String::new() };
-        ScopedSpan { span, detail, start: std::time::Instant::now(), enabled }
+        if is_enabled() {
+            ScopedSpan { span, detail: Some(uri_tail(uri)), start: Some(std::time::Instant::now()) }
+        } else {
+            ScopedSpan { span, detail: None, start: None }
+        }
     }
 }
 
 impl Drop for ScopedSpan {
     fn drop(&mut self) {
-        if self.enabled {
-            let detail = std::mem::take(&mut self.detail);
-            emit(TimingSpan::labeled(self.span, elapsed_ms(self.start), detail));
+        if let (Some(start), Some(detail)) = (self.start.take(), self.detail.take()) {
+            emit(TimingSpan::labeled(self.span, elapsed_ms(start), detail));
         }
     }
 }
@@ -414,7 +419,27 @@ mod tests {
         let long_name = "x".repeat(200);
         let uri = format!("file:///workspace/{long_name}.pm");
         let tail = uri_tail(&uri);
-        assert!(tail.len() <= 64, "tail must be bounded to 64 bytes, got {}", tail.len());
+        assert!(
+            tail.chars().count() <= 64,
+            "tail must be bounded to 64 chars, got {}",
+            tail.chars().count()
+        );
+        assert!(uri.ends_with(&tail), "tail must be a genuine suffix of the source uri");
+    }
+
+    #[test]
+    fn uri_tail_handles_multibyte_chars_without_panicking() {
+        // 4-byte-per-char emoji, well past the 64-char bound: a raw byte-index
+        // slice (e.g. `tail[tail.len() - 64..]`) would land mid-codepoint here
+        // and panic. `uri_tail` must slice on a char boundary instead.
+        let long_name = "\u{1F980}".repeat(200); // 🦀 crab emoji, 4 bytes per char
+        let uri = format!("file:///workspace/{long_name}.pm");
+        let tail = uri_tail(&uri); // must not panic
+        assert!(
+            tail.chars().count() <= 64,
+            "tail must be bounded to 64 chars, got {}",
+            tail.chars().count()
+        );
         assert!(uri.ends_with(&tail), "tail must be a genuine suffix of the source uri");
     }
 

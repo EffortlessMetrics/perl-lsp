@@ -42,6 +42,53 @@ use super::super::LspServer;
 /// provider's cancel-check closure can read.
 const UNCANCELLABLE_LOCAL_TOKEN_ID: JsonRpcId = JsonRpcId::Integer(-1);
 
+/// Test-only observer, notified exactly once the next time
+/// `handle_completion_cancellable` enters its analysis phase (the
+/// `if let Some(doc)` arm, before any provider work begins) *for the URI it
+/// was armed with*. Lets a regression test cancel a request deterministically
+/// *after* analysis has genuinely started, instead of guessing the timing
+/// with a fixed sleep. Mirrors `set_index_ready_wait_entered_observer` in
+/// `readiness.rs`, but keyed by URI: unlike readiness (a rare, mostly-
+/// synthetic wait path), every completion test that resolves an open
+/// document passes through this call site, so an unkeyed global slot could
+/// be consumed by an unrelated concurrent test's request and wake the
+/// canceller before the armed test's own analysis started (cubic
+/// review-run fbb70c75, discussion_r3560238397).
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+static COMPLETION_ANALYSIS_STARTED_OBSERVER: std::sync::Mutex<
+    Option<(String, std::sync::mpsc::Sender<()>)>,
+> = std::sync::Mutex::new(None);
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+pub(crate) fn set_completion_analysis_started_observer(
+    uri: &str,
+    sender: std::sync::mpsc::Sender<()>,
+) {
+    if let Ok(mut observer) = COMPLETION_ANALYSIS_STARTED_OBSERVER.lock() {
+        *observer = Some((uri.to_string(), sender));
+    }
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn notify_completion_analysis_started(uri: &str) {
+    let sender = COMPLETION_ANALYSIS_STARTED_OBSERVER.lock().ok().and_then(|mut observer| {
+        // Only consume the slot for the URI it was armed with -- an
+        // unrelated concurrent test's request must not wake this one's
+        // canceller (leaves the slot untouched for its rightful owner).
+        if observer.as_ref().is_some_and(|(armed_uri, _)| armed_uri == uri) {
+            observer.take().map(|(_, tx)| tx)
+        } else {
+            None
+        }
+    });
+    if let Some(sender) = sender {
+        let _ = sender.send(());
+    }
+}
+
+#[cfg(not(any(test, feature = "expose_lsp_test_api")))]
+fn notify_completion_analysis_started(_uri: &str) {}
+
 static SNIPPET_PLACEHOLDER_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SNIPPET_SIMPLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
@@ -1217,8 +1264,23 @@ impl LspServer {
                 ));
             }
 
-            let t_analyze_start = std::time::Instant::now();
+            // RAII span: covers the whole analysis attempt via `Drop`, so it
+            // emits `provider.completion.analyze` on every exit path --
+            // including the cancellation early `return Err` below -- not
+            // just the normal fall-through. A manual Instant+emit pair
+            // placed after this `if`/`else` (the prior shape) is skipped
+            // by any early `return` inside the `if` arm; see
+            // `provider.references.analyze` in references.rs for the same
+            // pattern (#3619). Started outside the `if let Some(doc)` arm so
+            // the `lock_hold`/`analyze` pair is preserved on the
+            // doc-no-longer-in-map path too, matching the prior manual-
+            // Instant behavior, which emitted unconditionally regardless of
+            // whether `doc_owned` resolved.
+            let _analyze_span =
+                crate::runtime::timing::ScopedSpan::start("provider.completion.analyze", uri);
             let response = if let Some(doc) = doc_owned.as_ref() {
+                notify_completion_analysis_started(uri);
+
                 let offset = self.pos16_to_offset(doc, line, character);
                 let ast_available = doc.current_parsed().is_some_and(|p| p.ast().is_some());
 
@@ -1361,13 +1423,6 @@ impl LspServer {
             } else {
                 None
             };
-            if timing_on {
-                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
-                    "provider.completion.analyze",
-                    crate::runtime::timing::elapsed_ms(t_analyze_start),
-                    crate::runtime::timing::uri_tail(uri),
-                ));
-            }
             if let Some(response) = response {
                 return Ok(Some(response));
             }
@@ -1778,6 +1833,162 @@ mod tests {
             lock_hold_idx < analyze_idx,
             "lock_hold span must be emitted before the analyze span (proves the documents-map \
              guard is dropped before analysis runs): {spans:?}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn cancellable_completion_emits_analyze_span_on_normal_completion()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Baseline: the cancellable path must emit `provider.completion.analyze`
+        // on the ordinary, non-cancelled fall-through -- the same contract
+        // `handle_completion` already proves above, checked here for the
+        // `_cancellable` entry point specifically.
+        let server = LspServer::default();
+        let uri = "file:///workspace/timing_completion_cancellable.pl";
+        server.test_apply_did_open(uri, "my $var = 42;\n$va", 1)?;
+
+        let _lock = crate::runtime::timing::capture::test_lock();
+        crate::runtime::timing::capture::start();
+        let id = json!(1);
+        let _ = server.handle_completion_cancellable(
+            Some(json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": 1, "character": 3 }
+            })),
+            Some(&id),
+        )?;
+        let spans = crate::runtime::timing::capture::drain();
+
+        assert!(
+            spans.iter().any(|s| s.span == "provider.completion.analyze"),
+            "expected a provider.completion.analyze span, got: {spans:?}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn cancellable_completion_emits_analyze_span_when_cancelled_mid_flight()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // #3619 regression test. `handle_completion_cancellable` checks
+        // `token.is_cancelled_relaxed()` twice: once before analysis starts,
+        // and once again right after the provider call returns (to reject a
+        // request that was cancelled while completions were being
+        // generated). The old code placed its manual Instant+emit pair for
+        // `provider.completion.analyze` *after* that second check, so a
+        // cancellation landing between the two checks caused the early
+        // `return Err(..)` to skip the emit entirely -- the analyze span was
+        // silently dropped for every request cancelled mid-analysis. The fix
+        // wraps the analysis block in a `ScopedSpan` (RAII), which emits on
+        // `Drop` regardless of which `return` fires.
+        //
+        // This test uses a genuinely concurrent cancellation (a background
+        // thread calling `token.cancel()`) against a fixture with
+        // `sub_count` candidate subs, so the off-lock analysis phase
+        // (owned-document clone + completion generation over thousands of
+        // `func_`-prefixed candidates) has a wide window to observe the
+        // cancellation before it returns -- reproducing the exact
+        // interleaving the bug depended on, not just the general RAII
+        // contract already covered by `timing.rs`'s
+        // `scoped_span_emits_on_early_return_from_enclosing_fn`.
+        //
+        // Timing is controlled deterministically, not with a fixed sleep: a
+        // `notify_completion_analysis_started` hook (module-level, mirrors
+        // `set_index_ready_wait_entered_observer` in `readiness.rs`) fires
+        // the instant the handler enters its analysis phase. The canceller
+        // thread blocks on that signal before calling `token.cancel()`, so
+        // the cancellation is guaranteed to land no earlier than the start
+        // of analysis -- a fixed sleep can only guess at that boundary and
+        // is either too short (fires before analysis begins, proving
+        // nothing) or too long (analysis already finished) under CI load.
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        // Each sub is called once below so the dead-code lint stays quiet --
+        // keeps this test's diagnostics payload small while still giving the
+        // completion provider thousands of `func_`-prefixed candidates to
+        // filter, which is what actually slows the analysis phase down.
+        let sub_count = 1_500;
+        let mut source = String::with_capacity(100_000);
+        for i in 0..sub_count {
+            source.push_str(&format!("sub func_{i} {{ my $x = {i}; return $x; }}\n"));
+        }
+        source.push_str("func_0(); ");
+        for i in 1..sub_count {
+            source.push_str(&format!("func_{i}(); "));
+        }
+        source.push('\n');
+        source.push_str("func_");
+        let uri = "file:///workspace/timing_completion_cancel_mid_flight.pl";
+
+        let server = LspServer::default();
+        server.test_apply_did_open(uri, &source, 1)?;
+
+        let request_id = JsonRpcId::Integer(918_273_645);
+        let token = PerlLspCancellationToken::new(
+            request_id.clone(),
+            "textDocument/completion".to_string(),
+        );
+        GLOBAL_CANCELLATION_REGISTRY
+            .register_token(token.clone())
+            .map_err(|e| format!("failed to register cancellation token: {e:?}"))?;
+
+        let _lock = crate::runtime::timing::capture::test_lock();
+        crate::runtime::timing::capture::start();
+
+        let (analysis_started_tx, analysis_started_rx) = std::sync::mpsc::channel();
+        set_completion_analysis_started_observer(uri, analysis_started_tx);
+
+        let landed = Arc::new(AtomicBool::new(false));
+        let canceller = {
+            let token = token.clone();
+            let landed = Arc::clone(&landed);
+            std::thread::spawn(move || -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                // Bounded wait: fail loudly instead of hanging forever if the
+                // analysis phase is never entered (e.g. a future refactor
+                // moves or removes the notify call).
+                analysis_started_rx.recv_timeout(std::time::Duration::from_secs(5)).map_err(
+                    |_| "timed out waiting for completion analysis to start".to_string(),
+                )?;
+                token.cancel();
+                landed.store(true, Ordering::SeqCst);
+                Ok(())
+            })
+        };
+
+        let last_line = source.lines().count() as u32 - 1;
+        let last_char = source.lines().next_back().map(str::len).unwrap_or(0) as u32;
+        let request_id_value = json!(918_273_645_i64);
+        let result = server.handle_completion_cancellable(
+            Some(json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": last_line, "character": last_char }
+            })),
+            Some(&request_id_value),
+        );
+
+        canceller
+            .join()
+            .map_err(|_| "canceller thread panicked")?
+            .map_err(|e| format!("canceller thread failed: {e}"))?;
+        assert!(landed.load(Ordering::SeqCst), "canceller thread must have run");
+
+        let spans = crate::runtime::timing::capture::drain();
+
+        // The race must actually land mid-analysis for this test to prove
+        // anything about the fix; fail loudly (rather than silently pass on
+        // an unrelated code path) if it did not.
+        assert!(
+            matches!(result, Err(ref e) if e.code == REQUEST_CANCELLED),
+            "test setup must trigger cancellation mid-analysis for this regression test to be \
+             meaningful; got: {result:?} (grow the fixture document if this flakes in CI)"
+        );
+
+        assert!(
+            spans.iter().any(|s| s.span == "provider.completion.analyze"),
+            "provider.completion.analyze span must be emitted even when the request is \
+             cancelled mid-analysis (#3619 regression), got spans: {spans:?}"
         );
 
         Ok(())
