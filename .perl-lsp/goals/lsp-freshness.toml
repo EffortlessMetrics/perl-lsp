@@ -1,0 +1,228 @@
+id = "plsp-swarm-lsp-freshness"
+title = "Fresh Facts Fast (LSP freshness) lane"
+status = "active"
+owner = "codex-swarm"
+created = "2026-07-10"
+
+plan = "plans/lsp-freshness/implementation-plan.md"
+tracker = "https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3396"
+references = [
+  "https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3046",
+  "https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/1711",
+  "https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/1658",
+  "https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/2674",
+]
+
+status_pointer = "docs/project/status/lsp.md"
+status_docs = [
+  "docs/project/status/lsp.md",
+  "docs/project/status/index.md",
+  "docs/project/status/neovim-didchange-latency-receipt.md",
+]
+
+objective = """
+Make every exact perl-lsp editor answer derive from one immutable,
+generation-matched parsed/semantic snapshot. textDocument/didChange must
+commit text and return without parsing. Only the latest eligible generation
+may publish AST state, diagnostics, workspace-index updates, symbols, or
+semantic facts. Providers must consume current-generation facts or choose an
+explicit bounded fallback, refusal, pending state, or documented
+stale-compatible behavior.
+"""
+
+end_state = [
+  "didChange performs no parse/semantic extraction before returning.",
+  "One immutable generation-tagged ParsedSnapshot is the sole parsed-state truth.",
+  "Only the latest eligible generation publishes (stale work publishes nothing).",
+  "Providers have explicit pending-parse contracts.",
+  "Accessors return owned Arc snapshots so document-map locks drop before analysis.",
+  "Derived semantics (analyzer/type-env/facts) are generation-owned and built once per generation.",
+  "Fact producer provenance is truthful (AST vs PIR-A vs framework vs oracle vs dynamic — #3046).",
+  "ready-index references performs no full-workspace request-time text scan (#1658).",
+  "Closure receipts exist (ranged-edit, generation-gap, latest-only worker, fact build/reuse, references scorecard, sub-foo->bar canary).",
+  "No implicit provider promotion.",
+]
+
+claim_boundaries = [
+  "No parser grammar changes.",
+  "No Perl-core base/comp/run burndown (another thread owns it).",
+  "No HIR/PIR expansion unless a separate compiler issue requires it.",
+  "No true-incremental-AST-reuse claim.",
+  "No TextDocumentSyncKind change.",
+  "No provider support-tier promotion without a promotion-ledger row.",
+  "No fallback deletion without representative correctness replay.",
+  "No request-time scan removal until replay proves parity or names the refusal boundary.",
+  "No hard millisecond CI budgets from shared/debug hardware.",
+  "Native Windows Rust/Cargo + isolated Windows cache paths only (no WSL/Bash cargo on this lane).",
+  "Current access returns None on generation mismatch.",
+  "Latest access is never the default provider path.",
+  "Stale work has no side effects.",
+  "Failed parse publishes a current-generation failure snapshot.",
+  "ParsedSnapshot fields cannot be assembled inconsistently.",
+  "rename/safe-delete/AST-edits fail closed without current proof.",
+  "No compiler-backed claim without provenance.",
+]
+
+[current]
+phase = "phase-1"
+lane = "reliability"
+repo = "perl-lsp-swarm"
+release_lineage_repo = "perl-lsp"
+status = "parsed_snapshot_seam_active"
+
+[limits]
+reliability_prs = 1
+trust_prs = 1
+substrate_prs = 1
+
+[[lanes]]
+id = "reliability"
+pr_cap = 1
+owns = [
+  "parsed_snapshot_seam",
+  "latest_only_worker",
+  "index_publication",
+  "closeout",
+]
+rule = "No broadening beyond the named lane work items. One production architecture PR at a time."
+
+[[lanes]]
+id = "trust"
+pr_cap = 1
+owns = [
+  "pending_parse_contract",
+  "current_provider_policy",
+  "references_replay",
+  "request_scan_retirement",
+]
+rule = "One stacked contract/test PR at a time. No fallback deletion without replay evidence."
+
+[[lanes]]
+id = "substrate"
+pr_cap = 1
+owns = [
+  "generation_owned_analysis",
+  "fact_producer_provenance",
+]
+rule = "One main-red sidecar PR at a time. No HIR/PIR expansion without a separate compiler issue."
+
+[[work_item]]
+id = "lsp-freshness-parsed-snapshot"
+status = "active"
+lane = "reliability"
+claim_boundary = "Owned Arc accessors, no dual state, invariant-owning construction, 3-way generation validation at publish. No provider cutover, no parser grammar changes."
+files = [
+  "crates/perl-lsp-rs/src/",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs",
+]
+
+[[work_item]]
+id = "lsp-freshness-pending-parse-contract"
+status = "ready"
+lane = "trust"
+claim_boundary = "Explicit pending-parse provider contract plus a sub-foo->bar rename canary. Stacked on the ParsedSnapshot seam; no live provider behavior change beyond the pending-state contract."
+files = [
+  "crates/perl-lsp-rs/src/",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs",
+]
+
+[[work_item]]
+id = "lsp-freshness-latest-only-worker"
+status = "planned"
+lane = "reliability"
+claim_boundary = "didChange returns before parse; deterministic barriers, not sleeps. No TextDocumentSyncKind change."
+files = [
+  "crates/perl-lsp-rs/src/",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs",
+]
+
+[[work_item]]
+id = "lsp-freshness-current-provider-policy"
+status = "planned"
+lane = "trust"
+claim_boundary = "Providers drop the document-map guard before analysis; lock-hold instrumentation added. No provider support-tier promotion without a promotion-ledger row."
+files = [
+  "crates/perl-lsp-rs/src/",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs",
+]
+
+[[work_item]]
+id = "lsp-freshness-generation-owned-analysis"
+status = "planned"
+lane = "substrate"
+claim_boundary = "Analyzer/type-env/facts are generation-owned, lazy, built once per generation with explicit eviction. No HIR/PIR expansion."
+files = [
+  "crates/perl-semantic-analyzer/src/",
+]
+commands = [
+  "rtk cargo test -p perl-semantic-analyzer",
+]
+
+[[work_item]]
+id = "lsp-freshness-fact-producer-provenance"
+status = "planned"
+lane = "substrate"
+claim_boundary = "Fact producer provenance (AST vs PIR-A vs framework vs oracle vs dynamic) is truthful. Tracked by #3046. No compiler-backed claim without provenance."
+files = [
+  "crates/perl-semantic-analyzer/src/",
+]
+commands = [
+  "rtk cargo test -p perl-semantic-analyzer",
+]
+
+[[work_item]]
+id = "lsp-freshness-index-publication"
+status = "planned"
+lane = "reliability"
+claim_boundary = "Workspace fact publication and extraction receipts for current-generation only. Tracked by #1711. Requires a receipt proving any preview pass costs less than the extraction it avoids."
+files = [
+  "crates/perl-workspace/src/",
+]
+commands = [
+  "rtk cargo test -p perl-workspace",
+]
+
+[[work_item]]
+id = "lsp-freshness-references-replay"
+status = "planned"
+lane = "trust"
+claim_boundary = "References representative replay scorecard. Tracked by #2674. No fallback deletion without representative correctness replay."
+files = [
+  "crates/perl-lsp-rs/src/",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs",
+]
+
+[[work_item]]
+id = "lsp-freshness-request-scan-retirement"
+status = "blocked"
+lane = "trust"
+claim_boundary = "Remove ready-index request-time workspace scan only after replay proves parity or names the refusal boundary. Tracked by #1658; blocked on the references replay work item."
+files = [
+  "crates/perl-workspace/src/",
+]
+commands = [
+  "rtk cargo test -p perl-workspace",
+]
+
+[[work_item]]
+id = "lsp-freshness-closeout"
+status = "planned"
+lane = "reliability"
+claim_boundary = "Closure receipts, manifest updates, cleanup, successor routing. Tracked by #3396 closure. Docs and receipts only; no new production code."
+files = [
+  ".perl-lsp/goals/lsp-freshness.toml",
+  "plans/lsp-freshness/implementation-plan.md",
+]
+commands = [
+  "rtk cargo xtask check-active-goal-manifest",
+]

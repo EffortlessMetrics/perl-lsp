@@ -213,6 +213,8 @@ plans/*
 !plans/real-perl-editor-trust/implementation-plan.md
 !plans/compiler-program/
 !plans/compiler-program/implementation-plan.md
+!plans/lsp-freshness/
+!plans/lsp-freshness/implementation-plan.md
 scanner_comparison/
 issue_updates/
 
