@@ -470,8 +470,28 @@ fn check_eval_node(block: &Node, eval_node: &Node, diagnostics: &mut Vec<Diagnos
 ///
 /// `open(FH, ">file")` is unsafe because the mode and filename are combined,
 /// allowing shell injection if the filename comes from user input.
+///
+/// The parser may represent `open(FH, ">file")` args as either:
+/// - Flat `args`: `[fh, mode_str]` (unit-test-constructed ASTs)
+/// - Wrapped: `[ArrayLiteral { elements: [fh, mode_str] }]` (real parser output
+///   for parenthesized calls) — this must be unwrapped or PL401 never fires
+///   for the common `open(FH, MODE)` syntax. Mirrors `check_pipe_open` below.
 fn check_two_arg_open(name: &str, args: &[Node], node: &Node, diagnostics: &mut Vec<Diagnostic>) {
-    if name != "open" || args.len() != 2 {
+    if name != "open" {
+        return;
+    }
+
+    let effective_args: &[Node] = if args.len() == 1 {
+        if let NodeKind::ArrayLiteral { elements } = &args[0].kind {
+            elements.as_slice()
+        } else {
+            args
+        }
+    } else {
+        args
+    };
+
+    if effective_args.len() != 2 {
         return;
     }
 
@@ -879,6 +899,40 @@ mod tests {
         assert!(
             diags.iter().all(|d| d.code.as_deref() != Some("PL605")),
             "normal 3-arg open should not be flagged as PL605: {diags:?}"
+        );
+    }
+
+    // --- two-arg open (PL401) tests ---
+
+    #[test]
+    fn parenthesized_two_arg_open_is_flagged() {
+        // open(FH, ">file") — real parser wraps parenthesized call args in a
+        // single ArrayLiteral node, so effective_args must be unwrapped for
+        // PL401 to fire on this (the common) syntax.
+        let diags = security_diags(r#"open(FH, ">file");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL401")),
+            "parenthesized 2-arg open should be flagged as PL401: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn parenthesized_two_arg_open_with_lexical_fh_is_flagged() {
+        // open(my $fh, $path) — lexical filehandle, still 2-arg and unsafe.
+        let diags = security_diags(r#"open(my $fh, $path);"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL401")),
+            "parenthesized 2-arg open with lexical fh should be flagged as PL401: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn three_arg_open_is_not_flagged_as_two_arg_open() {
+        // open($fh, "<", $path) — the safe 3-arg form must not trigger PL401.
+        let diags = security_diags(r#"open(my $fh, "<", $path);"#);
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL401")),
+            "3-arg open should not be flagged as PL401: {diags:?}"
         );
     }
 
