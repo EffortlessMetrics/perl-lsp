@@ -147,12 +147,13 @@ updates:
         update-types:
           - "minor"
           - "patch"
-      # Group all typescript/eslint related packages
+      # Group all typescript/oxlint related packages (PREP-2 #3662: ESLint +
+      # @typescript-eslint replaced by Oxlint + oxlint-tsgolint)
       typescript:
         patterns:
           - "typescript"
-          - "@typescript-eslint/*"
-          - "eslint*"
+          - "oxlint"
+          - "oxlint-tsgolint"
         update-types:
           - "minor"
           - "patch"
