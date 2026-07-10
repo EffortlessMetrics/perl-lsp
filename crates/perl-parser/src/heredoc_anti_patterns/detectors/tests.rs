@@ -114,13 +114,10 @@ EOF
 #[test]
 fn test_regex_heredoc_detection() {
     let detector = AntiPatternDetector::new();
-    let code = r###"
-m/pattern(?{
-    print <<'MATCH';
-    Match text
-MATCH
-})/
-"###;
+    // Single-line case: (?{ and << on the same line — detected by the bounded pattern.
+    // Multi-line cases ((?{ on one line, << on the next) are not detected after #1756;
+    // that tradeoff is explicit: line-boundary anchoring prevents ReDoS.
+    let code = "m/a(?{b<<'X'})c/";
     let diagnostics = detector.detect_all(code);
     assert_eq!(diagnostics.len(), 1);
     assert!(matches!(diagnostics[0].pattern, AntiPattern::RegexCodeBlockHeredoc { .. }));
@@ -129,11 +126,10 @@ MATCH
 #[test]
 fn test_eval_heredoc_detection() {
     let detector = AntiPatternDetector::new();
-    let code = r###"
-eval 'print <<"EVAL";
-Eval content
-EVAL';
-"###;
+    // Single-line case: eval and << on the same line — detected by the bounded pattern.
+    // Multi-line cases (closing quote on a later line) are not detected after #1756;
+    // that tradeoff is explicit: line-boundary anchoring prevents ReDoS.
+    let code = "eval 'print <<EOF;'";
     let diagnostics = detector.detect_all(code);
     assert_eq!(diagnostics.len(), 1);
     assert!(matches!(diagnostics[0].pattern, AntiPattern::EvalStringHeredoc { .. }));
