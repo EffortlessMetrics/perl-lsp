@@ -145,6 +145,7 @@ impl<'a> Parser<'a> {
             allow_indent,
             quote,
             decl_span: heredoc_collector::Span { start: decl_start, end: decl_end },
+            body_start: after_line_break(self.src_bytes, decl_end),
         });
     }
 
@@ -170,15 +171,11 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Advance to first content line (handle newline after statement terminator)
-        self.byte_cursor = after_line_break(self.src_bytes, self.byte_cursor);
-
         // Keep a copy of the declarations so we can match outputs back to inputs
         let pending: Vec<_> = self.pending_heredocs.iter().cloned().collect();
 
-        let out = collect_all(
+        let out = collect_at_declaration_offsets(
             self.src_bytes,
-            self.byte_cursor,
             std::mem::take(&mut self.pending_heredocs),
         );
 

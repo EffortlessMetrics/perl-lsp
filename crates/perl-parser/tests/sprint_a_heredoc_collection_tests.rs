@@ -20,6 +20,7 @@ fn empty_unindented() {
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),
+        body_start: 0,
     });
     // Offset 6 is right after "<<EOT\n" (the declaration line)
     let res = collect_all(src, 6, q);
@@ -38,6 +39,7 @@ fn indented_strip_uses_terminator_indent_mixed_ws() {
         allow_indent: true,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 6),
+        body_start: 0,
     });
     let res = collect_all(src, 7, q); // After "<<~EOT\n"
     let segs = &res.contents[0].segments;
@@ -55,6 +57,7 @@ fn crlf_terminator_match_preserves_content_spans() {
         allow_indent: true,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 7),
+        body_start: 0,
     });
     let res = collect_all(src, 8, q); // After "<<~EOT\r\n"
     let segs = &res.contents[0].segments;
@@ -72,6 +75,7 @@ fn label_like_lines_are_not_terminators() {
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),
+        body_start: 0,
     });
     let res = collect_all(src, 6, q); // After "<<EOT\n"
     assert_eq!(res.contents[0].segments.len(), 2); // "notEOT", " EOTX"
@@ -86,12 +90,14 @@ fn two_heredocs_in_one_statement_fifo() {
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 4),
+        body_start: 0,
     });
     q.push_back(PendingHeredoc {
         label: Arc::from("B"),
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(5, 9),
+        body_start: 0,
     });
     let res = collect_all(src, 8, q); // After "<<A <<B\n"
     assert_eq!(res.contents.len(), 2);
@@ -112,6 +118,7 @@ fn indented_content_less_than_terminator_indent() {
         allow_indent: true,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 6),
+        body_start: 0,
     });
     let res = collect_all(src, 7, q); // After "<<~EOT\n"
     let segs = &res.contents[0].segments;
@@ -132,6 +139,7 @@ fn non_indented_heredoc_preserves_all_whitespace() {
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),
+        body_start: 0,
     });
     let res = collect_all(src, 6, q); // After "<<EOT\n"
     let segs = &res.contents[0].segments;
@@ -150,6 +158,7 @@ fn heredoc_with_empty_lines() {
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),
+        body_start: 0,
     });
     let res = collect_all(src, 6, q); // After "<<EOT\n"
     let segs = &res.contents[0].segments;
@@ -169,6 +178,7 @@ fn full_span_covers_all_segments() {
         allow_indent: false,
         quote: QuoteKind::Unquoted,
         decl_span: sp(0, 5),
+        body_start: 0,
     });
     let res = collect_all(src, 6, q); // After "<<EOT\n"
     let content = &res.contents[0];
