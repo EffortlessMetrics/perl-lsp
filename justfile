@@ -3036,46 +3036,17 @@ lsp-tier-c:
 # Worktree Cleanup
 # ============================================================================
 
-# Clean up stale agent worktrees (safe — only removes worktrees with no uncommitted changes and no open PR)
+# Clean up stale agent worktrees (safe — location-agnostic via `git worktree
+# list --porcelain`; keeps the root worktree, locked worktrees, worktrees
+# with an open PR, and worktrees active within the last GRACE_HOURS; salvages
+# a recovery packet for dirty worktrees before force-removing them).
 # Also reaps orphaned /tmp build-target directories to reclaim disk space.
-clean-worktrees:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    repo_name=$(basename "$PWD")
-    managed_root="$(dirname "$PWD")/${repo_name}-worktrees"
-    echo "Reaping orphaned /tmp agent build targets (dry-run — pass APPLY=1 to prune)..."
-    bash "$(git rev-parse --show-toplevel)/scripts/clean-tmp-targets.sh" || true
-    echo ""
-    echo "Pruning unreferenced worktrees..."
-    git worktree prune
-    echo "Checking ${managed_root}/ for stale entries..."
-    removed=0
-    kept=0
-    for wt in "${managed_root}"/*/; do
-        [ -d "$wt" ] || continue
-        name=$(basename "$wt")
-        # Check for uncommitted changes
-        if [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
-            echo "  KEEP $name (has uncommitted changes)"
-            kept=$((kept + 1))
-            continue
-        fi
-        # Check for open PR
-        branch=$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-        if [ -n "$branch" ] && [ "$branch" != "HEAD" ]; then
-            pr_count=$(gh pr list --head "$branch" --state open --json number --jq length 2>/dev/null || echo "0")
-            if [ "$pr_count" -gt 0 ]; then
-                echo "  KEEP $name (has open PR on $branch)"
-                kept=$((kept + 1))
-                continue
-            fi
-        fi
-        echo "  REMOVE $name"
-        git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
-        removed=$((removed + 1))
-    done
-    git worktree prune
-    echo "Done: removed $removed, kept $kept"
+# Dry-run by default — pass APPLY=1 (or --apply) to actually salvage+remove.
+# See scripts/clean-worktrees.sh for full behavior and issue #3573 for the
+# path bug this replaced (globbed a fixed `../<repo>-worktrees/` path that
+# agents never actually use — real worktrees live under `.claude/worktrees/`).
+clean-worktrees *ARGS:
+    bash scripts/clean-worktrees.sh {{ARGS}}
 
 # Query, allocate, release, or clean up reusable worktree slots
 worktree-manager *ARGS:
