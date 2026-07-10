@@ -296,6 +296,26 @@ impl SymbolTable {
         self.references.entry(name).or_default().push(reference);
     }
 
+    /// Find the innermost lexical scope whose source range contains `offset`.
+    ///
+    /// Scopes are pushed with the [`SourceLocation`] of the AST node that
+    /// opens them (subroutine, block, package, etc.), so a scope's range
+    /// always fully covers the ranges of any scopes nested inside it. The
+    /// scope with the greatest `location.start` that still contains
+    /// `offset` is therefore the most specific (innermost) enclosing scope.
+    ///
+    /// Falls back to the global scope (`0`) when no scope's range contains
+    /// `offset` -- e.g. top-level, package-scope code before any block or
+    /// subroutine opens.
+    pub fn scope_at_offset(&self, offset: usize) -> ScopeId {
+        self.scopes
+            .values()
+            .filter(|scope| scope.location.start <= offset && offset < scope.location.end)
+            .max_by_key(|scope| scope.location.start)
+            .map(|scope| scope.id)
+            .unwrap_or(0)
+    }
+
     /// Find symbol definitions visible from a given scope for Navigate/Analyze workflows.
     pub fn find_symbol(&self, name: &str, from_scope: ScopeId, kind: SymbolKind) -> Vec<&Symbol> {
         let mut results = Vec::new();
