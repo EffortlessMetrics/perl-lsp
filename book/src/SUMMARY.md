@@ -69,6 +69,13 @@
 # Reference
 
 - [Current Status](./reference/current-status.md)
+  - [Status Overview](./reference/status/index.md)
+  - [LSP Status](./reference/status/lsp.md)
+  - [Test Status](./reference/status/tests.md)
+  - [Parser Status](./reference/status/parser.md)
+  - [Quality Metrics](./reference/status/quality.md)
+  - [Release Status](./reference/status/release.md)
+- [Editor Setup (Canonical)](./reference/editor-setup-canonical.md)
 - [Roadmap](./reference/roadmap.md)
 - [Milestones](./reference/milestones.md)
 - [Stability Statement](./reference/stability.md)
