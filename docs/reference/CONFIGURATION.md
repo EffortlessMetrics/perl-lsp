@@ -86,73 +86,18 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 
 ## All Settings at a Glance
 
-### `.perl-lsp.toml` keys
-
-| Section | Key | Type | Default | Description |
-|---|---|---|---|---|
-| `[perl]` | `version` | string | none | Perl version hint, e.g. `"5.38"`. Reserved; not yet used. |
-| `[perl]` | `include_paths` | string[] | `[]` | Extra module paths. Empty = keep built-in defaults. |
-| `[diagnostics]` | `perlcritic` | bool | true | Enable critic diagnostics. Set false to disable. |
-| `[diagnostics]` | `perlcritic_severity` | int 1-5 | 3 | Minimum severity to report. 1 = least severe (reports everything), 5 = most severe (reports only strictest). |
-| `[critic]` | `engine` | string | `"native"` | Critic engine: `native` for Rust-native rules, or `legacy` / `perlcritic` / `external` for Perl::Critic-compatible diagnostics. |
-| `[critic]` | `profile` | string | `"recommended"` | Native critic rule bundle: `recommended` or `strict`. |
-| `[formatting]` | `enabled` | bool | true | Enable LSP formatting. |
-| `[formatting]` | `engine` | string | `"native"` | Formatter engine: `native`, `compat`, `external-perltidy`, or `off`. |
-| `[formatting]` | `perltidy_profile` | string | none | `.perltidyrc` profile used by external perltidy compatibility and native-tooling compatibility reports. |
-| `[features]` | `inlay_hints` | bool | true | Enable/disable all inlay hints globally. |
-
-### LSP workspace settings (all editors, under `perl.*`)
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `perl.workspace.includePaths` | string[] | `["lib", ".", "local/lib/perl5"]` | Module search paths (project libs) |
-| `perl.workspace.usePerl5lib` | bool | `true` | Read `PERL5LIB` env var. Independent of `useSystemInc`. |
-| `perl.workspace.perl5libPrecedence` | `"prepend"` \| `"append"` | `"prepend"` | Whether `PERL5LIB` is searched before or after `includePaths` |
-| `perl.workspace.useSystemInc` | bool | `false` | Include interpreter startup `@INC` in resolution. Independent of `usePerl5lib`. |
-| `perl.workspace.resolutionTimeout` | number (ms) | `50` | Module resolution deadline |
-| `perl.inlayHints.enabled` | bool | `true` | Master inlay hints switch |
-| `perl.inlayHints.parameterHints` | bool | `true` | Show parameter names at call sites |
-| `perl.inlayHints.typeHints` | bool | `true` | Show inferred variable types |
-| `perl.inlayHints.chainedHints` | bool | `false` | Show method chain type annotations |
-| `perl.inlayHints.maxLength` | number | `30` | Max characters before hint is truncated |
-| `perl.testRunner.enabled` | bool | `true` | Enable integrated test runner |
-| `perl.testRunner.command` | string | `"perl"` | Test executable (`"perl"` or `"prove"`) |
-| `perl.testRunner.args` | string[] | `[]` | Extra args for the test command |
-| `perl.testRunner.timeout` | number (ms) | `60000` | Test execution deadline |
-| `perl.formatting.enabled` | bool | `true` | Enable LSP formatting |
-| `perl.formatting.engine` | string | `"native"` | Formatter engine: `native`, `compat`, `external-perltidy`, or `off` |
-| `perl.formatting.profile` | string | none | Path to `.perltidyrc` profile |
-| `perl.formatting.maximumLineLength` | number | `80` | Maximum line length |
-| `perl.formatting.indentColumns` | number | `4` | Indent width |
-| `perl.perlcritic.enabled` | bool | `true` | Enable critic diagnostics. Set false to disable native critic diagnostics |
-| `perl.perlcritic.severity` | int 1-5 | `3` | Minimum severity to report |
-| `perl.perlcritic.profile` | string | none | Path to `.perlcriticrc` profile |
-| `perl.critic.engine` | string | `"native"` | Critic engine: `native`, `legacy`, `perlcritic`, or `external` |
-| `perl.critic.profile` | string | `"recommended"` | Native critic profile: `recommended` or `strict` |
-| `perl.telemetry.enabled` | bool | `false` | Send telemetry events to client |
-| `perl.limits.*` | various | see below | Resource caps and timeouts |
-
-### `perl.limits` reference
-
-| Key | Default | Description |
-|---|---|---|
-| `workspaceSymbolCap` | `200` | Max `workspace/symbol` results |
-| `referencesCap` | `500` | Max `textDocument/references` results |
-| `completionCap` | `100` | Max completion items |
-| `documentSymbolCap` | `500` | Max `textDocument/documentSymbol` results |
-| `codeLensCap` | `100` | Max code lens items per file |
-| `diagnosticsPerFileCap` | `200` | Max diagnostics per file |
-| `inlayHintsCap` | `500` | Max inlay hints per file |
-| `astCacheMaxEntries` | `100` | AST cache size (LRU eviction) |
-| `astCacheTtlSecs` | `300` | AST cache TTL in seconds |
-| `symbolCacheMaxEntries` | `1000` | Symbol cache size |
-| `maxIndexedFiles` | `10000` | Max files indexed for workspace features |
-| `maxSymbolsPerFile` | `5000` | Max symbols indexed per file |
-| `maxTotalSymbols` | `500000` | Max symbols across all indexed files |
-| `maxFileSizeBytes` | `1048576` | Skip files larger than this (default: 1 MB) |
-| `parseStormThreshold` | `10` | Pending parses before degradation mode |
-| `workspaceScanDeadlineMs` | `30000` | Initial workspace scan budget (ms) |
-| `referenceSearchDeadlineMs` | `2000` | Reference search budget (ms) |
+The full, canonical settings reference lives in
+[CONFIG.md](CONFIG.md) and
+[CONFIGURATION_SCHEMA.md](CONFIGURATION_SCHEMA.md#configuration-options), to
+avoid two documents drifting out of sync: `.perl-lsp.toml` keys are in
+[CONFIG.md § Project Configuration File](CONFIG.md#project-configuration-file-perl-lsptoml),
+LSP `perl.*` workspace settings are in
+[CONFIG.md § Workspace Settings (LSP)](CONFIG.md#workspace-settings-lsp), and
+the `perl.limits.*` table is in
+[CONFIG.md § perl.limits](CONFIG.md#perllimits). This guide's [Quick
+Start](#quick-start) above covers the handful of keys most projects touch;
+the [Copy-Paste Scenarios](#copy-paste-scenarios) below cover the rest by
+example.
 
 ---
 

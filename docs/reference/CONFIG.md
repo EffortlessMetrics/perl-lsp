@@ -755,7 +755,7 @@ decrease them for resource-constrained environments.
 ## CLI Flags
 
 Flags passed when launching the `perllsp` executable. Source:
-`crates/perl-lsp-launcher/src/lib.rs`.
+`crates/perl-lsp-rs-core/src/runtime/launcher/mod.rs`.
 
 ### Server mode
 
@@ -851,7 +851,7 @@ coc.nvim uses Vim/Neovim filetypes, so Perl buffers must have `filetype=perl`.
 ## Environment Variables
 
 Environment variables read at startup by the `perllsp` executable. Source:
-`crates/perl-lsp-launcher/src/lib.rs`.
+`crates/perl-lsp-rs-core/src/runtime/launcher/mod.rs`.
 
 ### `PERL_LSP_LOG`
 
@@ -963,7 +963,7 @@ launch `perllsp --stdio`.
 ## DAP Debug Configuration
 
 Debug Adapter Protocol configuration used in `launch.json`. Source:
-`crates/perl-dap-config/src/lib.rs` and `vscode-extension/package.json`.
+`crates/perl-dap/src/config/mod.rs` and `vscode-extension/package.json`.
 
 For a full walkthrough, see the [DAP User Guide](../tutorials/DAP_USER_GUIDE.md).
 
