@@ -130,6 +130,7 @@ jobs:
       run: |
         mkdir -p benchmarks/results
         PERL_LSP_BIN="${{ github.workspace }}/target/debug/perl-lsp" \
+          PERL_LSP_UX_REQUIRE_BINARY=1 \
           cargo test -p perl-lsp-ux-tests --features integration-test \
           --test ux_scenario_18_real_repo_perf -- --test-threads=1 --nocapture \
           2>&1 | tee benchmarks/results/real-repo-perf.txt

@@ -1089,12 +1089,62 @@ impl FormatResult {
 
 // ─────────────────────────────── Binary Resolution ───────────────────────────
 
+/// Environment variable that flips [`binary_available`] from a silent skip
+/// into a hard failure when the `perl-lsp` binary cannot be resolved.
+///
+/// Every scenario in this crate follows the pattern
+/// `if !binary_available() { eprintln!("SKIP ..."); return Ok(()); }`, which
+/// means an unbuilt binary makes the whole UX suite report "N passed" while
+/// exercising nothing (#3596). CI jobs that are supposed to actually run
+/// these scenarios should set `PERL_LSP_UX_REQUIRE_BINARY=1` so a missing
+/// binary fails loudly instead of vacuously greening.
+pub const REQUIRE_BINARY_ENV: &str = "PERL_LSP_UX_REQUIRE_BINARY";
+
 /// Return whether the perl-lsp binary can be resolved for UX scenario tests.
 ///
 /// This is a lightweight guard for integration tests that need to skip when the
 /// server binary has not been built in the current environment.
+///
+/// When [`REQUIRE_BINARY_ENV`] is set to a truthy value, a missing binary is
+/// treated as a hard failure (a clear `assert!` panic with an actionable
+/// message) instead of a silent skip. Because every scenario funnels its skip
+/// decision through this single function, setting the env var in a CI job
+/// makes the entire suite fail loud if `cargo build -p perl-lsp-rs` was never
+/// run — see #3596. Uses `assert!` rather than `panic!` directly: this
+/// workspace denies `clippy::panic` in production code, and `assert!` is the
+/// sanctioned hard-failure idiom.
 pub fn binary_available() -> bool {
-    resolve_binary().is_ok()
+    match resolve_binary() {
+        Ok(_) => true,
+        Err(err) => {
+            assert!(
+                !strict_binary_required(),
+                "{REQUIRE_BINARY_ENV}=1 is set, which forbids the silent \
+                 UX-suite SKIP path — perl-lsp binary not built. \
+                 Run `cargo build -p perl-lsp-rs` first. \
+                 Resolution error: {err}"
+            );
+            false
+        }
+    }
+}
+
+/// True when [`REQUIRE_BINARY_ENV`] is set to `1`/`true` (case-insensitive).
+fn strict_binary_required() -> bool {
+    is_truthy_env_value(std::env::var(REQUIRE_BINARY_ENV).ok().as_deref())
+}
+
+/// Pure truthy-value predicate behind [`strict_binary_required`].
+///
+/// Factored out of the env lookup so the parsing rules can be unit tested
+/// deterministically without mutating process-global environment state —
+/// this crate denies `unsafe_code`, which `std::env::set_var`/`remove_var`
+/// require since Rust made them `unsafe fn`.
+fn is_truthy_env_value(value: Option<&str>) -> bool {
+    value.is_some_and(|v| {
+        let v = v.trim();
+        v == "1" || v.eq_ignore_ascii_case("true")
+    })
 }
 
 /// Standard skip reason for scenarios that require a runnable perl-lsp binary.
@@ -1272,8 +1322,8 @@ pub fn find_perlcritic() -> Option<String> {
 #[cfg(test)]
 mod normalize_tests {
     use super::{
-        document_symbol_names, find_binary_near_exe, is_index_ready_event, normalize_lsp_payload,
-        normalize_uri_for_expectations,
+        document_symbol_names, find_binary_near_exe, is_index_ready_event, is_truthy_env_value,
+        normalize_lsp_payload, normalize_uri_for_expectations,
     };
     use crate::LspEvent;
     use serde_json::{Value, json};
@@ -1345,6 +1395,30 @@ mod normalize_tests {
 
         assert_eq!(resolved, agent_bin.to_string_lossy());
         Ok(())
+    }
+
+    /// Documents the strict-mode env-var contract behind `binary_available()`'s
+    /// fail-loud guard (#3596): with the var unset or falsy, the skip path stays
+    /// allowed (returns `false`, no panic); only an explicit truthy value flips
+    /// it to strict. The panic itself is exercised indirectly — this test locks
+    /// down the pure predicate `strict_binary_required()` delegates to before
+    /// deciding whether to panic, without mutating process env (this crate
+    /// denies `unsafe_code`, which `env::set_var` now requires) or faking a
+    /// missing binary end-to-end.
+    #[test]
+    fn is_truthy_env_value_recognizes_expected_forms() {
+        assert!(
+            !is_truthy_env_value(None),
+            "unset var must not trigger strict mode (skip allowed)"
+        );
+
+        for value in ["1", "true", "TRUE", "True", "TrUe"] {
+            assert!(is_truthy_env_value(Some(value)), "{value:?} should be treated as truthy");
+        }
+
+        for value in ["0", "false", "FALSE", "yes", ""] {
+            assert!(!is_truthy_env_value(Some(value)), "{value:?} should not be treated as truthy");
+        }
     }
 
     // ── normalize_uri_for_expectations ────────────────────────────────────────
@@ -1508,5 +1582,102 @@ mod normalize_tests {
         // Url::parse("file://$WORKSPACE/foo.pl") treats $WORKSPACE as host and
         // to_file_path() fails -> backslash-replace branch returns string unchanged.
         assert_eq!(result["uri"], "file://$WORKSPACE/foo.pl");
+    }
+}
+
+// ─────────────── Durable subprocess proof of the fail-loud guard (#3596) ──────
+
+#[cfg(test)]
+mod strict_binary_guard_subprocess_tests {
+    use super::{REQUIRE_BINARY_ENV, binary_available};
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    /// Target test invoked ONLY by name, from an isolated child process
+    /// spawned by `strict_mode_fails_loud_in_subprocess_when_binary_missing`
+    /// below. Its only job is to call `binary_available()` unconditionally so
+    /// the parent test can observe whether the strict-mode guard panics. When
+    /// this test runs as part of the normal in-process suite (where a real
+    /// perl-lsp binary is typically resolvable) it just returns without
+    /// panicking — it is only meaningful when driven from the subprocess
+    /// below, with a forced-missing binary and strict mode on.
+    #[test]
+    fn binary_available_panics_when_strict_and_missing() {
+        binary_available();
+    }
+
+    /// Durable regression proof for #3596: `PERL_LSP_UX_REQUIRE_BINARY=1`
+    /// with no resolvable binary must be a hard failure, not a silent skip.
+    ///
+    /// A one-off manual check of this behavior (as done for #3596's initial
+    /// build) is not durable — normal CI always builds the perl-lsp binary
+    /// before running this suite, so a broken guard would never surface
+    /// there and could regress silently. This test proves the panic path
+    /// itself, in a subprocess deliberately denied every fallback
+    /// `resolve_binary()` tries:
+    ///
+    /// 1. Copies the currently running test executable into a fresh temp
+    ///    directory with no `target`-named ancestor, which defeats the
+    ///    `current_exe()`-walk fallback (it would otherwise find the real,
+    ///    already-built `perl-lsp` sitting next to this same test binary in
+    ///    a normal CI run).
+    /// 2. Clears `PERL_LSP_BIN`, `CARGO_TARGET_DIR`, and `CARGO_MANIFEST_DIR`
+    ///    in the CHILD's environment only (never the parent's — this crate
+    ///    denies `unsafe_code`, and `std::env::set_var` on the parent
+    ///    process is `unsafe`) so none of `resolve_binary()`'s other
+    ///    fallbacks can find a real binary either.
+    ///
+    /// Note: merely pointing `PERL_LSP_BIN` at a nonexistent path does NOT
+    /// exercise this guard — `resolve_binary()`'s step 1 returns `Ok` for
+    /// any non-empty `PERL_LSP_BIN` without checking the path actually
+    /// exists, so that approach "resolves" to a bogus path and fails later
+    /// via a completely different error surface (a process-launch failure
+    /// elsewhere in the harness), not this guard's `assert!`. Removing the
+    /// var entirely is what forces a genuine `resolve_binary()` `Err`, which
+    /// is what this test needs to exercise.
+    #[test]
+    fn strict_mode_fails_loud_in_subprocess_when_binary_missing() -> anyhow::Result<()> {
+        let current_exe = std::env::current_exe()?;
+        let isolated_dir = TempDir::new()?;
+        let exe_name = current_exe
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("current_exe() has no file name"))?;
+        let isolated_exe = isolated_dir.path().join(exe_name);
+        std::fs::copy(&current_exe, &isolated_exe)?;
+
+        let output = Command::new(&isolated_exe)
+            .args([
+                // `--exact` matches on the FULLY QUALIFIED name (module path
+                // included) — the bare function name alone matches nothing.
+                "strict_binary_guard_subprocess_tests::binary_available_panics_when_strict_and_missing",
+                "--exact",
+                "--nocapture",
+            ])
+            .env_remove("PERL_LSP_BIN")
+            .env_remove("CARGO_TARGET_DIR")
+            .env_remove("CARGO_MANIFEST_DIR")
+            .env(REQUIRE_BINARY_ENV, "1")
+            .output()?;
+
+        assert!(
+            !output.status.success(),
+            "expected the child process to fail loud when strict mode is on and no binary \
+             is resolvable; got success. stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            combined.contains("forbids the silent")
+                && combined.contains("cargo build -p perl-lsp-rs"),
+            "expected the actionable fail-loud message in child output, got: {combined}"
+        );
+
+        Ok(())
     }
 }
