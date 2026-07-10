@@ -1121,7 +1121,7 @@ mod tests {
 
     #[test]
     fn symbolic_reference_creates_boundary() {
-        let graph = lower("no strict 'refs'; my $v = ${$name};");
+        let graph = lower("no strict 'refs'; my @v = @{'Symbolic::values'};");
         assert_eq!(graph.receipt.dynamic_boundary_counts.get("SymbolicReference"), Some(&1));
     }
 
@@ -1334,7 +1334,7 @@ $x = 1 if $y;
         let graph = lower(
             r#"
 eval "$code";
-no strict 'refs'; ${$name};
+no strict 'refs'; @{'Symbolic::values'};
 *alias = $thing;
 sub AUTOLOAD {}
 "#,

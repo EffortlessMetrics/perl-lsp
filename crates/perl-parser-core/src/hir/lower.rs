@@ -577,6 +577,7 @@ impl Lowerer {
             }
             NodeKind::Unary { op, operand } => {
                 if is_symbolic_reference_deref_op(op)
+                    && !is_runtime_reference_deref_operand(operand)
                     && !self.strict_refs_enabled_at(node.location.start)
                 {
                     let reason = "symbolic reference dereference is not statically known";
@@ -1522,14 +1523,23 @@ impl Lowerer {
     }
 
     fn record_phase_block(&mut self, phase: &str, range: SourceLocation) {
+        let phase = compile_phase(phase);
         self.compile_environment.phase_blocks.push(CompilePhaseBlock {
-            phase: compile_phase(phase),
+            phase,
             range,
             scope_id: Some(self.current_scope()),
             package_context: self.package_context.clone(),
             provenance: CompileProvenance::ExactAst,
             confidence: CompileConfidence::High,
         });
+
+        // INIT and END bodies are compiled with the surrounding program but execute
+        // later in Perl's lifecycle. Preserve their phase facts without treating
+        // ordinary compile analysis as an attempt to execute those bodies.
+        if matches!(phase, CompilePhase::Init | CompilePhase::End) {
+            return;
+        }
+
         self.record_compile_environment_boundary(
             CompileEnvironmentBoundaryKind::PhaseBlockExecution,
             range,
@@ -2132,6 +2142,13 @@ fn contains_interpolation_marker(value: &str) -> bool {
 
 fn is_symbolic_reference_deref_op(op: &str) -> bool {
     matches!(op, "${}" | "@{}" | "%{}" | "&{}" | "*{}")
+}
+
+/// A dereference whose operand is already a variable is an ordinary runtime
+/// expression. Its eventual referent may be unknown, but that does not make
+/// it a symbolic-reference compile boundary.
+fn is_runtime_reference_deref_operand(operand: &Node) -> bool {
+    matches!(operand.kind, NodeKind::Variable { .. })
 }
 
 fn pragma_state_fact(

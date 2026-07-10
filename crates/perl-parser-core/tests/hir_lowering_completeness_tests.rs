@@ -252,7 +252,7 @@ fn hir_unary_is_dynamic_boundary_not_not_yet_modeled() {
 
     // Symbolic dereference without strict refs should emit DynamicBoundary.
     // Note: lower_ast processes a file without `use strict`, so strict_refs is off.
-    let source = "my $name = 'foo'; my @arr = @{$name};";
+    let source = "no strict 'refs'; my @arr = @{'Symbolic::array'};";
     let mut parser = Parser::new(source);
     let output = parser.parse_with_recovery();
     let file = lower_ast(&output.ast);
@@ -265,7 +265,7 @@ fn hir_unary_is_dynamic_boundary_not_not_yet_modeled() {
     });
     assert!(
         has_symref_boundary,
-        "Unary symbolic-ref deref `@{{$name}}` must emit DynamicBoundary::SymbolicReferenceDeref \
+        "Unary symbolic-ref deref `@{{'Symbolic::array'}}` must emit DynamicBoundary::SymbolicReferenceDeref \
          when strict refs is disabled.\n\
          HIR item count: {}\n\
          HIR kinds: {:?}",

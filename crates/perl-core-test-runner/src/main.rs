@@ -280,7 +280,6 @@ fn is_unsupported_compile_boundary(
     !is_base_term_cwd_setup_boundary(effect, invocation, source)
         && !is_base_lex_symbolic_reference_boundary(effect, invocation)
         && !is_base_lex_map_begin_boundary(effect, invocation, source)
-        && !is_base_rs_end_cleanup_boundary(effect, invocation, source)
         && !is_base_rs_filehandle_alias_boundary(effect, invocation, source)
         && !is_comp_our_tieall_autoload_boundary(effect, invocation, source)
         && !is_comp_line_debug_inc_setup_boundary(effect, invocation, source)
@@ -290,11 +289,8 @@ fn is_unsupported_compile_boundary(
         && !is_comp_filter_exception_inc_filter_boundary(effect, invocation, source)
         && !is_comp_redef_warning_setup_boundary(effect, invocation, source)
         && !is_comp_redef_suppressed_warning_eval_boundary(effect, invocation, source)
-        && !is_comp_multiline_cleanup_boundary(effect, invocation, source)
         && !is_comp_fold_warning_setup_boundary(effect, invocation, source)
         && !is_comp_fold_readonly_constant_ref_boundary(effect, invocation, source)
-        && !is_comp_fold_nested_constant_ref_boundary(effect, invocation, source)
-        && !is_comp_utf_cleanup_boundary(effect, invocation, source)
         && !is_comp_parser_run_test_pl_setup_boundary(effect, invocation, source)
         && !is_comp_proto_inc_setup_boundary(effect, invocation, source)
         && !is_comp_proto_typeglob_sub_assignment_boundary(effect, invocation, source)
@@ -310,8 +306,6 @@ fn is_unsupported_compile_boundary(
         && !is_comp_require_utf8_open_boundary(effect, invocation, source)
         && !is_comp_require_module_true_setup_boundary(effect, invocation, source)
         && !is_comp_require_runtime_dynamic_require_boundary(effect, invocation, source)
-        && !is_comp_require_module_true_tuple_deref_boundary(effect, invocation, source)
-        && !is_comp_require_cleanup_boundary(effect, invocation, source)
         && !is_comp_hints_phase_boundary(effect, invocation, source)
         && !is_run_cloexec_config_setup_boundary(effect, invocation, source)
         && !is_run_switch_setup_boundary(effect, invocation, source)
@@ -322,7 +316,6 @@ fn is_unsupported_compile_boundary(
         && !is_run_switch_i_setup_boundary(effect, invocation, source)
         && !is_run_switchd_debugger_setup_boundary(effect, invocation, source)
         && !is_run_switchdx_miniperl_setup_boundary(effect, invocation, source)
-        && !is_run_switchdx_log_cleanup_boundary(effect, invocation, source)
         && !is_run_data_argv_setup_boundary(effect, invocation, source)
         && !is_run_switchp_data_setup_boundary(effect, invocation, source)
 }
@@ -393,26 +386,6 @@ fn is_base_lex_map_begin_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "BEGIN {$_122782 = 'tst2'}"
-}
-
-fn is_base_rs_end_cleanup_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "base/rs.t"
-        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
-        || effect.dynamic_reason.as_deref()
-            != Some("phase block compile-time execution is recorded but not evaluated")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized == "END { unlink \"./foo\"; }"
 }
 
 fn is_base_rs_filehandle_alias_boundary(
@@ -607,26 +580,6 @@ fn is_comp_redef_suppressed_warning_eval_boundary(
     normalized == "BEGIN {\n    local $^W = 0;\n    eval qq(sub sub10 () {1} sub sub10 {1});\n}"
 }
 
-fn is_comp_multiline_cleanup_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/multiline.t"
-        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
-        || effect.dynamic_reason.as_deref()
-            != Some("phase block compile-time execution is recorded but not evaluated")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized == "END {\n    1 while unlink $filename;\n}"
-}
-
 fn is_comp_fold_warning_setup_boundary(
     effect: &CompileEffect,
     invocation: &Invocation,
@@ -668,48 +621,6 @@ fn is_comp_fold_readonly_constant_ref_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == r#"${\"hello\n"}"#
-}
-
-fn is_comp_fold_nested_constant_ref_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/fold.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized_slice = slice.replace("\r\n", "\n");
-    let normalized_source = source.replace("\r\n", "\n");
-    normalized_slice == "$$_"
-        && normalized_source.contains("for (1,2) { for (\\(1+3)) { push @values, $$_; $$_++ } }")
-}
-
-fn is_comp_utf_cleanup_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/utf.t"
-        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
-        || effect.dynamic_reason.as_deref()
-            != Some("phase block compile-time execution is recorded but not evaluated")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized == "END {\n    1 while unlink \"tmputf$$.pl\";\n}"
 }
 
 fn is_comp_parser_run_test_pl_setup_boundary(
@@ -1085,51 +996,6 @@ fn is_comp_require_module_true_setup_boundary(
         && normalized.contains("$module_true_test_count += 12;")
 }
 
-fn is_comp_require_module_true_tuple_deref_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/require.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized_source = source.replace("\r\n", "\n");
-    slice.trim() == "@$tuple"
-        && normalized_source.contains("foreach my $tuple (@module_true_tests)")
-        && normalized_source
-            .contains("my ($pack_name, $param_str, $this_code, $mod_code, $eval_code)= @$tuple;")
-}
-
-fn is_comp_require_cleanup_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/require.t"
-        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
-        || effect.dynamic_reason.as_deref()
-            != Some("phase block compile-time execution is recorded but not evaluated")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized.starts_with("END {")
-        && normalized.contains("foreach my $file (@files_to_delete)")
-        && normalized.contains("1 while unlink $file;")
-}
-
 fn is_comp_hints_phase_boundary(
     effect: &CompileEffect,
     invocation: &Invocation,
@@ -1390,26 +1256,6 @@ fn is_run_switchdx_miniperl_setup_boundary(
     let normalized = slice.replace("\r\n", "\n");
     normalized
         == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    require './test.pl';\n    skip_all_if_miniperl();\n}"
-}
-
-fn is_run_switchdx_log_cleanup_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "run/switchDx.t"
-        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
-        || effect.dynamic_reason.as_deref()
-            != Some("phase block compile-time execution is recorded but not evaluated")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized == "END {\n    unlink $perlio_log;\n}"
 }
 
 fn is_run_data_argv_setup_boundary(
@@ -2506,7 +2352,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_base_rs_other_phase_block_stays_bucketed() -> TestResult {
+    fn compile_end_phase_block_is_deferred_for_any_path() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline("END { $x = 1; }\n".to_string()),
             display_path: "base/rs.t".to_string(),
@@ -2514,8 +2360,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -2928,7 +2774,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_multiline_cleanup_other_file_stays_bucketed() -> TestResult {
+    fn compile_end_cleanup_is_deferred_outside_its_source_fixture() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_multiline_cleanup_source()),
             display_path: "comp/fold.t".to_string(),
@@ -2936,13 +2782,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_multiline_cleanup_changed_block_stays_bucketed() -> TestResult {
+    fn compile_edited_end_cleanup_is_deferred() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 "#!./perl\nmy $filename = \"multiline$$\";\nEND {\n    unlink $filename;\n}\n"
@@ -2953,8 +2799,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3059,7 +2905,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_fold_nested_constant_ref_other_file_stays_bucketed() -> TestResult {
+    fn compile_runtime_deref_is_not_source_locked() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_fold_nested_constant_ref_source()),
             display_path: "comp/retainedlines.t".to_string(),
@@ -3067,13 +2913,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_fold_changed_nested_constant_ref_stays_bucketed() -> TestResult {
+    fn compile_edited_runtime_deref_is_not_source_locked() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 "#!./perl -w\nfor (1,2) { for (\\(1+4)) { $$_++ } }\n".to_string(),
@@ -3083,8 +2929,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3103,7 +2949,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_utf_cleanup_other_file_stays_bucketed() -> TestResult {
+    fn compile_utf_end_cleanup_is_deferred_outside_its_source_fixture() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_utf_cleanup_source()),
             display_path: "comp/hints.t".to_string(),
@@ -3111,13 +2957,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_utf_cleanup_changed_block_stays_bucketed() -> TestResult {
+    fn compile_edited_utf_end_cleanup_is_deferred() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 "#!./perl -w\nEND {\n    unlink \"tmputf$$.pl\";\n}\n".to_string(),
@@ -3127,8 +2973,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3397,7 +3243,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_form_scope_end_format_changed_block_stays_bucketed() -> TestResult {
+    fn compile_edited_end_format_is_deferred() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 comp_form_scope_end_format_source()
@@ -3408,8 +3254,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3624,7 +3470,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_require_module_true_tuple_deref_other_file_stays_bucketed() -> TestResult {
+    fn compile_module_true_tuple_deref_is_not_source_locked() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_require_module_true_tuple_deref_source()),
             display_path: "comp/hints.t".to_string(),
@@ -3632,13 +3478,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_require_module_true_tuple_deref_changed_slice_stays_bucketed() -> TestResult {
+    fn compile_edited_module_true_tuple_deref_is_not_source_locked() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 comp_require_module_true_tuple_deref_source().replace("@$tuple", "@$other"),
@@ -3648,8 +3494,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3668,7 +3514,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_require_cleanup_other_file_stays_bucketed() -> TestResult {
+    fn compile_require_end_cleanup_is_deferred_outside_its_source_fixture() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_require_cleanup_source()),
             display_path: "comp/hints.t".to_string(),
@@ -3676,13 +3522,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_require_cleanup_changed_block_stays_bucketed() -> TestResult {
+    fn compile_edited_require_end_cleanup_is_deferred() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 comp_require_cleanup_source().replace("unlink $file", "unlink \"$file.tmp\""),
@@ -3692,8 +3538,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -4481,7 +4327,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_run_switchdx_log_cleanup_other_file_stays_bucketed() -> TestResult {
+    fn compile_switchdx_end_cleanup_is_deferred_outside_its_source_fixture() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(run_switchdx_log_cleanup_source()),
             display_path: "run/fresh_perl.t".to_string(),
@@ -4489,13 +4335,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_run_switchdx_log_cleanup_changed_block_stays_bucketed() -> TestResult {
+    fn compile_edited_switchdx_end_cleanup_is_deferred() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline("END {\n    unlink $other_log;\n}\n".to_string()),
             display_path: "run/switchDx.t".to_string(),
@@ -4503,8 +4349,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
