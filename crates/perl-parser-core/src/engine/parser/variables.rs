@@ -300,6 +300,13 @@ impl<'a> Parser<'a> {
         // We need to split the sigil from the name
         let text = &token.text;
 
+        if let Some(name) = Self::simple_braced_scalar_token_name(text) {
+            return Ok(Node::new(
+                NodeKind::Variable { sigil: String::from("$"), name: name.to_string() },
+                SourceLocation { start: token.start, end: token.end },
+            ));
+        }
+
         // Special handling for @{, %{, and ${ (array/hash/scalar dereference)
         // e.g. @{$ref}, %{$hash}, ${"${pkg}::$sym"}
         if &**text == "@{" || &**text == "%{" || &**text == "${" {
@@ -313,15 +320,25 @@ impl<'a> Parser<'a> {
             let start = token.start;
 
             // Parse the expression inside the braces
-            let expr = if sigil == "$" {
+            let (expr, folded) = if sigil == "$" {
                 self.parse_braced_scalar_body()?
             } else {
-                self.parse_expression()?
+                (self.parse_expression()?, false)
             };
 
             self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
+
+            if folded {
+                // `${ name }` == `$name` (perlref): already folded to a
+                // scalar variable node; do not re-wrap in Unary{"${}"}.
+                // Widen the span to cover the whole `${ ... }`, matching the
+                // no-whitespace single-token fast path above.
+                let mut folded_node = expr;
+                folded_node.location = SourceLocation { start, end };
+                return Ok(folded_node);
+            }
 
             let op = format!("{}{{}}", sigil);
             return Ok(Node::new(
@@ -359,15 +376,23 @@ impl<'a> Parser<'a> {
         {
             self.tokens.next()?; // consume {
 
-            let expr = if sigil == "$" {
+            let (expr, folded) = if sigil == "$" {
                 self.parse_braced_scalar_body()?
             } else {
-                self.parse_expression()?
+                (self.parse_expression()?, false)
             };
 
             self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
+
+            if folded {
+                // `${ name }` == `$name` (perlref): already folded to a
+                // scalar variable node; do not re-wrap in Unary{"${}"}.
+                let mut folded_node = expr;
+                folded_node.location = SourceLocation { start: token.start, end };
+                return Ok(folded_node);
+            }
 
             let op = format!("{}{{}}", sigil);
             return Ok(Node::new(
@@ -385,6 +410,25 @@ impl<'a> Parser<'a> {
             let inner_name = &name[1..]; // strip leading {
             let inner_start = token.start + sigil.len() + 1; // after sigil and {
             let inner_end = token.end;
+
+            // `${sep }` (trailing whitespace before `}`, none after `${`):
+            // the lexer greedily captures `${sep` as one token because
+            // there's no space right after `${`. When the captured name is
+            // a plain bareword immediately followed by `}` — no postfix, no
+            // `::` — this is `${name}` == `$name` folding (perlref), not a
+            // dereference; mirror `try_parse_simple_braced_scalar`'s fast
+            // path instead of wrapping in Unary{"${}"}.
+            if sigil == "$"
+                && is_simple_scalar_name(inner_name)
+                && self.peek_kind() == Some(TokenKind::RightBrace)
+            {
+                self.expect(TokenKind::RightBrace)?;
+                let end = self.previous_position();
+                return Ok(Node::new(
+                    NodeKind::Variable { sigil: "$".to_string(), name: inner_name.to_string() },
+                    SourceLocation { start: token.start, end },
+                ));
+            }
 
             let mut inner = if sigil == "$" && self.peek_kind() == Some(TokenKind::DoubleColon) {
                 self.parse_qualified_scalar_tail(inner_name.to_string(), inner_start, inner_end)?
@@ -540,14 +584,61 @@ impl<'a> Parser<'a> {
             .map(Some)
     }
 
-    fn parse_braced_scalar_body(&mut self) -> ParseResult<Node> {
+    /// Parse the body of a `${...}` and report whether it was already
+    /// folded to a bare scalar variable by the `${name}` == `$name` rule
+    /// (perlref), via `try_parse_simple_braced_scalar`.
+    ///
+    /// When the returned flag is `true`, the caller MUST NOT wrap the node
+    /// in `Unary{"${}"}` — it is already the correct scalar variable node.
+    /// All other cases (caret-special variables, qualified names, and real
+    /// scalar-ref dereferences such as `${$ref}`) return `false` and must
+    /// still be wrapped — even though `${$ref}` produces a structurally
+    /// identical `Variable` node once parsed, so the flag (not the node
+    /// shape) is what distinguishes folding from dereferencing.
+    fn parse_braced_scalar_body(&mut self) -> ParseResult<(Node, bool)> {
         if let Some(expr) = self.try_parse_braced_caret_special_scalar()? {
-            return Ok(expr);
+            return Ok((expr, false));
+        }
+
+        if let Some(expr) = self.try_parse_simple_braced_scalar()? {
+            return Ok((expr, true));
         }
 
         match self.try_parse_braced_qualified_scalar()? {
-            Some(expr) => Ok(expr),
-            None => self.parse_expression(),
+            Some(expr) => Ok((expr, false)),
+            None => Ok((self.parse_expression()?, false)),
+        }
+    }
+
+    fn try_parse_simple_braced_scalar(&mut self) -> ParseResult<Option<Node>> {
+        if self.peek_kind() != Some(TokenKind::Identifier) {
+            return Ok(None);
+        }
+
+        // The peeked identifier must be a plain bareword (e.g. `sep`), not a
+        // sigil-prefixed variable reference (e.g. `$ref` inside `${$ref}`,
+        // which is a nested dereference, not `${name}` == `$name` folding).
+        if !is_simple_scalar_name(&self.tokens.peek()?.text) {
+            return Ok(None);
+        }
+
+        if self.tokens.peek_second()?.kind != TokenKind::RightBrace {
+            return Ok(None);
+        }
+
+        let name_token = self.tokens.next()?;
+        Ok(Some(Node::new(
+            NodeKind::Variable { sigil: String::from("$"), name: name_token.text.to_string() },
+            SourceLocation { start: name_token.start, end: name_token.end },
+        )))
+    }
+
+    fn simple_braced_scalar_token_name(text: &str) -> Option<&str> {
+        let inner = text.strip_prefix("${")?.strip_suffix('}')?;
+        if is_simple_scalar_name(inner) {
+            Some(inner)
+        } else {
+            None
         }
     }
 
@@ -828,15 +919,23 @@ impl<'a> Parser<'a> {
             self.tokens.next()?; // consume {
 
             // Parse the expression inside the braces
-            let expr = if sigil == "$" {
+            let (expr, folded) = if sigil == "$" {
                 self.parse_braced_scalar_body()?
             } else {
-                self.parse_expression()?
+                (self.parse_expression()?, false)
             };
 
             self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
+
+            if folded {
+                // `${ name }` == `$name` (perlref): already folded to a
+                // scalar variable node; do not re-wrap in Unary{"${}"}.
+                let mut folded_node = expr;
+                folded_node.location = SourceLocation { start, end };
+                return Ok(folded_node);
+            }
 
             let op = format!("{}{{}}", sigil);
             return Ok(Node::new(
@@ -1377,6 +1476,27 @@ impl<'a> Parser<'a> {
 /// `$` `@` `%` `&` `*` `\` `;` `+` `_`, bracketed ref groups, and ASCII space.
 fn is_valid_prototype_char(c: char) -> bool {
     matches!(c, '$' | '@' | '%' | '&' | '*' | '\\' | ';' | '+' | '_' | '[' | ']' | ' ')
+}
+
+/// Return `true` if `name` is a simple bareword identifier suitable for the
+/// `${name}` == `$name` folding described in perlref: `${foo}` is exactly
+/// `$foo` when `foo` is a plain identifier, not an arbitrary dereference
+/// expression.
+///
+/// Valid: first character alphabetic or underscore, remaining characters
+/// alphanumeric or underscore. Matches the identifier text the lexer already
+/// produces for the `${identifier}` single-token form (see
+/// `perl-lexer`'s braced-variable scan), so no `::` package-separator
+/// handling is needed here.
+fn is_simple_scalar_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|c| c.is_alphanumeric() || c == '_')
 }
 
 #[cfg(test)]

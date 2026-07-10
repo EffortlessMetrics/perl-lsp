@@ -44,6 +44,62 @@ fn braced_scalar_deref_is_unary() {
 }
 
 #[test]
+fn braced_simple_scalar_name_is_variable_not_deref() {
+    let sexp = first_expr_sexp("${sep};");
+    assert!(
+        sexp.contains("(variable $ sep)"),
+        "simple braced scalar should parse as a variable, got {sexp}"
+    );
+    assert!(
+        !sexp.contains("unary_${}"),
+        "simple braced scalar must not parse as symbolic deref, got {sexp}"
+    );
+}
+
+#[test]
+fn braced_simple_scalar_name_with_internal_whitespace_both_sides_is_variable_not_deref() {
+    // ${ sep } (whitespace on both sides of the name) must fold the same as
+    // the no-space form ${sep} — must NOT become a symbolic dereference.
+    let sexp = first_expr_sexp("${ sep };");
+    assert!(
+        sexp.contains("(variable $ sep)"),
+        "whitespace-padded braced scalar should parse as a variable, got {sexp}"
+    );
+    assert!(
+        !sexp.contains("unary_${}"),
+        "whitespace-padded braced scalar must not parse as symbolic deref, got {sexp}"
+    );
+}
+
+#[test]
+fn braced_simple_scalar_name_with_leading_whitespace_is_variable_not_deref() {
+    // ${sep } (whitespace only before the closing brace).
+    let sexp = first_expr_sexp("${sep };");
+    assert!(
+        sexp.contains("(variable $ sep)"),
+        "leading-space braced scalar should parse as a variable, got {sexp}"
+    );
+    assert!(
+        !sexp.contains("unary_${}"),
+        "leading-space braced scalar must not parse as symbolic deref, got {sexp}"
+    );
+}
+
+#[test]
+fn braced_simple_scalar_name_with_trailing_whitespace_is_variable_not_deref() {
+    // ${ sep} (whitespace only after the opening brace).
+    let sexp = first_expr_sexp("${ sep};");
+    assert!(
+        sexp.contains("(variable $ sep)"),
+        "trailing-space braced scalar should parse as a variable, got {sexp}"
+    );
+    assert!(
+        !sexp.contains("unary_${}"),
+        "trailing-space braced scalar must not parse as symbolic deref, got {sexp}"
+    );
+}
+
+#[test]
 fn braced_array_deref_is_unary() {
     // @{$ref} must produce (unary_@{} (variable $ ref))
     let sexp = first_expr_sexp("@{$ref};");
