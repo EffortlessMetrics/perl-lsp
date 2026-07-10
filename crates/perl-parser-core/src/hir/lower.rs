@@ -702,6 +702,7 @@ impl Lowerer {
                 );
                 self.record_phase_block(phase, node.location);
                 self.visit(block, confidence);
+                self.record_phase_execution_boundary(phase, block, node.location);
                 self.exit_scope();
             }
             NodeKind::Format { name, .. } => {
@@ -1532,11 +1533,21 @@ impl Lowerer {
             provenance: CompileProvenance::ExactAst,
             confidence: CompileConfidence::High,
         });
+    }
 
+    fn record_phase_execution_boundary(
+        &mut self,
+        phase: &str,
+        block: &Node,
+        range: SourceLocation,
+    ) {
+        let phase = compile_phase(phase);
         // INIT and END bodies are compiled with the surrounding program but execute
         // later in Perl's lifecycle. Preserve their phase facts without treating
         // ordinary compile analysis as an attempt to execute those bodies.
-        if matches!(phase, CompilePhase::Init | CompilePhase::End) {
+        if matches!(phase, CompilePhase::Init | CompilePhase::End)
+            || !phase_block_requires_compile_execution(block)
+        {
             return;
         }
 
@@ -2283,6 +2294,51 @@ fn compile_phase(phase: &str) -> CompilePhase {
         "INIT" => CompilePhase::Init,
         "END" => CompilePhase::End,
         _ => CompilePhase::Unknown,
+    }
+}
+
+/// Whether a phase block may alter the compilation environment without a
+/// statically modeled effect. Pure data-only phase bodies still compile and
+/// retain their phase fact, but do not require compile-time evaluation.
+fn phase_block_requires_compile_execution(block: &Node) -> bool {
+    match &block.kind {
+        NodeKind::FunctionCall { .. }
+        | NodeKind::MethodCall { .. }
+        | NodeKind::IndirectCall { .. }
+        | NodeKind::Eval { .. }
+        | NodeKind::Do { .. }
+        | NodeKind::Use { .. }
+        | NodeKind::No { .. }
+        | NodeKind::PhaseBlock { .. } => true,
+        NodeKind::Assignment { lhs, .. } if is_compile_environment_target(lhs) => true,
+        NodeKind::VariableDeclaration { declarator, variable, .. }
+            if matches!(declarator.as_str(), "local" | "our")
+                && is_compile_environment_target(variable) =>
+        {
+            true
+        }
+        _ => block.children().into_iter().any(phase_block_requires_compile_execution),
+    }
+}
+
+fn is_compile_environment_target(node: &Node) -> bool {
+    match &node.kind {
+        NodeKind::Variable { sigil, name } => matches!(
+            (sigil.as_str(), name.as_str()),
+            ("$", "INC")
+                | ("@", "INC")
+                | ("%", "INC")
+                | ("$", "^H")
+                | ("%", "^H")
+                | ("$", "^OPEN")
+        ),
+        NodeKind::VariableWithAttributes { variable, .. } => {
+            is_compile_environment_target(variable)
+        }
+        NodeKind::Binary { op, left, .. } if op == "{}" || op == "[]" => {
+            is_compile_environment_target(left)
+        }
+        _ => false,
     }
 }
 
