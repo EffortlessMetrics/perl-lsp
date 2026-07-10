@@ -446,6 +446,18 @@ impl LspServer {
                 "scoped compiler state-variable declaration class cutover proof only; lexical state variable declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
             ));
         }
+        if let Some(candidate) = semantic_token_named_function_call_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "named_function_call",
+                "function",
+                "matched_existing_live_function_token",
+                "unmatched_existing_live_function_token",
+                true,
+                "scoped compiler named-function-call class cutover proof only; named function calls may count as compiler-token identities only when their source-backed whole-call span already matches existing live parser/HIR function tokens, and no new token output is emitted",
+            ));
+        }
 
         receipts
     }
@@ -715,6 +727,125 @@ mod tests {
         // fall back rather than record a false compiler-token identity.
         let source = "# state $todo\nmy $x = 1;\n";
         assert!(semantic_token_state_variable_declaration_candidate(source).is_none());
+    }
+
+    #[test]
+    fn named_function_call_candidate_spans_the_whole_call() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // The live FunctionCall token covers the entire call expression, so the
+        // candidate span must run from the callee name through the close paren.
+        let source = "use strict;\n\ncompute(1, 2);\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("a bareword call should be detected")?;
+        assert_eq!(candidate.identity, "token:named_function_call:compute:compiler");
+        let span = candidate.source_span.ok_or("call candidate must be source-backed")?;
+        // `compute(1, 2)` is 13 UTF-16 units on a single line.
+        assert_eq!(span.single_line_lsp_length(), Some(13));
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_handles_empty_argument_list()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "run_pipeline();\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("a no-argument call should be detected")?;
+        assert_eq!(candidate.identity, "token:named_function_call:run_pipeline:compiler");
+        let span = candidate.source_span.ok_or("call candidate must be source-backed")?;
+        // `run_pipeline()` is 14 UTF-16 units.
+        assert_eq!(span.single_line_lsp_length(), Some(14));
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_excludes_method_calls() {
+        // `->name(` is a method dispatch handled by the method-call class. The
+        // ONLY call here is the method call, so a detected candidate would prove
+        // the `>` prefix blocker failed; the detector must fall back instead.
+        let source = "my $c = shift;\n$c->stash(1);\n";
+        assert!(semantic_token_named_function_call_candidate(source).is_none());
+    }
+
+    #[test]
+    fn named_function_call_candidate_excludes_sigil_and_ampersand_calls() {
+        // `&name(` (ampersand call) and `$ref->(` (coderef dispatch) are not
+        // plain bareword `FunctionCall` function tokens; both must fall back.
+        assert!(semantic_token_named_function_call_candidate("&helper(1);\n").is_none());
+        assert!(semantic_token_named_function_call_candidate("$ref->(1);\n").is_none());
+    }
+
+    #[test]
+    fn named_function_call_candidate_scans_past_commented_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // A `name(` inside a `#` line comment must not shadow the real call that
+        // follows; the detector skips the comment and reports `dispatch`.
+        let source = "# run_pipeline()\ndispatch();\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("the real dispatch() call should be detected past the comment")?;
+        assert_eq!(candidate.identity, "token:named_function_call:dispatch:compiler");
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_scans_past_stringized_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // A `name(` inside a quoted string literal must not shadow a later real
+        // call.
+        let source = "my $x = 'foo(';\nbar();\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("the real bar() call should be detected past the string literal")?;
+        assert_eq!(candidate.identity, "token:named_function_call:bar:compiler");
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_balances_parens_inside_string_arguments()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Parentheses inside a quoted string argument must not be counted while
+        // balancing, so the whole-call span still covers `emit(")")` (9 units)
+        // to match the live FunctionCall token.
+        let source = "emit(\")\");\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("a call with a paren inside a string arg should still be detected")?;
+        assert_eq!(candidate.identity, "token:named_function_call:emit:compiler");
+        let span = candidate.source_span.ok_or("call candidate must be source-backed")?;
+        assert_eq!(span.single_line_lsp_length(), Some(9));
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_scans_past_multiline_call_to_single_line_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // A leading call whose parens span multiple lines cannot yield a
+        // single-line span, so the scan continues to the later single-line call.
+        let source = "outer(\n    1,\n);\ninner();\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("the single-line inner() call should be detected")?;
+        assert_eq!(candidate.identity, "token:named_function_call:inner:compiler");
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_excludes_control_keywords() {
+        // `if (...)` is not a FunctionCall function token; the detector must fall
+        // back rather than record a span that cannot match a live token.
+        let source = "if (1) {\n    1;\n}\n";
+        assert!(semantic_token_named_function_call_candidate(source).is_none());
+    }
+
+    #[test]
+    fn named_function_call_candidate_skips_multiline_calls() {
+        // A call whose parens span multiple lines fails closed: no single-line
+        // whole-call span can match a live token.
+        let source = "compute(\n    1,\n);\n";
+        assert!(semantic_token_named_function_call_candidate(source).is_none());
+    }
+
+    #[test]
+    fn named_function_call_candidate_ignores_declaration_without_call_parens() {
+        // `sub helper {` has no `(` after the name, so it is not a call site.
+        let source = "sub helper {\n    return 1;\n}\n";
+        assert!(semantic_token_named_function_call_candidate(source).is_none());
     }
 
     #[test]
@@ -1235,6 +1366,238 @@ fn line_start_variable_declaration_candidate(
     None
 }
 
+/// Detect a bareword named function call `name(...)` and emit its
+/// `token:named_function_call:<name>:compiler` candidate.
+///
+/// Unlike the name-scoped declaration classes, the live parser/HIR provider
+/// emits the `function` token for a call across the ENTIRE call expression
+/// (`compute(1, 2)`), not just the callee name: `NodeKind::FunctionCall`
+/// reports `node.location` spanning the whole call and the collector emits the
+/// token at that span (contrast `NodeKind::MethodCall`, which narrows to the
+/// method name). To match exactly one existing live token, this candidate's
+/// source-backed span therefore covers the callee name through the matching
+/// close paren on the same line.
+///
+/// Method calls (`->name(`), ampersand calls (`&name(`), sigiled/coderef calls
+/// (`$name(`), and control-flow / declaration keywords that the collector does
+/// NOT classify as `FunctionCall` function tokens are excluded so we never
+/// record a candidate that cannot match a live token. The scan skips Perl line
+/// comments and single/double-quoted strings, so a `name(` inside a comment or
+/// string cannot shadow a later real call and parentheses inside string
+/// arguments are not miscounted. A call whose parentheses do not balance on a
+/// single line is skipped (the scan continues to a later call), keeping the
+/// fail-closed boundary intact.
+fn semantic_token_named_function_call_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    let (name_start, paren_open, call_end) = first_named_function_call_span(source)?;
+    let name = &source[name_start..paren_open];
+    let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        source, name_start, call_end,
+    )?;
+
+    Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+        format!("token:named_function_call:{name}:compiler"),
+        ProviderFactSourceKind::CompilerFact,
+        Provenance::SemanticAnalyzer,
+        Confidence::Medium,
+        ProviderFactFreshness::Fresh,
+        span,
+    ))
+}
+
+/// Lightweight lexical state for scanning Perl source while skipping the two
+/// constructs that would otherwise be mistaken for call syntax: line comments
+/// and single/double-quoted string literals. Quote-like forms (`q//`, `qq//`),
+/// heredocs, and regex literals are deliberately NOT modeled — they fall
+/// through as code, and in the worst case a candidate simply fails to match a
+/// live token and the class falls back (output-neutral), never emitting a
+/// wrong token.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PerlScanState {
+    Code,
+    LineComment,
+    SingleQuote,
+    DoubleQuote,
+}
+
+/// Find the first bareword `name(...)` call whose parentheses balance on a
+/// single line, returning `(name_start, paren_open, call_end)` byte offsets
+/// (`call_end` is just past the matching close paren).
+///
+/// The scan is comment- and string-aware: a `name(` embedded in a `#` line
+/// comment or a quoted string is skipped rather than shadowing a later real
+/// call, and parentheses inside string arguments (`emit(")")`) are not counted
+/// while balancing. If a candidate call does not close on its line, the scan
+/// continues to the next call site rather than giving up — so a leading
+/// multi-line or malformed call cannot suppress a later single-line one.
+///
+/// Runs on nearly every document change, so it walks `char_indices()` once with
+/// no heap allocation.
+fn first_named_function_call_span(source: &str) -> Option<(usize, usize, usize)> {
+    let mut chars = source.char_indices().peekable();
+    let mut state = PerlScanState::Code;
+    // The character immediately before the current position, used only to
+    // distinguish `$#array` (last-index sigil) from a `#` comment and to apply
+    // the call-prefix blocker to an identifier run.
+    let mut prev = '\0';
+
+    while let Some((idx, ch)) = chars.next() {
+        match state {
+            PerlScanState::LineComment => {
+                if ch == '\n' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::SingleQuote => {
+                if ch == '\\' {
+                    chars.next();
+                } else if ch == '\'' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::DoubleQuote => {
+                if ch == '\\' {
+                    chars.next();
+                } else if ch == '"' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::Code => {
+                if ch == '#' && prev != '$' {
+                    state = PerlScanState::LineComment;
+                } else if ch == '\'' {
+                    state = PerlScanState::SingleQuote;
+                } else if ch == '"' {
+                    state = PerlScanState::DoubleQuote;
+                } else if ch.is_ascii_alphabetic() || ch == '_' {
+                    let run_start = idx;
+                    let mut run_end = idx + ch.len_utf8();
+                    while let Some(&(nidx, nch)) = chars.peek() {
+                        if is_subroutine_name_char(nch) {
+                            run_end = nidx + nch.len_utf8();
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if let Some(&(paren_open, '(')) = chars.peek() {
+                        let name = &source[run_start..run_end];
+                        if !is_call_prefix_blocker(prev) && !is_non_call_keyword(name) {
+                            if let Some(call_end) = string_aware_call_end(source, paren_open) {
+                                return Some((run_start, paren_open, call_end));
+                            }
+                        }
+                    }
+
+                    // `run_end` is one past the last name character; the next
+                    // loop iteration re-reads whatever follows the run.
+                    prev = source[..run_end].chars().next_back().unwrap_or('\0');
+                    continue;
+                }
+            }
+        }
+        prev = ch;
+    }
+
+    None
+}
+
+/// Scan from a call's opening `(` to its matching `)` on the same line, skipping
+/// parentheses that appear inside Perl line comments or single/double-quoted
+/// strings. Returns the byte offset just past the close paren, or `None` if the
+/// parentheses do not balance before end-of-line (fail-closed).
+fn string_aware_call_end(source: &str, paren_open: usize) -> Option<usize> {
+    let mut chars = source[paren_open..].char_indices();
+    let mut state = PerlScanState::Code;
+    let mut depth = 0usize;
+    let mut prev = '\0';
+
+    while let Some((offset, ch)) = chars.next() {
+        match state {
+            PerlScanState::LineComment => {
+                if ch == '\n' {
+                    return None;
+                }
+            }
+            PerlScanState::SingleQuote => {
+                if ch == '\\' {
+                    chars.next();
+                } else if ch == '\'' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::DoubleQuote => {
+                if ch == '\\' {
+                    chars.next();
+                } else if ch == '"' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::Code => match ch {
+                '\n' => return None,
+                '#' if prev != '$' => state = PerlScanState::LineComment,
+                '\'' => state = PerlScanState::SingleQuote,
+                '"' => state = PerlScanState::DoubleQuote,
+                '(' => depth += 1,
+                ')' => {
+                    depth = depth.checked_sub(1)?;
+                    if depth == 0 {
+                        return Some(paren_open + offset + ch.len_utf8());
+                    }
+                }
+                _ => {}
+            },
+        }
+        prev = ch;
+    }
+
+    None
+}
+
+/// Characters immediately preceding an identifier that mark it as something
+/// other than a plain bareword function call (method dispatch, coderef/sigil
+/// call, ampersand call, reference-taking).
+fn is_call_prefix_blocker(ch: char) -> bool {
+    matches!(ch, '>' | '&' | '$' | '@' | '%' | '\\')
+}
+
+/// Keywords that take a parenthesised form but are NOT emitted as
+/// `NodeKind::FunctionCall` `function` tokens by the live collector
+/// (control flow, logical operators, and the collector's builtin skip-list).
+fn is_non_call_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "if" | "unless"
+            | "while"
+            | "until"
+            | "for"
+            | "foreach"
+            | "elsif"
+            | "else"
+            | "given"
+            | "when"
+            | "and"
+            | "or"
+            | "not"
+            | "eval"
+            | "do"
+            | "use"
+            | "no"
+            | "return"
+            | "my"
+            | "our"
+            | "local"
+            | "state"
+            | "sub"
+            | "next"
+            | "last"
+            | "redo"
+            | "goto"
+    )
+}
+
 fn lexical_variable_name_after_my_marker(
     source: &str,
     marker_start: usize,
@@ -1504,6 +1867,24 @@ fn semantic_tokens_live_slice_provider_trace(
             source_backed_state: "source_backed_state_variable_declaration_live_token_match",
             user_message: "Semantic tokens exposed the source-backed compiler state-variable declaration live trace because it matched the existing parser/HIR variable token. No new semantic tokens were emitted.",
             claim_boundary: "only source-backed compiler state-variable declaration spans that exactly match existing live parser/HIR variable tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader variable classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    let named_function_call_candidate = semantic_token_named_function_call_candidate(source);
+    saw_compiler_token_candidate |= named_function_call_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        named_function_call_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "function",
+            compiler_token_class: "named_function_call",
+            source_backed_state: "source_backed_named_function_call_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler named-function-call live trace because its whole-call span matched the existing parser/HIR function token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler named-function-call whole-call spans that exactly match existing live parser/HIR function tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader function classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
         },
     ) {
         return trace;

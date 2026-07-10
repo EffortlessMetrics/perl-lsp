@@ -236,6 +236,7 @@ fn semantic_token_candidate_class_is_approved(candidate: &SemanticTokenShadowCan
                 || candidate.identity.starts_with("token:lexical_variable_use:")
                 || candidate.identity.starts_with("token:our_variable_declaration:")
                 || candidate.identity.starts_with("token:state_variable_declaration:")
+                || candidate.identity.starts_with("token:named_function_call:")
         }
         _ => false,
     }
@@ -846,6 +847,46 @@ mod tests {
         assert_eq!(
             result.receipt.new_result.identities,
             vec!["token:self_method_call:status:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_named_function_call_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // The named-function-call span is the whole call expression, so the
+        // approved span is multi-character; it must still count through the
+        // scoped class identity exactly once.
+        let candidate = shadow_candidate(
+            "token:named_function_call:run_pipeline:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(3, 0, 14)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result =
+            semantic_token_source_shadow(Vec::new(), vec![candidate], "named_function_call");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:named_function_call:run_pipeline:compiler".to_string()]
         );
         assert_eq!(report.candidate_count, 1);
         assert_eq!(report.source_backed_span_count, 1);
