@@ -2,8 +2,9 @@
 
 This checklist is the release gate for the current cut.
 The mechanics live in [RELEASE.md](../../RELEASE.md), the release-day sequence lives in
-[PUBLISHING_ROADMAP.md](PUBLISHING_ROADMAP.md), and changelog generation lives in
-[CHANGELOG_WORKFLOW.md](../CHANGELOG_WORKFLOW.md).
+[PUBLISHING_ROADMAP.md](PUBLISHING_ROADMAP.md), changelog generation lives in
+[CHANGELOG_WORKFLOW.md](../CHANGELOG_WORKFLOW.md), and provenance-aware release-note
+authoring lives in [docs/releases/README.md](../releases/README.md).
 
 Use `NEW_VERSION` as the target semver string for the release you are preparing.
 
@@ -17,6 +18,53 @@ Use `NEW_VERSION` as the target semver string for the release you are preparing.
 - [ ] `CHANGELOG.md` contains a dated `## [NEW_VERSION]` section and leaves `[Unreleased]` empty.
 - [ ] The crates listed in `[workspace.metadata.publish.allow]` report `NEW_VERSION`.
 - [ ] `cargo xtask install-surface-check` passes.
+
+### Release provenance and note completeness
+
+Resolve these values to immutable SHAs before the source sync or version bump:
+
+```bash
+export PREVIOUS_RC=<previous-swarm-release-sha>
+export RC_SHA=<new-swarm-freeze-sha>
+export SYNC_SHA=<perl-lsp-history-preserving-sync-sha>
+```
+
+- [ ] The previous swarm release anchor and new swarm RC/freeze SHA are recorded in `docs/releases/vNEW_VERSION.md`.
+- [ ] The logical development range is forward-moving:
+
+  ```bash
+  git merge-base --is-ancestor "$PREVIOUS_RC" "$RC_SHA"
+  ```
+
+- [ ] The logical squash-merge ledger was reviewed with first-parent history:
+
+  ```bash
+  git log --first-parent --reverse --format='%H%x09%s' "$PREVIOUS_RC..$RC_SHA"
+  ```
+
+- [ ] Every user-visible `feat` and `fix` in that ledger appears in the release note or has an explicit exclusion reason.
+- [ ] Test-only, receipt-only, shadow-only, disabled, and swarm-internal work is classified separately from shipped user behavior.
+- [ ] The source sync is a history-preserving complete-tree merge with exactly two parents:
+
+  ```bash
+  test "$(git show -s --format='%P' "$SYNC_SHA" | wc -w)" -eq 2
+  ```
+
+- [ ] The promoted swarm RC is an ancestor of the source sync commit:
+
+  ```bash
+  git merge-base --is-ancestor "$RC_SHA" "$SYNC_SHA"
+  ```
+
+- [ ] `git diff --name-only "$SYNC_SHA" "$RC_SHA"` contains only documented release-repo exclusions.
+- [ ] The release note classifies the source tag comparison as `safe`, `inflated`, `incomplete`, or `tree-only` when it is not a clean logical ledger.
+- [ ] The release note contains an explicit claim boundary for disabled, capability-gated, config-gated, shadow-only, and compiler-substrate work.
+- [ ] The generated GitHub Release body was compared with the curated note; the generated body does not silently replace the logical-change review.
+
+Do not tag a content snapshot, patch replay, archive copy, or one-parent mirror when the logical swarm commits exist. See [docs/releases/README.md](../releases/README.md) and [docs/swarm/sync-protocol.md](../swarm/sync-protocol.md).
+
+### Install and artifact surface
+
 - [ ] Release archives ship the DAP binary: the release workflow runs `cargo xtask release artifact-check` on the produced `dist/` (see `.github/workflows/release.yml`). To verify a local/downloaded set: `cargo xtask release artifact-check --dist dist --version NEW_VERSION`.
 - [ ] `cargo xtask release-notes --tag vNEW_VERSION --output /tmp/vNEW_VERSION-body.md` produces release notes with the Linux asset chooser:
 
