@@ -1,12 +1,14 @@
 .vscode/**
 .vscode-test/**
 out/test/**
+out-test/**
 coverage/**
 src/**
 test/**
 .gitignore
 .yarnrc
 **/tsconfig.json
+tsconfig.test.json
 **/.eslintrc.json
 **/*.map
 **/*.ts
@@ -22,7 +24,6 @@ build.sh
 icon.svg
 icon_generator.py
 package-lock.json
-pnpm-lock.yaml
 test-extension.pl
 INTERNAL_DEPLOYMENT.md
 PUBLISHING.md

@@ -1303,10 +1303,12 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "clean:test": "node -e \"require('fs').rmSync('out-test',{recursive:true,force:true})\"",
+    "compile:test": "npm run clean:test && tsc -p ./tsconfig.test.json",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext .ts",
-    "test": "jest --verbose",
-    "test:ci": "jest --ci --coverage",
+    "test": "npm run compile:test && node scripts/run-jest.js --verbose",
+    "test:ci": "npm run compile:test && node scripts/run-jest.js --ci --coverage",
     "test:grammar": "vscode-tmgrammar-snap --config package.json \"test/grammar/fixtures/*.pl\"",
     "test:grammar:update": "vscode-tmgrammar-snap --config package.json -u \"test/grammar/fixtures/*.pl\"",
     "test:integration": "npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
@@ -1317,13 +1319,6 @@
     "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package",
     "publish:openvsx": "npx ovsx publish",
     "check:openvsx": "npx ovsx --version"
-  },
-  "pnpm": {
-    "overrides": {
-      "diff@>=6.0.0 <8.0.3": ">=8.0.3",
-      "serialize-javascript@<7.0.5": ">=7.0.5",
-      "serialize-javascript@<=7.0.2": ">=7.0.3"
-    }
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
@@ -1344,7 +1339,6 @@
     "eslint": "^10.5.0",
     "jest": "^30.4.2",
     "mocha": "^11.7.6",
-    "ts-jest": "^29.4.11",
     "typescript": "^6.0.3",
     "vscode-tmgrammar-test": "^0.1.3"
   }
