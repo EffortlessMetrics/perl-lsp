@@ -21,26 +21,31 @@ pub enum DegradationTier {
     /// features are provided (word completion, bracket matching, folding
     /// via brace counting, text-based symbol extraction).
     Minimal,
-    /// Parse produced errors but also produced a partial AST. Best-effort
-    /// completions, navigation, and diagnostics are available from whatever
-    /// parsed successfully.
+    /// Parse produced blocking errors but also produced a partial AST.
+    /// Best-effort completions, navigation, and diagnostics are available from
+    /// whatever parsed successfully. Advisory-only diagnostics do not
+    /// downgrade to this tier.
     Partial,
-    /// Parse succeeded without errors. All features are available.
+    /// Parse succeeded without blocking errors. All features are available.
+    /// Advisory-only diagnostics retain this tier rather than demoting to
+    /// [`Self::Partial`].
     Full,
 }
 
 impl DegradationTier {
     /// Compute the degradation tier from parse results.
     ///
-    /// - `Full`: AST present and no parse errors
-    /// - `Partial`: AST present but parse errors exist
+    /// - `Full`: AST present and no blocking parse errors
+    /// - `Partial`: AST present with blocking parse errors
     /// - `Minimal`: No AST (parse failed completely)
     pub fn from_parse_result(
         ast: &Option<Arc<perl_parser::ast::Node>>,
         parse_errors: &[perl_parser::error::ParseError],
     ) -> Self {
         match ast {
-            Some(_) if parse_errors.is_empty() => DegradationTier::Full,
+            Some(_) if parse_errors.iter().all(|error| !error.blocks_clean_parse()) => {
+                DegradationTier::Full
+            }
             Some(_) => DegradationTier::Partial,
             None => DegradationTier::Minimal,
         }
@@ -683,6 +688,23 @@ mod tests {
         if snapshot.ast().is_some() && !snapshot.parse_errors().is_empty() {
             assert_eq!(snapshot.degradation_tier(), DegradationTier::Partial);
         }
+    }
+
+    #[test]
+    fn advisory_only_parse_retains_full_semantics() {
+        let snapshot = snapshot_for("my $pattern = qr/^(a+)+$/;", 0);
+
+        assert!(snapshot.ast().is_some(), "valid regex must retain its AST");
+        assert!(
+            !snapshot.parse_errors().is_empty(),
+            "nested quantifier must remain visible as an advisory"
+        );
+        assert!(
+            snapshot.parse_errors().iter().all(|error| !error.blocks_clean_parse()),
+            "the valid nested-quantifier diagnostic must be advisory-only"
+        );
+        assert_eq!(snapshot.degradation_tier(), DegradationTier::Full);
+        assert!(snapshot.degradation_tier().has_full_semantics());
     }
 
     #[test]
