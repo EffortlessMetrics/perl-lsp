@@ -318,6 +318,7 @@ fn is_unsupported_compile_boundary(
         && !is_run_test_pl_setup_boundary(effect, invocation, source)
         && !is_run_fresh_perl_setup_boundary(effect, invocation, source)
         && !is_run_script_setup_boundary(effect, invocation, source)
+        && !is_run_runenv_setup_boundary(effect, invocation, source)
         && !is_run_switch_i_setup_boundary(effect, invocation, source)
         && !is_run_switchd_debugger_setup_boundary(effect, invocation, source)
         && !is_run_switchdx_miniperl_setup_boundary(effect, invocation, source)
@@ -1305,6 +1306,27 @@ fn is_run_script_setup_boundary(
     let normalized = slice.replace("\r\n", "\n");
     normalized
         == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    require './test.pl';\t# for which_perl() etc\n    plan(3);\n}"
+}
+
+fn is_run_runenv_setup_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "run/runenv.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    let normalized = slice.replace("\r\n", "\n");
+    normalized
+        == "BEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    require Config; Config->import;\n    require './test.pl';\n    skip_all_without_config('d_fork');\n}"
 }
 
 fn is_run_switch_i_setup_boundary(
@@ -4265,6 +4287,51 @@ mod tests {
     }
 
     #[test]
+    fn compile_run_runenv_setup_boundary_passes() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_runenv_setup_source()),
+            display_path: "run/runenv.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_runenv_setup_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(run_runenv_setup_source()),
+            display_path: "run/runenv_hashseed.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_runenv_setup_changed_block_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                run_runenv_setup_source()
+                    .replace("    skip_all_without_config('d_fork');", "    plan(1);"),
+            ),
+            display_path: "run/runenv.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_run_switch_i_setup_boundary_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(run_switch_i_setup_source()),
@@ -5343,6 +5410,20 @@ BEGIN {
     fn run_script_setup_source() -> String {
         "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    @INC = '../lib';\n    require './test.pl';\t# for which_perl() etc\n    plan(3);\n}\n"
             .to_string()
+    }
+
+    fn run_runenv_setup_source() -> String {
+        r#"#!./perl
+
+BEGIN {
+    chdir 't' if -d 't';
+    @INC = '../lib';
+    require Config; Config->import;
+    require './test.pl';
+    skip_all_without_config('d_fork');
+}
+"#
+        .to_string()
     }
 
     fn run_switch_i_setup_source() -> String {
