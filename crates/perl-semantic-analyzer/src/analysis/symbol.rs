@@ -304,6 +304,17 @@ impl SymbolTable {
     /// scope with the greatest `location.start` that still contains
     /// `offset` is therefore the most specific (innermost) enclosing scope.
     ///
+    /// The start boundary is inclusive (`offset == location.start` matches)
+    /// and the end boundary is exclusive (`offset == location.end` does
+    /// not), so a scope covers `[start, end)`.
+    ///
+    /// Invariant: when two or more scopes share the same `location.start`,
+    /// the tie is broken by `id`. Scope IDs are assigned in monotonically
+    /// increasing, strictly nested push order (see [`Self::push_scope`]), so
+    /// a child scope always has a greater `id` than its parent. Ranking by
+    /// `(location.start, id)` therefore always selects the innermost scope
+    /// among same-start candidates, never an outer sibling or ancestor.
+    ///
     /// Falls back to the global scope (`0`) when no scope's range contains
     /// `offset` -- e.g. top-level, package-scope code before any block or
     /// subroutine opens.
@@ -311,7 +322,7 @@ impl SymbolTable {
         self.scopes
             .values()
             .filter(|scope| scope.location.start <= offset && offset < scope.location.end)
-            .max_by_key(|scope| scope.location.start)
+            .max_by_key(|scope| (scope.location.start, scope.id))
             .map(|scope| scope.id)
             .unwrap_or(0)
     }
@@ -3659,6 +3670,169 @@ mod tests {
         assert!(
             our_from_block.iter().any(|s| s.name == "g"),
             "input that hits the boundary: scope.kind != ScopeKind::Package"
+        );
+    }
+
+    /// Direct contract tests for `SymbolTable::scope_at_offset` (issue
+    /// #3695): out-of-scope fallback, nested/sibling selection, inclusive
+    /// start / exclusive end boundaries, and the `(start, id)` tie-breaker
+    /// that makes same-start selection deterministic. Hand-built (not
+    /// extracted) so each boundary is exercised in isolation, matching the
+    /// style of `find_symbol_boundary_discriminator` above.
+    #[test]
+    fn scope_at_offset_out_of_all_scopes_falls_back_to_global() {
+        let mut table = SymbolTable::new(); // global scope 0, location {0,0}
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Subroutine,
+                location: SourceLocation { start: 10, end: 20 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        // Before and after the only non-global scope: no scope's range
+        // contains the offset, so the fallback (`unwrap_or(0)`) applies.
+        assert_eq!(table.scope_at_offset(5), 0, "offset before all scopes falls back to scope 0");
+        assert_eq!(table.scope_at_offset(25), 0, "offset after all scopes falls back to scope 0");
+    }
+
+    #[test]
+    fn scope_at_offset_selects_innermost_nested_scope() {
+        let mut table = SymbolTable::new();
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Subroutine,
+                location: SourceLocation { start: 0, end: 100 },
+                symbols: HashSet::new(),
+            },
+        );
+        table.scopes.insert(
+            2,
+            Scope {
+                id: 2,
+                parent: Some(1),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 10, end: 90 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        assert_eq!(
+            table.scope_at_offset(50),
+            2,
+            "offset inside both the sub and its nested block picks the innermost (block) scope"
+        );
+    }
+
+    #[test]
+    fn scope_at_offset_selects_correct_sibling() {
+        let mut table = SymbolTable::new();
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 10, end: 40 },
+                symbols: HashSet::new(),
+            },
+        );
+        table.scopes.insert(
+            2,
+            Scope {
+                id: 2,
+                parent: Some(0),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 50, end: 90 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        assert_eq!(table.scope_at_offset(20), 1, "offset inside the first sibling only");
+        assert_eq!(table.scope_at_offset(70), 2, "offset inside the second sibling only");
+    }
+
+    #[test]
+    fn scope_at_offset_start_boundary_is_inclusive() {
+        let mut table = SymbolTable::new();
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 10, end: 20 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        assert_eq!(
+            table.scope_at_offset(10),
+            1,
+            "offset == location.start is inside the scope (inclusive lower bound)"
+        );
+    }
+
+    #[test]
+    fn scope_at_offset_end_boundary_is_exclusive() {
+        let mut table = SymbolTable::new();
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 10, end: 20 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        assert_eq!(
+            table.scope_at_offset(20),
+            0,
+            "offset == location.end is outside the scope (exclusive upper bound); falls back to global"
+        );
+    }
+
+    /// Reproduction for #3695: without the `(location.start, id)` compound
+    /// key, `scope_at_offset` compares only `location.start`, so equal-start
+    /// scopes tie and `max_by_key` resolves the tie via `HashMap` iteration
+    /// order -- not scope nesting. With the fix, ranking by `(start, id)`
+    /// deterministically picks the highest-id (innermost) scope every time,
+    /// since scope IDs are assigned in strictly increasing, nested push
+    /// order (see `push_scope`). Reverting the key back to a bare
+    /// `scope.location.start` makes this test flaky-to-failing, since the
+    /// tie is then broken by unspecified `HashMap` iteration order instead
+    /// of nesting depth.
+    #[test]
+    fn scope_at_offset_ties_on_equal_start_pick_highest_id() {
+        let mut table = SymbolTable::new();
+        // Four scopes all opening at the same offset (e.g. a `sub` and a
+        // block whose opening brace coincides), inserted out of id order so
+        // "insertion order happens to match" can't explain a passing result.
+        for (id, end) in [(4, 40), (2, 80), (5, 20), (3, 60)] {
+            table.scopes.insert(
+                id,
+                Scope {
+                    id,
+                    parent: Some(0),
+                    kind: ScopeKind::Block,
+                    location: SourceLocation { start: 10, end },
+                    symbols: HashSet::new(),
+                },
+            );
+        }
+
+        assert_eq!(
+            table.scope_at_offset(15),
+            5,
+            "equal-start scopes must tie-break on the highest id (innermost), not iteration order"
         );
     }
 

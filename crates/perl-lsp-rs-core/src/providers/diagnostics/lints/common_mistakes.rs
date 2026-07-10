@@ -295,6 +295,20 @@ mod tests {
     }
 
     #[test]
+    fn numeric_compare_with_nested_block_local_scalar_no_pl404() {
+        // Regression for #3695 (re-applying #3644/#3659 hardening): `my $x`
+        // declared inside a nested block (an `if` block inside a `sub`, not
+        // just directly inside the sub body) must still be visible at the
+        // comparison site. This exercises scope_at_offset picking the
+        // innermost of two NESTED (not just one-level) enclosing scopes.
+        let diags = common_mistakes_diags("sub outer { if (1) { my $x = 10; if ($x == 5) { } } }");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL404")),
+            "numeric compare with nested-block declared scalar should not fire PL404: {diags:?}"
+        );
+    }
+
+    #[test]
     fn numeric_compare_with_sub_local_undeclared_scalar_fires_pl404() {
         // True-positive guard: a genuinely undeclared variable inside a sub
         // should still fire PL404 -- the fix must not over-suppress across
