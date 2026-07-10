@@ -53,13 +53,18 @@ pub fn build_snapshot(
     // naming what was asked for and `known_programs` listing valid ids)
     // instead of `goals next --json` exiting with a non-JSON error —
     // `--json` callers must always get parseable output.
-    let resolved_program = match &program_arg {
-        Some(requested) if known_programs.iter().any(|p| &p.id == requested) => {
-            Some(requested.clone())
-        }
-        Some(_unknown) => None,
-        None => default_program.clone(),
-    };
+    //
+    // The `default_program` arm used to assign it straight from
+    // `active.toml` with no validation at all (#3647 follow-up finding):
+    // an unknown, malformed, or path-traversal-shaped `default_program`
+    // reached `resolved_program` unchecked whenever no explicit `--program`
+    // was given — fail-OPEN on a control-plane work-routing authority.
+    // `resolve_program` now runs BOTH sources through the same
+    // `manifest::validate_program_id` check the static
+    // `active_goal_manifest::validate_default_program` validator uses, so
+    // the two can never drift or fail open again.
+    let resolved_program =
+        resolve_program(&root, program_arg.as_deref(), default_program.as_deref());
 
     let (repository, live_open_prs) = load_live_prs(&root, fixture)?;
 
@@ -83,6 +88,25 @@ pub fn build_snapshot(
     }
 
     Ok(snapshot)
+}
+
+/// Resolves which program `goals next` selects against: an explicit
+/// `--program` wins when given (even if invalid — it never falls back to
+/// `default_program`, matching the pre-existing `--program` contract),
+/// otherwise `active.toml`'s `default_program`. Either source must pass
+/// `manifest::validate_program_id` (bare id, no path separators/`..`, and
+/// an existing manifest under `.perl-lsp/goals/programs/`) or resolution
+/// fails closed to `None` — `select_next` turns that into
+/// `Blocked(ambiguous_program_authority)` rather than ever guessing or
+/// loading an unvalidated path. Pure/fs-read-only (no shelling), so it is
+/// unit-testable without a live `gh` call.
+fn resolve_program(
+    root: &Path,
+    program_arg: Option<&str>,
+    default_program: Option<&str>,
+) -> Option<String> {
+    let candidate = program_arg.or(default_program)?;
+    manifest::validate_program_id(root, candidate).ok().map(|()| candidate.to_owned())
 }
 
 fn discover_known_programs(root: &Path) -> Result<Vec<ProgramCandidate>> {
@@ -365,6 +389,58 @@ commands = ["rtk cargo test"]
         );
         assert_eq!(snapshot.resolved_program, None);
         assert!(snapshot.candidates.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_program_rejects_an_unvalidated_default_program() -> Result<()> {
+        // #3647 follow-up: `default_program` used to be assigned to
+        // `resolved_program` straight from `active.toml` with none of the
+        // known-programs/bare-id validation the explicit `--program` path
+        // already applied — fail-open on a control-plane work-routing
+        // authority. `resolve_program` must now reject an unknown id AND a
+        // path-traversal-shaped one, exactly like `--program` does.
+        let temp = tempfile::tempdir()?;
+        let programs_dir = temp.path().join(".perl-lsp/goals/programs");
+        fs::create_dir_all(&programs_dir)?;
+        fs::write(programs_dir.join("known.toml"), "id = \"known\"\n")?;
+
+        for bad_default in ["unknown-program-xyz", "../../../etc/passwd", "sub/dir"] {
+            assert_eq!(
+                resolve_program(temp.path(), None, Some(bad_default)),
+                None,
+                "default_program {bad_default:?} must not resolve"
+            );
+        }
+
+        // A valid, known default_program still resolves normally.
+        assert_eq!(resolve_program(temp.path(), None, Some("known")), Some("known".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn unvalidated_default_program_blocks_selection_with_ambiguous_program_authority() -> Result<()>
+    {
+        // Proves the fail-closed outcome end to end: an unresolved
+        // `default_program` must reach `select_next` as
+        // `Blocked(ambiguous_program_authority)` — never a panic, and
+        // never a silently-selected candidate.
+        use super::super::select::{SelectionDecision, select_next};
+
+        let temp = tempfile::tempdir()?;
+        let programs_dir = temp.path().join(".perl-lsp/goals/programs");
+        fs::create_dir_all(&programs_dir)?;
+        fs::write(programs_dir.join("known.toml"), "id = \"known\"\n")?;
+
+        let mut snapshot = blank_snapshot("known");
+        snapshot.resolved_program = resolve_program(temp.path(), None, Some("../../../etc/passwd"));
+
+        match select_next(&snapshot) {
+            SelectionDecision::Blocked(blockers) => {
+                assert_eq!(blockers[0].kind, "ambiguous_program_authority");
+            }
+            other => bail!("expected Blocked(ambiguous_program_authority), got {other:?}"),
+        }
         Ok(())
     }
 

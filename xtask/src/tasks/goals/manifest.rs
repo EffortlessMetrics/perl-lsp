@@ -59,6 +59,41 @@ pub fn program_manifest_path(id: &str) -> String {
     format!(".perl-lsp/goals/programs/{id}.toml")
 }
 
+/// The ONE program-id validator shared by `active_goal_manifest::run()`'s
+/// static `validate_default_program` check and
+/// `super::snapshot::build_snapshot`'s live resolution of `default_program`
+/// (#3647 follow-up: the two had drifted, and the live selector path was
+/// fail-open — a `default_program` value could reach `resolved_program`
+/// unvalidated whenever no explicit `--program` was given).
+///
+/// Rejects any id containing a path separator (`/`, `\\`, `:`) or
+/// parent-dir traversal (`..`): such a value would otherwise escape
+/// `.perl-lsp/goals/programs/` when joined onto [`program_manifest_path`].
+/// Then requires the resulting manifest path to actually exist on disk —
+/// the same definition of "known program" `snapshot::discover_known_programs`
+/// uses (it lists `.toml` files under that same directory), so this check
+/// and known-programs membership can never disagree.
+///
+/// Returns `Ok(())` when `id` is safe to resolve as a program, `Err(reason)`
+/// with a human-readable violation string otherwise (not a display value —
+/// callers decide how to surface it: a validation violation line for the
+/// static checker, or a fail-closed `None` for the live selector).
+pub fn validate_program_id(root: &Path, id: &str) -> Result<(), String> {
+    if id.trim().is_empty() {
+        return Err("program id must not be empty".to_owned());
+    }
+    if id.contains('/') || id.contains('\\') || id.contains(':') || id.contains("..") {
+        return Err(format!(
+            "must be a bare program id (no path separators or \"..\"), got {id:?}"
+        ));
+    }
+    let manifest_path = program_manifest_path(id);
+    if !root.join(&manifest_path).exists() {
+        return Err(format!("program {id:?} manifest not found at {manifest_path}"));
+    }
+    Ok(())
+}
+
 /// Detects whether a program manifest's TOML text declares a `[[milestone]]`
 /// array-of-tables (a milestone ledger, `load_milestone_ledger`'s shape) as
 /// opposed to the lane-routing `[[work_item]]` shape. Parses the TOML and
@@ -330,5 +365,54 @@ mod tests {
     #[test]
     fn is_milestone_ledger_false_for_malformed_toml() {
         assert!(!is_milestone_ledger("not valid toml {{{"));
+    }
+
+    #[test]
+    fn validate_program_id_accepts_a_known_bare_id() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let programs_dir = temp.path().join(".perl-lsp/goals/programs");
+        fs::create_dir_all(&programs_dir)?;
+        fs::write(programs_dir.join("known.toml"), "id = \"known\"\n")?;
+
+        assert!(validate_program_id(temp.path(), "known").is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn validate_program_id_rejects_an_unknown_id() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        fs::create_dir_all(temp.path().join(".perl-lsp/goals/programs"))?;
+
+        let err = validate_program_id(temp.path(), "not-a-real-program")
+            .expect_err("unknown program id must fail validation");
+        assert!(
+            err.contains("not-a-real-program"),
+            "expected the id to be named in the error, got {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn validate_program_id_rejects_path_traversal_tokens() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let programs_dir = temp.path().join(".perl-lsp/goals/programs");
+        fs::create_dir_all(&programs_dir)?;
+        fs::write(programs_dir.join("known.toml"), "id = \"known\"\n")?;
+
+        for bad in ["../../../etc/passwd", "sub/dir", "a\\b", "a:b", ".."] {
+            let err = validate_program_id(temp.path(), bad)
+                .expect_err("path-traversal-shaped id must fail validation");
+            assert!(
+                err.contains("bare program id"),
+                "expected a bare-program-id violation for {bad:?}, got {err}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn validate_program_id_rejects_empty_id() {
+        let err = validate_program_id(Path::new("."), "").expect_err("empty id must fail");
+        assert!(err.contains("must not be empty"));
     }
 }

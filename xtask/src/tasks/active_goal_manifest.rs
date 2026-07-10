@@ -287,30 +287,17 @@ fn validate_default_program(
         return;
     }
 
-    // `default_program` must be a bare program id, not a path: it is
-    // interpolated directly into `program_manifest_path` below, so a value
-    // containing a path separator or `..` could otherwise escape
-    // `.perl-lsp/goals/programs/` and be loaded as if it were a
-    // discoverable program.
-    if default_program.contains('/')
-        || default_program.contains('\\')
-        || default_program.contains(':')
-        || default_program.contains("..")
-    {
-        violations.push(format!(
-            "{ACTIVE_GOAL_PATH}: default_program must be a bare program id (no path separators or \"..\"), got {default_program:?}"
-        ));
+    // Bare-id + on-disk-existence check, shared with `goals next`'s live
+    // resolution of `default_program` (`snapshot::build_snapshot`) via
+    // `goals_manifest::validate_program_id` — the ONE place this check
+    // lives, so the static validator here and the live selector can never
+    // drift on what counts as a safe, known program id (#3647 follow-up).
+    if let Err(reason) = goals_manifest::validate_program_id(root, default_program) {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: default_program {reason}"));
         return;
     }
 
     let manifest_path = goals_manifest::program_manifest_path(default_program);
-    if !root.join(&manifest_path).exists() {
-        violations.push(format!(
-            "{ACTIVE_GOAL_PATH}: default_program {default_program:?} manifest not found at {manifest_path}"
-        ));
-        return;
-    }
-
     match fs::read_to_string(root.join(&manifest_path)) {
         Ok(text) if goals_manifest::is_milestone_ledger(&text) => {
             match goals_manifest::load_milestone_ledger(root, &manifest_path) {
