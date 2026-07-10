@@ -64,6 +64,7 @@ pub mod generate_semantic_snapshot;
 pub mod generated_files;
 pub mod git_context;
 pub mod github;
+pub mod goals;
 pub mod hardening;
 #[cfg(feature = "parser-tasks")]
 pub mod highlight;

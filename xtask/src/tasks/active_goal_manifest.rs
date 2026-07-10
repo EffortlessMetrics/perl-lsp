@@ -10,7 +10,18 @@
 //! `.perl-lsp/goals/lanes/<lane>.toml`. Completed work items live under
 //! `.perl-lsp/goals/archive/` and are relocated only, never re-validated
 //! against the active-lane contract.
+//!
+//! M3 (#3624) additively extends this validator with one more field on the
+//! same `active.toml` pointer: an optional `default_program`, naming the
+//! governed default program for `cargo xtask goals next`. When
+//! `default_program` names a program other than `active_program` (e.g. a
+//! milestone-ledger program like `agent_loop_enablement`, which does not
+//! share the lane-routing `[[work_item]]` shape validated above), its
+//! manifest is validated separately via the shared typed loader in
+//! `tasks::goals::manifest` so this validator and the `goals next`
+//! selector can never drift on what a valid ledger looks like.
 
+use crate::tasks::goals::manifest as goals_manifest;
 use crate::utils::project_root;
 use color_eyre::eyre::{Context, Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
@@ -121,6 +132,8 @@ fn validate(root: &Path) -> Result<ManifestStats> {
             )),
         }
     }
+
+    validate_default_program(root, pointer_table, expected_program, &mut violations);
 
     if !violations.is_empty() {
         eprintln!("active goal manifest violations:");
@@ -242,6 +255,83 @@ fn validate_pointer(
     }
 
     manifest_path.zip(board_path)
+}
+
+/// Validates the M3 (#3624) `default_program` extension to the schema-2
+/// pointer. Optional: absent `default_program` is not itself a violation
+/// (older schema-2 `active.toml` files without it remain valid; callers
+/// fall back to `active_program`). When present and naming a program other
+/// than `active_program`, that sibling manifest must exist and, if it is a
+/// milestone-ledger program (contains `[[milestone]]`), must pass the
+/// shared `goals::manifest::validate_milestone_ledger` structural checks —
+/// keeping this validator and the `goals next` selector from drifting on
+/// what a valid ledger looks like.
+fn validate_default_program(
+    root: &Path,
+    pointer_table: &Table,
+    expected_program: &str,
+    violations: &mut Vec<String>,
+) {
+    let Some(raw) = pointer_table.get("default_program") else {
+        return;
+    };
+    let Some(default_program) = raw.as_str() else {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: default_program must be a string"));
+        return;
+    };
+    if default_program.trim().is_empty() {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: default_program must not be empty"));
+        return;
+    }
+    if default_program == expected_program {
+        return;
+    }
+
+    // `default_program` must be a bare program id, not a path: it is
+    // interpolated directly into `program_manifest_path` below, so a value
+    // containing a path separator or `..` could otherwise escape
+    // `.perl-lsp/goals/programs/` and be loaded as if it were a
+    // discoverable program.
+    if default_program.contains('/')
+        || default_program.contains('\\')
+        || default_program.contains(':')
+        || default_program.contains("..")
+    {
+        violations.push(format!(
+            "{ACTIVE_GOAL_PATH}: default_program must be a bare program id (no path separators or \"..\"), got {default_program:?}"
+        ));
+        return;
+    }
+
+    let manifest_path = goals_manifest::program_manifest_path(default_program);
+    if !root.join(&manifest_path).exists() {
+        violations.push(format!(
+            "{ACTIVE_GOAL_PATH}: default_program {default_program:?} manifest not found at {manifest_path}"
+        ));
+        return;
+    }
+
+    match fs::read_to_string(root.join(&manifest_path)) {
+        Ok(text) if goals_manifest::is_milestone_ledger(&text) => {
+            match goals_manifest::load_milestone_ledger(root, &manifest_path) {
+                Ok(ledger) => {
+                    violations.extend(goals_manifest::validate_milestone_ledger(&ledger));
+                }
+                Err(err) => violations.push(format!(
+                    "{ACTIVE_GOAL_PATH}: default_program {default_program:?} manifest failed to parse as a milestone ledger: {err}"
+                )),
+            }
+        }
+        Ok(_) => {
+            // A non-milestone-ledger sibling program (e.g. another
+            // lane-routing program). Existence is already confirmed above;
+            // full structural validation of that shape is
+            // `validate_program_manifest`'s job when it IS `active_program`.
+        }
+        Err(err) => violations.push(format!(
+            "{ACTIVE_GOAL_PATH}: default_program {default_program:?}: failed to read {manifest_path}: {err}"
+        )),
+    }
 }
 
 struct LaneOwnership {
@@ -1319,6 +1409,43 @@ mod tests {
             "got command violations: {command_violations:?}"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn validate_default_program_rejects_path_like_ids() -> Result<()> {
+        let root = fixture_root(&[])?;
+        for hostile in ["../../etc/passwd", "programs/../secret", "a/b", "a\\b", "C:evil"] {
+            let mut pointer_table = Table::new();
+            pointer_table.insert("default_program".to_owned(), Value::String(hostile.to_owned()));
+            let mut violations = Vec::new();
+
+            validate_default_program(root.path(), &pointer_table, "expected", &mut violations);
+
+            assert!(
+                violations.iter().any(|v| v.contains("bare program id")),
+                "expected a bare-program-id violation for {hostile:?}, got {violations:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn validate_default_program_accepts_a_bare_known_milestone_ledger_id() -> Result<()> {
+        // The real repo tree has a genuine milestone-ledger program
+        // (agent_loop_enablement) — exercise the parsed-TOML
+        // `is_milestone_ledger` classification against it end to end.
+        let root = project_root()?;
+        let mut pointer_table = Table::new();
+        pointer_table.insert(
+            "default_program".to_owned(),
+            Value::String("agent_loop_enablement".to_owned()),
+        );
+        let mut violations = Vec::new();
+
+        validate_default_program(&root, &pointer_table, "expected", &mut violations);
+
+        assert_eq!(violations, Vec::<String>::new(), "got violations: {violations:?}");
         Ok(())
     }
 

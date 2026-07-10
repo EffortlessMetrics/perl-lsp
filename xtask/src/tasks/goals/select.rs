@@ -1,0 +1,538 @@
+//! Pure, deterministic work selector (#3624, M3 of the enablement train
+//! #3612).
+//!
+//! `select_next` takes a [`SelectionSnapshot`] built entirely by adapters
+//! (`super::snapshot` — the only place `git`/`gh` are shelled or manifests
+//! are read from disk) and returns a [`SelectionDecision`]. It performs
+//! **no I/O**: no shell, no filesystem, no network, no session-task-board reads.
+//! The same snapshot always produces the same decision (byte-stable JSON).
+//!
+//! Invariant (mirrors CLAUDE.md's truth hierarchy): live GitHub state and
+//! the manifest chain outrank conversation and session bookkeeping. This
+//! module and its siblings in `xtask/src/tasks/goals/` must never read or
+//! write the Claude Code harness's session task-tracking board — that
+//! board's own "completed" flag is known not to persist reliably across
+//! sessions and must never gate selection. See `mod.rs`'s test suite for
+//! the mechanical check of this invariant.
+
+use serde::Serialize;
+use std::collections::BTreeSet;
+
+/// Normalized status of a selectable unit of work (a milestone or a
+/// lane-routing work item), independent of which program manifest shape
+/// produced it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MilestoneStatus {
+    Completed,
+    InProgress,
+    Pending,
+    Blocked,
+    Deferred,
+}
+
+/// Parses a raw manifest status string into the normalized selection
+/// status. Unknown strings fail closed to `Blocked` rather than being
+/// silently treated as selectable.
+pub fn parse_status(raw: &str) -> MilestoneStatus {
+    match raw {
+        "completed" => MilestoneStatus::Completed,
+        "in_progress" | "active" => MilestoneStatus::InProgress,
+        "pending" | "ready" | "planned" => MilestoneStatus::Pending,
+        "deferred" => MilestoneStatus::Deferred,
+        _ => MilestoneStatus::Blocked,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MilestoneCandidate {
+    pub id: String,
+    pub title: String,
+    pub status: MilestoneStatus,
+    pub issue: Option<u64>,
+    pub depends_on: Vec<String>,
+    pub exit_criteria: String,
+    pub lane: Option<String>,
+    pub claim_boundary: Option<String>,
+    pub ownership: Vec<String>,
+    pub required_proof: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct LiveOpenPr {
+    pub number: u64,
+    pub title: String,
+    #[serde(default)]
+    pub body: String,
+    pub url: String,
+    #[serde(rename = "isDraft", alias = "is_draft", default)]
+    pub is_draft: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProgramCandidate {
+    pub id: String,
+}
+
+/// Everything `select_next` needs, already resolved and read. Built only
+/// by `super::snapshot::build_snapshot` (live) or directly by tests
+/// (fixture-equivalent, in-process).
+#[derive(Debug, Clone)]
+pub struct SelectionSnapshot {
+    pub repository: String,
+    pub requested_program: Option<String>,
+    pub default_program: Option<String>,
+    pub known_programs: Vec<ProgramCandidate>,
+    /// `None` means program selection could not be resolved unambiguously
+    /// (no explicit `--program`, no governed `default_program`, or more
+    /// than one candidate default with no priority winner). `select_next`
+    /// fails closed on this rather than guessing.
+    pub resolved_program: Option<String>,
+    pub mode: String,
+    pub board: Option<String>,
+    /// Program-level display title (e.g. a milestone ledger's own `title`
+    /// field), surfaced in `GoalsNextOutput` for human/JSON consumers.
+    /// `None` for lane-routing programs, which have no equivalent field.
+    pub program_title: Option<String>,
+    /// The GitHub tracker issue for the whole program (e.g. #3612 for
+    /// `agent_loop_enablement`), distinct from any individual candidate's
+    /// own `issue`.
+    pub tracker_issue: Option<u64>,
+    pub non_goals: Vec<String>,
+    pub candidates: Vec<MilestoneCandidate>,
+    pub live_open_prs: Vec<LiveOpenPr>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkPacket {
+    pub issue: Option<u64>,
+    pub id: String,
+    pub reason: String,
+    pub mode: String,
+    pub ownership: Vec<String>,
+    pub non_goals: Vec<String>,
+    pub required_proof: Vec<String>,
+    pub session_goal: String,
+    pub inputs_used: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SelectionBlocker {
+    pub kind: String,
+    pub detail: String,
+    pub pr_number: Option<u64>,
+    pub pr_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompletionEvidence {
+    pub program: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "decision", content = "data", rename_all = "snake_case")]
+pub enum SelectionDecision {
+    Selected(WorkPacket),
+    Blocked(Vec<SelectionBlocker>),
+    Complete(CompletionEvidence),
+}
+
+/// Pure selection. See module docs for the I/O contract.
+///
+/// Precedence:
+/// 1. Ambiguous program authority (`resolved_program` unset) -> `Blocked`.
+/// 2. A live open PR already references any non-terminal (not
+///    `Completed`/`Deferred`) candidate in this program -> `Blocked`,
+///    naming the PR (never mutated/closed here). Live PR state outranks
+///    the candidate's self-reported ledger status.
+/// 3. Earliest candidate (declaration order) that is itself `Pending` and
+///    whose `depends_on` are all `Completed` -> `Selected`.
+/// 4. Every candidate `Completed`/`Deferred` -> `Complete`.
+/// 5. Otherwise (e.g. everything in flight/blocked with unmet deps, or no
+///    candidates at all) -> `Blocked` rather than guessing.
+pub fn select_next(snapshot: &SelectionSnapshot) -> SelectionDecision {
+    let Some(program_id) = snapshot.resolved_program.as_deref() else {
+        return SelectionDecision::Blocked(vec![SelectionBlocker {
+            kind: "ambiguous_program_authority".to_owned(),
+            detail: ambiguity_detail(snapshot),
+            pr_number: None,
+            pr_url: None,
+        }]);
+    };
+
+    // Match live open PRs against every non-terminal candidate's issue
+    // (in-progress, pending, AND blocked), not only in-progress ones.
+    // A candidate's ledger `status` is self-reported and can drift from
+    // reality (e.g. a PR opened for a "pending" candidate before its
+    // status was updated); per CLAUDE.md's truth hierarchy live GitHub PR
+    // state outranks the manifest, so scoping this guard to `InProgress`
+    // alone would let `select_next` hand out a sibling candidate while
+    // real work is already in flight for one the ledger hasn't caught up
+    // on yet. Completed/Deferred candidates are excluded: they are done,
+    // and a PR merely mentioning their issue (e.g. in a changelog) must
+    // not block selection.
+    let non_terminal_issues: Vec<u64> = snapshot
+        .candidates
+        .iter()
+        .filter(|c| !matches!(c.status, MilestoneStatus::Completed | MilestoneStatus::Deferred))
+        .filter_map(|c| c.issue)
+        .collect();
+    let blocking_prs: Vec<&LiveOpenPr> = snapshot
+        .live_open_prs
+        .iter()
+        .filter(|pr| non_terminal_issues.iter().any(|issue| references_issue(pr, *issue)))
+        .collect();
+    if !blocking_prs.is_empty() {
+        return SelectionDecision::Blocked(
+            blocking_prs
+                .iter()
+                .map(|pr| SelectionBlocker {
+                    kind: "active_work_must_be_dispositioned".to_owned(),
+                    detail: format!(
+                        "PR #{} ({:?}) is open for tracked work in program {program_id:?}; disposition it before selecting new work",
+                        pr.number, pr.title
+                    ),
+                    pr_number: Some(pr.number),
+                    pr_url: Some(pr.url.clone()),
+                })
+                .collect(),
+        );
+    }
+
+    let completed: BTreeSet<&str> = snapshot
+        .candidates
+        .iter()
+        .filter(|c| c.status == MilestoneStatus::Completed)
+        .map(|c| c.id.as_str())
+        .collect();
+
+    let selected = snapshot.candidates.iter().find(|c| {
+        c.status == MilestoneStatus::Pending
+            && c.depends_on.iter().all(|dep| completed.contains(dep.as_str()))
+    });
+
+    if let Some(candidate) = selected {
+        let mut reason = format!(
+            "earliest eligible candidate in {program_id}: depends_on {:?} all completed, status pending; exit criteria: {}",
+            candidate.depends_on, candidate.exit_criteria
+        );
+        if let Some(lane) = &candidate.lane {
+            reason = format!("{reason} (lane: {lane})");
+        }
+        let mut non_goals = snapshot.non_goals.clone();
+        if let Some(claim_boundary) = &candidate.claim_boundary {
+            non_goals.insert(0, claim_boundary.clone());
+        }
+        return SelectionDecision::Selected(WorkPacket {
+            issue: candidate.issue,
+            id: candidate.id.clone(),
+            reason,
+            mode: snapshot.mode.clone(),
+            ownership: candidate.ownership.clone(),
+            non_goals,
+            required_proof: candidate.required_proof.clone(),
+            session_goal: format!("{}: {}", candidate.id, candidate.title),
+            inputs_used: vec![
+                "origin/main".to_owned(),
+                "live gh pr list (open, this repository)".to_owned(),
+                format!(".perl-lsp/goals/programs/{program_id}.toml"),
+            ],
+        });
+    }
+
+    let all_terminal = !snapshot.candidates.is_empty()
+        && snapshot
+            .candidates
+            .iter()
+            .all(|c| matches!(c.status, MilestoneStatus::Completed | MilestoneStatus::Deferred));
+    if all_terminal {
+        return SelectionDecision::Complete(CompletionEvidence {
+            program: program_id.to_owned(),
+            detail: format!("all {} candidates completed or deferred", snapshot.candidates.len()),
+        });
+    }
+
+    SelectionDecision::Blocked(vec![SelectionBlocker {
+        kind: "no_eligible_candidate".to_owned(),
+        detail: format!(
+            "no candidate in {program_id} has satisfied dependencies and pending status ({} candidates total)",
+            snapshot.candidates.len()
+        ),
+        pr_number: None,
+        pr_url: None,
+    }])
+}
+
+fn ambiguity_detail(snapshot: &SelectionSnapshot) -> String {
+    format!(
+        "requested={:?} default={:?} known={:?}",
+        snapshot.requested_program,
+        snapshot.default_program,
+        snapshot.known_programs.iter().map(|p| p.id.as_str()).collect::<Vec<_>>()
+    )
+}
+
+fn references_issue(pr: &LiveOpenPr, issue: u64) -> bool {
+    let needle = format!("#{issue}");
+    contains_issue_reference(&pr.title, &needle) || contains_issue_reference(&pr.body, &needle)
+}
+
+/// Raw substring matching on `#<issue>` false-matches when one issue
+/// number is a numeric prefix of another (candidate `#12` would match a
+/// mention of `#120`; candidate `#3602` would match `#36024`). Requires
+/// the character immediately after the match to be end-of-string or a
+/// non-digit, so the matched `#<issue>` is not itself a prefix of a
+/// longer issue reference.
+fn contains_issue_reference(text: &str, needle: &str) -> bool {
+    text.match_indices(needle).any(|(idx, _)| {
+        let after = idx + needle.len();
+        after >= text.len() || !text.as_bytes()[after].is_ascii_digit()
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn candidate(id: &str, status: MilestoneStatus, depends_on: &[&str]) -> MilestoneCandidate {
+        MilestoneCandidate {
+            id: id.to_owned(),
+            title: format!("title-{id}"),
+            status,
+            issue: None,
+            depends_on: depends_on.iter().map(|s| (*s).to_owned()).collect(),
+            exit_criteria: "exit".to_owned(),
+            lane: None,
+            claim_boundary: None,
+            ownership: Vec::new(),
+            required_proof: Vec::new(),
+        }
+    }
+
+    fn base_snapshot(candidates: Vec<MilestoneCandidate>) -> SelectionSnapshot {
+        SelectionSnapshot {
+            repository: "EffortlessMetrics/perl-lsp-swarm".to_owned(),
+            requested_program: None,
+            default_program: Some("agent_loop_enablement".to_owned()),
+            known_programs: vec![ProgramCandidate { id: "agent_loop_enablement".to_owned() }],
+            resolved_program: Some("agent_loop_enablement".to_owned()),
+            mode: "maintainer".to_owned(),
+            board: None,
+            program_title: None,
+            tracker_issue: None,
+            non_goals: vec!["no product change".to_owned()],
+            candidates,
+            live_open_prs: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn selection_precedence_picks_earliest_eligible_by_depends_on() {
+        let snapshot = base_snapshot(vec![
+            candidate("M2", MilestoneStatus::Completed, &[]),
+            candidate("M3", MilestoneStatus::InProgress, &["M2"]),
+            candidate("M4", MilestoneStatus::Pending, &["M2"]),
+            candidate("M5", MilestoneStatus::Pending, &["M2"]),
+        ]);
+
+        let decision = select_next(&snapshot);
+        match decision {
+            SelectionDecision::Selected(packet) => assert_eq!(packet.id, "M4"),
+            other => panic!("expected Selected(M4), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn selection_respects_unsatisfied_depends_on() {
+        let snapshot = base_snapshot(vec![
+            candidate("M2", MilestoneStatus::Pending, &[]),
+            candidate("M3", MilestoneStatus::Pending, &["M2"]),
+        ]);
+
+        let decision = select_next(&snapshot);
+        match decision {
+            SelectionDecision::Selected(packet) => assert_eq!(packet.id, "M2"),
+            other => panic!("expected Selected(M2), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ambiguous_program_authority_blocks() {
+        let mut snapshot = base_snapshot(vec![candidate("M2", MilestoneStatus::Pending, &[])]);
+        snapshot.resolved_program = None;
+        snapshot.default_program = None;
+        snapshot.known_programs =
+            vec![ProgramCandidate { id: "a".to_owned() }, ProgramCandidate { id: "b".to_owned() }];
+
+        let decision = select_next(&snapshot);
+        match decision {
+            SelectionDecision::Blocked(blockers) => {
+                assert_eq!(blockers.len(), 1);
+                assert_eq!(blockers[0].kind, "ambiguous_program_authority");
+                assert!(blockers[0].pr_number.is_none());
+            }
+            other => panic!("expected Blocked(ambiguous_program_authority), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn active_same_lane_work_conflict_blocks_and_identifies_pr_without_mutation() {
+        let mut m3 = candidate("M3", MilestoneStatus::InProgress, &["M2"]);
+        m3.issue = Some(3624);
+        let mut snapshot =
+            base_snapshot(vec![candidate("M2", MilestoneStatus::Completed, &[]), m3]);
+        snapshot.live_open_prs = vec![LiveOpenPr {
+            number: 4242,
+            title: "feat(goals): M3 selector (#3624)".to_owned(),
+            body: "Part of #3612".to_owned(),
+            url: "https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/4242".to_owned(),
+            is_draft: true,
+        }];
+        let before = snapshot.clone();
+
+        let decision = select_next(&snapshot);
+
+        match decision {
+            SelectionDecision::Blocked(blockers) => {
+                assert_eq!(blockers.len(), 1);
+                assert_eq!(blockers[0].kind, "active_work_must_be_dispositioned");
+                assert_eq!(blockers[0].pr_number, Some(4242));
+                assert!(blockers[0].pr_url.as_deref().unwrap().contains("4242"));
+            }
+            other => panic!("expected Blocked(active_work_must_be_dispositioned), got {other:?}"),
+        }
+        // Read-only: select_next must not mutate the snapshot it was given
+        // (no PR close/mutate call exists in this module at all).
+        assert_eq!(before.candidates.len(), snapshot.candidates.len());
+        assert_eq!(before.live_open_prs.len(), snapshot.live_open_prs.len());
+    }
+
+    #[test]
+    fn pending_candidate_with_live_pr_blocks_selection_even_though_not_in_progress() {
+        // Live GitHub state outranks the manifest's self-reported status
+        // (CLAUDE.md truth hierarchy): a PR already open for a "pending"
+        // candidate (ledger not yet updated to "in_progress") must still
+        // block, not be silently skipped in favor of a different pending
+        // sibling.
+        let mut m3 = candidate("M3", MilestoneStatus::Pending, &["M2"]);
+        m3.issue = Some(3624);
+        let mut snapshot = base_snapshot(vec![
+            candidate("M2", MilestoneStatus::Completed, &[]),
+            m3,
+            candidate("M4", MilestoneStatus::Pending, &["M2"]),
+        ]);
+        snapshot.live_open_prs = vec![LiveOpenPr {
+            number: 4242,
+            title: "feat(goals): M3 selector (#3624)".to_owned(),
+            body: String::new(),
+            url: "https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/4242".to_owned(),
+            is_draft: true,
+        }];
+
+        let decision = select_next(&snapshot);
+
+        match decision {
+            SelectionDecision::Blocked(blockers) => {
+                assert_eq!(blockers[0].kind, "active_work_must_be_dispositioned");
+                assert_eq!(blockers[0].pr_number, Some(4242));
+            }
+            other => panic!("expected Blocked(active_work_must_be_dispositioned), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn completed_candidate_referenced_by_a_pr_does_not_block_selection() {
+        // A PR that merely mentions a *completed* candidate's issue (e.g. a
+        // changelog entry, a "see also") must not block selection of new
+        // work — only non-terminal candidates participate in the guard.
+        let mut m2 = candidate("M2", MilestoneStatus::Completed, &[]);
+        m2.issue = Some(3614);
+        let mut snapshot =
+            base_snapshot(vec![m2, candidate("M3", MilestoneStatus::Pending, &["M2"])]);
+        snapshot.live_open_prs = vec![LiveOpenPr {
+            number: 5000,
+            title: "docs: mention M2 (#3614) in the changelog".to_owned(),
+            body: String::new(),
+            url: "u".to_owned(),
+            is_draft: false,
+        }];
+
+        let decision = select_next(&snapshot);
+
+        match decision {
+            SelectionDecision::Selected(packet) => assert_eq!(packet.id, "M3"),
+            other => panic!("expected Selected(M3), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn references_issue_does_not_prefix_match_a_longer_issue_number() {
+        // Candidate issue #12 must not be considered referenced by a PR
+        // that only mentions #120 or #1234 — `references_issue` requires a
+        // non-digit boundary after the match.
+        let mut m2 = candidate("M2", MilestoneStatus::InProgress, &[]);
+        m2.issue = Some(12);
+        let mut snapshot = base_snapshot(vec![m2]);
+        snapshot.live_open_prs = vec![LiveOpenPr {
+            number: 1,
+            title: "unrelated work (#120)".to_owned(),
+            body: "see also #1234".to_owned(),
+            url: "u".to_owned(),
+            is_draft: false,
+        }];
+
+        let decision = select_next(&snapshot);
+
+        // No pending candidate here (M2 is in_progress with no siblings),
+        // so the real assertion is that the PR did NOT trip the
+        // active-work-conflict blocker; it falls through to
+        // `no_eligible_candidate` instead.
+        match decision {
+            SelectionDecision::Blocked(blockers) => {
+                assert_eq!(blockers[0].kind, "no_eligible_candidate");
+            }
+            other => panic!("expected Blocked(no_eligible_candidate), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_candidates_is_graceful_not_a_panic() {
+        let snapshot = base_snapshot(Vec::new());
+        let decision = select_next(&snapshot);
+        match decision {
+            SelectionDecision::Blocked(blockers) => {
+                assert_eq!(blockers[0].kind, "no_eligible_candidate");
+            }
+            other => panic!("expected Blocked(no_eligible_candidate), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn all_completed_reports_complete() {
+        let snapshot = base_snapshot(vec![
+            candidate("M2", MilestoneStatus::Completed, &[]),
+            candidate("M3", MilestoneStatus::Deferred, &["M2"]),
+        ]);
+        let decision = select_next(&snapshot);
+        match decision {
+            SelectionDecision::Complete(evidence) => {
+                assert_eq!(evidence.program, "agent_loop_enablement");
+            }
+            other => panic!("expected Complete, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deterministic_byte_stable_output_for_fixed_snapshot() {
+        let snapshot = base_snapshot(vec![
+            candidate("M2", MilestoneStatus::Completed, &[]),
+            candidate("M3", MilestoneStatus::Pending, &["M2"]),
+        ]);
+
+        let first = serde_json::to_string(&select_next(&snapshot))
+            .unwrap_or_else(|e| panic!("serialize failed: {e}"));
+        let second = serde_json::to_string(&select_next(&snapshot))
+            .unwrap_or_else(|e| panic!("serialize failed: {e}"));
+        assert_eq!(first, second);
+    }
+}

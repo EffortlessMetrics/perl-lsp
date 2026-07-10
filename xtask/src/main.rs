@@ -127,6 +127,14 @@ enum Commands {
     /// Validate workspace-symbol class promotion registry.
     CheckWorkspaceSymbolClasses,
 
+    /// Deterministic, program-aware work selector (#3624, M3 of the
+    /// enablement train #3612). READ-ONLY: selects the next eligible
+    /// slice of work from live evidence, never creates branches/worktrees/PRs.
+    Goals {
+        #[command(subcommand)]
+        command: GoalsCommand,
+    },
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
@@ -2960,6 +2968,29 @@ enum DevexCommand {
 }
 
 #[derive(Subcommand)]
+enum GoalsCommand {
+    /// Select the next eligible slice of work from live evidence
+    /// (main, live open GitHub PRs, the M2 manifest chain, and — for
+    /// milestone-ledger programs — the `[[milestone]]` ledger).
+    /// READ-ONLY: never creates a branch, worktree, or PR.
+    Next {
+        /// Explicitly select a program by id (`.perl-lsp/goals/programs/<id>.toml`).
+        /// Defaults to `active.toml`'s governed `default_program`
+        /// (falling back to `active_program`).
+        #[arg(long)]
+        program: Option<String>,
+
+        /// Optional fixture JSON to parse instead of live `gh pr list` data.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Emit machine-readable JSON instead of human-readable text.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum QueueCommand {
     /// Capture the open PR queue into a stable JSON snapshot document.
     Snapshot {
@@ -3140,6 +3171,9 @@ fn run_cli(cli: Cli) -> Result<()> {
         Commands::CheckLsp318Claims => lsp_318_claims::run(),
         Commands::GenerateLsp318Matrix { check } => lsp_318_matrix::run(check),
         Commands::CheckWorkspaceSymbolClasses => workspace_symbol_classes::run(),
+        Commands::Goals { command } => match command {
+            GoalsCommand::Next { program, fixture, json } => goals::next(program, fixture, json),
+        },
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {

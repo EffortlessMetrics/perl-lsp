@@ -1,0 +1,103 @@
+# Milestone ledger for the enablement train (epic #3612): "turn the loop
+# into repository-enforced machinery." Selectable via
+# `cargo xtask goals next --program agent_loop_enablement --json` (or as
+# the governed default while active.toml's default_program names it).
+#
+# This is a MILESTONE LEDGER, not a lane-routing program manifest — it
+# does not share real_perl_editor_trust.toml's [[work_item]]/[current]/
+# [limits]/[[lane_ownership]] shape, and is validated separately (see
+# xtask/src/tasks/goals/manifest.rs::validate_milestone_ledger, invoked
+# from check-active-goal-manifest via active.toml's default_program).
+#
+# Dependency shape (per #3612): M3-M7 are parallel sibling workstreams that
+# each only need M2's schema split to exist; #3612 does not gate M4 on M3
+# (or M5/M6/M7 on each other) — each is "its own reviewed, capability-
+# read-only, control-plane PR." The pilot (#3602) is the first end-to-end
+# proof and needs the FULL M2-M7 bar cleared ("do NOT start the autonomous
+# loop until M2-M7 are machine-enforced"); M8/M9 build on the pilot.
+#
+# `exit_criteria` for M2-M6 are literal quotes from #3612's "**Exit:**"
+# lines. M7-M9 and the pilot have no literal "**Exit:**" line in the epic
+# body; their `exit_criteria` below are a best-effort paraphrase of that
+# milestone's paragraph, not a verbatim quote — read the epic itself
+# (https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3612) as the
+# authority when in doubt.
+
+id = "agent_loop_enablement"
+title = "Enablement train: turn the loop into repository-enforced machinery"
+tracker_issue = 3612
+non_goals = [
+  "No /start-pr branch/worktree creation from goals next itself (separate deliverable).",
+  "No capability-profile enforcement (policy/agent-capabilities.toml) from M3 — that is M4.",
+  "No writer-lease / build-isolation changes from M3 — that is M5.",
+  "No package-local CLAUDE.md context generation from M3 — that is M6.",
+  "No receipt-schema/proof-run runner changes from M3 — that is M7.",
+  "No review-workflow (review-forward-pr.js) changes from M3 — that is M8.",
+  "No product/parser/LSP behavior change of any kind from this ledger or its selector.",
+]
+
+[[milestone]]
+id = "M2"
+title = "Split durable program state"
+status = "completed"
+issue = 3614
+depends_on = []
+exit_criteria = "a fresh agent identifies program/lane/board/ownership/completion without reading completed-item history"
+
+[[milestone]]
+id = "M3"
+title = "Deterministic selector + goal compiler"
+status = "in_progress"
+issue = 3624
+depends_on = ["M2"]
+exit_criteria = "next slice chosen from live evidence, not chat"
+
+[[milestone]]
+id = "M4"
+title = "Enforce capability profiles"
+status = "pending"
+depends_on = ["M2"]
+exit_criteria = "review workflows mechanically cannot write"
+
+[[milestone]]
+id = "M5"
+title = "Real worktree + build isolation"
+status = "pending"
+depends_on = ["M2"]
+exit_criteria = "parallel writers cannot share target or branch lease"
+
+[[milestone]]
+id = "M6"
+title = "Package-local context"
+status = "pending"
+depends_on = ["M2"]
+exit_criteria = "local ownership loads on demand; no volatile facts in local context"
+
+[[milestone]]
+id = "M7"
+title = "Machine-produced receipts"
+status = "pending"
+depends_on = ["M2"]
+exit_criteria = "every completion claim is tied to a machine receipt proving the intended instrument ran, not merely that the test process exited zero (the #3599 lesson)"
+
+[[milestone]]
+id = "pilot-3602"
+title = "First end-to-end pilot (real-workspace references coverage)"
+status = "pending"
+issue = 3602
+depends_on = ["M3", "M4", "M5", "M6", "M7"]
+exit_criteria = "the full program-selects to bounded-goal to writer-lease to read-only-review to receipt to PR-cockpit to auto-merge to reconciliation to learning chain is proven end-to-end on one well-suited work item before broader rollout"
+
+[[milestone]]
+id = "M8"
+title = "Save the loop workflows"
+status = "pending"
+depends_on = ["pilot-3602"]
+exit_criteria = "review-forward-pr.js, mechanical-migration.js, and program-iteration.js persist as reusable, GitHub-reconstructible workflow artifacts, not one-off conversation state"
+
+[[milestone]]
+id = "M9"
+title = "Meta-loop + observability"
+status = "pending"
+depends_on = ["M8"]
+exit_criteria = "every repeated failure produces a stronger invariant/type/test/oracle/narrower-capability/skill/hook/learning artifact, tracked via the named meta-loop metrics, not just another local patch"
