@@ -26,9 +26,10 @@
 #      protection, and don't reliably re-run on every push (rate limits). A
 #      stale bot review is reported ADVISORY, not BLOCK — see the #3621
 #      self-check incident below.
-#   2. Thread resolution — every review thread that is still ACTIVE (not
-#      resolved AND not outdated — see below) has been resolved for a real
-#      reason (fixed/refuted/superseded/accepted-with-follow-up).
+#   2. Thread resolution — every review thread that is still unresolved
+#      (`isResolved == false`, regardless of `isOutdated` — see below) has
+#      been resolved for a real reason
+#      (fixed/refuted/superseded/accepted-with-follow-up).
 #
 # This exact check was re-inlined independently across pr-ready.md,
 # pr-respond.md, ops-merge-batch.md, pr-responder.md, and ops.md, and drifted
@@ -48,14 +49,31 @@
 #   - `isResolved`  — a human/bot explicitly resolved the conversation
 #   - `isOutdated`  — the commented-on diff hunk no longer exists at HEAD
 #                      (the code moved/changed underneath the comment)
-# A thread only BLOCKS convergence when it is ACTIVE: isResolved == false
-# AND isOutdated == false. An outdated-but-unresolved thread is not
-# automatically safe to ignore for a human, but for machine-gating purposes
-# it no longer points at live code, so it does not block this script's
-# merge-ready verdict; the diff-auditor / reviewer-deep pass is responsible
-# for judging whether an outdated thread's concern still applies. This
-# script reports outdated threads separately (as ADVISORY) so a human/agent
-# reading its output isn't blind to them — it just doesn't gate on them.
+#
+# ANY unresolved thread BLOCKS convergence — isResolved == false, regardless
+# of isOutdated. `isOutdated` is reported as METADATA (which unresolved
+# bucket a thread falls in: "active" vs "outdated") but is NOT a blocking
+# discriminator.
+#
+# This was previously wrong: an earlier version of this script treated
+# outdated-but-unresolved threads as ADVISORY/non-blocking, reasoning that
+# "it no longer points at live code, so it does not block." That reasoning
+# does not match GitHub's actual mergeability computation. This repo's
+# active `main` branch-protection ruleset enforces
+# `required_conversation_resolution`, and GitHub applies that check to
+# EVERY unresolved review thread — it does not consult `isOutdated` at all.
+# PR #3621 proved this directly: it sat BLOCKED for many review cycles with
+# 0 active threads but 9 outdated-unresolved threads; resolving those 9
+# (with no other change) made the merge fire immediately. Treating outdated
+# threads as non-blocking meant this script could report `converged:true`
+# while GitHub itself still refused to merge — exactly the "internal
+# verdict disagrees with GitHub mergeability" class of defect this script
+# exists to eliminate. See issue #3679.
+#
+# Resolving a genuinely-outdated thread is usually a safe, low-cost
+# cleanup step (the diff it commented on no longer exists), so this being a
+# BLOCK rather than an ADVISORY should rarely add real friction — but it is
+# still required, because the ruleset requires it.
 #
 # ── Pagination ───────────────────────────────────────────────────────────────
 #
@@ -75,10 +93,11 @@
 # ── Exit codes ───────────────────────────────────────────────────────────────
 #
 #   0  CONVERGED — no pending review requests, every human reviewer's latest
-#      review is at the current HEAD SHA, and no ACTIVE thread remains
-#      unresolved. (Stale bot reviews do not block — see bot-exclusion note
-#      above.) Merge-ready from a review-convergence standpoint (other gates
-#      — CI, labels — are separate and NOT checked by this script).
+#      review is at the current HEAD SHA, and NO unresolved thread remains
+#      (neither active nor outdated — see the ACTIVE vs outdated vs resolved
+#      section above). (Stale bot reviews do not block — see bot-exclusion
+#      note above.) Merge-ready from a review-convergence standpoint (other
+#      gates — CI, labels — are separate and NOT checked by this script).
 #   1  NOT CONVERGED — one or more blocking conditions found; reasons are
 #      printed to stderr, one per line, prefixed "BLOCK".
 #   2  USAGE / FETCH ERROR — bad arguments, `gh`/`jq` missing, or the GraphQL
@@ -90,14 +109,33 @@
 # object on the final line (for callers that want structured output):
 #   {"pr":N,"headRefOid":"...","converged":true|false,
 #    "pending_reviewers":[...],"stale_reviews":[...],"stale_bot_reviews":[...],
-#    "active_threads":N,"outdated_threads":N,"resolved_threads":N}
+#    "unresolved_active":N,"unresolved_outdated":N,"unresolved_total":N,
+#    "resolved_threads":N}
 # ("stale_reviews" is human reviewers only — BLOCKING. "stale_bot_reviews" is
 # auto-review-app reviewers whose latest review predates HEAD — ADVISORY,
-# never blocking; see the bot-exclusion note above.)
-# stderr: BLOCK lines for anything that fails convergence; ADVISORY lines
-# for outdated threads that don't block but are worth a human glance.
+# never blocking; see the bot-exclusion note above. "unresolved_active" and
+# "unresolved_outdated" both BLOCK; "unresolved_total" is their sum.)
+# stderr: BLOCK lines for anything that fails convergence (both unresolved
+# categories — active and outdated); ADVISORY lines only for stale bot
+# reviews, which never block.
+#
+# ── Test seam (no network) ──────────────────────────────────────────────────
+#
+# When the CONVERGENCE_TEST_FIXTURE_DIR environment variable is set, the two
+# gh-calling points below (the `gh pr view` metadata fetch and the
+# `paginate_pr_connection` GraphQL fetch) read canned JSON from files in
+# that directory instead of calling `gh`. This lets
+# scripts/tests/test-check-pr-review-convergence.sh exercise the
+# verdict/reporting logic deterministically and offline. See the
+# "Test seam" comment further down for the exact fixture file contract.
+# This variable must never be set outside of tests.
 #
 set -euo pipefail
+
+# Test-only seam — see the "Test seam (no network)" header comment above.
+# Empty string means "not in test mode" (the default, always true in
+# production usage).
+CONVERGENCE_TEST_FIXTURE_DIR="${CONVERGENCE_TEST_FIXTURE_DIR:-}"
 
 if [[ $# -lt 1 ]]; then
     echo "usage: $0 <pr-number> [owner/repo]" >&2
@@ -105,12 +143,20 @@ if [[ $# -lt 1 ]]; then
 fi
 PR="$1"
 
-if ! command -v gh >/dev/null 2>&1; then
+if [[ -z "$CONVERGENCE_TEST_FIXTURE_DIR" ]] && ! command -v gh >/dev/null 2>&1; then
     echo "ERROR: gh CLI not found on PATH" >&2
     exit 2
 fi
 if ! command -v jq >/dev/null 2>&1; then
     echo "ERROR: jq not found on PATH" >&2
+    exit 2
+fi
+
+if [[ -n "$CONVERGENCE_TEST_FIXTURE_DIR" && -z "${2:-}" ]]; then
+    # In fixture mode arg2 (owner/repo) MUST be explicit — otherwise the
+    # REPO_SLUG default below would fall through to a live `gh repo view`
+    # call, defeating the point of the offline test seam.
+    echo "ERROR: CONVERGENCE_TEST_FIXTURE_DIR requires an explicit owner/repo (arg 2)" >&2
     exit 2
 fi
 
@@ -131,9 +177,27 @@ PAGE_SIZE=50
 # $2 = inner node selection (GraphQL selection set, no braces needed beyond
 #      what's passed)
 # Prints one JSON array (concatenation of every page's `nodes`) to stdout.
+#
+# Test seam: when CONVERGENCE_TEST_FIXTURE_DIR is set, this reads
+# "$CONVERGENCE_TEST_FIXTURE_DIR/<field>.json" (a plain JSON array of nodes,
+# already fully "paginated" — no gh call, no pagination loop) instead of
+# querying GraphQL. This is the only place `latestReviews`/`reviewThreads`
+# data enters the script, so stubbing it here is sufficient to make the
+# whole verdict/reporting pipeline testable offline.
 paginate_pr_connection() {
     local field="$1"
     local node_selection="$2"
+
+    if [[ -n "$CONVERGENCE_TEST_FIXTURE_DIR" ]]; then
+        local fixture_file="$CONVERGENCE_TEST_FIXTURE_DIR/${field}.json"
+        if [[ ! -f "$fixture_file" ]]; then
+            echo "ERROR: test fixture missing: $fixture_file" >&2
+            exit 2
+        fi
+        jq -c '.' "$fixture_file"
+        return
+    fi
+
     local cursor="null"
     local all_nodes="[]"
     local has_next="true"
@@ -181,7 +245,18 @@ EOF
 #    read via the REST-ish `gh pr view` for simplicity — reviewRequests over
 #    50 simultaneous requested reviewers is not a realistic case for this
 #    repo's review model) ─────────────────────────────────────────────────
-if ! PR_META="$(gh pr view "$PR" --repo "$OWNER/$REPO" --json headRefOid,reviewRequests 2>&1)"; then
+#
+# Test seam: when CONVERGENCE_TEST_FIXTURE_DIR is set, read
+# "$CONVERGENCE_TEST_FIXTURE_DIR/pr_view.json" (same shape as
+# `gh pr view --json headRefOid,reviewRequests`) instead of calling `gh`.
+if [[ -n "$CONVERGENCE_TEST_FIXTURE_DIR" ]]; then
+    fixture_file="$CONVERGENCE_TEST_FIXTURE_DIR/pr_view.json"
+    if [[ ! -f "$fixture_file" ]]; then
+        echo "ERROR: test fixture missing: $fixture_file" >&2
+        exit 2
+    fi
+    PR_META="$(jq -c '.' "$fixture_file")"
+elif ! PR_META="$(gh pr view "$PR" --repo "$OWNER/$REPO" --json headRefOid,reviewRequests 2>&1)"; then
     echo "ERROR: could not fetch PR #$PR metadata: $PR_META" >&2
     exit 2
 fi
@@ -218,9 +293,14 @@ fi
 #    auto-review bot's last run predates the latest push — the same
 #    over-block class this script exists to eliminate (see #3621 self-test:
 #    every push after a bot's last comment permanently fails convergence).
-#    A stale bot review is reported as ADVISORY, same treatment as an
-#    outdated thread: visible, not blocking. Only non-bot (human) reviewers'
-#    staleness blocks convergence.
+#    A stale bot review is reported as ADVISORY — visible, not blocking.
+#    NOTE: this is the ONLY advisory-only (non-blocking) category left in
+#    this script. Unresolved review threads, whether active or outdated,
+#    both BLOCK convergence (see the "ACTIVE vs outdated vs resolved
+#    threads" section above and issue #3679) — stale bot reviews are NOT
+#    "the same treatment as an outdated thread" anymore. Only non-bot
+#    (human) reviewers' staleness blocks convergence among review
+#    submissions.
 LATEST_REVIEWS="$(paginate_pr_connection "latestReviews" "author { login __typename } state commit { oid }")"
 
 HUMAN_REVIEWS="$(printf '%s' "$LATEST_REVIEWS" | jq -c '[.[] | select((.author.__typename // "User") != "Bot")]')"
@@ -234,16 +314,20 @@ STALE_BOT_REVIEWS="$(printf '%s' "$BOT_REVIEWS" | jq -c --arg head "$HEAD_REF_OI
     '[.[] | select(.commit.oid != $head) | {login: .author.login, reviewedAt: .commit.oid, state: .state}]')"
 STALE_BOT_REVIEW_COUNT="$(printf '%s' "$STALE_BOT_REVIEWS" | jq 'length')"
 
-# ── Fetch reviewThreads (paginated) — classify ACTIVE vs outdated vs
-#    resolved. Only ACTIVE (isResolved==false && isOutdated==false) blocks
-#    convergence. ──────────────────────────────────────────────────────────
+# ── Fetch reviewThreads (paginated) — classify unresolved-active vs
+#    unresolved-outdated vs resolved. BOTH unresolved buckets block
+#    convergence (isOutdated is metadata, not a blocking discriminator —
+#    see the "ACTIVE vs outdated vs resolved threads" header section).
+#    ────────────────────────────────────────────────────────────────────────
 REVIEW_THREADS="$(paginate_pr_connection "reviewThreads" "id isResolved isOutdated path")"
 
-ACTIVE_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '[.[] | select(.isResolved == false and .isOutdated == false)]')"
-ACTIVE_THREAD_COUNT="$(printf '%s' "$ACTIVE_THREADS" | jq 'length')"
+UNRESOLVED_ACTIVE_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '[.[] | select(.isResolved == false and .isOutdated == false)]')"
+UNRESOLVED_ACTIVE_COUNT="$(printf '%s' "$UNRESOLVED_ACTIVE_THREADS" | jq 'length')"
 
-OUTDATED_UNRESOLVED_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '[.[] | select(.isResolved == false and .isOutdated == true)]')"
-OUTDATED_THREAD_COUNT="$(printf '%s' "$OUTDATED_UNRESOLVED_THREADS" | jq 'length')"
+UNRESOLVED_OUTDATED_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '[.[] | select(.isResolved == false and .isOutdated == true)]')"
+UNRESOLVED_OUTDATED_COUNT="$(printf '%s' "$UNRESOLVED_OUTDATED_THREADS" | jq 'length')"
+
+UNRESOLVED_TOTAL_COUNT="$((UNRESOLVED_ACTIVE_COUNT + UNRESOLVED_OUTDATED_COUNT))"
 
 RESOLVED_THREAD_COUNT="$(printf '%s' "$REVIEW_THREADS" | jq '[.[] | select(.isResolved == true)] | length')"
 
@@ -252,7 +336,9 @@ RESOLVED_THREAD_COUNT="$(printf '%s' "$REVIEW_THREADS" | jq '[.[] | select(.isRe
 # Converged iff:
 #   (a) no pending (unfulfilled) review requests, AND
 #   (b) no reviewer's latest review is stale relative to headRefOid, AND
-#   (c) no ACTIVE (unresolved, non-outdated) thread remains
+#   (c) no unresolved thread remains — active OR outdated (the live 'main'
+#       ruleset's required_conversation_resolution blocks on isResolved
+#       alone; it does not consult isOutdated — see issue #3679)
 CONVERGED="true"
 
 if [[ "$PENDING_REVIEWER_COUNT" -gt 0 ]]; then
@@ -271,21 +357,22 @@ if [[ "$STALE_REVIEW_COUNT" -gt 0 ]]; then
     done < <(printf '%s' "$STALE_REVIEWS" | jq -c '.[]')
 fi
 
-if [[ "$ACTIVE_THREAD_COUNT" -gt 0 ]]; then
+if [[ "$UNRESOLVED_ACTIVE_COUNT" -gt 0 ]]; then
     CONVERGED="false"
     while IFS= read -r row; do
         path="$(printf '%s' "$row" | jq -r '.path')"
         id="$(printf '%s' "$row" | jq -r '.id')"
         echo "BLOCK PR #$PR: unresolved review thread on '$path' (id=$id) — resolve for a real reason (fixed/refuted/superseded/accepted-with-follow-up)" >&2
-    done < <(printf '%s' "$ACTIVE_THREADS" | jq -c '.[]')
+    done < <(printf '%s' "$UNRESOLVED_ACTIVE_THREADS" | jq -c '.[]')
 fi
 
-if [[ "$OUTDATED_THREAD_COUNT" -gt 0 ]]; then
+if [[ "$UNRESOLVED_OUTDATED_COUNT" -gt 0 ]]; then
+    CONVERGED="false"
     while IFS= read -r row; do
         path="$(printf '%s' "$row" | jq -r '.path')"
         id="$(printf '%s' "$row" | jq -r '.id')"
-        echo "ADVISORY PR #$PR: thread on '$path' (id=$id) is unresolved but outdated (diff moved) — not blocking, but worth a human glance" >&2
-    done < <(printf '%s' "$OUTDATED_UNRESOLVED_THREADS" | jq -c '.[]')
+        echo "BLOCK PR #$PR: unresolved review thread on '$path' (id=$id) is outdated (diff moved underneath it) — the live 'main' ruleset's required_conversation_resolution still blocks on it regardless of isOutdated (see #3679); resolve it, usually a safe cleanup since the code moved" >&2
+    done < <(printf '%s' "$UNRESOLVED_OUTDATED_THREADS" | jq -c '.[]')
 fi
 
 if [[ "$STALE_BOT_REVIEW_COUNT" -gt 0 ]]; then
@@ -299,7 +386,7 @@ fi
 # ── Report ───────────────────────────────────────────────────────────────────
 
 if [[ "$CONVERGED" == "true" ]]; then
-    echo "OK   PR #$PR: review convergence achieved at $HEAD_REF_OID (0 pending reviewers, 0 stale human reviews, $ACTIVE_THREAD_COUNT active threads, $RESOLVED_THREAD_COUNT resolved, $OUTDATED_THREAD_COUNT outdated-unresolved, $STALE_BOT_REVIEW_COUNT stale-bot-advisory)"
+    echo "OK   PR #$PR: review convergence achieved at $HEAD_REF_OID (0 pending reviewers, 0 stale human reviews, 0 unresolved threads [$UNRESOLVED_ACTIVE_COUNT active + $UNRESOLVED_OUTDATED_COUNT outdated], $RESOLVED_THREAD_COUNT resolved, $STALE_BOT_REVIEW_COUNT stale-bot-advisory)"
 else
     # Per the documented output contract (script header + review-convergence.md):
     # stdout always carries a human-readable summary line + the JSON verdict,
@@ -316,10 +403,11 @@ jq -n \
     --argjson pending "$PENDING_REVIEWERS" \
     --argjson stale "$STALE_REVIEWS" \
     --argjson staleBot "$STALE_BOT_REVIEWS" \
-    --argjson active "$ACTIVE_THREAD_COUNT" \
-    --argjson outdated "$OUTDATED_THREAD_COUNT" \
+    --argjson unresolvedActive "$UNRESOLVED_ACTIVE_COUNT" \
+    --argjson unresolvedOutdated "$UNRESOLVED_OUTDATED_COUNT" \
+    --argjson unresolvedTotal "$UNRESOLVED_TOTAL_COUNT" \
     --argjson resolved "$RESOLVED_THREAD_COUNT" \
-    '{pr: $pr, headRefOid: $head, converged: $converged, pending_reviewers: $pending, stale_reviews: $stale, stale_bot_reviews: $staleBot, active_threads: $active, outdated_threads: $outdated, resolved_threads: $resolved}'
+    '{pr: $pr, headRefOid: $head, converged: $converged, pending_reviewers: $pending, stale_reviews: $stale, stale_bot_reviews: $staleBot, unresolved_active: $unresolvedActive, unresolved_outdated: $unresolvedOutdated, unresolved_total: $unresolvedTotal, resolved_threads: $resolved}'
 
 if [[ "$CONVERGED" == "true" ]]; then
     exit 0
