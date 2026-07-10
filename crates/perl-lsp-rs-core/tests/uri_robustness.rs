@@ -17,14 +17,13 @@ fn is_valid_uri(s: &str) -> bool {
 // Empty and minimal inputs
 // ---------------------------------------------------------------------------
 
-/// BUG REPORT (#815): `lsp_types::Uri` silently accepts an empty string as a
-/// valid parse, returning a URI whose `.as_str()` is `""`.  Because the
-/// `parse::<Uri>()` call succeeds, `parse_uri` never reaches its fallback and
-/// returns an empty URI instead of a meaningful sentinel.
+/// Regression test for #815: `lsp_types::Uri` used to silently accept an
+/// empty string as a valid parse, returning a URI whose `.as_str()` is `""`.
+/// Because the `parse::<Uri>()` call succeeded, `parse_uri` never reached its
+/// fallback and returned an empty URI instead of a meaningful sentinel.
 ///
-/// This test is `#[ignore]`d so the test suite stays green; it documents the
-/// defect so a follow-up builder can add the empty-string guard to
-/// `parse_uri` (check `sanitized.is_empty()` before the parse attempt).
+/// #815 is fixed upstream — this test is a live regression guard, not
+/// `#[ignore]`'d.
 #[test]
 fn test_parse_uri_empty_string_returns_valid_fallback() {
     let uri = parse_uri("");
@@ -32,12 +31,13 @@ fn test_parse_uri_empty_string_returns_valid_fallback() {
     assert!(is_valid_uri(uri.as_str()), "fallback for empty input must itself be a valid URI");
 }
 
-/// BUG REPORT (#815): Same root cause as the empty-string case above.
+/// Regression test for #815: same root cause as the empty-string case above.
 /// After BOM-stripping and `trim()`, a whitespace-only input collapses to
-/// `""`, which `lsp_types::Uri` accepts without error.  The fallback is
-/// never reached.
+/// `""`, which `lsp_types::Uri` used to accept without error, so the
+/// fallback was never reached.
 ///
-/// `#[ignore]`d for the same reason — pending fix in `parse_uri`.
+/// #815 is fixed upstream — this test is a live regression guard, not
+/// `#[ignore]`'d.
 #[test]
 fn test_parse_uri_whitespace_only_returns_valid_fallback() {
     // After trimming, the sanitized string is empty — must use fallback.

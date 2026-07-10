@@ -5,9 +5,9 @@
 <h1 align="center">perl-lsp</h1>
 
 <p align="center">
-  <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a>
-  <a href="https://codecov.io/gh/EffortlessMetrics/perl-lsp"><img src="https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg" alt="Codecov parser branch coverage" /></a>
-  <a href="https://github.com/EffortlessMetrics/ripr/blob/main/docs/BADGE_POLICY.md"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/badges/ripr-plus.json" alt="ripr+" /></a>
+  <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
+  <a href="https://codecov.io/gh/EffortlessMetrics/perl-lsp"><img src="https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/main/graph/badge.svg" alt="Codecov parser branch coverage" /></a>
+  <a href="https://github.com/EffortlessMetrics/ripr/blob/main/docs/BADGE_POLICY.md"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/badges/ripr-plus.json" alt="ripr+" /></a>
 </p>
 
 <p align="center">
