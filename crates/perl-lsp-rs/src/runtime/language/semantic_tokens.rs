@@ -26,10 +26,29 @@ impl LspServer {
 
         if let Some(p) = params {
             let uri = req_uri(&p)?;
-            let documents = self.documents_guard();
-            let doc = self
-                .get_document(&documents, uri)
-                .ok_or_else(|| semantic_tokens_document_not_open(uri))?;
+
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any
+            // analysis (#3396 off-lock provider consumption).
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.semantic_tokens.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            let doc = doc_owned.as_ref().ok_or_else(|| semantic_tokens_document_not_open(uri))?;
+            // Covers the whole analysis block via `Drop`, so it emits
+            // correctly regardless of which exit point below fires.
+            let _analyze_span =
+                crate::runtime::timing::ScopedSpan::start("provider.semantic_tokens.analyze", uri);
             let parsed = doc.current_parsed();
             if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                 let data =
@@ -417,8 +436,28 @@ impl LspServer {
 
             tracing::debug!(uri, start_line, end_line, "Getting semantic tokens for range");
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any
+            // analysis (#3396 off-lock provider consumption).
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.semantic_tokens.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            if let Some(doc) = doc_owned.as_ref() {
+                let _analyze_span = crate::runtime::timing::ScopedSpan::start(
+                    "provider.semantic_tokens.analyze",
+                    uri,
+                );
                 let parsed = doc.current_parsed();
                 if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let all_tokens =

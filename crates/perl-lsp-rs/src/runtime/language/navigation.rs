@@ -858,8 +858,28 @@ impl LspServer {
                 params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any
+            // analysis (#3396 off-lock provider consumption).
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.navigation.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            if let Some(doc) = doc_owned.as_ref() {
+                // Covers the whole analysis block via `Drop`, so it emits
+                // correctly regardless of which `return` below fires.
+                let _analyze_span =
+                    crate::runtime::timing::ScopedSpan::start("provider.navigation.analyze", uri);
                 let parsed = doc.current_parsed();
                 if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let offset = self.pos16_to_offset(doc, line, character);
@@ -1197,9 +1217,29 @@ impl LspServer {
                 }
             }
 
-            // Continue with remaining definition lookup logic that needs document access
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            // Continue with remaining definition lookup logic that needs document access.
+            // Grab an owned `DocumentState` clone under a brief documents-map
+            // lock, then drop the guard before doing any analysis (#3396
+            // off-lock provider consumption).
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.navigation.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            if let Some(doc) = doc_owned.as_ref() {
+                // Covers the whole analysis block via `Drop`, so it emits
+                // correctly regardless of which `return` below fires.
+                let _analyze_span =
+                    crate::runtime::timing::ScopedSpan::start("provider.navigation.analyze", uri);
                 let offset = self.pos16_to_offset(doc, line, character);
                 let radius = 50;
                 let (text_start, text_around) =

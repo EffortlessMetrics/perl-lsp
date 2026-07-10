@@ -919,8 +919,36 @@ impl LspServer {
                 workspace_mode = IndexAccessMode::None;
             }
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any analysis
+            // (#3396 off-lock provider consumption). `DocumentState` derives
+            // `Clone`: `rope` (structural sharing) and `generation`/`parsed`
+            // (`Arc` bumps, incl. the owned `Arc<ParsedSnapshot>` from #3579)
+            // clone cheaply, but `text` (`String`) and `line_starts`
+            // (`Vec<usize>`) are real O(document-size) copies -- both are
+            // needed by the analysis below (offset/position mapping, symbol
+            // text extraction), so this isn't wasted work, but it is a
+            // genuine per-request cost, not a free clone. It is bounded and
+            // single-threaded (a memcpy), unlike the alternative of holding
+            // the documents-map mutex -- shared by every open document, not
+            // just this one -- for the full analysis duration below.
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.completion.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+
+            let t_analyze_start = std::time::Instant::now();
+            let response = if let Some(doc) = doc_owned.as_ref() {
                 let offset = self.pos16_to_offset(doc, line, character);
                 let ast_available = doc.current_parsed().is_some_and(|p| p.ast().is_some());
 
@@ -1072,12 +1100,24 @@ impl LspServer {
                 } else {
                     tracing::debug!(count = items.len(), "Returning completions");
                 }
-                return Ok(Some(Self::completion_list_response(
+                Some(Self::completion_list_response(
                     is_incomplete,
                     items,
                     item_defaults_data_support,
                     apply_kind_support,
-                )));
+                ))
+            } else {
+                None
+            };
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.completion.analyze",
+                    crate::runtime::timing::elapsed_ms(t_analyze_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            if let Some(response) = response {
+                return Ok(Some(response));
             }
         }
 
@@ -1149,8 +1189,36 @@ impl LspServer {
                 workspace_mode = IndexAccessMode::None;
             }
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any analysis
+            // (#3396 off-lock provider consumption). `DocumentState` derives
+            // `Clone`: `rope` (structural sharing) and `generation`/`parsed`
+            // (`Arc` bumps, incl. the owned `Arc<ParsedSnapshot>` from #3579)
+            // clone cheaply, but `text` (`String`) and `line_starts`
+            // (`Vec<usize>`) are real O(document-size) copies -- both are
+            // needed by the analysis below, so this isn't wasted work, but it
+            // is a genuine per-request cost, not a free clone. It is bounded
+            // and single-threaded (a memcpy), unlike the alternative of
+            // holding the documents-map mutex -- shared by every open
+            // document, not just this one -- for the full analysis duration
+            // below.
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.completion.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+
+            let t_analyze_start = std::time::Instant::now();
+            let response = if let Some(doc) = doc_owned.as_ref() {
                 let offset = self.pos16_to_offset(doc, line, character);
                 let ast_available = doc.current_parsed().is_some_and(|p| p.ast().is_some());
 
@@ -1284,12 +1352,24 @@ impl LspServer {
                     })
                     .collect();
 
-                return Ok(Some(Self::completion_list_response(
+                Some(Self::completion_list_response(
                     false,
                     items,
                     item_defaults_data_support,
                     apply_kind_support,
-                )));
+                ))
+            } else {
+                None
+            };
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.completion.analyze",
+                    crate::runtime::timing::elapsed_ms(t_analyze_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            if let Some(response) = response {
+                return Ok(Some(response));
             }
 
             Ok(Some(json!({"isIncomplete": false, "items": []})))
@@ -1659,6 +1739,45 @@ mod tests {
         assert!(
             server.workspace_index_stale_for_document(uri),
             "test setup must leave the open document newer than the workspace index"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn completion_off_lock_analysis_emits_lock_hold_and_analyze_timing_spans()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // #3396 Phase 4: `handle_completion` grabs an owned `DocumentState`
+        // clone under a brief documents-map lock, then drops the guard before
+        // analysis. Proves this measurably: the `lock_hold` span (the brief
+        // guarded scope) must be recorded before the `analyze` span (the
+        // off-lock work), for the same request.
+        let server = LspServer::default();
+        let uri = "file:///workspace/timing_completion.pl";
+        server.test_apply_did_open(uri, "my $var = 42;\n$va", 1)?;
+
+        let _lock = crate::runtime::timing::capture::test_lock();
+        crate::runtime::timing::capture::start();
+        let _ = server.handle_completion(Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 1, "character": 3 }
+        })))?;
+        let spans = crate::runtime::timing::capture::drain();
+
+        let lock_hold_idx = spans.iter().position(|s| s.span == "provider.completion.lock_hold");
+        let analyze_idx = spans.iter().position(|s| s.span == "provider.completion.analyze");
+        assert!(
+            lock_hold_idx.is_some(),
+            "expected a provider.completion.lock_hold span, got: {spans:?}"
+        );
+        assert!(
+            analyze_idx.is_some(),
+            "expected a provider.completion.analyze span, got: {spans:?}"
+        );
+        assert!(
+            lock_hold_idx < analyze_idx,
+            "lock_hold span must be emitted before the analyze span (proves the documents-map \
+             guard is dropped before analysis runs): {spans:?}"
         );
 
         Ok(())

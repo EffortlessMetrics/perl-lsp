@@ -51,14 +51,34 @@ impl LspServer {
                 params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
-            // Phase 1: Extract hover info under document lock
-            let (extracted, live_compiler_context) = {
+            // Phase 1: grab owned parse state (offset, snapshot, text) under a
+            // brief documents-map lock, then drop the guard *before* doing any
+            // analysis (#3396 off-lock provider consumption). `current_parsed()`
+            // (from #3579) returns an owned `Arc<ParsedSnapshot>`, so the
+            // analysis below can run entirely after the guard is released.
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let locked = {
                 let documents = self.documents_guard();
-                if let Some(doc) = self.get_document(&documents, uri) {
+                self.get_document(&documents, uri).map(|doc| {
                     let offset = self.pos16_to_offset(doc, line, character);
+                    (offset, doc.current_parsed(), doc.text.clone())
+                })
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.hover.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+
+            let t_analyze_start = std::time::Instant::now();
+            let (extracted, live_compiler_context) = match locked {
+                Some((offset, parsed, text)) => {
                     let live_compiler_context =
-                        Self::live_hover_compiler_context(uri, &doc.text, offset);
-                    let parsed = doc.current_parsed();
+                        Self::live_hover_compiler_context(uri, &text, offset);
                     if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                         // Check for `use Module` at this offset first
                         let extracted = if let Some(module_name) =
@@ -71,17 +91,17 @@ impl LspServer {
                             } else {
                                 HoverExtracted::UseModule(
                                     module_name,
-                                    doc.text.clone(),
+                                    text.clone(),
                                     uri.to_string(),
                                     offset,
                                 )
                             }
                         } else if let Some(module_name) =
-                            Self::find_require_module_at_offset(&doc.text, offset)
+                            Self::find_require_module_at_offset(&text, offset)
                         {
                             HoverExtracted::UseModule(
                                 module_name,
-                                doc.text.clone(),
+                                text.clone(),
                                 uri.to_string(),
                                 offset,
                             )
@@ -91,22 +111,27 @@ impl LspServer {
                             // Check for `with 'Role'` / `extends 'Parent'` at this offset
                             HoverExtracted::UseModule(
                                 module_name,
-                                doc.text.clone(),
+                                text.clone(),
                                 uri.to_string(),
                                 offset,
                             )
                         } else {
-                            self.extract_symbol_hover(uri, ast, &doc.text, offset)
+                            self.extract_symbol_hover(uri, ast, &text, offset)
                         };
                         (extracted, live_compiler_context)
                     } else {
-                        (Self::extract_token_hover(uri, &doc.text, offset), live_compiler_context)
+                        (Self::extract_token_hover(uri, &text, offset), live_compiler_context)
                     }
-                } else {
-                    (HoverExtracted::None, None)
                 }
+                None => (HoverExtracted::None, None),
             };
-            // Document lock released here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.hover.analyze",
+                    crate::runtime::timing::elapsed_ms(t_analyze_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
 
             // Phase 2: Resolve module or return pre-built hover
             match extracted {

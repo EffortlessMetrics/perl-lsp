@@ -159,6 +159,59 @@ pub(crate) fn elapsed_ms(start: std::time::Instant) -> f64 {
     start.elapsed().as_secs_f64() * 1_000.0
 }
 
+/// Last path segment of a document URI (bounded to 64 chars), used as the
+/// `detail` field of a `PERL_LSP_TIMING` span. Never allocates on the hot path
+/// unless timing is enabled (callers guard the call).
+///
+/// Provider-side counterpart of `text_sync::uri_tail` (kept as a separate,
+/// crate-shared copy here rather than importing from `text_sync` -- providers
+/// under `runtime/language/` are a distinct read-path seam from the
+/// didChange/publish mutation path `text_sync` owns; see #3396).
+pub(crate) fn uri_tail(uri: &str) -> String {
+    let tail = uri.rsplit(['/', '\\']).next().unwrap_or(uri);
+    tail.char_indices()
+        .rev()
+        .nth(63)
+        .map(|(idx, _)| tail[idx..].to_string())
+        .unwrap_or_else(|| tail.to_string())
+}
+
+/// RAII helper that emits a labeled span on drop, covering a scope with
+/// multiple early-return exit points (`?`, mid-body `return`) where manually
+/// instrumenting every exit site would be invasive to a provider's existing
+/// control flow.
+///
+/// Local variables are dropped (in reverse declaration order) as part of a
+/// normal early `return` unwinding the stack -- this is guaranteed by Rust's
+/// drop semantics, not a special case -- so starting one of these at the top
+/// of an off-lock analysis block and letting it fall out of scope naturally
+/// captures the elapsed time regardless of which `return` the block takes.
+/// A no-op (zero-cost past the initial `is_enabled` check) when timing is off.
+pub(crate) struct ScopedSpan {
+    span: &'static str,
+    detail: String,
+    start: std::time::Instant,
+    enabled: bool,
+}
+
+impl ScopedSpan {
+    /// Start a scoped span for `uri`, active only while [`is_enabled`] is true.
+    pub(crate) fn start(span: &'static str, uri: &str) -> Self {
+        let enabled = is_enabled();
+        let detail = if enabled { uri_tail(uri) } else { String::new() };
+        ScopedSpan { span, detail, start: std::time::Instant::now(), enabled }
+    }
+}
+
+impl Drop for ScopedSpan {
+    fn drop(&mut self) {
+        if self.enabled {
+            let detail = std::mem::take(&mut self.detail);
+            emit(TimingSpan::labeled(self.span, elapsed_ms(self.start), detail));
+        }
+    }
+}
+
 /// Serialize a span to a single-line JSON string (no trailing newline).
 fn format_span_json(span: &TimingSpan) -> String {
     // Round to 3 decimals for a readable, stable JSONL stream.
@@ -268,6 +321,23 @@ pub(crate) mod capture {
         ENABLED.store(false, Ordering::Relaxed);
         buffer().lock().map(|mut buf| std::mem::take(&mut *buf)).unwrap_or_default()
     }
+
+    /// Serializes tests that rely on this shared in-process capture sink.
+    ///
+    /// `ENABLED` and `BUFFER` are process-global, but `cargo test` runs
+    /// multiple test threads concurrently (this crate's own guidance is
+    /// `--test-threads=2`, not 1) -- two capture-based tests running at the
+    /// same time would otherwise race on `start`/`push`/`drain`, each seeing
+    /// spans from the other. Any test that calls [`start`]/[`drain`] must
+    /// hold this lock for the duration of that section.
+    ///
+    /// Self-heals from a poisoned lock (a panic in one capture-based test
+    /// must not permanently block every other capture-based test in the
+    /// binary) rather than propagating the poison.
+    pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: Mutex<()> = Mutex::new(());
+        LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
 }
 
 #[cfg(test)]
@@ -334,7 +404,72 @@ mod tests {
     }
 
     #[test]
+    fn uri_tail_returns_last_path_segment() {
+        assert_eq!(uri_tail("file:///workspace/lib/Foo.pm"), "Foo.pm");
+        assert_eq!(uri_tail("Foo.pm"), "Foo.pm");
+    }
+
+    #[test]
+    fn uri_tail_bounds_to_64_chars_on_a_char_boundary() {
+        let long_name = "x".repeat(200);
+        let uri = format!("file:///workspace/{long_name}.pm");
+        let tail = uri_tail(&uri);
+        assert!(tail.len() <= 64, "tail must be bounded to 64 bytes, got {}", tail.len());
+        assert!(uri.ends_with(&tail), "tail must be a genuine suffix of the source uri");
+    }
+
+    #[test]
+    fn scoped_span_emits_on_drop_when_capture_enabled() {
+        let _lock = capture::test_lock();
+        capture::start();
+        {
+            let _span = ScopedSpan::start("provider.test.analyze", "file:///a/b.pl");
+            // scope ends here -- span should emit via Drop
+        }
+        let spans = capture::drain();
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].span, "provider.test.analyze");
+        assert_eq!(spans[0].detail.as_deref(), Some("b.pl"));
+    }
+
+    #[test]
+    fn scoped_span_emits_on_early_return_from_enclosing_fn() {
+        fn analyze_with_early_return(should_bail: bool) -> u32 {
+            let _span = ScopedSpan::start("provider.test.early_return", "file:///c.pl");
+            if should_bail {
+                return 0; // local destructors (including _span) still run here
+            }
+            1
+        }
+
+        let _lock = capture::test_lock();
+        capture::start();
+        let result = analyze_with_early_return(true);
+        let spans = capture::drain();
+        assert_eq!(result, 0);
+        assert_eq!(spans.len(), 1, "ScopedSpan must emit even on an early `return`");
+        assert_eq!(spans[0].span, "provider.test.early_return");
+    }
+
+    #[test]
+    fn scoped_span_is_noop_when_capture_disabled() {
+        let _lock = capture::test_lock();
+        // Capture starts disabled by default (each test drains at the end, but
+        // this test never calls `capture::start()`), so no span should emit.
+        let before = capture::is_enabled();
+        assert!(!before, "capture must be off by default for this test to be meaningful");
+        {
+            let _span = ScopedSpan::start("provider.test.noop", "file:///d.pl");
+        }
+        // Nothing to drain -- start capture just to observe an empty buffer.
+        capture::start();
+        let spans = capture::drain();
+        assert!(spans.is_empty());
+    }
+
+    #[test]
     fn capture_start_records_and_drain_disables() {
+        let _lock = capture::test_lock();
         capture::start();
         assert!(is_enabled(), "capture should make timing enabled");
         emit(TimingSpan::labeled("didChange.total", 1.0, "a.pl"));

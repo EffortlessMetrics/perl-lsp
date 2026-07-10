@@ -762,3 +762,44 @@ fn method_modifier_hover_escapes_doc_markdown() {
     // Method name should appear in backtick span (not escaped — it's code)
     assert!(value.contains("`validate_input`"), "method name should appear in code span: {value}");
 }
+
+#[test]
+fn hover_off_lock_analysis_emits_lock_hold_and_analyze_timing_spans()
+-> Result<(), Box<dyn std::error::Error>> {
+    // #3396 Phase 4: `handle_hover` grabs the parsed snapshot + text under a
+    // brief documents-map lock, then drops the guard before analysis. Proves
+    // this measurably: the `lock_hold` span (the brief guarded scope) must be
+    // recorded before the `analyze` span (the off-lock work), for the same
+    // request.
+    let text = "my $var = 42;\n";
+    let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+    let uri = "file:///timing-hover.pl".to_string();
+    server.did_open(json!({
+        "textDocument": {
+            "uri": uri,
+            "languageId": "perl",
+            "version": 1,
+            "text": text
+        }
+    }))?;
+
+    let _lock = crate::runtime::timing::capture::test_lock();
+    crate::runtime::timing::capture::start();
+    let _ = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 0, "character": 4 }
+    })))?;
+    let spans = crate::runtime::timing::capture::drain();
+
+    let lock_hold_idx = spans.iter().position(|s| s.span == "provider.hover.lock_hold");
+    let analyze_idx = spans.iter().position(|s| s.span == "provider.hover.analyze");
+    assert!(lock_hold_idx.is_some(), "expected a provider.hover.lock_hold span, got: {spans:?}");
+    assert!(analyze_idx.is_some(), "expected a provider.hover.analyze span, got: {spans:?}");
+    assert!(
+        lock_hold_idx < analyze_idx,
+        "lock_hold span must be emitted before the analyze span (proves the documents-map guard \
+         is dropped before analysis runs): {spans:?}"
+    );
+
+    Ok(())
+}
