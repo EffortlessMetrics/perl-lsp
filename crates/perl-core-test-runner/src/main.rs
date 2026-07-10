@@ -19,6 +19,23 @@ const MODE_ENV: &str = "PERL_LSP_HARNESS_MODE";
 const CONTEXT_ENV: &str = "PERL_LSP_HARNESS_CONTEXT";
 const EXECUTE_BASE_ALLOWLIST: &[&str] =
     &["base/if.t", "base/cond.t", "base/num.t", "base/pat.t", "base/translate.t", "base/while.t"];
+const RUN_DTRACE_PLATFORM_PROBE_SOURCE: &str = r#"BEGIN {
+    chdir 't' if -d 't';
+    @INC = '../lib';
+    require './test.pl';
+
+    skip_all_without_config("usedtrace");
+
+    $dtrace = $Config::Config{dtrace};
+
+    $Perl = which_perl();
+
+    `$dtrace -V` or skip_all("$dtrace unavailable");
+
+    my $result = `$dtrace -qnBEGIN -c'$Perl -e 1' 2>&1`;
+    $? && skip_all("Apparently can't probe using $dtrace (perhaps you need root?): $result");
+}
+"#;
 
 #[derive(Debug)]
 struct Invocation {
@@ -278,6 +295,7 @@ fn is_unsupported_compile_boundary(
         return false;
     }
     !is_static_perl_core_test_bootstrap_boundary(effect, invocation, source)
+        && !is_run_dtrace_platform_probe_boundary(effect, invocation, source)
         && !is_base_term_cwd_setup_boundary(effect, invocation, source)
         && !is_base_lex_symbolic_reference_boundary(effect, invocation)
         && !is_base_lex_map_begin_boundary(effect, invocation, source)
@@ -373,6 +391,30 @@ fn is_static_perl_core_test_bootstrap_boundary(
     }
 
     matches!(remaining, [] | ["require './test.pl';"] | ["require \"./test.pl\";"])
+}
+
+/// Accept the pinned DTrace availability probe as governed platform semantic
+/// debt. The `BEGIN` body executes an external tool and can depend on host
+/// privileges, so compile analysis must neither execute nor generalize it.
+/// Keep the exact path and body guards: other compile-time probes remain
+/// explicit boundaries until their semantics are modelled.
+fn is_run_dtrace_platform_probe_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "run/dtrace.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    slice.replace("\r\n", "\n") == RUN_DTRACE_PLATFORM_PROBE_SOURCE
 }
 
 fn is_comp_final_line_num_syntax_error_probe(
@@ -3983,6 +4025,50 @@ mod tests {
         let invocation = Invocation {
             source: SourceInput::Inline(static_test_bootstrap_source()),
             display_path: "run/switcha.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_dtrace_platform_probe_is_governed_semantic_debt() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(RUN_DTRACE_PLATFORM_PROBE_SOURCE.to_string()),
+            display_path: "run/dtrace.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_dtrace_platform_probe_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(RUN_DTRACE_PLATFORM_PROBE_SOURCE.to_string()),
+            display_path: "run/switchd.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_dtrace_platform_probe_changed_source_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                RUN_DTRACE_PLATFORM_PROBE_SOURCE.replace("$dtrace -V", "$dtrace --version"),
+            ),
+            display_path: "run/dtrace.t".to_string(),
         };
 
         let result = run_compile(&invocation)?;
