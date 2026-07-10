@@ -1,0 +1,129 @@
+id = "plsp-swarm-real-perl-editor-trust"
+title = "perl-lsp-swarm execution lane"
+owner = "codex-swarm"
+created = "2026-05-20"
+
+proposal = "docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md"
+plan = "plans/real-perl-editor-trust/implementation-plan.md"
+status_pointer = "docs/project/status/real_perl_editor_trust_v1.md"
+operating_model = "docs/swarm/operating-model.md"
+
+# Durable outcome.
+objective = """
+Make perl-lsp-swarm the active execution repo for Real Perl Editor Trust work
+while keeping perl-lsp as the canonical release, history, and package-lineage
+repo until curated sync and release steps promote swarm work back upstream.
+"""
+
+# Terminal conditions.
+end_state = [
+  "All new development targets perl-lsp-swarm by default.",
+  "perl-lsp receives curated sync and release-lineage PRs only.",
+  "Trust, compiler substrate, and reliability work are routed through explicit lanes.",
+  "Promotion-ledger work names promotion, fallback, blocker, and receipt boundaries.",
+  "Spec hardening and receipts land in swarm before release-lineage sync.",
+]
+
+# Claim boundary.
+claim_boundaries = [
+  "Do not treat perl-lsp-swarm as just another branch farm.",
+  "Do not broaden provider behavior from receipt or docs work alone.",
+  "Do not promote rename, safe-delete, generated symbols, semantic tokens, or diagnostics without a promotion-ledger row and receipt.",
+  "Do not treat generated, dynamic, stale, ambient, unknown, or low-confidence facts as exact source-backed facts.",
+  "Do not use perl-lsp for routine feature development once the swarm execution lane is active.",
+  "Do not claim release-lineage sync until a separate sync protocol and curated upstream PR exist.",
+]
+
+# Required evidence.
+status_docs = [
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_cutover.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+  "docs/project/status/ux_capability_dashboard.md",
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/parser.md",
+]
+
+specs = [
+  "docs/specs/PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md",
+  "docs/specs/PLSP-SPEC-0016-provider-decision-receipt-v1.md",
+  "docs/specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md",
+  "docs/specs/PLSP-SPEC-0018-edit-authorization-contract.md",
+  "docs/specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md",
+  "docs/specs/PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md",
+  "docs/specs/PLSP-SPEC-0021-diagnostic-explanation-v1.md",
+  "docs/specs/PLSP-SPEC-0022-module-path-authority.md",
+  "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
+  "docs/specs/PLSP-SPEC-0024-framework-fact-adapters.md",
+  "docs/specs/PLSP-SPEC-0025-pir-v0.md",
+  "docs/specs/PLSP-SPEC-0026-determinism-receipt-v1.md",
+  "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md",
+]
+
+# Selection priority when multiple lanes have ready work: trust first (user-
+# facing correctness), then substrate (compiler-facts groundwork), then
+# reliability (routing/cleanup/devex).
+selection_priority = ["trust", "substrate", "reliability"]
+
+[current]
+lane = "real_perl_editor_trust_v1"
+repo = "perl-lsp-swarm"
+release_lineage_repo = "perl-lsp"
+status = "swarm_execution_cutover"
+
+# WIP caps / budgets (per routing lane, matched 1:1 against lanes/<lane>.toml pr_cap).
+[limits]
+trust_prs = 2
+substrate_prs = 2
+reliability_prs = 4
+
+# Lane ownership: which routing lanes this program funds, their WIP cap, and
+# where the full lane definition (may-change / must-route-elsewhere / board /
+# proof policy) lives.
+[[lane_ownership]]
+lane = "trust"
+pr_cap = 2
+manifest = ".perl-lsp/goals/lanes/trust.toml"
+
+[[lane_ownership]]
+lane = "substrate"
+pr_cap = 2
+manifest = ".perl-lsp/goals/lanes/substrate.toml"
+
+[[lane_ownership]]
+lane = "reliability"
+pr_cap = 4
+manifest = ".perl-lsp/goals/lanes/reliability.toml"
+
+# Active work items only. Completed work items live in
+# .perl-lsp/goals/archive/real_perl_editor_trust-completed.toml (65 items,
+# relocated unchanged during the M2 goal-state split, #3612).
+[[work_item]]
+id = "provider-proof-assignment-gate-after-constant-provider-proof"
+status = "active"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the constant-provider substrate proof and current zero-gap parser pointer only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]

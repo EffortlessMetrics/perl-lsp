@@ -1,0 +1,36 @@
+id = "trust"
+program = "real_perl_editor_trust"
+program_manifest = ".perl-lsp/goals/programs/real_perl_editor_trust.toml"
+pr_cap = 2
+
+# Board pointer (status board for the active lane).
+board = "docs/project/status/real_perl_editor_trust_v1.md"
+
+# Eligible work classes this lane may change (unchanged from the prior
+# [[lanes]] "owns" list in active.toml).
+may_change = [
+  "provider_promotion_ledger",
+  "real_perl_editor_trust_v1_boundary",
+  "workspace_symbols",
+  "semantic_tokens",
+  "rename",
+  "safe_delete",
+  "diagnostic_explanations",
+  "workspace_trust_report",
+]
+
+# Proof policy (unchanged from the prior [[lanes]] "rule").
+proof_policy = "No broadening; every PR must name promotion, fallback, blocker, and receipt boundaries when it touches trusted provider behavior."
+
+# Work that falls outside may_change routes elsewhere rather than being
+# treated as trust-lane cleanup: provider cutover requires an explicit
+# fact-class promotion (see policy/provider-promotion-ledger.toml) before
+# it may broaden from receipt or docs work alone; substrate groundwork
+# (lexer/parser proptest, prototype table, bareword classifier, PIR/oracle
+# prep) routes to the substrate lane; assignment-gated queue triage, docs,
+# and cleanup route to the reliability lane.
+must_route_elsewhere = "Provider behavior broadening without a promotion-ledger row and receipt; substrate groundwork owned by the substrate lane; routine queue triage, docs, and cleanup owned by the reliability lane."
+
+next_items = [
+  "semantic-token-class-receipts-when-new-class-ready",
+]

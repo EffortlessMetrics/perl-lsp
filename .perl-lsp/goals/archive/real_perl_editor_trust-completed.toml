@@ -1,0 +1,1525 @@
+# Archived completed work items relocated from .perl-lsp/goals/active.toml
+# during the M2 goal-state split (schema=2 migration, #3612).
+# Program: real_perl_editor_trust
+# Relocation only -- content is unchanged from the original active.toml entries.
+
+[[work_item]]
+id = "swarm-operating-manifest"
+status = "completed"
+lane = "trust"
+claim_boundary = "Control-plane docs only; no code behavior, provider output, CI workflow, or release-lineage sync change."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "docs/swarm/operating-model.md",
+]
+commands = [
+  "rtk python -c \"import pathlib, tomllib; tomllib.loads(pathlib.Path('.perl-lsp/goals/active.toml').read_text())\"",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "swarm-pr-template-review-rules"
+status = "completed"
+lane = "trust"
+claim_boundary = "GitHub template and review-rule docs only; no label mutation in this PR unless the orchestrator explicitly assigns it."
+
+[[work_item]]
+id = "old-repo-release-lineage-marker"
+status = "completed"
+lane = "trust"
+repo = "perl-lsp"
+claim_boundary = "Old repo marker only; no swarm source sync or release claim."
+
+[[work_item]]
+id = "swarm-sync-protocol"
+status = "completed"
+lane = "trust"
+claim_boundary = "Sync policy docs only; no branch protection, mirror, or release automation change."
+
+[[work_item]]
+id = "real-perl-editor-trust-smoke-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Product-level provider smoke receipt only; no provider behavior broadening, support-tier promotion, or release claim."
+files = [
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_44_real_editor_trust_smoke_receipt.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_44_real_editor_trust_smoke_receipt --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "safe-delete-referenced-source-blockers"
+status = "completed"
+lane = "trust"
+claim_boundary = "Safe-delete referenced-source blocker receipt only; no provider behavior broadening, support-tier promotion, or server-applied edits."
+files = [
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_45_safe_delete_referenced_source_blocker.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_45_safe_delete_referenced_source_blocker --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "rename-fallback-edit-freshness-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Rename fallback/edit-freshness receipt only; no broader package/compiler-backed rename promotion."
+files = [
+  "crates/perl-lsp-rs/src/runtime/language/refactor_runtime_blocker_tests.rs",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib refactor_runtime_blocker --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "workspace-symbol-generated-no-source-proof"
+status = "completed"
+lane = "trust"
+claim_boundary = "Workspace-symbol generated/no-source proof only; no broader generated workspace-symbol promotion or exact generated method-body locations."
+files = [
+  "crates/perl-lsp-rs/src/runtime/language/symbols_runtime_quality_tests.rs",
+  "crates/perl-lsp-rs/src/runtime/workspace.rs",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib workspace_symbols_runtime_quality_receipt_blocks_generated_no_source_candidate --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "semantic-token-scoped-class-proof"
+status = "completed"
+lane = "trust"
+claim_boundary = "Semantic-token scoped class proof only; no broad compiler-backed token output or new token emission without output-neutral proof."
+files = [
+  "crates/perl-lsp-rs-core/src/providers/semantic_tokens/semantic_tokens_shadow.rs",
+  "crates/perl-lsp-rs/src/runtime/language/semantic_tokens.rs",
+  "crates/perl-lsp-rs/src/runtime/language/semantic_tokens_runtime_quality_tests.rs",
+  "docs/project/status/provider_cutover.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+  "docs/project/status/ux_capability_dashboard.md",
+  "docs/specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md",
+  "policy/provider-promotion-ledger.toml",
+  "policy/semantic-token-classes.toml",
+  "xtask/src/tasks/semantic_token_classes.rs",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs-core --lib semantic_token_shadow_allows_scoped_phase_block_declaration_class --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib semantic_tokens_runtime_quality_receipt_proves_source_backed_phase_block_declaration_compiler_token_parity --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-rs --lib semantic_tokens_runtime_quality_receipt_refreshes_phase_block_declaration_live_pilot_after_edit --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-rs --lib semantic_tokens_runtime_quality_receipt --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-semantic-token-classes",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "semantic-token-support-review"
+status = "completed"
+lane = "trust"
+claim_boundary = "Semantic-token support review only; no broad compiler-backed token output, support-tier promotion, or new token emission without class-policy proof."
+files = [
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_cutover.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+  "docs/project/status/ux_capability_dashboard.md",
+  "policy/provider-promotion-ledger.toml",
+  "policy/semantic-token-classes.toml",
+]
+commands = [
+  "rtk cargo xtask check-semantic-token-classes",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "prototype-table"
+status = "completed"
+lane = "substrate"
+claim_boundary = "Prototype-table substrate proof only; no provider behavior, diagnostic suppression, parser bucket movement, support-tier promotion, or PIR/determinism claim."
+files = [
+  "crates/perl-parser-core/src/hir/model.rs",
+  "crates/perl-parser-core/tests/hir_tests.rs",
+  "docs/project/status/compiler_facts.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo test -p perl-parser-core --test hir_tests hir_compile_effect_log_links_source_mutations_facts_and_boundaries --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "bareword-classifier"
+status = "completed"
+lane = "substrate"
+claim_boundary = "Bareword-classifier substrate proof only; no provider behavior, diagnostic suppression, parser bucket movement, support-tier promotion, or PIR/determinism claim."
+files = [
+  "crates/perl-parser-core/src/hir/model.rs",
+  "crates/perl-parser-core/src/hir/lower.rs",
+  "crates/perl-parser-core/tests/hir_tests.rs",
+  "docs/project/status/compiler_facts.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo test -p perl-parser-core --test hir_tests bareword --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "determinism-receipt-v1-spec"
+status = "completed"
+lane = "substrate"
+claim_boundary = "Determinism receipt v1 spec/planning only; no PIR implementation, runtime probing, provider behavior, release-lineage sync, or determinism claim."
+files = [
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md",
+  "docs/specs/PLSP-SPEC-0022-module-path-authority.md",
+  "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
+  "docs/specs/PLSP-SPEC-0025-pir-v0.md",
+  "docs/specs/PLSP-SPEC-0026-determinism-receipt-v1.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "differential-oracle-contract"
+status = "completed"
+lane = "substrate"
+claim_boundary = "Differential oracle contract planning only; no real-Perl runtime dependency, workspace probing, provider behavior, release-lineage sync, support-tier promotion, or corpus/parser bucket movement claim."
+files = [
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/specs/README.md",
+  "docs/specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md",
+  "docs/specs/PLSP-SPEC-0022-module-path-authority.md",
+  "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
+  "docs/specs/PLSP-SPEC-0026-determinism-receipt-v1.md",
+  "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md",
+  "docs/project/status/compiler_facts.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-promotion-ledger-maintenance"
+status = "completed"
+lane = "trust"
+claim_boundary = "Provider promotion ledger maintenance only; no provider behavior broadening, support-tier promotion, parser bucket movement, release-lineage sync, or edit authorization change."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "policy/provider-promotion-ledger.toml",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs-core --features lsp-compat --profile agent --locked type_definition -- --nocapture",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "oracle-fixture-manifest-after-contract"
+status = "completed"
+lane = "substrate"
+claim_boundary = "Differential oracle fixture manifest declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md",
+  "schemas/oracle_fixture_manifest.v1.schema.json",
+  "crates/perl-corpus/fixtures/differential_oracle/manifest.json",
+  "docs/project/status/compiler_facts.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "xtask/src/main.rs",
+  "xtask/src/tasks/mod.rs",
+  "xtask/src/tasks/oracle_fixture_manifest.rs",
+]
+commands = [
+  "rtk cargo test -p xtask --profile agent --locked oracle_fixture_manifest -- --nocapture",
+  "rtk cargo xtask check-oracle-fixture-manifest",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_fixture_manifest.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content crates/perl-corpus/fixtures/differential_oracle/manifest.json -Raw | ConvertFrom-Json | Out-Null'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "oracle-receipt-schema-after-manifest"
+status = "completed"
+lane = "substrate"
+claim_boundary = "Differential oracle receipt schema validation only; no oracle runner, Perl execution, workspace probing, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md",
+  "schemas/oracle_receipt.v1.schema.json",
+  "docs/project/status/compiler_facts.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "xtask/src/main.rs",
+  "xtask/src/tasks/mod.rs",
+  "xtask/src/tasks/oracle_receipt_schema.rs",
+]
+commands = [
+  "rtk cargo test -p xtask --profile agent --locked oracle_receipt_schema -- --nocapture",
+  "rtk cargo xtask check-oracle-receipt-schema",
+  "rtk cargo xtask check-oracle-fixture-manifest",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_receipt.v1.schema.json -Raw | ConvertFrom-Json | Out-Null'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "post-oracle-schema-routing-review"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Control-plane routing review only; no oracle runner, Perl execution, workspace probing, provider behavior, support-tier promotion, provider-row promotion, release-lineage sync, or parser/corpus bucket movement."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-oracle-receipt-schema",
+  "rtk cargo xtask check-oracle-fixture-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "devex-storage-safe-validation"
+status = "completed"
+lane = "reliability"
+claim_boundary = "DevEx storage validation routing only; no cargo-safe behavior change, build-system change, provider behavior, support-tier promotion, release-lineage sync, parser/corpus bucket movement, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask devex-doctor",
+  "rtk cargo xtask gate-policy check",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "policy-cleanup-routing-review"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Policy cleanup routing review only; no policy enforcement broadening, provider behavior, support-tier promotion, release-lineage sync, parser/corpus bucket movement, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask gate-policy check",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "published-api-hygiene"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Published API baseline and storage-safe tooling hygiene only; no Rust API surface code change, provider behavior, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "justfile",
+  ".ci/public-api-baselines",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'",
+  "rtk bash -lc './scripts/cargo-safe xtask gate-policy check'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-support-claims'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'",
+  "rtk bash -lc 'just public-api-update'",
+  "rtk bash -lc 'just public-api-check'",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-promotion-ledger-parity-review"
+status = "completed"
+lane = "trust"
+claim_boundary = "Provider promotion ledger parity routing only; no fact-class promotion, provider behavior, support-tier movement, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-promotion-ledger'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-support-claims'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'",
+  "rtk bash -lc './scripts/cargo-safe xtask metrics parser-accuracy --check'",
+  "rtk bash -lc './scripts/cargo-safe xtask metrics ratchet-check parser_accuracy'",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "semantic-token-class-receipts-as-needed"
+status = "completed"
+lane = "trust"
+claim_boundary = "Semantic-token receipt routing only until a new scoped compiler-token class is ready; class-declaration is currently deferred until live-output parity is proven; no broad compiler-backed token output, provider behavior broadening, support-tier movement, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "policy/provider-promotion-ledger.toml",
+  "policy/semantic-token-classes.toml",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk bash -lc './scripts/cargo-safe test -p perl-lsp-rs-core --lib semantic_token_shadow_blocks_unpromoted_class_declaration_class --profile agent --locked -- --nocapture'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-promotion-ledger'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-semantic-token-classes'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-support-claims'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'",
+  "rtk bash -lc './scripts/cargo-safe xtask metrics parser-accuracy --check'",
+  "rtk bash -lc './scripts/cargo-safe xtask metrics ratchet-check parser_accuracy'",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-real-workspace-quality-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver quality proof over a real-workspace-shaped completion fixture; no completion behavior change, support-tier promotion, generated/dynamic promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_46_receiver_real_workspace_quality.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk powershell -Command '$root=Split-Path (Get-Location).Path -Parent; $target=Join-Path $root \".tmp\\perl-lsp-swarm-win-target\"; $temp=Join-Path $root \".tmp\\receiver-generated-nosource\"; New-Item -ItemType Directory -Force -Path $target,$temp | Out-Null; $env:CARGO_TARGET_DIR=$target; $env:CARGO_INCREMENTAL=\"0\"; $env:TEMP=$temp; $env:TMP=$temp; rtk cargo build -p perl-lsp-rs --bin perl-lsp --profile agent --locked'",
+  "rtk powershell -Command '$root=Split-Path (Get-Location).Path -Parent; $target=Join-Path $root \".tmp\\perl-lsp-swarm-win-target\"; $temp=Join-Path $root \".tmp\\receiver-generated-nosource\"; New-Item -ItemType Directory -Force -Path $target,$temp | Out-Null; $env:CARGO_TARGET_DIR=$target; $env:CARGO_INCREMENTAL=\"0\"; $env:TEMP=$temp; $env:TMP=$temp; $env:PERL_LSP_BIN=Join-Path $target \"agent\\perl-lsp.exe\"; rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_46_receiver_real_workspace_quality --profile agent --locked -- --nocapture --test-threads=1'",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-generated-no-source-fallback-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only generated/no-source framework-method receiver fallback proof in the RealReceiver completion fixture; no completion behavior change, generated/no-source framework-method receiver promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_46_receiver_real_workspace_quality.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk powershell -Command '$root=Split-Path (Get-Location).Path -Parent; $target=Join-Path $root \".tmp\\perl-lsp-swarm-win-target\"; $temp=Join-Path $root \".tmp\\receiver-generated-nosource\"; New-Item -ItemType Directory -Force -Path $target,$temp | Out-Null; $env:CARGO_TARGET_DIR=$target; $env:CARGO_INCREMENTAL=\"0\"; $env:TEMP=$temp; $env:TMP=$temp; rtk cargo build -p perl-lsp-rs --bin perl-lsp --profile agent --locked'",
+  "rtk powershell -Command '$root=Split-Path (Get-Location).Path -Parent; $target=Join-Path $root \".tmp\\perl-lsp-swarm-win-target\"; $temp=Join-Path $root \".tmp\\receiver-generated-nosource\"; New-Item -ItemType Directory -Force -Path $target,$temp | Out-Null; $env:CARGO_TARGET_DIR=$target; $env:CARGO_INCREMENTAL=\"0\"; $env:TEMP=$temp; $env:TMP=$temp; $env:PERL_LSP_BIN=Join-Path $target \"agent\\perl-lsp.exe\"; rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_46_receiver_real_workspace_quality --profile agent --locked -- --nocapture --test-threads=1'",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-method-accessor-fallback-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver fallback proof for project-shaped accessor-return and method-return completion chains; no completion behavior change, support-tier promotion, medium-confidence receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_47_receiver_method_accessor_fallback.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_47_receiver_method_accessor_fallback --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-bless-confidence-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver confidence proof for literal and dynamic bless completion chains; no completion behavior change, support-tier promotion, dynamic-boundary promotion, medium-confidence receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_48_receiver_bless_confidence.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_48_receiver_bless_confidence --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-array-index-fallback-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver fallback proof for static and dynamic array-index completion chains; no completion behavior change, support-tier promotion, array-index receiver promotion, dynamic-boundary promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_49_receiver_array_index_fallback.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_49_receiver_array_index_fallback --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-self-framework-accessor-fact-fixture"
+status = "completed"
+lane = "trust"
+claim_boundary = "Facts-only receiver fixture for source-derived self constructor assignment plus framework accessor return evidence and mismatched-package fallback; no completion behavior change, provider cutover, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs",
+  "docs/project/status/receiver_facts.md",
+]
+commands = [
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts self_constructor_framework_accessor_records_medium_confidence_object_shape --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts self_framework_accessor_requires_matching_constructor_package --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-method-return-accessor-chain-fact-fixture"
+status = "completed"
+lane = "trust"
+claim_boundary = "Facts-only method-return receiver fixture for static constructor-to-framework-accessor chains; no completion behavior change, provider cutover, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-semantic-analyzer/src/analysis/type_inference.rs",
+  "crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs",
+  "docs/specs/PLSP-SPEC-0005-receiver-expression-facts.md",
+  "docs/project/status/receiver_facts.md",
+]
+commands = [
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts method_return_constructor_accessor_chain_records_object_shape --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts dynamic_method_return_accessor_chain_stays_non_exact --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-local-accessor-chain-fact-fixture"
+status = "completed"
+lane = "trust"
+claim_boundary = "Facts-only method-return receiver fixture for lexical locals initialized or assigned from static constructor-to-framework-accessor chains; no completion behavior change, provider cutover, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-semantic-analyzer/src/analysis/type_inference.rs",
+  "crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs",
+  "docs/specs/PLSP-SPEC-0005-receiver-expression-facts.md",
+  "docs/project/status/receiver_facts.md",
+]
+commands = [
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts method_return_local_accessor_chain_variable_records_object_shape --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts method_return_assigned_accessor_chain_variable_records_assignment --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts dynamic_local_accessor_chain_variable_stays_non_exact --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-local-accessor-chain-fallback-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver fallback proof for lexical-local accessor-chain method-return completion chains; no completion behavior change, support-tier promotion, local accessor-chain receiver promotion, medium-confidence receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_47_receiver_method_accessor_fallback.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_47_receiver_method_accessor_fallback --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-dynamic-local-accessor-chain-fallback-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver fallback proof for dynamic local accessor-chain method-return completion chains; no completion behavior change, support-tier promotion, local accessor-chain receiver promotion, dynamic local accessor-chain receiver promotion, medium-confidence receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_47_receiver_method_accessor_fallback.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_47_receiver_method_accessor_fallback --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-conditional-local-reassignment-fallback-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver fallback proof for conditional local reassignment method-return completion chains; no completion behavior change, support-tier promotion, conditional local reassignment receiver promotion, medium-confidence receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_47_receiver_method_accessor_fallback.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_47_receiver_method_accessor_fallback --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-source-backed-hash-slot-ux-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver quality proof for the narrow source-backed plain hash-slot completion pilot; no completion behavior change, support-tier promotion, hashref-slot promotion, broader receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_46_receiver_real_workspace_quality.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_46_receiver_real_workspace_quality --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-static-package-ux-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver quality proof for static package receiver completion in the real-workspace UX harness; no completion behavior change, support-tier promotion, broader receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_46_receiver_real_workspace_quality.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_46_receiver_real_workspace_quality --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-self-this-ux-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only receiver quality proof for $self/$this current-package method completion in the real-workspace UX harness; no completion behavior change, support-tier promotion, broader receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_50_receiver_self_this_quality.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_50_receiver_self_this_quality --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "source-lineage-drift-review"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Queue/source-lineage drift review only after the post-#95 publishing-repo commits; no source-repo development merge, source-over-swarm sync, provider behavior, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage sync."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 95 --json number,state,mergedAt,mergeCommit,title,url",
+  "rtk git fetch origin main",
+  "rtk git fetch source master:refs/remotes/source/master",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk git log --oneline source/master --not origin/main",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "neovim-latency-swarm-restack-review"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Swarm-native review/restack routing for the Neovim latency PR train only; no source-over-swarm sync, source-repo development merge, provider trust promotion, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage sync."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 279 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 280 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 286 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 287 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 288 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk git log --oneline source/master --not origin/main",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "source-pr-9572-manual-review"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Source PR #9572 review and swarm port only; no source-repo development merge, provider behavior, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage sync."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp 9572 --json number,title,state,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 339 --json number,title,state,mergeCommit,url",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "source-ancestry-27e837c-sync"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Source ancestry recording only; zero file changes, no source-over-swarm content sync, provider behavior, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage claim."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 340 --json number,title,state,mergeCommit,url",
+  "rtk git merge-base --is-ancestor source/master origin/main",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "parser-provider-queue-routing-review"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Queue and parser/provider pointer review only; choose the next ready lane from live PR state, parser_accuracy_next.md, and provider dashboards without changing runtime behavior, support tiers, parser/corpus buckets, or release-lineage sync."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated provider proof routing only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/parser_accuracy_next.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-provider-decision-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition provider-decision receipt only; no type-definition provider behavior broadening, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs-core/src/providers/provider_decision.rs",
+  "crates/perl-lsp-rs/src/execute_command/provider.rs",
+  "crates/perl-lsp-rs/src/runtime/language/navigation.rs",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_execute_command_tests.rs",
+  "docs/specs/PLSP-SPEC-0016-provider-decision-receipt-v1.md",
+  "schemas/provider_decision.v1.schema.json",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs-core --profile agent --locked provider_decision -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_execute_command_tests test_execute_command_explain_provider_decision_accepts_type_definition --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk powershell -NoProfile -Command 'Get-Content schemas/provider_decision.v1.schema.json -Raw | ConvertFrom-Json | Out-Null'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "post-type-definition-receipt-routing-review"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Post type-definition receipt routing review only; choose the next ready lane from live PR state, parser_accuracy_next.md, and provider dashboards without changing runtime behavior, support tiers, parser/corpus buckets, or release-lineage sync."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after type-definition receipt only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-project-receiver-data-flow-blocker-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition project-shaped receiver/data-flow blocker receipt only; no type-definition provider behavior broadening, data-flow inference, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes_project_receiver_data_flow_blockers --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition-project-blockers"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the type-definition project blocker receipt only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-ambiguous-identity-blocker-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition ambiguous-identity blocker receipt and hardening only; no type-definition data-flow inference, generated/dynamic promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs/src/runtime/language/navigation.rs",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_blocks_ambiguous_package_identity --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition-ambiguous-identity"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the type-definition ambiguous-identity blocker receipt only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-generated-dynamic-low-confidence-blocker-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition generated/no-source, dynamic-boundary, and low-confidence fallback receipt only; no type-definition behavior broadening, data-flow inference, generated/dynamic promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs/src/runtime/language/navigation.rs",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes_generated_dynamic_low_confidence_blockers --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition-boundary-blockers"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the type-definition generated/dynamic/low-confidence blocker receipt only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-dynamic-type-constraint-blocker-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition dynamic type-constraint blocker receipt only; no type-definition behavior broadening, data-flow inference, generated/dynamic promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs/src/runtime/language/navigation.rs",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes_dynamic_type_constraint_blocker --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition-dynamic-type-constraint"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the type-definition dynamic type-constraint blocker receipt only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-stale-fact-blocker-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition stale-fact blocker receipt only; no type-definition behavior broadening, data-flow inference, generated/dynamic promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs/src/runtime/language/navigation.rs",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes_stale_fact_blocker --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition-stale-fact"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the type-definition stale-fact blocker receipt only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-dynamic-bless-blocker-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition dynamic bless package-argument blocker receipt only; no type-definition behavior broadening, data-flow inference, generated/dynamic promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs/src/runtime/language/navigation.rs",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes_dynamic_bless_blocker --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition-dynamic-bless"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the type-definition dynamic bless package-argument blocker receipt only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-stale-request-version-detail-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition stale request-version receipt detail only; no type-definition behavior broadening, data-flow inference, generated/dynamic promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs/src/runtime/language/navigation.rs",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes_stale_fact_blocker --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture",
+  "rtk cargo fmt -p perl-lsp-rs -- --check",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition-stale-request-version-detail"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the type-definition stale request-version receipt detail only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-unscannable-source-blocker-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition unscannable target-source blocker receipt only; no exact type-definition expansion, data-flow inference, generated/dynamic promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs/src/runtime/language/navigation.rs",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_blocks_unscannable_target_source --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture",
+  "rtk cargo fmt -p perl-lsp-rs -- --check",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition-unscannable-source"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the type-definition unscannable target-source blocker receipt only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "semantic-token-class-declaration-readiness-review"
+status = "completed"
+lane = "trust"
+claim_boundary = "Semantic-token readiness review only; class-declaration remains deferred because the runtime receipt does not prove exact live-output parity, so no policy row, provider-promotion row, live trace class, support-tier movement, or token output change is authorized."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[work_item]]
+id = "cleanup-train-queue-review"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Publishing-repo queue triage and swarm routing only; no source-repo development merge, provider behavior, support-tier promotion, release/publish/signing change, or differential-oracle spec work."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh issue view 88 --repo EffortlessMetrics/perl-lsp-swarm --json number,title,state,url",
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,labels,headRefName,updatedAt,url",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "constant-provider-proof"
+status = "completed"
+lane = "substrate"
+claim_boundary = "Constant-provider substrate proof only; no completion/provider cutover, support-tier promotion, or broad constant inference claim."
+files = [
+  "crates/perl-semantic-analyzer/src/analysis/import_extractor.rs",
+  "crates/perl-lsp-rs-core/src/providers/completion/completion_shadow.rs",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk cargo test -p perl-semantic-analyzer use_constant --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs-core --lib completion_shadow --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
