@@ -47,7 +47,7 @@ exit_criteria = "a fresh agent identifies program/lane/board/ownership/completio
 [[milestone]]
 id = "M3"
 title = "Deterministic selector + goal compiler"
-status = "in_progress"
+status = "completed"
 issue = 3624
 depends_on = ["M2"]
 exit_criteria = "next slice chosen from live evidence, not chat"
