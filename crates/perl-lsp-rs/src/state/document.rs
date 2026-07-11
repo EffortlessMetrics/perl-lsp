@@ -1234,6 +1234,23 @@ mod tests {
     }
 }
 
+/// Compile-time contract: `ParsedSnapshot` must remain `!Send + !Sync`.
+///
+/// `parent_map: Arc<ParentMap>` where `ParentMap = FxHashMap<*const Node, *const
+/// Node>` (raw pointers) is the sole load-bearing basis for this: raw pointers
+/// are `!Send + !Sync`, so the map is, so the `Arc` wrapping it is, so the whole
+/// snapshot is. Every other field is `Send + Sync`. This assertion fails to
+/// *compile* (not just fails at test time) if a future refactor -- e.g. #3766 --
+/// "fixes" a thread-crossing compile error by unsoundly making the raw-pointer
+/// parent graph `Send`/`Sync`.
+#[cfg(test)]
+mod send_sync_contract {
+    use super::ParsedSnapshot;
+    use static_assertions::assert_not_impl_any;
+
+    assert_not_impl_any!(ParsedSnapshot: Send, Sync);
+}
+
 /// Normalize legacy package separator ' to ::
 pub fn normalize_package_separator(s: &str) -> Cow<'_, str> {
     perl_module::path::normalize_package_separator(s)

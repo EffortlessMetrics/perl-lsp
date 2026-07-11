@@ -133,6 +133,7 @@ perl-tdd-support = { workspace = true }
 parking_lot.workspace = true
 criterion.workspace = true
 perl-corpus = { workspace = true }
+static_assertions.workspace = true
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/perl-lsp-{ version }-{ target }{ archive-suffix }"

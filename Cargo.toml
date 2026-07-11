@@ -353,6 +353,8 @@ clap = { version = "4.5.60", features = ["derive"] }
 tokio = { version = "1.52.3", features = ["net", "rt-multi-thread", "macros", "io-util", "sync", "time"] }
 proptest = "1.11.0"
 criterion = "0.8.1"
+# Dev-only: compile-time trait-bound contracts (e.g. assert_not_impl_any!).
+static_assertions = "1.1"
 
 # Profile for development - slightly optimized for better performance
 [profile.dev]
