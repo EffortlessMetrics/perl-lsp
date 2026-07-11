@@ -146,7 +146,11 @@ impl LineStartsCache {
         let mut uc = 0;
         let mut bo = 0;
         for ch in sl.chars() {
-            if uc >= character as usize {
+            // Test before consuming so a column that lands inside a surrogate
+            // pair clamps to the start of that codepoint rather than skipping
+            // past it. `uc >= character` alone over-advances for mid-surrogate
+            // requests (e.g. column 2 over "x😀y" must map to the emoji start).
+            if uc + ch.len_utf16() > character as usize {
                 break;
             }
             uc += ch.len_utf16();
