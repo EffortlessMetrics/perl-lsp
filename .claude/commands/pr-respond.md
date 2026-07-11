@@ -38,24 +38,50 @@ been classified `Fix`):
 3. Commit: `fix(review): address <reviewer> feedback — <what>`
 
 ### 4. Reply to comments
+
+**Before resolving any thread**, reply with a machine-readable disposition —
+see the canonical convention in
+[.claude/reference/review-convergence.md § Disposition-reply
+convention](../reference/review-convergence.md#disposition-reply-convention-before-calling-resolvereviewthread):
+
+```
+Disposition: fixed | refuted | superseded | follow-up
+Evidence: <commit sha + test name>  /  <file:line + why>  /  <superseding head sha + seam>  /  <issue #N + why non-blocking>
+```
+
 ```bash
 gh api repos/:owner/:repo/pulls/$ARGUMENTS/comments/<comment-id>/replies \
-  -f body="Fixed in <commit-hash>. <brief explanation>"
+  -f body="Disposition: fixed
+Evidence: <commit-hash> + test <name>"
 ```
 
 Or for general review comments:
 ```bash
 gh pr comment $ARGUMENTS --body "Addressed review feedback:
-- <comment 1>: fixed in <hash>
-- <comment 2>: <explanation>
+- <comment 1>: Disposition: fixed
+  Evidence: <hash> + test <name>
+- <comment 2>: Disposition: refuted
+  Evidence: <file:line>: <reasoning>
 "
 ```
 
 ### 4.5 Resolve the conversation thread
 
-After replying with evidence, resolve the GitHub review thread — only once it
-has a real disposition (fixed/refuted/superseded/accepted-with-follow-up), not
-performatively:
+**A thread must never be resolved with zero reply** — that's the
+resolved-to-clear anti-pattern the #3647 incident shipped through (a
+responder silently `resolveReviewThread`'d 15 threads with no reply and no
+evidence; the PR merged with 6 live P1 defects). Follow this now as
+process discipline: `check-pr-review-convergence` does **not yet**
+mechanically detect a missing disposition reply — that detection
+(`resolved_without_disposition`) is proposed in #3732, held back for a
+dogfood-advisory-first rollout so it doesn't retroactively block PRs
+already in flight. A resolved thread with zero reply currently passes the
+script silently. Once #3732 lands, a resolved thread whose
+`comments.totalCount <= 1` (no reply beyond the original comment) will be
+`BLOCK`ing.
+
+Only after step 4's disposition reply has been posted, resolve the GitHub
+review thread:
 
 ```bash
 gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { isResolved } } }'

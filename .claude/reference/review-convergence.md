@@ -129,3 +129,60 @@ outside of tests.
 If you are adding a new surface that needs this check, call the script —
 do not write a new GraphQL query for it, even if it looks like "just this
 one field."
+
+## Disposition-reply convention (before calling `resolveReviewThread`)
+
+**This is the canonical statement of the convention — every other doc
+that mentions resolving a review thread links here instead of restating
+it, to avoid the same five-file drift described in "Why this exists"
+above.**
+
+Before **any** `resolveReviewThread` GraphQL call, the agent MUST first
+post a reply comment on that thread carrying a machine-readable
+disposition:
+
+```
+Disposition: fixed | refuted | superseded | follow-up
+Evidence: <commit sha + test name>  /  <file:line + why>  /  <superseding head sha + seam>  /  <issue #N + why non-blocking>
+```
+
+- `fixed` — the commit SHA that fixed it, plus the test name that proves it.
+- `refuted` — the `file:line` and the invariant/reasoning showing the
+  concern doesn't apply.
+- `superseded` — the head SHA of the change that overtook this thread and
+  the seam it replaces.
+- `follow-up` — the tracked issue number and why it's non-blocking here.
+  Never write "will follow up" without a real issue number — untracked
+  follow-up work silently disappears once the thread closes.
+
+**A thread must never be resolved with zero reply.** That is the
+resolved-to-clear anti-pattern the #3647 incident shipped through: a
+responder silently `resolveReviewThread`'d 15 threads with no reply and no
+evidence, and the PR merged with 6 live P1 defects because nothing forced
+a reason to exist. Sequence is always **reply, then resolve** — never
+resolve first and explain later, never resolve without replying at all.
+
+**Mechanical enforcement status (as of this writing): NOT YET LIVE.**
+`scripts/ci/check-pr-review-convergence` currently blocks only on pending
+reviewers, stale human reviews, and unresolved threads (items 1-3 above)
+— it does not read `comments.totalCount` and does not emit
+`resolved_without_disposition`. That detection (flagging any resolved
+thread whose `comments.totalCount <= 1` — no reply posted beyond the
+original review comment — as `BLOCK`ing) is proposed in #3732, which is
+deliberately **held back** for a dogfood-advisory-first rollout: this
+convention lands and is followed by agents first, so the mechanical gate
+doesn't retroactively block PRs already in flight when it goes live. Until
+#3732 merges, a resolved thread with zero reply passes
+`check-pr-review-convergence` silently — follow this convention as
+**process discipline**, verified by the agent/reviewer doing the work, not
+yet by the script's exit code. Once #3732 lands, the script enforces it
+mechanically. Even then, the script can only verify a reply's *existence*,
+not its *content* — following the exact `Disposition:`/`Evidence:` format
+above is what makes the reply useful to a human reader and to any future
+content-quality check, not just sufficient to pass the mechanical gate.
+
+Every agent/skill that calls or instructs `resolveReviewThread` follows
+this convention: `.claude/commands/pr-respond.md` step 4.5,
+`.claude/agents/pr-responder.md` step 5, and the verification-side
+references in `.claude/commands/pr-ready.md` step 3.5 and
+`.claude/agents/ops.md`.

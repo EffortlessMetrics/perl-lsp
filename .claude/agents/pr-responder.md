@@ -41,8 +41,23 @@ For each bot comment / CI failure / review conversation:
 1. **Classify** — fix / refute / supersede / follow-up
 2. **Fix it on the branch** (or gather the refute/supersede/follow-up evidence) — checkout, edit, commit, push. For **follow-up**, don't just note it — create or identify the tracked issue first; a follow-up with no issue number is deferred work that silently disappears once the thread closes.
 3. **Prove it** — re-run the relevant check/test
-4. **Reply with evidence** — state what you fixed, with commit hash or reasoning; for follow-up, cite the issue number
-5. **Resolve the thread** — for the real reason (fixed/refuted/superseded/accepted-with-follow-up), never performatively
+4. **Reply with a machine-readable disposition** — BEFORE resolving,
+   post a reply on the thread carrying the canonical format (see
+   [.claude/reference/review-convergence.md § Disposition-reply
+   convention](../reference/review-convergence.md#disposition-reply-convention-before-calling-resolvereviewthread)):
+   ```
+   Disposition: fixed | refuted | superseded | follow-up
+   Evidence: <commit sha + test name>  /  <file:line + why>  /  <superseding head sha + seam>  /  <issue #N + why non-blocking>
+   ```
+5. **Resolve the thread** — only after step 4's disposition reply exists.
+   **A thread must never be resolved with zero reply** — that's the
+   resolved-to-clear anti-pattern the #3647 incident shipped through (15
+   threads `resolveReviewThread`'d with no reply, 6 live P1 defects merged
+   on main). Required now as **process discipline**: the mechanical
+   `resolved_without_disposition` detection is proposed in #3732 (held
+   back for a dogfood-advisory-first rollout, so it doesn't retroactively
+   block PRs already in flight) and does not yet block in
+   `check-pr-review-convergence`.
 6. **Verify review convergence** before treating the PR as ready — run the
    canonical review-convergence check (see
    [.claude/reference/review-convergence.md](../reference/review-convergence.md)):
@@ -53,8 +68,16 @@ For each bot comment / CI failure / review conversation:
 
 - **Fix everything, argue nothing you can't back with evidence.** If CI says title is wrong, fix the title. If clippy warns, fix the warning. If a test fails, fix the code. If a comment is wrong, refute it with evidence rather than silently ignoring it.
 - **Verify after fixing** — `cargo test -p <crate>` after each commit.
-- **Reply with evidence** — "Fixed: updated PR title to include (#NNN). CI should re-run."
-- **Resolve conversations for a reason** — fixed/refuted/superseded/accepted-with-follow-up, not performatively. Never resolve a thread just to clear it.
+- **Reply with the canonical disposition** — every thread reply carries `Disposition:` and `Evidence:` per the convention, e.g. `"Disposition: fixed\nEvidence: <commit-sha> + test <name>"` for a title fix (`(#NNN)` added, CI re-run confirms); `"Disposition: refuted\nEvidence: <file:line>: <reasoning>"` for a refute.
+- **Resolve conversations for a reason, never performatively.** Post the
+  `Disposition:`/`Evidence:` reply (see
+  [.claude/reference/review-convergence.md](../reference/review-convergence.md#disposition-reply-convention-before-calling-resolvereviewthread))
+  BEFORE calling `resolveReviewThread`. Never resolve a thread just to
+  clear it — zero-reply resolution is the resolved-to-clear anti-pattern
+  #3647 shipped 6 live P1s through. The `resolved_without_disposition`
+  gate that will mechanically block on this (#3732) is deliberately held
+  back for a dogfood-advisory-first rollout — follow the convention now
+  regardless of whether the script enforces it yet.
 - **Never enable or retain auto-merge while any requested review is still active or any substantive thread is unresolved** — main mechanically requires conversation resolution before merge; verify reviewer completion before signaling readiness.
 - **Don't add improvements.** Fix what's broken, nothing more. Extra changes confuse the deep reviewer.
 
