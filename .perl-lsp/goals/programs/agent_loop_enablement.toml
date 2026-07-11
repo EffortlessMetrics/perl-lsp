@@ -120,10 +120,49 @@ issue = 3777
 depends_on = ["M2"]
 exit_criteria = "parallel writers cannot share target or branch lease"
 
+# M6 status = "completed" (2026-07-11, per the user's #3782 canonical
+# reframe posted on #3848: M6's OUTCOME is agents-find-code-faster /
+# avoid-ownership-mistakes / choose-focused-proof / rediscover-less -- NOT
+# 46/46 coverage or a required merge-gate. Read literally, this milestone's
+# quoted exit_criteria has two parts. Part 1 ("local ownership loads on
+# demand") is DONE: all 46 workspace members are accounted for -- 35
+# have-context (23 pre-existing + 12 core-product crates authored in #3879
+# with needs_context left empty) + 11 permanent exemptions (infra/test-only
+# crates, `.ci/policies/agent-context-policy.toml`); 0 remain in
+# `needs_context`. Part 2 ("no volatile facts") is enforced GOING FORWARD by
+# `cargo xtask check-agent-context` (#3876 phase 1: coverage; #3883 phase 2:
+# volatile-fact regex scanning PR#/SHA/release/date/status words, plus
+# paths-exist validation) -- but 18 PRE-EXISTING CLAUDE.md files (authored
+# before this bar existed) still carry ~20 advisory-flagged volatile-fact
+# hits, tracked as explicitly OPTIONAL, non-gating cleanup in #3882.
+#
+# Per #3782, that residual is NOT an M6-completion blocker: the reframe
+# explicitly says "do NOT pursue 'clean all 18 pre-existing files -> flip
+# gate to required' as an M6-completion prerequisite -- that over-indexes
+# on the count," and "#3882 cleanup is OPTIONAL/opportunistic, not
+# required-gate-blocking." The validator itself stays ADVISORY
+# (`required: false` in `.ci/gate-policy.yaml`) BY DESIGN here -- unlike M4
+# (`blocked`: an advisory check that SHOULD be a mechanical required gate
+# but is stuck on an external admin action), M6 is a context-AVAILABILITY
+# milestone, not a mechanical-enforcement one; "advisory validator, targeted
+# context over universal ceremony" is the correct shape per #3782, not an
+# under-delivered gate. A second follow-up (#3887: 2 validator
+# false-negative edge cases) is also tracked, non-gating hardening.
+#
+# Claim boundary: package-local context coverage is complete -- every
+# workspace member is accounted for (authored CLAUDE.md or explicitly
+# exempt), with no core-product crate left in `needs_context` -- BUT
+# `cargo xtask check-agent-context` CURRENTLY EXITS NON-ZERO because it
+# `bail!`s on the remaining volatile-fact hits in the pre-existing
+# CLAUDE.md files; that sub-check failure is tracked as OPTIONAL,
+# non-gating cleanup in #3882 per the user's #3848 steering, not silently
+# dropped. Run `cargo xtask check-agent-context` for the live
+# coverage/hit counts -- do NOT hardcode them here (AGENTS.md: metrics
+# drift). exit_criteria below is left untouched as the literal #3612 quote.
 [[milestone]]
 id = "M6"
 title = "Package-local context"
-status = "pending"
+status = "completed"
 issue = 3848
 depends_on = ["M2"]
 exit_criteria = "local ownership loads on demand; no volatile facts in local context"
