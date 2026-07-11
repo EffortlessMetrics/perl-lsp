@@ -8,14 +8,21 @@
 #   2 — worktree issue (not running in an isolated git worktree)
 #   3 — conflict issue (unresolved merge conflicts present)
 #   4 — cwd issue (running from the main repo root, not a worktree path)
+#   5 — CARGO_TARGET_DIR is set (defeats automatic per-worktree isolation)
 #   6 — stash issue (shared stash has entries — cross-contamination risk)
 #
 # Usage:
 #   bash scripts/agent-preflight.sh
 #
-# Check 5 computes the recommended CARGO_TARGET_DIR and prints it.
-# Agents should set CARGO_TARGET_DIR before running cargo commands:
-#   export CARGO_TARGET_DIR="/tmp/agent-$(git branch --show-current | tr '/' '-')-target"
+# Check 5 ENFORCES target-dir isolation (issue #3854). Cargo's default
+# (unconfigured) target-dir already resolves per-worktree — agents must NOT
+# export CARGO_TARGET_DIR. This check FAILS (non-zero exit) when the
+# variable is set: a stale shell-profile export from a prior session or a
+# different worktree/branch silently overrides the correct per-worktree
+# default for every subsequently-sourced shell, redirecting builds to the
+# wrong worktree (the "stale-binary trap"). There is no legitimate reason
+# for an agent to set it under the current convention — unset it and rely
+# on the default.
 
 set -uo pipefail
 
@@ -102,24 +109,26 @@ else
 fi
 
 # ── Check 5: CARGO_TARGET_DIR isolation ─────────────────────────────────────
-# Shared target/ across worktrees causes phantom test failures from stale
-# artifacts. Each agent needs its own CARGO_TARGET_DIR.
+# Cargo's default (unconfigured) target-dir resolves to
+# <workspace-root>/target, which for a git-worktree checkout is
+# <this-worktree>/target — already isolated, automatically, with no setup
+# step (issue #3854). A stray CARGO_TARGET_DIR in the environment (usually a
+# stale `export` left in a shell profile from a prior session or a different
+# worktree/branch) silently overrides that per-worktree default for every
+# subsequently-sourced shell — the "stale-binary trap." This check FAILS if
+# it's set: unsetting it (not documenting around it) is the enforcement
+# point.
 
 if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
-    ok "CARGO_TARGET_DIR already set: $CARGO_TARGET_DIR"
+    err "CARGO_TARGET_DIR is set (\"$CARGO_TARGET_DIR\") — unset it; cargo's default is already per-worktree isolated and a stale export redirects builds to the wrong worktree (see WORKTREE_PROTOCOL.md / #3854)."
+    echo "    Fix: unset CARGO_TARGET_DIR"
+    echo "    If this came from a shell profile (~/.bashrc, ~/.zshrc), remove that"
+    echo "    line — it is a leftover from another worktree/branch/session, not a"
+    echo "    legitimate setting under the current convention."
+    TARGET_DIR_OK=false
 else
-    BRANCH_SLUG="$(git branch --show-current 2>/dev/null | tr '/' '-')"
-    if [[ -n "$BRANCH_SLUG" ]]; then
-        RECOMMENDED_TARGET="/tmp/agent-${BRANCH_SLUG}-target"
-        ok "Recommended CARGO_TARGET_DIR=$RECOMMENDED_TARGET"
-        echo "    Run: export CARGO_TARGET_DIR=\"$RECOMMENDED_TARGET\""
-    else
-        # Detached HEAD — use a hash-based fallback
-        HEAD_SHORT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
-        RECOMMENDED_TARGET="/tmp/agent-detached-${HEAD_SHORT}-target"
-        ok "Recommended CARGO_TARGET_DIR=$RECOMMENDED_TARGET (detached HEAD fallback)"
-        echo "    Run: export CARGO_TARGET_DIR=\"$RECOMMENDED_TARGET\""
-    fi
+    ok "CARGO_TARGET_DIR is unset — cargo will use this worktree's own target/ (isolation is automatic)"
+    TARGET_DIR_OK=true
 fi
 
 # ── Check 6: No git stash entries (shared across worktrees) ──────────────────
@@ -174,6 +183,10 @@ fi
 
 if [[ "$CWD_OK" == false ]]; then
     exit 4
+fi
+
+if [[ "$TARGET_DIR_OK" == false ]]; then
+    exit 5
 fi
 
 if [[ "$STASH_OK" == false ]]; then

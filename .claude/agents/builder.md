@@ -48,10 +48,17 @@ If no impl branch exists (simple issue, skipped spec-planner):
 
 ## Environment setup
 
-Before running any cargo commands, set CARGO_TARGET_DIR to prevent shared build artifact collisions:
-```bash
-export CARGO_TARGET_DIR="/tmp/agent-$(git branch --show-current | tr '/' '-')-target"
-```
+Target-dir isolation is automatic — cargo's default (unconfigured) `target-dir`
+resolves to `<workspace-root>/target`, which for a `git worktree` checkout is
+`<your-worktree>/target`. Every worktree already has its own build output; you
+don't need to do anything.
+
+**Do NOT `export CARGO_TARGET_DIR`, especially not in a persistent shell profile
+(`~/.bashrc`, `~/.zshrc`).** Cargo's env-var precedence beats any per-worktree
+default (env > config > default), so a stale exported value from a prior
+session or a different worktree/branch silently overrides the correct
+per-worktree isolation for every subsequently-sourced shell — the exact
+stale-binary trap this convention used to cause (issue #3854).
 
 ## Guardrails (learned from 2026-06 campaign)
 
