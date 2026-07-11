@@ -1131,4 +1131,93 @@ our @ISA = ('B', 'C');
         let items = must_some(items);
         assert_eq!(items[0].name, "Foo");
     }
+
+    /// Regression guard for the "shared boundary" hazard: when the closing
+    /// `}` of a block-form package is immediately followed by the next
+    /// statement with no separator (`Outer`'s `location.end` exactly equals
+    /// `Inner`'s `location.start`), the inclusive-end bound in
+    /// `find_node_at_offset` must never resolve to a WRONG node -- e.g. it
+    /// must not silently report the shared offset as belonging to `Inner`
+    /// (the following package), nor fabricate a match for `Outer` that
+    /// isn't actually backed by a `Package`/`Class` AST node at that exact
+    /// offset.
+    ///
+    /// Empirically, `find_node_at_offset` resolves this offset to `Outer`'s
+    /// own `Block` child (recursion drills into the child whose span also
+    /// reaches the shared offset), not to the `Package` node itself and not
+    /// to `Inner` (`Inner` is never visited -- the `Program`-level loop
+    /// returns as soon as `Outer`'s subtree produces a match). Since
+    /// `prepare()` only special-cases `Package`/`Class`/`Identifier` node
+    /// kinds, landing on a `Block` node is filtered out and `prepare`
+    /// correctly returns `None` -- proving the inclusive-end bound cannot
+    /// produce a *wrong* match at a shared sibling boundary, only an
+    /// (already pre-existing, unchanged) imprecise `None`.
+    #[test]
+    fn test_prepare_at_shared_boundary_of_adjacent_block_packages() {
+        // No whitespace between the closing '}' of `Outer` and `package Inner;`.
+        let code = "package Outer { 1; }package Inner;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let outer_start = ast_package_start(&ast, "Outer");
+        let outer_end = ast_package_end(&ast, "Outer");
+        let inner_start = ast_package_start(&ast, "Inner");
+        assert_eq!(
+            outer_end, inner_start,
+            "test setup assumption: Outer's end must exactly equal Inner's start \
+             for this to exercise the shared-boundary hazard"
+        );
+
+        // Positive controls: offsets inside each package's own name (not
+        // just near the shared boundary) must still resolve to that
+        // package. Without these, a regression that made `prepare` return
+        // `None` unconditionally would pass the boundary assertion below
+        // trivially. `+ 3` lands inside "Outer"/"Inner" respectively, past
+        // the 8-byte "package " prefix both names share.
+        let outer_items = must_some(provider.prepare(&ast, code, outer_start + 8 + 3));
+        assert_eq!(
+            outer_items[0].name, "Outer",
+            "offset inside Outer's own name must resolve to Outer"
+        );
+        let inner_items = must_some(provider.prepare(&ast, code, inner_start + 8 + 3));
+        assert_eq!(
+            inner_items[0].name, "Inner",
+            "offset inside Inner's own name must resolve to Inner"
+        );
+
+        // At the exact shared offset, `prepare` must not report `Inner`
+        // (which starts here but was never reached) nor fabricate a
+        // `Package`-kind match for `Outer` that the AST doesn't actually
+        // back at this precise offset -- it must return `None`.
+        assert!(
+            provider.prepare(&ast, code, outer_end).is_none(),
+            "shared boundary offset must not produce a wrong/stale Package match"
+        );
+    }
+
+    /// Test helper: return the `location.end` of the top-level `Package` node
+    /// with the given name (block form, so its span covers the whole `{ }`).
+    fn ast_package_end(ast: &Node, want_name: &str) -> usize {
+        must_some(find_package_span(ast, want_name)).1
+    }
+
+    /// Test helper: return the `location.start` of the top-level `Package`
+    /// node with the given name.
+    fn ast_package_start(ast: &Node, want_name: &str) -> usize {
+        must_some(find_package_span(ast, want_name)).0
+    }
+
+    fn find_package_span(ast: &Node, want_name: &str) -> Option<(usize, usize)> {
+        if let NodeKind::Program { statements } = &ast.kind {
+            for s in statements {
+                if let NodeKind::Package { name, .. } = &s.kind
+                    && name == want_name
+                {
+                    return Some((s.location.start, s.location.end));
+                }
+            }
+        }
+        None
+    }
 }
