@@ -1038,8 +1038,19 @@ impl LspServer {
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
 
-                    // Enhance completions with cached type information.
-                    let type_engine = self.get_or_build_type_engine(uri, &doc.text, ast);
+                    // Enhance completions with generation-owned type information
+                    // (#3760): the type environment is materialized once per
+                    // ParsedSnapshot generation and derived from the exact source
+                    // this snapshot was parsed from, so a completion request under
+                    // rapid edits always reads type facts for the current
+                    // generation — no cross-generation bleed. `type_environment()`
+                    // only returns `None` for an AST-less snapshot, which cannot
+                    // happen on this path (this branch is already gated on
+                    // `parsed.ast()` being `Some`, the same snapshot); the
+                    // `.and_then` is defensive plumbing against a future change to
+                    // that guard, not a reachable `None` today. The sigil-based
+                    // fallback below still runs regardless.
+                    let type_engine = parsed.as_ref().and_then(|p| p.type_environment());
 
                     // Add type information to completion items where possible
                     for completion in &mut base_completions {
@@ -1048,7 +1059,9 @@ impl LspServer {
                             // Try to get the actual inferred type for the variable
                             let var_name =
                                 completion.label.trim_start_matches(['$', '@', '%', '&']);
-                            if let Some(perl_type) = type_engine.get_type_at(var_name) {
+                            if let Some(perl_type) =
+                                type_engine.as_ref().and_then(|engine| engine.get_type_at(var_name))
+                            {
                                 completion.detail = Some(Self::format_type_for_detail(&perl_type));
                             } else {
                                 // Fallback to sigil-based type hint
