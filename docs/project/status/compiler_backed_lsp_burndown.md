@@ -14,6 +14,35 @@ and promote only when the provider gates are satisfied.
 This page does not claim broad runtime conformance or broad compiler-backed LSP
 cutover. Provider behavior changes still require provider-specific proof.
 
+## Burndown Summary
+
+At-a-glance state. Counts are derived by counting entries in the Phase 2 Board,
+the [P3 burn-down log](#p3-compile-bucket-burn-down-log), and the Current Gap
+Inputs table below — not estimated. Where a total or remaining count is not
+enumerated anywhere in this file (`run`'s remaining `parse_recovery` files, P4's
+"broader runtime" scope), it is marked `?` rather than guessed.
+
+The P3 burn-down log's file count (38: 3 `base` + 17 `comp` + 18 `run`) is scoped
+to files that moved between compile buckets within that log. It does not include
+the six `base/*.t` files tracked separately as P2's selected execute-base
+(`if.t`, `cond.t`, `num.t`, `pat.t`, `translate.t`, `while.t`), which were already
+compile-clean before P3 started and are referenced elsewhere in this document —
+these two counts (38 vs. the 44 total distinct `base`/`comp`/`run` file
+references across the whole page) measure different scopes, not conflicting
+facts.
+
+**Phase 2 board status:** P0 ✅ &nbsp; P1 ✅ &nbsp; P2 ✅ &nbsp; P3 🟡 &nbsp; P4 🟡 &nbsp; P5 ✅ &nbsp; P6 ✅ &nbsp; P7 ✅ &nbsp; P8 ✅
+
+| Bucket | Cleared | Remaining | State |
+|---|---|---|---|
+| `base` parse/compile | 9/9 files compile-clean; 3 of these (`rs.t`, `term.t`, `lex.t`) are logged reaching compile pass in the P3 burn-down | 0 | ✅ Green |
+| `comp` parse/compile | `compile_effect` and `parse_recovery` both cleared: 16 files moved `compile_effect` → compile pass, plus 1 file (`comp/decl.t`) moved `parse_recovery` → compile pass directly (17 files reaching compile pass total in the P3 log) | 0 known | ✅ Green |
+| `run` parse/compile | `compile_effect` cleared: 17 files moved `compile_effect` → compile pass, plus 1 file (`run/script.t`) moved `parse_recovery` → compile pass directly (18 files reaching compile pass total in the P3 log) | `parse_recovery` remains on the rest of `run` (total bucket size not enumerated in this file) | 🟡 remaining count `?` |
+| `runtime_control_flow` (P4) | 1 selected-file burn-down (`base/while.t`) | broader bucket | 🟡 selected slice only |
+| `runtime_value_model` (P4) | 2 selected-file burn-downs (`base/num.t`, `base/translate.t`) | broader bucket | 🟡 selected slice only |
+| `runtime_regex` (P4) | 1 selected slice (`base/pat.t`) | broader bucket | 🟡 selected slice only |
+| Selected execute-base (P2) | 6/6 selected files, 325/325 TAP assertions | n/a — selected scope, not a full-profile claim | ✅ Green |
+
 ## Required PR Proof
 
 Normal PRs are governed by:
@@ -40,12 +69,65 @@ Coverage is advisory/manual/scheduled only and must not block normal PR work.
 | P0 | Phase 2 board | Green after #3459 | This file | None | Board exists and is linked from the harness and provider status pages |
 | P1 | First provider candidate selection | Green / selected | `textDocument/references` PIR-A initialized same-file lexical references selected below; #2674 tracks the measurement-to-promotion roadmap; #2635/#3461 supply the guarded shadow/refusal prerequisites | Refresh the selected candidate's P5/P6/P7 evidence before behavior promotion | One provider surface and fact class is selected with harness, scorecard/oracle, shadow, fallback, and rollback evidence named |
 | P2 | Selected runtime expansion | Green / expanded | Selected execute-base covers `base/if.t`, `base/cond.t`, `base/num.t`, `base/pat.t`, `base/translate.t`, and `base/while.t` with 325/325 TAP assertions | None | Selected execute receipt expanded beyond the previous three files without broad profile-wide execute |
-| P3 | Compile bucket burn-down | Yellow / ongoing | #3474 focused runner proof moves `base/lex.t` from `parse_recovery` to `compile_effect`; #3481 focused proof moves `base/term.t` from `compile_effect` to compile pass; #3483 focused proof moves `base/rs.t` from `compile_effect` to compile pass; #3485 focused proof moves `comp/require.t` from `parse_recovery` to `compile_effect`; #3487 focused proof moves `comp/use.t` from `parse_recovery` to `compile_effect`; #3490 focused proof moves `comp/proto.t` from `parse_recovery` to `compile_effect`; #3492 focused proof moves `comp/decl.t` from `parse_recovery` to compile pass; #3494 focused proof moves `comp/line_debug.t` from compile-mode `parse_recovery` to `compile_effect`; #3496 focused proof moves `base/lex.t` from `compile_effect` to compile pass; #3498 focused proof moves `comp/final_line_num.t` from compile-mode `parse_recovery` to `compile_effect`; #3500 focused proof moves `comp/parser.t` from compile-mode `parse_recovery` to `compile_effect`; #3502 focused proof moves `comp/our.t` from `compile_effect` to compile pass; #3506 focused proof moves `run/switch-I-and-M.t` and `run/switchM.t` from `compile_effect` to compile pass; #3508 focused proof moves `run/switch0.t`, `run/switchF2.t`, and `run/switcht.t` from `compile_effect` to compile pass; #3510 focused proof moves `run/switcha.t`, `run/switchF.t`, and `run/noswitch.t` from `compile_effect` to compile pass; #3512 focused proof moves `run/switchn.t` from `compile_effect` to compile pass; #3514 focused proof moves `run/switchp.t` from `compile_effect` to compile pass; #3516 focused proof moves `run/switchx.t` from `compile_effect` to compile pass; #3518 focused proof moves `run/switchI.t` from `compile_effect` to compile pass; #3520 focused proof moves `run/switchd-78586.t` from `compile_effect` to compile pass; #3522 focused proof moves `run/cloexec.t` from `compile_effect` to compile pass; #3524 focused proof moves `run/runenv_hashseed.t` from `compile_effect` to compile pass; #3526 focused proof moves `run/switchDx.t` from `compile_effect` to compile pass; #3528 focused proof moves `run/fresh_perl.t` from `compile_effect` to compile pass; #3530 focused proof moves `comp/line_debug.t` from `compile_effect` to compile pass; #3532 focused proof moves `comp/filter_exception.t` from `compile_effect` to compile pass; #3534 focused proof moves `comp/redef.t` from `compile_effect` to compile pass; #3536 focused proof moves `comp/multiline.t` from `compile_effect` to compile pass; #3538 focused proof moves `comp/fold.t` from `compile_effect` to compile pass; #3540 focused proof moves `comp/utf.t` from `compile_effect` to compile pass; #3543 focused proof moves `comp/parser_run.t` from `compile_effect` to compile pass; #3545 focused proof moves `comp/retainedlines.t` from `compile_effect` to compile pass; #3548 focused proof moves `comp/proto.t` from `compile_effect` to compile pass; #3551 focused proof moves `comp/use.t` from `compile_effect` to compile pass; #3553 focused proof moves `comp/parser.t` from `compile_effect` to compile pass; #3555 focused proof moves `comp/final_line_num.t` from `compile_effect` to compile pass; #3557 focused proof moves `comp/form_scope.t` from `compile_effect` to compile pass; #3560 focused proof moves `comp/require.t` from `compile_effect` to compile pass; #3562 focused proof moves `comp/hints.t` from `compile_effect` to compile pass; #3565 focused proof moves `run/script.t` from `parse_recovery` to compile pass; current real upstream receipts still show `parse_recovery` in `run`; `comp` `compile_effect` is cleared | Reduce one named bucket or tight cluster | One compile bucket shrinks without new `unknown` or unbucketed failures |
+| P3 | Compile bucket burn-down | Yellow / ongoing | `comp` `compile_effect`/`parse_recovery` both cleared; `run` `compile_effect` cleared, `parse_recovery` remains (count unknown); `base` 9/9 compile-clean. Full PR-by-PR trail: [P3 burn-down log](#p3-compile-bucket-burn-down-log) (40 PRs, 38 files) | Reduce one named bucket or tight cluster | One compile bucket shrinks without new `unknown` or unbucketed failures |
 | P4 | Runtime bucket burn-down | Yellow / ongoing | `runtime_control_flow` has one selected-file burn-down through `base/while.t`; `runtime_value_model` has selected-file burn-downs through `base/num.t` and `base/translate.t`; `runtime_regex` has its first selected slice through `base/pat.t`; broader runtime remains selected only | Return to P3 compile bucket burn-down before selecting another execute candidate | One runtime bucket shrinks and the selected execute baseline is updated |
 | P5 | Curated-gold / oracle alignment | Green / curated corpus exists | `references_promotion_test::p5_curated_expected_lsp_range_corpus_for_initialized_lexicals` checks expected LSP `Range` sets for the PIR-A initialized same-file lexical slice; existing provider references receipts remain support evidence only | Feed this corpus into P6 provider shadow comparison | Candidate fact class has independent correctness evidence beyond harness receipts |
 | P6 | Provider shadow comparison | Green / receipt exists | `references_promotion_test::p6_provider_shadow_receipt_for_curated_references_slice` compares the selected PIR-A candidate to the P5 curated ranges and asserts the PIR shadow receipt records fallback, confidence, freshness, and dynamic-boundary blocker behavior | None | Shadow receipt records candidate, fallback, blockers, confidence, freshness, and dynamic-boundary behavior |
 | P7 | First provider promotion prep | Green / prep proof | `references_promotion_test::p7_promotion_prep_preserves_feature_gate_and_no_output_change` proves the rollback/off anchor, legacy-output preservation in shadow mode, and dynamic-boundary fallback for the selected PIR-A references slice; the References PIR-A row is recorded in the provider promotion ledger | None | Promotion-prep proof lands without broad live behavior change |
 | P8 | First gated provider promotion | Green / bounded live | `textDocument/references` now allows the selected lexical slice to reach the semantic source-backed tier when `includeDeclaration=false`; `handle_references_lexical_variable_without_declaration_uses_source_backed_tier` proves the live receipt, `handle_references_workspace_variable_answering_tier_in_trace` proves declaration-including lexical fallback, and `p7_promotion_prep_preserves_feature_gate_and_no_output_change` preserves the rollback/off proof | Return to P3/P4 bucket burn-down before any broader provider promotion | One provider surface/fact class changes live behavior with rollback/fallback proof |
+
+### P3 compile-bucket burn-down log
+
+<details>
+<summary>P3 burn-down log (40 PRs, 38 files)</summary>
+
+| PR | File(s) | Transition |
+|---|---|---|
+| #3474 | `base/lex.t` | `parse_recovery` → `compile_effect` |
+| #3481 | `base/term.t` | `compile_effect` → compile pass |
+| #3483 | `base/rs.t` | `compile_effect` → compile pass |
+| #3485 | `comp/require.t` | `parse_recovery` → `compile_effect` |
+| #3487 | `comp/use.t` | `parse_recovery` → `compile_effect` |
+| #3490 | `comp/proto.t` | `parse_recovery` → `compile_effect` |
+| #3492 | `comp/decl.t` | `parse_recovery` → compile pass |
+| #3494 | `comp/line_debug.t` | compile-mode `parse_recovery` → `compile_effect` |
+| #3496 | `base/lex.t` | `compile_effect` → compile pass |
+| #3498 | `comp/final_line_num.t` | compile-mode `parse_recovery` → `compile_effect` |
+| #3500 | `comp/parser.t` | compile-mode `parse_recovery` → `compile_effect` |
+| #3502 | `comp/our.t` | `compile_effect` → compile pass |
+| #3506 | `run/switch-I-and-M.t`, `run/switchM.t` | `compile_effect` → compile pass |
+| #3508 | `run/switch0.t`, `run/switchF2.t`, `run/switcht.t` | `compile_effect` → compile pass |
+| #3510 | `run/switcha.t`, `run/switchF.t`, `run/noswitch.t` | `compile_effect` → compile pass |
+| #3512 | `run/switchn.t` | `compile_effect` → compile pass |
+| #3514 | `run/switchp.t` | `compile_effect` → compile pass |
+| #3516 | `run/switchx.t` | `compile_effect` → compile pass |
+| #3518 | `run/switchI.t` | `compile_effect` → compile pass |
+| #3520 | `run/switchd-78586.t` | `compile_effect` → compile pass |
+| #3522 | `run/cloexec.t` | `compile_effect` → compile pass |
+| #3524 | `run/runenv_hashseed.t` | `compile_effect` → compile pass |
+| #3526 | `run/switchDx.t` | `compile_effect` → compile pass |
+| #3528 | `run/fresh_perl.t` | `compile_effect` → compile pass |
+| #3530 | `comp/line_debug.t` | `compile_effect` → compile pass |
+| #3532 | `comp/filter_exception.t` | `compile_effect` → compile pass |
+| #3534 | `comp/redef.t` | `compile_effect` → compile pass |
+| #3536 | `comp/multiline.t` | `compile_effect` → compile pass |
+| #3538 | `comp/fold.t` | `compile_effect` → compile pass |
+| #3540 | `comp/utf.t` | `compile_effect` → compile pass |
+| #3543 | `comp/parser_run.t` | `compile_effect` → compile pass |
+| #3545 | `comp/retainedlines.t` | `compile_effect` → compile pass |
+| #3548 | `comp/proto.t` | `compile_effect` → compile pass |
+| #3551 | `comp/use.t` | `compile_effect` → compile pass |
+| #3553 | `comp/parser.t` | `compile_effect` → compile pass |
+| #3555 | `comp/final_line_num.t` | `compile_effect` → compile pass |
+| #3557 | `comp/form_scope.t` | `compile_effect` → compile pass |
+| #3560 | `comp/require.t` | `compile_effect` → compile pass |
+| #3562 | `comp/hints.t` | `compile_effect` → compile pass |
+| #3565 | `run/script.t` | `parse_recovery` → compile pass |
+
+Current real upstream receipts still show `parse_recovery` in `run`; `comp`
+`compile_effect` is cleared.
+
+</details>
 
 ## Selected Provider Candidate
 
