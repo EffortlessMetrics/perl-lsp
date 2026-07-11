@@ -303,13 +303,16 @@ fn is_inside_heredoc(lines: &[&str], target_line: usize) -> bool {
         // If we are inside a heredoc, check whether this line is the
         // terminator.
         if inside {
-            if let Some(term) = active_heredocs.last() {
+            if let Some(term) = active_heredocs.first() {
                 let trimmed = line.trim();
                 // Perl heredoc terminator: the tag alone on a line (possibly
                 // with leading whitespace for <<~ heredocs, trailing ; allowed).
+                // Heredocs opened on the same statement must close in
+                // declaration order (perlop), so match the earliest-pending
+                // tag (FIFO), not the most-recently-opened one.
                 let trimmed_semi = trimmed.trim_end_matches(';').trim_end();
                 if trimmed_semi == term {
-                    active_heredocs.pop();
+                    active_heredocs.remove(0);
                     inside = !active_heredocs.is_empty();
                     continue;
                 }
@@ -502,6 +505,57 @@ mod tests {
         assert!(!is_inside_heredoc(&lines, 0));
         assert!(is_inside_heredoc(&lines, 1));
         assert!(!is_inside_heredoc(&lines, 2));
+    }
+
+    #[test]
+    fn is_inside_heredoc_two_on_one_line_closes_in_declaration_order() {
+        // Perl requires heredoc bodies opened on the same statement to be
+        // closed in declaration order (perlop): A's terminator comes before
+        // B's body, not after. Matching against the most-recently-opened tag
+        // (LIFO) instead of the earliest-pending one (FIFO) would leave "A"
+        // permanently un-popped once "B" closes, corrupting `inside` state
+        // for the rest of the file.
+        let lines = vec![
+            "print <<A, <<B;", // 0
+            "line in A",       // 1
+            "A",               // 2
+            "line in B",       // 3
+            "B",               // 4
+            "sub foo {",       // 5 - well outside any heredoc
+        ];
+        assert!(is_inside_heredoc(&lines, 1));
+        assert!(!is_inside_heredoc(&lines, 2));
+        assert!(is_inside_heredoc(&lines, 3));
+        assert!(!is_inside_heredoc(&lines, 4));
+        assert!(!is_inside_heredoc(&lines, 5));
+    }
+
+    #[test]
+    fn is_inside_heredoc_three_on_one_line_closes_in_declaration_order() {
+        // Generalization check for the FIFO fix: with three heredocs opened
+        // on one statement (`<<A, <<B, <<C`), Perl reads their bodies and
+        // terminators strictly in declaration order (verified against real
+        // `perl`: reversing any pair of terminators fails with "Can't find
+        // string terminator"). The earliest-pending tag must always be the
+        // one matched, all the way down to zero pending tags — not just for
+        // the two-heredoc case.
+        let lines = vec![
+            "print <<A, <<B, <<C;", // 0
+            "body A",               // 1
+            "A",                    // 2
+            "body B",               // 3
+            "B",                    // 4
+            "body C",               // 5
+            "C",                    // 6
+            "sub foo {",            // 7 - well outside any heredoc
+        ];
+        assert!(is_inside_heredoc(&lines, 1));
+        assert!(!is_inside_heredoc(&lines, 2));
+        assert!(is_inside_heredoc(&lines, 3));
+        assert!(!is_inside_heredoc(&lines, 4));
+        assert!(is_inside_heredoc(&lines, 5));
+        assert!(!is_inside_heredoc(&lines, 6));
+        assert!(!is_inside_heredoc(&lines, 7));
     }
 
     #[test]
