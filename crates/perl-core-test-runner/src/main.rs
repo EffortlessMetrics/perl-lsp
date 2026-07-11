@@ -5,9 +5,9 @@
 // TAP is the process protocol for this binary.
 #![allow(clippy::print_stderr, clippy::print_stdout)]
 
-use anyhow::{Context, Result, bail};
-use perl_core_harness_types::{RUNNER_RECORD_SCHEMA_VERSION, RunnerRecord, RunnerStatus};
-use perl_parser_core::hir::{CompileEffect, CompileEffectKind, CompileEffectSourceKind, lower_ast};
+use anyhow::{bail, Context, Result};
+use perl_core_harness_types::{RunnerRecord, RunnerStatus, RUNNER_RECORD_SCHEMA_VERSION};
+use perl_parser_core::hir::{lower_ast, CompileEffect, CompileEffectKind, CompileEffectSourceKind};
 use perl_parser_core::{Parser, RecoverySalvageClass, RecoverySalvageProfile};
 use std::env;
 use std::ffi::OsString;
@@ -43,6 +43,7 @@ const RUN_SWITCHC_PLATFORM_PROBE_SOURCE: &str = r#"BEGIN {
     skip_all_without_perlio();
     skip_all_if_miniperl('-C and $ENV{PERL_UNICODE} are disabled on miniperl');
 }"#;
+const RUN_SWITCHI_SETUP_SOURCE: &str = "BEGIN {\n    chdir 't' if -d 't';\n    unshift @INC, '../lib';     # Do NOT make this @INC = '../lib';\n    require './test.pl';\t# for which_perl() etc\n    plan(4);\n}";
 
 #[derive(Debug)]
 struct Invocation {
@@ -1357,9 +1358,7 @@ fn is_run_switch_i_setup_boundary(
     let Some(slice) = source.get(effect.range.start..effect.range.end) else {
         return false;
     };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized
-        == "BEGIN {\n    chdir 't' if -d 't';\n    unshift @INC, '../lib';\n    require './test.pl';\n    plan(4);\n}"
+    slice.replace("\r\n", "\n") == RUN_SWITCHI_SETUP_SOURCE
 }
 
 fn is_run_switchd_debugger_setup_boundary(
@@ -4543,10 +4542,7 @@ mod tests {
     #[test]
     fn compile_run_switch_i_setup_changed_block_stays_bucketed() -> TestResult {
         let invocation = Invocation {
-            source: SourceInput::Inline(
-                "#!./perl\n\nBEGIN {\n    chdir 't' if -d 't';\n    unshift @INC, '../lib';\n    require './test.pl';\n    plan(5);\n}\n"
-                    .to_string(),
-            ),
+            source: SourceInput::Inline(run_switch_i_setup_source().replace("plan(4)", "plan(5)")),
             display_path: "run/switchI.t".to_string(),
         };
 
@@ -5626,16 +5622,7 @@ BEGIN {
     }
 
     fn run_switch_i_setup_source() -> String {
-        r#"#!./perl -IFoo::Bar -IBla
-
-BEGIN {
-    chdir 't' if -d 't';
-    unshift @INC, '../lib';
-    require './test.pl';
-    plan(4);
-}
-"#
-        .to_string()
+        format!("#!./perl -IFoo::Bar -IBla\n\n{RUN_SWITCHI_SETUP_SOURCE}\n")
     }
 
     fn run_switchd_debugger_setup_source() -> String {
