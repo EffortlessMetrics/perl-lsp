@@ -56,7 +56,7 @@ enforcement = "advisory"
 # armed — is covered by a separate bridge audit (a later PR), not by this
 # policy file.
 retrospective_covered_through = "da86c123a"
-advisory_expected_from = ""
+advisory_expected_from = "af58b72a"
 blocking_enforced_from = ""
 
 # Every PR carries ONE explicit disposition: a Changie fragment OR an
