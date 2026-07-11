@@ -502,7 +502,12 @@ impl TypeHierarchyProvider {
     // Helper methods
 
     fn find_node_at_offset<'a>(&self, node: &'a Node, offset: usize) -> Option<&'a Node> {
-        if offset >= node.location.start && offset < node.location.end {
+        // Inclusive end: a caret resting at the trailing edge of a node (the
+        // position right after typing its last character, e.g. `package Foo`
+        // with the caret just after "o") must still be treated as on-node,
+        // matching the convention already established in the document-highlight
+        // and references providers for the same half-open-bound class of bug.
+        if offset >= node.location.start && offset <= node.location.end {
             // First check children
             if let Some(children) = self.get_children(node) {
                 for child in children {
@@ -1108,5 +1113,22 @@ our @ISA = ('B', 'C');
 
         assert_eq!(children.len(), 5);
         Ok(())
+    }
+
+    #[test]
+    fn test_prepare_finds_type_with_trailing_edge_caret() {
+        // No trailing semicolon/newline: the `Package` node's own span ends
+        // exactly at the last byte of "Foo", so a caret resting at the
+        // trailing edge (offset == source.len(), the common "just finished
+        // typing the name" cursor position) must still resolve to it.
+        let code = "package Foo";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let items = provider.prepare(&ast, code, code.len());
+        assert!(items.is_some(), "trailing-edge caret should still find the enclosing type");
+        let items = must_some(items);
+        assert_eq!(items[0].name, "Foo");
     }
 }
