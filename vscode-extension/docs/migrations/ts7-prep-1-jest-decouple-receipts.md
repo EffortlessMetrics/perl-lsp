@@ -16,10 +16,10 @@ A direct `typescript` 6 → 7 swap is **impossible today** because two ecosystem
 dependencies hard-cap their `typescript` peer below 7, and neither has any published
 version that supports TS7:
 
-| Dependency | Installed | `typescript` peer range | Supports TS7? | Newest published | Newest peer range |
-|---|---|---|---|---|---|
-| `ts-jest` | 29.4.11 | `>=4.3 <7` | **No** | 29.4.11 (`latest`) | `>=4.3 <7` |
-| `@typescript-eslint/*` | 8.61.1 | `>=4.8.4 <6.1.0` | **No** | 8.63.0 (`latest`) | `>=4.8.4 <6.1.0` |
+| Dependency             | Installed | `typescript` peer range | Supports TS7? | Newest published   | Newest peer range |
+| ---------------------- | --------- | ----------------------- | ------------- | ------------------ | ----------------- |
+| `ts-jest`              | 29.4.11   | `>=4.3 <7`              | **No**        | 29.4.11 (`latest`) | `>=4.3 <7`        |
+| `@typescript-eslint/*` | 8.61.1    | `>=4.8.4 <6.1.0`        | **No**        | 8.63.0 (`latest`)  | `>=4.8.4 <6.1.0`  |
 
 `typescript` dist-tags at probe time: `latest = 7.0.2`, `rc = 7.0.1-rc`,
 `beta = 6.0.0-beta`. Stable 7 exists (`7.0.2`); `tsc` was probed, not
@@ -77,18 +77,18 @@ suites are Mocha, keep their own tsconfig + runner, and are excluded from
 
 ## Behavior-preservation proofs (all on TS6, this PR's HEAD)
 
-| Property | Baseline (ts-jest) | PREP-1 (tsc + Jest-on-JS) |
-|---|---|---|
-| `npm ci` | exit 0 | exit 0 |
-| `npm run lint` (eslint) | exit 0 | exit 0 |
-| `npm run compile` (prod `tsc -p ./`) | exit 0 | exit 0 |
-| `npm run test:ci` | 643 passed, 1 skipped¹ | **643 passed, 1 skipped, exit 0** |
-| `npm run test:grammar` | exit 0 | exit 0 |
-| Integration/published `tsc` compile | exit 0 | exit 0 (unchanged path) |
-| Coverage | collected (ts-jest maps to `.ts`) | collected (v8 maps to `.ts` via inline maps) |
-| Failure locations | `.ts:line:col` | `.ts:line:col` (verified²) |
-| Production `out/` payload | 17 `.js` (+ `out/test/**`) | identical set |
-| `typescript` in tree | single `6.0.3` | single `6.0.3` |
+| Property                             | Baseline (ts-jest)                | PREP-1 (tsc + Jest-on-JS)                    |
+| ------------------------------------ | --------------------------------- | -------------------------------------------- |
+| `npm ci`                             | exit 0                            | exit 0                                       |
+| `npm run lint` (eslint)              | exit 0                            | exit 0                                       |
+| `npm run compile` (prod `tsc -p ./`) | exit 0                            | exit 0                                       |
+| `npm run test:ci`                    | 643 passed, 1 skipped¹            | **643 passed, 1 skipped, exit 0**            |
+| `npm run test:grammar`               | exit 0                            | exit 0                                       |
+| Integration/published `tsc` compile  | exit 0                            | exit 0 (unchanged path)                      |
+| Coverage                             | collected (ts-jest maps to `.ts`) | collected (v8 maps to `.ts` via inline maps) |
+| Failure locations                    | `.ts:line:col`                    | `.ts:line:col` (verified²)                   |
+| Production `out/` payload            | 17 `.js` (+ `out/test/**`)        | identical set                                |
+| `typescript` in tree                 | single `6.0.3`                    | single `6.0.3`                               |
 
 ¹ Baseline `test:ci` also reports 3 FAILED suites **on Windows only**: the
 `testPathIgnorePatterns` entries (`<rootDir>/src/test/integration/` etc.) use forward

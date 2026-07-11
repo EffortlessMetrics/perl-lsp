@@ -38,24 +38,22 @@ describe('gherkin step definition support', () => {
 
   test('builds conservative generated regex patterns', () => {
     expect(buildGeneratedStepPattern('a user exists with name "alice"')).toBe(
-      '^a user exists with name "([^"]+)"$'
+      '^a user exists with name "([^"]+)"$',
     );
-    expect(buildGeneratedStepPattern('I add <item> to the cart')).toBe(
-      '^I add (.+) to the cart$'
-    );
-    expect(buildGeneratedStepPattern('the total is 19.99')).toBe(
-      '^the total is 19\\.99$'
-    );
+    expect(buildGeneratedStepPattern('I add <item> to the cart')).toBe('^I add (.+) to the cart$');
+    expect(buildGeneratedStepPattern('the total is 19.99')).toBe('^the total is 19\\.99$');
   });
 
   test('extracts slash-delimited step definitions and flags unsupported forms as ambiguous', () => {
-    const supported = scanStepDefinitions([
-      'use Test::BDD::Cucumber::StepFile;',
-      '',
-      'Given qr/^a user exists with name "([^"]+)"$/, sub {',
-      '    return;',
-      '};',
-    ].join('\n'));
+    const supported = scanStepDefinitions(
+      [
+        'use Test::BDD::Cucumber::StepFile;',
+        '',
+        'Given qr/^a user exists with name "([^"]+)"$/, sub {',
+        '    return;',
+        '};',
+      ].join('\n'),
+    );
 
     expect(supported.ambiguous).toBe(false);
     expect(supported.definitions).toEqual([
@@ -74,26 +72,30 @@ describe('gherkin step definition support', () => {
     const step = parseGherkinStepLine('Then the total should be "10"', 6);
     expect(step).not.toBeNull();
 
-    expect(classifyStepDefinitionStatus(step!, [
-      'Then qr/^the total should be "([^"]+)"$/, sub { return; };',
-    ])).toBe('defined');
+    expect(
+      classifyStepDefinitionStatus(step!, [
+        'Then qr/^the total should be "([^"]+)"$/, sub { return; };',
+      ]),
+    ).toBe('defined');
 
-    expect(classifyStepDefinitionStatus(step!, [
-      'Then qr{^the total should be "([^"]+)"$}, sub { return; };',
-    ])).toBe('ambiguous');
+    expect(
+      classifyStepDefinitionStatus(step!, [
+        'Then qr{^the total should be "([^"]+)"$}, sub { return; };',
+      ]),
+    ).toBe('ambiguous');
 
-    expect(classifyStepDefinitionStatus(step!, [
-      'Given qr/^some other step$/, sub { return; };',
-    ])).toBe('undefined');
+    expect(
+      classifyStepDefinitionStatus(step!, ['Given qr/^some other step$/, sub { return; };']),
+    ).toBe('undefined');
   });
 
   test('treats potentially expensive step regexes as ambiguous', () => {
     const step = parseGherkinStepLine('Then aaaaaaaaaaaaaaaaaaaa!', 1);
     expect(step).not.toBeNull();
 
-    expect(classifyStepDefinitionStatus(step!, [
-      'Then qr/^(a+)+!$/, sub { return; };',
-    ])).toBe('ambiguous');
+    expect(classifyStepDefinitionStatus(step!, ['Then qr/^(a+)+!$/, sub { return; };'])).toBe(
+      'ambiguous',
+    );
   });
 
   test('does not treat named-capture groups as expensive (no false positive)', () => {
@@ -113,15 +115,19 @@ describe('gherkin step definition support', () => {
     // quantifier, misclassifying ordinary step definitions as `ambiguous`.
     const numericStep = parseGherkinStepLine('Then the total is 19', 1);
     expect(numericStep).not.toBeNull();
-    expect(classifyStepDefinitionStatus(numericStep!, [
-      'Then qr/^the total is [0-9]+$/, sub { return; };',
-    ])).toBe('defined');
+    expect(
+      classifyStepDefinitionStatus(numericStep!, [
+        'Then qr/^the total is [0-9]+$/, sub { return; };',
+      ]),
+    ).toBe('defined');
 
     const quotedStep = parseGherkinStepLine('Then the name is "alice"', 1);
     expect(quotedStep).not.toBeNull();
-    expect(classifyStepDefinitionStatus(quotedStep!, [
-      'Then qr/^the name is "([^"]+)"$/, sub { return; };',
-    ])).toBe('defined');
+    expect(
+      classifyStepDefinitionStatus(quotedStep!, [
+        'Then qr/^the name is "([^"]+)"$/, sub { return; };',
+      ]),
+    ).toBe('defined');
   });
 
   test('treats bounded inner quantifiers in quantified groups as expensive (#953)', () => {
@@ -130,15 +136,15 @@ describe('gherkin step definition support', () => {
     // still creates exponential paths on failure.
     const stepA = parseGherkinStepLine('Then aaaaaaaaaaaaaaaaaaaa!', 1);
     expect(stepA).not.toBeNull();
-    expect(classifyStepDefinitionStatus(stepA!, [
-      'Then qr/^([a-z]{2,5})+!$/, sub { return; };',
-    ])).toBe('ambiguous');
+    expect(
+      classifyStepDefinitionStatus(stepA!, ['Then qr/^([a-z]{2,5})+!$/, sub { return; };']),
+    ).toBe('ambiguous');
 
     const stepB = parseGherkinStepLine('Then 192168001001', 1);
     expect(stepB).not.toBeNull();
-    expect(classifyStepDefinitionStatus(stepB!, [
-      'Then qr/^(\\d{1,3}){4}$/, sub { return; };',
-    ])).toBe('ambiguous');
+    expect(
+      classifyStepDefinitionStatus(stepB!, ['Then qr/^(\\d{1,3}){4}$/, sub { return; };']),
+    ).toBe('ambiguous');
   });
 
   test('#859 safe cases are still safe after bounded-quantifier extension', () => {
@@ -146,37 +152,37 @@ describe('gherkin step definition support', () => {
     // accidentally widen the heuristic to flag linear-time patterns.
     const numericStep = parseGherkinStepLine('Then total is 19', 1);
     expect(numericStep).not.toBeNull();
-    expect(classifyStepDefinitionStatus(numericStep!, [
-      'Then qr/^total is [0-9]+$/, sub { return; };',
-    ])).toBe('defined');
+    expect(
+      classifyStepDefinitionStatus(numericStep!, ['Then qr/^total is [0-9]+$/, sub { return; };']),
+    ).toBe('defined');
 
     const quotedStep = parseGherkinStepLine('Then name is "alice"', 1);
     expect(quotedStep).not.toBeNull();
-    expect(classifyStepDefinitionStatus(quotedStep!, [
-      'Then qr/^name is "([^"]+)"$/, sub { return; };',
-    ])).toBe('defined');
+    expect(
+      classifyStepDefinitionStatus(quotedStep!, ['Then qr/^name is "([^"]+)"$/, sub { return; };']),
+    ).toBe('defined');
 
     // A capture group with no outer quantifier is also safe.
     const capStep = parseGherkinStepLine('Then value is 42', 1);
     expect(capStep).not.toBeNull();
-    expect(classifyStepDefinitionStatus(capStep!, [
-      'Then qr/^value is (\\d+)$/, sub { return; };',
-    ])).toBe('defined');
+    expect(
+      classifyStepDefinitionStatus(capStep!, ['Then qr/^value is (\\d+)$/, sub { return; };']),
+    ).toBe('defined');
   });
 
   test('suggests a deterministic feature-relative target file', () => {
     expect(
       suggestStepDefinitionPath(
         path.join('/workspace', 'features', 'checkout.feature'),
-        '/workspace'
-      )
+        '/workspace',
+      ),
     ).toBe(path.join('/workspace', 'features', 'step_definitions', 'checkout_steps.pm'));
 
     expect(
       suggestStepDefinitionPath(
         path.join('/workspace', 'spec', 'features', 'login.feature'),
-        '/workspace'
-      )
+        '/workspace',
+      ),
     ).toBe(path.join('/workspace', 'spec', 'features', 'step_definitions', 'login_steps.pm'));
   });
 

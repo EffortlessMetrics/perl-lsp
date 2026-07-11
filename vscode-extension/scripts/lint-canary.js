@@ -136,13 +136,17 @@ function fail(message, detail) {
 }
 
 function main() {
-  const oxlintVersion = require(path.join(EXT_ROOT, 'node_modules', 'oxlint', 'package.json')).version;
+  const oxlintVersion = require(
+    path.join(EXT_ROOT, 'node_modules', 'oxlint', 'package.json'),
+  ).version;
   const tsgolintVersion = require(
     path.join(EXT_ROOT, 'node_modules', 'oxlint-tsgolint', 'package.json'),
   ).version;
 
   console.log(`[lint-canary] oxlint@${oxlintVersion}, oxlint-tsgolint@${tsgolintVersion}`);
-  console.log('[lint-canary] asserting type-aware mode is genuinely engaged (not a silent syntax-only fallback)...');
+  console.log(
+    '[lint-canary] asserting type-aware mode is genuinely engaged (not a silent syntax-only fallback)...',
+  );
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-oxlint-canary-'));
   let allPassed = true;
@@ -158,7 +162,8 @@ function main() {
     const badResult = runOxlint(tmpDir, 'bad.ts');
     const badFlagged =
       badResult.status !== 0 &&
-      (badResult.stdout.includes('no-floating-promises') || badResult.stderr.includes('no-floating-promises'));
+      (badResult.stdout.includes('no-floating-promises') ||
+        badResult.stderr.includes('no-floating-promises'));
     if (!badFlagged) {
       allPassed = false;
       fail(
@@ -166,14 +171,17 @@ function main() {
         `exit=${badResult.status}\nstdout:\n${badResult.stdout}\nstderr:\n${badResult.stderr}`,
       );
     } else {
-      console.log('[lint-canary] OK  case (a): bad.ts flagged by typescript/no-floating-promises (type-aware engine ran).');
+      console.log(
+        '[lint-canary] OK  case (a): bad.ts flagged by typescript/no-floating-promises (type-aware engine ran).',
+      );
     }
 
     // Case (b): the awaited form MUST pass. A nonzero/error result here
     // means either a false positive, or (more likely under alpha tooling)
     // that type-aware initialization itself failed — both are RED.
     const goodResult = runOxlint(tmpDir, 'good.ts');
-    const goodClean = goodResult.status === 0 && !goodResult.stdout.includes('no-floating-promises');
+    const goodClean =
+      goodResult.status === 0 && !goodResult.stdout.includes('no-floating-promises');
     if (!goodClean) {
       allPassed = false;
       fail(
@@ -189,7 +197,9 @@ function main() {
   }
 
   if (allPassed) {
-    console.log('[lint-canary] PASS — type-aware typescript/no-floating-promises genuinely executed.');
+    console.log(
+      '[lint-canary] PASS — type-aware typescript/no-floating-promises genuinely executed.',
+    );
     process.exitCode = 0;
   }
 }

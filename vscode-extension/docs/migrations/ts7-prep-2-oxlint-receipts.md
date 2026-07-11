@@ -62,14 +62,14 @@ but only one of the six rules actually consumes type information
 (`@typescript-eslint/no-floating-promises` — confirmed against
 typescript-eslint's own rule docs; the other five are AST-only).
 
-| ESLint rule | Oxlint rule | Type-aware? | Severity (before → after) |
-|---|---|---|---|
-| `@typescript-eslint/no-explicit-any` | `typescript/no-explicit-any` | No | warn → warn |
-| `@typescript-eslint/consistent-type-imports` | `typescript/consistent-type-imports` | No (syntactic) | warn → warn (`prefer: type-imports`, unchanged) |
-| `@typescript-eslint/no-floating-promises` | `typescript/no-floating-promises` | **Yes** | error → error |
-| `@typescript-eslint/no-unused-vars` | `no-unused-vars` | No | warn → warn (`argsIgnorePattern: ^_`, unchanged) |
-| `no-console` | `no-console` | No | warn → warn |
-| `eqeqeq` | `eqeqeq` | No | error → error (`always`, unchanged) |
+| ESLint rule                                  | Oxlint rule                          | Type-aware?    | Severity (before → after)                        |
+| -------------------------------------------- | ------------------------------------ | -------------- | ------------------------------------------------ |
+| `@typescript-eslint/no-explicit-any`         | `typescript/no-explicit-any`         | No             | warn → warn                                      |
+| `@typescript-eslint/consistent-type-imports` | `typescript/consistent-type-imports` | No (syntactic) | warn → warn (`prefer: type-imports`, unchanged)  |
+| `@typescript-eslint/no-floating-promises`    | `typescript/no-floating-promises`    | **Yes**        | error → error                                    |
+| `@typescript-eslint/no-unused-vars`          | `no-unused-vars`                     | No             | warn → warn (`argsIgnorePattern: ^_`, unchanged) |
+| `no-console`                                 | `no-console`                         | No             | warn → warn                                      |
+| `eqeqeq`                                     | `eqeqeq`                             | No             | error → error (`always`, unchanged)              |
 
 `.oxlintrc.json` sets `categories.correctness: "off"` and `plugins: ["typescript"]`
 so only these six rules are active — verified via `oxlint src --print-config`,
@@ -100,7 +100,7 @@ async function doAsyncThing(): Promise<void> {
   return Promise.resolve();
 }
 export function callSite(): void {
-  doAsyncThing();   // bare call — no await/void/catch/then
+  doAsyncThing(); // bare call — no await/void/catch/then
 }
 ```
 
@@ -144,6 +144,7 @@ no ERESOLVE, no --force, no --legacy-peer-deps
 ```
 
 Verified zero remnants:
+
 ```
 $ find node_modules -maxdepth 1 -iname "*eslint*"   → (none)
 $ grep -c '"eslint'  package-lock.json               → 0
@@ -358,7 +359,7 @@ bulk-dismissed — before resolving.
 
 **Thread 1 (sourcery-ai, `src/test/oxlint.test.ts:35`)** — "the rule-set test
 only checks the six expected rules are present (`arrayContaining`), not that
-they're the *only* six; config drift or an accidental extra rule wouldn't
+they're the _only_ six; config drift or an accidental extra rule wouldn't
 fail it." **Valid — fixed.** The rule-name assertion now does exact-set
 equality (`ruleNames.sort()` vs `expectedRuleNames.sort()`), so a silently
 added or removed rule now fails the test.
@@ -393,7 +394,7 @@ shows oxlint 1.73.0's core ESLint-equivalent rule namespace
 (`no-unused-vars`/`no-console`/`eqeqeq`/`eqeqeq` etc.) is not gated by the
 `plugins` array at all — `plugins` extends the rule surface with optional
 families (react, vue, jsx-a11y, ...); it does not replace a "default set"
-that would otherwise include core rules. (`"eslint"` *is* a valid enum value
+that would otherwise include core rules. (`"eslint"` _is_ a valid enum value
 in `configuration_schema.json`'s `LintPluginOptionsSchema`, so the reviewer's
 suggested fix would not have errored — it's just unnecessary given the
 measured behavior.) No code change made; replied on the thread with this

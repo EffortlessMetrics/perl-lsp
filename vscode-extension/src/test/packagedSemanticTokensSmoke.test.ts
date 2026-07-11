@@ -69,9 +69,8 @@ function findBundledServerPath(): string | undefined {
 
   const extRoot = path.resolve(__dirname, '..', '..');
   const platformDir = path.join(extRoot, 'bin', `${process.platform}-${process.arch}`);
-  const candidateNames = process.platform === 'win32'
-    ? ['perllsp.exe', 'perl-lsp.exe']
-    : ['perllsp', 'perl-lsp'];
+  const candidateNames =
+    process.platform === 'win32' ? ['perllsp.exe', 'perl-lsp.exe'] : ['perllsp', 'perl-lsp'];
 
   for (const name of candidateNames) {
     const candidate = path.join(platformDir, name);
@@ -101,7 +100,10 @@ class MinimalLspClient {
   private child: ChildProcessWithoutNullStreams;
   private buffer = Buffer.alloc(0);
   private nextId = 1;
-  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  private pending = new Map<
+    number,
+    { resolve: (v: unknown) => void; reject: (e: Error) => void }
+  >();
 
   constructor(serverBinary: string) {
     this.child = spawn(serverBinary, [], {
@@ -109,7 +111,9 @@ class MinimalLspClient {
       windowsHide: true,
     });
     this.child.stdout.on('data', (chunk: Buffer) => this.onData(chunk));
-    this.child.stderr.on('data', () => { /* drain — diagnostics not needed for this smoke */ });
+    this.child.stderr.on('data', () => {
+      /* drain — diagnostics not needed for this smoke */
+    });
   }
 
   private onData(chunk: Buffer): void {
@@ -139,7 +143,10 @@ class MinimalLspClient {
   }
 
   private dispatch(message: JsonRpcMessage): void {
-    if (typeof message.id === 'number' && (message.result !== undefined || message.error !== undefined)) {
+    if (
+      typeof message.id === 'number' &&
+      (message.result !== undefined || message.error !== undefined)
+    ) {
       const waiter = this.pending.get(message.id);
       if (waiter) {
         this.pending.delete(message.id);
@@ -168,8 +175,14 @@ class MinimalLspClient {
         reject(new Error(`${method} timed out after ${timeoutMs}ms`));
       }, timeoutMs);
       this.pending.set(id, {
-        resolve: (v) => { clearTimeout(timeout); resolve(v); },
-        reject: (e) => { clearTimeout(timeout); reject(e); },
+        resolve: (v) => {
+          clearTimeout(timeout);
+          resolve(v);
+        },
+        reject: (e) => {
+          clearTimeout(timeout);
+          reject(e);
+        },
       });
       this.send({ jsonrpc: '2.0', id, method, params });
     });
@@ -237,89 +250,104 @@ if (!serverPath) {
   // eslint-disable-next-line no-console
   console.warn(
     '[packagedSemanticTokensSmoke] SKIPPED: no packaged perllsp binary found at ' +
-    `vscode-extension/bin/${process.platform}-${process.arch}/ and PERL_LSP_SMOKE_SERVER_PATH is unset. ` +
-    'Run `npm run bundle-lsp` (or set PERL_LSP_SMOKE_SERVER_PATH to a built perllsp/perl-lsp binary) ' +
-    'to exercise this smoke against the real packaged server. This is a documented gap, not a passing test.',
+      `vscode-extension/bin/${process.platform}-${process.arch}/ and PERL_LSP_SMOKE_SERVER_PATH is unset. ` +
+      'Run `npm run bundle-lsp` (or set PERL_LSP_SMOKE_SERVER_PATH to a built perllsp/perl-lsp binary) ' +
+      'to exercise this smoke against the real packaged server. This is a documented gap, not a passing test.',
   );
 }
 
-describeOrSkip('packaged perllsp binary: semantic tokens through the advertised legend (#3388)', () => {
-  let client: MinimalLspClient;
+describeOrSkip(
+  'packaged perllsp binary: semantic tokens through the advertised legend (#3388)',
+  () => {
+    let client: MinimalLspClient;
 
-  afterEach(() => {
-    client?.dispose();
-  });
-
-  test('sub -> keyword, foo -> function, no function token at column 0', async () => {
-    // Guaranteed defined inside this block: describeOrSkip only registers
-    // this suite when serverPath is defined.
-    const binary = serverPath as string;
-    client = new MinimalLspClient(binary);
-
-    const initializeResult = await client.request('initialize', {
-      processId: process.pid,
-      rootUri: null,
-      capabilities: {
-        textDocument: {
-          synchronization: { dynamicRegistration: false },
-          semanticTokens: { dynamicRegistration: false },
-        },
-      },
-    }, 30_000) as {
-      capabilities?: {
-        semanticTokensProvider?: {
-          legend?: { tokenTypes: string[]; tokenModifiers: string[] };
-        };
-      };
-    };
-
-    const legend = initializeResult.capabilities?.semanticTokensProvider?.legend;
-    expect(legend).toBeDefined();
-    expect(Array.isArray(legend?.tokenTypes)).toBe(true);
-    expect(legend?.tokenTypes.length ?? 0).toBeGreaterThan(0);
-
-    client.notify('initialized', {});
-
-    const uri = 'file:///smoke.pl';
-    const text = 'sub foo { return 1; }';
-    client.notify('textDocument/didOpen', {
-      textDocument: { uri, languageId: 'perl', version: 1, text },
+    afterEach(() => {
+      client?.dispose();
     });
 
-    const tokensResult = await client.request('textDocument/semanticTokens/full', {
-      textDocument: { uri },
-    }, 30_000) as { data?: number[] } | null;
+    test('sub -> keyword, foo -> function, no function token at column 0', async () => {
+      // Guaranteed defined inside this block: describeOrSkip only registers
+      // this suite when serverPath is defined.
+      const binary = serverPath as string;
+      client = new MinimalLspClient(binary);
 
-    expect(tokensResult).toBeTruthy();
-    const data = tokensResult?.data ?? [];
-    expect(data.length).toBeGreaterThan(0);
+      const initializeResult = (await client.request(
+        'initialize',
+        {
+          processId: process.pid,
+          rootUri: null,
+          capabilities: {
+            textDocument: {
+              synchronization: { dynamicRegistration: false },
+              semanticTokens: { dynamicRegistration: false },
+            },
+          },
+        },
+        30_000,
+      )) as {
+        capabilities?: {
+          semanticTokensProvider?: {
+            legend?: { tokenTypes: string[]; tokenModifiers: string[] };
+          };
+        };
+      };
 
-    const tokens = decodeSemanticTokens(data, legend as { tokenTypes: string[] });
-    expect(tokens.length).toBeGreaterThan(0);
+      const legend = initializeResult.capabilities?.semanticTokensProvider?.legend;
+      expect(legend).toBeDefined();
+      expect(Array.isArray(legend?.tokenTypes)).toBe(true);
+      expect(legend?.tokenTypes.length ?? 0).toBeGreaterThan(0);
 
-    // "sub" spans columns 0-3 on line 0 and must be classified as a keyword.
-    const subToken = tokens.find(t => t.line === 0 && t.startChar === 0);
-    expect(subToken).toBeDefined();
-    expect(subToken?.type).toBe('keyword');
-    expect(subToken?.length).toBe(3);
+      client.notify('initialized', {});
 
-    // "foo" spans columns 4-7 on line 0 and must be classified as a function
-    // declaration — this is the precise NodeKind::Subroutine name_span the
-    // single renderer (#3406) is responsible for emitting.
-    const fooToken = tokens.find(t => t.line === 0 && t.startChar === 4);
-    expect(fooToken).toBeDefined();
-    expect(fooToken?.type).toBe('function');
-    expect(fooToken?.length).toBe(3);
+      const uri = 'file:///smoke.pl';
+      const text = 'sub foo { return 1; }';
+      client.notify('textDocument/didOpen', {
+        textDocument: { uri, languageId: 'perl', version: 1, text },
+      });
 
-    // Regression guard for the #3388 defect class: no token classified as
-    // "function" may sit at column 0 (that column belongs to the "sub"
-    // keyword). The legacy AST-only renderer emitted a function token at
-    // the subroutine node's own start span when `name_span` was absent,
-    // which the single renderer replaced with the precise name span.
-    const functionTokenAtColumnZero = tokens.find(t => t.startChar === 0 && t.type === 'function');
-    expect(functionTokenAtColumnZero).toBeUndefined();
+      const tokensResult = (await client.request(
+        'textDocument/semanticTokens/full',
+        {
+          textDocument: { uri },
+        },
+        30_000,
+      )) as { data?: number[] } | null;
 
-    await client.request('shutdown', null, 10_000).catch(() => { /* best-effort */ });
-    client.notify('exit', null);
-  }, 45_000);
-});
+      expect(tokensResult).toBeTruthy();
+      const data = tokensResult?.data ?? [];
+      expect(data.length).toBeGreaterThan(0);
+
+      const tokens = decodeSemanticTokens(data, legend as { tokenTypes: string[] });
+      expect(tokens.length).toBeGreaterThan(0);
+
+      // "sub" spans columns 0-3 on line 0 and must be classified as a keyword.
+      const subToken = tokens.find((t) => t.line === 0 && t.startChar === 0);
+      expect(subToken).toBeDefined();
+      expect(subToken?.type).toBe('keyword');
+      expect(subToken?.length).toBe(3);
+
+      // "foo" spans columns 4-7 on line 0 and must be classified as a function
+      // declaration — this is the precise NodeKind::Subroutine name_span the
+      // single renderer (#3406) is responsible for emitting.
+      const fooToken = tokens.find((t) => t.line === 0 && t.startChar === 4);
+      expect(fooToken).toBeDefined();
+      expect(fooToken?.type).toBe('function');
+      expect(fooToken?.length).toBe(3);
+
+      // Regression guard for the #3388 defect class: no token classified as
+      // "function" may sit at column 0 (that column belongs to the "sub"
+      // keyword). The legacy AST-only renderer emitted a function token at
+      // the subroutine node's own start span when `name_span` was absent,
+      // which the single renderer replaced with the precise name span.
+      const functionTokenAtColumnZero = tokens.find(
+        (t) => t.startChar === 0 && t.type === 'function',
+      );
+      expect(functionTokenAtColumnZero).toBeUndefined();
+
+      await client.request('shutdown', null, 10_000).catch(() => {
+        /* best-effort */
+      });
+      client.notify('exit', null);
+    }, 45_000);
+  },
+);

@@ -3,17 +3,18 @@
 This directory is the current home for the launch-demo visuals called out in issue #3302.
 
 Status:
+
 - The SVG files in this folder are storyboard previews, not recorded GIFs.
 - The final GIFs come from captured editor sessions, not from the storyboards themselves.
 - Once a recording exists, use `scripts/marketing/render-walkthrough-gif.py` to produce the compressed GIF and enforce a size cap.
 
 ## Planned GIFs
 
-| Target GIF | Storyboard | Source material |
-| --- | --- | --- |
-| `install-health.gif` | [`install-health.svg`](install-health.svg) | Fresh install, extension auto-download, and `perllsp --health` |
-| `find-references.gif` | [`find-references.svg`](find-references.svg) | Go to definition and find references over `demo_workspace/main.pl` and `demo_workspace/lib/Utils.pm` |
-| `extract-variable.gif` | [`extract-variable.svg`](extract-variable.svg) | Code action refactor flow in `demo_workspace/main.pl` |
+| Target GIF             | Storyboard                                     | Source material                                                                                      |
+| ---------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `install-health.gif`   | [`install-health.svg`](install-health.svg)     | Fresh install, extension auto-download, and `perllsp --health`                                       |
+| `find-references.gif`  | [`find-references.svg`](find-references.svg)   | Go to definition and find references over `demo_workspace/main.pl` and `demo_workspace/lib/Utils.pm` |
+| `extract-variable.gif` | [`extract-variable.svg`](extract-variable.svg) | Code action refactor flow in `demo_workspace/main.pl`                                                |
 
 For the canonical capture checklist and asset names, see
 [`../../../docs/assets/demo-asset-plan.toml`](../../../docs/assets/demo-asset-plan.toml).

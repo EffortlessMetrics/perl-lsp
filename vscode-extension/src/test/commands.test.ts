@@ -140,7 +140,7 @@ describe('perl-lsp command palette commands (issue #2058)', () => {
       // invoked, so explicit `onCommand:*` activation events are redundant. This
       // extension targets `^1.88.0` (see package.json `engines.vscode`).
       const commandActivationEvents = pkg.activationEvents.filter((event: string) =>
-        event.startsWith('onCommand:')
+        event.startsWith('onCommand:'),
       );
 
       expect(commandActivationEvents).toEqual([]);
@@ -297,7 +297,7 @@ describe('perl-lsp.showRefactoringOptions command', () => {
 
   test('has title "Show Refactoring Options"', () => {
     const cmd = pkg.contributes.commands.find(
-      (c: any) => c.command === 'perl-lsp.showRefactoringOptions'
+      (c: any) => c.command === 'perl-lsp.showRefactoringOptions',
     );
     expect(cmd).toBeDefined();
     expect(cmd.title).toBe('Show Refactoring Options');
@@ -305,7 +305,7 @@ describe('perl-lsp.showRefactoringOptions command', () => {
 
   test('has Perl category', () => {
     const cmd = pkg.contributes.commands.find(
-      (c: any) => c.command === 'perl-lsp.showRefactoringOptions'
+      (c: any) => c.command === 'perl-lsp.showRefactoringOptions',
     );
     expect(cmd.category).toBe('Perl');
   });
@@ -334,13 +334,17 @@ describe('perl-lsp.createDebugConfig command', () => {
   });
 
   test('has title "Create Debug Configuration"', () => {
-    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.createDebugConfig');
+    const cmd = pkg.contributes.commands.find(
+      (c: any) => c.command === 'perl-lsp.createDebugConfig',
+    );
     expect(cmd).toBeDefined();
     expect(cmd.title).toBe('Create Debug Configuration');
   });
 
   test('has Perl category', () => {
-    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.createDebugConfig');
+    const cmd = pkg.contributes.commands.find(
+      (c: any) => c.command === 'perl-lsp.createDebugConfig',
+    );
     expect(cmd.category).toBe('Perl');
   });
 
@@ -397,7 +401,9 @@ describe('perl-lsp trust explanation commands', () => {
   });
 
   test('workspace trust report is available when a workspace is open', () => {
-    const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.showWorkspaceTrustReport');
+    const entry = paletteEntries.find(
+      (e: any) => e.command === 'perl-lsp.showWorkspaceTrustReport',
+    );
     expect(entry).toBeDefined();
     expect(entry.when).toContain('workspaceFolderCount');
   });

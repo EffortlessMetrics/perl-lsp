@@ -23,7 +23,7 @@ jest.mock('vscode-languageclient/node', () => ({
 import { activate, deactivate } from '../extension';
 
 function delay(ms: number): Promise<'timeout'> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(() => resolve('timeout'), ms);
   });
 }
@@ -34,7 +34,7 @@ async function waitUntil(condition: () => boolean, timeoutMs: number): Promise<v
     if (Date.now() - startedAt > timeoutMs) {
       throw new Error('condition not met before timeout');
     }
-    await new Promise(resolve => {
+    await new Promise((resolve) => {
       setTimeout(resolve, 10);
     });
   }
@@ -79,7 +79,10 @@ describe('extension activation startup scheduling (#3159)', () => {
   test('activation resolves even when language client start is still pending', async () => {
     process.env.PERL_LSP_EXTENSION_TEST_SKIP_STARTUP = '0';
     const extensionRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-activation-'));
-    const serverPath = path.join(extensionRoot, process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp');
+    const serverPath = path.join(
+      extensionRoot,
+      process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp',
+    );
     fs.writeFileSync(serverPath, '');
 
     (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
@@ -99,9 +102,9 @@ describe('extension activation startup scheduling (#3159)', () => {
 
     const activation = activate(makeContext(extensionRoot));
 
-    await expect(Promise.race([activation.then(() => 'activated' as const), delay(250)]))
-      .resolves
-      .toBe('activated');
+    await expect(
+      Promise.race([activation.then(() => 'activated' as const), delay(250)]),
+    ).resolves.toBe('activated');
     await waitUntil(() => mockLanguageClientStart.mock.calls.length > 0, 500);
 
     expect(mockLanguageClientStart).toHaveBeenCalledTimes(1);

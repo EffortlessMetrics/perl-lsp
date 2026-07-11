@@ -88,14 +88,12 @@ describe('extension UX warnings', () => {
     (vscode.window as any).activeTextEditor = undefined;
     (vscode.workspace as any).workspaceFolders = undefined;
     (vscode.extensions as any).all = [];
-    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(
-      (section?: string) => ({
-        get: jest.fn((key: string, defaultValue?: any) => defaultValue),
-        has: jest.fn(() => false),
-        inspect: jest.fn(),
-        update: jest.fn(),
-      })
-    );
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation((section?: string) => ({
+      get: jest.fn((key: string, defaultValue?: any) => defaultValue),
+      has: jest.fn(() => false),
+      inspect: jest.fn(),
+      update: jest.fn(),
+    }));
     (vscode.window.showWarningMessage as jest.Mock).mockImplementation(async () => undefined);
   });
 
@@ -137,11 +135,11 @@ describe('extension UX warnings', () => {
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('src/libx'),
       'Open Settings',
-      'Create Missing Directories'
+      'Create Missing Directories',
     );
     expect(globalState.update).toHaveBeenCalledWith(
       expect.stringContaining('perl-lsp.includePathsWarning.'),
-      'src/libx'
+      'src/libx',
     );
 
     showWarningMessage.mockClear();
@@ -153,7 +151,7 @@ describe('extension UX warnings', () => {
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('vendorx'),
       'Open Settings',
-      'Create Missing Directories'
+      'Create Missing Directories',
     );
   });
 
@@ -189,7 +187,7 @@ describe('extension UX warnings', () => {
     expect(fs.existsSync(path.join(workspaceDir, 't/lib'))).toBe(true);
     expect(fs.existsSync(path.join(workspaceDir, 'vendor/perl'))).toBe(true);
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      expect.stringContaining('Created 2 include directories')
+      expect.stringContaining('Created 2 include directories'),
     );
   });
 
@@ -232,12 +230,12 @@ describe('extension UX warnings', () => {
     // The symlinked path must be excluded from creatablePaths so only 'Open Settings' is offered.
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('linked/created-from-warning'),
-      'Open Settings'
+      'Open Settings',
     );
     expect(showWarningMessage).not.toHaveBeenCalledWith(
       expect.any(String),
       'Open Settings',
-      'Create Missing Directories'
+      'Create Missing Directories',
     );
     // Belt-and-suspenders: even if the user somehow triggered creation, nothing should land outside.
     expect(fs.existsSync(path.join(outsideDir, 'created-from-warning'))).toBe(false);
@@ -331,7 +329,7 @@ describe('extension UX warnings', () => {
     await warnAboutPerlExtensionConflicts(context);
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('Perl Navigator'),
-      'Open Coexistence Guide'
+      'Open Coexistence Guide',
     );
 
     showWarningMessage.mockClear();
@@ -369,7 +367,7 @@ describe('extension UX warnings', () => {
 
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('absolute path'),
-      'Open Settings'
+      'Open Settings',
     );
     expect(showWarningMessage.mock.calls[0]).toHaveLength(2);
   });
@@ -403,7 +401,7 @@ describe('extension UX warnings', () => {
 
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('../outside-lib'),
-      'Open Settings'
+      'Open Settings',
     );
     expect(showWarningMessage.mock.calls[0]).toHaveLength(2);
     expect(fs.existsSync(path.resolve(workspaceDir, '../outside-lib'))).toBe(false);
@@ -482,7 +480,7 @@ describe('extension UX warnings', () => {
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('vendor/lib'),
       'Open Settings',
-      'Create Missing Directories'
+      'Create Missing Directories',
     );
   });
 
@@ -520,13 +518,13 @@ describe('extension UX warnings', () => {
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('vendor/lib'),
       'Open Settings',
-      'Create Missing Directories'
+      'Create Missing Directories',
     );
     expect(fs.existsSync(path.join(workspaceDir, 'vendor/lib'))).toBe(true);
     expect(fs.existsSync(path.join(workspaceDir, 'lib'))).toBe(false);
     expect(fs.existsSync(path.join(workspaceDir, 'local/lib/perl5'))).toBe(false);
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      expect.stringContaining('Created 1 include directory: vendor/lib.')
+      expect.stringContaining('Created 1 include directory: vendor/lib.'),
     );
   });
 
@@ -584,7 +582,10 @@ describe('extension UX warnings', () => {
       update: jest.fn(),
     }));
 
-    await syncPerlCriticConfiguration({ sendNotification } as any, vscode.Uri.file('/tmp/example.pl'));
+    await syncPerlCriticConfiguration(
+      { sendNotification } as any,
+      vscode.Uri.file('/tmp/example.pl'),
+    );
 
     expect(sendNotification).toHaveBeenCalledWith(
       'workspace/didChangeConfiguration',
@@ -599,7 +600,7 @@ describe('extension UX warnings', () => {
             }),
           }),
         }),
-      })
+      }),
     );
   });
 
@@ -612,7 +613,10 @@ describe('extension UX warnings', () => {
       update: jest.fn(),
     }));
 
-    await syncPerlCriticConfiguration({ sendNotification } as any, vscode.Uri.file('/tmp/example.pl'));
+    await syncPerlCriticConfiguration(
+      { sendNotification } as any,
+      vscode.Uri.file('/tmp/example.pl'),
+    );
     expect(sendNotification).not.toHaveBeenCalled();
   });
 
@@ -640,11 +644,11 @@ describe('extension UX warnings', () => {
       expect.objectContaining({
         command: 'perl.runCritic',
         arguments: ['file:///workspace/lib/Foo.pm'],
-      })
+      }),
     );
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('Critic found 2 issues in Foo.pm.'),
-      'Show Output'
+      'Show Output',
     );
   });
 
@@ -675,7 +679,7 @@ describe('extension UX warnings', () => {
             }),
           }),
         }),
-      })
+      }),
     );
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Critic severity set to 4.');
   });
@@ -692,11 +696,11 @@ describe('extension UX warnings', () => {
     };
     (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
       get: jest.fn((key: string, defaultValue?: any) =>
-        key in explicit ? explicit[key] : defaultValue
+        key in explicit ? explicit[key] : defaultValue,
       ),
       has: jest.fn(() => false),
       inspect: jest.fn((key: string) =>
-        key in explicit ? { globalValue: explicit[key] } : undefined
+        key in explicit ? { globalValue: explicit[key] } : undefined,
       ),
       update: jest.fn(async () => undefined),
     }));
@@ -712,7 +716,7 @@ describe('extension UX warnings', () => {
             perlcritic: expect.objectContaining({ severity: 2 }),
           }),
         }),
-      })
+      }),
     );
   });
 
@@ -727,11 +731,11 @@ describe('extension UX warnings', () => {
     };
     (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
       get: jest.fn((key: string, defaultValue?: any) =>
-        key in languageScoped ? languageScoped[key] : defaultValue
+        key in languageScoped ? languageScoped[key] : defaultValue,
       ),
       has: jest.fn(() => false),
       inspect: jest.fn((key: string) =>
-        key in languageScoped ? { globalLanguageValue: languageScoped[key] } : undefined
+        key in languageScoped ? { globalLanguageValue: languageScoped[key] } : undefined,
       ),
       update: jest.fn(async () => undefined),
     }));
@@ -742,7 +746,7 @@ describe('extension UX warnings', () => {
     // never populates the *LanguageValue fields the [perl] block lives in.
     expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith(
       'perl-lsp',
-      expect.objectContaining({ languageId: 'perl' })
+      expect.objectContaining({ languageId: 'perl' }),
     );
 
     expect(sendNotification).toHaveBeenCalledWith(
@@ -753,7 +757,7 @@ describe('extension UX warnings', () => {
             critic: expect.objectContaining({ severity: 5 }),
           }),
         }),
-      })
+      }),
     );
   });
 
@@ -775,25 +779,22 @@ describe('extension UX warnings', () => {
 
     await explainProviderDecisionCommand({ sendRequest } as any, 'goto_definition');
 
-    expect(sendRequest).toHaveBeenCalledWith(
-      'workspace/executeCommand',
-      {
-        command: 'perl.explainProviderDecision',
-        arguments: [
-          {
-            provider: 'goto_definition',
-            request_position: {
-              uri_scheme: 'file',
-              line: 12,
-              character: 4,
-            },
+    expect(sendRequest).toHaveBeenCalledWith('workspace/executeCommand', {
+      command: 'perl.explainProviderDecision',
+      arguments: [
+        {
+          provider: 'goto_definition',
+          request_position: {
+            uri_scheme: 'file',
+            line: 12,
+            character: 4,
           },
-        ],
-      }
-    );
+        },
+      ],
+    });
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       'Goto definition used fallback.',
-      'Show Output'
+      'Show Output',
     );
   });
 
@@ -817,29 +818,23 @@ describe('extension UX warnings', () => {
       user_message: 'Diagnostic explanation is available.',
     }));
 
-    await explainDiagnosticCommand(
-      { sendRequest } as any,
-      {
-        provider: 'diagnostics',
-        request_receipt: requestReceipt,
-      }
-    );
+    await explainDiagnosticCommand({ sendRequest } as any, {
+      provider: 'diagnostics',
+      request_receipt: requestReceipt,
+    });
 
-    expect(sendRequest).toHaveBeenCalledWith(
-      'workspace/executeCommand',
-      {
-        command: 'perl.explainProviderDecision',
-        arguments: [
-          {
-            provider: 'diagnostics',
-            request_receipt: requestReceipt,
-          },
-        ],
-      }
-    );
+    expect(sendRequest).toHaveBeenCalledWith('workspace/executeCommand', {
+      command: 'perl.explainProviderDecision',
+      arguments: [
+        {
+          provider: 'diagnostics',
+          request_receipt: requestReceipt,
+        },
+      ],
+    });
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       'Diagnostic explanation is available.',
-      'Show Output'
+      'Show Output',
     );
   });
 
@@ -861,21 +856,18 @@ describe('extension UX warnings', () => {
 
     await previewSafeDeleteCommand({ sendRequest } as any);
 
-    expect(sendRequest).toHaveBeenCalledWith(
-      'workspace/executeCommand',
-      {
-        command: 'perl.previewSafeDelete',
-        arguments: [
-          {
-            textDocument: { uri: 'file:///workspace/lib/Foo.pm' },
-            position: { line: 8, character: 2 },
-          },
-        ],
-      }
-    );
+    expect(sendRequest).toHaveBeenCalledWith('workspace/executeCommand', {
+      command: 'perl.previewSafeDelete',
+      arguments: [
+        {
+          textDocument: { uri: 'file:///workspace/lib/Foo.pm' },
+          position: { line: 8, character: 2 },
+        },
+      ],
+    });
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       'Safe delete refused. No edits were applied.',
-      'Show Output'
+      'Show Output',
     );
   });
 
@@ -891,7 +883,10 @@ describe('extension UX warnings', () => {
         languageId: 'perl',
         uri: vscode.Uri.file('/workspace/lib/Foo.pm'),
         getText: jest.fn(() => 'shared'),
-        getWordRangeAtPosition: jest.fn(() => ({ start: { line: 12, character: 4 }, end: { line: 12, character: 10 } })),
+        getWordRangeAtPosition: jest.fn(() => ({
+          start: { line: 12, character: 4 },
+          end: { line: 12, character: 10 },
+        })),
       },
       selection: {
         active: { line: 12, character: 4 },
@@ -905,24 +900,21 @@ describe('extension UX warnings', () => {
       expect.objectContaining({
         value: 'shared',
         placeHolder: 'renamed_symbol',
-      })
+      }),
     );
-    expect(sendRequest).toHaveBeenCalledWith(
-      'workspace/executeCommand',
-      {
-        command: 'perl.previewPackageRename',
-        arguments: [
-          {
-            textDocument: { uri: 'file:///workspace/lib/Foo.pm' },
-            position: { line: 12, character: 4 },
-            newName: 'renamed_shared',
-          },
-        ],
-      }
-    );
+    expect(sendRequest).toHaveBeenCalledWith('workspace/executeCommand', {
+      command: 'perl.previewPackageRename',
+      arguments: [
+        {
+          textDocument: { uri: 'file:///workspace/lib/Foo.pm' },
+          position: { line: 12, character: 4 },
+          newName: 'renamed_shared',
+        },
+      ],
+    });
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       'Package rename preview is available. No edits were applied.',
-      'Show Output'
+      'Show Output',
     );
   });
 
@@ -948,7 +940,7 @@ describe('extension UX warnings', () => {
             provider: 'safe_delete',
           }),
         ],
-      })
+      }),
     );
     const clipboardText = (vscode.env.clipboard.writeText as jest.Mock).mock.calls[0][0] as string;
     expect(JSON.parse(clipboardText)).toEqual({
@@ -957,7 +949,7 @@ describe('extension UX warnings', () => {
       decision: 'blocked',
     });
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'Provider decision receipt copied.'
+      'Provider decision receipt copied.',
     );
   });
 
@@ -1017,7 +1009,10 @@ describe('extension UX warnings', () => {
     const state = workspaceTrustClientRuntimeState();
     const dap = state.dap as Record<string, unknown>;
     const launchConfiguration = dap.launch_configuration as Record<string, unknown>;
-    const includePathCounts = launchConfiguration.include_path_kind_counts as Record<string, number>;
+    const includePathCounts = launchConfiguration.include_path_kind_counts as Record<
+      string,
+      number
+    >;
 
     expect(dap.launch_json_workspace_count).toBe(1);
     expect(launchConfiguration.status).toBe('client_launch_config_reported');
@@ -1143,11 +1138,10 @@ describe('extension UX warnings', () => {
       },
     }));
 
-    expect(sendRequest).toHaveBeenCalledWith(
-      'workspace/executeCommand',
-      {
-        command: 'perl.workspaceTrustReport',
-        arguments: [{
+    expect(sendRequest).toHaveBeenCalledWith('workspace/executeCommand', {
+      command: 'perl.workspaceTrustReport',
+      arguments: [
+        {
           client_runtime_state: {
             schema_version: 'workspace_trust_client_runtime.v1',
             source: 'vscode-extension',
@@ -1170,9 +1164,9 @@ describe('extension UX warnings', () => {
               },
             },
           },
-        }],
-      }
-    );
+        },
+      ],
+    });
     const rendered = outputChannel.appendLine.mock.calls
       .map((call: unknown[]) => call[0])
       .join('\n');
@@ -1188,7 +1182,9 @@ describe('extension UX warnings', () => {
     expect(rendered).toContain('DAP launch configs: 2');
     expect(rendered).toContain('DAP Perl configs: 1');
     expect(rendered).toContain('DAP includePaths entries: 2');
-    expect(rendered).toContain('launch config boundary: Launch configuration state reports counts and path classes only.');
+    expect(rendered).toContain(
+      'launch config boundary: Launch configuration state reports counts and path classes only.',
+    );
     expect(rendered).toContain('PERL5LIB is not inherited by workspace module resolution.');
     expect(rendered).toContain('Setup hints are derived from current configuration only.');
     expect(rendered).toContain('completion: partial-live-with-fallback');
@@ -1245,22 +1241,19 @@ describe('extension UX warnings', () => {
 
     await explainMissingModuleLookupCommand({ sendRequest } as any);
 
-    expect(sendRequest).toHaveBeenCalledWith(
-      'workspace/executeCommand',
-      {
-        command: 'perl.explainMissingModuleLookup',
-        arguments: [
-          {
-            module: 'Missing::Payload',
-            textDocument: { uri: 'file:///workspace/script.pl' },
-            position: { line: 0, character: 8 },
-          },
-        ],
-      }
-    );
+    expect(sendRequest).toHaveBeenCalledWith('workspace/executeCommand', {
+      command: 'perl.explainMissingModuleLookup',
+      arguments: [
+        {
+          module: 'Missing::Payload',
+          textDocument: { uri: 'file:///workspace/script.pl' },
+          position: { line: 0, character: 8 },
+        },
+      ],
+    });
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       'Module Missing::Payload was not found in the current effective @INC state.',
-      'Show Output'
+      'Show Output',
     );
     const rendered = outputChannel.appendLine.mock.calls
       .map((call: unknown[]) => String(call[0]))
@@ -1280,7 +1273,9 @@ describe('suggestDiscoveredIncludePaths (#1633)', () => {
     const store = new Map<string, any>();
     return {
       store,
-      get: jest.fn((key: string, defaultValue?: any) => (store.has(key) ? store.get(key) : defaultValue)),
+      get: jest.fn((key: string, defaultValue?: any) =>
+        store.has(key) ? store.get(key) : defaultValue,
+      ),
       update: jest.fn(async (key: string, value: any) => {
         if (value === undefined) {
           store.delete(key);
@@ -1295,7 +1290,7 @@ describe('suggestDiscoveredIncludePaths (#1633)', () => {
     const update = jest.fn(async () => undefined);
     (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
       get: jest.fn((key: string, defaultValue?: any) =>
-        key === 'includePaths' ? includePaths : defaultValue
+        key === 'includePaths' ? includePaths : defaultValue,
       ),
       update,
     }));
@@ -1335,11 +1330,11 @@ describe('suggestDiscoveredIncludePaths (#1633)', () => {
       expect.stringContaining('"src"'),
       'Add to Include Paths',
       'Open Settings',
-      'Dismiss'
+      'Dismiss',
     );
     expect(context.globalState.update).toHaveBeenCalledWith(
       expect.stringContaining('perl-lsp.includePathsSuggestion.'),
-      expect.any(String)
+      expect.any(String),
     );
   });
 
@@ -1373,7 +1368,7 @@ describe('suggestDiscoveredIncludePaths (#1633)', () => {
     expect(update).toHaveBeenCalledWith(
       'includePaths',
       expect.arrayContaining(['lib', 'local/lib/perl5', 'vendor']),
-      vscode.ConfigurationTarget.Workspace
+      vscode.ConfigurationTarget.Workspace,
     );
   });
 
@@ -1404,7 +1399,10 @@ describe('suggestDiscoveredIncludePaths (#1633)', () => {
     // check, the scanner would incorrectly suggest adding "local" as an additional root.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-discover-subpath-'));
     fs.mkdirSync(path.join(dir, 'local', 'lib', 'perl5'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'local', 'lib', 'perl5', 'Installed.pm'), 'package Installed; 1;\n');
+    fs.writeFileSync(
+      path.join(dir, 'local', 'lib', 'perl5', 'Installed.pm'),
+      'package Installed; 1;\n',
+    );
 
     const context: any = { globalState: makeGlobalState() };
     // local/lib/perl5 is already in includePaths — "local" should be suppressed
@@ -1421,9 +1419,13 @@ describe('suggestDiscoveredIncludePaths (#1633)', () => {
 // ---------------------------------------------------------------------------
 describe('suggestAiCompletionIfSupported (#1634)', () => {
   function makeWorkspaceState(shown = false) {
-    const store = new Map<string, any>([['perl-lsp.aiCompletion.firstRunNotificationShown', shown]]);
+    const store = new Map<string, any>([
+      ['perl-lsp.aiCompletion.firstRunNotificationShown', shown],
+    ]);
     return {
-      get: jest.fn((key: string, defaultValue?: any) => (store.has(key) ? store.get(key) : defaultValue)),
+      get: jest.fn((key: string, defaultValue?: any) =>
+        store.has(key) ? store.get(key) : defaultValue,
+      ),
       update: jest.fn(async (key: string, value: any) => {
         store.set(key, value);
       }),
@@ -1434,7 +1436,7 @@ describe('suggestAiCompletionIfSupported (#1634)', () => {
     const update = jest.fn(async () => undefined);
     (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
       get: jest.fn((key: string, defaultValue?: any) =>
-        key === 'aiCompletion.enabled' ? enabled : defaultValue
+        key === 'aiCompletion.enabled' ? enabled : defaultValue,
       ),
       update,
     }));
@@ -1464,12 +1466,16 @@ describe('suggestAiCompletionIfSupported (#1634)', () => {
       expect.stringContaining('AI-powered inline completions'),
       'Enable',
       'Learn More',
-      'Dismiss'
+      'Dismiss',
     );
-    expect(update).toHaveBeenCalledWith('aiCompletion.enabled', true, vscode.ConfigurationTarget.Workspace);
+    expect(update).toHaveBeenCalledWith(
+      'aiCompletion.enabled',
+      true,
+      vscode.ConfigurationTarget.Workspace,
+    );
     expect(context.workspaceState.update).toHaveBeenCalledWith(
       'perl-lsp.aiCompletion.firstRunNotificationShown',
-      true
+      true,
     );
   });
 
@@ -1544,7 +1550,7 @@ describe('openDemoProjectCommand (#1635)', () => {
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       'vscode.openFolder',
       expect.objectContaining({ fsPath: path.join(extRoot, 'assets', 'demo-project') }),
-      { forceNewWindow: true }
+      { forceNewWindow: true },
     );
     expect(vscode.window.showInformationMessage).toHaveBeenCalled();
   });
@@ -1557,12 +1563,12 @@ describe('openDemoProjectCommand (#1635)', () => {
     await openDemoProjectCommand(context);
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      expect.stringContaining('demo project is not available')
+      expect.stringContaining('demo project is not available'),
     );
     expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
       'vscode.openFolder',
       expect.anything(),
-      expect.anything()
+      expect.anything(),
     );
   });
 });

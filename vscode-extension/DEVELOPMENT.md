@@ -96,26 +96,26 @@ The `.vsix` file can be installed directly in VS Code via **Extensions → Insta
 
 ## Common tasks
 
-| Task | Command |
-|------|---------|
-| Compile TypeScript | `npm run compile` |
-| Watch mode | `npm run watch` |
-| Run unit tests | `npm test` |
-| Lint | `npm run lint` |
-| Build `.vsix` package | `npm run package` |
+| Task                          | Command                      |
+| ----------------------------- | ---------------------------- |
+| Compile TypeScript            | `npm run compile`            |
+| Watch mode                    | `npm run watch`              |
+| Run unit tests                | `npm test`                   |
+| Lint                          | `npm run lint`               |
+| Build `.vsix` package         | `npm run package`            |
 | Full marketplace verification | `npm run verify:marketplace` |
 
 ## Extension entry point
 
 The main extension code lives in `src/extension.ts`. Key files:
 
-| File | Purpose |
-|------|---------|
-| `src/extension.ts` | Activation, server lifecycle |
-| `src/downloader.ts` | Auto-download logic for the `perllsp` binary |
-| `src/healthWidget.ts` | Status bar health indicator |
-| `src/onboarding.ts` | First-run setup flow |
-| `src/debugAdapter.ts` | DAP debug adapter |
+| File                  | Purpose                                      |
+| --------------------- | -------------------------------------------- |
+| `src/extension.ts`    | Activation, server lifecycle                 |
+| `src/downloader.ts`   | Auto-download logic for the `perllsp` binary |
+| `src/healthWidget.ts` | Status bar health indicator                  |
+| `src/onboarding.ts`   | First-run setup flow                         |
+| `src/debugAdapter.ts` | DAP debug adapter                            |
 
 ## Pointing the extension at a different server version
 

@@ -75,6 +75,7 @@ code test/sample.pl
 ```
 
 Test these features:
+
 - [ ] Syntax highlighting works
 - [ ] Diagnostics appear for syntax errors
 - [ ] Format document (Shift+Alt+F) works (native formatter; no perltidy required)
@@ -101,6 +102,7 @@ cargo build --target x86_64-pc-windows-msvc --release
 ```
 
 Place binaries in appropriate directories:
+
 - `bin/linux-x64/perllsp`
 - `bin/darwin-x64/perllsp`
 - `bin/darwin-arm64/perllsp`
@@ -176,16 +178,21 @@ vsce publish 0.5.1  # Specific version
 ## Troubleshooting
 
 ### "Missing publisher name"
+
 Update `package.json` with your publisher ID.
 
 ### "Personal Access Token expired"
+
 Create a new token and login again with `vsce login`.
 
 ### Binary not found
+
 Ensure `bundle-lsp.js` correctly detects platform and copies binaries.
 
 ### Large package size
+
 Check `.vscodeignore` is excluding unnecessary files.
+
 ## Marketplace Launch Checklist
 
 Before first public launch:

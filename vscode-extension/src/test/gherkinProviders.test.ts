@@ -17,9 +17,9 @@ describe('gherkin outline providers', () => {
     expect(vscode.languages.registerDocumentSymbolProvider).toHaveBeenCalledTimes(1);
     expect(vscode.languages.registerFoldingRangeProvider).toHaveBeenCalledTimes(1);
     expect(vscode.languages.registerDefinitionProvider).toHaveBeenCalledTimes(1);
-    expect((vscode.languages.registerDocumentSymbolProvider as jest.Mock).mock.calls[0][0]).toEqual([
-      { language: 'gherkin' },
-    ]);
+    expect((vscode.languages.registerDocumentSymbolProvider as jest.Mock).mock.calls[0][0]).toEqual(
+      [{ language: 'gherkin' }],
+    );
   });
 
   test('builds hierarchical document symbols for feature structure', () => {
@@ -71,7 +71,7 @@ describe('gherkin outline providers', () => {
         expect.objectContaining({ start: 0, end: 5 }),
         expect.objectContaining({ start: 1, end: 2 }),
         expect.objectContaining({ start: 3, end: 5 }),
-      ])
+      ]),
     );
   });
 
@@ -96,7 +96,7 @@ describe('gherkin outline providers', () => {
             '};',
           ].join('\n'),
         },
-      ]
+      ],
     );
 
     expect(links).toHaveLength(1);
@@ -117,14 +117,11 @@ describe('gherkin outline providers', () => {
       [
         {
           uri: vscode.Uri.file('/project/features/step_definitions/user_steps.pm'),
-          text: [
-            'use Test::BDD::Cucumber::StepFile;',
-            '',
-            'Given qr/^(a+)+!$/, sub {',
-            '};',
-          ].join('\n'),
+          text: ['use Test::BDD::Cucumber::StepFile;', '', 'Given qr/^(a+)+!$/, sub {', '};'].join(
+            '\n',
+          ),
         },
-      ]
+      ],
     );
 
     expect(links).toHaveLength(0);
@@ -151,7 +148,7 @@ describe('gherkin outline providers', () => {
             '};',
           ].join('\n'),
         },
-      ]
+      ],
     );
     expect(linksA).toHaveLength(0);
 
@@ -175,7 +172,7 @@ describe('gherkin outline providers', () => {
             '};',
           ].join('\n'),
         },
-      ]
+      ],
     );
     expect(linksB).toHaveLength(0);
   });
@@ -201,7 +198,7 @@ describe('gherkin outline providers', () => {
             '};',
           ].join('\n'),
         },
-      ]
+      ],
     );
     expect(links).toHaveLength(1);
   });
@@ -226,7 +223,7 @@ describe('gherkin outline providers', () => {
             '};',
           ].join('\n'),
         },
-      ]
+      ],
     );
 
     // Named captures are safe — must NOT be filtered by the expensive-regex guard
@@ -254,7 +251,7 @@ describe('gherkin outline providers', () => {
             '};',
           ].join('\n'),
         },
-      ]
+      ],
     );
 
     expect(links).toHaveLength(1);
@@ -270,29 +267,31 @@ describe('gherkin outline providers', () => {
       .mockResolvedValue([]);
     (vscode.workspace.openTextDocument as jest.Mock).mockResolvedValue({
       uri: vscode.Uri.file('/project/features/step_definitions/login_steps.pm'),
-      getText: () => [
-        'use Test::BDD::Cucumber::StepFile;',
-        '',
-        'When qr/the user logs in with valid credentials/, sub {',
-        '};',
-      ].join('\n'),
+      getText: () =>
+        [
+          'use Test::BDD::Cucumber::StepFile;',
+          '',
+          'When qr/the user logs in with valid credentials/, sub {',
+          '};',
+        ].join('\n'),
     });
 
     const links = await provider.provideDefinition(
       {
-        getText: () => [
-          'Feature: Login',
-          '  Scenario: Happy path',
-          '    When the user logs in with valid credentials',
-        ].join('\n'),
+        getText: () =>
+          [
+            'Feature: Login',
+            '  Scenario: Happy path',
+            '    When the user logs in with valid credentials',
+          ].join('\n'),
       } as vscode.TextDocument,
       { line: 2, character: 12 } as vscode.Position,
-      { isCancellationRequested: false } as vscode.CancellationToken
+      { isCancellationRequested: false } as vscode.CancellationToken,
     );
 
     expect(vscode.workspace.findFiles).toHaveBeenCalled();
     expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(
-      expect.objectContaining({ fsPath: '/project/features/step_definitions/login_steps.pm' })
+      expect.objectContaining({ fsPath: '/project/features/step_definitions/login_steps.pm' }),
     );
     expect(links).toHaveLength(1);
     expect(links[0].targetUri.fsPath).toBe('/project/features/step_definitions/login_steps.pm');

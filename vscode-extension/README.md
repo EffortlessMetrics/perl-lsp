@@ -5,8 +5,10 @@
 [![docs.rs](https://docs.rs/perl-lsp-rs/badge.svg)](https://docs.rs/perl-lsp-rs)
 [![crates.io downloads](https://img.shields.io/crates/d/perl-lsp-rs.svg?label=crates.io%20downloads)](https://crates.io/crates/perl-lsp-rs)
 <!-- perl-lsp:vs-marketplace-installs-badge:start -->
+
 [![VS Marketplace installs](https://img.shields.io/badge/VS%20Marketplace-313%20installs-0078D4)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
 <!-- perl-lsp:vs-marketplace-installs-badge:end -->
+
 [![Open VSX downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 [![Codecov parser branch coverage](https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/perl-lsp)
 [![MSRV](https://img.shields.io/badge/MSRV-1.95-blue)](https://www.rust-lang.org/)
@@ -24,6 +26,7 @@ for support-tier boundaries, explanations, previews, and copyable receipts.
 ## Features
 
 ### Navigation and Intelligence
+
 - **Go to Definition** -- Jump to source-backed definitions where proof is available, with fallback for ambiguous or dynamic cases
 - **Find References** -- Find source-backed usages and keep fallback behavior for unsupported shapes
 - **Hover Documentation** -- Show provenance-backed docs and module-lookup explanations where available
@@ -32,6 +35,7 @@ for support-tier boundaries, explanations, previews, and copyable receipts.
 - **Symbol Navigation** -- Outline view, breadcrumbs, and workspace symbol search with generated/dynamic boundaries labeled or gated
 
 ### Refactoring and Code Actions
+
 - **Rename** -- Scoped lexical and package-local renames only where source-backed proof and fallback guards pass
 - **Preview Safe Delete** -- Preview allowed, blocked, or refused symbol deletion before any edit is returned
 - **Preview Package Rename** -- Preview package/compiler-backed rename evidence without authorizing broad edits
@@ -40,6 +44,7 @@ for support-tier boundaries, explanations, previews, and copyable receipts.
 - **Organize Imports** -- Sort and clean `use` statements (`Shift+Alt+O`)
 
 ### Diagnostics and Quality
+
 - **Real-time Errors** -- Syntax and semantic error detection as you type
 - **Undefined Variables** -- Catch typos under `use strict`
 - **Unused Variables** -- Find dead code
@@ -48,6 +53,7 @@ for support-tier boundaries, explanations, previews, and copyable receipts.
 - **Document Formatting** -- Native Perl formatting (`Shift+Alt+F`)
 
 ### Advanced Features
+
 - **Semantic Highlighting** -- Context-aware syntax coloring beyond TextMate grammars
 - **Type Hierarchy** -- Navigate inheritance with `@ISA` and `use parent`
 - **Call Hierarchy** -- Trace function calls inbound and outbound
@@ -76,6 +82,7 @@ with `lib/Utils.pm` and `lib/Database.pm` so you can immediately try completion,
 hover, and go-to-definition.
 
 ### Debugging (via perl-dap)
+
 - **Breakpoints** -- Set breakpoints with conditional support
 - **Step Debugging** -- Step into, over, and out of function calls
 - **Variable Inspection** -- View variables, watch expressions, and call stack
@@ -90,6 +97,7 @@ module is only needed for legacy bridge-mode workflows. See the
 the required launch configuration.
 
 ### Test Explorer
+
 - **Test Discovery** -- Automatic discovery of `.t` test files
 - **Run Tests** -- Run individual tests or entire files from the Testing panel (`Shift+Alt+T`)
 - **TAP Support** -- Native Test Anything Protocol result parsing
@@ -132,11 +140,11 @@ codium --install-extension EffortlessMetrics.perl-lsp-rs
 
 The extension automatically downloads the correct `perllsp` binary for your platform on first activation:
 
-| Platform | Architectures |
-|----------|--------------|
-| **Windows** | x64, ARM64 |
-| **macOS** | Intel (x64), Apple Silicon (ARM64) |
-| **Linux** | x64, ARM64 (glibc and musl) |
+| Platform    | Architectures                      |
+| ----------- | ---------------------------------- |
+| **Windows** | x64, ARM64                         |
+| **macOS**   | Intel (x64), Apple Silicon (ARM64) |
+| **Linux**   | x64, ARM64 (glibc and musl)        |
 
 On Linux, `auto` selects the GNU/glibc archive for mainstream distributions and
 the musl archive for Alpine Linux or musl-based containers. Set
@@ -172,23 +180,23 @@ Then point the extension to your `perllsp` binary via `perl-lsp.serverPath`.
 
 All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` and search for "perl-lsp".
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `perl-lsp.autoDownload` | `true` | Automatically download `perllsp` if not found locally |
-| `perl-lsp.serverPath` | `""` | Absolute path to a `perllsp` binary (overrides auto-download) |
-| `perl-lsp.channel` | `"latest"` | Release channel. Use `latest` for the current public-alpha line or `tag` for a pinned public-alpha release |
-| `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.1`) when channel is `tag` |
-| `perl-lsp.linuxLibc` | `"auto"` | Linux libc release asset selection: `auto`, `gnu`, `glibc`, or `musl` |
-| `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting (requires server restart to apply) |
-| `perl-lsp.enableFormatting` | `true` | Enable native document formatting (`perltidy` not required; server restart to apply) |
-| `perl-lsp.formatOnSave` | `false` | Format document on save |
-| `perl-lsp.enableTestIntegration` | `true` | Enable Test Explorer integration |
-| `perl-lsp.includePaths` | `["lib", "local/lib/perl5"]` | Additional library paths for module resolution |
-| `perl-lsp.perltidyConfig` | `""` | Path to `.perltidyrc` (auto-detected if empty) |
-| `perl-lsp.trace.server` | `"off"` | LSP trace level for debugging: `off`, `messages`, `verbose` |
-| `perl-lsp.featureProfile` | `"auto"` | Runtime capability profile. Keep `auto` unless you need a specific compatibility profile |
-| `perl-lsp.downloadBaseUrl` | `""` | Internal mirror URL for air-gapped deployments |
-| `perl-lsp.mcp.servers` | `[]` | Optional MCP stdio server definitions (`label`, `command`, `args`, `cwd`, `env`, `version`, `enabled`) published to VS Code language models |
+| Setting                          | Default                      | Description                                                                                                                                 |
+| -------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `perl-lsp.autoDownload`          | `true`                       | Automatically download `perllsp` if not found locally                                                                                       |
+| `perl-lsp.serverPath`            | `""`                         | Absolute path to a `perllsp` binary (overrides auto-download)                                                                               |
+| `perl-lsp.channel`               | `"latest"`                   | Release channel. Use `latest` for the current public-alpha line or `tag` for a pinned public-alpha release                                  |
+| `perl-lsp.versionTag`            | `""`                         | Specific release tag (e.g. `v0.12.1`) when channel is `tag`                                                                                 |
+| `perl-lsp.linuxLibc`             | `"auto"`                     | Linux libc release asset selection: `auto`, `gnu`, `glibc`, or `musl`                                                                       |
+| `perl-lsp.enableSemanticTokens`  | `true`                       | Enable semantic syntax highlighting (requires server restart to apply)                                                                      |
+| `perl-lsp.enableFormatting`      | `true`                       | Enable native document formatting (`perltidy` not required; server restart to apply)                                                        |
+| `perl-lsp.formatOnSave`          | `false`                      | Format document on save                                                                                                                     |
+| `perl-lsp.enableTestIntegration` | `true`                       | Enable Test Explorer integration                                                                                                            |
+| `perl-lsp.includePaths`          | `["lib", "local/lib/perl5"]` | Additional library paths for module resolution                                                                                              |
+| `perl-lsp.perltidyConfig`        | `""`                         | Path to `.perltidyrc` (auto-detected if empty)                                                                                              |
+| `perl-lsp.trace.server`          | `"off"`                      | LSP trace level for debugging: `off`, `messages`, `verbose`                                                                                 |
+| `perl-lsp.featureProfile`        | `"auto"`                     | Runtime capability profile. Keep `auto` unless you need a specific compatibility profile                                                    |
+| `perl-lsp.downloadBaseUrl`       | `""`                         | Internal mirror URL for air-gapped deployments                                                                                              |
+| `perl-lsp.mcp.servers`           | `[]`                         | Optional MCP stdio server definitions (`label`, `command`, `args`, `cwd`, `env`, `version`, `enabled`) published to VS Code language models |
 
 ### Internal / Air-Gapped Deployment
 
@@ -198,17 +206,18 @@ For environments without internet access, set `perl-lsp.downloadBaseUrl` to an i
 
 Use `Ctrl+Shift+P` (Command Palette) and search "Perl" to see all available commands.
 
-| Action | Shortcut |
-|--------|----------|
-| Organize Imports | `Shift+Alt+O` |
-| Run Tests | `Shift+Alt+T` |
-| Restart Server | `Shift+Alt+R` |
-| Format Document | `Shift+Alt+F` |
+| Action           | Shortcut              |
+| ---------------- | --------------------- |
+| Organize Imports | `Shift+Alt+O`         |
+| Run Tests        | `Shift+Alt+T`         |
+| Restart Server   | `Shift+Alt+R`         |
+| Format Document  | `Shift+Alt+F`         |
 | Show Status Menu | Click status bar item |
 
 ## Supported Perl Features
 
 ### Modern Perl (5.38+)
+
 - `class` / `method` / `field` keywords
 - `try` / `catch` / `finally` blocks
 - `defer` blocks
@@ -216,6 +225,7 @@ Use `Ctrl+Shift+P` (Command Palette) and search "Perl" to see all available comm
 - Type constraints
 
 ### Complete Syntax Support
+
 - Regular expressions with any delimiter (`m!pattern!`, `s{}{}``)
 - Heredocs (all variants including indented `<<~`)
 - Unicode identifiers (`my $cafe = 'coffee'`)
@@ -229,52 +239,55 @@ Use `Ctrl+Shift+P` (Command Palette) and search "Perl" to see all available comm
 
 Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 
-| Command | Description |
-|---------|-------------|
-| **Perl: Restart Language Server** | Restart the language server |
-| **Perl: Open Demo Project** | Open a bundled demo project to try features immediately |
-| **Perl: Show Server Version** | Display installed perllsp version |
-| **Perl: Reinstall Server Binary** | Re-download the managed binary |
-| **Perl: Organize Use Statements** | Sort and clean `use` statements |
-| **Perl: Run Tests in Current File** | Run tests in the active `.t` or `.pl` file |
-| **Perl LSP: Explain Provider Decision** | Show why the last provider acted, fell back, or refused |
-| **Perl LSP: Copy Provider Decision Receipt** | Copy a structured local receipt for issue reports |
-| **Perl LSP: Show Workspace Trust Report** | Show workspace roots, module-resolution configuration, index state, support tiers, provider-decision traces, and dynamic-boundary policy in the output channel |
-| **Perl LSP: Explain This Diagnostic** | Explain PL701/PL109 diagnostics in the output channel when a receipt is available |
-| **Perl LSP: Explain Missing Module Lookup** | Show the current missing-module `@INC` lookup state and setup boundary |
-| **Perl LSP: Preview Safe Delete** | Preview whether symbol deletion is allowed, blocked, or refused before editing |
-| **Perl LSP: Preview Package Rename** | Preview package/compiler-backed rename evidence without authorizing an edit |
-| **Perl: Show Output Channel** | Open the extension output log |
-| **Perl: Show Status Menu** | Quick-access menu for all actions |
+| Command                                      | Description                                                                                                                                                    |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Perl: Restart Language Server**            | Restart the language server                                                                                                                                    |
+| **Perl: Open Demo Project**                  | Open a bundled demo project to try features immediately                                                                                                        |
+| **Perl: Show Server Version**                | Display installed perllsp version                                                                                                                              |
+| **Perl: Reinstall Server Binary**            | Re-download the managed binary                                                                                                                                 |
+| **Perl: Organize Use Statements**            | Sort and clean `use` statements                                                                                                                                |
+| **Perl: Run Tests in Current File**          | Run tests in the active `.t` or `.pl` file                                                                                                                     |
+| **Perl LSP: Explain Provider Decision**      | Show why the last provider acted, fell back, or refused                                                                                                        |
+| **Perl LSP: Copy Provider Decision Receipt** | Copy a structured local receipt for issue reports                                                                                                              |
+| **Perl LSP: Show Workspace Trust Report**    | Show workspace roots, module-resolution configuration, index state, support tiers, provider-decision traces, and dynamic-boundary policy in the output channel |
+| **Perl LSP: Explain This Diagnostic**        | Explain PL701/PL109 diagnostics in the output channel when a receipt is available                                                                              |
+| **Perl LSP: Explain Missing Module Lookup**  | Show the current missing-module `@INC` lookup state and setup boundary                                                                                         |
+| **Perl LSP: Preview Safe Delete**            | Preview whether symbol deletion is allowed, blocked, or refused before editing                                                                                 |
+| **Perl LSP: Preview Package Rename**         | Preview package/compiler-backed rename evidence without authorizing an edit                                                                                    |
+| **Perl: Show Output Channel**                | Open the extension output log                                                                                                                                  |
+| **Perl: Show Status Menu**                   | Quick-access menu for all actions                                                                                                                              |
 
 ## Compatibility
 
 The `perllsp` binary works with any editor that supports the Language Server Protocol:
 
-| Editor | How to connect |
-|--------|---------------|
-| **VS Code / VSCodium** | This extension (auto-configured) |
-| **Cursor** | This extension |
-| **PearAI** | This extension (install from Open VSX) |
-| **Neovim** | `nvim-lspconfig` with `perl_lsp` server |
-| **Emacs** | `lsp-mode` or `eglot` |
-| **Helix** | `languages.toml` with `perllsp --stdio` |
-| **Sublime Text** | LSP package with `perllsp --stdio` |
-| **GitHub Codespaces** | This extension |
-| **Gitpod** | This extension |
+| Editor                 | How to connect                          |
+| ---------------------- | --------------------------------------- |
+| **VS Code / VSCodium** | This extension (auto-configured)        |
+| **Cursor**             | This extension                          |
+| **PearAI**             | This extension (install from Open VSX)  |
+| **Neovim**             | `nvim-lspconfig` with `perl_lsp` server |
+| **Emacs**              | `lsp-mode` or `eglot`                   |
+| **Helix**              | `languages.toml` with `perllsp --stdio` |
+| **Sublime Text**       | LSP package with `perllsp --stdio`      |
+| **GitHub Codespaces**  | This extension                          |
+| **Gitpod**             | This extension                          |
 
 ## Troubleshooting
 
 **Server not starting?**
+
 1. Open the output channel: Command Palette > "Perl: Show Output Channel"
 2. Check that `perllsp` is available: Command Palette > "Perl: Show Server Version"
 3. If auto-download failed, check your network/proxy settings or install manually
 
 **Formatting not working?**
+
 - Check `perl-lsp.enableFormatting` is `true` (native formatting is the default; `perltidy` is not required)
 - If you selected the external/compatibility formatter engine, ensure `perltidy` is installed and available in your PATH
 
 **Diagnostics too noisy?**
+
 - Run **Perl LSP: Explain This Diagnostic** to see whether the warning is a
   true missing fact, low-confidence evidence, or a dynamic boundary.
 - Run **Perl LSP: Show Workspace Trust Report** if module paths, Perl binary,

@@ -135,9 +135,9 @@ describe('PerlDebugConfigurationProvider', () => {
     test('includes launch, attach by TCP, and attach by PID templates', () => {
       const configs = provider.provideDebugConfigurations(undefined) as any[];
 
-      const hasLaunch = configs.some(c => c.request === 'launch');
-      const hasTCPAttach = configs.some(c => c.request === 'attach' && c.port);
-      const hasPIDAttach = configs.some(c => c.request === 'attach' && c.processId);
+      const hasLaunch = configs.some((c) => c.request === 'launch');
+      const hasTCPAttach = configs.some((c) => c.request === 'attach' && c.port);
+      const hasPIDAttach = configs.some((c) => c.request === 'attach' && c.processId);
 
       expect(hasLaunch).toBe(true);
       expect(hasTCPAttach).toBe(true);
@@ -185,7 +185,7 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
       expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
         expect.stringContaining('perl-dap'),
         'Reinstall',
-        'Open Debugging Guide'
+        'Open Debugging Guide',
       );
     } finally {
       process.env.PATH = origPath;
@@ -282,7 +282,7 @@ describe('debug test command helpers', () => {
     expect(rewriteTestLensCommand(lens).command.command).toBe(VSCODE_DEBUG_TEST_COMMAND);
   });
 
-test('rewrites server run-test code lenses to the VS Code command', () => {
+  test('rewrites server run-test code lenses to the VS Code command', () => {
     const lens = {
       command: {
         title: 'Run Test',
@@ -318,11 +318,13 @@ test('rewrites server run-test code lenses to the VS Code command', () => {
   });
 
   test('parses a TestItem-like object into a launch target', () => {
-    expect(parseDebugTestLaunchTarget({
-      label: 'constructor',
-      uri: { fsPath: path.normalize('/workspace/t/basic.t') },
-      args: ['--verbose'],
-    })).toEqual({
+    expect(
+      parseDebugTestLaunchTarget({
+        label: 'constructor',
+        uri: { fsPath: path.normalize('/workspace/t/basic.t') },
+        args: ['--verbose'],
+      }),
+    ).toEqual({
       label: 'constructor',
       program: path.normalize('/workspace/t/basic.t'),
       args: ['--verbose'],
@@ -460,41 +462,85 @@ describe('buildDapExecutableArgs', () => {
   test('translates the shipped structured externalDebugger (connect) shape', () => {
     const config = {
       debuggerBackend: 'external',
-      externalDebugger: { kind: 'ptkdb', mode: 'connect', control: 'mirror', host: '127.0.0.1', port: 13604 },
+      externalDebugger: {
+        kind: 'ptkdb',
+        mode: 'connect',
+        control: 'mirror',
+        host: '127.0.0.1',
+        port: 13604,
+      },
     };
     expect(buildDapExecutableArgs(config as any)).toEqual(['--external-peer', '127.0.0.1:13604']);
   });
 
   test('defaults host to 127.0.0.1 and mode to connect for the structured shape', () => {
-    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { port: 9001 } } as any))
-      .toEqual(['--external-peer', '127.0.0.1:9001']);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { port: 9001 },
+      } as any),
+    ).toEqual(['--external-peer', '127.0.0.1:9001']);
   });
 
   test('wires listen mode to --external-peer-listen (port 0 = allocate ephemeral)', () => {
     // A concrete port binds it; port 0 / absent asks perl-dap to allocate one,
     // so only the host is passed as the bind spec.
-    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 13604 } } as any))
-      .toEqual(['--external-peer-listen', '127.0.0.1:13604']);
-    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 0 } } as any))
-      .toEqual(['--external-peer-listen', '127.0.0.1']);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 13604 },
+      } as any),
+    ).toEqual(['--external-peer-listen', '127.0.0.1:13604']);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 0 },
+      } as any),
+    ).toEqual(['--external-peer-listen', '127.0.0.1']);
     // Defaults host to 127.0.0.1 when omitted.
-    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen' } } as any))
-      .toEqual(['--external-peer-listen', '127.0.0.1']);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen' },
+      } as any),
+    ).toEqual(['--external-peer-listen', '127.0.0.1']);
   });
 
   test('does not fabricate an address for unimplemented modes or connect port 0', () => {
     // launchPeer is not wired; connect requires a concrete port — fall back to native.
-    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'launchPeer', port: 13604 } } as any)).toEqual([]);
-    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'connect', port: 0 } } as any)).toEqual([]);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'launchPeer', port: 13604 },
+      } as any),
+    ).toEqual([]);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'connect', port: 0 },
+      } as any),
+    ).toEqual([]);
   });
 
   test('rejects a listen host that could smuggle extra argv tokens', () => {
-    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen', host: 'host --flag' } } as any)).toEqual([]);
-    expect(buildDapExecutableArgs({ debuggerBackend: 'external', externalDebugger: { mode: 'listen', host: 'a:b' } } as any)).toEqual([]);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen', host: 'host --flag' },
+      } as any),
+    ).toEqual([]);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen', host: 'a:b' },
+      } as any),
+    ).toEqual([]);
   });
 
   test('the native backend (or absent debuggerBackend) yields no bridge args', () => {
-    expect(buildDapExecutableArgs({ debuggerBackend: 'native', program: '/x.pl' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ debuggerBackend: 'native', program: '/x.pl' } as any)).toEqual(
+      [],
+    );
     expect(buildDapExecutableArgs({ request: 'launch', program: '/x.pl' } as any)).toEqual([]);
   });
 });
@@ -567,7 +613,7 @@ describe('offerDebugConfigOnFirstPerlOpen', () => {
       expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
         expect.stringContaining('debug configuration'),
         expect.any(String),
-        expect.any(String)
+        expect.any(String),
       );
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });

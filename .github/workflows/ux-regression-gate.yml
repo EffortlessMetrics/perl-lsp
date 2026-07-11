@@ -420,6 +420,13 @@ jobs:
         working-directory: vscode-extension
         run: npm run lint
 
+      # Oxfmt (PREP-3, #3662) is the sole formatter for vscode-extension/** —
+      # no Prettier. fmt:check fails the build on any unformatted file so
+      # drift can't land; `npm run fmt` applies fixes locally.
+      - name: Format check (oxfmt)
+        working-directory: vscode-extension
+        run: npm run fmt:check
+
       - name: Typecheck (tsc)
         working-directory: vscode-extension
         run: npm run compile

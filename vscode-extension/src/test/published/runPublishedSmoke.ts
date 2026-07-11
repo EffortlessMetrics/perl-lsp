@@ -39,7 +39,7 @@ function validatePublishedVersion(version: string): void {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
@@ -50,7 +50,7 @@ function downloadFile(url: string, destination: string, redirects = 0): Promise<
   }
 
   return new Promise((resolve, reject) => {
-    const request = https.get(url, response => {
+    const request = https.get(url, (response) => {
       const statusCode = response.statusCode ?? 0;
       const location = response.headers.location;
       if (statusCode >= 300 && statusCode < 400 && location) {
@@ -152,15 +152,16 @@ async function installExtension(
     installTarget,
     '--force',
   ];
-  const spawnTarget = process.platform === 'win32'
-    ? {
-        command: process.env.ComSpec || 'cmd.exe',
-        args: ['/d', '/s', '/c', cliPath, ...args],
-      }
-    : {
-        command: cliPath,
-        args,
-      };
+  const spawnTarget =
+    process.platform === 'win32'
+      ? {
+          command: process.env.ComSpec || 'cmd.exe',
+          args: ['/d', '/s', '/c', cliPath, ...args],
+        }
+      : {
+          command: cliPath,
+          args,
+        };
   let lastFailure = '';
 
   for (let attempt = 1; attempt <= 12; attempt += 1) {
@@ -179,7 +180,9 @@ async function installExtension(
       result.error instanceof Error ? result.error.message : '',
       result.stdout,
       result.stderr,
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     if (attempt < 12) {
       await sleep(20_000);
@@ -191,20 +194,28 @@ async function installExtension(
 
 async function main(): Promise<void> {
   const source = publishedSource();
-  const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-published-smoke-workspace-'));
+  const workspacePath = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'perl-lsp-published-smoke-workspace-'),
+  );
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-published-smoke-user-'));
-  const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-published-smoke-extensions-'));
+  const extensionsDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'perl-lsp-published-smoke-extensions-'),
+  );
   const downloadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-published-smoke-download-'));
   const harnessExtensionPath = path.resolve(process.cwd(), 'src/test/published/harness');
   const extensionTestsPath = path.resolve(__dirname, './suite');
   const repoRoot = path.resolve(__dirname, '../../../..');
   const vscodeExecutablePath = await downloadAndUnzipVSCode();
   const installTarget = await resolveInstallTarget(source, downloadDir);
-  const receiptsRoot = process.env.PERL_LSP_SMOKE_RECEIPTS_DIR
-    || path.join(repoRoot, 'target', 'receipts', 'vscode-smoke');
+  const receiptsRoot =
+    process.env.PERL_LSP_SMOKE_RECEIPTS_DIR ||
+    path.join(repoRoot, 'target', 'receipts', 'vscode-smoke');
   fs.mkdirSync(receiptsRoot, { recursive: true });
 
-  fs.writeFileSync(path.join(workspacePath, 'smoke.pl'), "use strict;\nuse warnings;\nprint \"ok\\n\";\n");
+  fs.writeFileSync(
+    path.join(workspacePath, 'smoke.pl'),
+    'use strict;\nuse warnings;\nprint "ok\\n";\n',
+  );
 
   await installExtension(vscodeExecutablePath, installTarget, userDataDir, extensionsDir);
 

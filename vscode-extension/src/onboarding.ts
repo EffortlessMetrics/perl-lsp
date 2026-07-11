@@ -58,8 +58,8 @@ export const PERL_MISSING_MESSAGE =
  * Priority: Perl missing > binary missing > unknown crash.
  */
 export function classifyStartupFailure(results: HealthCheckResult[]): string {
-  const perlResult = results.find(r => r.label === 'Perl interpreter');
-  const binaryResult = results.find(r => r.label === 'LSP binary');
+  const perlResult = results.find((r) => r.label === 'Perl interpreter');
+  const binaryResult = results.find((r) => r.label === 'LSP binary');
 
   // Perl not found — highest priority, most actionable for the user.
   if (!perlResult || (perlResult.ok === false && perlResult.status === HealthCheckStatus.Error)) {
@@ -67,7 +67,11 @@ export function classifyStartupFailure(results: HealthCheckResult[]): string {
   }
 
   // LSP binary not found — Perl is present but the server binary is missing.
-  if (binaryResult && binaryResult.ok === false && binaryResult.status === HealthCheckStatus.Error) {
+  if (
+    binaryResult &&
+    binaryResult.ok === false &&
+    binaryResult.status === HealthCheckStatus.Error
+  ) {
     const detail = binaryResult.detail.trimEnd();
     const detailWithPeriod = detail.endsWith('.') ? detail : `${detail}.`;
     return (
@@ -89,10 +93,7 @@ export function classifyStartupFailure(results: HealthCheckResult[]): string {
 // Internal exec helper type
 // ---------------------------------------------------------------------------
 
-type ExecCheckFn = (
-  cmd: string,
-  args: string[],
-) => Promise<{ stdout: string; stderr: string }>;
+type ExecCheckFn = (cmd: string, args: string[]) => Promise<{ stdout: string; stderr: string }>;
 
 interface ExecInvocation {
   command: string;
@@ -126,10 +127,7 @@ export class OnboardingManager {
    */
   _execCheck: ExecCheckFn;
 
-  constructor(
-    context: vscode.ExtensionContext,
-    outputChannel: vscode.OutputChannel,
-  ) {
+  constructor(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel) {
     this.context = context;
     this.outputChannel = outputChannel;
     this._execCheck = defaultExecCheck;
@@ -161,10 +159,7 @@ export class OnboardingManager {
   async checkPerlInstalled(): Promise<HealthCheckResult> {
     const label = 'Perl interpreter';
     try {
-      const { stdout } = await this._execCheck('perl', [
-        '-e',
-        'print $]',
-      ]);
+      const { stdout } = await this._execCheck('perl', ['-e', 'print $]']);
       const version = stdout.trim() || '(unknown)';
       this.outputChannel.appendLine(`[onboarding] Perl version: ${version}`);
       return {
@@ -207,9 +202,7 @@ export class OnboardingManager {
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.outputChannel.appendLine(
-        `[onboarding] perltidy not found: ${msg}`,
-      );
+      this.outputChannel.appendLine(`[onboarding] perltidy not found: ${msg}`);
       return {
         label,
         ok: false,
@@ -331,9 +324,7 @@ export class OnboardingManager {
    *
    * @param serverPath  Path to the LSP binary, or `null` if unavailable.
    */
-  async runSetupHealthCheck(
-    serverPath: string | null,
-  ): Promise<HealthCheckResult[]> {
+  async runSetupHealthCheck(serverPath: string | null): Promise<HealthCheckResult[]> {
     this.outputChannel.appendLine('[onboarding] Running setup health check...');
 
     const [perlResult, perltidyResult, perlcriticResult] = await Promise.all([
@@ -358,9 +349,7 @@ export class OnboardingManager {
           : r.status === HealthCheckStatus.Warning
             ? '[WARN]'
             : '[ERROR]';
-      this.outputChannel.appendLine(
-        `[onboarding] ${icon} ${r.label}: ${r.detail}`,
-      );
+      this.outputChannel.appendLine(`[onboarding] ${icon} ${r.label}: ${r.detail}`);
     }
 
     return results;
@@ -411,10 +400,7 @@ export class OnboardingManager {
     );
 
     if (selection === 'Run Health Check') {
-      await vscode.commands.executeCommand(
-        'perl-lsp.runHealthCheck',
-        serverPath,
-      );
+      await vscode.commands.executeCommand('perl-lsp.runHealthCheck', serverPath);
     } else if (selection === 'Show Output') {
       this.outputChannel.show();
     }
@@ -431,18 +417,12 @@ function defaultExecCheck(
 ): Promise<{ stdout: string; stderr: string }> {
   const initialInvocation = { command: cmd, args };
   return runExecInvocation(initialInvocation).catch(async (err: unknown) => {
-    const windowsFallback = await resolveWindowsInvocationFallback(
-      initialInvocation,
-      err,
-    );
+    const windowsFallback = await resolveWindowsInvocationFallback(initialInvocation, err);
     if (windowsFallback) {
       return runExecInvocation(windowsFallback);
     }
 
-    const unixShellFallback = resolveUnixShellInvocationFallback(
-      initialInvocation,
-      err,
-    );
+    const unixShellFallback = resolveUnixShellInvocationFallback(initialInvocation, err);
     if (unixShellFallback) {
       return runExecInvocation(unixShellFallback);
     }
@@ -455,18 +435,13 @@ function runExecInvocation(
   invocation: ExecInvocation,
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(
-      invocation.command,
-      invocation.args,
-      { timeout: 5000 },
-      (err, stdout, stderr) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ stdout, stderr });
-        }
-      },
-    );
+    execFile(invocation.command, invocation.args, { timeout: 5000 }, (err, stdout, stderr) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
   });
 }
 
@@ -494,14 +469,14 @@ async function resolveWindowsInvocationFallback(
 function isSpawnNotFound(err: unknown): boolean {
   return Boolean(
     err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      (err as { code?: unknown }).code === 'ENOENT',
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code?: unknown }).code === 'ENOENT',
   );
 }
 
 function resolveWindowsCommandCandidate(command: string): Promise<string | null> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     execFile('where.exe', [command], { timeout: 5000 }, (err, stdout) => {
       if (err) {
         resolve(null);
@@ -549,17 +524,15 @@ function escapePosixShellArg(value: string): string {
 export function selectWindowsCommandCandidate(stdout: string): string | null {
   const candidates = stdout
     .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => line.length > 0);
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 
   if (candidates.length === 0) {
     return null;
   }
 
   return candidates.reduce((best, candidate) => {
-    return windowsCommandPriority(candidate) > windowsCommandPriority(best)
-      ? candidate
-      : best;
+    return windowsCommandPriority(candidate) > windowsCommandPriority(best) ? candidate : best;
   });
 }
 

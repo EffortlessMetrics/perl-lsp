@@ -12,12 +12,16 @@ interface MomentResult {
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
 
-async function withTimeout<T>(label: string, operation: PromiseLike<T>, timeoutMs: number): Promise<T> {
+async function withTimeout<T>(
+  label: string,
+  operation: PromiseLike<T>,
+  timeoutMs: number,
+): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
@@ -36,16 +40,21 @@ async function withTimeout<T>(label: string, operation: PromiseLike<T>, timeoutM
 
 function platformLabel(): string {
   switch (process.platform) {
-    case 'win32': return 'windows';
-    case 'darwin': return 'macos';
-    case 'linux': return 'linux';
-    default: return process.platform;
+    case 'win32':
+      return 'windows';
+    case 'darwin':
+      return 'macos';
+    case 'linux':
+      return 'linux';
+    default:
+      return process.platform;
   }
 }
 
 function receiptsDir(): string {
-  const root = process.env.PERL_LSP_SMOKE_RECEIPTS_DIR
-    ?? path.resolve(__dirname, '..', '..', '..', '..', 'target', 'receipts', 'vscode-smoke');
+  const root =
+    process.env.PERL_LSP_SMOKE_RECEIPTS_DIR ??
+    path.resolve(__dirname, '..', '..', '..', '..', 'target', 'receipts', 'vscode-smoke');
   const sourceLabel = process.env.PERL_LSP_SMOKE_SOURCE_LABEL ?? 'first-hour';
   const dir = path.join(root, sourceLabel, platformLabel());
   fs.mkdirSync(dir, { recursive: true });
@@ -85,11 +94,11 @@ function walkFiles(root: string, maxEntries: number): string[] {
 }
 
 function findPerlFiles(root: string): string[] {
-  return walkFiles(root, 10_000).filter(file => /\.(?:pl|pm|t|psgi)$/i.test(file));
+  return walkFiles(root, 10_000).filter((file) => /\.(?:pl|pm|t|psgi)$/i.test(file));
 }
 
 function sampleLabels(items: readonly vscode.CompletionItem[]): string[] {
-  return items.slice(0, 10).map(item => {
+  return items.slice(0, 10).map((item) => {
     if (typeof item.label === 'string') {
       return item.label;
     }
@@ -225,18 +234,21 @@ async function collectProviderMoment(
   } as MomentResult;
 }
 
-async function waitForDiagnostics(uri: vscode.Uri, timeoutMs: number): Promise<vscode.Diagnostic[]> {
+async function waitForDiagnostics(
+  uri: vscode.Uri,
+  timeoutMs: number,
+): Promise<vscode.Diagnostic[]> {
   const existing = vscode.languages.getDiagnostics(uri);
   if (existing.length > 0) {
     return existing;
   }
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const timeout = setTimeout(() => {
       subscription.dispose();
       resolve(vscode.languages.getDiagnostics(uri));
     }, timeoutMs);
-    const subscription = vscode.languages.onDidChangeDiagnostics(event => {
-      if (event.uris.some(changed => changed.toString() === uri.toString())) {
+    const subscription = vscode.languages.onDidChangeDiagnostics((event) => {
+      if (event.uris.some((changed) => changed.toString() === uri.toString())) {
         clearTimeout(timeout);
         subscription.dispose();
         resolve(vscode.languages.getDiagnostics(uri));
@@ -255,7 +267,10 @@ suite('First-hour VS Code receipt', function () {
     assert.ok(workspaceFolder, 'first-hour receipt requires a workspace folder');
     const workspacePath = workspaceFolder.uri.fsPath;
     const serverPath = process.env.PERL_LSP_FIRST_HOUR_SERVER_PATH ?? '';
-    assert.ok(serverPath, 'PERL_LSP_FIRST_HOUR_SERVER_PATH must point to the current-main LSP binary');
+    assert.ok(
+      serverPath,
+      'PERL_LSP_FIRST_HOUR_SERVER_PATH must point to the current-main LSP binary',
+    );
     assert.ok(fs.existsSync(serverPath), `server binary must exist: ${serverPath}`);
 
     const perlFiles = findPerlFiles(workspacePath);
@@ -275,7 +290,7 @@ suite('First-hour VS Code receipt', function () {
     fs.writeFileSync(probePath, probeText);
 
     const badPath = path.join(workspacePath, 'zz_first_hour_receipt_bad.pl');
-    fs.writeFileSync(badPath, "use strict;\nuse warnings;\nmy $x = ;\n");
+    fs.writeFileSync(badPath, 'use strict;\nuse warnings;\nmy $x = ;\n');
 
     const extension = vscode.extensions.getExtension('EffortlessMetrics.perl-lsp-rs');
     assert.ok(extension, 'extension should be available in the extension host');
@@ -296,10 +311,7 @@ suite('First-hour VS Code receipt', function () {
         file_count_sampled: walkFiles(workspacePath, 10_000).length,
         perl_file_count_sampled: perlFiles.length,
         module_under_probe: moduleName,
-        probe_files: [
-          path.basename(probePath),
-          path.basename(badPath),
-        ],
+        probe_files: [path.basename(probePath), path.basename(badPath)],
       },
       limitations: [
         'Automated extension-host run uses real VS Code and the real extension, but does not visually inspect the status bar.',
@@ -374,12 +386,26 @@ suite('First-hour VS Code receipt', function () {
 
     const probeDocument = await vscode.workspace.openTextDocument(probePath);
     await vscode.window.showTextDocument(probeDocument);
-    const completionPosition = probeDocument.positionAt(probeText.indexOf('$object->') + '$object->'.length);
-    const symbolPosition = probeDocument.positionAt(probeText.indexOf(moduleName) + Math.floor(moduleName.length / 2));
+    const completionPosition = probeDocument.positionAt(
+      probeText.indexOf('$object->') + '$object->'.length,
+    );
+    const symbolPosition = probeDocument.positionAt(
+      probeText.indexOf(moduleName) + Math.floor(moduleName.length / 2),
+    );
 
-    const immediate = await collectProviderMoment('immediate', probeDocument, completionPosition, symbolPosition);
+    const immediate = await collectProviderMoment(
+      'immediate',
+      probeDocument,
+      completionPosition,
+      symbolPosition,
+    );
     await delay(30_000);
-    const afterThirtySeconds = await collectProviderMoment('after_30_seconds', probeDocument, completionPosition, symbolPosition);
+    const afterThirtySeconds = await collectProviderMoment(
+      'after_30_seconds',
+      probeDocument,
+      completionPosition,
+      symbolPosition,
+    );
 
     const badDocument = await vscode.workspace.openTextDocument(badPath);
     await vscode.window.showTextDocument(badDocument);
@@ -403,7 +429,7 @@ suite('First-hour VS Code receipt', function () {
       diagnostics_probe: {
         file: path.basename(badPath),
         count: badDiagnostics.length,
-        messages: badDiagnostics.slice(0, 10).map(diagnostic => diagnostic.message),
+        messages: badDiagnostics.slice(0, 10).map((diagnostic) => diagnostic.message),
       },
       failures: [],
     };

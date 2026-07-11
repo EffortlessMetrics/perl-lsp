@@ -32,10 +32,7 @@ import {
   StartupErrorKind,
   selectBestDiagnosis,
 } from '../startupDiagnosis';
-import {
-  serverNotRunningMessage,
-  _setLastStartupDiagnosisForTest,
-} from '../extension';
+import { serverNotRunningMessage, _setLastStartupDiagnosisForTest } from '../extension';
 
 // ---------------------------------------------------------------------------
 // classifyStartupError — pure classification of stderr/stdout text
@@ -102,15 +99,13 @@ describe('classifyStartupError', () => {
   });
 
   test('GLIBC detection is case-insensitive to variant spellings', () => {
-    const result = classifyStartupError(
-      'version `GLIBC_2.17` not found (required by perllsp)'
-    );
+    const result = classifyStartupError('version `GLIBC_2.17` not found (required by perllsp)');
     expect(result.kind).toBe(StartupErrorKind.GlibcMismatch);
   });
 
   test('missing library name is captured in hint', () => {
     const result = classifyStartupError(
-      'error while loading shared libraries: libssl.so.3: cannot open shared object file'
+      'error while loading shared libraries: libssl.so.3: cannot open shared object file',
     );
     expect(result.kind).toBe(StartupErrorKind.MissingSharedLibrary);
     expect(result.hint).toContain('libssl.so.3');
@@ -164,7 +159,8 @@ describe('classifyStartupError', () => {
   // -------------------------------------------------------------------------
 
   test('detects Windows DLL initialization failure', () => {
-    const stderr = 'The application failed to initialize properly (0xc0000142). DLL initialization routine failed.';
+    const stderr =
+      'The application failed to initialize properly (0xc0000142). DLL initialization routine failed.';
     const result = classifyStartupError(stderr);
     expect(result.kind).toBe(StartupErrorKind.WindowsBinaryError);
     expect(result.hint).toContain('Windows');
@@ -172,7 +168,8 @@ describe('classifyStartupError', () => {
   });
 
   test('detects Windows wrong architecture (not a valid Win32 application)', () => {
-    const stderr = 'C:\\Users\\user\\.vscode\\extensions\\perllsp.exe is not a valid Win32 application.';
+    const stderr =
+      'C:\\Users\\user\\.vscode\\extensions\\perllsp.exe is not a valid Win32 application.';
     const result = classifyStartupError(stderr);
     expect(result.kind).toBe(StartupErrorKind.WindowsBinaryError);
     expect(result.hint).toContain('Windows');
@@ -190,7 +187,8 @@ describe('classifyStartupError', () => {
   // -------------------------------------------------------------------------
 
   test('detects macOS dyld Library not loaded', () => {
-    const stderr = 'dyld: Library not loaded: /usr/lib/libssl.dylib\n  Referenced from: /usr/local/bin/perllsp\n  Reason: image not found';
+    const stderr =
+      'dyld: Library not loaded: /usr/lib/libssl.dylib\n  Referenced from: /usr/local/bin/perllsp\n  Reason: image not found';
     const result = classifyStartupError(stderr);
     expect(result.kind).toBe(StartupErrorKind.MacOsDylibError);
     expect(result.hint).toContain('macOS');
@@ -240,7 +238,7 @@ describe('selectBestDiagnosis', () => {
   });
 
   test('falls back to health-check message when probe kind is Unknown', () => {
-    const probe = classifyStartupError('');  // Unknown
+    const probe = classifyStartupError(''); // Unknown
     const healthMsg = 'Perl interpreter not found. Install Perl 5.10+ and reload the window.';
     const result = selectBestDiagnosis(probe, healthMsg);
     expect(result.hint).toContain('Perl');
@@ -250,14 +248,14 @@ describe('selectBestDiagnosis', () => {
   });
 
   test('returns probe Unknown unchanged when no health message is provided', () => {
-    const probe = classifyStartupError('');  // Unknown
+    const probe = classifyStartupError(''); // Unknown
     const result = selectBestDiagnosis(probe, undefined);
     expect(result.kind).toBe(StartupErrorKind.Unknown);
     expect(result.hint).toBeTruthy();
   });
 
   test('returns probe Unknown unchanged when health message is empty string', () => {
-    const probe = classifyStartupError('');  // Unknown
+    const probe = classifyStartupError(''); // Unknown
     const result = selectBestDiagnosis(probe, '');
     expect(result.kind).toBe(StartupErrorKind.Unknown);
   });
@@ -322,7 +320,9 @@ describe('serverNotRunningMessage diagnosis cache (#4193)', () => {
     expect(msg).toContain('glibc');
     expect(msg).toContain('cargo install');
     // Must not show generic fallback when diagnosis is present
-    expect(msg).not.toBe('Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.');
+    expect(msg).not.toBe(
+      'Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.',
+    );
   });
 
   test('returns formatted diagnosis when permission denied is cached', () => {
@@ -348,7 +348,8 @@ describe('serverNotRunningMessage diagnosis cache (#4193)', () => {
     _setLastStartupDiagnosisForTest({
       kind: StartupErrorKind.Unknown,
       hint: 'The Perl Language Server stopped unexpectedly. Check the Output panel for details.',
-      remediation: 'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
+      remediation:
+        'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
     });
 
     const msg = serverNotRunningMessage();

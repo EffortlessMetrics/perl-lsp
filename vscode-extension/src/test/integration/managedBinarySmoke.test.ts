@@ -5,7 +5,11 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import * as vscode from 'vscode';
 import type { HealthCheckCommandResult, ReinstallCommandResult } from '../../commandResults';
 
-async function withTimeout<T>(label: string, operation: PromiseLike<T>, timeoutMs: number): Promise<T> {
+async function withTimeout<T>(
+  label: string,
+  operation: PromiseLike<T>,
+  timeoutMs: number,
+): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
@@ -23,7 +27,7 @@ async function withTimeout<T>(label: string, operation: PromiseLike<T>, timeoutM
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
@@ -46,17 +50,22 @@ async function waitForCommand(command: string, timeoutMs: number): Promise<void>
 
 function platformLabel(): string {
   switch (process.platform) {
-    case 'win32': return 'windows';
-    case 'darwin': return 'macos';
-    case 'linux': return 'linux';
-    default: return process.platform;
+    case 'win32':
+      return 'windows';
+    case 'darwin':
+      return 'macos';
+    case 'linux':
+      return 'linux';
+    default:
+      return process.platform;
   }
 }
 
 function smokeReceiptsDir(sourceLabel: string): string {
   // __dirname after compile is <repo>/vscode-extension/out/test/integration → 4x .. reaches repo root.
-  const root = process.env.PERL_LSP_SMOKE_RECEIPTS_DIR
-    ?? path.resolve(__dirname, '..', '..', '..', '..', 'target', 'receipts', 'vscode-smoke');
+  const root =
+    process.env.PERL_LSP_SMOKE_RECEIPTS_DIR ??
+    path.resolve(__dirname, '..', '..', '..', '..', 'target', 'receipts', 'vscode-smoke');
   const dir = path.join(root, sourceLabel, platformLabel());
   fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -170,11 +179,7 @@ suite('Managed binary smoke', function () {
         `managed binary should exist after first reinstall: ${reinstall1.serverPath}`,
       );
       assert.ok(reinstall1.target, 'first reinstall should include the release target triple');
-      assert.equal(
-        reinstall1.checksumVerified,
-        true,
-        'first reinstall should verify SHA256SUMS',
-      );
+      assert.equal(reinstall1.checksumVerified, true, 'first reinstall should verify SHA256SUMS');
 
       if (process.platform === 'linux') {
         assert.match(reinstall1.target, /-unknown-linux-gnu$/);
@@ -202,7 +207,7 @@ suite('Managed binary smoke', function () {
       assert.ok(health1, 'first health check should return a result');
       assert.equal(health1.ok, true, JSON.stringify(health1.checks, null, 2));
       assert.ok(
-        health1.checks.some(check => check.label === 'LSP binary' && check.status === 'ok'),
+        health1.checks.some((check) => check.label === 'LSP binary' && check.status === 'ok'),
         JSON.stringify(health1.checks, null, 2),
       );
       artifacts.state.firstHealthOk = true;
@@ -216,9 +221,13 @@ suite('Managed binary smoke', function () {
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
       });
-      lockingProcess.stdout.on('data', () => { /* drain */ });
-      lockingProcess.stderr.on('data', () => { /* drain */ });
-      lockingProcess.on('error', err => {
+      lockingProcess.stdout.on('data', () => {
+        /* drain */
+      });
+      lockingProcess.stderr.on('data', () => {
+        /* drain */
+      });
+      lockingProcess.on('error', (err) => {
         appendLog(artifacts, `locking process error: ${err.message}`);
       });
       // Give the OS a moment to actually hold the executable file handle.
@@ -246,11 +255,7 @@ suite('Managed binary smoke', function () {
         fs.existsSync(reinstall2.serverPath),
         `managed binary should exist after second reinstall: ${reinstall2.serverPath}`,
       );
-      assert.equal(
-        reinstall2.checksumVerified,
-        true,
-        'second reinstall should verify SHA256SUMS',
-      );
+      assert.equal(reinstall2.checksumVerified, true, 'second reinstall should verify SHA256SUMS');
 
       const mtimeAfter = fs.statSync(reinstall2.serverPath).mtimeMs;
       artifacts.state.binaryMtimeAfter = mtimeAfter;
@@ -270,7 +275,7 @@ suite('Managed binary smoke', function () {
       assert.ok(health2, 'second health check should return a result');
       assert.equal(health2.ok, true, JSON.stringify(health2.checks, null, 2));
       assert.ok(
-        health2.checks.some(check => check.label === 'LSP binary' && check.status === 'ok'),
+        health2.checks.some((check) => check.label === 'LSP binary' && check.status === 'ok'),
         JSON.stringify(health2.checks, null, 2),
       );
       artifacts.state.secondHealthOk = true;

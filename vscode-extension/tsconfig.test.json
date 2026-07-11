@@ -20,11 +20,5 @@
     "types": ["jest", "node"]
   },
   "include": ["src/**/*"],
-  "exclude": [
-    "node_modules",
-    "out",
-    "out-test",
-    "src/test/integration/**",
-    "src/test/published/**"
-  ]
+  "exclude": ["node_modules", "out", "out-test", "src/test/integration/**", "src/test/published/**"]
 }
