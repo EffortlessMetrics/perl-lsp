@@ -26,6 +26,7 @@ mod latency;
 mod lifecycle;
 mod notebook;
 pub(crate) mod outbound;
+pub(crate) mod parse_worker;
 #[cfg(feature = "workspace")]
 pub(crate) mod readiness;
 mod refresh;
@@ -116,7 +117,7 @@ use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
-    Arc,
+    Arc, Weak,
     atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
 };
 use url::Url;
@@ -205,6 +206,13 @@ pub struct LspServer {
     refresh_controller: refresh::RefreshController,
     /// Diagnostic publication debouncer (installed after Arc wrapping in Scheduler::new)
     diagnostic_debouncer: Mutex<Option<diagnostic_debounce::DiagnosticDebouncer>>,
+    /// Off-lock async parse worker (#3396 Phase 3), installed after Arc
+    /// wrapping in `Scheduler::new` (production) or explicitly by tests
+    /// that want to exercise the real async gap. `None` means the
+    /// synchronous fallback path is active -- see
+    /// `LspServer::install_default_parse_worker` and
+    /// `handle_did_change_with_cancellation`.
+    parse_worker_handle: Mutex<Option<Arc<parse_worker::ParseWorker>>>,
     /// File watcher change debouncer (installed after Arc wrapping in Scheduler::new)
     file_watcher_debouncer: Mutex<Option<file_watcher_debounce::FileWatcherDebouncer>>,
     /// Notebook document store (LSP 3.17)
@@ -1191,6 +1199,108 @@ impl LspServer {
             drop(guard);
             self.publish_diagnostics(uri);
         }
+    }
+
+    /// Install the off-lock async parse worker (#3396 Phase 3).
+    ///
+    /// Requires `Arc<Self>` because the worker's post-publish callback calls
+    /// back into `LspServer` methods (symbol reindex, diagnostics,
+    /// workspace index) from a background thread -- mirrors how
+    /// `Scheduler::new` builds the diagnostic debouncer's `publish_fn`
+    /// closure. Called from `Scheduler::new` for the production runtime
+    /// (the path a real editor's `didChange` traffic takes). Tests that
+    /// want to exercise the real async gap (rather than the #3589
+    /// forced test-only gap) call this explicitly on an `Arc<LspServer>`
+    /// they construct themselves; a bare `LspServer::new()` with no worker
+    /// installed keeps the synchronous fallback (`handle_did_change` parses
+    /// inline, exactly as before this PR).
+    pub(crate) fn install_default_parse_worker(self: &Arc<Self>) {
+        let cb_server = Arc::downgrade(self);
+        let on_published: Arc<dyn Fn(parse_worker::PublishedParseTicket) + Send + Sync> = {
+            let cb_server = Weak::clone(&cb_server);
+            Arc::new(move |ticket: parse_worker::PublishedParseTicket| {
+                // Break the Arc cycle: if the server has been dropped (shutdown path),
+                // skip the side-effect cleanly. If the server is still live, invoke
+                // the callback. This ensures the server can drop and its worker threads
+                // can join on shutdown.
+                if let Some(server) = cb_server.upgrade() {
+                    server.run_post_parse_side_effects(ticket);
+                }
+                // If server has been dropped, this is a clean no-op during shutdown.
+            })
+        };
+        // #3618/#3660: `on_activated` and `on_settled` together couple BOTH
+        // the increment and the decrement of a URI's pending-parse lifecycle
+        // to `active`-claim ownership under `Coordinator::state`'s single
+        // lock -- see `ParseWorker::spawn_with_pending_count_hooks`'s doc
+        // comment. Same `Weak<Self>` pattern as `on_published` above and for
+        // the same reason in both: a strong `Arc<Self>` captured here would
+        // recreate the LspServer<->ParseWorker cycle #3618 exists to break.
+        //
+        // `on_activated` fires exactly once per NEW pending-parse lifecycle,
+        // synchronously inside `Coordinator::enqueue`'s critical section,
+        // strictly before any worker thread can be woken to process that
+        // job -- calling this increment from `handle_did_change_with_cancellation`
+        // itself (the caller of `ParseWorker::enqueue`) after `enqueue`
+        // returns left a window where an unusually fast worker could
+        // dequeue, process, and settle (decrementing, which floors at 0)
+        // BEFORE this increment ever ran, permanently stranding the counter.
+        let on_activated: Arc<dyn Fn(&str) + Send + Sync> = {
+            let cb_server = Weak::clone(&cb_server);
+            Arc::new(move |uri: &str| {
+                if let Some(server) = cb_server.upgrade() {
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = server.coordinator() {
+                        coordinator.notify_change(uri);
+                    }
+                }
+            })
+        };
+        // `on_settled` fires exactly once per lifecycle, when its LAST job
+        // finishes processing regardless of how it ended (publish, panic,
+        // or terminal stale-reject) -- see `Coordinator::finish`'s return
+        // value and `FinishGuard`.
+        let on_settled: Arc<dyn Fn(&str) + Send + Sync> = {
+            let cb_server = Weak::clone(&cb_server);
+            Arc::new(move |uri: &str| {
+                if let Some(server) = cb_server.upgrade() {
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = server.coordinator() {
+                        coordinator.notify_parse_complete(uri);
+                    }
+                }
+            })
+        };
+        let worker = parse_worker::ParseWorker::spawn_with_pending_count_hooks(
+            Arc::clone(&self.documents),
+            Arc::clone(&self.ast_cache),
+            on_published,
+            on_activated,
+            on_settled,
+        );
+        // If every worker thread failed to spawn (resource exhaustion), do
+        // NOT install it: the async `didChange` path only checks
+        // `self.parse_worker().is_some()` to decide whether to enqueue
+        // instead of parsing inline, and an installed-but-threadless worker
+        // would silently accept jobs no thread will ever process -- a
+        // permanent stall instead of a crash. Leaving `parse_worker_handle`
+        // as `None` here keeps the existing synchronous fallback path (the
+        // one hundreds of unit tests and any editor session already
+        // exercise) as the effective behavior instead.
+        if worker.is_operational() {
+            *self.parse_worker_handle.lock() = Some(Arc::new(worker));
+        } else {
+            tracing::error!(
+                "parse worker pool failed to spawn any threads; \
+                 falling back to the synchronous parse path"
+            );
+        }
+    }
+
+    /// The installed off-lock parse worker, if any. `None` means the
+    /// synchronous fallback path is active.
+    pub(crate) fn parse_worker(&self) -> Option<Arc<parse_worker::ParseWorker>> {
+        self.parse_worker_handle.lock().clone()
     }
 
     /// Install the file watcher debouncer (called from Scheduler::new after Arc wrapping).

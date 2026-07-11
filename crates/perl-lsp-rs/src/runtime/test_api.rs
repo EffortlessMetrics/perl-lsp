@@ -920,6 +920,177 @@ impl LspServer {
             .map(|span| (span.span.to_string(), span.ms, span.detail))
             .collect()
     }
+
+    /// Install the production off-lock async parse worker (#3396 Phase 3)
+    /// on this server.
+    ///
+    /// Test-only convenience that exercises the exact same installation
+    /// path `Scheduler::new` uses in production. Requires `Arc<Self>` --
+    /// construct the server as `Arc::new(LspServer::new())` (or any other
+    /// constructor) before calling. Without this call, `handle_did_change`
+    /// stays on the synchronous fallback path (today's behavior), which is
+    /// what the vast majority of existing unit tests implicitly rely on.
+    pub fn test_install_parse_worker(self: &std::sync::Arc<Self>) {
+        self.install_default_parse_worker();
+    }
+
+    /// Whether the off-lock parse worker is installed on this server (i.e.
+    /// whether `handle_did_change` is on the async path or the synchronous
+    /// fallback).
+    pub fn test_parse_worker_installed(&self) -> bool {
+        self.parse_worker().is_some()
+    }
+
+    /// Snapshot of the installed parse worker's counters, or `None` if no
+    /// worker is installed.
+    pub fn test_parse_worker_metrics(&self) -> Option<ParseWorkerMetricsSnapshot> {
+        self.parse_worker().map(|worker| {
+            let s = worker.metrics();
+            ParseWorkerMetricsSnapshot {
+                jobs_enqueued: s.jobs_enqueued,
+                jobs_started: s.jobs_started,
+                jobs_coalesced: s.jobs_coalesced,
+                jobs_cancelled: s.jobs_cancelled,
+                jobs_rejected_stale: s.jobs_rejected_stale,
+                jobs_published: s.jobs_published,
+                failures_published: s.failures_published,
+                queue_depth_max: s.queue_depth_max,
+                jobs_panicked: s.jobs_panicked,
+            }
+        })
+    }
+
+    /// Block (condvar-based, never a sleep loop) until the parse worker has
+    /// no pending or in-flight job for `uri`, or `timeout` elapses. Returns
+    /// whether it settled in time; `false` (immediately) if no worker is
+    /// installed.
+    ///
+    /// Convenience for non-correctness-critical callers (e.g. a receipt
+    /// test waiting for a burst of edits to settle before querying
+    /// providers). Callers that need to control the exact moment a
+    /// specific generation is about to publish should use the pause/release
+    /// barrier below instead of polling "is everything quiet now".
+    pub fn test_wait_for_parse_worker_settled(
+        &self,
+        uri: &str,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let Some(worker) = self.parse_worker() else {
+            return false;
+        };
+        let normalized_uri = self.normalize_uri_key(uri);
+        worker.wait_until_settled(&normalized_uri, timeout)
+    }
+
+    /// Arm the installed parse worker's test barrier: the worker will pause
+    /// immediately before publishing a snapshot for `(uri, generation)`.
+    /// A no-op if no worker is installed.
+    ///
+    /// Pair with [`Self::test_parse_worker_wait_until_paused`] and
+    /// [`Self::test_parse_worker_release_barrier`] to deterministically
+    /// exercise the real off-lock async gap (as opposed to the #3589
+    /// forced test-only gap via `test_apply_text_change_without_reparse`) --
+    /// e.g. the real-worker variant of the `sub_foo_to_bar` cross-provider
+    /// freshness canary.
+    pub fn test_parse_worker_arm_barrier(&self, uri: &str, generation: u32) {
+        let normalized_uri = self.normalize_uri_key(uri);
+        if let Some(worker) = self.parse_worker() {
+            worker.test_barrier().arm(&normalized_uri, generation);
+        }
+    }
+
+    /// Block until the parse worker reports it has paused at a previously
+    /// armed barrier. A no-op (returns immediately) if no worker is
+    /// installed.
+    pub fn test_parse_worker_wait_until_paused(&self) {
+        if let Some(worker) = self.parse_worker() {
+            worker.test_barrier().wait_until_paused();
+        }
+    }
+
+    /// Release a paused parse worker. A no-op if no worker is installed.
+    pub fn test_parse_worker_release_barrier(&self) {
+        if let Some(worker) = self.parse_worker() {
+            worker.test_barrier().release();
+        }
+    }
+
+    /// Arm the installed parse worker's SIDE-EFFECT barrier: the worker
+    /// will pause immediately after a successful publish for `(uri,
+    /// generation)`, but before invoking the post-publish side-effect
+    /// callback. A no-op if no worker is installed.
+    ///
+    /// This is a distinct pause point from
+    /// [`Self::test_parse_worker_arm_barrier`] (which pauses BEFORE
+    /// publish) -- it exists to prove that "publication succeeded" and
+    /// "the deferred side effects are still current" are separate
+    /// invariants: a test can pause here, let a real newer edit commit for
+    /// real, then release and assert the paused generation's side effects
+    /// never fired (see
+    /// `LspServer::run_post_parse_side_effects`'s own freshness re-check).
+    pub fn test_parse_worker_arm_side_effect_barrier(&self, uri: &str, generation: u32) {
+        let normalized_uri = self.normalize_uri_key(uri);
+        if let Some(worker) = self.parse_worker() {
+            worker.side_effect_barrier().arm(&normalized_uri, generation);
+        }
+    }
+
+    /// Block until the parse worker reports it has paused at a previously
+    /// armed side-effect barrier. A no-op if no worker is installed.
+    pub fn test_parse_worker_wait_until_side_effects_paused(&self) {
+        if let Some(worker) = self.parse_worker() {
+            worker.side_effect_barrier().wait_until_paused();
+        }
+    }
+
+    /// Release a parse worker paused at the side-effect barrier. A no-op if
+    /// no worker is installed.
+    pub fn test_parse_worker_release_side_effect_barrier(&self) {
+        if let Some(worker) = self.parse_worker() {
+            worker.side_effect_barrier().release();
+        }
+    }
+
+    /// Arm the installed parse worker to panic (instead of parsing) the
+    /// next time it processes `(uri, generation)`. A no-op if no worker is
+    /// installed. Test-only: proves the worker's panic-recovery path
+    /// releases the URI and keeps the worker pool alive.
+    pub fn test_parse_worker_arm_panic(&self, uri: &str, generation: u32) {
+        let normalized_uri = self.normalize_uri_key(uri);
+        if let Some(worker) = self.parse_worker() {
+            worker.panic_injector().arm(&normalized_uri, generation);
+        }
+    }
+}
+
+/// Public snapshot of the installed parse worker's counters (test-only).
+///
+/// Mirrors `crate::runtime::parse_worker::ParseWorkerMetricsSnapshot`
+/// (crate-private) with a public type so external integration tests under
+/// `tests/` -- which only see the crate's public API -- can read it.
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ParseWorkerMetricsSnapshot {
+    /// Total `enqueue` calls, regardless of coalescing outcome.
+    pub jobs_enqueued: u64,
+    /// Jobs actually dequeued and parsed.
+    pub jobs_started: u64,
+    /// Jobs replaced in the pending slot before a worker ever started them.
+    pub jobs_coalesced: u64,
+    /// Reserved: jobs cooperatively cancelled mid-parse. Always 0 today.
+    pub jobs_cancelled: u64,
+    /// Jobs dequeued, parsed, but rejected at publish time (superseded
+    /// generation or a document-instance mismatch).
+    pub jobs_rejected_stale: u64,
+    /// Jobs whose publish succeeded.
+    pub jobs_published: u64,
+    /// Subset of `jobs_published` where the published snapshot carried
+    /// `ast: None`.
+    pub failures_published: u64,
+    /// High-water mark of the pending-job queue depth.
+    pub queue_depth_max: u64,
+    /// Jobs whose processing panicked and was recovered.
+    pub jobs_panicked: u64,
 }
 
 #[cfg(all(test, feature = "workspace"))]

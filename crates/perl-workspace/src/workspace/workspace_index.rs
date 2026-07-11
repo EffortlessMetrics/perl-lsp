@@ -439,6 +439,15 @@ impl IndexCoordinator {
         &self.caps
     }
 
+    /// Current pending-parse counter (lock-free read). Exposed for tests
+    /// that need to assert the counter returns to baseline after a burst
+    /// of `notify_change`/`notify_parse_complete` calls -- e.g. proving a
+    /// coalescing or panic/stale-reject accounting fix actually balances
+    /// (#3660), rather than only checking the coarser `state()` transition.
+    pub fn pending_parse_count(&self) -> usize {
+        self.metrics.pending_count()
+    }
+
     /// Snapshot lifecycle instrumentation (durations, transitions, early exits)
     pub fn instrumentation_snapshot(&self) -> IndexInstrumentationSnapshot {
         self.instrumentation.snapshot()
@@ -1140,10 +1149,85 @@ pub struct FileIndex {
     dependencies: HashSet<String>,
     /// Content hash for early-exit optimization
     content_hash: u64,
-    /// Document generation represented by this indexed snapshot.
+    /// Document generation represented by this indexed snapshot -- the
+    /// GENUINELY COMMITTED generation. Only ever advanced by a successful
+    /// late-guard `files.insert` (or the unchanged-content early exit,
+    /// which is atomic and cannot fail). Never advanced speculatively, so
+    /// `indexed_generation()` and every other reader of this field always
+    /// see a generation whose symbols/content_hash/document_store text
+    /// were actually produced -- there is nothing to roll back here on a
+    /// parse failure, because it was never spent on a guess.
     generation: u32,
+    /// High-water mark of generations *claimed* (reserved) for this key,
+    /// including in-flight attempts that have not yet committed. Bumped
+    /// early -- before parsing -- by [`ReservationGuard`] so a concurrent
+    /// out-of-order task for an older generation can be rejected before it
+    /// writes stale text into `document_store` (see `index_file_with_generation`).
+    /// Always `>= generation`. Deliberately NOT the source of truth for
+    /// "what's indexed" -- only `generation` is -- so a reservation that
+    /// never pans out (parse error, document no longer open) can never
+    /// leave the publicly-read `generation` field pointing at content that
+    /// was never actually stored.
+    pending_generation: u32,
     /// Workspace folder URI this file belongs to (for multi-root workspace support)
     folder_uri: Option<String>,
+}
+
+/// RAII reservation for `index_file_with_generation`'s early-guard claim on
+/// `FileIndex::pending_generation`.
+///
+/// Constructed once a task's generation genuinely advances the high-water
+/// mark; dropped without a call to [`Self::commit`] rolls the reservation
+/// back automatically -- covering EVERY early-return between the
+/// reservation and the late guard's successful commit (today: a parse
+/// error and a `document_store` lookup miss) uniformly, so a future third
+/// early-return in this function can't silently reintroduce the same bug
+/// class (#3618 review-3660 findings 3(a)/3(b)/3(c)).
+///
+/// The rollback restores `pending_generation` toward `FileIndex::generation`
+/// -- the last GENUINELY COMMITTED generation, which only a successful late
+/// guard ever advances -- rather than to this task's own pre-reservation
+/// snapshot. Restoring to a per-task snapshot is unsound under chained
+/// failures: if task A reserves then fails, and task B reserves a still
+/// -higher generation and ALSO fails, A's rollback correctly no-ops (B's
+/// claim is still current), but a rollback that restores to "my own
+/// pre-reservation value" would have B's own drop set the high-water mark
+/// to A's already-superseded reservation -- stranding it above the true
+/// committed floor read by nothing, but also below what a legitimate
+/// future reservation should be able to observe as "nothing is truly
+/// pending." Restoring to `generation` (never touched by any reservation)
+/// is always correct regardless of how many reservations chained and
+/// failed before this one.
+struct ReservationGuard<'a> {
+    index: &'a WorkspaceIndex,
+    key: String,
+    reserved: u32,
+    committed: bool,
+}
+
+impl ReservationGuard<'_> {
+    /// Disarm the rollback -- call this once the late guard has genuinely
+    /// committed this generation to `self.files`.
+    fn commit(mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for ReservationGuard<'_> {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        let mut files = self.index.files.write();
+        if let Some(existing) = files.get_mut(&self.key) {
+            // Only roll back if nothing newer has claimed the slot since --
+            // a concurrent task's own legitimate later reservation must
+            // never be stomped by this failure's cleanup.
+            if existing.pending_generation == self.reserved {
+                existing.pending_generation = existing.generation;
+            }
+        }
+    }
 }
 
 /// Write-through semantic fact storage for one indexed file.
@@ -1788,34 +1872,123 @@ impl WorkspaceIndex {
         text.hash(&mut hasher);
         let content_hash = hasher.finish();
 
-        // Check if content is unchanged (early-exit optimization)
+        // Check if content is unchanged (early-exit optimization), and --
+        // still under the SAME `files.write()` guard -- update
+        // `document_store`. `document_store` has its own, entirely separate
+        // internal lock (`DocumentStore::documents: Arc<RwLock<..>>`, no
+        // cross-reference to `self.files`), so holding `files.write()`
+        // across both the generation check AND the `document_store` write
+        // does not risk any lock-ordering deadlock; it makes the two
+        // genuinely atomic with respect to any other writer of this URI's
+        // entry, closing the race outright rather than narrowing it (an
+        // earlier revision applied this same generation check here but
+        // released `files.write()` before the `document_store` write,
+        // leaving a real, if nanosecond-scale, window a stale out-of-order
+        // task could still land in -- flagged again by factory-droid on
+        // PR #3618 after that partial fix).
         let key = DocumentStore::uri_key(&uri_str);
+        // Set below iff this task's generation genuinely advances the
+        // claimed high-water mark (a genuine reservation, not a
+        // same-or-older no-op). `ReservationGuard::drop` rolls the claim
+        // back automatically on ANY early return between here and the late
+        // guard's successful commit (`.commit()`, called once this task's
+        // generation is actually written to `self.files` below) -- see its
+        // doc comment for why it restores toward the last genuinely
+        // committed generation rather than a per-task snapshot.
+        let mut reservation: Option<ReservationGuard<'_>> = None;
         {
             let mut files = self.files.write();
             if let Some(existing_index) = files.get_mut(&key) {
                 if existing_index.content_hash == content_hash {
                     existing_index.generation = existing_index.generation.max(generation);
+                    existing_index.pending_generation =
+                        existing_index.pending_generation.max(generation);
                     // Content unchanged, skip re-indexing
                     return Ok(());
                 }
+                // Same monotonic generation guard as the one under the later
+                // `files.write()` block below (see its doc comment for the
+                // full out-of-order-completion race this closes) -- applied
+                // here too so a stale out-of-order task can't overwrite
+                // `document_store`'s text with older content even when it's
+                // correctly rejected from `self.files` by the later guard.
+                // Compares against the HIGH-WATER MARK (genuinely committed
+                // OR still-in-flight reserved), not just the committed
+                // generation, so a concurrent newer task that hasn't
+                // finished parsing yet still correctly rejects an older
+                // out-of-order task here.
+                let high_water = existing_index.generation.max(existing_index.pending_generation);
+                if generation > 0 && high_water > 0 && high_water > generation {
+                    return Ok(());
+                }
+                // Reserve this generation NOW, before parsing -- not just at
+                // the later guard, which only runs AFTER
+                // `Parser::new(&text).parse()` below completes. Without this,
+                // two concurrent tasks for adjacent generations N and N+1 can
+                // BOTH read the high-water mark here before EITHER has
+                // finished parsing, so neither guard sees the other as newer
+                // and both proceed to write `document_store` -- if N's
+                // (older) write lands after N+1's, `document_store.text`
+                // ends up holding stale content indefinitely, observable by
+                // cross-file consumers (rename, safe-delete preview,
+                // navigation, hover for other-file symbols) that read
+                // `document_store()` directly (flagged by factory-droid and
+                // cubic on PR #3618). Bumping `pending_generation` here,
+                // still under this SAME `files.write()` acquisition, makes
+                // it visible to the very next racer's early check
+                // immediately -- it does not need to wait for this task's
+                // parse to finish.
+                //
+                // This claim is tracked SEPARATELY from `generation` (the
+                // genuinely-committed field read by `indexed_generation()`
+                // and everything else) precisely so a reservation that never
+                // pans out -- parse error, or the document closing before
+                // the late guard runs -- has nothing to roll back on the
+                // field callers actually trust; only `pending_generation`
+                // needs cleanup, and `ReservationGuard` does that
+                // automatically on any early return (review-3660 findings
+                // 3(a)/3(b)/3(c) on PR #3618).
+                if generation > 0 && generation > high_water {
+                    existing_index.pending_generation = generation;
+                    reservation = Some(ReservationGuard {
+                        index: self,
+                        key: key.clone(),
+                        reserved: generation,
+                        committed: false,
+                    });
+                }
             }
-        }
 
-        // Update document store
-        if self.document_store.is_open(&uri_str) {
-            self.document_store.update(&uri_str, 1, text.clone());
-        } else {
-            self.document_store.open(uri_str.clone(), 1, text.clone());
+            // Update document store -- still holding `files.write()`, so no
+            // other writer of this URI can observe a partial state between
+            // the generation check above and this write.
+            if self.document_store.is_open(&uri_str) {
+                self.document_store.update(&uri_str, 1, text.clone());
+            } else {
+                self.document_store.open(uri_str.clone(), 1, text.clone());
+            }
         }
 
         // Parse the file
         let mut parser = Parser::new(&text);
         let ast = match parser.parse() {
             Ok(ast) => ast,
-            Err(e) => return Err(format!("Parse error: {}", e)),
+            Err(e) => {
+                // `reservation`'s `Drop` (if it holds a claim) rolls
+                // `pending_generation` back to the last genuinely committed
+                // generation -- this task never reaches the late guard's
+                // commit below.
+                return Err(format!("Parse error: {}", e));
+            }
         };
 
-        // Get the document for line index
+        // Get the document for line index. If the document was closed out
+        // from under a still-in-flight background index task (e.g. a rapid
+        // didClose racing this task's own reservation), `reservation`'s
+        // `Drop` rolls the claim back here too -- previously this early
+        // return left `self.files[key].generation`'s reservation
+        // permanently claimed with nothing that would ever commit it
+        // (#3618 review-3660 finding 3(c)).
         let mut doc = self.document_store.get(&uri_str).ok_or("Document not found")?;
 
         // Determine workspace folder URI from the file URI
@@ -1863,6 +2036,69 @@ impl WorkspaceIndex {
         {
             let mut files = self.files.write();
 
+            // Monotonic generation guard: an older TRACKED generation must
+            // never overwrite a newer TRACKED one, regardless of
+            // completion order.
+            //
+            // This write path is reached by, among other callers, a
+            // fire-and-forget background indexing task (see
+            // `LspServer::run_post_parse_side_effects` in perl-lsp-rs --
+            // `handle.spawn_blocking(task)`) that returns to its caller as
+            // soon as it is *spawned*, not when it completes. Two such
+            // tasks for adjacent generations N and N+1 of the same URI can
+            // therefore run on different blocking-pool threads and finish
+            // OUT OF ORDER. Each independently passes its own
+            // pre-spawn freshness check (a single check-then-act that is
+            // NOT atomic with this write), so completion order alone
+            // decided which generation's content ended up stored here --
+            // if N finishes after N+1, N would silently overwrite N+1,
+            // producing torn state: this index at N while the document's
+            // own symbol_index/AST are already at N+1, externally
+            // observable as inconsistent `workspace/symbol` vs.
+            // same-file answers until the next edit.
+            //
+            // This check closes that hole at the STORE itself -- a second,
+            // independent line of defense that does not depend on task
+            // completion order. It is evaluated under the SAME
+            // `files.write()` acquisition as the `files.insert` below, so
+            // the check-then-act is atomic with respect to any other
+            // writer of this URI's entry.
+            //
+            // `generation == 0` is deliberately treated as "untracked" and
+            // exempt from this guard, matching every other call site in
+            // the codebase that does not thread a real per-document
+            // generation counter through `index_file_with_generation`:
+            // `index_file()` (the ungenerationed convenience wrapper used
+            // by file-watcher re-indexing, workspace-wide rescans, rename
+            // preview indexing, and most tests) and the `didOpen`
+            // background index task (`runtime/text_sync.rs`, which always
+            // passes `0` since a freshly opened document always starts at
+            // generation 0) both intentionally call this with `generation:
+            // 0` on every invocation, including *legitimate re-indexes of
+            // already-tracked documents* (e.g. reopening a file that was
+            // previously edited to some generation > 0, or an external
+            // on-disk change picked up by the file watcher after edits).
+            // A strict numeric comparison across these untracked calls and
+            // the async parse worker's tracked calls would incorrectly
+            // block those legitimate refreshes once any document reached
+            // generation > 0 -- confirmed empirically: an unconditional
+            // `existing.generation >= generation` guard here made 7
+            // existing tests fail (`test_early_exit_optimization_changed_content`
+            // et al.), all of which re-index the same URI twice through the
+            // untracked `generation: 0` convention and expect the second
+            // (later) call to win. Only comparing when BOTH sides are
+            // genuinely tracked (`> 0`) closes the out-of-order race for
+            // the async parse worker -- the only caller that ever supplies
+            // a real, monotonically-increasing generation for the same
+            // in-flight document -- without touching any untracked caller.
+            if generation > 0 {
+                if let Some(existing) = files.get(&key) {
+                    if existing.generation > 0 && existing.generation > generation {
+                        return Ok(());
+                    }
+                }
+            }
+
             // Remove stale global references from previous version of this file
             if let Some(old_index) = files.get(&key) {
                 let mut global_refs = self.global_references.write();
@@ -1879,6 +2115,19 @@ impl WorkspaceIndex {
                 drop(symbols);
             }
             files.insert(key.clone(), file_index);
+            // This generation is now genuinely committed -- disarm the
+            // reservation's rollback so its `Drop` at function end is a
+            // no-op. Nothing left to roll back: `pending_generation` on the
+            // freshly-inserted `FileIndex` resets to its default (0), which
+            // is harmless -- `generation` (just written above) is the only
+            // field any guard or reader ever trusts as "committed", and a
+            // reset `pending_generation` only ever makes a FUTURE early
+            // guard's high-water comparison more permissive, never less
+            // correct, since `generation.max(pending_generation)` still
+            // floors at the value just committed here.
+            if let Some(reservation) = reservation.take() {
+                reservation.commit();
+            }
             let mut symbols = self.symbols.write();
             let mut search_idx = self.search_index.write();
             if let Some(new_index) = files.get(&key) {
@@ -6107,6 +6356,650 @@ sub hello {
             index.is_index_generation_stale(uri.as_str(), 3),
             "indexed_generation < expected_generation must be stale"
         );
+    }
+
+    /// #3618 review defect: two fire-and-forget background index tasks for
+    /// adjacent generations N and N+1 of the same URI can run on different
+    /// threads and complete OUT OF ORDER (the caller's own pre-spawn
+    /// freshness check is not atomic with this write -- see the monotonic
+    /// generation guard's doc comment on `index_file_with_generation`
+    /// above). This deterministically forces exactly that ordering with a
+    /// `std::sync::Barrier` (no sleeps): generation N+1's commit is fully
+    /// complete (its thread has returned from `index_file_with_generation`
+    /// and reached the barrier) BEFORE generation N's thread is released to
+    /// attempt its own (now late) write. The older generation must never
+    /// win, regardless of which thread's call happened to finish last.
+    #[test]
+    fn out_of_order_generation_commits_never_regress_the_stored_index()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let uri = must(url::Url::parse("file:///lib/OutOfOrder.pm"));
+
+        const GEN_N: u32 = 5;
+        const GEN_N_PLUS_1: u32 = 6;
+        let gen_n_text = "package OutOfOrder;\nsub gen_n_symbol { 1 }\n1;\n".to_string();
+        let gen_n_plus_1_text =
+            "package OutOfOrder;\nsub gen_n_plus_1_symbol { 1 }\n1;\n".to_string();
+        let gen_n_plus_1_text_for_assertion = gen_n_plus_1_text.clone();
+
+        // Released only once BOTH threads have reached it. Generation N+1's
+        // thread reaches the barrier AFTER its write has fully committed;
+        // generation N's thread reaches the barrier BEFORE attempting its
+        // write. So N cannot even start writing until N+1's write is
+        // already visible in the store -- the exact "N completes after
+        // N+1" ordering the real background-task race can produce.
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+
+        let index_n = Arc::clone(&index);
+        let uri_n = uri.clone();
+        let barrier_n = Arc::clone(&barrier);
+        let handle_n = std::thread::spawn(move || -> Result<(), String> {
+            barrier_n.wait();
+            index_n.index_file_with_generation(uri_n, gen_n_text, GEN_N)
+        });
+
+        let index_n1 = Arc::clone(&index);
+        let uri_n1 = uri.clone();
+        let barrier_n1 = Arc::clone(&barrier);
+        let handle_n1 = std::thread::spawn(move || -> Result<(), String> {
+            let result =
+                index_n1.index_file_with_generation(uri_n1, gen_n_plus_1_text, GEN_N_PLUS_1);
+            barrier_n1.wait();
+            result
+        });
+
+        handle_n1
+            .join()
+            .map_err(|_| "generation N+1 thread panicked")?
+            .map_err(|e| format!("generation N+1 write returned an error: {e}"))?;
+        handle_n
+            .join()
+            .map_err(|_| "generation N thread panicked")?
+            .map_err(|e| format!("generation N write returned an error: {e}"))?;
+
+        assert_eq!(
+            index.indexed_generation(uri.as_str()),
+            Some(GEN_N_PLUS_1),
+            "the stored generation must be N+1 even though N's write completed after it"
+        );
+
+        let symbols = index.file_symbols(uri.as_str());
+        assert!(
+            symbols.iter().any(|s| s.name == "gen_n_plus_1_symbol"),
+            "the newer generation's content must be the one stored, even though its writer \
+             finished first; got symbols: {:?}",
+            symbols.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+        assert!(
+            !symbols.iter().any(|s| s.name == "gen_n_symbol"),
+            "the older generation's write must never win, even though it committed AFTER the \
+             newer one; got symbols: {:?}",
+            symbols.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+
+        // #3618 review defect (cubic): `document_store` is a SEPARATE piece
+        // of state from `self.files`, written unconditionally earlier in
+        // `index_file_with_generation` -- before the monotonic generation
+        // guard runs. Proving the guard closes the race for `self.files`
+        // (above) does not prove `document_store` stayed consistent with
+        // it; a cross-file consumer (workspace rename, safe-delete preview,
+        // navigation, hover for symbols in other files -- all read
+        // `document_store()` directly) could still observe generation N's
+        // stale text even though the symbol index correctly holds N+1's
+        // facts.
+        let stored_doc = must_some(index.document_store().get(uri.as_str()));
+        assert_eq!(
+            stored_doc.text, gen_n_plus_1_text_for_assertion,
+            "document_store must hold the newer generation's text, matching self.files -- an \
+             older out-of-order write must not leave document_store and self.files disagreeing \
+             about which generation is current"
+        );
+
+        Ok(())
+    }
+
+    /// #3618 review defect (factory-droid P1, cubic P1): the test above
+    /// forces generation N+1 to FULLY COMMIT (parse finished, late guard
+    /// run, `self.files` updated) before generation N's thread even starts
+    /// -- so N is correctly rejected by the early guard reading an
+    /// ALREADY-CURRENT `self.files[key].generation`. That does not exercise
+    /// the actual reported race: `self.files[key].generation` is only
+    /// otherwise updated by the LATE guard, which runs AFTER
+    /// `Parser::new(&text).parse()` completes -- so a task for generation N
+    /// whose early guard check runs WHILE a concurrent task for generation
+    /// N+1 has only reserved its slot but is STILL PARSING (not yet at the
+    /// late guard) would, without the early reservation this test proves,
+    /// see a stale (pre-N+1) generation and incorrectly proceed to
+    /// overwrite `document_store` with N's older text.
+    ///
+    /// Constructs that window directly: releases both threads from the SAME
+    /// barrier (no full-completion ordering imposed), gives generation N+1
+    /// a LARGE document (many subs) so its parse takes measurably longer
+    /// than generation N's trivial one, and gives N a brief, bounded head
+    /// start (not a polling sleep -- a single fixed delay establishing
+    /// relative ordering, the same class of technique the barrier above
+    /// replaces sleep-based polling with, just biasing rather than forcing
+    /// the race here since there is no production pause hook to force it
+    /// exactly). Repeats several iterations, since a race that depends on
+    /// relative thread-scheduling timing is not guaranteed to manifest on
+    /// every single run even when present -- consistent reproduction across
+    /// iterations is the meaningful signal, not any single run.
+    #[test]
+    fn concurrent_still_parsing_newer_generation_still_wins_document_store()
+    -> Result<(), Box<dyn std::error::Error>> {
+        const GEN_N: u32 = 1;
+        const GEN_N_PLUS_1: u32 = 2;
+        let gen_n_text = "package StillParsing;\nsub gen_n_symbol { 1 }\n1;\n".to_string();
+        // Large enough that parsing takes measurably longer than the small
+        // generation-N document's parse + N's own early-guard check --
+        // widens the window generation N+1 spends between reserving its
+        // generation and reaching the late guard.
+        let mut gen_n_plus_1_text = String::from("package StillParsing;\n");
+        for i in 0..2000 {
+            gen_n_plus_1_text.push_str(&format!("sub gen_n_plus_1_symbol_{i} {{ {i} }}\n"));
+        }
+        gen_n_plus_1_text.push_str("1;\n");
+
+        for iteration in 0..10 {
+            let index = Arc::new(WorkspaceIndex::new());
+            let uri =
+                must(url::Url::parse(&format!("file:///lib/StillParsing{iteration}.pm")));
+            // Baseline generation 0 so `self.files.get_mut(&key)` finds an
+            // existing entry for the early guard/reservation to act on --
+            // matches the real scenario (an already-tracked document being
+            // edited), not a brand-new never-before-seen URI.
+            index.index_file_with_generation(
+                uri.clone(),
+                "package StillParsing;\n1;\n".to_string(),
+                0,
+            )?;
+
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+
+            let index_n1 = Arc::clone(&index);
+            let uri_n1 = uri.clone();
+            let barrier_n1 = Arc::clone(&barrier);
+            let text_n1 = gen_n_plus_1_text.clone();
+            let handle_n1 = std::thread::spawn(move || -> Result<(), String> {
+                barrier_n1.wait();
+                index_n1.index_file_with_generation(uri_n1, text_n1, GEN_N_PLUS_1)
+            });
+
+            let index_n = Arc::clone(&index);
+            let uri_n = uri.clone();
+            let barrier_n = Arc::clone(&barrier);
+            let text_n = gen_n_text.clone();
+            let handle_n = std::thread::spawn(move || -> Result<(), String> {
+                barrier_n.wait();
+                // Brief, bounded head start for generation N+1 to reach and
+                // pass its early-guard reservation (a fast, un-parsed
+                // operation: hash + lock + compare + document_store write)
+                // before generation N's own early-guard check runs -- not a
+                // polling loop, a single fixed delay biasing which side of
+                // the reservation window this thread's check lands in. Kept
+                // well under generation N+1's own parse time (thousands of
+                // subs) so this thread's check reliably lands DURING that
+                // still-parsing window, not after it.
+                std::thread::sleep(std::time::Duration::from_millis(2));
+                index_n.index_file_with_generation(uri_n, text_n, GEN_N)
+            });
+
+            handle_n1
+                .join()
+                .map_err(|_| "generation N+1 thread panicked")?
+                .map_err(|e| format!("generation N+1 write returned an error: {e}"))?;
+            handle_n
+                .join()
+                .map_err(|_| "generation N thread panicked")?
+                .map_err(|e| format!("generation N write returned an error: {e}"))?;
+
+            let stored_doc = must_some(index.document_store().get(uri.as_str()));
+            assert!(
+                !stored_doc.text.contains("gen_n_symbol"),
+                "iteration {iteration}: document_store must never end up holding generation N's \
+                 (older) text once generation N+1 has been reserved, even while N+1 is still \
+                 parsing when N's early guard runs; got: {:?}",
+                stored_doc.text
+            );
+        }
+
+        Ok(())
+    }
+
+    /// #3618 review-3660 finding 3(a): the early-guard reservation added to
+    /// close the still-parsing race above must roll itself back when the
+    /// parse it was reserved for actually fails -- otherwise a single
+    /// unparseable edit permanently strands the tracked generation ahead of
+    /// what was ever genuinely indexed, silently disabling all FUTURE
+    /// generation guards for that URI (every later legitimate generation
+    /// would look "stale" against the phantom reservation forever).
+    ///
+    /// Needs a real, reliably-reachable parse failure, not a hand-wavy
+    /// "assume it can fail" -- uses 200 levels of `if ($a) { ... }` nesting
+    /// against `perl-parser-core`'s `MAX_RECURSION_DEPTH = 128`
+    /// (`crates/perl-parser-core/src/engine/parser/mod.rs`), which
+    /// `check_recursion()` (`engine/parser/helpers.rs`) turns into a
+    /// `ParseError::NestingTooDeep` that `parse_statement`'s callers
+    /// (`statements.rs`, `control_flow.rs`) explicitly propagate rather
+    /// than recover from -- confirmed here by asserting on `Err` directly
+    /// (not the softer "Err or recorded diagnostic" pattern the older
+    /// `test_deep_nesting_stack_overflow` parser test uses at only 100
+    /// levels, which is why that test doesn't already cover this).
+    #[test]
+    fn parse_error_rollback_restores_the_last_committed_generation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///lib/DeepNestFail.pm"));
+
+        // Commit a genuine baseline at generation 3 first.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package DeepNestFail;\nsub baseline { 1 }\n1;\n".to_string(),
+            3,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(3));
+
+        // 200 nested `if` blocks -- well past MAX_RECURSION_DEPTH (128) --
+        // deterministically triggers `ParseError::NestingTooDeep`.
+        let mut too_deep = String::from("package DeepNestFail;\n");
+        for _ in 0..200 {
+            too_deep.push_str("if ($a) { ");
+        }
+        too_deep.push_str("1;");
+        for _ in 0..200 {
+            too_deep.push('}');
+        }
+        too_deep.push('\n');
+
+        let result = index.index_file_with_generation(uri.clone(), too_deep, 4);
+        assert!(
+            result.is_err(),
+            "200 levels of nesting must exceed MAX_RECURSION_DEPTH=128 and return Err, not \
+             recover -- got {result:?}"
+        );
+
+        // The reservation for generation 4 must have rolled back: the
+        // publicly-read generation stays at the last genuinely committed
+        // value (3), never advances to the failed attempt's 4.
+        assert_eq!(
+            index.indexed_generation(uri.as_str()),
+            Some(3),
+            "a failed parse must not leave the tracked generation claiming content that was \
+             never actually indexed"
+        );
+
+        // And the rollback must not have wedged the guard: a legitimate
+        // follow-up at generation 4 with valid text still succeeds.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package DeepNestFail;\nsub recovered { 1 }\n1;\n".to_string(),
+            4,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(4));
+        let symbols = index.file_symbols(uri.as_str());
+        assert!(symbols.iter().any(|s| s.name == "recovered"));
+
+        Ok(())
+    }
+
+    /// #3618 review-3660 finding 3(b): a rollback that restores the tracked
+    /// generation to "whatever THIS task saw before it reserved" (rather
+    /// than to the last genuinely committed generation) is unsound under
+    /// CHAINED failures. Walkthrough of the bug this guards against (fixed
+    /// by tracking `FileIndex::generation` -- committed -- and
+    /// `FileIndex::pending_generation` -- reserved/in-flight -- as two
+    /// separate fields, with rollback always restoring toward `generation`
+    /// rather than a per-task snapshot):
+    ///
+    /// - Baseline committed generation is 4.
+    /// - Task A reserves generation 5 (pending_generation: 4 -> 5), then
+    ///   fails to parse.
+    /// - Task B reserves generation 6 (pending_generation: 5 -> 6) BEFORE
+    ///   A's rollback runs, then ALSO fails to parse.
+    /// - A's rollback correctly no-ops: `pending_generation` (6) no longer
+    ///   equals what A reserved (5) -- something newer has claimed the
+    ///   slot since.
+    /// - B's rollback must restore toward the COMMITTED value (4), not
+    ///   toward "5" (A's now-stale pre-reservation value, and NOT what B
+    ///   itself observed either) -- otherwise `pending_generation` would
+    ///   land on an intermediate value nothing ever committed, and (in the
+    ///   OLD single-field design where the reservation and the committed
+    ///   value were the same field) `indexed_generation()` would incorrectly
+    ///   report 5 even though nothing at generation 5 or 6 was ever
+    ///   genuinely indexed.
+    ///
+    /// This test drives that exact interleaving directly (single-threaded,
+    /// deterministic -- no timing dependency, since the guard's rollback
+    /// logic doesn't depend on wall-clock timing, only on call order) and
+    /// asserts `indexed_generation()` is still exactly the baseline (4)
+    /// after BOTH failures, then proves the guard isn't left wedged: a
+    /// legitimate retry at generation 6 with valid text still succeeds.
+    #[test]
+    fn chained_reservation_failures_never_strand_generation_above_committed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///lib/ChainedFail.pm"));
+
+        index.index_file_with_generation(
+            uri.clone(),
+            "package ChainedFail;\nsub baseline { 1 }\n1;\n".to_string(),
+            4,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(4));
+
+        let mut too_deep_a = String::from("package ChainedFail;\n");
+        for _ in 0..200 {
+            too_deep_a.push_str("if ($a) { ");
+        }
+        too_deep_a.push_str("1;");
+        for _ in 0..200 {
+            too_deep_a.push('}');
+        }
+        too_deep_a.push('\n');
+        let too_deep_b = too_deep_a.clone();
+
+        // Task A: reserves generation 5, fails.
+        let result_a = index.index_file_with_generation(uri.clone(), too_deep_a, 5);
+        assert!(result_a.is_err(), "generation 5's over-nested text must fail to parse");
+
+        // Task B: reserves generation 6 -- in the real concurrent scenario
+        // this races in WHILE A is still parsing, before A's rollback runs;
+        // driving it strictly after A's `Err` here still exercises the
+        // same rollback-ordering logic (B's own rollback must restore
+        // toward `generation`, not toward whatever A's reservation left
+        // behind) since A's failed reservation is never read as a
+        // "committed" value by B's high-water check either way.
+        let result_b = index.index_file_with_generation(uri.clone(), too_deep_b, 6);
+        assert!(result_b.is_err(), "generation 6's over-nested text must fail to parse");
+
+        assert_eq!(
+            index.indexed_generation(uri.as_str()),
+            Some(4),
+            "two chained reservation failures (gen 5 then gen 6) must never strand the tracked \
+             generation on an intermediate, never-committed value -- it must still read the last \
+             genuinely committed generation"
+        );
+
+        // The guard must not be wedged: a legitimate retry at generation 6
+        // with valid text still succeeds and correctly advances the index.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package ChainedFail;\nsub recovered { 1 }\n1;\n".to_string(),
+            6,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(6));
+        let symbols = index.file_symbols(uri.as_str());
+        assert!(symbols.iter().any(|s| s.name == "recovered"));
+
+        Ok(())
+    }
+
+    /// #3618 review-3660 finding 3(c): the early-guard reservation must
+    /// roll back on EVERY early return between it and the late guard's
+    /// commit -- not just a parse error. `self.document_store.get(&uri_str)
+    /// .ok_or("Document not found")?` is a second, real, reachable
+    /// early-return site: an ordinary "rapid tab-close after edit" (a
+    /// `didClose` racing an in-flight background index task for the same
+    /// URI, wired via `DocumentStore::close` in `runtime/text_sync.rs`) can
+    /// close the document between the early guard's reservation and this
+    /// read. Before this fix, that path had NO rollback at all, silently
+    /// leaking the reservation.
+    ///
+    /// Drives the actual race with real threads and a large document (many
+    /// subs) so generation 5's parse takes measurably longer than the
+    /// close call, widening the window a concurrent `document_store.close`
+    /// has to land inside it -- same class of timing technique as
+    /// `concurrent_still_parsing_newer_generation_still_wins_document_store`
+    /// above. Repeats several iterations since the race is timing-dependent.
+    #[test]
+    fn document_closed_during_late_parse_rolls_back_reservation_and_permits_legitimate_retry()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut gen_5_text = String::from("package CloseRace;\n");
+        for i in 0..3000 {
+            gen_5_text.push_str(&format!("sub gen_5_symbol_{i} {{ {i} }}\n"));
+        }
+        gen_5_text.push_str("1;\n");
+
+        for iteration in 0..10 {
+            let index = Arc::new(WorkspaceIndex::new());
+            let uri = must(url::Url::parse(&format!("file:///lib/CloseRace{iteration}.pm")));
+
+            index.index_file_with_generation(
+                uri.clone(),
+                "package CloseRace;\nsub baseline { 1 }\n1;\n".to_string(),
+                3,
+            )?;
+            assert_eq!(index.indexed_generation(uri.as_str()), Some(3));
+
+            let index_parse = Arc::clone(&index);
+            let uri_parse = uri.clone();
+            let text_parse = gen_5_text.clone();
+            let parse_handle = std::thread::spawn(move || {
+                index_parse.index_file_with_generation(uri_parse, text_parse, 5)
+            });
+
+            // Brief, bounded head start so the parse thread's early guard
+            // has reserved generation 5 and opened the document before this
+            // thread closes it -- widens the window the close needs to land
+            // in (the large document's parse), rather than requiring it hit
+            // the few-line gap between parse success and the `.get()` call
+            // exactly.
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            index.document_store().close(uri.as_str());
+
+            let parse_result =
+                parse_handle.join().map_err(|_| "generation 5 parse thread panicked")?;
+
+            // Whichever way the race landed (close hit the parse window and
+            // caused a "Document not found" Err, or the parse finished
+            // first and generation 5 committed normally before the close),
+            // the tracked generation must never claim generation 5 while
+            // simultaneously having failed to commit it.
+            if parse_result.is_err() {
+                assert_eq!(
+                    index.indexed_generation(uri.as_str()),
+                    Some(3),
+                    "iteration {iteration}: a document-closed early return must roll the \
+                     reservation back to the last committed generation, not strand it at 5"
+                );
+            }
+
+            // Regardless of outcome, the guard must not be wedged: reopen
+            // and re-index at generation 5 must succeed (proves no
+            // permanently-leaked reservation from either this race or a
+            // prior iteration's URI).
+            index.index_file_with_generation(
+                uri.clone(),
+                "package CloseRace;\nsub recovered { 1 }\n1;\n".to_string(),
+                5,
+            )?;
+            assert_eq!(
+                index.indexed_generation(uri.as_str()),
+                Some(5),
+                "iteration {iteration}: a legitimate retry after the close race must still \
+                 succeed and advance the tracked generation"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// #3618 review-3660: the three tests above (3a/3b/3c) prove a failed
+    /// reservation doesn't leave `indexed_generation()` claiming an
+    /// un-indexed generation, and that a SAME-generation retry still
+    /// succeeds -- but `indexed_generation()` only ever reads
+    /// `FileIndex::generation`, which `ReservationGuard::drop` never
+    /// touches (only `pending_generation` is rolled back), and a
+    /// same-generation retry sails through the early guard's strict `>`
+    /// high-water comparison whether or not the rollback ran. review-3660
+    /// proved this empirically: no-op'ing `ReservationGuard::drop` left
+    /// all three tests passing unchanged. None of them actually exercise
+    /// `pending_generation`.
+    ///
+    /// This test does. It reproduces review-3660's exact discriminating
+    /// scenario: a HIGHER generation (10) reserves then fails to parse,
+    /// leaking `pending_generation = 10` if the rollback doesn't run. A
+    /// LEGITIMATE, LOWER, still-uncommitted generation (7) then arrives
+    /// with valid content -- modeling an out-of-order background index
+    /// task (`LspServer::run_post_parse_side_effects`'s `spawn_blocking`)
+    /// completing after a later generation was merely attempted, not
+    /// after it committed. Without rollback, the early guard's high-water
+    /// check (`existing.generation.max(existing.pending_generation) = 10
+    /// > 7`) rejects generation 7 outright -- `index_file_with_generation`
+    /// returns `Ok(())` but SILENTLY skips indexing it, permanently
+    /// stranding the index at generation 3 even though generation 7's
+    /// content was never anything but valid. With the rollback (this PR's
+    /// fix), generation 10's parse failure clears the leaked reservation
+    /// back to the committed floor (3), so generation 7 correctly passes
+    /// the high-water check and gets indexed.
+    ///
+    /// Mutation-proved: with `ReservationGuard::drop` temporarily no-op'd,
+    /// this test fails (`indexed_generation()` reports `Some(3)`, symbols
+    /// lack `gen_7_symbol`); restored, it passes. See the PR comment for
+    /// both outputs.
+    #[test]
+    fn failed_higher_generation_reservation_does_not_silently_drop_a_legitimate_lower_generation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///lib/LeakedReservation.pm"));
+
+        // Baseline committed generation 3.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package LeakedReservation;\nsub baseline { 1 }\n1;\n".to_string(),
+            3,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(3));
+
+        // Generation 10 reserves (pending_generation: 3 -> 10 if the
+        // reservation is taken), then fails to parse -- 200 levels of
+        // nesting deterministically exceeds MAX_RECURSION_DEPTH (128).
+        let mut too_deep = String::from("package LeakedReservation;\n");
+        for _ in 0..200 {
+            too_deep.push_str("if ($a) { ");
+        }
+        too_deep.push_str("1;");
+        for _ in 0..200 {
+            too_deep.push('}');
+        }
+        too_deep.push('\n');
+        let result_10 = index.index_file_with_generation(uri.clone(), too_deep, 10);
+        assert!(result_10.is_err(), "generation 10's over-nested text must fail to parse");
+
+        // Generation 7 -- lower than the failed generation 10, but higher
+        // than (and still uncommitted relative to) the baseline of 3 --
+        // arrives with genuinely valid content. This is the discriminating
+        // assertion: it only passes if generation 10's leaked reservation
+        // was actually rolled back.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package LeakedReservation;\nsub gen_7_symbol { 1 }\n1;\n".to_string(),
+            7,
+        )?;
+
+        assert_eq!(
+            index.indexed_generation(uri.as_str()),
+            Some(7),
+            "a legitimate generation (7) must not be silently dropped by a higher generation's \
+             (10) leaked-and-failed reservation -- without the rollback, the high-water check \
+             (10 > 7) rejects it and the index stays permanently stuck at the baseline (3)"
+        );
+        let symbols = index.file_symbols(uri.as_str());
+        assert!(
+            symbols.iter().any(|s| s.name == "gen_7_symbol"),
+            "generation 7's content must actually be indexed, not silently skipped; got \
+             symbols: {:?}",
+            symbols.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+        assert!(
+            !symbols.iter().any(|s| s.name == "baseline"),
+            "generation 7's content must have REPLACED the baseline (3) index, not merely left \
+             it in place; got symbols: {:?}",
+            symbols.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+
+        Ok(())
+    }
+
+    /// #3618 review thread (factory-droid, PRRT_kwDOSid81M6QBZ1u): before the
+    /// `generation`/`pending_generation` split added in this PR's fix-3
+    /// round, the early guard's reservation wrote directly onto
+    /// `FileIndex::generation` (`existing_index.generation = generation`) --
+    /// the SAME field `indexed_generation()` reads. For the entire window
+    /// between that reservation and the late guard's insert, a reader
+    /// (including `LspServer::workspace_index_stale_for_document`, which
+    /// gates hover/navigation/references/completion's local-provider
+    /// fallback on `indexed_generation() == DocumentState::current_generation()`)
+    /// would see the NEW generation number while `file_symbols()` (and
+    /// everything else keyed off the same `FileIndex`) still returned the
+    /// OLD generation's facts -- a window where the index looks caught up
+    /// but isn't.
+    ///
+    /// The `generation`/`pending_generation` split closes this as a side
+    /// effect: the early guard now only ever advances `pending_generation`;
+    /// `generation` -- the only field `indexed_generation()` reads -- is
+    /// written exclusively by the late guard's successful insert, AFTER
+    /// parsing and symbol extraction have already completed. There is no
+    /// longer a reservation write on the path `indexed_generation()` reads
+    /// at all, so this test asserts the window is actually closed: while a
+    /// large document is still parsing in another thread, `indexed_generation()`
+    /// must keep reporting the PREVIOUS generation, never the in-flight one.
+    #[test]
+    fn indexed_generation_never_advances_speculatively_during_a_still_parsing_task()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut gen_5_text = String::from("package StaleWindow;\n");
+        for i in 0..3000 {
+            gen_5_text.push_str(&format!("sub gen_5_symbol_{i} {{ {i} }}\n"));
+        }
+        gen_5_text.push_str("1;\n");
+
+        for iteration in 0..10 {
+            let index = Arc::new(WorkspaceIndex::new());
+            let uri = must(url::Url::parse(&format!("file:///lib/StaleWindow{iteration}.pm")));
+
+            index.index_file_with_generation(
+                uri.clone(),
+                "package StaleWindow;\nsub baseline { 1 }\n1;\n".to_string(),
+                3,
+            )?;
+            assert_eq!(index.indexed_generation(uri.as_str()), Some(3));
+
+            let index_parse = Arc::clone(&index);
+            let uri_parse = uri.clone();
+            let text_parse = gen_5_text.clone();
+            let parse_handle = std::thread::spawn(move || {
+                index_parse.index_file_with_generation(uri_parse, text_parse, 5)
+            });
+
+            // Brief, bounded head start so the parse thread's early guard has
+            // reserved generation 5 (bumped `pending_generation`) before this
+            // thread reads `indexed_generation()` -- the exact reservation
+            // window the pre-fix code would have leaked into `generation`.
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            let generation_while_still_parsing = index.indexed_generation(uri.as_str());
+
+            parse_handle
+                .join()
+                .map_err(|_| "generation 5 parse thread panicked")?
+                .map_err(|e| format!("generation 5 write returned an error: {e}"))?;
+
+            assert_eq!(
+                generation_while_still_parsing,
+                Some(3),
+                "iteration {iteration}: indexed_generation() must never report a generation \
+                 whose symbols haven't actually been committed yet -- observed {:?} while \
+                 generation 5 was still mid-parse (baseline was 3)",
+                generation_while_still_parsing
+            );
+            assert_eq!(
+                index.indexed_generation(uri.as_str()),
+                Some(5),
+                "iteration {iteration}: after the parse genuinely completes, indexed_generation() \
+                 must reflect it"
+            );
+        }
+
+        Ok(())
     }
 
     #[test]

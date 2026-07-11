@@ -37,6 +37,8 @@
 
 use perl_lsp::LspServer;
 use serde_json::{Value, json};
+use std::sync::Arc;
+use std::time::Duration;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
@@ -290,10 +292,16 @@ fn sub_foo_to_bar_cross_provider_freshness_canary() -> TestResult {
         decoded1.contains(&(1, 0, 5, "function".to_string())),
         "post-publish: `bar()` call must decode as function; decoded={decoded1:?}"
     );
-    assert!(
-        !decoded1.iter().any(|(_l, _c, _len, type_name)| type_name == "foo"),
-        "post-publish: no current result may contain `foo`; decoded={decoded1:?}"
-    );
+    // NOTE: there is deliberately no "`decoded1` must not contain `foo`"
+    // assertion here. `decode_semantic_tokens` resolves `type_name` from the
+    // LSP semantic-token legend (categories like "function"/"keyword"), not
+    // from source identifier text -- the wire format is purely positional
+    // (line delta, column delta, length, legend index, modifiers bitmask)
+    // and never carries the identifier string at all. `type_name == "foo"`
+    // would be vacuously false forever regardless of whether a stale `foo`
+    // fact leaked, so it cannot detect that. The `refs1` / `json_contains`
+    // check right below is the one that actually carries text and proves
+    // freshness.
 
     let refs1 = server.test_handle_references(Some(json!({
         "textDocument": { "uri": uri },
@@ -739,6 +747,195 @@ fn providers_answer_normally_with_no_pending_parse_gap() -> TestResult {
         _ => false,
     };
     assert!(def_non_empty, "no gap: definition must answer fresh; got: {def:?}");
+
+    Ok(())
+}
+
+// ── Real async-worker variant (#3396 Phase 3) ─────────────────────────────
+//
+// Everything above forces the pending-parse gap via the #3589 test-only
+// helpers (`test_apply_text_change_without_reparse` /
+// `test_publish_parse_for_current_generation`) -- deliberately kept intact
+// above, since they remain a valid, cheap proof for provider policy in
+// isolation. This test instead installs the REAL off-lock parse worker
+// (#3396 Phase 3) and drives the exact same `sub foo -> bar` scenario
+// through a genuine asynchronous gap using the worker's pause/release
+// barrier, proving the real production wiring -- not just the synthetic
+// gap -- produces the same freshness guarantees.
+
+/// Build a fresh, `Arc`-wrapped server with the real parse worker installed
+/// and capture the semantic-token legend from the same `initialize`
+/// response used to construct it (mirrors `fresh_server_with_legend`, but
+/// `Arc`-wrapped so `test_install_parse_worker` can be called).
+fn fresh_server_with_real_worker_and_legend() -> TestResult<(Arc<LspServer>, Vec<String>)> {
+    let server = Arc::new(LspServer::new());
+    server.test_install_parse_worker();
+    assert!(
+        server.test_parse_worker_installed(),
+        "parse worker must report installed immediately after test_install_parse_worker"
+    );
+    let init = server
+        .test_handle_initialize_dispatch(Some(json!({
+            "capabilities": {},
+            "rootUri": null,
+            "workspaceFolders": null
+        })))?
+        .ok_or("initialize must return a result")?;
+    let legend = init
+        .pointer("/capabilities/semanticTokensProvider/legend/tokenTypes")
+        .and_then(Value::as_array)
+        .ok_or("semanticTokensProvider.legend.tokenTypes missing from initialize response")?
+        .iter()
+        .map(|v| v.as_str().unwrap_or("").to_string())
+        .collect();
+    Ok((server, legend))
+}
+
+/// `sub_foo_to_bar_cross_provider_freshness_canary`, re-run against the REAL
+/// off-lock async parse worker instead of the forced test-only gap.
+///
+/// Sequence: apply the `foo -> bar` edit through the genuine async
+/// `didChange` path (worker installed, so the enqueue-and-return path is
+/// live), arm the worker's barrier so it pauses immediately before
+/// publishing the edit's generation, assert providers see the gap exactly
+/// like the synthetic-gap canary does, release the worker, and assert
+/// everything resolves to `bar` once the real publish lands.
+#[test]
+fn sub_foo_to_bar_cross_provider_freshness_canary_real_async_worker() -> TestResult {
+    let (server, legend) = fresh_server_with_real_worker_and_legend()?;
+    let uri = "file:///pending_parse_canary_real_async.pl";
+
+    // didOpen is unaffected by this PR (always synchronous) -- generation 0.
+    server.test_apply_did_open(uri, BEFORE_TEXT, 1)?;
+    assert_eq!(server.test_document_generation(uri), Some(0));
+
+    // ── Fresh baseline (generation 0) ─────────────────────────────────────
+    let sem0 = server.test_handle_semantic_tokens(Some(json!({"textDocument": {"uri": uri}})))?;
+    let decoded0 = decode_semantic_tokens(&sem0, &legend)?;
+    assert!(
+        decoded0.contains(&(0, 4, 3, "function".to_string())),
+        "baseline: `foo` declaration must decode as function; decoded={decoded0:?}"
+    );
+
+    // ── Arm the barrier, then apply the foo->bar edit through the REAL
+    //    async path. `didChange` must return immediately (enqueue-only) --
+    //    the barrier proves the worker got as far as parsing but has not
+    //    yet published, by blocking on it explicitly rather than trusting
+    //    that `test_apply_did_change` returning fast means anything on its
+    //    own (a synchronous fallback would also return "fast" for a tiny
+    //    fixture).
+    server.test_parse_worker_arm_barrier(uri, 1);
+    server.test_apply_did_change(uri, AFTER_TEXT, 2)?;
+    server.test_parse_worker_wait_until_paused();
+
+    assert_eq!(
+        server.test_document_generation(uri),
+        Some(1),
+        "the real didChange path must still bump the text generation before returning"
+    );
+
+    // ── While genuinely paused mid-publish: providers must show the same
+    //    gap behavior as the synthetic-gap canary -- no stale `foo`, no
+    //    unearned fresh `bar` claim.
+    let sem_gap =
+        server.test_handle_semantic_tokens(Some(json!({"textDocument": {"uri": uri}})))?;
+    let decoded_gap = decode_semantic_tokens(&sem_gap, &legend)?;
+    assert!(
+        decoded_gap.is_empty(),
+        "real gap: semantic tokens must not claim generation N from the stale N-1 AST; decoded={decoded_gap:?}"
+    );
+
+    let refs_gap = server.test_handle_references(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 0 },
+        "context": { "includeDeclaration": true }
+    })))?;
+    let refs_gap_empty = refs_gap.as_ref().and_then(Value::as_array).is_none_or(|a| a.is_empty());
+    assert!(
+        refs_gap_empty,
+        "real gap: references must not answer from a stale/absent AST; got: {refs_gap:?}"
+    );
+    assert!(
+        !json_contains(&refs_gap, "foo"),
+        "real gap: references result must never leak the stale `foo` fact; got: {refs_gap:?}"
+    );
+
+    let rename_gap = server.test_handle_rename(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 0 },
+        "newName": "baz"
+    })))?;
+    let rename_gap_edit_count = rename_gap
+        .as_ref()
+        .and_then(|v| v.get("changes"))
+        .and_then(Value::as_object)
+        .map(|changes| changes.values().filter_map(Value::as_array).map(Vec::len).sum::<usize>())
+        .unwrap_or(0);
+    assert_eq!(
+        rename_gap_edit_count, 0,
+        "real gap: rename must fail closed (zero edits); got: {rename_gap:?}"
+    );
+
+    // ── Release the worker -- it publishes for real this time.
+    server.test_parse_worker_release_barrier();
+    assert!(
+        server.test_wait_for_parse_worker_settled(uri, Duration::from_secs(5)),
+        "worker must settle (publish) within the timeout after release"
+    );
+
+    let metrics = server.test_parse_worker_metrics().ok_or("parse worker metrics missing")?;
+    assert_eq!(metrics.jobs_published, 1, "exactly one generation must have published");
+    // The structural "a rejected/coalesced job never triggers side effects"
+    // invariant is proven precisely by
+    // `runtime::parse_worker::tests::rejected_publish_never_invokes_the_side_effect_callback`
+    // (a counting `on_published` stub, checked against `jobs_rejected_stale`
+    // directly). This integration test instead proves the REAL production
+    // wiring end-to-end: the provider-facing assertions above and below are
+    // the externally observable half of that same invariant.
+
+    let sem1 = server.test_handle_semantic_tokens(Some(json!({"textDocument": {"uri": uri}})))?;
+    let decoded1 = decode_semantic_tokens(&sem1, &legend)?;
+    assert!(
+        decoded1.contains(&(0, 4, 3, "function".to_string())),
+        "post-publish: `bar` declaration must decode as function; decoded={decoded1:?}"
+    );
+    // See the analogous NOTE in `sub_foo_to_bar_cross_provider_freshness_canary`:
+    // `decode_semantic_tokens`'s `type_name` comes from the legend (token
+    // categories), never from source identifier text, so a
+    // `type_name == "foo"` check is vacuously false forever and cannot
+    // detect a leaked stale `foo` fact -- the `refs1` / `json_contains`
+    // check right below is the one that actually carries text.
+
+    let refs1 = server.test_handle_references(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 0 },
+        "context": { "includeDeclaration": true }
+    })))?;
+    let refs1_locations = refs1.as_ref().and_then(Value::as_array);
+    assert!(
+        refs1_locations.is_some_and(|a| !a.is_empty()),
+        "post-publish: references must resolve `bar`; got: {refs1:?}"
+    );
+    assert!(
+        !json_contains(&refs1, "foo"),
+        "post-publish: references result must not mention `foo`"
+    );
+
+    let rename1 = server.test_handle_rename(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 0 },
+        "newName": "baz"
+    })))?;
+    let rename1_edit_count = rename1
+        .as_ref()
+        .and_then(|v| v.get("changes"))
+        .and_then(Value::as_object)
+        .map(|changes| changes.values().filter_map(Value::as_array).map(Vec::len).sum::<usize>())
+        .unwrap_or(0);
+    assert!(
+        rename1_edit_count > 0,
+        "post-publish: rename must succeed once the real generation-1 snapshot is current; got: {rename1:?}"
+    );
 
     Ok(())
 }

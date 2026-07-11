@@ -38,6 +38,27 @@ fn uri_tail(uri: &str) -> String {
 }
 
 impl LspServer {
+    /// Whether the dormant eager-incremental-maintenance fast-path
+    /// (`incremental_doc`/`incremental_state`) is opted into for this
+    /// server. Always `false` when the `incremental` cargo feature is not
+    /// compiled in.
+    ///
+    /// `didChange` uses this to decide whether to take the off-lock async
+    /// parse-worker path (#3396 Phase 3) or the synchronous fallback: eager
+    /// incremental maintenance needs its own parse to run synchronously
+    /// under the same `documents` lock as the text-state update, so it is
+    /// incompatible with the async worker path today.
+    fn incremental_eager_enabled(&self) -> bool {
+        #[cfg(feature = "incremental")]
+        {
+            self.incremental_eager.load(Ordering::Relaxed)
+        }
+        #[cfg(not(feature = "incremental"))]
+        {
+            false
+        }
+    }
+
     /// Handle textDocument/didOpen notification.
     ///
     /// Delegates to [`Self::handle_did_open_with_cancellation`] with no token.
@@ -632,7 +653,97 @@ impl LspServer {
                     return Ok(());
                 }
 
-                // Notify coordinator of pending change (tracks parse storm)
+                // ---- Off-lock async parse path (#3396 Phase 3, default) ----
+                //
+                // Active whenever a parse worker is installed (the
+                // production runtime via `Scheduler::new`, or a test that
+                // opted in explicitly) AND the dormant `incremental_eager`
+                // fast-path is not in play (that flag needs its own parse
+                // to happen synchronously under this same lock -- see
+                // `DocumentState::incremental_doc`/`incremental_state`
+                // docs). Falls through to the synchronous fallback path
+                // below otherwise, so a bare `LspServer::new()` (used by
+                // hundreds of existing unit tests that assert
+                // `current_parsed()` is available immediately after
+                // `handle_did_change` returns) is unaffected.
+                if !self.incremental_eager_enabled() {
+                    if let Some(worker) = self.parse_worker() {
+                        // Commit the text-only mutation now; the parse +
+                        // parent-map + publish happen off this lock, in the
+                        // worker. `current_parsed()` reports `None` for
+                        // this document until the worker publishes for
+                        // `next_gen` (or forever, if a newer edit
+                        // supersedes it first); `latest_parsed()` keeps
+                        // answering with the pre-edit snapshot in the
+                        // meantime -- see `state::DocumentState` module
+                        // docs and the #3589 pending-parse provider
+                        // policies.
+                        doc_state.replace_text_state(doc.rope.clone(), text.clone(), version);
+                        #[cfg(feature = "incremental")]
+                        {
+                            doc_state.incremental_doc = None;
+                            doc_state.incremental_state = None;
+                        }
+                        let generation_handle = doc_state.generation.clone();
+                        documents.insert(normalized_uri.clone(), doc_state);
+                        drop(documents);
+
+                        if timing_on {
+                            use crate::runtime::timing::{TimingSpan, elapsed_ms, emit};
+                            let tail = uri_tail(uri);
+                            let bytes = text.len();
+                            let edits = changes.len();
+                            let ver = i64::from(version);
+                            let total_ms = elapsed_ms(t_did_change_start);
+                            for (name, ms) in [
+                                ("didChange.total", total_ms),
+                                ("didChange.lock_wait", lock_wait_ms),
+                                ("didChange.apply_changes", apply_changes_ms),
+                                ("didChange.rope_to_string", rope_to_string_ms),
+                            ] {
+                                emit(TimingSpan::document(
+                                    name,
+                                    ms,
+                                    tail.clone(),
+                                    ver,
+                                    bytes,
+                                    edits,
+                                ));
+                            }
+                        }
+
+                        // Coordinator notification for a NEW pending-parse
+                        // lifecycle (tracks parse storm) is fired from
+                        // INSIDE `enqueue` itself (`Coordinator::on_activated`,
+                        // wired in `install_default_parse_worker`), not from
+                        // here after `enqueue` returns -- calling it from
+                        // this caller left a window where an unusually fast
+                        // worker could dequeue, process, and settle (its
+                        // decrement) before this call ever ran, permanently
+                        // stranding the pending-parse counter (#3618 settle-
+                        // before-increment race). `enqueue`'s return value
+                        // is no longer needed by this caller.
+                        worker.enqueue(
+                            uri.to_string(),
+                            normalized_uri,
+                            next_gen,
+                            generation_handle,
+                            Arc::from(text.as_str()),
+                        );
+
+                        return Ok(());
+                    }
+                }
+
+                // ---- Synchronous fallback path (unchanged behavior) ----
+                // Active when no worker is installed, or `incremental_eager`
+                // opted into the dormant fast-path that needs the parse
+                // to happen synchronously under this same lock. Every call
+                // here fully parses before returning (no coalescing is
+                // possible), so `notify_change` below is always followed by
+                // exactly one matching `notify_parse_complete` for THIS
+                // edit -- unlike the async branch above, this unconditional
+                // call is already balanced.
                 #[cfg(feature = "workspace")]
                 if let Some(coordinator) = self.coordinator() {
                     coordinator.notify_change(uri);
@@ -847,8 +958,11 @@ impl LspServer {
                 // Publish the snapshot built above -- `doc_state`'s
                 // generation Arc was already bumped to `next_gen` earlier
                 // (same atomic, cloned), so this publication always succeeds
-                // in today's synchronous parse-under-the-lock world.
-                doc_state.publish_parsed_if_current(next_gen, snapshot);
+                // in today's synchronous parse-under-the-lock world. Clone
+                // (not move) so `snapshot` is still available below to
+                // build the `PublishedParseTicket` for
+                // `run_post_parse_side_effects`.
+                doc_state.publish_parsed_if_current(next_gen, Arc::clone(&snapshot));
 
                 // Check if a newer change arrived while we were parsing
                 if let Some(existing_doc) = self.get_document(&documents, uri) {
@@ -905,39 +1019,131 @@ impl LspServer {
                     }
                 }
 
-                if let Some(ref ast) = ast_arc {
-                    self.reindex_document_symbols(uri, ast, &text);
-                } else {
-                    self.clear_document_symbols(uri);
+                // Symbol reindex, workspace index, diagnostics -- shared
+                // with the async parse worker's post-publish callback (see
+                // `Self::run_post_parse_side_effects`). Only reached here
+                // after a successful synchronous publish above, matching
+                // the worker's "only after a successful, freshness-gated
+                // publish" invariant. `ast_arc` is intentionally not passed
+                // separately -- the ticket carries `snapshot`, and every
+                // side effect derives `ast` from `snapshot.ast()` so there
+                // is exactly one source of truth for it.
+                self.run_post_parse_side_effects(parse_worker::PublishedParseTicket {
+                    uri: uri.to_string(),
+                    document_instance: generation_for_index_task,
+                    generation: next_gen,
+                    snapshot,
+                    text: Arc::from(text.as_str()),
+                    // No worker, no queue, no `finish()` settle hook on
+                    // this path -- `run_post_parse_side_effects` must keep
+                    // firing `notify_parse_complete` itself. See
+                    // `PublishedParseTicket`'s doc comment and #3660.
+                    settle_notified_by_worker: false,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Run post-parse side effects (symbol reindex, workspace index,
+    /// diagnostics) for a just-published parse carried by `ticket`.
+    ///
+    /// Shared by the synchronous fallback path (called inline, after its
+    /// own `publish_parsed_if_current`) and the async parse worker's
+    /// post-publish callback (`LspServer::install_default_parse_worker`,
+    /// invoked from `parse_worker::process_job` only after a successful
+    /// freshness-gated publish). Every call site must only reach this
+    /// method after a publish it knows to have succeeded -- a rejected
+    /// publish must never call this, or a stale generation's diagnostics /
+    /// index entry / symbol table would leak past the freshness gate that
+    /// exists specifically to prevent that.
+    ///
+    /// ## Publication validity != side-effect validity
+    ///
+    /// A successful `publish_parsed_if_current` proves the snapshot was
+    /// current *at publish time* -- it does not prove these *deferred*
+    /// side effects are still current by the time they actually commit.
+    /// Between the async worker's publish-lock release and each side effect
+    /// below actually running, a newer edit can land and supersede
+    /// `ticket.generation`. Every mutating side effect therefore commits
+    /// through [`Self::commit_parse_effect_if_current`] -- the single
+    /// sanctioned oracle that re-validates freshness immediately before
+    /// commit, not merely once at this method's entry. This makes "a side
+    /// effect forgot to re-check freshness at all" structurally impossible
+    /// to introduce by accident: there is no other sanctioned way to write
+    /// parse-derived state, so a future side effect either goes through the
+    /// oracle or has no path to commit at all. It does NOT make the
+    /// check-then-commit sequence atomic -- see the TOCTOU note on
+    /// [`document_generation_still_current`] for the residual (nanosecond-
+    /// scale, `documents.lock()`-released-before-`commit()`-runs) window a
+    /// newer edit can still land in.
+    pub(crate) fn run_post_parse_side_effects(&self, ticket: parse_worker::PublishedParseTicket) {
+        let ast_arc = ticket.snapshot.ast().cloned();
+
+        let symbols_committed = self.commit_parse_effect_if_current(&ticket, || {
+            if let Some(ref ast) = ast_arc {
+                self.reindex_document_symbols(&ticket.uri, ast, &ticket.text);
+            } else {
+                self.clear_document_symbols(&ticket.uri);
+            }
+        });
+
+        if symbols_committed.is_none() {
+            // Stale by the time these side effects were about to commit --
+            // a newer edit already superseded `ticket.generation`. Skip
+            // every remaining mutating effect below; only keep the
+            // coordinator's completion bookkeeping consistent (mirrors the
+            // pre-existing "still notify completion even if discarding, to
+            // keep coordinator state consistent" precedent in the
+            // synchronous fallback path's own stale-parse discard branch)
+            // -- unless the async worker's settle hook already owns this
+            // lifecycle's decrement (see `PublishedParseTicket` and #3660).
+            if !ticket.settle_notified_by_worker {
+                #[cfg(feature = "workspace")]
+                if let Some(coordinator) = self.coordinator() {
+                    coordinator.notify_parse_complete(&ticket.uri);
                 }
+            }
+            return;
+        }
 
-                // Index symbols for workspace search.
-                // Indexing runs in a background task so the handler returns
-                // immediately; `notify_parse_complete` is called inside the task.
-                if let Some(ref _ast) = ast_arc {
-                    #[cfg(feature = "workspace")]
-                    if let Some(coordinator) = self.coordinator() {
-                        if let Ok(url) = url::Url::parse(uri) {
-                            let workspace_index = Arc::clone(coordinator.index());
-                            let coordinator_clone = Arc::clone(coordinator);
-                            let doc_content = text.clone();
-                            let uri_owned = uri.to_string();
-                            let expected_generation = next_gen;
-                            let generation = Arc::clone(&generation_for_index_task);
-                            let task_counter = Arc::clone(&self.pending_index_task_count);
-                            task_counter.fetch_add(1, Ordering::SeqCst);
+        // Index symbols for workspace search.
+        // Indexing runs in a background task so the handler returns
+        // immediately; `notify_parse_complete` is called inside the task.
+        //
+        // This task is the highest-risk deferred side effect: it can run
+        // arbitrarily later than the other side effects above (scheduled on
+        // the blocking pool or run inline), so its own commit-time oracle
+        // call -- not just the entry-point check above -- is load-bearing,
+        // not defense-in-depth.
+        if ast_arc.is_some() {
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                if let Ok(url) = url::Url::parse(&ticket.uri) {
+                    let workspace_index = Arc::clone(coordinator.index());
+                    let coordinator_clone = Arc::clone(coordinator);
+                    let doc_content = ticket.text.to_string();
+                    let uri_owned = ticket.uri.clone();
+                    let normalized_uri_owned = self.normalize_uri_key(&ticket.uri);
+                    let documents_for_task =
+                        crate::runtime::parse_worker::DocumentsHandle(Arc::clone(&self.documents));
+                    let expected_generation = ticket.generation;
+                    let document_instance = Arc::clone(&ticket.document_instance);
+                    let task_counter = Arc::clone(&self.pending_index_task_count);
+                    let settle_notified_by_worker = ticket.settle_notified_by_worker;
+                    task_counter.fetch_add(1, Ordering::SeqCst);
 
-                            let task = move || {
-                                if generation.load(Ordering::Acquire) != expected_generation {
-                                    tracing::debug!(
-                                        uri = %uri_owned,
-                                        expected_generation,
-                                        "Skipping stale background index task after document close/change"
-                                    );
-                                    coordinator_clone.notify_parse_complete(&uri_owned);
-                                    task_counter.fetch_sub(1, Ordering::SeqCst);
-                                    return;
-                                }
+                    let task = move || {
+                        // The SAME sanctioned oracle, called at THIS task's
+                        // own (much later) commit boundary -- see
+                        // `commit_parse_effect_if_current`.
+                        let indexed = commit_parse_effect_if_current(
+                            &documents_for_task,
+                            &normalized_uri_owned,
+                            expected_generation,
+                            &document_instance,
+                            || {
                                 if let Err(e) = workspace_index.index_file_with_generation(
                                     url,
                                     doc_content,
@@ -945,45 +1151,164 @@ impl LspServer {
                                 ) {
                                     tracing::warn!("Failed to index file {}: {}", uri_owned, e);
                                 }
-                                coordinator_clone.notify_parse_complete(&uri_owned);
-                                task_counter.fetch_sub(1, Ordering::SeqCst);
-                            };
+                            },
+                        );
+                        if indexed.is_none() {
+                            tracing::debug!(
+                                uri = %uri_owned,
+                                expected_generation,
+                                "Skipping stale background index task after document close/change"
+                            );
+                        }
+                        // See `PublishedParseTicket` and #3660: the async
+                        // worker's settle hook already owns this
+                        // lifecycle's decrement when `true`.
+                        if !settle_notified_by_worker {
+                            coordinator_clone.notify_parse_complete(&uri_owned);
+                        }
+                        task_counter.fetch_sub(1, Ordering::SeqCst);
+                    };
 
-                            match tokio::runtime::Handle::try_current() {
-                                Ok(handle) => {
-                                    handle.spawn_blocking(task);
-                                }
-                                Err(_) => {
-                                    task();
-                                }
-                            }
-
-                            // Fast path: immediately publish parse-error diagnostics so
-                            // syntax errors appear before the slow debounce fires.
-                            // The debounced full publish replaces this notification.
-                            self.publish_parse_errors_fast(uri);
-                            // Send full diagnostics (debounced); coordinator completion is async.
-                            self.publish_diagnostics_debounced(uri);
-                            return Ok(());
+                    match tokio::runtime::Handle::try_current() {
+                        Ok(handle) => {
+                            handle.spawn_blocking(task);
+                        }
+                        Err(_) => {
+                            task();
                         }
                     }
-                }
 
-                // Notify coordinator synchronously when no coordinator/URL/workspace feature.
-                #[cfg(feature = "workspace")]
-                if let Some(coordinator) = self.coordinator() {
-                    coordinator.notify_parse_complete(uri);
+                    // Fast path: immediately publish parse-error diagnostics so
+                    // syntax errors appear before the slow debounce fires.
+                    // The debounced full publish replaces this notification.
+                    self.commit_parse_effect_if_current(&ticket, || {
+                        self.publish_parse_errors_fast(&ticket.uri);
+                    });
+                    // Send full diagnostics (debounced); coordinator completion is async.
+                    self.commit_parse_effect_if_current(&ticket, || {
+                        self.publish_diagnostics_debounced(&ticket.uri);
+                    });
+                    return;
                 }
-
-                // Fast path: immediately publish parse-error diagnostics.
-                self.publish_parse_errors_fast(uri);
-                // Send full diagnostics (use original URI for client notification)
-                // Debounced: coalesces rapid typing into a single publication
-                self.publish_diagnostics_debounced(uri);
             }
         }
 
-        Ok(())
+        // Notify coordinator synchronously when no coordinator/URL/workspace
+        // feature -- unless the async worker's settle hook already owns
+        // this lifecycle's decrement (see `PublishedParseTicket` and #3660).
+        if !ticket.settle_notified_by_worker {
+            #[cfg(feature = "workspace")]
+            if let Some(coordinator) = self.coordinator() {
+                coordinator.notify_parse_complete(&ticket.uri);
+            }
+        }
+
+        // Fast path: immediately publish parse-error diagnostics.
+        self.commit_parse_effect_if_current(&ticket, || {
+            self.publish_parse_errors_fast(&ticket.uri);
+        });
+        // Send full diagnostics (use original URI for client notification)
+        // Debounced: coalesces rapid typing into a single publication
+        self.commit_parse_effect_if_current(&ticket, || {
+            self.publish_diagnostics_debounced(&ticket.uri);
+        });
+    }
+
+    /// The ONLY sanctioned way to commit a deferred post-parse side effect.
+    ///
+    /// Every side effect derived from a [`parse_worker::PublishedParseTicket`]
+    /// -- diagnostics, document-symbol reindex, workspace-index replacement,
+    /// symbol-cache updates, semantic-fact publication, any
+    /// freshness-claiming trace -- routes through this function rather than
+    /// hand-rolling its own generation re-check. Re-validates document
+    /// instance identity + generation freshness immediately before `commit`
+    /// runs (not merely when the ticket was constructed, and not merely once
+    /// at some earlier "entry point") via [`document_generation_still_current`].
+    /// Runs `commit` and returns `Some` only if `ticket`'s
+    /// `(document_instance, generation)` still matched the live document at
+    /// the instant the check ran; otherwise the effect is dropped entirely
+    /// and this returns `None`.
+    ///
+    /// NOT atomic with `commit` itself: the check takes `documents.lock()`,
+    /// reads, and releases it before `commit` runs (`commit` closures do
+    /// I/O -- notifications, index writes -- that must not run while holding
+    /// the documents lock, or every side effect would serialize behind it
+    /// and defeat the point of moving parse work off that lock). A newer
+    /// edit can therefore still land in the gap between the check passing
+    /// and `commit` actually writing. In practice this window is
+    /// nanoseconds wide (no `.await`, no I/O, no blocking call between the
+    /// check returning and `commit()` being invoked) and is not eliminated,
+    /// only made vanishingly unlikely; a caller that needs a hard guarantee
+    /// must not rely on this function for it.
+    pub(crate) fn commit_parse_effect_if_current<T>(
+        &self,
+        ticket: &parse_worker::PublishedParseTicket,
+        commit: impl FnOnce() -> T,
+    ) -> Option<T> {
+        let normalized_uri = self.normalize_uri_key(&ticket.uri);
+        commit_parse_effect_if_current(
+            &self.documents,
+            &normalized_uri,
+            ticket.generation,
+            &ticket.document_instance,
+            commit,
+        )
+    }
+}
+
+/// Whether `generation` (identified by `generation_handle`) is still the
+/// current generation of the document stored at `normalized_uri`.
+///
+/// A deferred side effect (symbol reindex, workspace-index mutation,
+/// diagnostics) must re-validate freshness at its own commit point, not
+/// only trust that the `ParsedSnapshot` it was derived from published
+/// successfully at some earlier point in time -- a newer edit can supersede
+/// `generation` in the window between that publish and this side effect
+/// actually committing. Two independent checks are required:
+///
+/// - **Document-instance identity** (`Arc::ptr_eq`): closes the
+///   close/reopen ABA hole -- a didClose+didOpen cycle on the same URI
+///   installs a brand-new `DocumentState` with a fresh `Arc<AtomicU32>`
+///   generation counter that could coincidentally reach the same numeric
+///   value `generation_handle` is still holding.
+/// - **Live generation number**: even for the *same* document instance, a
+///   later edit bumps the generation past `generation`.
+///
+/// Both must hold, checked together under one `documents.lock()`
+/// acquisition, for the side effect to be considered still valid to commit.
+/// A document that has been closed entirely (removed from the map) also
+/// fails this check, since `documents.get(normalized_uri)` returns `None`.
+pub(crate) fn document_generation_still_current(
+    documents: &Mutex<HashMap<String, DocumentState>>,
+    normalized_uri: &str,
+    generation: u32,
+    generation_handle: &Arc<AtomicU32>,
+) -> bool {
+    let docs = documents.lock();
+    docs.get(normalized_uri).is_some_and(|doc| {
+        Arc::ptr_eq(&doc.generation, generation_handle) && doc.current_generation() == generation
+    })
+}
+
+/// Free-function core of the single sanctioned post-parse side-effect
+/// oracle -- see [`LspServer::commit_parse_effect_if_current`] for the
+/// `&self` convenience wrapper most call sites use. This standalone form
+/// exists so a detached background task (which does not carry `&self`,
+/// only the individually `Arc`-cloned pieces it needs -- see the
+/// background workspace-index task in
+/// [`LspServer::run_post_parse_side_effects`]) can still commit through the
+/// exact same freshness check rather than a hand-rolled duplicate.
+pub(crate) fn commit_parse_effect_if_current<T>(
+    documents: &Mutex<HashMap<String, DocumentState>>,
+    normalized_uri: &str,
+    generation: u32,
+    generation_handle: &Arc<AtomicU32>,
+    commit: impl FnOnce() -> T,
+) -> Option<T> {
+    if document_generation_still_current(documents, normalized_uri, generation, generation_handle) {
+        Some(commit())
+    } else {
+        None
     }
 }
 

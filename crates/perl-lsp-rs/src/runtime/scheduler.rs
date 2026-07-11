@@ -444,6 +444,12 @@ impl Scheduler {
         });
         server.install_file_watcher_debouncer(fw_debouncer);
 
+        // Install the off-lock async parse worker (#3396 Phase 3) now that
+        // server is wrapped in Arc. This is the production default: real
+        // editor `didChange` traffic goes through this `Scheduler`, so the
+        // mutation worker below only ever text-applies -- it never parses.
+        server.install_default_parse_worker();
+
         Self {
             mutation_tx,
             read_tx,

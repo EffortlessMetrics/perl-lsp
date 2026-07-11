@@ -1035,6 +1035,197 @@ fn test_did_close_removes_document_symbols_from_index() -> Result<(), Box<dyn st
     Ok(())
 }
 
+/// Publication validity != side-effect validity (#3396 Phase 3): a deferred
+/// side effect (here, `reindex_document_symbols` via
+/// `run_post_parse_side_effects`) must re-validate freshness at its OWN
+/// commit point, not just trust that the `ParsedSnapshot` it carries was
+/// valid when some earlier publish succeeded.
+///
+/// This directly exercises `run_post_parse_side_effects`'s
+/// `commit_parse_effect_if_current` oracle with a generation that has been
+/// superseded between "this parse was captured" and "its side effects are
+/// about to commit" -- exactly the window an async parse worker's
+/// `on_published` callback can be delayed across, even though this test
+/// does not need the worker itself to prove it.
+#[test]
+fn stale_generation_side_effects_never_reindex_symbols() -> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = LspServer::new();
+    let uri = "file:///stale_side_effect_symbol_race.pl";
+
+    server.did_open(json!({
+        "textDocument": {
+            "uri": uri,
+            "languageId": "perl",
+            "version": 1,
+            "text": "sub kept_symbol { 1 }\n"
+        }
+    }))?;
+    assert!(server.symbol_index.lock().search_prefix("kept_").contains(&"kept_symbol".to_string()));
+
+    // Capture the generation handle exactly as a deferred side effect
+    // would (e.g. the async parse worker's `on_published` callback carries
+    // `PublishedParseTicket::document_instance`).
+    let normalized_uri = server.normalize_uri_key(uri);
+    let generation_handle = {
+        let docs = server.documents.lock();
+        must_some(docs.get(&normalized_uri)).generation.clone()
+    };
+
+    // Simulate a newer edit landing AFTER this generation's parse was
+    // captured but BEFORE its deferred side effects committed -- bump the
+    // generation directly (as a real `didChange` would, without publishing
+    // a snapshot for it) to reproduce the window between an async worker's
+    // publish and its side effects actually running.
+    generation_handle.fetch_add(1, Ordering::SeqCst);
+
+    let stale_text = "sub stale_symbol_must_never_appear { 1 }\n";
+    let mut parser = perl_parser::Parser::new(stale_text);
+    let stale_ast = Arc::new(must_some(parser.parse().ok()));
+    let stale_snapshot =
+        Arc::new(ParsedSnapshot::from_parse_result(0, stale_text, Some(stale_ast), Vec::new()));
+
+    // Call the side-effect method directly with a ticket for the STALE
+    // (superseded) generation -- reproduces what `on_published` would do if
+    // it committed after the document had already moved on.
+    server.run_post_parse_side_effects(parse_worker::PublishedParseTicket {
+        uri: uri.to_string(),
+        document_instance: generation_handle,
+        generation: 0, // the generation this (now-stale) parse was captured for
+        snapshot: stale_snapshot,
+        text: Arc::from(stale_text),
+        // Simulates what `process_job`/`on_published` would construct on
+        // the real async path -- see `PublishedParseTicket`'s doc comment.
+        settle_notified_by_worker: true,
+    });
+
+    assert!(
+        server.symbol_index.lock().search_prefix("stale_symbol").is_empty(),
+        "a superseded generation's side effects must never reindex symbols"
+    );
+    assert!(
+        server.symbol_index.lock().search_prefix("kept_").contains(&"kept_symbol".to_string()),
+        "the untouched symbol index must survive a rejected stale side-effect attempt"
+    );
+
+    Ok(())
+}
+
+/// End-to-end proof of the exact race the coordinator's deep-review flagged,
+/// through the REAL production wiring (the installed async parse worker's
+/// side-effect barrier, not a direct method call): parse N publishes, is
+/// paused immediately before its side effects commit, a real edit N+1 lands
+/// and commits for real, N's side-effect barrier is released -- and N's
+/// side effects (symbol reindex) must never have reached the symbol index.
+#[test]
+fn stale_side_effects_never_commit_through_the_real_worker_after_a_newer_edit()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = StdArc::new(LspServer::new());
+    server.install_default_parse_worker();
+    let uri = "file:///real_worker_side_effect_race.pl";
+
+    server.test_apply_did_open(uri, "sub kept_real_symbol { 1 }\n", 1)?;
+    assert!(
+        server
+            .symbol_index
+            .lock()
+            .search_prefix("kept_real_")
+            .contains(&"kept_real_symbol".to_string())
+    );
+
+    let worker = must_some(server.parse_worker());
+    let side_effect_barrier = worker.side_effect_barrier();
+    let normalized_uri = server.normalize_uri_key(uri);
+
+    // RAII guard: releases the paused worker thread even if an assertion
+    // below panics. Without this, a panic between `arm` and the manual
+    // `release()` call leaves a real worker thread permanently blocked
+    // inside `ParseWorkerTestBarrier::maybe_pause`'s condvar wait -- which
+    // has no shutdown-awareness (see its doc comment) -- so `server`'s own
+    // drop (during the panic's unwind) hangs forever inside
+    // `ParseWorker::drop`'s `handle.join()`. A failing assertion must
+    // report FAILED, not hang the whole test binary.
+    struct ReleaseOnDrop<'a>(&'a parse_worker::ParseWorkerTestBarrier);
+    impl Drop for ReleaseOnDrop<'_> {
+        fn drop(&mut self) {
+            self.0.release();
+        }
+    }
+    let _release_guard = ReleaseOnDrop(&side_effect_barrier);
+
+    // Edit N (generation 1): arm the side-effect barrier so the worker
+    // pauses immediately after N's publish succeeds, before its side
+    // effects (symbol reindex) commit.
+    side_effect_barrier.arm(&normalized_uri, 1);
+    server.test_apply_did_change(uri, "sub gen1_symbol_must_never_be_indexed { 1 }\n", 2)?;
+    side_effect_barrier.wait_until_paused();
+
+    // Publish already landed -- current_parsed() must be generation 1.
+    {
+        let docs = server.documents.lock();
+        let doc = must_some(docs.get(&normalized_uri));
+        let current = must_some(doc.current_parsed());
+        assert_eq!(current.generation(), 1);
+    }
+    // But its side effects have not committed -- the symbol index must
+    // still be exactly as it was after the initial didOpen.
+    assert!(server.symbol_index.lock().search_prefix("gen1_symbol").is_empty());
+
+    // Edit N+1 (generation 2) commits for REAL while N's side effects are
+    // still paused. `didChange` applies the text and bumps the generation
+    // counter SYNCHRONOUSLY (that part never waits on the worker) and only
+    // then enqueues its own parse job -- which, per the per-URI
+    // single-flight design, cannot be dequeued until generation 1's
+    // `process_job` call fully returns (i.e. after its side effects
+    // resolve, whether they commit or are skipped). So at this point the
+    // TEXT/generation for this URI is already 2, but generation 2's own
+    // parse+side-effects have NOT run yet -- this is exactly the coordinator's
+    // race: "the document's generation moved on" without generation 1's
+    // deferred side effects having had a chance to notice yet.
+    server.test_apply_did_change(uri, "sub gen2_symbol_is_the_real_current_fact { 1 }\n", 3)?;
+    assert_eq!(
+        server.test_document_generation(uri),
+        Some(2),
+        "the text/generation commit for edit N+1 must land immediately, independent of the paused worker"
+    );
+    assert!(
+        server.symbol_index.lock().search_prefix("gen2_symbol").is_empty(),
+        "generation 2's parse has not run yet (its job is queued behind generation 1's still-in-flight one)"
+    );
+
+    // Release generation 1's paused side effects. Its callback
+    // (`run_post_parse_side_effects`) must now detect staleness (the
+    // document is at generation 2, not 1) and skip the reindex entirely --
+    // then, per the per-URI serialization, generation 2's own queued job is
+    // picked up and runs to completion (publish + side effects) once
+    // generation 1's `process_job` call returns.
+    side_effect_barrier.release();
+
+    assert!(
+        server.test_wait_for_parse_worker_settled(uri, Duration::from_secs(5)),
+        "generation 1's released side-effect callback must finish running"
+    );
+    assert!(
+        server.symbol_index.lock().search_prefix("gen1_symbol").is_empty(),
+        "generation 1's side effects must NEVER reach the symbol index once superseded -- \
+         this is the publication-validity != side-effect-validity invariant"
+    );
+    // The document's real current fact (generation 2) must still be intact.
+    assert!(
+        server
+            .symbol_index
+            .lock()
+            .search_prefix("gen2_symbol")
+            .contains(&"gen2_symbol_is_the_real_current_fact".to_string()),
+        "generation 1's rejected side effects must not have clobbered generation 2's index entry"
+    );
+
+    Ok(())
+}
+
 /// A virtual document (URI with no backing file on disk) must be removed from
 /// the workspace index when closed so that `workspace/symbol` does not return
 /// stale entries for editor-only buffers.
@@ -1972,5 +2163,218 @@ fn did_open_normalizes_plain_windows_path_uri() -> Result<(), Box<dyn std::error
         "plain Windows path should normalize to canonical key; keys: {:?}",
         docs.keys().collect::<Vec<_>>()
     );
+    Ok(())
+}
+
+/// #3660 regression: a rapid burst of same-URI edits on the async parse
+/// worker path must NOT leave `IndexCoordinator` permanently stuck in
+/// `Degraded{ParseStorm}` once the burst has fully settled.
+///
+/// Root cause (independently confirmed both ways during #3618 review): the
+/// pre-fix code called `coordinator.notify_change(uri)` once per edit
+/// (`handle_did_change_with_cancellation`'s async branch), but the parse
+/// worker coalesces same-URI jobs so only the surviving job ever publishes
+/// and calls the matching `coordinator.notify_parse_complete(uri)` (from
+/// `run_post_parse_side_effects`) -- for N rapid edits to one URI, only 1
+/// decrement ever fires against N increments, so the pending-parse counter
+/// never returns to zero and the coordinator's `if pending == 0` recovery
+/// guard (`workspace_index.rs`) never fires. Confirmed this does NOT
+/// reproduce on bare `origin/main` (no off-lock parse worker exists there,
+/// so every edit fully parses synchronously with no coalescing possible,
+/// keeping `notify_change`/`notify_parse_complete` inherently 1:1) --
+/// this is introduced by, not pre-existing to, the off-lock coalescing
+/// path.
+///
+/// Fix: `ParseWorker::enqueue` (and the internal `Coordinator::enqueue` it
+/// wraps) now returns `true` only when this call establishes a NEW
+/// pending-parse lifecycle for the URI (nothing was queued or in-flight a
+/// moment ago), `false` when it coalesces into an already-outstanding one.
+/// The caller only calls `notify_change` on `true`, so a burst of N
+/// coalesced edits increments the counter at most once per lifecycle,
+/// matching the (also once-per-lifecycle, in the common case) eventual
+/// `notify_parse_complete`.
+#[cfg(feature = "workspace")]
+#[test]
+fn rapid_burst_does_not_permanently_degrade_the_workspace_index_coordinator()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = StdArc::new(LspServer::new());
+    server.install_default_parse_worker();
+    let uri = "file:///burst_does_not_degrade_coordinator.pl";
+    server.test_apply_did_open(uri, "my $a = 1;\n", 1)?;
+    let normalized_uri = server.normalize_uri_key(uri);
+    assert!(
+        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "initial open must settle"
+    );
+
+    // Burst well above the parse-storm threshold (10) so a pre-fix run
+    // would reliably transition to Degraded and (per the bug) never
+    // recover.
+    for v in 2..=16i32 {
+        server.test_apply_did_change(uri, &format!("my $a = {v};\n"), v)?;
+    }
+    assert!(
+        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "the burst must settle within the timeout"
+    );
+
+    let coordinator = must_some(server.coordinator());
+    assert!(
+        !matches!(coordinator.state(), perl_parser::workspace_index::IndexState::Degraded { .. }),
+        "the coordinator must not remain Degraded once the burst has fully settled; got: {:?}",
+        coordinator.state()
+    );
+
+    Ok(())
+}
+
+/// #3660 follow-up (factory-droid): a NEW-lifecycle job that ends WITHOUT
+/// publishing must still credit its pending-parse settle. `notify_change`
+/// fires once per new lifecycle (`ParseWorker::enqueue` returning `true`);
+/// prior to `on_settled`, only a SUCCESSFUL publish ever called
+/// `on_published` (and transitively `notify_parse_complete`) -- a job that
+/// panics is caught by `catch_unwind` and never reaches `on_published` at
+/// all, so with no coalesced successor to inherit `active` ownership, that
+/// lifecycle's decrement was permanently uncredited: a #3660-class leak via
+/// a different path than the one #3660 itself fixed.
+///
+/// Wires the REAL `LspServer` + installed async worker + real
+/// `IndexCoordinator` (not a bare `ParseWorker` with a synthetic callback,
+/// which has no coordinator to leak against) and injects a real panic via
+/// the production panic-recovery path.
+#[cfg(feature = "workspace")]
+#[test]
+fn panicking_new_lifecycle_job_still_credits_the_pending_parse_settle()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = StdArc::new(LspServer::new());
+    server.install_default_parse_worker();
+    let uri = "file:///panic_credits_settle.pl";
+    server.test_apply_did_open(uri, "my $a = 1;\n", 1)?;
+    let normalized_uri = server.normalize_uri_key(uri);
+    assert!(
+        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "initial open must settle"
+    );
+
+    let coordinator = must_some(server.coordinator());
+    let baseline = coordinator.pending_parse_count();
+
+    // Arm the panic injector for generation 1, then apply the edit that
+    // both bumps to generation 1 AND establishes this as a NEW pending-parse
+    // lifecycle (nothing was queued/active for this URI a moment ago, so
+    // `enqueue` returns `true` and `notify_change` fires -- see #3660).
+    server.test_parse_worker_arm_panic(uri, 1);
+    server.test_apply_did_change(uri, "my $aa = 1;\n", 2)?;
+    assert!(
+        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "the panicking job's lifecycle must settle (worker recovers, URI released) within the timeout"
+    );
+
+    let metrics = must_some(server.test_parse_worker_metrics());
+    assert!(
+        metrics.jobs_panicked >= 1,
+        "the panic injector must have actually fired for this test to prove anything; metrics={metrics:?}"
+    );
+
+    assert_eq!(
+        coordinator.pending_parse_count(),
+        baseline,
+        "a panicking job's pending-parse increment must still be credited a matching decrement \
+         even though it never reaches on_published; got pending_parse_count={}, baseline={baseline}",
+        coordinator.pending_parse_count()
+    );
+    assert!(
+        !matches!(coordinator.state(), perl_parser::workspace_index::IndexState::Degraded { .. }),
+        "the coordinator must not be left Degraded by an uncredited panic; got: {:?}",
+        coordinator.state()
+    );
+
+    Ok(())
+}
+
+/// #3660 follow-up (factory-droid): a NEW-lifecycle job terminally rejected
+/// as stale (no coalesced successor queued behind it to inherit `active`
+/// ownership) must still credit its pending-parse settle -- the same class
+/// of leak as the panic case above, via `process_job`'s `!published` early
+/// return instead of a caught panic.
+///
+/// Constructs the terminal-stale-reject-with-no-successor case via the
+/// close/reopen document-instance-identity (ABA) hazard: a job paused at
+/// the pre-publish barrier, whose document is then closed and reopened
+/// (`didOpen` is always synchronous -- see `handle_did_open` -- so this
+/// enqueues NOTHING behind the paused job), so when released it is rejected
+/// by `Arc::ptr_eq` failing against the fresh `DocumentState`'s generation
+/// handle, `pending` is empty for this URI at that point, and `finish()`
+/// takes its terminal branch on a job that was rejected, not published.
+#[cfg(feature = "workspace")]
+#[test]
+fn terminal_stale_reject_with_no_successor_still_credits_the_pending_parse_settle()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = StdArc::new(LspServer::new());
+    server.install_default_parse_worker();
+    let uri = "file:///terminal_reject_credits_settle.pl";
+    server.test_apply_did_open(uri, "my $a = 1;\n", 1)?;
+    let normalized_uri = server.normalize_uri_key(uri);
+    assert!(
+        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "initial open must settle"
+    );
+
+    let coordinator = must_some(server.coordinator());
+    let baseline = coordinator.pending_parse_count();
+
+    // Pause generation 1's job immediately before it attempts to publish --
+    // this is the new-lifecycle enqueue, so `notify_change` fires once here.
+    server.test_parse_worker_arm_barrier(uri, 1);
+    server.test_apply_did_change(uri, "my $aa = 1;\n", 2)?;
+    server.test_parse_worker_wait_until_paused();
+
+    // Close + reopen while generation 1 is paused: `didOpen` is always
+    // synchronous (never touches the async worker), so nothing gets
+    // enqueued behind the paused job -- `pending` stays empty for this URI.
+    // The reopened document gets a brand-new `DocumentState` with a fresh
+    // `Arc<AtomicU32>` generation handle.
+    server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+    server.test_apply_did_open(uri, "my $reopened = 1;\n", 1)?;
+
+    // Release generation 1's paused job: `Arc::ptr_eq` against the fresh
+    // document's generation handle fails, so `publish_parsed_if_current`'s
+    // caller treats it as unpublished -- `jobs_rejected_stale` increments,
+    // `on_published` never fires, and (with nothing queued behind it)
+    // `finish()` takes its terminal branch on this rejected job.
+    server.test_parse_worker_release_barrier();
+    assert!(
+        must_some(server.parse_worker())
+            .wait_until_settled(&server.normalize_uri_key(uri), Duration::from_secs(5)),
+        "the rejected job's lifecycle must settle within the timeout"
+    );
+
+    let metrics = must_some(server.test_parse_worker_metrics());
+    assert!(
+        metrics.jobs_rejected_stale >= 1,
+        "the close/reopen ABA must have actually produced a stale rejection for this test to \
+         prove anything; metrics={metrics:?}"
+    );
+
+    assert_eq!(
+        coordinator.pending_parse_count(),
+        baseline,
+        "a terminally-stale-rejected job's pending-parse increment must still be credited a \
+         matching decrement even though it never reaches on_published; got \
+         pending_parse_count={}, baseline={baseline}",
+        coordinator.pending_parse_count()
+    );
+    assert!(
+        !matches!(coordinator.state(), perl_parser::workspace_index::IndexState::Degraded { .. }),
+        "the coordinator must not be left Degraded by an uncredited terminal stale-reject; got: {:?}",
+        coordinator.state()
+    );
+
     Ok(())
 }
