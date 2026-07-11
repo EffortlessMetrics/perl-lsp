@@ -138,6 +138,20 @@ const IMPLICIT_EXPORT_SKIP_LIST: &[&str] = &[
     "DBIx::Class",
     "DBIx::Class::Core",
     "DBIx::Class::Schema",
+    // --- Core modules with a default @EXPORT (bare `use` populates the caller
+    // namespace with lowercase functions the module-name substring never matches).
+    // Verified against each module's default @EXPORT before adding: ---
+    // Cwd @EXPORT = cwd getcwd fastcwd fastgetcwd (perldoc.perl.org/Cwd).
+    "Cwd",
+    // File::Copy @EXPORT = copy move (perldoc.perl.org/File::Copy; `perl -MFile::Copy`
+    // confirms copy is imported by default).
+    "File::Copy",
+    // Sys::Hostname @EXPORT = hostname (perldoc.perl.org/Sys::Hostname; bare
+    // `use Sys::Hostname` makes hostname() callable).
+    "Sys::Hostname",
+    // Socket exports socket constants/functions (inet_aton, AF_INET, sockaddr_in, …)
+    // by default (perldoc.perl.org/Socket).
+    "Socket",
 ];
 
 /// Check for unused import statements.
@@ -582,6 +596,58 @@ mod tests {
         assert!(
             !has_unused_import(&diags),
             "DBIx::Class::Schema exports schema DSL and should not be flagged: {diags:?}"
+        );
+    }
+
+    // --- core modules with a default @EXPORT ---
+    //
+    // Regression for the false-positive where a bare `use Module;` of a core
+    // default-Exporter module was flagged as unused because the imported symbol
+    // (a lowercase function) never contains the module-name substring. Each case
+    // uses the default-exported symbol without qualification. Verified against the
+    // module's default @EXPORT (perldoc + running perl) before adding to the skip list.
+
+    #[test]
+    fn cwd_not_flagged() {
+        // Cwd @EXPORT includes getcwd; bare `use Cwd;` makes getcwd() callable.
+        let source = "use Cwd;\nmy $d = getcwd();\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "Cwd exports getcwd/cwd by default and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn file_copy_not_flagged() {
+        // File::Copy @EXPORT = copy move; bare `use File::Copy;` makes copy() callable.
+        let source = "use File::Copy;\ncopy('a', 'b');\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "File::Copy exports copy/move by default and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn sys_hostname_not_flagged() {
+        // Sys::Hostname @EXPORT = hostname; bare `use Sys::Hostname;` makes hostname() callable.
+        let source = "use Sys::Hostname;\nmy $h = hostname();\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "Sys::Hostname exports hostname by default and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn socket_not_flagged() {
+        // Socket exports inet_aton and other socket symbols by default.
+        let source = "use Socket;\nmy $addr = inet_aton('127.0.0.1');\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "Socket exports socket constants/functions by default and should not be flagged: {diags:?}"
         );
     }
 }
