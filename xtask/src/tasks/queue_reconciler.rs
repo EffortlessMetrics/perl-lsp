@@ -269,9 +269,7 @@ pub fn reconcile_queue(
         // None → no projection contradictions emitted (safe no-op).
         let review_receipt = fetch_current_review_receipt(pr.number).unwrap_or(None);
 
-        let mut contradictions = detect_contradictions(pr, &events, ci_outcome);
-        contradictions
-            .extend(contradictions_from_current_review_receipt(pr, review_receipt.as_ref()));
+        let contradictions = merge_contradictions(pr, &events, ci_outcome, review_receipt.as_ref());
 
         if contradictions.is_empty() {
             continue;
@@ -454,22 +452,76 @@ pub fn detect_contradictions(
     out
 }
 
+/// True when `receipt` names the CURRENT head of `pr` (same sha, same PR number, expected
+/// kind/schema). Shared by the receipt-projection path below and by
+/// [`is_fix_forward_current_approval`] so both use exactly the same "is this receipt live"
+/// test — no drift between the two consumers of `ReviewReceipt`.
+fn is_current_head_receipt(pr: &OpenPr, receipt: &ReviewReceipt) -> bool {
+    receipt.kind == REVIEW_RECEIPT_KIND
+        && receipt.schema_version == 1
+        && receipt.sha == pr.head_ref_oid
+        && receipt.pr == pr.number
+}
+
+/// True when `receipt` is a CURRENT-head `Approved` receipt with `fix_forward_applied`.
+///
+/// Per M4 invariant #4 (a pass that changes the implementation is a fix/responder pass,
+/// not independent review), such a receipt must never license stripping the routing
+/// labels `needs-builder-fix` / `needs-diff-fix` — regardless of *which* detector wants to
+/// strip them. This is consumed by [`merge_contradictions`] as a post-filter over the
+/// label-pair timeline resolver in [`detect_contradictions`] (which has no receipt
+/// awareness at all), closing the bypass where a fix-forward reviewer applying the
+/// `review-reviewed` / `diff-audited` sign-off labels could self-clear the routing labels
+/// via the label-only path even though the receipt-projection path (below) already
+/// refuses to do so on its own.
+fn is_fix_forward_current_approval(pr: &OpenPr, receipt: Option<&ReviewReceipt>) -> bool {
+    receipt.is_some_and(|r| {
+        is_current_head_receipt(pr, r)
+            && r.verdict == ReviewReceiptVerdict::Approved
+            && r.fix_forward_applied
+    })
+}
+
+/// Authoritative merge point: combine label/timeline/live-CI detection with the
+/// current-head receipt projection, then apply the invariant-#4 post-filter. Callers
+/// (`reconcile_queue` and tests) MUST go through this rather than re-implementing the
+/// merge inline — that inline duplication is exactly how the label-pair resolver bypass
+/// shipped (the two detectors were merged without the fix-forward gate applying to both).
+pub fn merge_contradictions(
+    pr: &OpenPr,
+    events: &[LabelEvent],
+    ci_outcome: CiOutcome,
+    receipt: Option<&ReviewReceipt>,
+) -> Vec<Contradiction> {
+    let mut contradictions = detect_contradictions(pr, events, ci_outcome);
+    contradictions.extend(contradictions_from_current_review_receipt(pr, receipt));
+
+    if is_fix_forward_current_approval(pr, receipt) {
+        contradictions.retain(|c| c.strip != NEEDS_BUILDER_FIX && c.strip != NEEDS_DIFF_FIX);
+    }
+
+    contradictions
+}
+
 pub fn contradictions_from_current_review_receipt(
     pr: &OpenPr,
     receipt: Option<&ReviewReceipt>,
 ) -> Vec<Contradiction> {
-    let Some(current) = receipt.filter(|r| {
-        r.kind == REVIEW_RECEIPT_KIND
-            && r.schema_version == 1
-            && r.sha == pr.head_ref_oid
-            && r.pr == pr.number
-    }) else {
+    let Some(current) = receipt.filter(|r| is_current_head_receipt(pr, r)) else {
         return Vec::new();
     };
     let mut out = Vec::new();
     let has = |name: &str| pr.labels.iter().any(|l| l == name);
 
     match current.verdict {
+        // Invariant #4 (M4 ledger): a pass that changes the implementation is a
+        // fix/responder pass, not independent review. A receipt where the reviewer
+        // both fixed AND approved in the same pass (`fix_forward_applied == true`)
+        // must NOT self-clear routing labels — that would let a reviewer's own
+        // fix-forward stand in for independent sign-off. The resulting head still
+        // requires a fresh, independent `Approved` receipt (`fix_forward_applied ==
+        // false`) at the same sha before routing labels are stripped.
+        ReviewReceiptVerdict::Approved if current.fix_forward_applied => {}
         ReviewReceiptVerdict::Approved => {
             if has(NEEDS_BUILDER_FIX) {
                 out.push(Contradiction {
@@ -1555,6 +1607,76 @@ required = false
         assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
     }
 
+    // -----------------------------------------------------------------------
+    // Invariant #4 (M4 ledger): fix-forward pass != independent review.
+    // Audit: issuecomment-4944651562 on #3763.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn fix_forward_approved_receipt_does_not_strip_needs_builder_fix() {
+        let pr = make_pr(11, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let mut receipt = make_review_receipt(11, "sha-11", ReviewReceiptVerdict::Approved);
+        receipt.fix_forward_applied = true;
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(
+            c.is_empty(),
+            "a fix-forward approval (reviewer fixed AND approved in the same pass) must not \
+             self-clear needs-builder-fix — that would count a fix pass as independent sign-off"
+        );
+    }
+
+    #[test]
+    fn fix_forward_approved_receipt_does_not_strip_needs_diff_fix() {
+        let pr = make_pr(12, &[DIFF_AUDITED, NEEDS_DIFF_FIX]);
+        let mut receipt = make_review_receipt(12, "sha-12", ReviewReceiptVerdict::Approved);
+        receipt.fix_forward_applied = true;
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.is_empty(), "a fix-forward approval must not self-clear needs-diff-fix either");
+    }
+
+    #[test]
+    fn independent_approved_receipt_still_strips_needs_builder_fix() {
+        // Regression guard: an Approved receipt with fix_forward_applied == false (a genuine
+        // independent review) must keep stripping needs-builder-fix exactly as before.
+        let pr = make_pr(13, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(13, "sha-13", ReviewReceiptVerdict::Approved);
+        assert!(!receipt.fix_forward_applied, "helper default must stay false for this guard");
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
+    }
+
+    #[test]
+    fn fix_forward_receipt_at_old_head_does_not_satisfy_new_head() {
+        // A fix-forward Approved receipt posted at old head H (a) never strips anything even
+        // at H (gated above), and (b) once the PR moves to a new head H2, the H receipt fails
+        // the sha-staleness gate too — belt-and-suspenders per invariant #5 (new head needs a
+        // fresh independent review; a stale fix-forward receipt cannot substitute for one).
+        let mut fix_forward_receipt_at_h =
+            make_review_receipt(14, "sha-H", ReviewReceiptVerdict::Approved);
+        fix_forward_receipt_at_h.fix_forward_applied = true;
+
+        let pr_at_h = OpenPr {
+            number: 14,
+            labels: labels(&[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]),
+            head_ref_oid: "sha-H".to_string(),
+        };
+        let c_at_h =
+            contradictions_from_current_review_receipt(&pr_at_h, Some(&fix_forward_receipt_at_h));
+        assert!(c_at_h.is_empty(), "fix-forward receipt must not strip anything at its own head");
+
+        let pr_at_h2 = OpenPr {
+            number: 14,
+            labels: labels(&[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]),
+            head_ref_oid: "sha-H2".to_string(),
+        };
+        let c_at_h2 =
+            contradictions_from_current_review_receipt(&pr_at_h2, Some(&fix_forward_receipt_at_h));
+        assert!(
+            c_at_h2.is_empty(),
+            "an old-head receipt (fix-forward or not) must not satisfy a new head — sha gate"
+        );
+    }
+
     #[test]
     fn current_needs_builder_receipt_strips_approval_labels() {
         let pr = make_pr(8, &[REVIEW_REVIEWED, DIFF_AUDITED, NEEDS_BUILDER_FIX]);
@@ -1732,11 +1854,10 @@ my $x = 1;
         assert!(extract_latest_review_receipt(&comments).is_none());
     }
 
-    /// Integration test: the full per-PR detection pipeline wired by `reconcile_queue`.
-    ///
-    /// Mirrors the inner loop:
-    /// 1. `detect_contradictions` against labels + timeline + live CI.
-    /// 2. Extend with `contradictions_from_current_review_receipt` from the loaded receipt.
+    /// Integration test: the full per-PR detection pipeline wired by `reconcile_queue`,
+    /// via the shared `merge_contradictions` entry point (the actual production merge
+    /// point — not a hand-inlined copy of it, so this test can't drift from what
+    /// `reconcile_queue` really runs).
     ///
     /// Verifies that an approved review_receipt at the current head SHA strips
     /// `needs-builder-fix` *in addition to* whatever timeline-based pairs the
@@ -1760,7 +1881,9 @@ my $x = 1;
         // (closing the dead-code loop), and at least one strip must carry
         // receipt provenance (keep == review_receipt). We do NOT assert
         // `contradictions.len() == 1` — both sources legitimately fire and the
-        // audit trail benefits from preserving both reasons.
+        // audit trail benefits from preserving both reasons. `fix_forward_applied` is
+        // `false` here (a genuine independent review), so the invariant-#4 post-filter
+        // in `merge_contradictions` does not suppress either strip.
         let pr = make_pr(42, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
         let body = format!(
             r#"```json
@@ -1771,9 +1894,7 @@ my $x = 1;
         let receipt = extract_latest_review_receipt(&comments);
         assert!(receipt.is_some(), "loader must extract the embedded receipt");
 
-        // Simulate the per-PR pipeline exactly as `reconcile_queue` runs it.
-        let mut contradictions = detect_contradictions(&pr, &[], CiOutcome::Pending);
-        contradictions.extend(contradictions_from_current_review_receipt(&pr, receipt.as_ref()));
+        let contradictions = merge_contradictions(&pr, &[], CiOutcome::Pending, receipt.as_ref());
 
         let strips: Vec<&str> = contradictions.iter().map(|c| c.strip.as_str()).collect();
         assert!(
@@ -1798,13 +1919,75 @@ my $x = 1;
         let receipt = extract_latest_review_receipt(&[]);
         assert!(receipt.is_none());
 
-        let mut contradictions = detect_contradictions(&pr, &[], CiOutcome::Pending);
-        contradictions.extend(contradictions_from_current_review_receipt(&pr, receipt.as_ref()));
+        let contradictions = merge_contradictions(&pr, &[], CiOutcome::Pending, receipt.as_ref());
 
         // Exactly one contradiction (the label-pair fallback), no receipt-sourced ones.
         assert_eq!(contradictions.len(), 1);
         assert_eq!(contradictions[0].strip, NEEDS_BUILDER_FIX);
         assert_eq!(contradictions[0].keep, REVIEW_REVIEWED);
+    }
+
+    // -----------------------------------------------------------------------
+    // Invariant #4 bypass fix: the label-pair timeline resolver in
+    // `detect_contradictions` has no receipt awareness, so merely gating
+    // `contradictions_from_current_review_receipt` was not enough — a fix-forward
+    // reviewer applying `review-reviewed` / `diff-audited` could still self-clear
+    // `needs-builder-fix` / `needs-diff-fix` via the label-pair path. These tests pin
+    // `merge_contradictions` (the actual `reconcile_queue` entry point) as the place
+    // the gate must hold, regardless of which detector wants to strip.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn label_pair_resolver_fix_forward_bypass_is_blocked_for_needs_builder_fix() {
+        // No timeline events → detect_contradictions' conservative fallback would, on
+        // its own, strip needs-builder-fix (keeping review-reviewed). A current-head
+        // fix-forward Approved receipt must suppress that strip too.
+        let pr = make_pr(15, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let mut receipt = make_review_receipt(15, "sha-15", ReviewReceiptVerdict::Approved);
+        receipt.fix_forward_applied = true;
+
+        let c = merge_contradictions(&pr, &[], CiOutcome::Pending, Some(&receipt));
+        assert!(
+            !c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX),
+            "label-pair resolver must not bypass the fix-forward gate: {c:?}"
+        );
+    }
+
+    #[test]
+    fn label_pair_resolver_fix_forward_bypass_is_blocked_for_needs_diff_fix() {
+        let pr = make_pr(16, &[DIFF_AUDITED, NEEDS_DIFF_FIX]);
+        let mut receipt = make_review_receipt(16, "sha-16", ReviewReceiptVerdict::Approved);
+        receipt.fix_forward_applied = true;
+
+        let c = merge_contradictions(&pr, &[], CiOutcome::Pending, Some(&receipt));
+        assert!(
+            !c.iter().any(|item| item.strip == NEEDS_DIFF_FIX),
+            "label-pair resolver must not bypass the fix-forward gate: {c:?}"
+        );
+    }
+
+    #[test]
+    fn label_pair_resolver_still_strips_needs_builder_fix_for_independent_receipt() {
+        // Regression guard: a genuine independent Approved receipt (fix_forward_applied
+        // == false) at the current head must not be affected by the post-filter —
+        // needs-builder-fix keeps stripping exactly as before.
+        let pr = make_pr(17, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(17, "sha-17", ReviewReceiptVerdict::Approved);
+        assert!(!receipt.fix_forward_applied, "helper default must stay false for this guard");
+
+        let c = merge_contradictions(&pr, &[], CiOutcome::Pending, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
+    }
+
+    #[test]
+    fn label_pair_resolver_still_strips_needs_builder_fix_with_no_receipt() {
+        // Regression guard: with no receipt at all, the label-pair fallback behaves
+        // exactly as before the fix — the post-filter only activates for a current-head
+        // fix-forward Approved receipt, which does not exist here.
+        let pr = make_pr(18, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+
+        let c = merge_contradictions(&pr, &[], CiOutcome::Pending, None);
+        assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
     }
 
     // -----------------------------------------------------------------------
