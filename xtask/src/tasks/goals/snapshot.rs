@@ -55,10 +55,11 @@ pub fn build_snapshot(
     // `--json` callers must always get parseable output.
     //
     // The `default_program` arm used to assign it straight from
-    // `active.toml` with no validation at all (#3647 follow-up finding):
-    // an unknown, malformed, or path-traversal-shaped `default_program`
-    // reached `resolved_program` unchecked whenever no explicit `--program`
-    // was given — fail-OPEN on a control-plane work-routing authority.
+    // `active.toml` with no validation at all (#3647 follow-up finding,
+    // #3696/#3697): an unknown, malformed, or path-traversal-shaped
+    // `default_program` reached `resolved_program` unchecked whenever no
+    // explicit `--program` was given — fail-OPEN on a control-plane
+    // work-routing authority (this was also #3692 defect 5). This
     // `resolve_program` now runs BOTH sources through the same
     // `manifest::validate_program_id` check the static
     // `active_goal_manifest::validate_default_program` validator uses, so
@@ -67,6 +68,7 @@ pub fn build_snapshot(
         resolve_program(&root, program_arg.as_deref(), default_program.as_deref());
 
     let (repository, live_open_prs) = load_live_prs(&root, fixture)?;
+    let current_git_ref = current_git_ref(&root);
 
     let mut snapshot = SelectionSnapshot {
         repository,
@@ -81,6 +83,7 @@ pub fn build_snapshot(
         non_goals: Vec::new(),
         candidates: Vec::new(),
         live_open_prs,
+        current_git_ref,
     };
 
     if let Some(program_id) = &resolved_program {
@@ -107,6 +110,39 @@ fn resolve_program(
 ) -> Option<String> {
     let candidate = program_arg.or(default_program)?;
     manifest::validate_program_id(root, candidate).ok().map(|()| candidate.to_owned())
+}
+
+/// Measures the actual local git ref this snapshot's evidence was read
+/// from (see #3692 defect 6): `WorkPacket::inputs_used` previously
+/// hardcoded the literal `"origin/main"` regardless of what was actually
+/// checked out, misattributing the receipt's own evidence on a feature
+/// branch. Falls back to `"unknown"` when `git` itself is unavailable or
+/// fails (this must never turn into an `Err` — provenance is
+/// best-effort, not load-bearing for selection correctness), and to the
+/// short commit SHA when `HEAD` is detached (so the value still names
+/// something concrete rather than the literal string `"HEAD"`).
+fn current_git_ref(root: &Path) -> String {
+    let branch = Command::new("git")
+        .current_dir(root)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+        .filter(|s| !s.is_empty());
+
+    match branch {
+        Some(name) if name != "HEAD" => name,
+        _ => Command::new("git")
+            .current_dir(root)
+            .args(["rev-parse", "--short", "HEAD"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| format!("detached@{}", String::from_utf8_lossy(&o.stdout).trim()))
+            .filter(|s| s != "detached@")
+            .unwrap_or_else(|| "unknown".to_owned()),
+    }
 }
 
 fn discover_known_programs(root: &Path) -> Result<Vec<ProgramCandidate>> {
@@ -317,6 +353,81 @@ mod tests {
         Ok(())
     }
 
+    // Regression coverage for #3692 defect 6 (factory-droid review thread,
+    // PR #3701): `current_git_ref` was previously only exercised
+    // indirectly via `inputs_used_reflects_the_actual_current_git_ref_not_a_hardcoded_literal`
+    // in `select.rs`, which starts from an already-populated
+    // `SelectionSnapshot` and never calls this function at all. Pin its
+    // three branches directly against throwaway repos so a regression in
+    // the fallback chain (git unavailable/failing -> "unknown"; detached
+    // HEAD -> "detached@<sha>", never the literal "HEAD") is caught here
+    // rather than only showing up as a confusing provenance string deep
+    // in a JSON receipt.
+
+    #[test]
+    fn current_git_ref_returns_unknown_outside_a_git_repo() -> Result<()> {
+        // Both `git rev-parse` invocations fail (not a git repo at all),
+        // so the function must fall back to "unknown" rather than
+        // propagating an `Err` — this value is best-effort provenance
+        // metadata, never load-bearing for selection correctness.
+        let temp = tempfile::tempdir()?;
+
+        assert_eq!(current_git_ref(temp.path()), "unknown");
+        Ok(())
+    }
+
+    #[test]
+    fn current_git_ref_names_the_actual_branch_in_a_real_repo() -> Result<()> {
+        // Pinned against a throwaway repo (rather than this crate's own
+        // checkout, whose branch/detached state varies across local runs
+        // and CI's frequently-detached PR checkouts) so the assertion is
+        // deterministic.
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        init_throwaway_repo(root)?;
+
+        assert_eq!(current_git_ref(root), "trunk");
+        Ok(())
+    }
+
+    #[test]
+    fn current_git_ref_names_the_short_sha_when_detached() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        init_throwaway_repo(root)?;
+        run_git(root, &["checkout", "-q", "--detach", "HEAD"])?;
+
+        let result = current_git_ref(root);
+        assert!(
+            result.starts_with("detached@") && result.len() > "detached@".len(),
+            "expected \"detached@<sha>\", got {result:?}"
+        );
+        Ok(())
+    }
+
+    /// Runs a `git` subcommand in `root`, failing the test (via `Err`) if
+    /// it exits nonzero.
+    fn run_git(root: &Path, args: &[&str]) -> Result<()> {
+        let status = std::process::Command::new("git").args(args).current_dir(root).status()?;
+        if !status.success() {
+            bail!("git {args:?} failed with {:?}", status.code());
+        }
+        Ok(())
+    }
+
+    /// Initializes a minimal one-commit repo on branch `trunk` in `root`,
+    /// for `current_git_ref` tests that need a real (but throwaway) git
+    /// history rather than this crate's own checkout.
+    fn init_throwaway_repo(root: &Path) -> Result<()> {
+        run_git(root, &["init", "-q", "-b", "trunk"])?;
+        run_git(root, &["config", "user.email", "test@example.com"])?;
+        run_git(root, &["config", "user.name", "Test"])?;
+        fs::write(root.join("f.txt"), "x")?;
+        run_git(root, &["add", "."])?;
+        run_git(root, &["commit", "-q", "-m", "init"])?;
+        Ok(())
+    }
+
     #[test]
     fn lane_routing_candidates_leave_issue_unresolved() -> Result<()> {
         let text = r#"
@@ -344,6 +455,7 @@ commands = ["rtk cargo test"]
             non_goals: Vec::new(),
             candidates: Vec::new(),
             live_open_prs: Vec::new(),
+            current_git_ref: "main".to_owned(),
         };
 
         load_lane_routing_candidates(text, "programs/p.toml", &mut snapshot)?;
@@ -369,8 +481,19 @@ commands = ["rtk cargo test"]
             non_goals: Vec::new(),
             candidates: Vec::new(),
             live_open_prs: Vec::new(),
+            current_git_ref: "main".to_owned(),
         }
     }
+
+    // #3692 defect 5 ("stale default_program -> non-JSON error") is now
+    // covered by #3697's `resolve_program_rejects_an_unvalidated_default_program`
+    // and `unvalidated_default_program_blocks_selection_with_ambiguous_program_authority`
+    // tests below (landed on main in a7eccc885 before this branch was
+    // rebased) — that PR's shared `manifest::validate_program_id` fully
+    // subsumes the fail-closed filtering this PR originally added here
+    // with a different `resolve_program` signature; dropped as a
+    // duplicate rather than re-litigated. See PR #3701's reconciliation
+    // note.
 
     #[test]
     fn unknown_requested_program_resolves_to_none_not_an_error() -> Result<()> {

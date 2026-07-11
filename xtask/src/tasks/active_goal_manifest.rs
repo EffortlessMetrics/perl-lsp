@@ -179,6 +179,16 @@ fn validate_pointer(
 
     if let Some(program) = string_field(table, "active_program") {
         stats.program = program.to_owned();
+        // `active_program` was never bare-id-checked (see #3692 defect
+        // 4): it flows into `validate_default_program`'s
+        // `default_program == expected_program` comparison below, and a
+        // path-shaped value there previously bypassed the path-injection
+        // check entirely when both fields shared the same value.
+        if !program.trim().is_empty() && !is_bare_program_id(program) {
+            violations.push(format!(
+                "{ACTIVE_GOAL_PATH}: active_program must be a bare program id (no path separators or \"..\"), got {program:?}"
+            ));
+        }
     }
 
     // Pointer-only invariant: active.toml must not carry work items itself
@@ -283,17 +293,31 @@ fn validate_default_program(
         violations.push(format!("{ACTIVE_GOAL_PATH}: default_program must not be empty"));
         return;
     }
-    if default_program == expected_program {
-        return;
-    }
 
     // Bare-id + on-disk-existence check, shared with `goals next`'s live
     // resolution of `default_program` (`snapshot::build_snapshot`) via
     // `goals_manifest::validate_program_id` — the ONE place this check
     // lives, so the static validator here and the live selector can never
-    // drift on what counts as a safe, known program id (#3647 follow-up).
+    // drift on what counts as a safe, known program id (#3647 follow-up,
+    // #3697).
+    //
+    // This MUST run before the equality-with-`active_program` shortcut
+    // below (see #3692 defect 4): `default_program` is interpolated
+    // directly into `program_manifest_path` further down, so a
+    // path-shaped value could otherwise escape
+    // `.perl-lsp/goals/programs/`. Previously, when `default_program`
+    // happened to equal `active_program` (both reader-controlled
+    // fields), the equality check returned early and this validation
+    // never ran for EITHER field — `active_program` itself was never
+    // bare-id-checked at all (closed separately below, in
+    // `validate_pointer`). Running this first closes that bypass
+    // regardless of which field(s) the hostile value came from.
     if let Err(reason) = goals_manifest::validate_program_id(root, default_program) {
         violations.push(format!("{ACTIVE_GOAL_PATH}: default_program {reason}"));
+        return;
+    }
+
+    if default_program == expected_program {
         return;
     }
 
@@ -818,6 +842,15 @@ fn validate_non_empty_string_array(
             None => violations.push(format!("{doc}: {field}[{index}] must be a string")),
         }
     }
+}
+
+/// A bare program id must not contain path separators or `..`: it is
+/// interpolated unvalidated into `goals::manifest::program_manifest_path`
+/// (`.perl-lsp/goals/programs/<id>.toml`) by both `active_program` and
+/// `default_program` call sites, so either field accepting a path-shaped
+/// value would let it escape that directory (see #3692 defect 4).
+fn is_bare_program_id(value: &str) -> bool {
+    !value.contains('/') && !value.contains('\\') && !value.contains(':') && !value.contains("..")
 }
 
 fn require_non_empty_string(doc: &str, table: &Table, field: &str, violations: &mut Vec<String>) {
@@ -1414,6 +1447,53 @@ mod tests {
                 "expected a bare-program-id violation for {hostile:?}, got {violations:?}"
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn validate_default_program_rejects_path_like_id_even_when_it_equals_active_program()
+    -> Result<()> {
+        // Regression for #3692 defect 4: the bare-id/path-injection check
+        // previously ran AFTER the `default_program == expected_program`
+        // equality shortcut, so a hostile value shared by BOTH fields
+        // bypassed validation entirely. Passing the same hostile string
+        // as `expected_program` here reproduces exactly that shape.
+        let root = fixture_root(&[])?;
+        for hostile in ["../../etc/passwd", "programs/../secret", "a/b"] {
+            let mut pointer_table = Table::new();
+            pointer_table.insert("default_program".to_owned(), Value::String(hostile.to_owned()));
+            let mut violations = Vec::new();
+
+            validate_default_program(root.path(), &pointer_table, hostile, &mut violations);
+
+            assert!(
+                violations.iter().any(|v| v.contains("bare program id")),
+                "expected a bare-program-id violation for {hostile:?} even when default_program == active_program, got {violations:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn validate_pointer_rejects_a_path_like_active_program() -> Result<()> {
+        // Regression for #3692 defect 4: `active_program` was never
+        // bare-id-checked at all prior to this fix.
+        let root = fixture_root(&[])?;
+        let mut table = Table::new();
+        table.insert("schema".to_owned(), Value::Integer(2));
+        table.insert("active_program".to_owned(), Value::String("../escape".to_owned()));
+        table.insert("active_lane".to_owned(), Value::String("trust".to_owned()));
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_pointer(root.path(), &table, &mut stats, &mut violations);
+
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.contains("active_program") && v.contains("bare program id")),
+            "expected an active_program bare-id violation, got {violations:?}"
+        );
         Ok(())
     }
 

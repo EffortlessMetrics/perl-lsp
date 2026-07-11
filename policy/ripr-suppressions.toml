@@ -168,6 +168,46 @@ review_after = "2026-07-10"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# goals-selector --json CLI regression test: same ripr#1428 class as
+# ripr-suppress-seam-proof-tests, one file.
+#
+# xtask/tests/goals_next_json_cli.rs (#3692 defect 1 / PR #3701) is a
+# single-scenario `-> Result<()>` integration test that spawns the compiled
+# `xtask` binary end to end to prove `goals next --json` prints parseable
+# JSON and exits 1 (never an unstructured color_eyre stderr dump) on an
+# internal error. The 6 flagged seams are ALL test-harness plumbing, not
+# production behavior:
+#   :29  call_deletion  — assert_cmd's .assert() chain call
+#   :37,:39 call_deletion — the anyhow::anyhow!(...) message-building
+#                            closure passed to .map_err(), only reached if
+#                            the very invariant under test (stdout IS valid
+#                            JSON) were to regress — there is no way to
+#                            "test the test's own failure message" without
+#                            deliberately breaking the production behavior
+#                            it verifies
+#   :40  error_path      — the `?` after that .map_err()
+#   :58  call_deletion / return_value — the terminal Ok(()) test-passed
+#                            marker
+# The actual production seam this test proves (next()'s json=true branch
+# calling std::process::exit(1) with parseable JSON on stdout and nothing
+# on stderr) is real production-code behavior, and IS exercised — this
+# suppression covers only the test file's own scaffolding around that
+# assertion, exactly as ripr-suppress-seam-proof-tests does for
+# ripr_seam_proof_*.rs. Remove this suppression once #1428 lands.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-goals-next-json-cli-test"
+kind = "test_receipt_surface"
+paths = ["xtask/tests/goals_next_json_cli.rs"]
+classification = ["call_deletion", "return_value", "error_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "xtask/tests/goals_next_json_cli.rs (#3692 defect 1, PR #3701) is a single-scenario Result<()> integration test driving the compiled xtask binary end to end to prove `goals next --json` emits parseable JSON on stdout and exits 1 on any internal error, never an unstructured color_eyre stderr dump. All 6 flagged seams (lines 29, 37, 39, 40, 58) are test-harness plumbing — the assert_cmd .assert() chain, the anyhow::anyhow!(...) message-building closure inside .map_err() (only reachable if the test's own invariant regressed), the ? error-path after it, and the terminal Ok(()) test-passed marker — not production behavior. Same ripr#1428 class as ripr-suppress-seam-proof-tests (test-harness plumbing flagged as production seams). The production seam this test proves (next()'s json=true branch in xtask/src/tasks/goals/mod.rs) is real and covered; only the test file's own scaffolding is suppressed. Remove when ripr#1428 is fixed upstream."
+created = "2026-07-11"
+review_after = "2026-08-11"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
 # parse_quote_operator_content: canonical shared helper — activation untraceable.
 #
 # PR refactor/centralize-qw-parsing merged the per-consumer copies of this
