@@ -88,10 +88,46 @@ impl<'a> Parser<'a> {
                 // parsing continues at the declared variable.
                 self.consume_legacy_decl_type_constraint()?;
 
-                // For my/our/state, parse a variable declaration target and
-                // any direct or arrow postfix lvalue operations.
+                // For my/our/state, parse a variable declaration target.
+                //
+                // Real Perl accepts an ARROW-postfix chain after the declared
+                // variable (`my $cache->{key} = ...`, `my $cache->[0] = ...`,
+                // `my $obj->method()`) — that's an autovivifying dereference
+                // on the freshly-declared lexical scalar, not a declaration
+                // of an array/hash *element*. Ground truth (perl 5.42.2):
+                //
+                //   $ perl -c -e 'my $cache->{key} = [1,2,3];'
+                //   -e syntax OK
+                //
+                // A DIRECT subscript with no arrow (`my $cache[0]`, `my
+                // $cache{key}`, `my @cache[0,1]`) is a syntax error in real
+                // Perl — `my`/`our`/`state` cannot declare an array or hash
+                // *element*, only whole variables:
+                //
+                //   $ perl -c -e 'my $cache[0] = 5;'
+                //   syntax error at -e line 1, near "$cache["
+                //   $ perl -c -e 'my $cache{key} = 5;'
+                //   syntax error at -e line 1, near "$cache{key"
+                //
+                // So only continue into the postfix chain when the next
+                // token is `->`. A direct `[`/`{` immediately after the bare
+                // declared variable is rejected outright here, matching real
+                // Perl's rejection, instead of silently parsing it as two
+                // unrelated statements or (the #3627 regression) folding the
+                // subscript into the declaration target itself.
                 let var = self.parse_variable()?;
-                self.parse_postfix_chain(var)?
+                match self.peek_kind() {
+                    Some(TokenKind::Arrow) => self.parse_postfix_chain(var)?,
+                    Some(kind @ (TokenKind::LeftBracket | TokenKind::LeftBrace)) => {
+                        let element_kind =
+                            if kind == TokenKind::LeftBracket { "array" } else { "hash" };
+                        return Err(ParseError::syntax(
+                            format!("Can't declare {element_kind} element in \"{declarator}\""),
+                            self.current_position(),
+                        ));
+                    }
+                    _ => var,
+                }
             };
 
             // Parse optional attributes

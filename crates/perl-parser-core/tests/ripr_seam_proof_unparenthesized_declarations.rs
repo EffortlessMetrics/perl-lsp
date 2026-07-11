@@ -30,7 +30,7 @@
 
 mod cpan_test_helpers;
 
-use cpan_test_helpers::assert_clean_parse;
+use cpan_test_helpers::{assert_clean_parse, assert_has_error};
 use perl_parser_core::hir::{HirKind, lower_ast};
 use perl_parser_core::{Node, NodeKind, Parser};
 
@@ -194,30 +194,74 @@ fn initializer_argument_commas_remain_a_single_declaration() -> Result<(), Strin
     Ok(())
 }
 
+// --------------------------------------------------------------------------
+// Defect #2 (regressed by #3627, tracked by the issue accompanying this
+// fix): `my`/`our`/`state` unconditionally postfix-chained the declared
+// variable, so a DIRECT (arrow-less) subscript right after the variable —
+// `my $cache[0]`, `my $cache{key}` — was silently accepted as the
+// declaration target (an "array/hash element" declaration). Real Perl
+// rejects this outright; `my`/`our`/`state` may only declare a whole
+// variable, never an element. Ground truth, `perl 5.42.2`:
+//
+//   $ perl -c -e 'my $cache[0] = 5;'
+//   syntax error at -e line 1, near "$cache["
+//   $ perl -c -e 'my $cache{key} = 5;'
+//   syntax error at -e line 1, near "$cache{key"
+//   $ perl -c -e 'our $cache[0] = 5;'
+//   syntax error at -e line 1, near "$cache["
+//   $ perl -c -e 'use feature "state"; sub f { state $cache[0] = 5; }'
+//   syntax error at -e line 1, near "$cache["
+//
+// This file previously (incorrectly) asserted that
+// `my $first[0], $second{key};` parsed CLEANLY with `$first[0]` as the
+// declaration's subscripted target — that assertion pinned the bug. Real
+// Perl rejects that exact source with a syntax error (verified above), so
+// the corrected test asserts rejection instead.
 #[test]
-fn unparenthesized_declaration_with_subscripted_first_term_declares_only_that_term()
--> Result<(), String> {
-    let source = "my $first[0], $second{key};";
-    assert_clean_parse(source);
+fn unparenthesized_declaration_with_direct_subscript_is_rejected() {
+    // Bare `$cache[0]` (array-element subscript, no arrow) directly after
+    // the declared variable must be rejected, not folded into the
+    // declaration target.
+    assert_has_error("my $cache[0] = 5;", "Can't declare array element");
+    // Bare `$cache{key}` (hash-element subscript, no arrow) is likewise
+    // rejected.
+    assert_has_error("my $cache{key} = 5;", "Can't declare hash element");
+    // Same rule applies to `our` and `state`, matching the oracle above.
+    assert_has_error("our $cache[0] = 5;", "Can't declare array element");
+    assert_has_error("state $cache[0] = 5;", "Can't declare array element");
+    // The exact source this test previously mis-asserted as a clean parse.
+    assert_has_error("my $first[0], $second{key};", "Can't declare array element");
+}
 
-    let declarations = statements(source)?;
+// Guard: the ARROW-postfix form is a genuinely different (and valid) Perl
+// idiom — `my $cache->{key} = ...` / `my $cache->[0] = ...` declare a plain
+// lexical scalar and then autovivify through it via `->`. This is NOT an
+// element declaration and must keep parsing cleanly after the fix above.
+// Ground truth:
+//
+//   $ perl -c -e 'my $cache->{key} = [1,2,3];'
+//   -e syntax OK
+//   $ perl -c -e 'my $cache->[0] = 5;'
+//   -e syntax OK
+#[test]
+fn arrow_postfix_after_declared_variable_still_parses_cleanly() -> Result<(), String> {
+    assert_clean_parse("my $cache->{key} = [1,2,3];");
+    assert_clean_parse("my $cache->[0] = 5;");
+
+    let declarations = statements("my $cache->[0] = 5;")?;
     let declaration =
         declarations.first().ok_or_else(|| "expected declaration statement".to_string())?;
-    let elements = comma_list_elements(declaration)?;
-    assert_eq!(elements.len(), 2, "expected [my $first[0], $second{{key}}]");
-
-    match &elements[0].kind {
+    match &declaration.kind {
         NodeKind::VariableDeclaration { declarator, variable, .. } => {
             assert_eq!(declarator, "my");
             assert!(
-                matches!(&variable.kind, NodeKind::Binary { op, .. } if op == "[]"),
-                "expected subscripted declaration target, got {:?}",
+                matches!(&variable.kind, NodeKind::Binary { op, .. } if op == "->[]"),
+                "expected arrow-chained subscript target, got {:?}",
                 variable.kind
             );
         }
         other => return Err(format!("expected VariableDeclaration, got {other:?}")),
     }
-    assert!(matches!(&elements[1].kind, NodeKind::Binary { op, .. } if op == "{}"));
     Ok(())
 }
 
