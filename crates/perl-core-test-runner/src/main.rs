@@ -35,6 +35,14 @@ const RUN_DTRACE_PLATFORM_PROBE_SOURCE: &str = r#"BEGIN {
     my $result = `$dtrace -qnBEGIN -c'$Perl -e 1' 2>&1`;
     $? && skip_all("Apparently can't probe using $dtrace (perhaps you need root?): $result");
 }"#;
+const RUN_SWITCHC_PLATFORM_PROBE_SOURCE: &str = r#"BEGIN {
+    chdir 't' if -d 't';
+    @INC = '../lib';
+    require "./test.pl";
+
+    skip_all_without_perlio();
+    skip_all_if_miniperl('-C and $ENV{PERL_UNICODE} are disabled on miniperl');
+}"#;
 
 #[derive(Debug)]
 struct Invocation {
@@ -295,6 +303,7 @@ fn is_unsupported_compile_boundary(
     }
     !is_static_perl_core_test_bootstrap_boundary(effect, invocation, source)
         && !is_run_dtrace_platform_probe_boundary(effect, invocation, source)
+        && !is_run_switchc_platform_probe_boundary(effect, invocation, source)
         && !is_base_term_cwd_setup_boundary(effect, invocation, source)
         && !is_base_lex_symbolic_reference_boundary(effect, invocation)
         && !is_base_lex_map_begin_boundary(effect, invocation, source)
@@ -414,6 +423,28 @@ fn is_run_dtrace_platform_probe_boundary(
         return false;
     };
     slice.replace("\r\n", "\n") == RUN_DTRACE_PLATFORM_PROBE_SOURCE
+}
+
+/// Accept the pinned PerlIO/miniperl capability probe as governed semantic
+/// debt. Its helpers inspect the target interpreter and can skip the test;
+/// compile analysis must not execute that host-dependent behavior.
+fn is_run_switchc_platform_probe_boundary(
+    effect: &CompileEffect,
+    invocation: &Invocation,
+    source: &str,
+) -> bool {
+    if normalize_display_path(&invocation.display_path) != "run/switchC.t"
+        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+        || effect.dynamic_reason.as_deref()
+            != Some("phase block compile-time execution is recorded but not evaluated")
+    {
+        return false;
+    }
+
+    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
+        return false;
+    };
+    slice.replace("\r\n", "\n") == RUN_SWITCHC_PLATFORM_PROBE_SOURCE
 }
 
 fn is_comp_final_line_num_syntax_error_probe(
@@ -4093,6 +4124,51 @@ mod tests {
                 run_dtrace_platform_probe_source().replace("$dtrace -V", "$dtrace --version"),
             ),
             display_path: "run/dtrace.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_switchc_platform_probe_is_governed_semantic_debt() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(RUN_SWITCHC_PLATFORM_PROBE_SOURCE.to_string()),
+            display_path: "run/switchC.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_switchc_platform_probe_other_file_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(RUN_SWITCHC_PLATFORM_PROBE_SOURCE.to_string()),
+            display_path: "run/switches.t".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_run_switchc_platform_probe_changed_source_stays_bucketed() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                RUN_SWITCHC_PLATFORM_PROBE_SOURCE
+                    .replace("skip_all_without_perlio();", "skip_all_without_config('d_perlio');"),
+            ),
+            display_path: "run/switchC.t".to_string(),
         };
 
         let result = run_compile(&invocation)?;
