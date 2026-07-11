@@ -569,10 +569,28 @@ impl ParseWorkerTestBarrier {
     }
 
     /// Block until the worker reports it has paused for the armed job.
+    ///
+    /// Bounded by a generous ceiling -- not a correctness requirement (the
+    /// underlying wait is otherwise event-driven, never polled) but a
+    /// test-harness legibility nicety (#3812): without it, CPU starvation
+    /// from concurrent builds/tests contending for cores silently hangs
+    /// this call for the full test-harness timeout with no diagnostic at
+    /// all. Bounding it turns that into a fast, clearly-labeled failure
+    /// instead. Test-harness only -- does not change worker behavior.
     pub(crate) fn wait_until_paused(&self) {
+        const CEILING: std::time::Duration = std::time::Duration::from_mins(1);
+        let deadline = std::time::Instant::now() + CEILING;
         let mut state = self.state.lock();
         while !state.paused {
-            self.cvar.wait(&mut state);
+            let now = std::time::Instant::now();
+            assert!(
+                now < deadline,
+                "ParseWorkerTestBarrier::wait_until_paused timed out after {CEILING:?} \
+                 waiting for the armed worker to reach its pause point -- likely CPU \
+                 starvation from concurrent builds/tests rather than a real bug; retry \
+                 serially"
+            );
+            self.cvar.wait_for(&mut state, deadline - now);
         }
     }
 
@@ -2163,5 +2181,239 @@ mod tests {
              it alive forever even if `drop()` itself happened to return"
         );
         Ok(())
+    }
+
+    // ---- Shutdown-drain: work queued (never itself dequeued) at the -----
+    // ---- moment shutdown is requested must still be drained -------------
+
+    /// #3812 (Fresh Facts Fast §3b concurrency gap): `Coordinator::take_next`
+    /// pops `ready` BEFORE checking `shutdown` (see its doc comment and the
+    /// `ParseWorker` module-level doc comment's "each worker finishes
+    /// draining whatever is left in `ready` before exiting" claim) -- but
+    /// nothing in this file exercised that claim against a job that was
+    /// NEVER itself dequeued before shutdown was requested: a job that only
+    /// exists as a coalesced `pending` entry, re-queued to `ready` by
+    /// `finish()` AFTER `request_shutdown()` already ran. This test
+    /// constructs exactly that ordering and proves the coalesced generation
+    /// still gets drained and published, rather than silently lost because
+    /// `shutdown` was already `true` by the time a worker looped back into
+    /// `take_next`.
+    #[test]
+    fn shutdown_drains_a_coalesced_job_never_itself_dequeued_before_the_request() {
+        let uri = "file:///shutdown_drain.pl";
+        let (documents, generation_handle) = one_doc(uri, "my $a = 1;\n");
+        let (cb, calls) = counting_callback();
+        let worker = ParseWorker::spawn(Arc::clone(&documents), ast_cache(), cb);
+        let barrier = worker.test_barrier();
+
+        // Job N (generation 1): dequeued and paused right before publish --
+        // occupies the only worker thread that will ever touch this URI.
+        generation_handle.fetch_add(1, Ordering::SeqCst);
+        barrier.arm(uri, 1);
+        worker.enqueue(
+            uri.to_string(),
+            uri.to_string(),
+            1,
+            Arc::clone(&generation_handle),
+            Arc::from("my $aa = 1;\n"),
+        );
+        barrier.wait_until_paused();
+
+        // While N is paused (mid-flight, unsettled), a newer edit coalesces
+        // into `pending` for the SAME uri -- generation 2 has NEVER been
+        // dequeued by any worker; it exists only as a `pending` entry
+        // waiting for N to finish and `finish()` to re-queue its uri to
+        // `ready`.
+        generation_handle.fetch_add(1, Ordering::SeqCst);
+        worker.enqueue(
+            uri.to_string(),
+            uri.to_string(),
+            2,
+            Arc::clone(&generation_handle),
+            Arc::from("my $aaa = 1;\n"),
+        );
+
+        // Request shutdown NOW: generation 2 is sitting in `pending`, never
+        // dequeued, and generation 1 is still mid-flight on the barrier.
+        // This is the "work in flight at shutdown time" scenario the
+        // module doc comment claims to handle but which nothing else in
+        // this file exercises.
+        worker.coordinator.request_shutdown();
+
+        // Release N -- its publish is rejected (superseded by generation
+        // 2); `finish()` sees generation 2 still pending and re-queues the
+        // uri to `ready` instead of releasing `active` ownership. This is
+        // the exact moment `take_next`'s loop must still pop `ready` and
+        // hand generation 2 to a worker DESPITE `shutdown` already being
+        // `true`.
+        barrier.release();
+
+        assert!(
+            wait_for(|| worker.metrics().jobs_rejected_stale >= 1, TEST_TIMEOUT),
+            "generation 1 must still be rejected as stale after shutdown was requested"
+        );
+        assert!(
+            wait_for(|| !calls.lock().is_empty(), TEST_TIMEOUT),
+            "generation 2 -- queued only via coalescing, never itself dequeued before \
+             shutdown was requested -- must still be drained and published, not silently \
+             lost because `shutdown` was already true by the time a worker looped back to \
+             `take_next`"
+        );
+        {
+            let docs = documents.lock();
+            let doc = must_some(docs.get(uri));
+            let current = must_some(doc.current_parsed());
+            assert_eq!(
+                current.generation(),
+                2,
+                "the coalesced generation must have been drained and published even though \
+                 shutdown was already requested"
+            );
+        }
+        assert_eq!(worker.metrics().jobs_published, 1);
+        assert_eq!(calls.lock().as_slice(), &[(uri.to_string(), 2)]);
+    }
+
+    // ---- Self-join hazard: the last strong reference dropping from a ----
+    // ---- worker-callback thread must not deadlock or double-join --------
+
+    /// #3812 (Fresh Facts Fast §3b concurrency gap):
+    /// `dropping_the_server_joins_the_installed_parse_worker_threads` (above)
+    /// proves the drop-and-join path is safe when the last strong
+    /// `Arc<LspServer>` is dropped from an EXTERNAL, dedicated thread. It
+    /// does not cover the structurally different case where the last
+    /// strong reference is held (and dropped) by a WORKER-CALLBACK THREAD
+    /// itself -- `on_published`/`on_activated`/`on_settled` all run on a
+    /// pool worker thread and, via `Weak::upgrade()`, can transiently hold
+    /// the last strong owner of whatever keeps the pool alive. If that
+    /// temporary owner's drop is the one that brings `ParseWorker`'s own
+    /// strong count to zero, `ParseWorker::drop()` -- shutdown + `for
+    /// handle in handles.drain(..) { handle.join() }` -- runs on that same
+    /// worker thread, and one of those handles is the worker's OWN.
+    /// `JoinHandle::join()` has no self-join guard: a thread joining its own
+    /// handle blocks forever (it cannot finish while blocked waiting for
+    /// itself to finish).
+    ///
+    /// This test constructs that exact ordering directly against
+    /// `ParseWorker` (bypassing `LspServer` -- the hazard is structural to
+    /// `ParseWorker::drop` itself, not specific to how `LspServer` happens
+    /// to wire its callbacks today) and proves it resolves rather than
+    /// hanging. A gate (condvar, not a sleep) forces the deterministic
+    /// ordering: the worker thread resurrects a strong `Arc<ParseWorker>`
+    /// from a `Weak` and blocks; only once the test thread has confirmed
+    /// this AND dropped its own strong reference (making the worker
+    /// thread's resurrected copy the LAST one) does the gate release,
+    /// letting the worker thread's `strong` drop -- and, if unguarded,
+    /// self-join -- for real.
+    ///
+    /// Deliberately bounded (`wait_for`/`TEST_TIMEOUT`), never a raw
+    /// blocking join or sleep: if the self-join hazard is real, only this
+    /// one worker thread hangs (leaked, never joined) -- the test thread
+    /// itself never blocks unboundedly, so this cannot hang the test
+    /// binary even if the underlying property does not hold.
+    ///
+    /// Currently `#[ignore]`d: this reproduces a REAL, confirmed defect --
+    /// `Drop for ParseWorker` (above) has no self-thread-id guard before
+    /// `handle.join()`, so this scenario genuinely deadlocks the worker
+    /// thread (bounded here, so it fails cleanly rather than hanging the
+    /// suite -- see #3816 for the empirical confirmation). Fixing
+    /// `ParseWorker::drop` itself is out of scope for this test-only PR
+    /// (#3812) -- the candidate fixes have real trade-offs that deserve
+    /// their own plan-reviewed PR, not a mechanical change bundled into a
+    /// test-only diff. Un-ignore this alongside that fix.
+    #[test]
+    #[ignore = "blocked on #3816: self-join deadlock in Drop for ParseWorker; \
+                un-ignore with the fix"]
+    fn self_join_from_a_worker_callback_thread_does_not_deadlock_shutdown() {
+        let uri = "file:///self_join.pl";
+        let (documents, generation_handle) = one_doc(uri, "my $a = 1;\n");
+
+        // Filled in AFTER `worker` exists (chicken-and-egg -- same pattern
+        // as `on_activated_observes_the_state_lock_as_still_held` above).
+        let self_ref: Arc<Mutex<Option<std::sync::Weak<ParseWorker>>>> = Arc::new(Mutex::new(None));
+        let self_ref_for_cb = Arc::clone(&self_ref);
+
+        let resurrected = Arc::new(AtomicBool::new(false));
+        let resurrected_for_cb = Arc::clone(&resurrected);
+        let shutdown_returned = Arc::new(AtomicBool::new(false));
+        let shutdown_returned_for_cb = Arc::clone(&shutdown_returned);
+
+        // Gate: keeps the worker thread's resurrected `strong` Arc alive
+        // until the test thread has dropped its own copy -- see the test
+        // doc comment above for why this ordering must be forced, not
+        // hoped for (without it, the worker thread could drop `strong`
+        // while the test's own `worker` handle is still alive, which
+        // would never exercise the last-reference-on-worker-thread case
+        // at all).
+        let gate_released = Arc::new(Mutex::new(false));
+        let gate_cvar = Arc::new(Condvar::new());
+        let gate_released_for_cb = Arc::clone(&gate_released);
+        let gate_cvar_for_cb = Arc::clone(&gate_cvar);
+
+        let on_published: Arc<dyn Fn(PublishedParseTicket) + Send + Sync> =
+            Arc::new(move |_ticket: PublishedParseTicket| {
+                // Resurrect a strong `Arc<ParseWorker>` from the `Weak` --
+                // at the instant this runs, the test thread's own strong
+                // copy is still alive too (refcount 2); it drops its copy
+                // only after observing `resurrected` below.
+                let strong = self_ref_for_cb.lock().as_ref().and_then(std::sync::Weak::upgrade);
+                resurrected_for_cb.store(strong.is_some(), Ordering::SeqCst);
+
+                // Block until the test thread has dropped its own strong
+                // reference -- forces `strong` (captured above) to be the
+                // LAST one alive at the moment it is finally dropped below.
+                {
+                    let mut released = gate_released_for_cb.lock();
+                    while !*released {
+                        gate_cvar_for_cb.wait(&mut released);
+                    }
+                }
+
+                // Dropping `strong` here -- ON THIS WORKER THREAD -- is the
+                // self-join hazard: `ParseWorker::drop()` runs synchronously
+                // on this thread, requests shutdown, and joins every pool
+                // thread's `JoinHandle`, including this thread's own. An
+                // unguarded self-join hangs this thread forever; if that
+                // happens, the line below never runs and
+                // `shutdown_returned` is never set.
+                drop(strong);
+                shutdown_returned_for_cb.store(true, Ordering::SeqCst);
+            });
+
+        let worker =
+            Arc::new(ParseWorker::spawn(Arc::clone(&documents), ast_cache(), on_published));
+        *self_ref.lock() = Some(Arc::downgrade(&worker));
+
+        generation_handle.fetch_add(1, Ordering::SeqCst);
+        worker.enqueue(
+            uri.to_string(),
+            uri.to_string(),
+            1,
+            Arc::clone(&generation_handle),
+            Arc::from("my $aa = 1;\n"),
+        );
+
+        assert!(
+            wait_for(|| resurrected.load(Ordering::SeqCst), TEST_TIMEOUT),
+            "on_published must run and successfully resurrect a strong Arc<ParseWorker> \
+             while the test's own handle is still alive"
+        );
+
+        // Drop the test's own strong reference now -- the worker thread's
+        // already-resurrected `strong` becomes the last one.
+        drop(worker);
+
+        // Release the gate: the worker thread's `strong` drops next, from
+        // inside the very callback that resurrected it.
+        *gate_released.lock() = true;
+        gate_cvar.notify_all();
+
+        assert!(
+            wait_for(|| shutdown_returned.load(Ordering::SeqCst), TEST_TIMEOUT),
+            "ParseWorker::drop() triggered from a worker-callback thread (holding the last \
+             strong reference) must return -- a missing self-join guard would block the \
+             worker thread inside its own `handle.join()` forever, and this flag would \
+             never be set"
+        );
     }
 }
