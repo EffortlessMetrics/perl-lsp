@@ -4,6 +4,20 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
+### Changed
+
+- **Migrated the extension toolchain to TypeScript 7, type-aware Oxlint,
+  Oxfmt, and Rolldown.** TypeScript remains the type-check authority;
+  Rolldown now produces the CommonJS extension bundle. (#3645, #3690,
+  #3721, #3736, #3755)
+- **Reduced the packaged VSIX from 458 files / 1.25 MB to 33 files / 291
+  KB** while preserving extension activation, command registration, native
+  LSP and DAP startup, binary auto-download and extraction, source maps,
+  integration tests, and published-extension smoke coverage. (#3755)
+- **Removed the legacy `ts-jest`, ESLint, and `@typescript-eslint`
+  compiler-API dependencies.** No TypeScript or JavaScript toolchain
+  binaries are shipped inside the extension. (#3645, #3690)
+
 ### Added
 
 - **First-run include-path discovery**: on activation the extension scans
@@ -21,6 +35,14 @@ All notable changes to the Perl Language Server extension will be documented in 
   demo project (`lib/Utils.pm`, `lib/Database.pm`) so first-time users can try
   completion, hover, and go-to-definition without their own project ready. The
   Get Started walkthrough's "Open a Perl Project" step now links to it. (#1635)
+
+### Fixed
+
+- **Extension activation no longer blocks on language-server startup.** UI and
+  commands now register and activation returns immediately while the language
+  client's startup tail completes in the background, instead of blocking
+  activation (and every command that depends on it) behind a slow server
+  start on large workspaces. (#3162)
 
 ## [0.12.4] - 2026-04-12
 
