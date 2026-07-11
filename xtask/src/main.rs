@@ -59,6 +59,11 @@ enum Commands {
     /// Run format and clippy checks only (no tests)
     CheckOnly,
 
+    /// Verify every workspace member has package-local agent context
+    /// (CLAUDE.md), an exemption, or a tracked context-debt entry
+    /// (`.ci/policies/agent-context-policy.toml`).
+    CheckAgentContext,
+
     /// Verify the governed Clippy lint policy ledger and workspace inheritance.
     CheckLintPolicy,
 
@@ -3258,6 +3263,7 @@ fn run_cli(cli: Cli) -> Result<()> {
             Some(CiSubcommand::Explain { receipt }) => ci_explain::run(receipt),
         },
         Commands::CheckOnly => ci::check_only(),
+        Commands::CheckAgentContext => check_agent_context::run(),
         Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::CheckDevexDocs => devex_docs::run(),

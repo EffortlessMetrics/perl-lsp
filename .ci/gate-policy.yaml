@@ -748,6 +748,28 @@ gates:
       - docs
       - invariants
 
+  # M6 (issue #3848 / epic #3612): package-local agent-context coverage.
+  # Advisory (required: false) -- `needs_context` in
+  # .ci/policies/agent-context-policy.toml still lists 12 core-product
+  # crates awaiting a CLAUDE.md (tracked in issue #3874); this gate is not
+  # promoted to required/branch-protection until that debt list is empty.
+  # It still fails on a truly UNACCOUNTED workspace member (neither
+  # has-context, exempt, nor needs_context), so drift stays visible.
+  - name: agent_context_coverage
+    tier: merge_gate
+    description: "Every workspace member has package-local context, an exemption, or tracked context debt (advisory; needs_context non-empty)"
+    required: false
+    command: cargo run --locked -p xtask -- check-agent-context
+    timeout_seconds: 120
+    retry_count: 0
+    budgets:
+      max_duration_ms: 90000
+    quarantine: false
+    tags:
+      - policy
+      - docs
+      - advisory
+
   - name: docs_build
     tier: merge_gate
     description: "Verify documentation builds without errors"
