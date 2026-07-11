@@ -5,6 +5,91 @@
 
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+# agent_type is the confirmed PreToolUse subagent field (captured live,
+# 2026-07-11: a real diff-auditor persona's payload carried a populated
+# agent_type="diff-auditor" with subagent_type null) -- it stays PRIMARY.
+# subagent_type is read as a defensive fallback only, in case a future
+# harness version or a different event shape (e.g. an Agent-Teams teammate
+# session) populates that field instead. Absent both -> "main" (top-level
+# orchestrator), matching the confirmed top-level payload shape.
+AGENT_TYPE=$(echo "$INPUT" | jq -r '.agent_type // .subagent_type // "main"')
+
+# Shared regex fragments (#3763 deep-review hardening, 2026-07-11): the
+# publish-boundary and read-only-shell blocks below both match a git/gh
+# subcommand immediately after the binary name. Two bypasses were found and
+# fixed here for both blocks:
+#   1. A bare `([[:space:]]|$)` terminator lets a shell separator ride
+#      straight through: `git push;echo`, `git push&&x`, `(git push)` all
+#      matched "push" followed by a non-whitespace, non-EOL character that
+#      the old class didn't cover. CMD_TERMINATOR adds `; & | < >` (shell
+#      separators, mirroring the `rm -rf` guard further down this file) and
+#      `)` (a subshell-wrapped command still needs to be caught).
+#   2. Requiring the subcommand immediately after `git`/`gh` lets global
+#      options hide it: `git -C /repo push`, `git -c user.name=x push`,
+#      `git --no-pager push`, `git --git-dir=... push`, and
+#      `gh --repo owner/name pr merge 42` all bypassed. GIT_GLOBAL_OPT /
+#      GH_GLOBAL_OPT tolerate a repeated run of the common global flags
+#      between the binary and its subcommand.
+GIT_GLOBAL_OPT='(-C[[:space:]]+[^[:space:]]+|-c[[:space:]]+[^[:space:]]+|--git-dir=[^[:space:]]+|--work-tree=[^[:space:]]+|--no-pager|--paginate|-p)'
+GH_GLOBAL_OPT='(--repo[[:space:]]+[^[:space:]]+|-R[[:space:]]+[^[:space:]]+|--hostname[[:space:]]+[^[:space:]]+)'
+CMD_TERMINATOR='([[:space:];&|<>)]|$)'
+
+# M4b publication boundary (#3763, "publication-boundary moves DEFER -> BUILD"):
+# the PreToolUse hook payload self-identifies the calling subagent via
+# `agent_type` when Claude Code invokes a hook inside a subagent (absent at
+# the top level, which is why the jq filter above defaults to "main"). This
+# lets us deny direct, routine `git push` forms (including the tested
+# global-option and shell-separator variants below) and `gh pr merge` for
+# review/audit personas specifically, with no env var required.
+#
+# Named review/audit personas already carry a read-only `tools:` allowlist
+# that excludes Edit/Write/Agent (`.claude/agents/*.md`, enforced by
+# `cargo xtask check-agent-capabilities` / #3771) -- their only residual
+# write surface is `Bash`. This block closes that surface for the direct
+# publish forms; shell-indirection through `Bash` (see "Known, accepted
+# limitations" below) remains a documented, accepted gap, not something
+# this hook claims to close.
+#
+# REVIEW_AUDIT_AGENT_TYPES MUST stay in sync with
+# `xtask/src/tasks/agent_capability_policy.rs`'s `REVIEW_AUDIT_AGENTS` (the
+# same cohort already excluded from Edit/Write by #3771). Do not hand-edit
+# one without the other --
+# `.claude/hooks/tests/test_review_audit_agents_sync.sh` fails CI the
+# moment the two lists disagree.
+REVIEW_AUDIT_AGENT_TYPES="reviewer reviewer-deep diff-auditor maintainer-pr maintainer-issue architecture-reviewer advocatus-diaboli accuracy-scout research-verifier oppositional-planner plan-reviewer spec-test-code-match scout-find-ci-ops-gaps scout-find-dap-gaps scout-find-docs-receipt-drift scout-find-lsp-gaps scout-find-parser-gaps scout-find-robustness-gaps"
+
+is_review_audit_agent() {
+  case " $REVIEW_AUDIT_AGENT_TYPES " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Known, accepted limitations (this is a GUARDRAIL against the routine,
+# unobfuscated publish forms a review/audit persona would actually type --
+# NOT an adversarial sandbox, and not a claim that no shell can ever push or
+# merge from here):
+#   - Global-option tolerance above covers the common documented forms, not
+#     every git/gh global flag that could ever precede the subcommand.
+#   - Shell indirection always bypasses a regex guard: `sh -c "git push"`,
+#     `eval "git push"`, decode-and-pipe (base64 | sh), or writing a script
+#     to disk and executing it separately are NOT caught here -- closing
+#     that class would require a real sandboxed shell, not a PreToolUse
+#     regex. This is the same category of accepted gap the `rm -rf` guard
+#     documents further down this file (quoted-path evasion there).
+# Defense-in-depth: this hook is one layer alongside the tool-allowlist
+# boundary (#3771, no Edit/Write/NotebookEdit/Agent for the review/audit
+# cohort) -- it is not the only control.
+if is_review_audit_agent "$AGENT_TYPE" && [ -n "$CMD" ]; then
+  if echo "$CMD" | grep -qE "(^|[^[:alnum:]_])git([[:space:]]+${GIT_GLOBAL_OPT})*[[:space:]]+push${CMD_TERMINATOR}"; then
+    echo "Blocked (publish boundary, #3763 M4b): agent_type=$AGENT_TYPE is a review/audit persona and may not 'git push'. Review/audit agents return findings; a writer, publisher, or the orchestrator performs the push." >&2
+    exit 2
+  fi
+  if echo "$CMD" | grep -qE "(^|[^[:alnum:]_])gh([[:space:]]+${GH_GLOBAL_OPT})*[[:space:]]+pr[[:space:]]+merge${CMD_TERMINATOR}"; then
+    echo "Blocked (publish boundary, #3763 M4b): agent_type=$AGENT_TYPE is a review/audit persona and may not 'gh pr merge'. Merging is an ops/orchestrator responsibility." >&2
+    exit 2
+  fi
+fi
 
 # M4b read-only shell (#3763): review/audit agents are mechanically read-only.
 # Their tool allowlist already excludes Edit/Write/NotebookEdit/Agent (see
@@ -17,7 +102,11 @@ CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 # agents return findings to an orchestrator; a writer/publisher performs the
 # writes. Enable by exporting CLAUDE_AGENT_READONLY=1 in the review-agent spawn.
 if [ "${CLAUDE_AGENT_READONLY:-0}" = "1" ] && [ -n "$CMD" ]; then
-  if echo "$CMD" | grep -qE '(^|[^[:alnum:]_])git[[:space:]]+(commit|push|merge|rebase|reset|revert|cherry-pick|am|apply|restore|stash|clean|add|rm|mv)([[:space:]]|$)'; then
+  # Same terminator + global-option hardening as the publish-boundary block
+  # above (CMD_TERMINATOR / GIT_GLOBAL_OPT / GH_GLOBAL_OPT) -- this is the
+  # same one-liner shape (binary, immediate subcommand, weak terminator)
+  # that had the same bypasses (`git -C /x commit`, `git push;echo`, etc.).
+  if echo "$CMD" | grep -qE "(^|[^[:alnum:]_])git([[:space:]]+${GIT_GLOBAL_OPT})*[[:space:]]+(commit|push|merge|rebase|reset|revert|cherry-pick|am|apply|restore|stash|clean|add|rm|mv)${CMD_TERMINATOR}"; then
     echo "Blocked (read-only agent): mutating git command. Review/audit agents return findings; a writer/publisher commits. See #3763 (M4b)." >&2
     exit 2
   fi
@@ -25,7 +114,7 @@ if [ "${CLAUDE_AGENT_READONLY:-0}" = "1" ] && [ -n "$CMD" ]; then
     echo "Blocked (read-only agent): mutating git command (branch/worktree/tag). See #3763 (M4b)." >&2
     exit 2
   fi
-  if echo "$CMD" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+(pr[[:space:]]+(merge|comment|review|edit|close|create|ready|lock|reopen)|issue[[:space:]]+(create|edit|comment|close|delete|lock|reopen|pin|transfer|develop)|label[[:space:]]+(create|edit|delete|clone)|release[[:space:]]+(create|edit|delete|upload)|secret|variable|cache[[:space:]]+delete|workflow[[:space:]]+(run|enable|disable)|run[[:space:]]+(rerun|cancel|delete))([[:space:]]|$)'; then
+  if echo "$CMD" | grep -qE "(^|[^[:alnum:]_])gh([[:space:]]+${GH_GLOBAL_OPT})*[[:space:]]+(pr[[:space:]]+(merge|comment|review|edit|close|create|ready|lock|reopen)|issue[[:space:]]+(create|edit|comment|close|delete|lock|reopen|pin|transfer|develop)|label[[:space:]]+(create|edit|delete|clone)|release[[:space:]]+(create|edit|delete|upload)|secret|variable|cache[[:space:]]+delete|workflow[[:space:]]+(run|enable|disable)|run[[:space:]]+(rerun|cancel|delete))${CMD_TERMINATOR}"; then
     echo "Blocked (read-only agent): mutating gh command. Review/audit agents post no comments/labels; a publisher/ops does. See #3763 (M4b)." >&2
     exit 2
   fi

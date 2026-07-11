@@ -4,7 +4,10 @@ name: Agent Capability Gate
 # parses `.claude/agents/*.md` and fails if any review/audit agent grants a
 # write/mutating tool (Edit/Write/NotebookEdit/MultiEdit/Agent/Task/Artifact)
 # or lacks an explicit read-only tools: allowlist. It also runs the
-# read-only-shell hook guard test.
+# read-only-shell hook guard test and the publication-boundary guard test
+# (git push / gh pr merge denied for review/audit agent_type values), plus
+# the drift guard that keeps the hook's review/audit list in sync with
+# xtask/src/tasks/agent_capability_policy.rs's REVIEW_AUDIT_AGENTS.
 
 on:
   pull_request:
@@ -12,6 +15,8 @@ on:
       - '.claude/agents/**'
       - '.claude/hooks/pre-tool-use.sh'
       - '.claude/hooks/tests/test_pre_tool_use_readonly.sh'
+      - '.claude/hooks/tests/test_pre_tool_use_publish_boundary.sh'
+      - '.claude/hooks/tests/test_review_audit_agents_sync.sh'
       - 'xtask/src/tasks/agent_capability_policy.rs'
       - '.github/workflows/agent-capability-gate.yml'
   merge_group:
@@ -37,9 +42,17 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable
+        with:
+          toolchain: stable
 
       - name: Enforce review/audit read-only capability boundary
         run: cargo xtask check-agent-capabilities
 
       - name: Read-only-shell hook guard test
         run: bash .claude/hooks/tests/test_pre_tool_use_readonly.sh
+
+      - name: Publication-boundary hook guard test
+        run: bash .claude/hooks/tests/test_pre_tool_use_publish_boundary.sh
+
+      - name: Review/audit agent list drift guard
+        run: bash .claude/hooks/tests/test_review_audit_agents_sync.sh
