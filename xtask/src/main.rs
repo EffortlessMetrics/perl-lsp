@@ -141,6 +141,39 @@ enum Commands {
         command: QueueCommand,
     },
 
+    /// Emit a machine-produced session-start receipt capturing checkout
+    /// identity (repo/branch/SHA relative to `origin/main`) and an advisory
+    /// staleness liveness check (M5 phase 4, #3777). READ-ONLY except for
+    /// `git fetch origin main` and writing the receipt JSON to `--out`;
+    /// never mutates a branch, worktree, PR, or ledger. Always exits 0 --
+    /// staleness is a WARNING, not a build gate (build-lease enforcement is
+    /// M5 phase 3, a separate deliverable).
+    #[command(name = "session-receipt")]
+    SessionReceipt {
+        /// Emit machine-readable JSON to stdout (also always written to `--out`).
+        #[arg(long)]
+        json: bool,
+
+        /// Override the auto-detected default program (falls back to
+        /// `.perl-lsp/goals/active.toml`'s `default_program`/`active_program`).
+        #[arg(long)]
+        program: Option<String>,
+
+        /// Optional lane label to stamp into the receipt. No auto-detection --
+        /// lane is a runtime work-item selection, not inherent checkout state.
+        #[arg(long)]
+        lane: Option<String>,
+
+        /// Output path for the receipt JSON (default: `target/receipts/session-start.json`).
+        #[arg(long)]
+        out: Option<PathBuf>,
+
+        /// Commits-behind-`origin/main` threshold that triggers the advisory
+        /// staleness WARNING.
+        #[arg(long, default_value_t = session_receipt::DEFAULT_WARN_THRESHOLD)]
+        warn_threshold: u32,
+    },
+
     /// PR-related local tooling (title check, etc.)
     Pr {
         #[command(subcommand)]
@@ -3255,6 +3288,9 @@ fn run_cli(cli: Cli) -> Result<()> {
                 Ok(())
             }
         },
+        Commands::SessionReceipt { json, program, lane, out, warn_threshold } => {
+            session_receipt::run(json, program, lane, out, warn_threshold)
+        }
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {
