@@ -53,9 +53,13 @@ enforcement = "advisory"
 #
 # The half-open interval `(retrospective_covered_through, advisory_expected_from]`
 # — PRs merged after the retrospective floor but before the advisory boundary
-# armed — is covered by a separate bridge audit (a later PR), not by this
-# policy file.
-retrospective_covered_through = "da86c123a"
+# armed — was closed by the bridge audit in #3784: of the 9 commits in
+# `da86c123a..af58b72a`, 8 are internal (orchestration/docs/test/dev-tooling/
+# changelog-infra, covered by exemption categories) and 1 is user-facing (#3765,
+# completion → generation-owned type environment), now carried by a retrospective
+# fragment under `.changes/unreleased/`. With the window covered, the floor
+# advances to the advisory boundary, collapsing the interval to empty.
+retrospective_covered_through = "af58b72a"
 advisory_expected_from = "af58b72a"
 blocking_enforced_from = ""
 

@@ -1,0 +1,9 @@
+project: product
+component: Language intelligence
+kind: Changed
+body: Completion now reads types from a generation-owned type environment, so results stay correct under rapid edits.
+time: 2026-07-11T00:00:00Z
+custom:
+  PR: "3765"
+  Slug: fff-completion-generation-owned
+  Breaking: "no"
