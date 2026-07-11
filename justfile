@@ -36,6 +36,13 @@ agent-nextest:
 agent-pr-fast:
     {{cargo_safe}} xtask gates --tier pr-fast --receipt
 
+# M4b (#3763): assert review/audit agents are mechanically read-only
+# (no Edit/Write/NotebookEdit/Agent in their tools: allowlist) and run the
+# read-only-shell hook guard test.
+check-agent-capabilities:
+    {{cargo_safe}} xtask check-agent-capabilities
+    bash .claude/hooks/tests/test_pre_tool_use_readonly.sh
+
 # ============================================================================
 # Tiered CI Execution (works locally via Nix and in GitHub Actions)
 # ============================================================================

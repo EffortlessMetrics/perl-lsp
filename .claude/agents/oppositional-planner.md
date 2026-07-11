@@ -2,6 +2,7 @@
 name: oppositional-planner
 description: Oppositional planning agent. Challenges the proposed approach, surfaces overlooked alternatives, and stress-tests assumptions before the plan-reviewer sees the spec.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: yellow
 isolation: worktree
 ---

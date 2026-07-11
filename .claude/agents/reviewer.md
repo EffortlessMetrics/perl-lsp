@@ -2,6 +2,7 @@
 name: reviewer
 description: Standards reviewer. Fast first pass on PRs — banned patterns, scope, formatting.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: yellow
 isolation: worktree
 ---

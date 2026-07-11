@@ -2,6 +2,7 @@
 name: scout-find-dap-gaps
 description: DAP discovery scout (Issue Discovery / Bug Scout Desk). Sweeps DAP stack/scopes/variables/lifecycle/transport surfaces for evidence-backed candidate issues. Read-only except filing candidate packets.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: green
 isolation: worktree
 ---

@@ -2,6 +2,7 @@
 name: plan-reviewer
 description: Plan review agent. Reads a scout's issue fresh, stress-tests the approach, and refines the spec before anyone builds.
 model: sonnet
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: green
 isolation: worktree
 ---

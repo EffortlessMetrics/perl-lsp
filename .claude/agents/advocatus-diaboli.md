@@ -2,6 +2,7 @@
 name: advocatus-diaboli
 description: Devil's advocate agent. Challenges whether an issue should exist at all — is this the right problem, is it in scope, is it yak-shaving, would users care?
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: red
 isolation: worktree
 ---

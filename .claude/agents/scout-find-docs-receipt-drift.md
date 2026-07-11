@@ -2,6 +2,7 @@
 name: scout-find-docs-receipt-drift
 description: Docs/receipt discovery scout (Issue Discovery / Bug Scout Desk). Sweeps status docs, receipts, and source-of-truth surfaces for drift and basis conflicts. Read-only except filing candidate packets.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: cyan
 isolation: worktree
 ---

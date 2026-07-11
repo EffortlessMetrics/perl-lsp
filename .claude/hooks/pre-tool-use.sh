@@ -6,6 +6,45 @@
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
+# M4b read-only shell (#3763): review/audit agents are mechanically read-only.
+# Their tool allowlist already excludes Edit/Write/NotebookEdit/Agent (see
+# `.claude/agents/*.md` `tools:` + `cargo xtask check-agent-capabilities`).
+# This block closes the residual mutating-Bash vector so the boundary is a
+# TRUE read-only shell: when the invoking agent is spawned with
+# CLAUDE_AGENT_READONLY=1, mutating git/gh/filesystem commands are rejected
+# BEFORE execution, while read-only inspection (git diff/log/show/status,
+# gh pr view/diff/list/checks, cargo check, cat, grep) passes. Review/audit
+# agents return findings to an orchestrator; a writer/publisher performs the
+# writes. Enable by exporting CLAUDE_AGENT_READONLY=1 in the review-agent spawn.
+if [ "${CLAUDE_AGENT_READONLY:-0}" = "1" ] && [ -n "$CMD" ]; then
+  if echo "$CMD" | grep -qE '(^|[^[:alnum:]_])git[[:space:]]+(commit|push|merge|rebase|reset|revert|cherry-pick|am|apply|restore|stash|clean|add|rm|mv)([[:space:]]|$)'; then
+    echo "Blocked (read-only agent): mutating git command. Review/audit agents return findings; a writer/publisher commits. See #3763 (M4b)." >&2
+    exit 2
+  fi
+  if echo "$CMD" | grep -qE '(^|[^[:alnum:]_])git[[:space:]]+(checkout[[:space:]]+(-[bB]|--)|switch[[:space:]]+-[cC]|branch[[:space:]]+(-[dDmMcC]|[^-[:space:]])|worktree[[:space:]]+add|tag[[:space:]]+[^-[:space:]])'; then
+    echo "Blocked (read-only agent): mutating git command (branch/worktree/tag). See #3763 (M4b)." >&2
+    exit 2
+  fi
+  if echo "$CMD" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+(pr[[:space:]]+(merge|comment|review|edit|close|create|ready|lock|reopen)|issue[[:space:]]+(create|edit|comment|close|delete|lock|reopen|pin|transfer|develop)|label[[:space:]]+(create|edit|delete|clone)|release[[:space:]]+(create|edit|delete|upload)|secret|variable|cache[[:space:]]+delete|workflow[[:space:]]+(run|enable|disable)|run[[:space:]]+(rerun|cancel|delete))([[:space:]]|$)'; then
+    echo "Blocked (read-only agent): mutating gh command. Review/audit agents post no comments/labels; a publisher/ops does. See #3763 (M4b)." >&2
+    exit 2
+  fi
+  if echo "$CMD" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+.*--(add|remove)-label'; then
+    echo "Blocked (read-only agent): gh label mutation. See #3763 (M4b)." >&2
+    exit 2
+  fi
+  if echo "$CMD" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+api[[:space:]]+.*(-X[[:space:]]*|--method[[:space:]]+)(POST|PATCH|PUT|DELETE)'; then
+    echo "Blocked (read-only agent): gh api write request. See #3763 (M4b)." >&2
+    exit 2
+  fi
+  # Filesystem writes: redirection (`>`, `>>` — but not `2>`/`2>&1`), and
+  # mutating coreutils. Read-only agents do not modify the filesystem.
+  if echo "$CMD" | grep -qE '>>|[^0-9&>]>[^&>]|(^|[^[:alnum:]_])(tee|dd|truncate|install)[[:space:]]|(^|[^[:alnum:]_])(cp|mv|touch|mkdir|rmdir|ln)[[:space:]]|(^|[^[:alnum:]_])sed[[:space:]]+-[^[:space:]]*i'; then
+    echo "Blocked (read-only agent): file-writing command. Review/audit agents do not modify the filesystem. See #3763 (M4b)." >&2
+    exit 2
+  fi
+fi
+
 if echo "$CMD" | grep -qE 'git push --force($|[[:space:]])|git push -f |git checkout \.|git reset --hard|cargo publish|git clean -fd'; then
   echo "Blocked: dangerous command '$CMD'. Use safer alternatives." >&2
   exit 2

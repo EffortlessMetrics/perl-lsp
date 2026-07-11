@@ -2,6 +2,7 @@
 name: maintainer-pr
 description: Maintainer vision agent (PRs). Checks whether the built PR aligns with perl-lsp's goals and quality bar — before deep-reviewer invests sonnet tokens on correctness.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: purple
 isolation: worktree
 ---

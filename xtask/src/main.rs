@@ -1736,6 +1736,15 @@ enum Commands {
         root: Option<PathBuf>,
     },
 
+    /// Enforce the M4b capability boundary: review/audit agents are
+    /// mechanically read-only (no Edit/Write/NotebookEdit/Agent in their
+    /// tools: allowlist). See issue #3763.
+    CheckAgentCapabilities {
+        /// Repository root containing `.claude/agents`.
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+
     /// Show summary statistics from swarm-metrics.jsonl.
     SwarmSummary {
         /// Path to operations directory (defaults to `.ops-perl-lsp`).
@@ -4066,6 +4075,7 @@ fn run_cli(cli: Cli) -> Result<()> {
         }
         Commands::WorktreeCleanup => worktrees::cleanup(),
         Commands::ValidateSwarmAgentRoster { root } => swarm_agent_roster::run(root),
+        Commands::CheckAgentCapabilities { root } => agent_capability_policy::run(root),
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }

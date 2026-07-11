@@ -2,6 +2,7 @@
 name: diff-auditor
 description: Final diff audit agent. Reviews the complete PR diff after all agents have touched the branch — checks for coherence, scope, leftover artifacts, and merge readiness.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: white
 isolation: worktree
 ---

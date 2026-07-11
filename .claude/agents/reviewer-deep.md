@@ -2,6 +2,7 @@
 name: reviewer-deep
 description: Correctness reviewer. Deep second pass — does the logic actually work? Edge cases? Regressions?
 model: sonnet
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: green
 isolation: worktree
 ---

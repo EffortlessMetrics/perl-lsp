@@ -2,6 +2,7 @@
 name: research-verifier
 description: Fact verification agent. Reads a scout-filed issue, verifies external claims (Perl semantics, LSP/DAP spec, crate APIs) via web search and codebase checks, then posts findings as a structured comment.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: cyan
 isolation: worktree
 ---
