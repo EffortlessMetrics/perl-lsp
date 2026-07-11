@@ -81,8 +81,6 @@ impl LspServer {
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
-            semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
-            type_inference_engine_cache: Arc::new(Mutex::new(HashMap::new())),
             provider_decision_traces: Arc::new(Mutex::new(HashMap::new())),
             semantic_tokens_cache: Arc::new(Mutex::new(HashMap::new())),
             module_scan_cache: Arc::new(
@@ -241,8 +239,6 @@ impl LspServer {
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
-            semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
-            type_inference_engine_cache: Arc::new(Mutex::new(HashMap::new())),
             provider_decision_traces: Arc::new(Mutex::new(HashMap::new())),
             semantic_tokens_cache: Arc::new(Mutex::new(HashMap::new())),
             module_scan_cache: Arc::new(
@@ -342,8 +338,6 @@ impl LspServer {
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
-            semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
-            type_inference_engine_cache: Arc::new(Mutex::new(HashMap::new())),
             provider_decision_traces: Arc::new(Mutex::new(HashMap::new())),
             semantic_tokens_cache: Arc::new(Mutex::new(HashMap::new())),
             module_scan_cache: Arc::new(

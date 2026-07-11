@@ -831,7 +831,6 @@ fn test_diagnostics_churn_drains_retained_state_after_close_delete()
         let path = dir.path().join("diagnostics_churn.pl");
         let uri = url::Url::from_file_path(&path).map_err(|_| "invalid file path")?;
         let uri = uri.to_string();
-        let normalized_uri = server.normalize_uri_key(&uri);
         let fixed_template = |version: i32| {
             format!("package Diagnostics::Churn;\nmy $value = {version};\n$value;\n1;\n")
         };
@@ -848,17 +847,14 @@ fn test_diagnostics_churn_drains_retained_state_after_close_delete()
             }
         }))?;
 
-        let _ = server.handle_hover(Some(json!({
+        let hover_before_churn = server.handle_hover(Some(json!({
             "textDocument": { "uri": uri },
             "position": { "line": 1, "character": 4 }
         })));
-        {
-            let cache = server.semantic_analyzer_cache.lock();
-            assert!(
-                cache.keys().any(|(cached_uri, _)| cached_uri == &normalized_uri),
-                "hover should populate semantic analyzer cache before churn"
-            );
-        }
+        assert!(
+            matches!(hover_before_churn, Ok(Some(ref v)) if !v.is_null()),
+            "hover should return symbol info before churn (generation-owned snapshot populated)"
+        );
 
         let mut saw_debounce_pressure = false;
         for version in 2..10 {
@@ -923,12 +919,6 @@ fn test_diagnostics_churn_drains_retained_state_after_close_delete()
         assert_eq!(pressure.pending_index_tasks, 0);
         assert_eq!(pressure.diagnostic_debounce_pending_uris, 0);
         assert_eq!(pressure.active_stream_sessions, 0);
-
-        let cache = server.semantic_analyzer_cache.lock();
-        assert!(
-            !cache.keys().any(|(cached_uri, _)| cached_uri == &normalized_uri),
-            "semantic analyzer cache must not retain diagnostics churn URI after close/delete"
-        );
 
         Ok::<(), Box<dyn std::error::Error>>(())
     })?;
@@ -1667,264 +1657,6 @@ fn test_template_file_guard_parses_mojolicious_language_id()
     Ok(())
 }
 
-/// Semantic analyzer cache must accumulate at most one entry per document
-/// version across multiple hover calls at different offsets.
-///
-/// This verifies the (uri, content_hash) key strategy: two hovers on the
-/// same document text must reuse the cached SemanticAnalyzer rather than
-/// constructing a fresh one.
-#[test]
-fn test_semantic_analyzer_cache_reuses_entry_on_same_version()
--> Result<(), Box<dyn std::error::Error>> {
-    let server = LspServer::new();
-    let uri = "file:///test_cache_hover.pl";
-    let text = "my $x = 1;\nmy $y = 2;\n";
-
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
-    }))?;
-
-    // Two hover calls at different positions on the same document version.
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 1, "character": 3 }
-    })));
-
-    // Cache must have exactly 1 entry: one per (uri, content_hash).
-    let cache = server.semantic_analyzer_cache.lock();
-    assert_eq!(
-        cache.len(),
-        1,
-        "should cache exactly one analyzer entry per document version (got {})",
-        cache.len()
-    );
-
-    Ok(())
-}
-
-/// The semantic analyzer cache must be cleared for a URI when the document
-/// changes (textDocument/didChange), so stale analysis is never served.
-#[test]
-fn test_semantic_analyzer_cache_invalidated_on_did_change() -> Result<(), Box<dyn std::error::Error>>
-{
-    let server = LspServer::new();
-    let uri = "file:///test_cache_invalidate_change.pl";
-    let text = "my $x = 1;\n";
-
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
-    }))?;
-
-    // Prime the cache with a hover call.
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    // Verify the cache has an entry before the change.
-    {
-        let cache = server.semantic_analyzer_cache.lock();
-        assert!(!cache.is_empty(), "cache must be populated before didChange");
-    }
-
-    // Apply a document change.
-    server.handle_did_change(Some(json!({
-        "textDocument": { "uri": uri, "version": 2 },
-        "contentChanges": [{ "text": "my $x = 99;\n" }]
-    })))?;
-
-    // Cache must be cleared for this URI after didChange.
-    let cache = server.semantic_analyzer_cache.lock();
-    let uri_key = server.normalize_uri_key(uri);
-    let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
-    assert!(!still_has_stale, "semantic_analyzer_cache must evict entries for changed URI");
-
-    Ok(())
-}
-
-/// The semantic analyzer cache must be cleared for a URI when the document
-/// is closed (textDocument/didClose), preventing stale memory retention.
-#[test]
-fn test_semantic_analyzer_cache_invalidated_on_did_close() -> Result<(), Box<dyn std::error::Error>>
-{
-    let server = LspServer::new();
-    let uri = "file:///test_cache_invalidate_close.pl";
-    let text = "my $x = 1;\n";
-
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
-    }))?;
-
-    // Prime the cache with a hover call.
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    // Verify the cache has an entry before the close.
-    {
-        let cache = server.semantic_analyzer_cache.lock();
-        assert!(!cache.is_empty(), "cache must be populated before didClose");
-    }
-
-    // Close the document.
-    server.handle_did_close(Some(json!({ "textDocument": { "uri": uri } })))?;
-
-    // Cache must be cleared for this URI after didClose.
-    let cache = server.semantic_analyzer_cache.lock();
-    let uri_key = server.normalize_uri_key(uri);
-    let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
-    assert!(!still_has_stale, "semantic_analyzer_cache must evict entries for closed URI");
-
-    Ok(())
-}
-
-/// A new document version must produce a distinct cache entry (different
-/// content hash) while the old version's entry is evicted on didChange.
-#[test]
-fn test_semantic_analyzer_cache_separates_document_versions()
--> Result<(), Box<dyn std::error::Error>> {
-    let server = LspServer::new();
-    let uri = "file:///test_cache_versions.pl";
-    let text_v1 = "my $x = 1;\n";
-    let text_v2 = "my $x = 999;\n";
-
-    // Open v1 and prime the cache.
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text_v1 }
-    }))?;
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    // Change to v2 (invalidates v1 entry) then hover again.
-    server.handle_did_change(Some(json!({
-        "textDocument": { "uri": uri, "version": 2 },
-        "contentChanges": [{ "text": text_v2 }]
-    })))?;
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    // Cache must have at most 1 entry (v2 only; v1 was evicted on didChange).
-    let cache = server.semantic_analyzer_cache.lock();
-    assert!(
-        cache.len() <= 1,
-        "cache must hold at most one entry after version change (got {})",
-        cache.len()
-    );
-
-    Ok(())
-}
-
-/// Type inference cache must accumulate at most one entry per document version
-/// across multiple hovers on the same source text.
-#[test]
-fn test_type_inference_cache_reuses_entry_on_same_version() -> Result<(), Box<dyn std::error::Error>>
-{
-    let server = LspServer::new();
-    let uri = "file:///test_type_cache_hover.pl";
-    let text = "my $x = 1;\nmy $y = $x;\n";
-
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
-    }))?;
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 1, "character": 3 }
-    })));
-
-    let cache = server.type_inference_engine_cache.lock();
-    assert_eq!(
-        cache.len(),
-        1,
-        "should cache exactly one type inference entry per document version (got {})",
-        cache.len()
-    );
-
-    Ok(())
-}
-
-/// The type inference cache must be cleared for a URI when source text changes.
-#[test]
-fn test_type_inference_cache_invalidated_on_did_change() -> Result<(), Box<dyn std::error::Error>> {
-    let server = LspServer::new();
-    let uri = "file:///test_type_cache_invalidate_change.pl";
-    let text = "my $x = 1;\n";
-
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
-    }))?;
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    {
-        let cache = server.type_inference_engine_cache.lock();
-        assert!(!cache.is_empty(), "type inference cache must be populated before didChange");
-    }
-
-    server.handle_did_change(Some(json!({
-        "textDocument": { "uri": uri, "version": 2 },
-        "contentChanges": [{ "text": "my $x = 99;\n" }]
-    })))?;
-
-    let cache = server.type_inference_engine_cache.lock();
-    let uri_key = server.normalize_uri_key(uri);
-    let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
-    assert!(!still_has_stale, "type inference cache must evict entries for changed URI");
-
-    Ok(())
-}
-
-/// The type inference cache must be cleared for a URI when the document closes.
-#[test]
-fn test_type_inference_cache_invalidated_on_did_close() -> Result<(), Box<dyn std::error::Error>> {
-    let server = LspServer::new();
-    let uri = "file:///test_type_cache_invalidate_close.pl";
-    let text = "my $x = 1;\n";
-
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
-    }))?;
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    {
-        let cache = server.type_inference_engine_cache.lock();
-        assert!(!cache.is_empty(), "type inference cache must be populated before didClose");
-    }
-
-    server.handle_did_close(Some(json!({ "textDocument": { "uri": uri } })))?;
-
-    let cache = server.type_inference_engine_cache.lock();
-    let uri_key = server.normalize_uri_key(uri);
-    let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
-    assert!(!still_has_stale, "type inference cache must evict entries for closed URI");
-
-    Ok(())
-}
-
 // =========================================================================
 // Error-path tests — closes #3039
 //
@@ -2205,7 +1937,8 @@ fn rapid_burst_does_not_permanently_degrade_the_workspace_index_coordinator()
     server.test_apply_did_open(uri, "my $a = 1;\n", 1)?;
     let normalized_uri = server.normalize_uri_key(uri);
     assert!(
-        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
         "initial open must settle"
     );
 
@@ -2216,7 +1949,8 @@ fn rapid_burst_does_not_permanently_degrade_the_workspace_index_coordinator()
         server.test_apply_did_change(uri, &format!("my $a = {v};\n"), v)?;
     }
     assert!(
-        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
         "the burst must settle within the timeout"
     );
 
@@ -2256,7 +1990,8 @@ fn panicking_new_lifecycle_job_still_credits_the_pending_parse_settle()
     server.test_apply_did_open(uri, "my $a = 1;\n", 1)?;
     let normalized_uri = server.normalize_uri_key(uri);
     assert!(
-        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
         "initial open must settle"
     );
 
@@ -2270,7 +2005,8 @@ fn panicking_new_lifecycle_job_still_credits_the_pending_parse_settle()
     server.test_parse_worker_arm_panic(uri, 1);
     server.test_apply_did_change(uri, "my $aa = 1;\n", 2)?;
     assert!(
-        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
         "the panicking job's lifecycle must settle (worker recovers, URI released) within the timeout"
     );
 
@@ -2322,7 +2058,8 @@ fn terminal_stale_reject_with_no_successor_still_credits_the_pending_parse_settl
     server.test_apply_did_open(uri, "my $a = 1;\n", 1)?;
     let normalized_uri = server.normalize_uri_key(uri);
     assert!(
-        must_some(server.parse_worker()).wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
         "initial open must settle"
     );
 

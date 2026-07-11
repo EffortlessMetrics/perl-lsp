@@ -8,7 +8,9 @@ use crate::documentation_targets::PerlDocumentationTarget;
 use crate::protocol::{req_position, req_uri};
 #[cfg(feature = "workspace")]
 use crate::runtime::readiness::IndexReadinessPolicy;
+use crate::state::ParsedSnapshot;
 use crate::util::escape_markdown_text;
+use std::sync::Arc;
 mod hover_cards;
 mod hover_extracted;
 #[cfg(test)]
@@ -116,7 +118,7 @@ impl LspServer {
                                 offset,
                             )
                         } else {
-                            self.extract_symbol_hover(uri, ast, &text, offset)
+                            self.extract_symbol_hover(uri, ast, &text, offset, &parsed)
                         };
                         (extracted, live_compiler_context)
                     } else {
@@ -192,16 +194,22 @@ impl LspServer {
         Ok(Some(json!(null)))
     }
 
-    /// Extract hover information from semantic analysis (called under document lock).
+    /// Extract hover information from semantic analysis (called off-lock, after
+    /// the documents-map guard has already been dropped).
     ///
-    /// Uses `get_or_build_analyzer` so repeated hovers on the same document version
-    /// share a single cached `SemanticAnalyzer` rather than re-traversing the AST.
+    /// Reads `parsed.semantic_analyzer()` / `parsed.type_environment()` so repeated
+    /// hovers on the same generation share a single lazily-built `SemanticAnalyzer`
+    /// / `TypeInferenceEngine` (via `ParsedSnapshot`'s `OnceLock` cells) rather than
+    /// re-traversing the AST per request. Both cells are generation-owned: they are
+    /// derived from `parsed`'s own AST and source, so a superseded snapshot's cells
+    /// are never observed here (see #3765/#3760).
     fn extract_symbol_hover(
         &self,
         uri: &str,
         ast: &Node,
         text: &str,
         offset: usize,
+        parsed: &Option<Arc<ParsedSnapshot>>,
     ) -> HoverExtracted {
         if let Some(xs_hover) = Self::extract_xs_api_hover(uri, text, offset) {
             return HoverExtracted::Complete(xs_hover);
@@ -217,7 +225,17 @@ impl LspServer {
             }
         }
 
-        let analyzer = self.get_or_build_analyzer(uri, text, ast);
+        // `parsed.semantic_analyzer()` is generation-owned (#3760/#3765): it is
+        // lazily built from *this* snapshot's own AST and source via a `OnceLock`,
+        // shared by `Arc` across all hovers on this generation, and never carries
+        // facts from a superseded generation. It returns `None` only when the
+        // snapshot has no AST -- which cannot happen here, since `ast` above was
+        // already extracted from this same `parsed.ast()`. The `.and_then` is
+        // defensive plumbing against a future change to that guard, not a
+        // reachable `None` today; degrade to no hover rather than panic if it ever is.
+        let Some(analyzer) = parsed.as_ref().and_then(|p| p.semantic_analyzer()) else {
+            return HoverExtracted::None;
+        };
 
         if let Some(symbol_info) =
             analyzer.symbol_at(crate::SourceLocation { start: offset, end: offset })
@@ -371,12 +389,17 @@ impl LspServer {
                 String::new()
             };
 
-            // Infer type for variables using TypeInferenceEngine
+            // Infer type for variables using TypeInferenceEngine, generation-owned
+            // via `parsed.type_environment()` (#3760/#3765) -- same lazy,
+            // exactly-once, generation-scoped contract as `semantic_analyzer()`
+            // above. `None` only when the snapshot has no AST, which the `ast`
+            // guard above already rules out for this snapshot.
             let type_info = if symbol_info.kind.is_variable() {
                 let var_name = &symbol_info.name; // already without sigil
-                let type_engine = self.get_or_build_type_engine(uri, text, ast);
+                let type_engine = parsed.as_ref().and_then(|p| p.type_environment());
                 type_engine
-                    .hover_label_for(var_name)
+                    .as_ref()
+                    .and_then(|engine| engine.hover_label_for(var_name))
                     .filter(|label| label != "Any")
                     .map(|label| format!("\n**Type**: `{}`", label))
                     .unwrap_or_default()
@@ -396,9 +419,19 @@ impl LspServer {
                 format!("\n\n{}", complexity_info)
             };
 
-            let doc_info = symbol_info
-                .documentation
-                .as_ref()
+            // Prefer `analyzer.hover_at(location)` -- it is POD-aware (leading
+            // `=head1..=cut` blocks and inline POD inside a sub body via
+            // `extract_sub_documentation`/`find_pod_in_node_body`), whereas
+            // `symbol_info.documentation` (from the symbol table) only
+            // recognizes leading `#` comment lines. Both read the same real
+            // source (`analyzer` here is the generation-owned
+            // `parsed.semantic_analyzer()` built with `analyze_with_source`),
+            // so this is purely "consult the richer of two existing facts",
+            // not a fidelity fix from empty- to real-source.
+            let doc_info = analyzer
+                .hover_at(symbol_info.location)
+                .and_then(|h| h.documentation.as_ref())
+                .or(symbol_info.documentation.as_ref())
                 .map(|d| format!("\n\n{}", escape_markdown_text(d)))
                 .unwrap_or_default();
 

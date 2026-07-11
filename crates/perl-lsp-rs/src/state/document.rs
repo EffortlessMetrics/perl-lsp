@@ -121,15 +121,15 @@ impl std::fmt::Display for DegradationTier {
 /// drops its analysis with its `Arc` when the generation advances.
 ///
 /// **This is the generation-owned path only for callers that have been
-/// migrated to use it.** As of #3760 that is completion's type-detail read
-/// only. Hover, references, and rename still read analyzer/type-environment
-/// facts through the older `LspServer`-level `(uri, content_hash)`-keyed
-/// caches (`semantic_analyzer_cache` / `type_inference_engine_cache` in
-/// `runtime/document_access.rs`), which are content-hash-gated rather than
-/// generation-gated — not a regression (content-hash gating already
-/// invalidates on any real edit), but not yet reading through these cells
-/// either. Migrating the remaining callers and retiring the old caches is
-/// tracked in #3766.
+/// migrated to use it.** As of #3760 that was completion's type-detail read;
+/// as of #3766, hover reads both `semantic_analyzer()` and
+/// `type_environment()` through these cells too, and the old `LspServer`-level
+/// `(uri, content_hash)`-keyed caches (`semantic_analyzer_cache` /
+/// `type_inference_engine_cache`, formerly in `runtime/document_access.rs`)
+/// have been retired — hover was their only consumer. References and rename
+/// still read analyzer/type-environment facts through a separate
+/// empty-source `SemanticAnalyzer::analyze(ast)` path; migrating them is
+/// tracked as follow-up slices (see #3766 context).
 ///
 /// This is deliberately *not* the workspace-wide `SemanticSnapshot` /
 /// `FileSemanticBundle` substrate (#1598/#1601): those own cross-file facts on
