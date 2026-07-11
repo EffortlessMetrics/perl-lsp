@@ -1123,3 +1123,24 @@ expensive = false
 duplicate_of = []
 review_after = "2026-08-10"
 expires = "2026-11-10"
+
+[[lane]]
+id = "changelog_advisory"
+workflow = ".github/workflows/changelog-advisory.yml"
+job = "changelog-disposition"
+tier = "frontdoor"
+kind = "automation"
+blocking = false
+default_pr = true
+runner = "ubuntu_latest"
+base_lem = 2
+owner = "ci"
+intent = "PR-time changelog disposition validation (Changie fragments or explicit exemptions). FOUNDATION / ADVISORY — blocking_enforced_from unset, so the exit-1 path is unreachable. Tracking issue #3784."
+failure_mode = "PR changelog disposition is unknown or an added fragment fails validation, but the advisory status does not block merge (no blocking_enforced_from armed)."
+proof_obligation = "Run cargo xtask changelog check, validate Changie fragments, and emit receipt."
+evidence = ["job output"]
+allowed_triggers = ["pull_request", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-08-10"
+expires = "2026-12-10"

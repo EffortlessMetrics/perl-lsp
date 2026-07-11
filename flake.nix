@@ -44,7 +44,8 @@
           cargo-llvm-cov    # Coverage reports (llvm-cov)
           cargo-machete     # Unused dependency detection
           cargo-semver-checks  # SemVer compliance checks
-          git-cliff         # Changelog generation
+          git-cliff         # Changelog generation (release-time)
+          changie           # PR-time release-note fragments (`cargo xtask changelog check`)
           bacon             # Background cargo watcher
           gh                # GitHub CLI for PR operations
           jq                # JSON processing for scripts

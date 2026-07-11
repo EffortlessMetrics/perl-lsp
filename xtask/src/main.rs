@@ -1664,6 +1664,15 @@ enum Commands {
         command: GatePolicyCommand,
     },
 
+    /// Advisory Changie release-note ledger checks (issue #3768).
+    ///
+    /// FOUNDATION / ADVISORY: prints findings and always exits 0; never blocks
+    /// a PR. Changes no release execution.
+    Changelog {
+        #[command(subcommand)]
+        command: ChangelogCommand,
+    },
+
     /// Detect contradictory PR label states and emit a methodology receipt.
     MethodologyGate {
         /// Fixture JSON file (local snapshot or GitHub event payload).
@@ -2316,6 +2325,36 @@ enum GatePolicyCommand {
         /// Profile to evaluate (pr/nightly/release).
         #[arg(long, value_enum, default_value = "pr")]
         profile: GatePolicyProfile,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ChangelogCommand {
+    /// Advisory check that a PR carries a changelog disposition (fragment or
+    /// exemption) and that any added fragment is schema-valid and renders.
+    Check {
+        /// Base ref to diff `HEAD` against (default: `origin/main`).
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Read the changed-file list from this file (one path per line)
+        /// instead of running `git diff`. CI passes the PR's changed files.
+        #[arg(long)]
+        changed_files: Option<PathBuf>,
+
+        /// Path to a file containing the PR body (for exemption-marker
+        /// detection). Falls back to the `CHANGELOG_PR_BODY` env var.
+        #[arg(long)]
+        pr_body_file: Option<PathBuf>,
+
+        /// Validate and render the sample fragments (`.changes/samples/`)
+        /// instead of checking a PR's changed files.
+        #[arg(long)]
+        self_test: bool,
+
+        /// Override the repository root. Testing seam; unused in CI.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
     },
 }
 
@@ -4071,6 +4110,31 @@ fn run_cli(cli: Cli) -> Result<()> {
         Commands::GatePolicy { command } => match command {
             GatePolicyCommand::Check => tasks::gate_policy::check(),
             GatePolicyCommand::Effective { profile } => tasks::gate_policy::effective(profile),
+        },
+        Commands::Changelog { command } => match command {
+            ChangelogCommand::Check { base, changed_files, pr_body_file, self_test, root } => {
+                // Three-outcome contract (see xtask/src/tasks/changelog.rs docs):
+                //   Ok(PolicySatisfied | AdvisoryFinding) => exit 0.
+                //   Ok(BlockingViolation)                 => exit 1 (only reachable
+                //     once policy/changelog.toml's `blocking_enforced_from` is set
+                //     and reached).
+                //   Err(instrument/config failure)         => exit 2, distinct from
+                //     both — never a silent pass, never a policy verdict.
+                match tasks::changelog::check(base, changed_files, pr_body_file, self_test, root) {
+                    Ok(
+                        tasks::changelog::CheckOutcome::PolicySatisfied
+                        | tasks::changelog::CheckOutcome::AdvisoryFinding,
+                    ) => Ok(()),
+                    Ok(tasks::changelog::CheckOutcome::BlockingViolation) => {
+                        eprintln!("changelog check: blocking policy violation");
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("changelog check: instrument failure: {e}");
+                        std::process::exit(2);
+                    }
+                }
+            }
         },
         Commands::GateReceipts { command } => match command {
             GateReceiptsCommand::List { format } => {

@@ -1,0 +1,84 @@
+# Changie configuration — PR-time release-note ledger (issue #3768).
+#
+# FOUNDATION / ADVISORY: this config is wired into an ADVISORY xtask check
+# (`cargo xtask changelog check`) that never blocks a PR. Release execution
+# (Cargo versions, publishing, the git-cliff path documented in
+# docs/CHANGELOG_WORKFLOW.md) is UNCHANGED by this file. A follow-up PR decides
+# whether/when to make fragments merge-blocking and whether Changie replaces the
+# git-cliff generation step.
+#
+# Model: each merged PR adds a file-based fragment under `.changes/unreleased/`
+# (`changie new`) OR carries an evidenced "no changelog needed" exemption. At
+# release time `changie batch <version> --project <p>` folds the fragments into
+# the project's Keep-a-Changelog file. Version selection stays a manual product
+# decision in 0.x — there is deliberately NO `auto:` version-bump mapping here.
+
+changesDir: .changes
+unreleasedDir: unreleased
+headerPath: header.tpl.md
+
+# Two projects share this repo. Each project's batched notes flow into its own
+# Keep-a-Changelog file. Fragments live in the shared `.changes/unreleased/`
+# directory and carry a `project:` field; `changie batch --project <key>`
+# filters by it.
+projects:
+  - label: Product (perl-lsp workspace)
+    key: product
+    changelog: CHANGELOG.md
+  - label: VS Code extension
+    key: vscode
+    changelog: vscode-extension/CHANGELOG.md
+projectsVersionSeparator: "-"
+
+# Filesystem-friendly fragment filenames: <project>-<PR>-<kind>-<HHMMSS>.yaml
+# (the default format interpolates component names, which contain spaces).
+fragmentFileFormat: '{{.Project}}-{{.Custom.PR}}-{{.Kind}}-{{.Time.Format "150405"}}'
+
+# Area of the project a change touches (monorepo-style organization layer).
+components:
+  - Language intelligence
+  - Editor behavior
+  - Performance and reliability
+  - Packaging and distribution
+  - Compatibility
+  - Developer experience
+
+# Keep-a-Changelog kinds. No `auto:` — the version bump is a manual product call.
+kinds:
+  - label: Added
+  - label: Changed
+  - label: Fixed
+  - label: Performance
+  - label: Deprecated
+  - label: Removed
+  - label: Security
+
+# Require a substantive one-line body.
+body:
+  minLength: 12
+
+# Custom metadata attached to every fragment.
+custom:
+  - key: PR
+    label: Pull request number
+    type: int
+    minInt: 1
+  - key: Slug
+    label: Short slug (optional grouping hint)
+    type: string
+    optional: true
+  - key: Breaking
+    label: Breaking change?
+    type: enum
+    enumOptions:
+      - "no"
+      - "yes"
+
+# Rendered change line. Breaking changes get a bold prefix; every line links its
+# PR. Custom values are strings, so Breaking is compared against the string
+# "yes".
+changeFormat: '- {{if eq .Custom.Breaking "yes"}}**Breaking:** {{end}}{{.Body}} ([#{{.Custom.PR}}](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/{{.Custom.PR}}))'
+
+# Version-file layout: group by component, then kind.
+componentFormat: '### {{.Component}}'
+kindFormat: '#### {{.Kind}}'
