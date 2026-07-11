@@ -1334,7 +1334,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^26.x",
     "@types/tar": "^7.0.87",
-    "@types/vscode": "~1.120.0",
+    "@types/vscode": "~1.125.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
     "jest": "^30.4.2",
