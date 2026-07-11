@@ -5,9 +5,9 @@
 // TAP is the process protocol for this binary.
 #![allow(clippy::print_stderr, clippy::print_stdout)]
 
-use anyhow::{Context, Result, bail};
-use perl_core_harness_types::{RUNNER_RECORD_SCHEMA_VERSION, RunnerRecord, RunnerStatus};
-use perl_parser_core::hir::{CompileEffect, CompileEffectKind, CompileEffectSourceKind, lower_ast};
+use anyhow::{bail, Context, Result};
+use perl_core_harness_types::{RunnerRecord, RunnerStatus, RUNNER_RECORD_SCHEMA_VERSION};
+use perl_parser_core::hir::{lower_ast, CompileEffect, CompileEffectKind, CompileEffectSourceKind};
 use perl_parser_core::{Parser, RecoverySalvageClass, RecoverySalvageProfile};
 use std::env;
 use std::ffi::OsString;
@@ -34,8 +34,7 @@ const RUN_DTRACE_PLATFORM_PROBE_SOURCE: &str = r#"BEGIN {
 
     my $result = `$dtrace -qnBEGIN -c'$Perl -e 1' 2>&1`;
     $? && skip_all("Apparently can't probe using $dtrace (perhaps you need root?): $result");
-}
-"#;
+}"#;
 
 #[derive(Debug)]
 struct Invocation {
@@ -308,7 +307,6 @@ fn is_unsupported_compile_boundary(
         && !is_comp_filter_exception_inc_filter_boundary(effect, invocation, source)
         && !is_comp_redef_warning_setup_boundary(effect, invocation, source)
         && !is_comp_redef_suppressed_warning_eval_boundary(effect, invocation, source)
-        && !is_comp_fold_warning_setup_boundary(effect, invocation, source)
         && !is_comp_fold_readonly_constant_ref_boundary(effect, invocation, source)
         && !is_comp_fold_nested_constant_ref_boundary(effect, invocation, source)
         && !is_comp_parser_run_test_pl_setup_boundary(effect, invocation, source)
@@ -323,7 +321,6 @@ fn is_unsupported_compile_boundary(
         && !is_comp_parser_multideref_literal_boundary(effect, invocation, source)
         && !is_comp_parser_heredoc_interpolation_boundary(effect, invocation, source)
         && !is_comp_require_setup_boundary(effect, invocation, source)
-        && !is_comp_require_utf8_open_boundary(effect, invocation, source)
         && !is_comp_require_module_true_setup_boundary(effect, invocation, source)
         && !is_comp_require_module_true_tuple_deref_boundary(effect, invocation, source)
         && !is_comp_require_runtime_dynamic_require_boundary(effect, invocation, source)
@@ -677,29 +674,6 @@ fn is_comp_redef_suppressed_warning_eval_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "BEGIN {\n    local $^W = 0;\n    eval qq(sub sub10 () {1} sub sub10 {1});\n}"
-}
-
-fn is_comp_fold_warning_setup_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/fold.t"
-        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
-        || effect.dynamic_reason.as_deref()
-            != Some("phase block compile-time execution is recorded but not evaluated")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    matches!(
-        normalized.as_str(),
-        "BEGIN { $^W = 0 }" | "BEGIN { $^W = 1 }" | "BEGIN { $^W = 0; $::{u} = \\undef }"
-    )
 }
 
 fn is_comp_fold_readonly_constant_ref_boundary(
@@ -1077,26 +1051,6 @@ fn is_comp_require_runtime_dynamic_require_boundary(
         && normalized_source.contains("Cwd::getcwd(),\"bleah.pm\"")
         && normalized_source
             .contains("our @module_true_tests; # this is set up in a BEGIN later on.")
-}
-
-fn is_comp_require_utf8_open_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/require.t"
-        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
-        || effect.dynamic_reason.as_deref()
-            != Some("phase block compile-time execution is recorded but not evaluated")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized == "BEGIN { ${^OPEN} = \":utf8\\0\"; }"
 }
 
 fn is_comp_require_module_true_setup_boundary(
@@ -2499,7 +2453,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_base_term_other_phase_block_stays_bucketed() -> TestResult {
+    fn compile_pure_begin_block_passes_without_source_lock() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline("BEGIN {\n    $x = 1;\n}\n".to_string()),
             display_path: "base/term.t".to_string(),
@@ -2507,8 +2461,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -2994,7 +2948,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_fold_warning_setup_boundary_passes() -> TestResult {
+    fn compile_comp_fold_static_warning_setup_passes_without_source_lock() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_fold_warning_setup_source()),
             display_path: "comp/fold.t".to_string(),
@@ -3008,7 +2962,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_fold_warning_setup_other_file_stays_bucketed() -> TestResult {
+    fn compile_comp_fold_static_warning_setup_passes_in_other_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_fold_warning_setup_source()),
             display_path: "comp/hints.t".to_string(),
@@ -3016,13 +2970,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_fold_warning_setup_changed_block_stays_bucketed() -> TestResult {
+    fn compile_comp_fold_static_warning_setup_changed_block_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 "#!./perl -w\n\nBEGIN { $^W = 0; $::{u} = \\0 }\n".to_string(),
@@ -3032,8 +2986,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3552,7 +3506,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_require_utf8_open_boundary_passes() -> TestResult {
+    fn compile_comp_require_utf8_open_passes_without_source_lock() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 "#!./perl\nBEGIN { ${^OPEN} = \":utf8\\0\"; }\n".to_string(),
@@ -3568,7 +3522,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_require_utf8_open_other_file_stays_bucketed() -> TestResult {
+    fn compile_comp_require_utf8_open_passes_in_other_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 "#!./perl\nBEGIN { ${^OPEN} = \":utf8\\0\"; }\n".to_string(),
@@ -3578,13 +3532,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_require_utf8_open_changed_block_stays_bucketed() -> TestResult {
+    fn compile_comp_require_raw_open_passes_without_source_lock() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 "#!./perl\nBEGIN { ${^OPEN} = \":raw\\0\"; }\n".to_string(),
@@ -3594,8 +3548,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -4100,14 +4054,20 @@ mod tests {
 
     #[test]
     fn compile_run_dtrace_platform_probe_is_governed_semantic_debt() -> TestResult {
+        let source = run_dtrace_platform_probe_source();
         let invocation = Invocation {
-            source: SourceInput::Inline(RUN_DTRACE_PLATFORM_PROBE_SOURCE.to_string()),
+            source: SourceInput::Inline(source.clone()),
             display_path: "run/dtrace.t".to_string(),
         };
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Pass);
+        assert_eq!(
+            result.status,
+            RunnerStatus::Pass,
+            "{}",
+            compile_boundary_summary(&source, "run/dtrace.t")?
+        );
         assert!(result.bucket.is_none());
         Ok(())
     }
@@ -4115,7 +4075,7 @@ mod tests {
     #[test]
     fn compile_run_dtrace_platform_probe_other_file_stays_bucketed() -> TestResult {
         let invocation = Invocation {
-            source: SourceInput::Inline(RUN_DTRACE_PLATFORM_PROBE_SOURCE.to_string()),
+            source: SourceInput::Inline(run_dtrace_platform_probe_source()),
             display_path: "run/switchd.t".to_string(),
         };
 
@@ -4130,7 +4090,7 @@ mod tests {
     fn compile_run_dtrace_platform_probe_changed_source_stays_bucketed() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
-                RUN_DTRACE_PLATFORM_PROBE_SOURCE.replace("$dtrace -V", "$dtrace --version"),
+                run_dtrace_platform_probe_source().replace("$dtrace -V", "$dtrace --version"),
             ),
             display_path: "run/dtrace.t".to_string(),
         };
@@ -4787,7 +4747,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_base_lex_other_phase_block_stays_bucketed() -> TestResult {
+    fn compile_pure_nested_begin_block_passes_without_source_lock() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline("map { BEGIN { $x = 1 } $_ } 'bar';\n".to_string()),
             display_path: "base/lex.t".to_string(),
@@ -4795,8 +4755,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -5522,6 +5482,10 @@ BEGIN {
 }
 "#
         .to_string()
+    }
+
+    fn run_dtrace_platform_probe_source() -> String {
+        format!("#!./perl\n\nmy $Perl;\nmy $dtrace;\n\n{RUN_DTRACE_PLATFORM_PROBE_SOURCE}")
     }
 
     fn run_switch_setup_source() -> String {
