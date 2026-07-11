@@ -1,9 +1,32 @@
 //! Mutation-proof boundary tests for unparenthesized declaration lists.
 //!
-//! A comma after a lexical variable begins a declaration list only when the
-//! following token is another variable.  The parser must retain every binding
-//! in the shared list-declaration AST shape without reclassifying initializer
-//! argument commas.
+//! Real Perl declares ONLY the first variable in an unparenthesized `my` /
+//! `our` / `state` declaration list. Verified live on `perl 5.42.2`:
+//!
+//!   $ perl -MO=Deparse,-p -e 'my $a, $b, $c = 1;'
+//!   (my($a), $b, ($c = 1));
+//!
+//! perlsub ("Private Variables via my()"): "If more than one value is
+//! listed, the list must be placed in parentheses" and "`my $foo, $bar = 1;`
+//! has the same effect as `my $foo; $bar = 1;`". Perl also emits
+//! "Parentheses missing around \"my\" list" (perldiag).
+//!
+//! A comma immediately following the declared variable therefore does NOT
+//! extend the declaration — it starts the surrounding comma expression,
+//! which the parser represents the same way it represents any other
+//! statement-level comma list (`print $a, $b, $c;`): an `ArrayLiteral` of
+//! the individual terms, wrapped in an `ExpressionStatement`. Only the
+//! first element of that list is a `VariableDeclaration`; the rest are
+//! ordinary expression terms.
+//!
+//! Parenthesized lists (`my ($a, $b) = ...`) are a DIFFERENT grammar form
+//! and are unaffected: they still fold every variable into one
+//! `NodeKind::VariableListDeclaration`, which is correct Perl.
+//!
+//! This file previously (incorrectly, per issue #3728) asserted the
+//! over-declaring behavior introduced by #3627 — every comma-separated
+//! variable folded into the declaration. These assertions are corrected to
+//! match real Perl semantics.
 
 mod cpan_test_helpers;
 
@@ -24,10 +47,6 @@ fn statements(source: &str) -> Result<Vec<Node>, String> {
     }
 }
 
-fn variable_names(variables: &[Node]) -> Result<Vec<String>, String> {
-    variables.iter().map(variable_name).collect()
-}
-
 fn variable_name(variable: &Node) -> Result<String, String> {
     match &variable.kind {
         NodeKind::Variable { sigil, name } => Ok(format!("{sigil}{name}")),
@@ -36,8 +55,20 @@ fn variable_name(variable: &Node) -> Result<String, String> {
     }
 }
 
+/// Unwrap the `ArrayLiteral` elements built by the statement-level comma
+/// continuation for `declarator $first, <rest...>;`.
+fn comma_list_elements(declaration: &Node) -> Result<&[Node], String> {
+    match &declaration.kind {
+        NodeKind::ExpressionStatement { expression } => match &expression.kind {
+            NodeKind::ArrayLiteral { elements } => Ok(elements),
+            other => Err(format!("expected ArrayLiteral, got {other:?}")),
+        },
+        other => Err(format!("expected ExpressionStatement, got {other:?}")),
+    }
+}
+
 #[test]
-fn unparenthesized_my_list_records_all_bindings_and_initializer() -> Result<(), String> {
+fn unparenthesized_my_list_declares_only_first_variable() -> Result<(), String> {
     let source = "my $exit, $exit_arg = values();";
     assert_clean_parse(source);
 
@@ -49,30 +80,52 @@ fn unparenthesized_my_list_records_all_bindings_and_initializer() -> Result<(), 
     let declaration =
         program_statements.first().ok_or_else(|| "expected declaration statement".to_string())?;
 
-    match &declaration.kind {
-        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+    let elements = comma_list_elements(declaration)?;
+    assert_eq!(elements.len(), 2, "expected [my($exit), $exit_arg = values()]");
+
+    // Only `$exit` is declared; it has no initializer of its own (`= values()`
+    // belongs to `$exit_arg`, a separate assignment term).
+    match &elements[0].kind {
+        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
             assert_eq!(declarator, "my");
-            assert_eq!(variable_names(variables)?, ["$exit", "$exit_arg"]);
-            assert!(initializer.is_some(), "expected list initializer");
+            assert_eq!(variable_name(variable)?, "$exit");
+            assert!(initializer.is_none(), "$exit itself is not initialized");
         }
-        other => return Err(format!("expected VariableListDeclaration, got {other:?}")),
+        other => return Err(format!("expected VariableDeclaration for $exit, got {other:?}")),
     }
 
+    // `$exit_arg = values()` is an ordinary assignment, NOT a declaration.
+    match &elements[1].kind {
+        NodeKind::Assignment { lhs, .. } => {
+            assert_eq!(variable_name(lhs)?, "$exit_arg");
+        }
+        other => return Err(format!("expected Assignment for $exit_arg, got {other:?}")),
+    }
+
+    // HIR: exactly one `my` declaration, binding only `$exit`.
     let hir = lower_ast(&ast);
-    let list_declaration = hir.items.iter().find_map(|item| match &item.kind {
-        HirKind::VariableDecl(declaration) if declaration.is_list => Some(declaration),
-        _ => None,
-    });
-    let list_declaration =
-        list_declaration.ok_or_else(|| "expected list declaration HIR item".to_string())?;
-    assert_eq!(list_declaration.declarator, "my");
-    assert_eq!(list_declaration.variables.len(), 2);
-    assert!(list_declaration.has_initializer);
+    let my_decls = hir
+        .items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            HirKind::VariableDecl(declaration) if declaration.declarator == "my" => {
+                Some(declaration)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(my_decls.len(), 1, "expected exactly one my-declaration");
+    assert!(!my_decls[0].is_list, "unparenthesized single-variable declaration is not a list");
+    assert_eq!(my_decls[0].variables.len(), 1);
+    assert_eq!(
+        format!("{}{}", my_decls[0].variables[0].sigil, my_decls[0].variables[0].name),
+        "$exit"
+    );
     Ok(())
 }
 
 #[test]
-fn our_and_state_support_unparenthesized_declaration_lists() -> Result<(), String> {
+fn our_and_state_declare_only_first_variable() -> Result<(), String> {
     let source = "our $package_name, $package_value; state $cached_name, $cached_value;";
     assert_clean_parse(source);
 
@@ -81,36 +134,45 @@ fn our_and_state_support_unparenthesized_declaration_lists() -> Result<(), Strin
         NodeKind::Program { statements } => statements,
         other => return Err(format!("expected Program node, got {other:?}")),
     };
-    let mut declarators = Vec::new();
+    assert_eq!(declarations.len(), 2);
+
+    let mut declared = Vec::new();
+    let mut bare = Vec::new();
     for declaration in declarations {
-        match &declaration.kind {
-            NodeKind::VariableListDeclaration { declarator, variables, .. } => {
-                declarators.push((declarator.clone(), variable_names(variables)?));
+        let elements = comma_list_elements(declaration)?;
+        assert_eq!(elements.len(), 2, "expected [declarator $first, $second]");
+
+        match &elements[0].kind {
+            NodeKind::VariableDeclaration { declarator, variable, .. } => {
+                declared.push((declarator.clone(), variable_name(variable)?));
             }
-            other => return Err(format!("expected VariableListDeclaration, got {other:?}")),
+            other => return Err(format!("expected VariableDeclaration, got {other:?}")),
         }
+        bare.push(variable_name(&elements[1])?);
     }
 
     assert_eq!(
-        declarators,
+        declared,
         vec![
-            ("our".to_string(), vec!["$package_name".to_string(), "$package_value".to_string()]),
-            ("state".to_string(), vec!["$cached_name".to_string(), "$cached_value".to_string()]),
+            ("our".to_string(), "$package_name".to_string()),
+            ("state".to_string(), "$cached_name".to_string()),
         ]
     );
+    // The second variable in each list is an ordinary (undeclared) reference.
+    assert_eq!(bare, vec!["$package_value".to_string(), "$cached_value".to_string()]);
 
     let hir = lower_ast(&ast);
     let hir_declarators = hir
         .items
         .iter()
         .filter_map(|item| match &item.kind {
-            HirKind::VariableDecl(declaration) if declaration.is_list => {
+            HirKind::VariableDecl(declaration) => {
                 Some((declaration.declarator.clone(), declaration.variables.len()))
             }
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert_eq!(hir_declarators, vec![("our".to_string(), 2), ("state".to_string(), 2)]);
+    assert_eq!(hir_declarators, vec![("our".to_string(), 1), ("state".to_string(), 1)]);
     Ok(())
 }
 
@@ -133,26 +195,35 @@ fn initializer_argument_commas_remain_a_single_declaration() -> Result<(), Strin
 }
 
 #[test]
-fn declaration_list_preserves_direct_subscripts_for_every_variable() -> Result<(), String> {
+fn unparenthesized_declaration_with_subscripted_first_term_declares_only_that_term()
+-> Result<(), String> {
     let source = "my $first[0], $second{key};";
     assert_clean_parse(source);
 
     let declarations = statements(source)?;
     let declaration =
         declarations.first().ok_or_else(|| "expected declaration statement".to_string())?;
-    let variables = match &declaration.kind {
-        NodeKind::VariableListDeclaration { variables, .. } => variables,
-        other => return Err(format!("expected VariableListDeclaration, got {other:?}")),
-    };
+    let elements = comma_list_elements(declaration)?;
+    assert_eq!(elements.len(), 2, "expected [my $first[0], $second{{key}}]");
 
-    assert_eq!(variables.len(), 2);
-    assert!(matches!(&variables[0].kind, NodeKind::Binary { op, .. } if op == "[]"));
-    assert!(matches!(&variables[1].kind, NodeKind::Binary { op, .. } if op == "{}"));
+    match &elements[0].kind {
+        NodeKind::VariableDeclaration { declarator, variable, .. } => {
+            assert_eq!(declarator, "my");
+            assert!(
+                matches!(&variable.kind, NodeKind::Binary { op, .. } if op == "[]"),
+                "expected subscripted declaration target, got {:?}",
+                variable.kind
+            );
+        }
+        other => return Err(format!("expected VariableDeclaration, got {other:?}")),
+    }
+    assert!(matches!(&elements[1].kind, NodeKind::Binary { op, .. } if op == "{}"));
     Ok(())
 }
 
 #[test]
-fn attributed_and_hash_declarations_remain_list_bindings() -> Result<(), String> {
+fn attributed_first_variable_declares_only_that_variable_with_its_attribute() -> Result<(), String>
+{
     let source = "my $first :Attr, %second;";
     assert_clean_parse(source);
 
@@ -163,24 +234,27 @@ fn attributed_and_hash_declarations_remain_list_bindings() -> Result<(), String>
     };
     let declaration =
         declarations.first().ok_or_else(|| "expected declaration statement".to_string())?;
-    let variables = match &declaration.kind {
-        NodeKind::VariableListDeclaration { variables, .. } => variables,
-        other => return Err(format!("expected VariableListDeclaration, got {other:?}")),
-    };
+    let elements = comma_list_elements(declaration)?;
+    assert_eq!(elements.len(), 2, "expected [my $first :Attr, %second]");
 
-    assert_eq!(variable_names(variables)?, ["$first", "%second"]);
-    assert!(matches!(
-        &variables[0].kind,
-        NodeKind::VariableWithAttributes { attributes, .. } if attributes == &["Attr"]
-    ));
+    match &elements[0].kind {
+        NodeKind::VariableDeclaration { declarator, variable, attributes, .. } => {
+            assert_eq!(declarator, "my");
+            assert_eq!(variable_name(variable)?, "$first");
+            assert_eq!(attributes, &["Attr".to_string()]);
+        }
+        other => return Err(format!("expected VariableDeclaration, got {other:?}")),
+    }
+    // `%second` is a bare (undeclared) reference, not part of the declaration.
+    assert_eq!(variable_name(&elements[1])?, "%second");
 
     let hir = lower_ast(&ast);
-    let list_declaration = hir.items.iter().find_map(|item| match &item.kind {
-        HirKind::VariableDecl(declaration) if declaration.is_list => Some(declaration),
+    let my_decl = hir.items.iter().find_map(|item| match &item.kind {
+        HirKind::VariableDecl(declaration) if declaration.declarator == "my" => Some(declaration),
         _ => None,
     });
-    let list_declaration =
-        list_declaration.ok_or_else(|| "expected list declaration HIR item".to_string())?;
-    assert_eq!(list_declaration.variables.len(), 2);
+    let my_decl = my_decl.ok_or_else(|| "expected my-declaration HIR item".to_string())?;
+    assert_eq!(my_decl.variables.len(), 1);
+    assert_eq!(my_decl.attribute_count, 1);
     Ok(())
 }

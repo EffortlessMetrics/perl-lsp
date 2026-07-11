@@ -1,4 +1,23 @@
 impl<'a> Parser<'a> {
+    /// Parse a `my`/`our`/`local`/`state` declaration used as a parenthesized
+    /// condition (`if (my $x = ...)`, `while (our $y)`, `elsif (...)`, etc.),
+    /// then absorb any trailing unparenthesized comma-list terms.
+    ///
+    /// `my`/`our`/`state` declare only the FIRST variable in an
+    /// unparenthesized list (perlsub: "If more than one value is listed,
+    /// the list must be placed in parentheses"), so `if (my $a, $b)` parses
+    /// as `if ((my $a), $b)` — the comma starts an ordinary comma expression,
+    /// not a second declared binding. This mirrors the statement-level fix
+    /// in the `My | Our | State` arm of `parse_statement_inner`.
+    /// `collect_comma_fat_arrow_continuation` stops at the closing
+    /// delimiter (`)`, `;`, ...), so it composes safely with each caller's
+    /// own terminator check.
+    fn parse_condition_declaration(&mut self) -> ParseResult<Node> {
+        let decl = self.parse_variable_declaration()?;
+        let condition = self.parse_below_assignment_with(decl)?;
+        self.collect_comma_fat_arrow_continuation(condition)
+    }
+
     /// Parse if statement
     fn parse_if_statement(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -16,8 +35,7 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Local)
                 | Some(TokenKind::State)
         ) {
-            let decl = self.parse_variable_declaration()?;
-            self.parse_below_assignment_with(decl)?
+            self.parse_condition_declaration()?
         } else {
             self.mark_not_stmt_start();
             self.parse_expression()?
@@ -44,8 +62,7 @@ impl<'a> Parser<'a> {
                     | Some(TokenKind::Local)
                     | Some(TokenKind::State)
             ) {
-                let decl = self.parse_variable_declaration()?;
-                self.parse_below_assignment_with(decl)?
+                self.parse_condition_declaration()?
             } else {
                 self.mark_not_stmt_start();
                 self.parse_expression()?
@@ -111,8 +128,7 @@ impl<'a> Parser<'a> {
                     | Some(TokenKind::Local)
                     | Some(TokenKind::State)
             ) {
-                let decl = self.parse_variable_declaration()?;
-                self.parse_below_assignment_with(decl)?
+                self.parse_condition_declaration()?
             } else {
                 self.mark_not_stmt_start();
                 self.parse_expression()?
@@ -165,8 +181,7 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Local)
                 | Some(TokenKind::State)
         ) {
-            let decl = self.parse_variable_declaration()?;
-            self.parse_below_assignment_with(decl)?
+            self.parse_condition_declaration()?
         } else {
             self.mark_not_stmt_start();
             self.parse_expression()?
@@ -277,6 +292,13 @@ impl<'a> Parser<'a> {
             self.in_for_loop_init = true;
             let decl = self.parse_variable_declaration()?;
             self.in_for_loop_init = false;
+            // `my` declares only the FIRST variable in an unparenthesized
+            // list (perlsub), so `for (my $i, $j; ...)` parses as
+            // `for ((my $i), $j; ...)` — absorb the trailing comma term(s)
+            // the same way the statement- and condition-level declaration
+            // sites do. `collect_comma_fat_arrow_continuation` stops at the
+            // `;` that terminates the init clause.
+            let decl = self.collect_comma_fat_arrow_continuation(decl)?;
             // Variable declarations in for loops don't have trailing semicolons
             Some(Box::new(decl))
         } else {
@@ -922,8 +944,7 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Local)
                 | Some(TokenKind::State)
         ) {
-            let decl = self.parse_variable_declaration()?;
-            self.parse_below_assignment_with(decl)?
+            self.parse_condition_declaration()?
         } else {
             self.mark_not_stmt_start();
             self.parse_expression()?
@@ -947,8 +968,7 @@ impl<'a> Parser<'a> {
                     | Some(TokenKind::Local)
                     | Some(TokenKind::State)
             ) {
-                let decl = self.parse_variable_declaration()?;
-                self.parse_below_assignment_with(decl)?
+                self.parse_condition_declaration()?
             } else {
                 self.mark_not_stmt_start();
                 self.parse_expression()?

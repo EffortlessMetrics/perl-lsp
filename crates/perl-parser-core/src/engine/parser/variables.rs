@@ -101,46 +101,20 @@ impl<'a> Parser<'a> {
                 Vec::new()
             };
 
-            // Perl also permits unparenthesized declaration lists such as
-            // `my $first, $second`.  Normalize those lists to the same AST
-            // shape as `my ($first, $second)` so every declared binding is
-            // available to semantic lowering.  Only a comma immediately
-            // followed by another variable starts this grammar form; other
-            // commas remain available to normal expression parsing.
-            if declarator != "local" && self.comma_starts_variable_declaration()? {
-                let mut variables = vec![self.variable_with_attributes(variable, attributes)];
-
-                while self.comma_starts_variable_declaration()? {
-                    self.consume_token()?; // consume comma
-
-                    let var = self.parse_variable()?;
-                    let var = self.parse_postfix_chain(var)?;
-                    let var_attributes = if self.peek_kind() == Some(TokenKind::Colon) {
-                        self.parse_variable_attributes()?
-                    } else {
-                        Vec::new()
-                    };
-                    variables.push(self.variable_with_attributes(var, var_attributes));
-                }
-
-                let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                    self.tokens.next()?; // consume =
-                    Some(Box::new(self.parse_expression()?))
-                } else {
-                    None
-                };
-
-                let end = self.previous_position();
-                return Ok(Node::new(
-                    NodeKind::VariableListDeclaration {
-                        declarator,
-                        variables,
-                        attributes: Vec::new(),
-                        initializer,
-                    },
-                    SourceLocation { start, end },
-                ));
-            }
+            // Perl's `my`/`our`/`state`/`local` declare ONLY the first variable
+            // when the declaration list is not parenthesized:
+            //
+            //   `perl -MO=Deparse,-p -e 'my $a, $b, $c = 1;'`
+            //   => `(my($a), $b, ($c = 1));`
+            //
+            // (perlsub: "If more than one value is listed, the list must be
+            // placed in parentheses.") So a comma immediately following the
+            // declared variable is NOT part of this declaration — it belongs
+            // to the surrounding comma-expression, which the callers of
+            // `parse_variable_declaration` (statement- and expression-level)
+            // pick up via their own comma continuation handling. Parenthesized
+            // lists (`my ($a, $b)`) are handled entirely by the branch above
+            // and are unaffected by this.
 
             // Accept both simple `=` and compound operators (`||=`, `//=`, `.=`, etc.)
             // Perl allows `our $x ||= 0;` and `my $y .= "suffix";`
@@ -184,40 +158,6 @@ impl<'a> Parser<'a> {
             );
             Ok(node)
         }
-    }
-
-    /// Whether the next comma begins an unparenthesized declaration list.
-    fn comma_starts_variable_declaration(&mut self) -> ParseResult<bool> {
-        if self.peek_kind() != Some(TokenKind::Comma) {
-            return Ok(false);
-        }
-
-        let next = self.tokens.peek_second()?;
-        Ok(Self::is_variable_sigil(Some(next.kind))
-            || next.kind == TokenKind::Percent
-            || (next.kind == TokenKind::Identifier
-                && next
-                    .text
-                    .chars()
-                    .next()
-                    .is_some_and(|character| matches!(character, '$' | '@' | '%'))))
-    }
-
-    /// Wrap a declared variable when it carries declaration attributes.
-    fn variable_with_attributes(&mut self, variable: Node, attributes: Vec<String>) -> Node {
-        if attributes.is_empty() {
-            return variable;
-        }
-
-        let start = variable.location.start;
-        let end = self.previous_position();
-        Node::new(
-            NodeKind::VariableWithAttributes {
-                variable: Box::new(variable),
-                attributes,
-            },
-            SourceLocation { start, end },
-        )
     }
 
     /// Parse one slot in a lexical list declaration.

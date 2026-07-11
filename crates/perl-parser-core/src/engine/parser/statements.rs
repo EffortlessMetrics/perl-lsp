@@ -257,7 +257,18 @@ impl<'a> Parser<'a> {
                     Ok(sub_node)
                 } else {
                     let decl = self.parse_variable_declaration()?;
-                    if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    // `my`/`our`/`state` declare only the FIRST variable when the
+                    // list is unparenthesized (perlsub: "the list must be placed
+                    // in parentheses"). A comma directly following the
+                    // declaration is therefore NOT part of it — it starts the
+                    // surrounding comma expression (e.g. `my $a, $b, $c = 1;`
+                    // deparses as `(my($a), $b, ($c = 1));`), so fold it into the
+                    // same statement-level comma/fat-arrow continuation used for
+                    // autoquoted keys.
+                    if matches!(
+                        self.peek_kind(),
+                        Some(TokenKind::FatArrow) | Some(TokenKind::Comma)
+                    ) {
                         self.finish_expression_from(decl)
                     } else {
                         Ok(self.parse_word_or_expr(decl)?)
