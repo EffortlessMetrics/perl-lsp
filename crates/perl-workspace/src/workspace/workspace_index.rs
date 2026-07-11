@@ -6502,8 +6502,7 @@ sub hello {
 
         for iteration in 0..10 {
             let index = Arc::new(WorkspaceIndex::new());
-            let uri =
-                must(url::Url::parse(&format!("file:///lib/StillParsing{iteration}.pm")));
+            let uri = must(url::Url::parse(&format!("file:///lib/StillParsing{iteration}.pm")));
             // Baseline generation 0 so `self.files.get_mut(&key)` finds an
             // existing entry for the early guard/reservation to act on --
             // matches the real scenario (an already-tracked document being

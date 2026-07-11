@@ -44,8 +44,7 @@ mod hover_generation_owned_tests {
 
         // Hover on $x at generation 0: should show scalar type, value 42 or numeric hint
         let hover0 = server.get_hover(uri, 1, 6); // "print $x"
-        let content0 =
-            semantic::hover_content(&hover0).ok_or("expected hover at generation 0")?;
+        let content0 = semantic::hover_content(&hover0).ok_or("expected hover at generation 0")?;
         assert!(
             content0.contains("Scalar Variable"),
             "generation 0 hover should show Scalar Variable, got: {content0}"
@@ -58,8 +57,7 @@ mod hover_generation_owned_tests {
 
         // Hover on $x at generation 1: should reflect NEW type (string), not cached generation 0
         let hover1 = server.get_hover(uri, 1, 6); // "print $x" (same position)
-        let content1 =
-            semantic::hover_content(&hover1).ok_or("expected hover at generation 1")?;
+        let content1 = semantic::hover_content(&hover1).ok_or("expected hover at generation 1")?;
         assert!(
             content1.contains("Scalar Variable"),
             "generation 1 hover should show Scalar Variable, got: {content1}"
@@ -152,7 +150,8 @@ mod hover_generation_owned_tests {
         } else if let Some(content_gen1) = semantic::hover_content(&hover_gen1) {
             // Hover returned info: should be valid symbol info (not corrupted)
             assert!(
-                content_gen1.contains("Scalar Variable") || content_gen1.contains("$x")
+                content_gen1.contains("Scalar Variable")
+                    || content_gen1.contains("$x")
                     || content_gen1.contains("Perl"),
                 "hover after edit should show variable or symbol info, not corrupted: {content_gen1}"
             );
@@ -304,12 +303,10 @@ print add($a, $b);
         let hover_b = server.get_hover(uri, 2, 4); // "$b"
         let hover_sub = server.get_hover(uri, 3, 4); // "sub add"
 
-        let content_a = semantic::hover_content(&hover_a)
-            .ok_or("expected hover for $a")?;
-        let content_b = semantic::hover_content(&hover_b)
-            .ok_or("expected hover for $b")?;
-        let content_sub = semantic::hover_content(&hover_sub)
-            .ok_or("expected hover for sub add")?;
+        let content_a = semantic::hover_content(&hover_a).ok_or("expected hover for $a")?;
+        let content_b = semantic::hover_content(&hover_b).ok_or("expected hover for $b")?;
+        let content_sub =
+            semantic::hover_content(&hover_sub).ok_or("expected hover for sub add")?;
 
         // All hovers should succeed and be consistent within the same generation
         assert!(
@@ -354,9 +351,8 @@ print add($a, $b);
         std::thread::sleep(std::time::Duration::from_millis(50));
 
         let hover_gen0_first = server.get_hover(uri, 1, 6);
-        let content_gen0_first =
-            semantic::hover_content(&hover_gen0_first)
-                .ok_or("expected hover at generation 0 (first)")?;
+        let content_gen0_first = semantic::hover_content(&hover_gen0_first)
+            .ok_or("expected hover at generation 0 (first)")?;
         assert!(
             content_gen0_first.contains("Scalar Variable") || content_gen0_first.contains("$x"),
             "generation 0 hover should show variable info: {content_gen0_first}"
@@ -368,8 +364,8 @@ print add($a, $b);
         std::thread::sleep(std::time::Duration::from_millis(50));
 
         let hover_gen1 = server.get_hover(uri, 1, 6);
-        let content_gen1 = semantic::hover_content(&hover_gen1)
-            .ok_or("expected hover at generation 1")?;
+        let content_gen1 =
+            semantic::hover_content(&hover_gen1).ok_or("expected hover at generation 1")?;
         assert!(
             content_gen1.contains("Scalar Variable") || content_gen1.contains("$y"),
             "generation 1 hover should show variable info for $y (not $x from gen0): {content_gen1}"
@@ -381,8 +377,8 @@ print add($a, $b);
         std::thread::sleep(std::time::Duration::from_millis(50));
 
         let hover_gen2 = server.get_hover(uri, 1, 6);
-        let content_gen2 = semantic::hover_content(&hover_gen2)
-            .ok_or("expected hover at generation 2")?;
+        let content_gen2 =
+            semantic::hover_content(&hover_gen2).ok_or("expected hover at generation 2")?;
         assert!(
             content_gen2.contains("Scalar Variable") || content_gen2.contains("$z"),
             "generation 2 hover should show variable info for $z (not $y or $x): {content_gen2}"

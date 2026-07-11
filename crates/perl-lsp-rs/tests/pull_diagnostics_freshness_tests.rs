@@ -433,8 +433,8 @@ fn pull_document_diagnostic_stays_fresh_during_pending_parse_gap() -> TestResult
 /// than the pre-edit (stale N-1 AST) syntax error surviving as a
 /// false-current diagnostic.
 #[test]
-fn pull_document_diagnostic_does_not_report_a_fixed_syntax_error_as_current_during_pending_parse_gap(
-) -> TestResult {
+fn pull_document_diagnostic_does_not_report_a_fixed_syntax_error_as_current_during_pending_parse_gap()
+-> TestResult {
     let server = fresh_server();
     let uri = "file:///pull_diag_fix_during_gap.pl";
 

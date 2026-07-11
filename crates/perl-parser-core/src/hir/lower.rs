@@ -2336,12 +2336,7 @@ fn is_compile_environment_target(node: &Node) -> bool {
     match &node.kind {
         NodeKind::Variable { sigil, name } => matches!(
             (sigil.as_str(), name.as_str()),
-            ("$", "INC")
-                | ("@", "INC")
-                | ("%", "INC")
-                | ("$", "^H")
-                | ("%", "^H")
-                | ("$", "^OPEN")
+            ("$", "INC") | ("@", "INC") | ("%", "INC") | ("$", "^H") | ("%", "^H") | ("$", "^OPEN")
         ),
         NodeKind::VariableWithAttributes { variable, .. } => {
             is_compile_environment_target(variable)
