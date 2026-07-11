@@ -349,8 +349,14 @@ mod tests {
         let root = project_root()?;
         let policy = load_policy(&root.join(POLICY_PATH))?;
 
+        // `exempt` is permanent tracked infra/test-only debt and is expected to
+        // stay non-empty. `needs_context` is the opposite: it is expected to
+        // shrink to empty as M6 (#3874/#3848) authors package-local CLAUDE.md
+        // files for the remaining core-product crates -- an empty list here is
+        // the gate succeeding, not a fixture regression, so this test only
+        // asserts that the field parses (any length, including zero, is valid).
         assert!(!policy.exempt.is_empty(), "expected at least one exempt entry");
-        assert!(!policy.needs_context.is_empty(), "expected at least one needs_context entry");
+        let _ = &policy.needs_context;
         Ok(())
     }
 

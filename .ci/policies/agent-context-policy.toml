@@ -73,63 +73,9 @@ reason = "`must`/`must_some` test-assertion helpers; test infra, not product."
 # Tracking issue: https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3874
 # Remove an entry here once the crate's CLAUDE.md is authored -- the gate
 # picks up the file's presence automatically; no other change is needed.
-
-[[needs_context]]
-name = "perllsp"
-reason = "Core LSP entrypoint crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-lsp-rs-core"
-reason = "Core LSP server logic; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-module"
-reason = "Module resolution core crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-workspace-core"
-reason = "Workspace-indexing core crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-pod"
-reason = "POD parsing/rendering core crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-lsp-perltidy"
-reason = "perltidy-integration formatting provider; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-diagnostics"
-reason = "Diagnostic/lint core crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-line-index"
-reason = "Line/column indexing core crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-ast-v2"
-reason = "Next-generation AST core crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-semantic-facts"
-reason = "Semantic-fact extraction core crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-tree-sitter-compat"
-reason = "Tree-sitter compatibility shim core crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
-
-[[needs_context]]
-name = "perl-dead-code"
-reason = "Dead-code analysis core crate; needs package-local CLAUDE.md."
-tracking_issue = 3874
+#
+# The 12 crates originally tracked here now each have a package-local
+# CLAUDE.md and have been removed from this list: perllsp, perl-lsp-rs-core,
+# perl-module, perl-workspace-core, perl-pod, perl-lsp-perltidy,
+# perl-diagnostics, perl-line-index, perl-ast-v2, perl-semantic-facts,
+# perl-tree-sitter-compat, perl-dead-code.
