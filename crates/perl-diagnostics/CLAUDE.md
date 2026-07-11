@@ -32,7 +32,7 @@ purely the vocabulary/type layer that emitting providers consume.
 ## Read first
 
 - `src/lib.rs` -- module map and the `codes`/`types` type-unification note.
-- `src/codes.rs` -- the canonical code list; read before adding a new
+- `src/codes/mod.rs` -- the canonical code list; read before adding a new
   diagnostic code anywhere in the workspace.
 
 ## Focused validation

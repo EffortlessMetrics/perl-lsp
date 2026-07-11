@@ -45,7 +45,7 @@ reference extraction, and safe renaming.
 - `src/lib.rs` -- module map with doc comments.
 - `src/api.rs` -- the entire public surface in one file; read this before
   the internals to know what's actually stable.
-- `src/resolution.rs` -- the `@INC`/URI resolution pipeline most callers
+- `src/resolution/mod.rs` -- the `@INC`/URI resolution pipeline most callers
   actually need.
 
 ## Focused validation
@@ -54,7 +54,7 @@ reference extraction, and safe renaming.
 integration / property test quartets (e.g.
 `module_resolution_{bdd,fuzz,integration,prop}.rs`) -- when changing a
 module's public behavior, update all four kinds, not just the one you
-noticed failing. `tests/facade_api_completeness.rs` guards against `api.rs`
+noticed failing. `tests/facade_api_completeness.rs` guards against `src/api.rs`
 drifting from the internal modules.
 
 ## Review hotspots
