@@ -387,6 +387,12 @@ impl TypeDefinitionProvider {
                 return false;
             };
 
+            // Require a non-identifier boundary after the keyword so a line like
+            // `typewriter => 'IBM'` isn't mistaken for a `type` declaration.
+            if rest.starts_with(|ch: char| ch.is_alphanumeric() || ch == '_') {
+                return false;
+            }
+
             Self::first_declared_name(rest).as_deref().is_some_and(|declared| declared == type_name)
         })
     }
@@ -932,5 +938,93 @@ $obj->method();
             &documents,
         );
         assert!(locations.is_none(), "binary documents must be skipped by custom type scan");
+    }
+
+    #[test]
+    fn test_line_declares_custom_type_requires_keyword_boundary() {
+        // "typewriter" merely starts with the keyword "type" as a string prefix;
+        // it must not be mistaken for a declaration of the unrelated type "writer".
+        assert!(!TypeDefinitionProvider::line_declares_custom_type(
+            "typewriter => 'IBM',",
+            "writer"
+        ));
+        assert!(TypeDefinitionProvider::line_declares_custom_type("type Writer => ...", "Writer"));
+    }
+
+    #[test]
+    fn test_line_declares_custom_type_requires_boundary_for_every_keyword() {
+        // The boundary check guards a shared loop over all six declaration
+        // keywords, not just "type" -- each one has an ordinary-identifier
+        // false-positive sibling that must not be matched as a declaration.
+        let false_positives: &[(&str, &str)] = &[
+            ("subtypes => 1,", "s"),
+            ("class_typescript => 'x',", "script"),
+            ("role_typewriter => 'y',", "writer"),
+            ("enumerate(@list);", "erate"),
+            ("declared_variable = 5;", "d_variable"),
+        ];
+        for (line, bogus_name) in false_positives {
+            assert!(
+                !TypeDefinitionProvider::line_declares_custom_type(line, bogus_name),
+                "line `{line}` must not be mistaken for a declaration of `{bogus_name}`"
+            );
+        }
+
+        // The legitimate, word-boundary-anchored form for each keyword still matches.
+        let real_declarations: &[(&str, &str)] = &[
+            ("subtype PositiveInt => ...", "PositiveInt"),
+            ("class_type Bar => ...", "Bar"),
+            ("role_type Baz => ...", "Baz"),
+            ("enum Color => [qw(Red Green Blue)];", "Color"),
+            ("declare 'Foo', as 'Str';", "Foo"),
+        ];
+        for (line, name) in real_declarations {
+            assert!(
+                TypeDefinitionProvider::line_declares_custom_type(line, name),
+                "line `{line}` should still be recognized as declaring `{name}`"
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_custom_type_definition_in_docs_does_not_leak_to_keyword_prefix() {
+        let provider = TypeDefinitionProvider::new();
+        let mut documents = HashMap::new();
+        documents.insert("file:///unrelated.pl".to_string(), "typewriter => 'IBM',\n".to_string());
+
+        let locations =
+            provider.find_custom_type_definition_in_docs("writer", "file:///origin.pl", &documents);
+        assert!(
+            locations.is_none(),
+            "a `typewriter` line must not resolve as the declaration of custom type `writer`"
+        );
+    }
+
+    #[test]
+    fn test_find_custom_type_definition_in_docs_still_resolves_real_declaration() {
+        // Co-located positive counterpart to the keyword-prefix-leak test above:
+        // the boundary check must not turn real declarations into false negatives.
+        let provider = TypeDefinitionProvider::new();
+        let mut documents = HashMap::new();
+        documents.insert(
+            "file:///types.pl".to_string(),
+            "type Writer => ...;\ntypewriter => 'IBM',\n".to_string(),
+        );
+
+        let locations =
+            provider.find_custom_type_definition_in_docs("Writer", "file:///origin.pl", &documents);
+        assert!(
+            locations.is_some(),
+            "a genuine `type Writer => ...` declaration must still resolve"
+        );
+    }
+
+    #[test]
+    fn test_line_declares_custom_type_matches_keyword_at_end_of_line() {
+        // The boundary check operates on `rest` after stripping the keyword; when
+        // the declared name is the last token on the line (no trailing separator),
+        // `rest` still starts with whitespace, so the boundary check must not
+        // reject it.
+        assert!(TypeDefinitionProvider::line_declares_custom_type("type Writer", "Writer"));
     }
 }
