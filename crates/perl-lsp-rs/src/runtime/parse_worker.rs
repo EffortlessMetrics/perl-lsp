@@ -997,7 +997,28 @@ impl Drop for ParseWorker {
     fn drop(&mut self) {
         self.coordinator.request_shutdown();
         let mut handles = self.handles.lock();
+        let self_id = thread::current().id();
         for handle in handles.drain(..) {
+            if handle.thread().id() == self_id {
+                // A worker thread can itself be the one running this drop --
+                // e.g. it holds the last strong `Arc<ParseWorker>` via a
+                // `Weak::upgrade()` inside an `on_published`, `on_activated`,
+                // or `on_settled` callback, and dropping that temporary
+                // strong ref at the end of the callback cascades into this
+                // `Drop`. Joining that thread's own `JoinHandle` from itself
+                // would deadlock (`JoinHandle::join` has no self-join
+                // detection). Skip it: the thread's own `while let Some(..) =
+                // take_next()` loop (see the worker loop in `spawn`)
+                // observes `shutdown == true` (just set above, on the shared
+                // `Coordinator` every worker thread holds a clone of) once
+                // `ready` drains, and exits on its own after this drop call
+                // returns and its current callback unwinds -- the unjoined
+                // `JoinHandle` is simply dropped (detached), which is safe:
+                // the OS reclaims the thread's resources the moment it
+                // actually finishes running rather than leaking. All other,
+                // non-self, handles are still joined exactly as before.
+                continue;
+            }
             let _ = handle.join();
         }
     }
@@ -2312,18 +2333,14 @@ mod tests {
     /// itself never blocks unboundedly, so this cannot hang the test
     /// binary even if the underlying property does not hold.
     ///
-    /// Currently `#[ignore]`d: this reproduces a REAL, confirmed defect --
-    /// `Drop for ParseWorker` (above) has no self-thread-id guard before
-    /// `handle.join()`, so this scenario genuinely deadlocks the worker
-    /// thread (bounded here, so it fails cleanly rather than hanging the
-    /// suite -- see #3816 for the empirical confirmation). Fixing
-    /// `ParseWorker::drop` itself is out of scope for this test-only PR
-    /// (#3812) -- the candidate fixes have real trade-offs that deserve
-    /// their own plan-reviewed PR, not a mechanical change bundled into a
-    /// test-only diff. Un-ignore this alongside that fix.
+    /// Was `#[ignore]`d pending #3816: this reproduced a REAL, confirmed
+    /// defect -- `Drop for ParseWorker` (above) had no self-thread-id guard
+    /// before `handle.join()`, so this scenario genuinely deadlocked the
+    /// worker thread (bounded here, so it failed cleanly rather than
+    /// hanging the suite -- see #3816 for the empirical confirmation and
+    /// the self-thread-id skip-guard fix). Un-ignored now that the guard is
+    /// in place.
     #[test]
-    #[ignore = "blocked on #3816: self-join deadlock in Drop for ParseWorker; \
-                un-ignore with the fix"]
     fn self_join_from_a_worker_callback_thread_does_not_deadlock_shutdown() {
         let uri = "file:///self_join.pl";
         let (documents, generation_handle) = one_doc(uri, "my $a = 1;\n");
