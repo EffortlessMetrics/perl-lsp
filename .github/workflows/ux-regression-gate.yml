@@ -427,7 +427,19 @@ jobs:
         working-directory: vscode-extension
         run: npm run fmt:check
 
-      - name: Typecheck (tsc)
+      # TypeScript 7 is the sole type-check authority — Rolldown (the build
+      # step below) does not type-check, it only bundles already-valid TS.
+      - name: Typecheck (tsc --noEmit, TS7)
+        working-directory: vscode-extension
+        run: npm run typecheck
+
+      # Rolldown (#3662, final step of the TS7 migration train) replaces TS
+      # emission as the production artifact builder: src/extension.ts ->
+      # the single out/extension.js CJS bundle. Built here (not just left to
+      # the jest suite's own beforeAll fallback) so a Rolldown-specific
+      # build failure surfaces as its own clearly-named, non-required-check
+      # CI step rather than being buried inside a jest failure.
+      - name: Build (rolldown)
         working-directory: vscode-extension
         run: npm run compile
 

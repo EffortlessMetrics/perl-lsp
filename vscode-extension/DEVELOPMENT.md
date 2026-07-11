@@ -36,8 +36,10 @@ This bypasses the auto-download and uses your local build.
 ## Compile the extension
 
 ```bash
-npm run compile     # Single build
-npm run watch       # Rebuild on every file change (use during active development)
+npm run typecheck   # Type-check only (tsc --noEmit) — TypeScript 7 is the sole type-check authority
+npm run compile     # Single build (Rolldown bundles out/extension.js — does NOT type-check)
+npm run watch       # Rebuild out/extension.js on every file change (use during active development)
+npm run watch:types # Optional companion: live tsc --noEmit type-check loop in a separate terminal
 ```
 
 ## Run and test in VS Code

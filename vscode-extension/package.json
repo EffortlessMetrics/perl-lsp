@@ -7,7 +7,7 @@
   "preview": true,
   "markdown": "github",
   "engines": {
-    "vscode": "^1.120.0"
+    "vscode": "^1.125.0"
   },
   "categories": [
     "Programming Languages",
@@ -1301,11 +1301,14 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "vscode:prepublish": "npm run typecheck && npm run compile",
+    "typecheck": "tsc --noEmit -p ./tsconfig.json",
+    "clean:out": "node -e \"const fs=require('fs'),path=require('path'); if(fs.existsSync('out')){for(const f of fs.readdirSync('out')){if(f!=='test')fs.rmSync(path.join('out',f),{recursive:true,force:true});}}\"",
+    "compile": "npm run clean:out && rolldown -c rolldown.config.mjs",
     "clean:test": "node -e \"require('fs').rmSync('out-test',{recursive:true,force:true})\"",
     "compile:test": "npm run clean:test && tsc -p ./tsconfig.test.json",
-    "watch": "tsc -watch -p ./",
+    "watch": "npm run clean:out && rolldown -c rolldown.config.mjs --watch",
+    "watch:types": "tsc -watch --noEmit -p ./tsconfig.json",
     "lint": "npm run lint:canary && oxlint src --type-aware",
     "lint:canary": "node scripts/lint-canary.js",
     "fmt": "oxfmt --write .",
@@ -1314,12 +1317,12 @@
     "test:ci": "npm run compile:test && node scripts/run-jest.js --ci --coverage",
     "test:grammar": "vscode-tmgrammar-snap --config package.json \"test/grammar/fixtures/*.pl\"",
     "test:grammar:update": "vscode-tmgrammar-snap --config package.json -u \"test/grammar/fixtures/*.pl\"",
-    "test:integration": "npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
+    "test:integration": "npm run typecheck && npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
     "test:published": "tsc -p ./tsconfig.published-smoke.json && node ./out/test/published/runPublishedSmoke.js",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
     "package": "npx @vscode/vsce package",
     "publish": "npx @vscode/vsce publish",
-    "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package",
+    "verify:marketplace": "npm run typecheck && npm run compile && npm run bundle-lsp && npm run package",
     "publish:openvsx": "npx ovsx publish",
     "check:openvsx": "npx ovsx --version"
   },
@@ -1342,6 +1345,7 @@
     "oxfmt": "0.58.0",
     "oxlint": "1.73.0",
     "oxlint-tsgolint": "0.24.0",
+    "rolldown": "1.1.5",
     "typescript": "^7.0.2",
     "vscode-tmgrammar-test": "^0.1.3"
   }
