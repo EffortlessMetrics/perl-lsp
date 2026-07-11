@@ -71,10 +71,51 @@ issue = 3751
 depends_on = ["M2"]
 exit_criteria = "review workflows mechanically cannot write"
 
+# M5 status = "completed" (2026-07-11, #3777 "M5 exit criteria SUBSTANTIALLY
+# SATISFIED" verdict): the exit_criteria ("parallel writers cannot share
+# target or branch lease") is mechanically satisfied on merged main for the
+# SAME-MACHINE swarm, verified empirically rather than by narrative claim —
+# git refuses a 2nd worktree on an already-checked-out branch ("already used
+# by worktree", branch-lease enforced topologically) and cargo's target-dir
+# build lock serializes concurrent same-target builds ("Blocking waiting for
+# file lock"), on top of: per-worktree default `CARGO_TARGET_DIR` (#3856),
+# worktree-manager fetching origin first before allocating a slot (#3798),
+# and the session-start receipt capturing checkout/HEAD-SHA state for a
+# liveness/staleness check (#3866). Phase 3 (build-lease schema) is
+# redundant with git worktree exclusivity + cargo's build lock for
+# correctness — optional observability only, tracked as follow-up #3869, not
+# required for this exit criterion. Phase 5 (stage-boundary checks) is
+# workflow-discipline, not addressed to this exit criterion, tracked as
+# follow-up #3870. Claim boundary: SAME-MACHINE is mechanically enforced;
+# cross-machine sharing (e.g. an NFS-mounted target across machines) is the
+# tracked, admin-hard residual on #3845, out of M5's scope — unlike M4
+# (advisory enforcement, NOT mechanically completable pending admin access),
+# M5's controls are genuinely mechanical and verified.
+#
+# Dispositioning each #3612-prescribed M5 mechanism (so "completed" doesn't
+# read as silently skipping the description's specifics): (1) worktree-keyed
+# `CARGO_TARGET_DIR` convention — SUPERSEDED, proven HARMFUL by #3856 (the
+# manual keyed-target convention itself WAS the stale-binary bug; cargo's
+# per-worktree default is already isolated and preflight now rejects a set
+# `CARGO_TARGET_DIR`; building it as prescribed would regress). (2) writer
+# leases (`.ops-perl-lsp/leases/`) + a PreToolUse Edit/Write guard — the
+# "second writer, same branch" OUTCOME is git-worktree-enforced (git refuses
+# a 2nd worktree on an already-checked-out branch, verified); the
+# PreToolUse-hook MECHANISM is SUPERSEDED by the hooks-aren't-authority
+# reframe (#3763/#3782: controls belong in state, not blocking hooks);
+# cross-machine lease enforcement remains the admin-hard #3845. (3)
+# SessionStart compact receipt — DONE (#3866, `cargo xtask session-receipt`).
+# (4) one heavy Cargo job / shared sccache not shared target / remove global
+# symlink / stage-boundary checks — target-sharing is cargo-build-lock +
+# per-worktree-default enforced (mechanical); stage-boundary focused checks
+# are optional workflow-discipline tracked in follow-up #3870, not part of
+# the Exit bar. (5) Exit outcome ("parallel writers cannot share target or
+# branch lease") — MET mechanically (git worktree exclusivity + cargo build
+# lock + per-worktree target), same-machine; cross-machine residual = #3845.
 [[milestone]]
 id = "M5"
 title = "Real worktree + build isolation"
-status = "pending"
+status = "completed"
 issue = 3777
 depends_on = ["M2"]
 exit_criteria = "parallel writers cannot share target or branch lease"
