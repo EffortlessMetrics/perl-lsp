@@ -1,0 +1,202 @@
+name: Needs Label Gate
+
+# M4 capability enforcement (issue #3751, epic #3612): machine-block the
+# "no needs-* label may merge" policy that today lives only as prose in
+# CLAUDE.md. This is deliberately a NEW, additive workflow — it does not
+# modify the two existing required checks (`Perl LSP Rust Small Result`,
+# `ripr+ New Gap Gate`) or their semantics, and it does not touch
+# `.github/workflows/pr-title-check.yml` (which owns `needs-issue-link`
+# and self-clears it once the title carries a real issue reference).
+#
+# Scope note: `.ci/policies/label-contradictions.toml` +
+# `methodology-gate.yml` already detect the narrower contradiction of
+# `merge-ready`/`auto-merge` coexisting with a `needs-*` label (advisory,
+# `--enforce` not passed, and `pull_request:` there has no `labeled`/
+# `unlabeled` types so it does not re-run on label changes). This workflow
+# implements the broader M4 ask directly: ANY `needs-*` label blocks,
+# independent of whether `merge-ready` has been applied yet, and it
+# re-evaluates on `labeled`/`unlabeled` so it clears automatically.
+#
+# Architecture (rev. after maintainer review on PR #3751): the verdict is
+# published as a commit STATUS (Statuses API, context "needs-label-gate")
+# on the resolved PR HEAD SHA, fetched live via `pulls.get` for every
+# triggering path -- never trusted from a payload SHA. This matters
+# because for `workflow_run` events `GITHUB_SHA`/`github.sha` is the
+# DEFAULT BRANCH head, not the PR head (GitHub Actions docs, "Events that
+# trigger workflows"): a job that only calls `core.setFailed()` on that
+# event would fail against `main`, leaving the PR's own check stale-green.
+# Posting an explicit commit status to the resolved PR head sidesteps that
+# entirely and gives ONE consistent context regardless of trigger. Calling
+# `core.setFailed()` additionally is safe ONLY for the `pull_request` path
+# (that event's own job is correctly associated with the PR head already);
+# it is deliberately NOT called for the `workflow_run` path, since doing so
+# would fail a check against whatever commit is currently HEAD on the
+# default branch and pollute `main`'s status with unrelated PR-label noise.
+#
+# Bot-authored label backstop: GitHub suppresses `labeled`/`unlabeled`
+# `pull_request` triggers for events caused by a workflow's own
+# `GITHUB_TOKEN` API calls. `pipeline-labels.yml` (adds/removes
+# `needs-deep-review`) and `pr-title-check.yml` (adds/removes
+# `needs-issue-link`) both write labels with their default token, so this
+# gate would NOT otherwise re-run when they do. The `workflow_run` trigger
+# below re-checks live label state after either of those workflows
+# completes and posts the same commit status to the real PR head, closing
+# the gap without touching either file. Note: `workflow_run` definitions
+# are read from the DEFAULT branch, so this backstop only becomes active
+# once this workflow file lands on `main` -- expected and harmless (the
+# direct `pull_request` triggers above already cover the common case on
+# this PR).
+#
+# Merge queue: verified via `gh api repos/.../rulesets` that a
+# "merge-queue" ruleset exists but has `enforcement: "disabled"` -- this
+# repo does not currently use GitHub's merge queue, so `merge_group` events
+# never fire and are intentionally not handled here. Revisit if that
+# ruleset is ever enabled.
+#
+# Publisher identity: verified via `gh api
+# repos/.../branches/main/protection` that the two existing required
+# checks are bound to `app_id: 15368` (the "GitHub Actions" app). Commit
+# statuses created with `github.rest.repos.createCommitStatus` using the
+# workflow's own `GITHUB_TOKEN` are attributed to that same app, so this
+# check's context will bind correctly if/when an admin registers it as
+# required.
+#
+# Admin step still required (out of scope here, needs branch-protection
+# admin): register the "needs-label-gate" status context as a required
+# check / ruleset rule so it actually blocks merge. Until then it is
+# visible red/green on the PR but advisory.
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, unlabeled, reopened]
+  workflow_run:
+    workflows: ["Pipeline Labels", "PR Title Check"]
+    types: [completed]
+
+# Serialize re-checks per PR so an older run can't overwrite a newer one's
+# verdict. Resolved from the raw event payload (no API call available in a
+# concurrency expression) for both trigger shapes; falls back to run_id
+# only when neither is present (e.g. a workflow_run with no associated PR).
+# Only cancel in-flight runs on `synchronize` (a real push) -- cancelling
+# on `labeled`/`unlabeled` would trip the repo's own
+# LABEL_EVENT_CANCELS_PR_RUN workflow-policy-lint rule, and would risk
+# cancelling a run that's evaluating a just-added blocking label.
+concurrency:
+  group: needs-label-gate-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+  # Narrowly scoped for createCommitStatus so the verdict can be posted to
+  # the resolved PR head SHA regardless of which event triggered this run
+  # (see architecture note above). No other write permission is granted.
+  statuses: write
+
+jobs:
+  # Deliberately NOT named `needs-label-gate`: this job's own check-run
+  # would otherwise carry the SAME context string as the commit status
+  # this job posts below. If both a check-run and a commit-status share a
+  # context, GitHub's required-check resolution can be ambiguous -- e.g. a
+  # stale-green pull_request-triggered check-run could satisfy the
+  # required context even after the workflow_run path posts a failing
+  # commit-status for a bot-added label, reopening the exact bypass this
+  # gate exists to close. `needs-label-gate` must be carried EXCLUSIVELY by
+  # the commit status (created via createCommitStatus below); this job's
+  # own check-run is informational only, under its own distinct name.
+  post-needs-label-status:
+    runs-on:
+      group: em-ci-nano
+      labels: [self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]
+    timeout-minutes: 5
+    steps:
+      - name: Resolve PR head, fetch live labels, post commit status
+        # v9.0.0, verified via `gh api repos/actions/github-script/git/tags/v9.0.0`
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const STATUS_CONTEXT = 'needs-label-gate';
+
+            // Always re-fetches the PR rather than trusting any event
+            // payload snapshot, so the head SHA and label set are current
+            // regardless of trigger (pull_request payload can also be a
+            // moment stale under rapid synchronize; workflow_run carries
+            // no label snapshot at all).
+            const checkPr = async (number) => {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: number,
+              });
+              const labels = (pr.labels || []).map((label) => label.name);
+              const blockers = labels.filter((name) => name.startsWith('needs-'));
+              const state = blockers.length > 0 ? 'failure' : 'success';
+              const description = (blockers.length > 0
+                ? `Blocked by: ${blockers.join(', ')}`
+                : 'No needs-* labels present'
+              ).slice(0, 140);
+
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: pr.head.sha,
+                state,
+                context: STATUS_CONTEXT,
+                description,
+                target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              });
+
+              core.info(
+                `PR #${number} @ ${pr.head.sha}: ${state}` +
+                (blockers.length > 0 ? ` (${blockers.join(', ')})` : '')
+              );
+              return { number, sha: pr.head.sha, state, blockers };
+            };
+
+            let results = [];
+
+            if (context.eventName === 'pull_request') {
+              const pr = context.payload.pull_request;
+              if (!pr) {
+                core.setFailed('needs-label-gate: pull_request payload missing from event.');
+                return;
+              }
+              results = [await checkPr(pr.number)];
+            } else if (context.eventName === 'workflow_run') {
+              const associated = context.payload.workflow_run.pull_requests || [];
+              if (associated.length === 0) {
+                core.info('needs-label-gate: workflow_run carried no associated pull_requests (e.g. fork PR or non-PR run); nothing to re-check.');
+                return;
+              }
+              for (const ref of associated) {
+                results.push(await checkPr(ref.number));
+              }
+            } else {
+              core.info(`needs-label-gate: unhandled event "${context.eventName}", skipping.`);
+              return;
+            }
+
+            const blocked = results.filter((result) => result.state === 'failure');
+            if (blocked.length === 0) {
+              return;
+            }
+
+            const summary = blocked.map((result) => `#${result.number}: ${result.blockers.join(', ')}`).join('; ');
+
+            // Only fail THIS job's own run for the pull_request path: that
+            // event's job is correctly associated with the PR head already,
+            // so failing it is a harmless, correctly-attached extra signal.
+            // For workflow_run, the job's own run is associated with the
+            // default branch head (see header note) -- failing it here
+            // would misleadingly redden main. The commit status posted
+            // above is the sole authoritative signal for that path.
+            if (context.eventName === 'pull_request') {
+              core.setFailed(
+                `Merge gate: this PR carries needs-* label(s) that must be resolved before merge: ${summary}. ` +
+                'Per CLAUDE.md ("no needs-* label may merge"), address the blocking review/fix pass and remove the label(s). ' +
+                'This check re-evaluates automatically on label add/remove (labeled/unlabeled triggers) and turns green once no needs-* label remains.'
+              );
+            } else {
+              core.info(
+                `needs-label-gate: posted failing status to PR head(s) after label-writer run: ${summary}.`
+              );
+            }
