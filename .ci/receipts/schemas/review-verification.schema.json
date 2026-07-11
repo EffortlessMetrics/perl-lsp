@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Review Verification Receipt (v1)",
+  "description": "PR-level marker recording an INDEPENDENT verification of a fix/refutation. Embedded in a PR issue comment as `<!-- verification:v1 {json} -->` and posted by scripts/reviews/run verify. The verifier MUST differ from the writer set (PR author + disposers); scripts/reviews/run refuses to post otherwise (write-side), and the check-pr-review-convergence closeout re-checks it (read-side) via verification_receipt_head_match (#3693 R1). `status` is reserved (v1 verification is a point-in-time result, not a long-running job); when present, `running` marks an in-flight verification.",
+  "type": "object",
+  "required": ["v", "head", "verifier", "result"],
+  "additionalProperties": false,
+  "properties": {
+    "v": {"const": 1},
+    "head": {"type": "string", "description": "The PR headRefOid this verification ran against."},
+    "verifier": {"type": "string", "description": "Identity of the independent verifier (must be outside the writer set)."},
+    "findings": {
+      "description": "Count of findings, or a structured findings object.",
+      "type": ["integer", "object"]
+    },
+    "result": {"enum": ["pass", "fail"]},
+    "status": {"enum": ["running", "done"], "description": "Reserved. Absent means a completed point-in-time verification."}
+  }
+}

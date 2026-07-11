@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Review Disposition Receipt (v1)",
+  "description": "THREAD-reply marker recording WHY a review thread was resolved. Embedded in a pull-request review-comment reply as `<!-- disposition:v1 {json} -->` and posted by scripts/reviews/disposition (the ONLY sanctioned resolve path — it posts this reply, then calls resolveReviewThread as an internal subprocess). The check-pr-review-convergence closeout reads these to compute dispositions_missing_marker, followups_without_issue, unreachable_fix_commits, and the writer set (#3693 R1). Class-specific evidence is required: fixed→commit, refuted→argument, superseded→superseded_by, follow-up→issue.",
+  "type": "object",
+  "required": ["v", "class", "thread_id", "by", "head", "evidence"],
+  "additionalProperties": false,
+  "properties": {
+    "v": {"const": 1},
+    "class": {"enum": ["fixed", "refuted", "superseded", "follow-up"]},
+    "thread_id": {"type": "string", "description": "The review thread this disposition resolves."},
+    "by": {"type": "string", "description": "Identity of the disposer (a member of the writer set)."},
+    "head": {"type": "string", "description": "The PR headRefOid this disposition was posted at."},
+    "evidence": {
+      "type": "object",
+      "description": "Class-specific evidence. Exactly the field for the class is required.",
+      "properties": {
+        "commit": {"type": "string", "description": "fixed: the SHA that fixed it (must be reachable from head)."},
+        "argument": {"type": "string", "description": "refuted: why the finding does not hold."},
+        "superseded_by": {"type": "string", "description": "superseded: the PR/issue/commit that supersedes it."},
+        "issue": {"type": "integer", "minimum": 1, "description": "follow-up: the tracking issue number."}
+      },
+      "additionalProperties": true
+    }
+  }
+}

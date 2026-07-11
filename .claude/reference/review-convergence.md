@@ -72,6 +72,102 @@ Both are separate, necessary conditions. A PR is only review-converged when
    `converged:true` on a PR GitHub would still refuse to merge — the exact
    "internal verdict disagrees with GitHub mergeability" defect class this
    script exists to eliminate. See issue #3679.
+4. **No resolved thread lacking a disposition reply.** `0 unresolved
+   threads` is necessary but **not sufficient** — #3647 merged out-of-band,
+   while its independent correctness review was still running, with 6 P1
+   defects live on main, because a responder silently `resolveReviewThread`'d
+   15 threads with **no reply at all**. The ruleset enforces "resolved"; it
+   cannot enforce "resolved for a justified reason." This script closes the
+   mechanical half of that gap: for every `reviewThreads` node with
+   `isResolved == true`, it checks `comments.totalCount`. A thread whose
+   `totalCount <= 1` (only the original review comment, nobody — bot,
+   human, or the original author — ever replied before it was resolved) is
+   the mechanical signature of resolved-to-clear, reported as
+   `resolved_without_disposition` and `BLOCK`ed.
+
+   **Heuristic, not intent detection — documented limits:**
+   - A thread the *original* reviewer resolves immediately after posting a
+     genuine one-line follow-up ("fixed in a1b2c3d") is **not** flagged —
+     that reply is the second comment, so `totalCount` is 2. The check is
+     "did anyone say anything after the finding," not "did someone else."
+   - A low-effort reply ("ok") that isn't a real disposition still passes —
+     the script can verify a reply's *existence*, not its *content*. See
+     issue #3693 for the `Disposition: fixed|refuted|superseded|follow-up`
+     reply-format convention this check assumes reviewers/responders
+     follow (content-quality enforcement is a human/reviewer judgment
+     call, not a mechanical one).
+   - `totalCount` is connection metadata, accurate independent of how many
+     comment `nodes` are actually fetched (the script only fetches
+     `first: 1`, for the opening commenter's login).
+5. **No independent review in flight.** The `needs-deep-review` label is
+   treated as a durable, repo-visible blocking marker — while present,
+   `independent_review_pending` is `true` and convergence is `BLOCK`ed
+   regardless of thread/review state. This makes an in-flight correctness
+   review mechanically visible: the other half of the #3647 root cause was
+   that the PR merged while its deep review was still running, with that
+   review existing only in an orchestrator's task list — not in the repo.
+
+## R1 protocol axes (#3693) — advisory by default
+
+Conditions 6–11 are the **review-protocol** layer added in R1. They upgrade
+convergence from "threads resolved with *some* reply" (conditions 4–5) to
+"every disposition is machine-checkable, every substantive fix is
+independently verified at head, and every in-flight review is repo-visible."
+
+**Rollout is advisory-first.** As of R1's landing, ~10 of the 14
+most-recent PRs would trip one of these axes because their threads were
+resolved before the disposition-marker convention existed. So conditions
+6–11 default to **advisory**: the closeout computes each axis, reports it in
+the JSON object, and prints a `WARN` line — but it does **not** flip
+`converged` and does **not** change the exit code. Set
+`REVIEW_PROTOCOL_ENFORCE=1` to promote every one of them to a hard `BLOCK`
+(flips `converged`, exit 1, `WARN` → `BLOCK`). Flipping the default to
+enforce is a deliberate later PR (R4), gated on a dogfood window proving the
+axes don't deadlock legitimate PRs.
+
+Conditions 1–5 are **unaffected** by the flag — they were hard blocks before
+R1 and stay hard blocks. In particular condition 4
+(`resolved_without_disposition`, the `totalCount<=1` no-reply signature) is
+still a hard block; condition 6 below is its content-aware *tightening*, and
+that tightening is what defaults to advisory.
+
+6. **Every resolved thread carries a `disposition:v1` marker.** A resolved
+   thread whose reply bodies contain no `<!-- disposition:v1 {…} -->` marker
+   is counted in `dispositions_missing_marker`. This catches the case
+   condition 4 misses: a thread with a *prose* reply (`totalCount >= 2`) but
+   no machine-readable disposition. Post dispositions via
+   `scripts/reviews/disposition`, which emits the marker and then resolves.
+7. **Substantive dispositions are independently verified at head.** For
+   every resolved thread with a class∈{fixed,refuted} disposition, a
+   PR-level `verification:v1` receipt must exist at the current head with
+   `result:"pass"` and a `verifier` **outside the writer set** (PR author +
+   every disposer). Otherwise `verification_receipt_head_match` is `false`.
+   The branch writer cannot verify their own substantive findings — the
+   writer!=verifier invariant. (Fix-commit author is a further writer-set
+   member the offline closeout cannot see; see open decision #4 in the R1
+   spec — the canonical writer definition is a pending human call.)
+8. **Fixed dispositions cite a commit reachable from head.** A class=fixed
+   disposition whose `evidence.commit` is not an ancestor of the current
+   head (prod: `git merge-base --is-ancestor`; fixtures:
+   `head_reachable_commits.json`) is counted in `unreachable_fix_commits` —
+   the cited fix never landed on this branch.
+9. **Follow-up dispositions cite an issue number.** A class=follow-up
+   disposition whose `evidence.issue` is missing or non-numeric is counted
+   in `followups_without_issue`.
+10. **No review-run receipt is still running.** A PR-level `review-run:v1`
+    receipt with `status:"running"` means an independent review is in
+    flight; `review_runs_in_flight` counts them. Post receipts via
+    `scripts/reviews/run review-start|review-done`.
+11. **The deep review receipt is bound to the current head.** If a
+    `kind:"deep"` review-run receipt was posted `status:"done"`, one must be
+    bound to the current head or `deep_review_receipt_head_match` is
+    `false` — a deep review that ran against an older push does not protect
+    the current head (the receipt-bound-to-older-head class).
+
+These axes are read/written by the `scripts/reviews/` surfaces:
+`state` (lifecycle position), `disposition` (the only sanctioned resolve
+path), `run` (receipt poster), and `lease` (per-branch push lease). Receipt
+shapes: `.ci/receipts/schemas/review-{run,verification,disposition,lease}.schema.json`.
 
 ## Pagination
 
@@ -99,21 +195,40 @@ scripts/ci/check-pr-review-convergence <pr-number> [owner/repo]
 {"pr": N, "headRefOid": "...", "converged": true|false,
  "pending_reviewers": [...], "stale_reviews": [...], "stale_bot_reviews": [...],
  "unresolved_active": N, "unresolved_outdated": N, "unresolved_total": N,
- "resolved_threads": N}
+ "resolved_threads": N, "resolved_without_disposition": N,
+ "independent_review_pending": true|false,
+ "review_protocol_enforce": true|false,
+ "review_runs_in_flight": N, "verification_runs_in_flight": N,
+ "deep_review_receipt_head_match": true|false,
+ "verification_receipt_head_match": true|false,
+ "dispositions_missing_marker": N, "followups_without_issue": N,
+ "unreachable_fix_commits": N}
 ```
 
 `unresolved_active` and `unresolved_outdated` both block convergence;
-`unresolved_total` is their sum. `stale_bot_reviews` is the only
-non-blocking (ADVISORY) count in the object.
+`unresolved_total` is their sum. `resolved_without_disposition` (count of
+resolved threads with `comments.totalCount <= 1` — see item 4 above) and
+`independent_review_pending` (the `needs-deep-review` label — item 5 above)
+both block convergence too. `stale_bot_reviews` is a non-blocking (ADVISORY)
+count. The R1 fields (`review_protocol_enforce` and everything after it —
+items 6–11 above) are **advisory by default**: reported and `WARN`ed but
+non-blocking unless `review_protocol_enforce` is `true` (set
+`REVIEW_PROTOCOL_ENFORCE=1`). `review_protocol_enforce` echoes which mode the
+run used.
 
 ### Test seam (no network)
 
 Set `CONVERGENCE_TEST_FIXTURE_DIR=<dir>` (plus an explicit `owner/repo` as
 arg 2) to make the script read canned JSON fixture files
-(`pr_view.json`, `latestReviews.json`, `reviewThreads.json`) instead of
-calling `gh`. This is exercised by
-`scripts/tests/test-check-pr-review-convergence.sh` and must never be set
-outside of tests.
+(`pr_view.json`, `latestReviews.json`, `reviewThreads.json`, and — for the
+R1 axes — optional `pr_comments.json` and `head_reachable_commits.json`)
+instead of calling `gh`. A fixture that omits the two optional files reads as
+"no PR-level receipts / no reachable-commit oracle", so pre-R1 fixtures keep
+passing unchanged. This is exercised by
+`scripts/tests/test-check-pr-review-convergence.sh` (and the lease suite
+`scripts/tests/test-review-lease.sh`) and must never be set outside of tests.
+`REVIEW_PROTOCOL_ENFORCE` must likewise never be set in production merge gates
+until the R4 flip.
 
 ## Where it's called from
 

@@ -1,0 +1,24 @@
+[
+  {
+    "id": "PRRT_prose_4",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/handlers/rename.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        },
+        {
+          "author": {
+            "login": "replier"
+          },
+          "body": "looks fine, resolving"
+        }
+      ]
+    }
+  }
+]

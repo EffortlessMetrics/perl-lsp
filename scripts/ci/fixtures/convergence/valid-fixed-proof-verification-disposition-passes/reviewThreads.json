@@ -1,0 +1,24 @@
+[
+  {
+    "id": "PRRT_valid_12",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/handlers/complete.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        },
+        {
+          "author": {
+            "login": "replier"
+          },
+          "body": "Fixed in the cited commit.\n\n<!-- disposition:v1 {\"v\":1,\"class\":\"fixed\",\"thread_id\":\"PRRT_valid_12\",\"by\":\"alice\",\"head\":\"cccccccccccccccccccccccccccccccccccccccc\",\"evidence\":{\"commit\":\"c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff\"}} -->"
+        }
+      ]
+    }
+  }
+]

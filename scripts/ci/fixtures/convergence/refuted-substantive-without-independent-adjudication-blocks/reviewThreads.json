@@ -1,0 +1,24 @@
+[
+  {
+    "id": "PRRT_refuted_7",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/handlers/refs.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        },
+        {
+          "author": {
+            "login": "replier"
+          },
+          "body": "Refuting.\n\n<!-- disposition:v1 {\"v\":1,\"class\":\"refuted\",\"thread_id\":\"PRRT_refuted_7\",\"by\":\"alice\",\"head\":\"7777777777777777777777777777777777777777\",\"evidence\":{\"argument\":\"This is intended behavior per the LSP spec section 3.17.\"}} -->"
+        }
+      ]
+    }
+  }
+]

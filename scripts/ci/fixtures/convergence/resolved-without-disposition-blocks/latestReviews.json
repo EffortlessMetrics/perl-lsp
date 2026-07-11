@@ -1,0 +1,7 @@
+[
+  {
+    "author": { "login": "alice", "__typename": "User" },
+    "state": "APPROVED",
+    "commit": { "oid": "eeee5555eeee5555eeee5555eeee5555eeee5555" }
+  }
+]

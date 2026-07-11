@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# scripts/reviews/disposition — the ONLY sanctioned review-thread resolve path
+# (#3693 R1, FILE 3).
+#
+# Every review thread must be resolved FOR A REASON, and that reason must be
+# machine-checkable. This helper enforces that by making "reply-with-evidence
+# THEN resolve" the single atomic operation:
+#
+#   1. Validate the class-specific evidence is present.
+#   2. Post the human reply comment to the thread, carrying a
+#      `<!-- disposition:v1 {json} -->` marker (see
+#      .ci/receipts/schemas/review-disposition.schema.json).
+#   3. THEN call resolveReviewThread — as an INTERNAL child subprocess of this
+#      script (see _resolve_thread below). Because the top-level command a
+#      future PreToolUse hook (R3) string-matches is
+#      `scripts/reviews/disposition …` — which contains no resolveReviewThread
+#      literal — the sanctioned path evades the raw-resolve block while every
+#      OTHER caller that types `resolveReviewThread` directly is blocked. This
+#      is the ONLY place resolveReviewThread is legitimately invoked.
+#
+# Ordering is LOAD-BEARING: reply (with evidence) precedes resolve, never the
+# reverse and never "resolve, then performatively reply." A resolve without a
+# preceding evidenced reply is exactly the #3647 resolved-to-clear signature
+# the convergence closeout blocks on.
+#
+# ── Usage ────────────────────────────────────────────────────────────────────
+#   scripts/reviews/disposition --pr <n> --thread <threadId> \
+#       --class <fixed|refuted|superseded|follow-up> --reply <text> \
+#       [--commit <sha>] [--issue <n>] [--superseded-by <n|url>] [--argument <text>] \
+#       [--repo <owner/repo>] [--head <sha>] [--by <id>] [--dry-run]
+#
+# Class-specific required evidence:
+#   fixed       → --commit <sha>
+#   refuted     → --argument <text>
+#   superseded  → --superseded-by <n|url>
+#   follow-up   → --issue <n>   (must be a positive integer)
+#
+# ── Exit codes ───────────────────────────────────────────────────────────────
+#   0 success (reply posted + thread resolved, or dry-run printed the plan)
+#   2 validation error (missing/invalid class evidence, bad args) or API error
+#
+# ── Test seam ────────────────────────────────────────────────────────────────
+#   --dry-run prints the reply body (with the embedded marker) and the
+#   intended resolve, and makes NO network call. scripts/tests exercise the
+#   validation + marker-emission logic through it.
+set -euo pipefail
+
+die_usage() { echo "ERROR: $1" >&2; exit 2; }
+
+PR="" THREAD="" CLASS="" REPLY="" COMMIT="" ISSUE="" SUPERSEDED_BY="" ARGUMENT=""
+REPO="" HEAD="" BY="" DRY_RUN=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --pr)            PR="${2:-}"; shift 2 ;;
+        --thread)        THREAD="${2:-}"; shift 2 ;;
+        --class)         CLASS="${2:-}"; shift 2 ;;
+        --reply)         REPLY="${2:-}"; shift 2 ;;
+        --commit)        COMMIT="${2:-}"; shift 2 ;;
+        --issue)         ISSUE="${2:-}"; shift 2 ;;
+        --superseded-by) SUPERSEDED_BY="${2:-}"; shift 2 ;;
+        --argument)      ARGUMENT="${2:-}"; shift 2 ;;
+        --repo)          REPO="${2:-}"; shift 2 ;;
+        --head)          HEAD="${2:-}"; shift 2 ;;
+        --by)            BY="${2:-}"; shift 2 ;;
+        --dry-run)       DRY_RUN=1; shift ;;
+        *) die_usage "unknown argument: $1" ;;
+    esac
+done
+
+[[ -n "$PR" ]]     || die_usage "--pr is required"
+[[ -n "$THREAD" ]] || die_usage "--thread is required"
+[[ -n "$CLASS" ]]  || die_usage "--class is required"
+[[ -n "$REPLY" ]]  || die_usage "--reply is required"
+command -v jq >/dev/null 2>&1 || die_usage "jq not found on PATH"
+
+# ── Validate class-specific evidence and build the evidence JSON object ──────
+EVIDENCE=""
+case "$CLASS" in
+    fixed)
+        [[ -n "$COMMIT" ]] || die_usage "class=fixed requires --commit <sha>"
+        EVIDENCE="$(jq -cn --arg c "$COMMIT" '{commit:$c}')"
+        ;;
+    refuted)
+        [[ -n "$ARGUMENT" ]] || die_usage "class=refuted requires --argument <text>"
+        EVIDENCE="$(jq -cn --arg a "$ARGUMENT" '{argument:$a}')"
+        ;;
+    superseded)
+        [[ -n "$SUPERSEDED_BY" ]] || die_usage "class=superseded requires --superseded-by <n|url>"
+        EVIDENCE="$(jq -cn --arg s "$SUPERSEDED_BY" '{superseded_by:$s}')"
+        ;;
+    follow-up)
+        [[ "$ISSUE" =~ ^[0-9]+$ && "$ISSUE" -gt 0 ]] || die_usage "class=follow-up requires --issue <positive-integer>"
+        EVIDENCE="$(jq -cn --argjson i "$ISSUE" '{issue:$i}')"
+        ;;
+    *)
+        die_usage "invalid --class '$CLASS' (fixed|refuted|superseded|follow-up)"
+        ;;
+esac
+
+# Resolve repo/head/actor lazily — only needed for the live path (dry-run may
+# omit them). In the live path, default from gh.
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    command -v gh >/dev/null 2>&1 || die_usage "gh not found on PATH (required unless --dry-run)"
+    [[ -n "$REPO" ]] || REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+    [[ -n "$HEAD" ]] || HEAD="$(gh pr view "$PR" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+    [[ -n "$BY" ]]   || BY="$(gh api user --jq .login 2>/dev/null || echo "unknown")"
+else
+    [[ -n "$HEAD" ]] || HEAD="DRYRUN-HEAD"
+    [[ -n "$BY" ]]   || BY="dryrun-actor"
+fi
+
+MARKER="$(jq -cn \
+    --arg class "$CLASS" --arg tid "$THREAD" --arg by "$BY" --arg head "$HEAD" \
+    --argjson ev "$EVIDENCE" \
+    '{v:1, class:$class, thread_id:$tid, by:$by, head:$head, evidence:$ev}')"
+BODY="$(printf '%s\n\n<!-- disposition:v1 %s -->' "$REPLY" "$MARKER")"
+
+# ── The sanctioned resolve — an INTERNAL child subprocess so the top-level
+#    command string a PreToolUse hook (R3) inspects never contains the
+#    resolveReviewThread literal. ─────────────────────────────────────────────
+_resolve_thread() {
+    local thread_id="$1"
+    gh api graphql -f threadId="$thread_id" -f query='
+        mutation($threadId: ID!) {
+            resolveReviewThread(input: {threadId: $threadId}) {
+                thread { id isResolved }
+            }
+        }'
+}
+
+_post_reply() {
+    local pr="$1" thread_id="$2" body="$3"
+    # addPullRequestReviewThreadReply attaches the reply to the existing thread.
+    gh api graphql -f threadId="$thread_id" -f body="$body" -f query='
+        mutation($threadId: ID!, $body: String!) {
+            addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) {
+                comment { id }
+            }
+        }'
+}
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY-RUN disposition for PR #$PR thread $THREAD (class=$CLASS, by=$BY, head=$HEAD)"
+    echo "--- reply body ---"
+    printf '%s\n' "$BODY"
+    echo "--- then (internal subprocess): resolveReviewThread($THREAD) ---"
+    exit 0
+fi
+
+# Idempotency: if the thread already carries a disposition:v1 marker at this
+# head from a prior run, re-resolve without duplicating the reply.
+EXISTING="$(gh api graphql -f threadId="$THREAD" -f query='
+    query($threadId: ID!) {
+        node(id: $threadId) {
+            ... on PullRequestReviewThread {
+                isResolved
+                comments(last: 20) { nodes { body } }
+            }
+        }
+    }' 2>/dev/null | jq -r --arg head "$HEAD" '
+        [.data.node.comments.nodes[]?.body // ""
+         | select(test("<!-- disposition:v1 .*\"head\":\"" + $head + "\""))] | length' 2>/dev/null || echo 0)"
+
+if [[ "${EXISTING:-0}" -gt 0 ]]; then
+    echo "OK disposition marker already present on thread $THREAD at head $HEAD — re-resolving without a duplicate reply"
+else
+    if ! _post_reply "$PR" "$THREAD" "$BODY" >/dev/null; then
+        echo "ERROR: failed to post disposition reply to thread $THREAD" >&2
+        exit 2
+    fi
+    echo "OK posted disposition reply (class=$CLASS) to thread $THREAD"
+fi
+
+if ! _resolve_thread "$THREAD" >/dev/null; then
+    echo "ERROR: failed to resolve thread $THREAD after posting the disposition reply" >&2
+    exit 2
+fi
+echo "OK resolved thread $THREAD (class=$CLASS, evidence=$EVIDENCE)"
+exit 0

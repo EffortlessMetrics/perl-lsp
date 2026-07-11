@@ -1,0 +1,14 @@
+[
+  {
+    "author": {
+      "login": "bob"
+    },
+    "body": "Independently verified the fix at head.\n\n<!-- verification:v1 {\"v\":1,\"head\":\"cccccccccccccccccccccccccccccccccccccccc\",\"verifier\":\"bob\",\"findings\":0,\"result\":\"pass\"} -->"
+  },
+  {
+    "author": {
+      "login": "bob"
+    },
+    "body": "Deep review complete at head.\n\n<!-- review-run:v1 {\"v\":1,\"kind\":\"deep\",\"head\":\"cccccccccccccccccccccccccccccccccccccccc\",\"reviewer\":\"bob\",\"status\":\"done\"} -->"
+  }
+]

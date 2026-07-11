@@ -23,6 +23,8 @@ on:
       - 'scripts/ci/check-pr-review-convergence'
       - 'scripts/ci/fixtures/convergence/**'
       - 'scripts/tests/test-check-pr-review-convergence.sh'
+      - 'scripts/reviews/**'
+      - 'scripts/tests/test-review-lease.sh'
       - '.github/workflows/publish-dry-run.yml'
       - '.github/workflows/ci-gate-self-tests.yml'
   workflow_dispatch: {}
@@ -118,9 +120,34 @@ jobs:
           if [ "${{ job.status }}" = "success" ]; then
             echo "## Review-convergence gate self-test passed" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "check-pr-review-convergence correctly BLOCKs on both active and outdated unresolved review threads (issue #3679), stays ADVISORY-only on stale bot reviews, and converges when all threads are resolved." >> "$GITHUB_STEP_SUMMARY"
+            echo "check-pr-review-convergence correctly BLOCKs on both active and outdated unresolved review threads (issue #3679), stays ADVISORY-only on stale bot reviews, converges when all threads are resolved, and (issue #3693 R1) reports the review-protocol axes advisory-by-default while BLOCKing them under REVIEW_PROTOCOL_ENFORCE=1." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## Review-convergence gate self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "The review-convergence gate contract regressed. Check the step output above for the failed case." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  review-lease-self-test:
+    name: Review-lease self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run review-lease self-test
+        run: bash scripts/tests/test-review-lease.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Review-lease self-test passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "scripts/reviews/lease (issue #3693 R1) correctly acquires/verifies/releases a per-branch lease, refuses a different owner while unexpired, and surfaces expired leases as takeover-candidates on audit (the relocated fixture 11)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Review-lease self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The review-lease contract regressed. Check the step output above for the failed case." >> "$GITHUB_STEP_SUMMARY"
           fi
