@@ -108,6 +108,73 @@ fn render_json_error(err: &color_eyre::eyre::Report) -> String {
     })
 }
 
+/// `cargo xtask goals reconcile --json` output shape. Advisory/diagnostic —
+/// unlike [`GoalsNextOutput`] this never represents a selection decision,
+/// just a list of drift findings (#3696 item B).
+#[derive(Debug, Clone, Serialize)]
+pub struct GoalsReconcileOutput {
+    pub program: Option<String>,
+    pub finding_count: usize,
+    pub findings: Vec<select::ReconciliationFinding>,
+}
+
+/// Runs `goals reconcile`. When `--json` is requested, EVERY error path
+/// (missing/unparseable fixture, invalid manifest, `gh` offline/unauth via
+/// `load_merged_prs_for_candidates`'s hard error) must emit parseable JSON
+/// on stdout and exit nonzero — never an unstructured `color_eyre` dump on
+/// stderr, mirroring `next()`'s contract exactly (see #3692 defect 1 and
+/// the coderabbit/chatgpt-codex findings on this PR: `reconcile --json`
+/// previously let such errors bubble through `?` unwrapped). Callers
+/// (`main.rs`) decide the additional "findings exist" exit code from the
+/// returned count on the `Ok` path — this module never calls
+/// `std::process::exit` on that path itself (that lives only in
+/// `bin/`/CLI dispatch, per coding standards); it DOES call it on the
+/// json-error path, exactly like `next()` already does.
+pub fn reconcile(program: Option<String>, fixture: Option<PathBuf>, json: bool) -> Result<usize> {
+    match render_reconcile_output(program, fixture, json) {
+        Ok((text, finding_count)) => {
+            println!("{text}");
+            Ok(finding_count)
+        }
+        Err(err) if json => {
+            println!("{}", render_json_error(&err));
+            std::process::exit(1);
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// Computes the exact text `reconcile()` would print for a successful run,
+/// plus the finding count, without doing any process-exiting side effect —
+/// mirrors `render_output`'s split for `next()` so the error path stays
+/// unit-testable.
+fn render_reconcile_output(
+    program: Option<String>,
+    fixture: Option<PathBuf>,
+    json: bool,
+) -> Result<(String, usize)> {
+    let findings = snapshot::build_reconciliation_report(program.clone(), fixture)?;
+    let finding_count = findings.len();
+    let output = GoalsReconcileOutput { program, finding_count, findings };
+
+    let text =
+        if json { serde_json::to_string_pretty(&output)? } else { render_reconcile_human(&output) };
+    Ok((text, finding_count))
+}
+
+fn render_reconcile_human(output: &GoalsReconcileOutput) -> String {
+    let mut lines = vec![format!("program: {}", output.program.as_deref().unwrap_or("<default>"))];
+    if output.findings.is_empty() {
+        lines.push("reconcile: no findings".to_owned());
+        return lines.join("\n");
+    }
+    lines.push(format!("reconcile: {} finding(s)", output.findings.len()));
+    for finding in &output.findings {
+        lines.push(format!("  - [{}] {}: {}", finding.kind, finding.milestone_id, finding.detail));
+    }
+    lines.join("\n")
+}
+
 fn render_human(output: &GoalsNextOutput) -> String {
     let mut lines = vec![
         format!("repository: {}", output.repository),
@@ -262,6 +329,55 @@ mod tests {
         let bogus = std::path::PathBuf::from("definitely/does/not/exist/prs.json");
 
         let human_result = render_output(None, Some(bogus), false);
+        assert!(human_result.is_err(), "non-json path must still surface Err to its caller");
+    }
+
+    // Regression coverage for the coderabbit (mod.rs:136) / chatgpt-codex
+    // (mod.rs:126) findings on this PR: `goals reconcile --json` must get
+    // the exact same JSON-error contract as `goals next --json` above —
+    // it previously let `build_reconciliation_report`'s `Err` (including
+    // `load_merged_prs_for_candidates`'s `bail!` on a failed `gh pr list
+    // --state merged`, coderabbit snapshot.rs:448) bubble unwrapped.
+
+    #[test]
+    fn render_reconcile_output_surfaces_an_err_when_the_fixture_path_does_not_exist() {
+        let bogus = std::path::PathBuf::from("definitely/does/not/exist/prs.json");
+
+        let result = render_reconcile_output(None, Some(bogus), true);
+
+        assert!(result.is_err(), "expected an Err for a missing fixture file");
+    }
+
+    #[test]
+    fn reconcile_json_error_output_is_parseable_and_names_the_failure() {
+        let bogus = std::path::PathBuf::from("definitely/does/not/exist/prs.json");
+        let err = render_reconcile_output(None, Some(bogus), true)
+            .expect_err("missing fixture file must produce an Err");
+
+        let text = render_json_error(&err);
+
+        let parsed: serde_json::Value = serde_json::from_str(&text)
+            .unwrap_or_else(|e| panic!("json error output must be parseable JSON: {e}\n{text}"));
+        let error_field = parsed
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| panic!("expected a string \"error\" field in {text}"));
+        assert!(!error_field.is_empty(), "expected a non-empty error message, got {text}");
+        assert!(
+            parsed.get("error_chain").is_some_and(|v| v.is_array()),
+            "expected an \"error_chain\" array field in {text}"
+        );
+    }
+
+    #[test]
+    fn reconcile_with_json_never_returns_err_to_the_caller() {
+        // Same contract as `next_with_json_never_returns_err_to_the_caller`
+        // above: with json=false the failure still propagates as `Err`
+        // (preserving prior behavior for human callers) -- the json/non-json
+        // branches are genuinely distinguished by `reconcile()`, not merged.
+        let bogus = std::path::PathBuf::from("definitely/does/not/exist/prs.json");
+
+        let human_result = render_reconcile_output(None, Some(bogus), false);
         assert!(human_result.is_err(), "non-json path must still surface Err to its caller");
     }
 }

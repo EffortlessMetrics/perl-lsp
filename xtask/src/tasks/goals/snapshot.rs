@@ -21,7 +21,8 @@ use std::process::Command;
 
 use super::manifest;
 use super::select::{
-    LiveOpenPr, MilestoneCandidate, ProgramCandidate, SelectionSnapshot, parse_status,
+    LiveOpenPr, MilestoneCandidate, MilestoneStatus, ProgramCandidate, ReconciliationFinding,
+    SelectionSnapshot, parse_status, reconcile_in_progress,
 };
 
 #[derive(Debug, Default, Deserialize)]
@@ -30,21 +31,37 @@ struct LivePrFixture {
     repository: Option<String>,
     #[serde(default)]
     prs: Vec<LiveOpenPr>,
+    /// MERGED PRs, consumed only by `goals reconcile` (`load_merged_prs_for_candidates`).
+    /// Absent in pre-existing `goals next` fixtures, which default to empty
+    /// and are therefore unaffected by this addition.
+    #[serde(default)]
+    merged_prs: Vec<LiveOpenPr>,
 }
 
 pub fn build_snapshot(
     program_arg: Option<String>,
     fixture: Option<PathBuf>,
 ) -> Result<SelectionSnapshot> {
-    let root = project_root()?;
+    build_snapshot_at(&project_root()?, program_arg, fixture)
+}
 
-    let pointer = manifest::load_active_pointer(&root)?;
+/// Root-parameterized core of [`build_snapshot`], split out so tests (and
+/// `build_reconciliation_report_at`) can point it at a temporary directory
+/// instead of the real repository tree — mirrors the existing
+/// root-parameterized pattern already used by `resolve_program` and
+/// `load_candidates_for_program` below.
+fn build_snapshot_at(
+    root: &Path,
+    program_arg: Option<String>,
+    fixture: Option<PathBuf>,
+) -> Result<SelectionSnapshot> {
+    let pointer = manifest::load_active_pointer(root)?;
     let default_program = pointer
         .default_program
         .clone()
         .or_else(|| (!pointer.active_program.is_empty()).then(|| pointer.active_program.clone()));
 
-    let known_programs = discover_known_programs(&root)?;
+    let known_programs = discover_known_programs(root)?;
 
     // Fail closed rather than erroring: an explicitly requested program
     // that isn't discoverable under `.perl-lsp/goals/programs/` leaves
@@ -65,10 +82,10 @@ pub fn build_snapshot(
     // `active_goal_manifest::validate_default_program` validator uses, so
     // the two can never drift or fail open again.
     let resolved_program =
-        resolve_program(&root, program_arg.as_deref(), default_program.as_deref());
+        resolve_program(root, program_arg.as_deref(), default_program.as_deref());
 
-    let (repository, live_open_prs) = load_live_prs(&root, fixture)?;
-    let current_git_ref = current_git_ref(&root);
+    let (repository, live_open_prs, live_prs_available) = load_live_prs(root, fixture)?;
+    let current_git_ref = current_git_ref(root);
 
     let mut snapshot = SelectionSnapshot {
         repository,
@@ -84,10 +101,11 @@ pub fn build_snapshot(
         candidates: Vec::new(),
         live_open_prs,
         current_git_ref,
+        live_prs_available,
     };
 
     if let Some(program_id) = &resolved_program {
-        load_candidates_for_program(&root, program_id, &mut snapshot)?;
+        load_candidates_for_program(root, program_id, &mut snapshot)?;
     }
 
     Ok(snapshot)
@@ -165,13 +183,20 @@ fn discover_known_programs(root: &Path) -> Result<Vec<ProgramCandidate>> {
     Ok(programs)
 }
 
-fn load_live_prs(root: &Path, fixture: Option<PathBuf>) -> Result<(String, Vec<LiveOpenPr>)> {
+/// Returns `(repository, open PRs, live_prs_available)`. `--fixture` input
+/// is always deterministic and therefore always "available"; a live `gh`
+/// call that fails (unauthenticated, offline, rate-limited) now fails
+/// CLOSED on availability rather than erroring the whole `goals next --json`
+/// invocation (#3696 item B) — the caller (`select_next`'s Guard A) treats
+/// unavailable live state as its own reconciliation blocker rather than
+/// ever conflating "unknown" with "confirmed no open PR".
+fn load_live_prs(root: &Path, fixture: Option<PathBuf>) -> Result<(String, Vec<LiveOpenPr>, bool)> {
     if let Some(fixture_path) = fixture {
         let text = fs::read_to_string(&fixture_path)
             .with_context(|| format!("failed to read fixture {}", fixture_path.display()))?;
         let parsed: LivePrFixture = serde_json::from_str(&text)
             .with_context(|| format!("failed to parse fixture {}", fixture_path.display()))?;
-        return Ok((parsed.repository.unwrap_or_else(|| "fixture".to_owned()), parsed.prs));
+        return Ok((parsed.repository.unwrap_or_else(|| "fixture".to_owned()), parsed.prs, true));
     }
 
     let repo_output = Command::new("gh")
@@ -200,12 +225,12 @@ fn load_live_prs(root: &Path, fixture: Option<PathBuf>) -> Result<(String, Vec<L
         .output()
         .context("failed to execute gh pr list")?;
     if !output.status.success() {
-        bail!("gh pr list failed: {}", String::from_utf8_lossy(&output.stderr));
+        return Ok((repository, Vec::new(), false));
     }
     let raw = String::from_utf8_lossy(&output.stdout);
     let prs: Vec<LiveOpenPr> =
         serde_json::from_str(&raw).context("failed to parse gh pr list output")?;
-    Ok((repository, prs))
+    Ok((repository, prs, true))
 }
 
 fn load_candidates_for_program(
@@ -331,6 +356,98 @@ fn load_lane_routing_candidates(
     Ok(())
 }
 
+/// `cargo xtask goals reconcile` (#3696 item B): diagnoses milestones whose
+/// self-reported ledger `status` may have drifted from live GitHub reality
+/// (a merged-not-open PR for an in-progress milestone) or that lack the
+/// identity `select_next`'s Guard A needs. This is a SOFT, advisory
+/// report — findings never mutate the ledger or any PR, and are
+/// deliberately NOT folded into `manifest::validate_milestone_ledger`'s
+/// hard violations, so `check-active-goal-manifest` is never red-CI'd by a
+/// finding that isn't currently blocking selection.
+pub fn build_reconciliation_report(
+    program: Option<String>,
+    fixture: Option<PathBuf>,
+) -> Result<Vec<ReconciliationFinding>> {
+    build_reconciliation_report_at(&project_root()?, program, fixture)
+}
+
+fn build_reconciliation_report_at(
+    root: &Path,
+    program: Option<String>,
+    fixture: Option<PathBuf>,
+) -> Result<Vec<ReconciliationFinding>> {
+    let snapshot = build_snapshot_at(root, program, fixture.clone())?;
+    let merged_prs =
+        load_merged_prs_for_candidates(root, &snapshot.candidates, fixture.as_deref())?;
+    Ok(reconcile_in_progress(
+        &snapshot.candidates,
+        &snapshot.live_open_prs,
+        &merged_prs,
+        &snapshot.repository,
+        snapshot.live_prs_available,
+    ))
+}
+
+/// Fetches MERGED PRs referencing any in-progress candidate's issue — the
+/// evidence `reconcile_in_progress`'s `merged_pr_but_still_in_progress`
+/// finding needs and `select_next`'s open-PR-only Guard A never looks at.
+/// `--fixture` (same JSON shape `load_live_prs` reads, plus `merged_prs`)
+/// replaces the live search, exactly like `load_live_prs`'s `--fixture`
+/// contract.
+fn load_merged_prs_for_candidates(
+    root: &Path,
+    candidates: &[MilestoneCandidate],
+    fixture: Option<&Path>,
+) -> Result<Vec<LiveOpenPr>> {
+    if let Some(fixture_path) = fixture {
+        let text = fs::read_to_string(fixture_path)
+            .with_context(|| format!("failed to read fixture {}", fixture_path.display()))?;
+        let parsed: LivePrFixture = serde_json::from_str(&text)
+            .with_context(|| format!("failed to parse fixture {}", fixture_path.display()))?;
+        return Ok(parsed.merged_prs);
+    }
+
+    let mut merged = Vec::new();
+    let mut seen_pr_numbers = std::collections::BTreeSet::new();
+    for issue in candidates
+        .iter()
+        .filter(|c| c.status == MilestoneStatus::InProgress)
+        .filter_map(|c| c.issue)
+    {
+        let output = Command::new("gh")
+            .current_dir(root)
+            .args([
+                "pr",
+                "list",
+                "--state",
+                "merged",
+                "--search",
+                &format!("{issue} in:body,title"),
+                "--limit",
+                "200",
+                "--json",
+                "number,title,body,url,isDraft",
+            ])
+            .output()
+            .context("failed to execute gh pr list --state merged")?;
+        if !output.status.success() {
+            bail!(
+                "gh pr list --state merged failed for issue #{issue}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let prs: Vec<LiveOpenPr> = serde_json::from_str(&raw)
+            .context("failed to parse gh pr list --state merged output")?;
+        for pr in prs {
+            if seen_pr_numbers.insert(pr.number) {
+                merged.push(pr);
+            }
+        }
+    }
+    Ok(merged)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,12 +461,13 @@ mod tests {
             r#"{"repository":"EffortlessMetrics/perl-lsp-swarm","prs":[{"number":1,"title":"t","body":"b","url":"u","isDraft":true}]}"#,
         )?;
 
-        let (repository, prs) = load_live_prs(&project_root()?, Some(fixture_path))?;
+        let (repository, prs, available) = load_live_prs(&project_root()?, Some(fixture_path))?;
 
         assert_eq!(repository, "EffortlessMetrics/perl-lsp-swarm");
         assert_eq!(prs.len(), 1);
         assert_eq!(prs[0].number, 1);
         assert!(prs[0].is_draft);
+        assert!(available, "a fixture is always deterministic/available");
         Ok(())
     }
 
@@ -456,6 +574,7 @@ commands = ["rtk cargo test"]
             candidates: Vec::new(),
             live_open_prs: Vec::new(),
             current_git_ref: "main".to_owned(),
+            live_prs_available: true,
         };
 
         load_lane_routing_candidates(text, "programs/p.toml", &mut snapshot)?;
@@ -482,6 +601,7 @@ commands = ["rtk cargo test"]
             candidates: Vec::new(),
             live_open_prs: Vec::new(),
             current_git_ref: "main".to_owned(),
+            live_prs_available: true,
         }
     }
 
@@ -609,6 +729,68 @@ commands = ["rtk cargo test"]
         assert!(
             err.to_string().contains("issue number"),
             "expected an issue-number violation in the error, got {err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn reconcile_flags_merged_pr_for_in_progress_milestone() -> Result<()> {
+        // The #3696 item B incident regression fixture. M3 in_progress
+        // (#3624) has NO open PR but a MERGED one —
+        // `build_reconciliation_report` must flag it as
+        // `merged_pr_but_still_in_progress`, naming the merged PR. M4 is a
+        // deliberately identity-less Pending sibling, exercising the soft
+        // `pending_without_identity` finding in the same pass.
+        let temp = tempfile::tempdir()?;
+        let programs_dir = temp.path().join(".perl-lsp/goals/programs");
+        fs::create_dir_all(&programs_dir)?;
+        fs::write(temp.path().join(".perl-lsp/goals/active.toml"), "active_program = \"p\"\n")?;
+        fs::write(
+            programs_dir.join("p.toml"),
+            r#"
+id = "p"
+title = "t"
+
+[[milestone]]
+id = "M3"
+title = "three"
+status = "in_progress"
+issue = 3624
+depends_on = []
+exit_criteria = "x"
+
+[[milestone]]
+id = "M4"
+title = "four"
+status = "pending"
+depends_on = ["M3"]
+exit_criteria = "y"
+"#,
+        )?;
+
+        let fixture_path = temp.path().join("prs.json");
+        fs::write(
+            &fixture_path,
+            r#"{"repository":"r","prs":[],"merged_prs":[{"number":4242,"title":"feat: M3 (#3624)","body":"","url":"https://example.invalid/pull/4242","isDraft":false}]}"#,
+        )?;
+
+        let findings =
+            build_reconciliation_report_at(temp.path(), Some("p".to_owned()), Some(fixture_path))?;
+
+        let merged_findings: Vec<_> =
+            findings.iter().filter(|f| f.kind == "merged_pr_but_still_in_progress").collect();
+        assert_eq!(
+            merged_findings.len(),
+            1,
+            "expected exactly one merged-PR finding, got {findings:?}"
+        );
+        assert_eq!(merged_findings[0].milestone_id, "M3");
+        assert_eq!(merged_findings[0].pr_number, Some(4242));
+        assert!(merged_findings[0].detail.contains("4242"));
+
+        assert!(
+            findings.iter().any(|f| f.milestone_id == "M4" && f.kind == "pending_without_identity"),
+            "expected a soft pending_without_identity finding for M4, got {findings:?}"
         );
         Ok(())
     }

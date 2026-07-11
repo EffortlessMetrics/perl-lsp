@@ -2997,6 +2997,27 @@ enum GoalsCommand {
         #[arg(long)]
         json: bool,
     },
+
+    /// Diagnose milestones whose self-reported ledger status may have
+    /// drifted from live GitHub reality (e.g. `in_progress` with a merged,
+    /// not open, PR) or that lack the identity `next`'s selector needs.
+    /// READ-ONLY, advisory (#3696 item B): never mutates a ledger or PR.
+    /// Exits non-zero when findings exist.
+    Reconcile {
+        /// Explicitly select a program by id (`.perl-lsp/goals/programs/<id>.toml`).
+        /// Defaults to `active.toml`'s governed `default_program`
+        /// (falling back to `active_program`).
+        #[arg(long)]
+        program: Option<String>,
+
+        /// Optional fixture JSON to parse instead of live `gh pr list` data.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Emit machine-readable JSON instead of human-readable text.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -3182,6 +3203,18 @@ fn run_cli(cli: Cli) -> Result<()> {
         Commands::CheckWorkspaceSymbolClasses => workspace_symbol_classes::run(),
         Commands::Goals { command } => match command {
             GoalsCommand::Next { program, fixture, json } => goals::next(program, fixture, json),
+            GoalsCommand::Reconcile { program, fixture, json } => {
+                let finding_count = goals::reconcile(program, fixture, json)?;
+                if finding_count > 0 {
+                    // Exit 1: findings exist. Distinct from a hard parse/gh
+                    // error (which already propagates via `?` above) --
+                    // mirrors the `pr-close-proof` non-zero-exit-lives-in-
+                    // main.rs pattern (#3696 item B); the `goals` module
+                    // itself never calls `process::exit`.
+                    std::process::exit(1);
+                }
+                Ok(())
+            }
         },
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
