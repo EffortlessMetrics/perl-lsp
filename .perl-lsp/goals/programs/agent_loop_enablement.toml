@@ -56,6 +56,7 @@ exit_criteria = "next slice chosen from live evidence, not chat"
 id = "M4"
 title = "Enforce capability profiles"
 status = "pending"
+issue = 3751
 depends_on = ["M2"]
 exit_criteria = "review workflows mechanically cannot write"
 
