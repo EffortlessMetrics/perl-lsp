@@ -138,22 +138,67 @@ function remapRunTestsByPathArgs(argv) {
   return result;
 }
 
-const jestArgs = remapRunTestsByPathArgs(process.argv.slice(2));
+// `--verbose` used to be hardcoded onto the base `npm test` script, which
+// made every local run print a per-test-case listing regardless of whether
+// anyone wanted it. It is opt-in now: `npm run test:ci` (and CI, which
+// invokes that script) passes `--verbose` explicitly on the command line, and
+// `JEST_VERBOSE` is available as an env toggle for anyone who wants verbose
+// output from the plain `npm test` path locally without editing the script.
+const VERBOSE_FLAG = '--verbose';
+const JEST_VERBOSE_ENV_VAR = 'JEST_VERBOSE';
+const TRUTHY_ENV_VALUES = new Set(['1', 'true', 'yes']);
 
-// Run Jest's own CLI entry point in-process (require it directly) rather
-// than spawning it as a child process. Two reasons:
-//   - `npx`/`npx.cmd` needs `shell: true` on Windows just to reach the
-//     .cmd shim — a quoting hazard avoided entirely by not shelling out.
-//   - `spawnSync` would add an extra process layer between this wrapper
-//     and Jest's own worker pool (jest-worker forks its own child
-//     processes for parallel test execution). That extra nesting caused
-//     worker forks to fail intermittently in CI ("Jest worker encountered
-//     N child process exceptions, exceeding retry limit") — a regression
-//     introduced by wrapping Jest in a subprocess at all. Requiring
-//     Jest's CLI entry directly makes this script's process the same
-//     top-level process Jest's workers fork from, exactly as when `jest`
-//     is invoked directly (no wrapper).
-const jestBin = require.resolve('jest/bin/jest', { paths: [ROOT] });
-process.chdir(ROOT);
-process.argv = [process.argv[0], jestBin, ...jestArgs];
-require(jestBin);
+function isVerboseEnvEnabled(env) {
+  const raw = (env[JEST_VERBOSE_ENV_VAR] || '').trim().toLowerCase();
+  return TRUTHY_ENV_VALUES.has(raw);
+}
+
+// Appends `--verbose` when the env toggle opts in, unless the caller already
+// passed an explicit verbosity flag on the command line (in which case the
+// explicit flag wins and the env toggle is not applied on top of it).
+function applyVerboseEnvToggle(argv, env) {
+  const hasExplicitVerboseFlag = argv.some(
+    (arg) => arg === VERBOSE_FLAG || arg === '--verbose=false' || arg === '--silent',
+  );
+  if (hasExplicitVerboseFlag || !isVerboseEnvEnabled(env)) {
+    return argv;
+  }
+  return [...argv, VERBOSE_FLAG];
+}
+
+function buildJestArgs(rawArgv, env) {
+  return applyVerboseEnvToggle(remapRunTestsByPathArgs(rawArgv), env);
+}
+
+module.exports = {
+  remapRunTestsByPathArgs,
+  mapSourcePathToCompiled,
+  isVerboseEnvEnabled,
+  applyVerboseEnvToggle,
+  buildJestArgs,
+};
+
+// Only run Jest when this file is executed directly (`node scripts/run-jest.js`),
+// not when it is `require()`d — e.g. by tests that exercise the helpers above
+// — which would otherwise recursively spawn a full Jest run in-process.
+if (require.main === module) {
+  const jestArgs = buildJestArgs(process.argv.slice(2), process.env);
+
+  // Run Jest's own CLI entry point in-process (require it directly) rather
+  // than spawning it as a child process. Two reasons:
+  //   - `npx`/`npx.cmd` needs `shell: true` on Windows just to reach the
+  //     .cmd shim — a quoting hazard avoided entirely by not shelling out.
+  //   - `spawnSync` would add an extra process layer between this wrapper
+  //     and Jest's own worker pool (jest-worker forks its own child
+  //     processes for parallel test execution). That extra nesting caused
+  //     worker forks to fail intermittently in CI ("Jest worker encountered
+  //     N child process exceptions, exceeding retry limit") — a regression
+  //     introduced by wrapping Jest in a subprocess at all. Requiring
+  //     Jest's CLI entry directly makes this script's process the same
+  //     top-level process Jest's workers fork from, exactly as when `jest`
+  //     is invoked directly (no wrapper).
+  const jestBin = require.resolve('jest/bin/jest', { paths: [ROOT] });
+  process.chdir(ROOT);
+  process.argv = [process.argv[0], jestBin, ...jestArgs];
+  require(jestBin);
+}
