@@ -101,8 +101,12 @@ impl DocumentHighlightProvider {
 
     /// Find the node at the given byte offset
     fn find_node_at_offset(&self, node: &Node, offset: usize) -> Option<Node> {
-        // Check if offset is within this node
-        if offset < node.location.start || offset >= node.location.end {
+        // Check if offset is within this node. The end is inclusive so a caret
+        // resting at the trailing edge of a token (the common "caret just after
+        // the word" position produced by double-click-select) is treated as
+        // on-token — matching the sibling references provider
+        // (navigation/references.rs).
+        if offset < node.location.start || offset > node.location.end {
             return None;
         }
 
@@ -131,7 +135,9 @@ impl DocumentHighlightProvider {
         source: &str,
         offset: usize,
     ) -> Option<SymbolInfo> {
-        if offset < node.location.start || offset >= node.location.end {
+        // Inclusive end (see `find_node_at_offset`): a trailing-edge caret is
+        // on-token so the synthetic-symbol fallback also recovers it.
+        if offset < node.location.start || offset > node.location.end {
             return None;
         }
 
@@ -142,9 +148,13 @@ impl DocumentHighlightProvider {
                     // Find the catch parameter location in the source within this node
                     let node_source = source.get(node.location.start..node.location.end)?;
                     let relative_offset = offset - node.location.start;
-                    // Search for the variable string near the offset
+                    // Search for the variable string near the offset. Inclusive
+                    // end (see `find_node_at_offset`): a trailing-edge caret on
+                    // the catch parameter itself must still match here, since
+                    // the outer containment gate above already treats that
+                    // offset as on-token.
                     for (pos, _) in node_source.match_indices(var_str.as_str()) {
-                        if pos <= relative_offset && relative_offset < pos + var_str.len() {
+                        if pos <= relative_offset && relative_offset <= pos + var_str.len() {
                             let first_char = var_str.chars().next()?;
                             if matches!(first_char, '$' | '@' | '%') {
                                 return Some(SymbolInfo {
@@ -465,7 +475,11 @@ impl DocumentHighlightProvider {
     /// variable at the given offset, but only if the variable is the `left` child
     /// (the container being subscripted, not the index/key).
     fn find_subscript_parent(&self, node: &Node, offset: usize) -> Option<String> {
-        if offset < node.location.start || offset >= node.location.end {
+        // Inclusive end (see `find_node_at_offset`): a trailing-edge caret on the
+        // subscripted container (e.g. `$arr` in `$arr[0]`) must still resolve to
+        // the `[]`/`{}` parent so the sigil normalization below fires, matching
+        // the same offset that `find_node_at_offset` already treats as on-token.
+        if offset < node.location.start || offset > node.location.end {
             return None;
         }
 
@@ -473,7 +487,7 @@ impl DocumentHighlightProvider {
         if let NodeKind::Binary { op, left, .. } = &node.kind {
             if (op == "[]" || op == "{}")
                 && offset >= left.location.start
-                && offset < left.location.end
+                && offset <= left.location.end
             {
                 // Verify the left child is a Variable with $ sigil
                 if let NodeKind::Variable { sigil, .. } = &left.kind {
