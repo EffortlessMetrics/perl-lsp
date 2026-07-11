@@ -1806,6 +1806,10 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
 
     fn position_of(text: &str, needle: &str) -> Result<(u32, u32), Box<dyn std::error::Error>> {
@@ -1861,15 +1865,14 @@ mod tests {
 
     #[test]
     fn perl_word_split_boundary_discriminator_c_eq_underscore() {
-        assert_eq!(perl_word_split_boundary('_'), false, "input that hits the boundary: c == '_'");
+        assert!(!perl_word_split_boundary('_'), "input that hits the boundary: c == '_'");
     }
 
     #[test]
     fn perl_word_split_boundary_discriminator_c_ne_underscore() {
-        assert_eq!(perl_word_split_boundary(' '), true, "input that hits the boundary: c != '_'");
-        assert_eq!(
-            perl_word_split_boundary('a'),
-            false,
+        assert!(perl_word_split_boundary(' '), "input that hits the boundary: c != '_'");
+        assert!(
+            !perl_word_split_boundary('a'),
             "input that hits the boundary: c.is_alphanumeric()"
         );
     }
@@ -1878,16 +1881,14 @@ mod tests {
     fn sub_declaration_keyword_before_boundary_discriminator_symbol_start_zero()
     -> Result<(), Box<dyn std::error::Error>> {
         let boundary_source = "target();\nsub target { 1 }\n";
-        assert_eq!(
-            sub_declaration_keyword_before(boundary_source, 0),
-            false,
+        assert!(
+            !sub_declaration_keyword_before(boundary_source, 0),
             "symbol_start == 0 must not slice before the document start"
         );
 
         let sub_name_offset = boundary_source.find("target {").ok_or("missing sub target")?;
-        assert_eq!(
+        assert!(
             sub_declaration_keyword_before(boundary_source, sub_name_offset),
-            true,
             "normal sub declaration names should still detect the preceding sub keyword"
         );
 
@@ -1901,14 +1902,12 @@ mod tests {
         let invalid_offset = source.find("target { 1 }").ok_or("missing invalid sub target")?;
         let valid_offset = source.find("target { 2 }").ok_or("missing valid sub target")?;
 
-        assert_eq!(
-            sub_declaration_keyword_before(source, invalid_offset),
-            false,
+        assert!(
+            !sub_declaration_keyword_before(source, invalid_offset),
             "input that hits the boundary: c != '_'"
         );
-        assert_eq!(
+        assert!(
             sub_declaration_keyword_before(source, valid_offset),
-            true,
             "plain sub declarations should still detect the sub keyword"
         );
 
@@ -1922,14 +1921,12 @@ mod tests {
         let tab_offset = source.find("target { 1 }").ok_or("missing tab-separated sub target")?;
         let method_offset = source.find("target { 2 }").ok_or("missing method target")?;
 
-        assert_eq!(
+        assert!(
             sub_declaration_keyword_before(source, tab_offset),
-            true,
             "input that hits the boundary: !c.is_alphanumeric() && c != '_'"
         );
-        assert_eq!(
-            sub_declaration_keyword_before(source, method_offset),
-            false,
+        assert!(
+            !sub_declaration_keyword_before(source, method_offset),
             "other declaration-like keywords must not be treated as sub declarations"
         );
 

@@ -121,7 +121,7 @@ fn location_count(value: Option<&Value>) -> usize {
     }
 }
 
-fn compiler_receipt<'a>(receipt: &'a Value) -> Result<&'a Value, Box<dyn std::error::Error>> {
+fn compiler_receipt(receipt: &Value) -> Result<&Value, Box<dyn std::error::Error>> {
     let value = receipt.get("compiler_receipt").ok_or("missing compiler_receipt")?;
     if value.is_null() {
         return Err(format!("expected compiler receipt, got runtime receipt: {receipt}").into());
@@ -525,9 +525,7 @@ fn references_include_declaration_true_adds_declaration_to_source_backed_result(
             .and_then(Value::as_array)
             .map(|locs| {
                 locs.iter().any(|loc| {
-                    loc.pointer("/range/start/line")
-                        .and_then(Value::as_u64)
-                        .map_or(false, |l| l == decl_line)
+                    loc.pointer("/range/start/line").and_then(Value::as_u64) == Some(decl_line)
                 })
             })
             .unwrap_or(false)

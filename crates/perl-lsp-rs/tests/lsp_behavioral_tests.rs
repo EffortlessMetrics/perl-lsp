@@ -1,3 +1,8 @@
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 /// Behavioral tests for LSP functionality
 /// These tests verify actual functionality, not just response shapes
 /// They ensure the wired infrastructure produces real results

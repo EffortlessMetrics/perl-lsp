@@ -1874,6 +1874,10 @@ fn lexical_path_key(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::{filter_workspace_root_from_inline_module_scan_roots, lexical_path_key};
     use crate::LspServer;
     use crate::state::ClientCapabilities;
@@ -2262,10 +2266,7 @@ mod tests {
     {
         let resolved = std::path::PathBuf::from("script.pl");
         let err = super::debug_command_from_oracle(None, &resolved).err().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "expected missing Perl oracle to reject debug launch",
-            )
+            std::io::Error::other("expected missing Perl oracle to reject debug launch")
         })?;
 
         assert_eq!(err.code, -32603);

@@ -4,6 +4,11 @@
 //! fixture infrastructure for testing Perl LSP executeCommand functionality with
 //! realistic test data and proper validation patterns.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 #[cfg(test)]
 mod integration_tests {
     use super::super::fixtures::*;

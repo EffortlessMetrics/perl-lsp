@@ -225,12 +225,14 @@ use warnings;
     /// | `"full"`     | `"full"`             |
     /// | `"building"` | `"partial"`          |
     /// | `"none"`     | `"none"`             |
-    fn expected_receipt_index_state(intended: &str) -> &'static str {
+    fn expected_receipt_index_state(
+        intended: &str,
+    ) -> Result<&'static str, Box<dyn std::error::Error>> {
         match intended {
-            "full" => "full",
-            "building" => "partial",
-            "none" => "none",
-            other => panic!("unknown intended index state label: {other}"),
+            "full" => Ok("full"),
+            "building" => Ok("partial"),
+            "none" => Ok("none"),
+            other => Err(format!("unknown intended index state label: {other}").into()),
         }
     }
 
@@ -328,7 +330,7 @@ use warnings;
         let answering_tier =
             receipt.get("answering_tier").and_then(Value::as_str).unwrap_or("unknown").to_string();
         if answering_tier != "empty" {
-            let expected_state = expected_receipt_index_state(intended_state_label);
+            let expected_state = expected_receipt_index_state(intended_state_label)?;
             assert_eq!(
                 observed_state.as_str(),
                 expected_state,

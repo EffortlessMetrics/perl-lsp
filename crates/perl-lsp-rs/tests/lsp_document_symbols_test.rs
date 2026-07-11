@@ -30,7 +30,7 @@ fn setup_server_with_capabilities(capabilities: Value) -> LspServer {
             "processId": 1,
             "capabilities": capabilities
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
     };
 
     server.handle_request(init_request);
@@ -120,7 +120,7 @@ sub calculate {
                 "uri": "file:///test.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("No response from server")?;
@@ -231,7 +231,7 @@ builder {
                 "uri": "file:///plack.psgi"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("No response from server")?;
@@ -282,7 +282,7 @@ sub another_sub {
                 "uri": "file:///nested.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("No response from server")?;
@@ -324,7 +324,7 @@ fn test_document_symbols_empty_document() -> TestResult {
                 "uri": "file:///empty.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("No response from server")?;
@@ -365,7 +365,7 @@ sub area {
                 "uri": "file:///constants.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("No response from server")?;
@@ -411,7 +411,7 @@ sub process {
                 "uri": "file:///labels.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("No response from server")?;
@@ -453,7 +453,7 @@ state $persistent = 0;
                 "uri": "file:///variables.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("No response from server")?;
@@ -531,7 +531,7 @@ sub child_method {
                 "uri": "file:///hierarchy.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("No response from server")?;
@@ -576,7 +576,7 @@ fn test_pod_sections_as_document_symbols() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_pod.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((10) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(10_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -623,7 +623,7 @@ fn test_pod_sections_stop_at_data_block() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_data_pod.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((11) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(11_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -651,7 +651,7 @@ fn test_pod_section_multiword_title() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_multiword.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((12) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(12_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -675,7 +675,7 @@ fn test_no_pod_unchanged_symbols() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_nopod.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((13) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(13_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -702,7 +702,7 @@ fn test_pod_sections_reject_invalid_levels() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_levels.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((14) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(14_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -738,7 +738,7 @@ fn test_pod_sections_stop_at_end_block() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_end_pod.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((15) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(15_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -770,7 +770,7 @@ fn test_pod_section_unicode_heading() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_unicode_pod.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((16) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(16_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -809,7 +809,7 @@ fn test_begin_block_appears_in_document_symbols() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_begin.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((20) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(20_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -843,7 +843,7 @@ fn test_end_block_appears_in_document_symbols() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_end.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((21) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(21_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -864,7 +864,7 @@ fn test_all_phase_blocks_appear_in_document_symbols() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_phases.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((22) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(22_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;
@@ -900,7 +900,7 @@ fn test_multiple_begin_blocks_all_appear() -> TestResult {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({ "textDocument": { "uri": "file:///test_multi_begin.pm" } })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((23) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(23_i64)),
     };
     let response = server.handle_request(request).ok_or("No response")?;
     let result = response.result.ok_or("Missing result")?;

@@ -339,6 +339,12 @@ pub(crate) mod capture {
     /// Self-heals from a poisoned lock (a panic in one capture-based test
     /// must not permanently block every other capture-based test in the
     /// binary) rather than propagating the poison.
+    ///
+    /// Narrower than the enclosing `capture` module's cfg gate: every current
+    /// caller is itself `cfg(test)`-gated, so under a plain
+    /// `expose_lsp_test_api`-only build (no `cfg(test)`) this would otherwise
+    /// be genuinely unused (clippy::dead_code).
+    #[cfg(test)]
     pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: Mutex<()> = Mutex::new(());
         LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -347,6 +353,10 @@ pub(crate) mod capture {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
 
     #[test]
@@ -368,12 +378,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_mode_file_path() {
+    fn parse_mode_file_path() -> Result<(), Box<dyn std::error::Error>> {
         match parse_mode("/tmp/perl-lsp-timing.jsonl") {
             TimingMode::File(path) => {
                 assert_eq!(path, PathBuf::from("/tmp/perl-lsp-timing.jsonl"));
+                Ok(())
             }
-            _ => panic!("expected File mode for a path value"),
+            _ => Err("expected File mode for a path value".into()),
         }
     }
 

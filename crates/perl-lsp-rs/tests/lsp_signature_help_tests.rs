@@ -108,7 +108,7 @@ fn test_signature_help_request_shape_errors_include_payload_guidance() -> TestRe
         let message =
             signature_help_shape_error(&mut harness, params).map_err(|e| format!("{case}: {e}"))?;
         assert_signature_help_shape_guidance(case, &message)
-            .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+            .map_err(Box::<dyn std::error::Error>::from)?;
     }
 
     harness.shutdown_gracefully();

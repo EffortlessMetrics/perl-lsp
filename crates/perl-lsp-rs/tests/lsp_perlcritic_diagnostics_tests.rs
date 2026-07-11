@@ -16,6 +16,9 @@
 //! Issue: #2018
 
 #![cfg(all(not(target_arch = "wasm32"), feature = "expose_lsp_test_api"))]
+// Tests are permitted to use `.expect()`/`.expect_err()` on Result/Option per
+// the repo's coding standards (unlike production code, where they are banned).
+#![allow(clippy::expect_used)]
 
 use perl_lsp::LspServer;
 use perl_subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};

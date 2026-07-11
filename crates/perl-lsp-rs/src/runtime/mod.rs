@@ -1311,6 +1311,10 @@ pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
     use crate::features::formatting::FormatRange;
     use crate::runtime::types::workspace_folder_matches_doc_uri;

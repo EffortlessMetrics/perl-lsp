@@ -15,7 +15,7 @@ fn test_formatting_capability_advertised() -> Result<(), Box<dyn std::error::Err
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {},
@@ -59,7 +59,7 @@ fn test_organize_imports_code_action_available() -> Result<(), Box<dyn std::erro
     // Initialize server
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {},
@@ -106,7 +106,7 @@ print Dumper($data);
     // Request code actions
     let actions_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
         method: "textDocument/codeAction".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri},
@@ -147,7 +147,7 @@ fn test_perlcritic_execute_command_available() -> Result<(), Box<dyn std::error:
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {},
@@ -189,7 +189,7 @@ fn test_builtin_diagnostics_work() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {},
@@ -228,7 +228,7 @@ fn test_builtin_diagnostics_work() -> Result<(), Box<dyn std::error::Error>> {
     // Request pull diagnostics
     let diag_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
         method: "textDocument/diagnostic".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri}
@@ -266,7 +266,7 @@ fn test_server_capabilities_complete() -> Result<(), Box<dyn std::error::Error>>
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {},
@@ -309,7 +309,7 @@ fn test_native_default_formatting_returns_edits_without_perltidy()
     // Initialize
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {},
@@ -347,7 +347,7 @@ fn test_native_default_formatting_returns_edits_without_perltidy()
 
     let format_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
         method: "textDocument/formatting".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri},

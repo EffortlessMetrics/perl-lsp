@@ -413,13 +413,16 @@ mod tests {
     /// the inbound queue capacity convention.
     #[test]
     fn outbound_capacity_constant_is_sane() {
-        // Must be non-zero (channel(0) would panic in tokio).
-        assert!(OUTBOUND_CAPACITY > 0, "OUTBOUND_CAPACITY must be positive");
+        // Must be non-zero (channel(0) would panic in tokio). OUTBOUND_CAPACITY is a
+        // const, so this is a genuine compile-time check (clippy::assertions_on_constants).
+        const { assert!(OUTBOUND_CAPACITY > 0, "OUTBOUND_CAPACITY must be positive") };
         // Must be finite / reasonable (not usize::MAX, not absurdly large).
-        assert!(
-            OUTBOUND_CAPACITY <= 1024,
-            "OUTBOUND_CAPACITY ({OUTBOUND_CAPACITY}) is suspiciously large — check the value"
-        );
+        const {
+            assert!(
+                OUTBOUND_CAPACITY <= 1024,
+                "OUTBOUND_CAPACITY is suspiciously large — check the value"
+            )
+        };
         // Must match the inbound QUEUE_CAPACITY convention (64).
         assert_eq!(
             OUTBOUND_CAPACITY, 64,

@@ -4,6 +4,10 @@
 //! while the full diagnostic set follows after the debounce (slow path).
 //! The fast path publishes ONLY parse-error-coded diagnostics (PL001).
 
+// Tests are permitted to use `.expect()`/`.expect_err()` on Result/Option per
+// the repo's coding standards (unlike production code, where they are banned).
+#![allow(clippy::expect_used)]
+
 mod support;
 
 use serde_json::json;

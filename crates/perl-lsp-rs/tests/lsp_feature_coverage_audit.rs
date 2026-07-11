@@ -34,7 +34,7 @@ fn setup_server() -> LspServer {
                 }
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
     };
     server.handle_request(init);
 
@@ -75,7 +75,7 @@ fn send_request(
 ) -> Result<serde_json::Value, String> {
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((id) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(id)),
         method: method.to_string(),
         params: Some(params),
     };
@@ -688,7 +688,7 @@ __PACKAGE__->meta->make_immutable;
         child_names
     );
     assert!(
-        !child_names.iter().any(|name| *name == "Animal"),
+        !child_names.contains(&"Animal"),
         "package self symbol should not appear as a child, found: {:?}",
         child_names
     );
@@ -942,7 +942,7 @@ fn diagnostics_syntax_error_does_not_crash_server() -> TestResult {
     // Also verify hover still works
     let hover_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((71) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(71_i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///broken.pl"},
@@ -976,7 +976,7 @@ sub new {
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((80) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(80_i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///pkg_hover.pm"},
@@ -998,7 +998,7 @@ fn hover_on_use_statement_module() -> TestResult {
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((81) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(81_i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///use_hover.pl"},
@@ -1023,7 +1023,7 @@ fn code_actions_empty_range() -> TestResult {
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((90) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(90_i64)),
         method: "textDocument/codeAction".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///actions.pl"},

@@ -2,6 +2,11 @@
 //!
 //! Tests all 114 built-in function signatures to ensure they work correctly
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 
@@ -14,7 +19,7 @@ fn setup_server() -> LspServer {
     // Send initialize request
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -58,7 +63,7 @@ fn open_doc(server: &LspServer, uri: &str, text: &str) {
 fn get_signature_help(server: &LspServer, uri: &str, line: u32, character: u32) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "textDocument/signatureHelp".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri},

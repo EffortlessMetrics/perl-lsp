@@ -9,8 +9,8 @@ use common::{
     short_timeout, start_lsp_server,
 };
 
-/// Comprehensive protocol violation tests
-/// Tests all possible ways the LSP protocol can be violated
+// Comprehensive protocol violation tests
+// Tests all possible ways the LSP protocol can be violated
 // Run with: cargo test -p perl-lsp-rs --features strict-jsonrpc
 
 fn require_error_response(

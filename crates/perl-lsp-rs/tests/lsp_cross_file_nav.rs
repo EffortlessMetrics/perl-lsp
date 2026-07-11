@@ -1,3 +1,8 @@
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
@@ -7,7 +12,7 @@ fn init_server() -> LspServer {
     // Initialize the server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {}
@@ -77,7 +82,7 @@ print "Result: $result\n";
     // Let's try workspace symbols first to ensure indexing is working
     let symbols_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((99) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(99_i64)),
         method: "workspace/symbol".to_string(),
         params: Some(json!({"query": "bar"})),
     };
@@ -88,7 +93,7 @@ print "Result: $result\n";
     // Test go-to-definition from callsite to definition
     let def_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
         method: "textDocument/definition".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///app.pl"},
@@ -171,7 +176,7 @@ for my $item (1..10) {
     // Find all references to process_lsp_cross_file_refs_1531
     let refs_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(3_i64)),
         method: "textDocument/references".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///lib/Utils.pm"},
@@ -236,7 +241,7 @@ sub reverse_str { reverse $_[0] }
     // Search for all symbols first
     let all_symbols_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((98) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(98_i64)),
         method: "workspace/symbol".to_string(),
         params: Some(json!({"query": ""})),
     };
@@ -247,7 +252,7 @@ sub reverse_str { reverse $_[0] }
     // Search for symbols containing "str"
     let symbols_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((4) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(4_i64)),
         method: "workspace/symbol".to_string(),
         params: Some(json!({"query": "str"})),
     };

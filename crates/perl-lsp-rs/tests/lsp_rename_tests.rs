@@ -7,6 +7,10 @@
 //! - Capability advertisement in server initialization
 //! - WorkspaceEdit response structure validation
 
+// Tests are permitted to use `.expect()`/`.expect_err()` on Result/Option per
+// the repo's coding standards (unlike production code, where they are banned).
+#![allow(clippy::expect_used)]
+
 mod support;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -474,7 +478,7 @@ fn test_rename_mismatched_sigil_is_rejected() -> TestResult {
     // The PR returns JsonRpcError(-32602), which harness surfaces as Err.
     match result {
         Err(e) => {
-            let msg = format!("{e}");
+            let msg = e.to_string();
             assert!(
                 msg.contains("sigil") || msg.contains("Invalid") || msg.contains("32602"),
                 "error should mention sigil mismatch or invalid identifier, got: {msg}"
@@ -524,7 +528,7 @@ print $x;
 
     match result {
         Err(e) => {
-            let msg = format!("{e}");
+            let msg = e.to_string();
             assert!(
                 msg.contains("empty") || msg.contains("Invalid") || msg.contains("32602"),
                 "empty newName should error with invalid-identifier, got: {msg}"
@@ -579,7 +583,7 @@ fn test_rename_invalid_identifier_is_rejected() -> TestResult {
 
     match result {
         Err(e) => {
-            let msg = format!("{e}");
+            let msg = e.to_string();
             assert!(
                 msg.contains("Invalid") || msg.contains("32602"),
                 "digit-leading identifier should error, got: {msg}"
@@ -826,7 +830,7 @@ greet();
 
     match result {
         Err(e) => {
-            let msg = format!("{e}");
+            let msg = e.to_string();
             assert!(
                 msg.contains("reserved") || msg.contains("keyword") || msg.contains("32602"),
                 "renaming sub to keyword should error with keyword-related message, got: {msg}"
@@ -905,7 +909,7 @@ fn test_rename_variable_to_keyword_allowed() -> TestResult {
         Err(e) => {
             // If the server returns an error, it must NOT be a keyword-related message,
             // because variables are allowed to have keyword names in Perl.
-            let msg = format!("{e}");
+            let msg = e.to_string();
             assert!(
                 !msg.contains("reserved keyword") && !msg.contains("keyword"),
                 "renaming variable to keyword name `$if` must not be rejected as a keyword: {msg}"

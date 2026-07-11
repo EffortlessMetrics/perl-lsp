@@ -113,7 +113,7 @@ fn doctor_reports_workspace_setup() -> Result<(), Box<dyn std::error::Error>> {
             "  Read-only CLI report. It does not start the LSP, mutate config, scan the workspace, or apply editor-specific settings."
         )
     );
-    assert_eq!(stdout.ends_with('\n'), true);
+    assert!(stdout.ends_with('\n'));
     assert_eq!(
         stdout
             .matches(&format!(

@@ -1204,12 +1204,14 @@ mod tests {
         (Arc::new(Mutex::new(map)), generation_handle)
     }
 
+    /// Calls recorded by [`counting_callback`], as `(uri, generation)` pairs.
+    type RecordedCalls = Arc<Mutex<Vec<(String, u32)>>>;
+
     /// A counting `on_published` stub -- records every call so a test can
     /// assert exactly how many times side effects fired, and for which
     /// (uri, generation) pairs.
-    fn counting_callback()
-    -> (Arc<dyn Fn(PublishedParseTicket) + Send + Sync>, Arc<Mutex<Vec<(String, u32)>>>) {
-        let calls: Arc<Mutex<Vec<(String, u32)>>> = Arc::new(Mutex::new(Vec::new()));
+    fn counting_callback() -> (Arc<dyn Fn(PublishedParseTicket) + Send + Sync>, RecordedCalls) {
+        let calls: RecordedCalls = Arc::new(Mutex::new(Vec::new()));
         let recorded = Arc::clone(&calls);
         let cb: Arc<dyn Fn(PublishedParseTicket) + Send + Sync> =
             Arc::new(move |p: PublishedParseTicket| {
@@ -2046,7 +2048,7 @@ mod tests {
             Arc::from("my $zz = 1;\n"),
         );
         assert!(
-            wait_for(|| worker.metrics().jobs_published >= PARSE_WORKERS as u64 + 1, TEST_TIMEOUT),
+            wait_for(|| worker.metrics().jobs_published > PARSE_WORKERS as u64, TEST_TIMEOUT),
             "a job on a brand-new URI must still be picked up and published after every worker \
              thread's `on_settled` panicked once -- the pool must not have been exhausted; \
              metrics={:?}",

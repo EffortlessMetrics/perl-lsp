@@ -1,5 +1,10 @@
 //! Tests for new LSP features in v0.8.2
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stderr doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stderr)]
+
 use serde_json::json;
 
 mod common;

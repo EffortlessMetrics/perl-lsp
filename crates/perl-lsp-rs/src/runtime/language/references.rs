@@ -2203,9 +2203,7 @@ mod tests {
 
         let decl_line: u64 = 2; // `sub target {` is at line index 2 (0-based)
         let contains_decl = locations.iter().any(|loc| {
-            loc.pointer("/range/start/line")
-                .and_then(serde_json::Value::as_u64)
-                .map_or(false, |l| l == decl_line)
+            loc.pointer("/range/start/line").and_then(serde_json::Value::as_u64) == Some(decl_line)
         });
         assert!(
             contains_decl,

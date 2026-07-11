@@ -96,9 +96,7 @@ fn test_special_scalar_vars_with_dollar_prefix() -> Result<(), Box<dyn std::erro
 
     // Every returned special variable must carry non-empty documentation
     for label in &labels {
-        if label.starts_with('$')
-            && !label.chars().skip(1).next().is_some_and(char::is_alphanumeric)
-        {
+        if label.starts_with('$') && !label.chars().nth(1).is_some_and(char::is_alphanumeric) {
             // Looks like a special var (starts with $ followed by non-alphanumeric)
             let doc = doc_for(items, label);
             assert!(

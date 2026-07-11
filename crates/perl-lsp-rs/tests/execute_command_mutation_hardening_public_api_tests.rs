@@ -92,7 +92,7 @@ fn setup_initialized_server() -> perl_lsp::LspServer {
 
     let initialize = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -937,7 +937,7 @@ fn test_run_subtest_handler_returns_correct_shape() -> TestResult {
             "command": "perl.runSubtest",
             "arguments": ["my fancy subtest"]
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
     };
 
     let response = server.handle_request(request).ok_or("No response from perl.runSubtest")?;
@@ -964,7 +964,7 @@ fn test_run_subtest_missing_argument_returns_error() -> TestResult {
             "command": "perl.runSubtest",
             "arguments": []
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response =

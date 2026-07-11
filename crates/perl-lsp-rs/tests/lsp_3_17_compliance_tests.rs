@@ -2,6 +2,11 @@
 //!
 //! Tests for partial result streaming contract and full LSP 3.17 method compliance.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stdout)]
+
 mod support;
 
 use support::lsp_harness::LspHarness;

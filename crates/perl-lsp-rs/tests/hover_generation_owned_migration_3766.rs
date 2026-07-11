@@ -18,6 +18,11 @@
 //! - **Pending-parse-gap** tests that generation coordination (the gap the content-hash cache lacks)
 //! - **Construction-count** tests per-generation accounting (not per-content-hash)
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stderr doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stderr)]
+
 mod common;
 
 #[cfg(test)]

@@ -33,6 +33,11 @@
 //! - PR #243: Fixed UTF-16 position handling in LSP handlers
 //! - PR #244: Adopted strict params and UTF-16 correctness across handlers
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod common;
 
 use common::{initialize_lsp, send_notification, send_request, start_lsp_server};

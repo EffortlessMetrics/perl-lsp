@@ -16,7 +16,7 @@ fn setup_server() -> LspServer {
             "processId": 1,
             "capabilities": {}
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
     };
     server.handle_request(init_request);
 
@@ -112,7 +112,7 @@ sub nested {
                 "uri": "file:///test.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("Expected response from server")?;
@@ -172,7 +172,7 @@ foreach my $item (@items) {
                 "uri": "file:///blocks.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("Expected response from server")?;
@@ -222,7 +222,7 @@ package AnotherModule {
                 "uri": "file:///packages.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("Expected response from server")?;
@@ -264,7 +264,7 @@ try {
                 "uri": "file:///try.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("Expected response from server")?;
@@ -311,7 +311,7 @@ my %hash = (
                 "uri": "file:///data.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("Expected response from server")?;
@@ -354,7 +354,7 @@ sub main {
                 "uri": "file:///imports.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("Expected response from server")?;
@@ -386,7 +386,7 @@ fn test_folding_ranges_empty_document() -> TestResult {
                 "uri": "file:///empty.pl"
             }
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
     };
 
     let response = server.handle_request(request).ok_or("Expected response from server")?;

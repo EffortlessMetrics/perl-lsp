@@ -6,6 +6,11 @@
 //! This module provides complete test coverage for all executeCommand features
 //! with focus on Issue #145 resolution and LSP 3.17+ protocol compliance.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stdout)]
+
 use serde_json::json;
 use std::time::Duration;
 
@@ -20,13 +25,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn repeat_analysis_budget() -> Duration {
     let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
 
-    if is_ci {
-        Duration::from_millis(2500)
-    } else if cfg!(windows) {
-        Duration::from_millis(2500)
-    } else {
-        Duration::from_secs(1)
-    }
+    if is_ci || cfg!(windows) { Duration::from_millis(2500) } else { Duration::from_secs(1) }
 }
 
 fn legacy_command_budget() -> Duration {

@@ -2,6 +2,11 @@
 //!
 //! Focus: user-visible symbol outline behavior during live editing workflows.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod support;
 
 use serde_json::Value;

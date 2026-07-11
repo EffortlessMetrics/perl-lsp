@@ -492,6 +492,10 @@ pub fn validate_rename(_key: &SymbolKey, new_name: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
     use std::sync::Arc;
     use url::Url;
@@ -548,7 +552,7 @@ $var;
                 Some((start, end, e.new_text.as_str()))
             })
             .collect();
-        replacements.sort_by(|a, b| b.0.cmp(&a.0));
+        replacements.sort_by_key(|r| std::cmp::Reverse(r.0));
         let mut new_text = text.to_string();
         for (start, end, rep) in replacements {
             new_text.replace_range(start..end, rep);

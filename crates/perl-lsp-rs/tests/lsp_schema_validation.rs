@@ -4,6 +4,10 @@
 //! using strict JSON schema validation.
 
 #![allow(clippy::collapsible_if)]
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stdout)]
 
 use serde_json::{Value, json};
 use std::collections::HashSet;

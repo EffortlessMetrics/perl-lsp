@@ -59,7 +59,12 @@ static COMPLETION_ANALYSIS_STARTED_OBSERVER: std::sync::Mutex<
     Option<(String, std::sync::mpsc::Sender<()>)>,
 > = std::sync::Mutex::new(None);
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
+// Narrower than the surrounding `expose_lsp_test_api`-eligible items: every
+// current caller is itself `cfg(test)`-gated (it arms
+// `COMPLETION_ANALYSIS_STARTED_OBSERVER`, which only `pub(crate)` in-crate test
+// code can reach), so under a plain `expose_lsp_test_api`-only build (no
+// `cfg(test)`) this would otherwise be genuinely unused (clippy::dead_code).
+#[cfg(test)]
 pub(crate) fn set_completion_analysis_started_observer(
     uri: &str,
     sender: std::sync::mpsc::Sender<()>,
@@ -1776,6 +1781,10 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
 
     fn explain_provider_decision(

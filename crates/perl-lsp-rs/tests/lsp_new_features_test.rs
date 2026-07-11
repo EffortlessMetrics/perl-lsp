@@ -1,5 +1,10 @@
 //! Test that newly connected features are properly advertised
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod support;
 use support::lsp_harness::LspHarness;
 

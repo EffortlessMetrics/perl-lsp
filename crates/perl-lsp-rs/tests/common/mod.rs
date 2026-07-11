@@ -24,7 +24,12 @@
 //! - `read_response_matching()`: Reads response matching specific ID
 
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
-#![allow(unused_imports)] // Re-exports needed for backwards compatibility across test files
+#![allow(unused_imports)]
+// Re-exports needed for backwards compatibility across test files
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stderr doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stderr)]
 
 // Re-export test_utils for semantic tests
 pub mod test_utils;
