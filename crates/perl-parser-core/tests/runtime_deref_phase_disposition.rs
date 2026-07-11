@@ -12,16 +12,28 @@ fn lower_source(source: &str) -> perl_parser_core::hir::HirFile {
 }
 
 #[test]
-fn variable_dereferences_do_not_emit_compile_boundaries() {
+fn variable_dereferences_without_strict_refs_are_potentially_symbolic() {
+    // This source has no `use strict`, so `strict_refs` is off by default (the
+    // same default Perl itself uses). Per perlref, hard-vs-symbolic
+    // dereference is decided by the operand's *runtime value*, not its AST
+    // shape: `keys %$hash`, `scalar @$array`, and `my ($name) = @$_` are all
+    // idiomatic "unpack a reference" calls in practice, but nothing at parse
+    // time proves `$hash`/`$array`/`$_` hold hard references rather than
+    // strings — under `no strict 'refs'` (or its absence) they are
+    // potentially symbolic and must stay a fail-closed compile boundary.
+    // Known-safe corpus idioms (`$$_` in comp/fold.t, `@$tuple` in
+    // comp/require.t) are quieted narrowly by perl-core-test-runner's
+    // per-file allowlist instead of by excluding this AST shape generally.
     let file = lower_source(
         "sub inspect { my ($hash, $array, $row) = @_; keys %$hash; scalar @$array; my ($name) = @$_; }",
     );
 
     assert!(
-        !file.compile_effects().iter().any(|effect| {
+        file.compile_effects().iter().any(|effect| {
             effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
         }),
-        "ordinary runtime dereferences must not enter the compile-effect stream"
+        "variable-operand dereferences without strict refs must stay a fail-closed \
+         SymbolicReferenceDeref compile boundary, per perlref"
     );
 }
 

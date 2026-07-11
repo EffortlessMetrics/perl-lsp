@@ -577,7 +577,6 @@ impl Lowerer {
             }
             NodeKind::Unary { op, operand } => {
                 if is_symbolic_reference_deref_op(op)
-                    && !is_runtime_reference_deref_operand(operand)
                     && !self.strict_refs_enabled_at(node.location.start)
                 {
                     let reason = "symbolic reference dereference is not statically known";
@@ -2151,15 +2150,27 @@ fn contains_interpolation_marker(value: &str) -> bool {
     value.contains('$') || value.contains('@') || value.contains('%')
 }
 
+/// Whether `op` is a block/sigil dereference form (`${}` / `@{}` / `%{}` /
+/// `&{}` / `*{}`) that Perl treats as a *symbolic* reference dereference when
+/// `strict 'refs'` is disabled — see perlref.
+///
+/// Per perlref, hard-vs-symbolic dereference is a **runtime-value** decision,
+/// not an AST-shape one: `$name = "foo"; $$name = 1;` dereferences a
+/// *variable* operand and still sets the package global `$foo` symbolically,
+/// because the variable's string contents are the referent's name. So this
+/// classifier intentionally does not special-case `Variable` operands (e.g.
+/// `${$x}`, `@$x`) as "always a hard reference" — under `no strict 'refs'`,
+/// any block/sigil dereference is *potentially* a symbolic reference,
+/// regardless of whether its operand is a literal, a variable, or an
+/// expression. This is a conservative, fail-closed heuristic (flag when
+/// unsure), not a proof that the operand is actually used as a symbol name at
+/// runtime — some idiomatic forms (`$$_`, `@$tuple` over an already-a-ref
+/// value) are always hard references in practice and never resolve a symbol
+/// table entry, but that can only be known from the runtime value, so callers
+/// that need to suppress known-safe idioms do so narrowly (e.g. the CPAN
+/// corpus test-runner's per-file allowlist), not by weakening this check.
 fn is_symbolic_reference_deref_op(op: &str) -> bool {
     matches!(op, "${}" | "@{}" | "%{}" | "&{}" | "*{}")
-}
-
-/// A dereference whose operand is already a variable is an ordinary runtime
-/// expression. Its eventual referent may be unknown, but that does not make
-/// it a symbolic-reference compile boundary.
-fn is_runtime_reference_deref_operand(operand: &Node) -> bool {
-    matches!(operand.kind, NodeKind::Variable { .. })
 }
 
 fn pragma_state_fact(

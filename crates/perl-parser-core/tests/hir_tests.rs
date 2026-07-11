@@ -1472,7 +1472,7 @@ fn hir_compile_effect_log_links_source_mutations_facts_and_boundaries()
 }
 
 #[test]
-fn hir_variable_reference_dereferences_remain_runtime_expressions()
+fn hir_symbolic_refs_emit_dynamic_boundaries_only_when_strict_refs_disabled()
 -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"package Symbolic::Refs;
 use strict;
@@ -1491,6 +1491,11 @@ ${$strict_again} = 2;
 
     let strict_scalar = source.find("${$strict_scalar}").ok_or("expected strict scalar deref")?;
     let strict_again = source.find("${$strict_again}").ok_or("expected restored strict deref")?;
+    let loose_scalar = source.find("${$loose_scalar}").ok_or("expected loose scalar deref")?;
+    let loose_array = source.find("@{$loose_array}").ok_or("expected loose array deref")?;
+    let loose_hash = source.find("%{$loose_hash}").ok_or("expected loose hash deref")?;
+    let loose_code = source.find("&{$loose_code}").ok_or("expected loose code deref")?;
+
     let symbolic_items = file
         .items
         .iter()
@@ -1503,9 +1508,15 @@ ${$strict_again} = 2;
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert!(
-        symbolic_items.is_empty(),
-        "variable-based reference dereferences are ordinary runtime expressions"
+    assert_eq!(
+        symbolic_items,
+        vec![
+            (loose_scalar, "symbolic reference dereference is not statically known"),
+            (loose_array, "symbolic reference dereference is not statically known"),
+            (loose_hash, "symbolic reference dereference is not statically known"),
+            (loose_code, "symbolic reference dereference is not statically known"),
+        ],
+        "symbolic-reference HIR boundaries should follow the scoped no strict refs region"
     );
 
     let symbolic_boundaries = file
@@ -1516,7 +1527,16 @@ ${$strict_again} = 2;
         .collect::<Vec<_>>();
     let boundary_starts =
         symbolic_boundaries.iter().map(|boundary| boundary.range.start).collect::<Vec<_>>();
-    assert!(boundary_starts.is_empty());
+    assert_eq!(boundary_starts, vec![loose_scalar, loose_array, loose_hash, loose_code]);
+    assert!(
+        symbolic_boundaries.iter().all(|boundary| {
+            boundary.provenance == CompileProvenance::DynamicBoundary
+                && boundary.confidence == CompileConfidence::Low
+                && boundary.package_context.as_deref() == Some("Symbolic::Refs")
+                && boundary.reason == "symbolic reference dereference is not statically known"
+        }),
+        "symbolic-reference facts should stay fail-closed with package context"
+    );
     assert!(
         !boundary_starts.contains(&strict_scalar) && !boundary_starts.contains(&strict_again),
         "strict refs regions should not be marked as symbolic-reference boundaries"
@@ -1524,10 +1544,17 @@ ${$strict_again} = 2;
 
     let effects = file.compile_effects();
     assert!(
-        !effects
-            .iter()
-            .any(|effect| effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref),
-        "ordinary dereferences must not become compile-effect boundaries"
+        effects.iter().any(|effect| {
+            effect.kind == CompileEffectKind::EmitDynamicBoundary
+                && effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
+                && effect.fact_kind == CompileEffectFactKind::DynamicBoundary
+                && effect.fact_name.as_deref() == Some("SymbolicReferenceDeref")
+                && effect.dynamic_reason.as_deref()
+                    == Some("symbolic reference dereference is not statically known")
+                && effect.provenance == CompileProvenance::DynamicBoundary
+                && effect.confidence == CompileConfidence::Low
+        }),
+        "compile-effect log should expose symbolic-reference boundary rows"
     );
     assert!(
         effects.iter().any(|effect| {
