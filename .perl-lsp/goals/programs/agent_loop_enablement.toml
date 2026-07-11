@@ -52,10 +52,21 @@ issue = 3624
 depends_on = ["M2"]
 exit_criteria = "next slice chosen from live evidence, not chat"
 
+# M4 status = "blocked" (2026-07-11, #3846 close comment + program board #3750
+# §2): the reconciler/state-machine work is built and computing (#3827), but
+# mechanical merge-gate enforcement is incomplete because registering
+# `needs-label-gate` as a REQUIRED branch-protection check needs admin
+# access no agent holds — a precise EXTERNAL blocker, not agent-buildable
+# work remaining. `blocked` is in `ALLOWED_MILESTONE_STATUSES`
+# (xtask/src/tasks/goals/manifest.rs) and `select_next` only ever selects
+# `Pending` candidates (xtask/src/tasks/goals/select.rs), so a `blocked` M4
+# is mechanically skipped by the selector in favor of the next eligible
+# milestone rather than wedging `goals next` here indefinitely. Revert to
+# "pending" once the admin action lands (tracked on #3751/#3845).
 [[milestone]]
 id = "M4"
 title = "Enforce capability profiles"
-status = "pending"
+status = "blocked"
 issue = 3751
 depends_on = ["M2"]
 exit_criteria = "review workflows mechanically cannot write"
@@ -64,6 +75,7 @@ exit_criteria = "review workflows mechanically cannot write"
 id = "M5"
 title = "Real worktree + build isolation"
 status = "pending"
+issue = 3777
 depends_on = ["M2"]
 exit_criteria = "parallel writers cannot share target or branch lease"
 
@@ -71,6 +83,7 @@ exit_criteria = "parallel writers cannot share target or branch lease"
 id = "M6"
 title = "Package-local context"
 status = "pending"
+issue = 3848
 depends_on = ["M2"]
 exit_criteria = "local ownership loads on demand; no volatile facts in local context"
 
@@ -78,6 +91,7 @@ exit_criteria = "local ownership loads on demand; no volatile facts in local con
 id = "M7"
 title = "Machine-produced receipts"
 status = "pending"
+issue = 3849
 depends_on = ["M2"]
 exit_criteria = "every completion claim is tied to a machine receipt proving the intended instrument ran, not merely that the test process exited zero (the #3599 lesson)"
 
@@ -93,6 +107,7 @@ exit_criteria = "the full program-selects to bounded-goal to writer-lease to rea
 id = "M8"
 title = "Save the loop workflows"
 status = "pending"
+issue = 3850
 depends_on = ["pilot-3602"]
 exit_criteria = "review-forward-pr.js, mechanical-migration.js, and program-iteration.js persist as reusable, GitHub-reconstructible workflow artifacts, not one-off conversation state"
 
@@ -100,5 +115,6 @@ exit_criteria = "review-forward-pr.js, mechanical-migration.js, and program-iter
 id = "M9"
 title = "Meta-loop + observability"
 status = "pending"
+issue = 3851
 depends_on = ["M8"]
 exit_criteria = "every repeated failure produces a stronger invariant/type/test/oracle/narrower-capability/skill/hook/learning artifact, tracked via the named meta-loop metrics, not just another local patch"
