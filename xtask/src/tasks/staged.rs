@@ -11,20 +11,28 @@
 //! that ever being staged, or vice versa. `git ls-tree` on the written tree
 //! reports the mode git actually recorded (`100644` vs `100755`), which is
 //! the only reliable source for that policy.
+//!
+//! # Read the captured snapshot, not the live index
+//!
+//! [`staged_tree_oid`] is called exactly once per run (`plan_gates`) and its
+//! result is threaded through every later check invocation
+//! (`GatePlan.staged_tree_oid` → `AgentReceipt.staged_tree_oid` →
+//! `commit_checks::run_named_check`'s `tree_oid` parameter). [`staged_diff_paths`]
+//! and [`read_staged_path_text`] both take an `Option<&str>` tree OID for
+//! exactly this reason: passing the captured OID makes them read from that
+//! frozen tree object (`git diff HEAD <oid>`, `git show <oid>:path`) instead
+//! of the live index (`git diff --cached`, `git show :path`). A concurrent
+//! `git add` between `plan_gates` capturing the OID and a check running
+//! would otherwise make different checks — or a check and the receipt that
+//! records what ran — inspect different states of the same commit. `None`
+//! is a defensive fallback for callers outside a real plan (e.g. ad hoc
+//! testing); every production call path has a captured OID to pass.
 
 use color_eyre::eyre::{Context, Result, bail};
 use std::path::Path;
 use std::process::Command;
 
 /// One entry from `git ls-tree -r` over the staged tree.
-///
-/// `#[allow(dead_code)]`: this PR (#3786-A) ships the substrate only — no
-/// check yet needs a full tree listing (the one wiring-proof check,
-/// `staged_tree_identity`, only needs the tree OID and the diff path list).
-/// #3786-B's staged file-mode policy check is the first real consumer;
-/// proven correct now via `list_staged_entries_reads_git_mode_not_filesystem_mode`
-/// below so it's ready when that PR lands.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StagedEntry {
     /// Octal mode string as recorded by git, e.g. `"100644"` or `"100755"`.
@@ -34,7 +42,6 @@ pub struct StagedEntry {
     pub path: String,
 }
 
-#[allow(dead_code)]
 impl StagedEntry {
     pub fn is_executable(&self) -> bool {
         self.mode == "100755"
@@ -68,11 +75,9 @@ pub fn staged_tree_oid(root: &Path) -> Result<String> {
 /// This is the *whole* tree, not just what changed in this commit — use
 /// [`staged_diff_paths`] to scope a check to the files actually being
 /// committed (the common case; scanning the whole tree on every commit would
-/// blow the commit-tier time budget on a large repo).
-///
-/// `#[allow(dead_code)]`: no #3786-A check needs a tree listing yet — see
-/// [`StagedEntry`]'s doc comment.
-#[allow(dead_code)]
+/// blow the commit-tier time budget on a large repo). Already frozen-tree
+/// -based by construction: `tree_oid` names the exact tree object to list,
+/// never the live index.
 pub fn list_staged_entries(root: &Path, tree_oid: &str) -> Result<Vec<StagedEntry>> {
     let raw = run_git_ok(root, &["ls-tree", "-r", "-z", tree_oid])?;
     let mut entries = Vec::new();
@@ -96,20 +101,55 @@ pub fn list_staged_entries(root: &Path, tree_oid: &str) -> Result<Vec<StagedEntr
     Ok(entries)
 }
 
-/// Paths added/copied/modified/renamed in the index relative to `HEAD` — the
-/// files that are actually part of this commit. This is the scoping input
-/// every per-file commit-tier check should use so cost stays proportional to
-/// the staged change, not the whole repo.
-pub fn staged_diff_paths(root: &Path) -> Result<Vec<String>> {
-    let raw = run_git_ok(root, &["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"])?;
+/// Paths added/copied/modified/renamed relative to `HEAD` — the files that
+/// are actually part of this commit. This is the scoping input every
+/// per-file commit-tier check should use so cost stays proportional to the
+/// staged change, not the whole repo.
+///
+/// `tree_oid`: `Some(oid)` diffs `HEAD` against that specific tree object
+/// (`git diff HEAD <oid>`) — the captured snapshot, immune to a `git add`
+/// that happens after `oid` was written. `None` falls back to `git diff
+/// --cached` (the live index) for callers outside a real plan.
+pub fn staged_diff_paths(root: &Path, tree_oid: Option<&str>) -> Result<Vec<String>> {
+    let raw = match tree_oid {
+        Some(oid) => {
+            let base = diff_base(root)?;
+            run_git_ok(root, &["diff", "--name-only", "--diff-filter=ACMR", "-z", &base, oid])?
+        }
+        None => run_git_ok(root, &["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"])?,
+    };
     Ok(raw.split('\0').filter(|s| !s.is_empty()).map(str::to_string).collect())
 }
 
-/// Byte size of a staged blob without reading its content (`git cat-file -s`).
+/// Git's well-known empty-tree object hash — a repo-independent constant
+/// git recognizes without it needing to be an explicitly stored object (the
+/// standard idiom for "diff against nothing", used e.g. to diff a repo's
+/// very first commit).
+const EMPTY_TREE_OID: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/// `"HEAD"` when it resolves, else the empty-tree constant — so a
+/// tree-oid-pinned diff still works on a brand-new repo with no commits yet
+/// (an unborn `HEAD`), matching what `git diff --cached` already handles
+/// implicitly for the live-index path.
 ///
-/// `#[allow(dead_code)]`: the oversized-file check that needs this is
-/// #3786-B.
-#[allow(dead_code)]
+/// `pub(crate)`: also used directly by `commit_checks::whitespace_check_at`,
+/// which needs the same base to run `git diff <base> <oid> --check` against
+/// the pinned tree object instead of `git diff --cached --check` (the live
+/// index) — see that function's doc comment for the TOCTOU this closes.
+pub(crate) fn diff_base(root: &Path) -> Result<String> {
+    let resolves = Command::new("git")
+        .current_dir(root)
+        .args(["rev-parse", "--verify", "--quiet", "HEAD"])
+        .output()
+        .context("failed to check whether HEAD resolves")?
+        .status
+        .success();
+    Ok(if resolves { "HEAD".to_string() } else { EMPTY_TREE_OID.to_string() })
+}
+
+/// Byte size of a staged blob without reading its content (`git cat-file -s`).
+/// Already frozen-tree-based by construction: `oid` names the exact blob,
+/// never the live index.
 pub fn blob_size(root: &Path, oid: &str) -> Result<u64> {
     let raw = run_git_ok(root, &["cat-file", "-s", oid])?;
     raw.trim()
@@ -117,10 +157,13 @@ pub fn blob_size(root: &Path, oid: &str) -> Result<u64> {
         .with_context(|| format!("`git cat-file -s {oid}` returned non-numeric size: {raw:?}"))
 }
 
-/// Read a staged path's content by asking git for the blob at `:path` in the
-/// index directly — works even when the working tree doesn't match (a
-/// partially-staged edit), because it never touches the filesystem outside
-/// git's object database.
+/// Read a staged path's content — works even when the working tree doesn't
+/// match (a partially-staged edit), because it never touches the filesystem
+/// outside git's object database.
+///
+/// `tree_oid`: `Some(oid)` reads the blob from that specific tree object
+/// (`git show <oid>:path`) — the captured snapshot. `None` reads from the
+/// live index (`git show :path`) for callers outside a real plan.
 ///
 /// `Ok(None)` means exactly one thing: `git show` succeeded and the content
 /// isn't valid UTF-8 (a legitimate binary file, skipped by text-oriented
@@ -131,15 +174,18 @@ pub fn blob_size(root: &Path, oid: &str) -> Result<u64> {
 /// callers of this function pass paths from [`staged_diff_paths`], which by
 /// construction *are* staged, so an unexpected failure here is worth
 /// knowing about, not swallowing.
-///
-/// `#[allow(dead_code)]`: every #3786-B check reads staged content through
-/// this function; #3786-A proves it correct (see the staged-vs-working-tree
-/// tests below) without a production caller yet.
-#[allow(dead_code)]
-pub fn read_staged_path_text(root: &Path, path: &str) -> Result<Option<String>> {
+pub fn read_staged_path_text(
+    root: &Path,
+    path: &str,
+    tree_oid: Option<&str>,
+) -> Result<Option<String>> {
+    let spec = match tree_oid {
+        Some(oid) => format!("{oid}:{path}"),
+        None => format!(":{path}"),
+    };
     let output = Command::new("git")
         .current_dir(root)
-        .args(["show", &format!(":{path}")])
+        .args(["show", &spec])
         .output()
         .with_context(|| format!("failed to read staged content for {path}"))?;
     if !output.status.success() {
@@ -147,6 +193,24 @@ pub fn read_staged_path_text(root: &Path, path: &str) -> Result<Option<String>> 
         bail!("failed to read staged content for {path}: {stderr}");
     }
     Ok(String::from_utf8(output.stdout).ok())
+}
+
+/// Whether `path` exists at all in the given staged tree object — for a
+/// caller like `commit_checks::rustfmt_staged_at` that needs the STAGED
+/// version of a config file (`rustfmt.toml`) which may or may not be part of
+/// the diff being committed (it might be untouched by this commit, or not
+/// tracked at all). [`read_staged_path_text`] deliberately treats "path
+/// isn't staged" as a real `Err` (its callers pass paths already known to be
+/// staged, from [`staged_diff_paths`]), so a caller that genuinely doesn't
+/// know whether an incidental path exists in the tree must check first
+/// rather than pattern-matching on `read_staged_path_text`'s error text.
+pub fn staged_path_exists(root: &Path, tree_oid: &str, path: &str) -> Result<bool> {
+    let status = Command::new("git")
+        .current_dir(root)
+        .args(["cat-file", "-e", &format!("{tree_oid}:{path}")])
+        .status()
+        .with_context(|| format!("failed to check whether {path} exists in tree {tree_oid}"))?;
+    Ok(status.success())
 }
 
 #[cfg(test)]
@@ -277,7 +341,7 @@ mod tests {
         // Dirty the WORKING TREE without staging it.
         repo.write("foo.rs", "fn main() { /* unstaged edit */ }\n")?;
 
-        let staged_text = read_staged_path_text(repo.root(), "foo.rs")?
+        let staged_text = read_staged_path_text(repo.root(), "foo.rs", None)?
             .context("foo.rs should still be readable from the index")?;
         assert_eq!(
             staged_text, "fn main() {}\n",
@@ -301,7 +365,7 @@ mod tests {
         // on disk no longer has the edit, but the STAGED blob still does.
         repo.write("foo.rs", "fn main() {}\n")?;
 
-        let staged_text = read_staged_path_text(repo.root(), "foo.rs")?
+        let staged_text = read_staged_path_text(repo.root(), "foo.rs", None)?
             .context("foo.rs should still be readable from the index")?;
         assert_eq!(
             staged_text, "fn main() { /* staged edit */ }\n",
@@ -327,7 +391,7 @@ mod tests {
         repo.add("foo.rs")?;
         repo.commit("initial")?;
 
-        let result = read_staged_path_text(repo.root(), "never-staged.rs");
+        let result = read_staged_path_text(repo.root(), "never-staged.rs", None);
 
         let err = match result {
             Err(err) => err,
@@ -357,7 +421,7 @@ mod tests {
         repo.write("new_file.rs", "fn main() {}\n")?;
         repo.add("new_file.rs")?;
 
-        let paths = staged_diff_paths(repo.root())?;
+        let paths = staged_diff_paths(repo.root(), None)?;
         assert!(
             paths.iter().any(|p| p == "new_file.rs"),
             "the newly staged file must be reported: {paths:?}"
@@ -424,6 +488,94 @@ mod tests {
             entry.is_executable(),
             "list_staged_entries must report the git-recorded mode (100755), not whatever the \
              filesystem happens to show under core.fileMode=false"
+        );
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------
+    // Frozen-tree-vs-live-index correctness proof.
+    //
+    // The class of bug a deep review caught in #3786-A: a check must read
+    // the SAME snapshot `plan_gates` captured via `staged_tree_oid`, not
+    // whatever the index has become by the time the check actually runs. A
+    // concurrent `git add` between capture and dispatch must not change
+    // what a `Some(oid)`-pinned read reports.
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn read_staged_path_text_with_pinned_oid_ignores_a_later_git_add() -> Result<()> {
+        let repo = TempRepo::init()?;
+        repo.write("foo.rs", "fn main() {}\n")?;
+        repo.add("foo.rs")?;
+        repo.commit("initial")?;
+
+        // Stage an edit and capture the tree OID -- this is what plan_gates
+        // does once, up front.
+        repo.write("foo.rs", "fn main() { /* captured */ }\n")?;
+        repo.add("foo.rs")?;
+        let captured_oid = staged_tree_oid(repo.root())?;
+
+        // A concurrent `git add` changes the index AFTER the OID was
+        // captured -- simulating another process staging more work while
+        // this run's checks are still dispatching.
+        repo.write("foo.rs", "fn main() { /* concurrent change */ }\n")?;
+        repo.add("foo.rs")?;
+
+        // A read pinned to the captured OID must still see the captured
+        // content, not the concurrent change.
+        let pinned_text = read_staged_path_text(repo.root(), "foo.rs", Some(&captured_oid))?
+            .context("foo.rs should be readable from the pinned tree")?;
+        assert_eq!(
+            pinned_text, "fn main() { /* captured */ }\n",
+            "a Some(oid)-pinned read must ignore a concurrent git add that happened after the \
+             OID was captured"
+        );
+
+        // For contrast: an unpinned (None) read DOES see the live index --
+        // proving the difference is the tree-oid pinning, not some other
+        // accident of the test setup.
+        let live_text = read_staged_path_text(repo.root(), "foo.rs", None)?
+            .context("foo.rs should be readable from the live index")?;
+        assert_eq!(
+            live_text, "fn main() { /* concurrent change */ }\n",
+            "an unpinned (None) read should see the live index, confirming the pinned read's \
+             stability comes from the OID, not from git caching"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn staged_diff_paths_with_pinned_oid_ignores_a_later_git_add() -> Result<()> {
+        let repo = TempRepo::init()?;
+        repo.write("committed.rs", "fn main() {}\n")?;
+        repo.add("committed.rs")?;
+        repo.commit("initial")?;
+
+        // Stage one new file and capture the tree OID.
+        repo.write("captured.rs", "fn main() {}\n")?;
+        repo.add("captured.rs")?;
+        let captured_oid = staged_tree_oid(repo.root())?;
+
+        // A concurrent `git add` stages a SECOND new file after the OID was
+        // captured.
+        repo.write("concurrent.rs", "fn main() {}\n")?;
+        repo.add("concurrent.rs")?;
+
+        let pinned_paths = staged_diff_paths(repo.root(), Some(&captured_oid))?;
+        assert!(
+            pinned_paths.iter().any(|p| p == "captured.rs"),
+            "the file staged before the OID was captured must be reported: {pinned_paths:?}"
+        );
+        assert!(
+            !pinned_paths.iter().any(|p| p == "concurrent.rs"),
+            "a file staged AFTER the OID was captured must NOT be reported by a pinned read: \
+             {pinned_paths:?}"
+        );
+
+        let live_paths = staged_diff_paths(repo.root(), None)?;
+        assert!(
+            live_paths.iter().any(|p| p == "concurrent.rs"),
+            "an unpinned (None) read should see the concurrently staged file: {live_paths:?}"
         );
         Ok(())
     }

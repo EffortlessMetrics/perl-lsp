@@ -67,12 +67,14 @@ tiers:
   #   BLOCKED posture fails the run; CLASSIFICATION REQUIRED/ADVISORY/NOT
   #   PROVEN are recorded but never block (the arming clock is a later PR —
   #   mirrors policy/changelog.toml's blocking_enforced_from pattern).
-  # Rollout: #3786-A (this slice) ships the tier + the --staged/git
-  #   write-tree substrate + the coach-style output shape, proven by one
-  #   wiring check. #3786-B (a follow-up PR stacked on this one) adds the
-  #   nine real structural checks.
+  # Rollout: #3786-A shipped the tier + the --staged/git write-tree
+  #   substrate + the coach-style output shape, proven by one wiring check.
+  #   #3786-B adds the nine real structural checks: whitespace_check,
+  #   conflict_markers_staged, staged_exec_mode_policy, staged_config_syntax,
+  #   forbidden_machine_paths, staged_oversized_or_binary,
+  #   changie_fragment_staged, rustfmt_staged, from_raw_staged.
   commit:
-    description: "Staged-tree substrate that run-before-commit checks are built on"
+    description: "Staged-tree hygiene checks that run before git commit"
     target_duration_seconds: 30
     enforcement: local
 
@@ -139,20 +141,23 @@ tiers:
 
 gates:
   # ===========================================================================
-  # Tier: commit (issue #3786-A — the staged-tree substrate)
+  # Tier: commit (issue #3786 — the commit-gate feedback ladder)
   # ===========================================================================
   # `command` is dispatched in-process by `run_internal_commit_check` in
   # xtask/src/tasks/gates.rs (matched on the literal "cargo xtask
-  # commit-check <name>" string), never shelled out. Implementation lives in
-  # xtask/src/tasks/commit_checks.rs.
+  # commit-check <name>" string), never shelled out, so the whole tier stays
+  # well inside its sub-30s budget. Implementations live in
+  # xtask/src/tasks/commit_checks.rs; every check reads through
+  # xtask/src/tasks/staged.rs, pinned to the `git write-tree` OID
+  # `plan_gates` captured once for this run — never the live index, never a
+  # second `git write-tree`.
   #
-  # This is a deliberately near-empty tier: #3786-A ships the substrate
-  # (GateTier::Commit, --staged/git write-tree identity, the coach-style
-  # output shape) proven by exactly one wiring check, not real hygiene
-  # checks. The nine structural checks (whitespace/conflict markers, staged
-  # file-mode policy, config syntax, Changie fragments, rustfmt, the
-  # ExitStatus::from_raw fold-in, …) are #3786-B, a follow-up PR stacked on
-  # this one.
+  # #3786-A shipped the substrate (GateTier::Commit, --staged/git write-tree
+  # identity, the coach-style output shape) proven by one wiring check.
+  # #3786-B (this slice) adds the nine real structural checks below. V1 is
+  # advisory-first: only a deterministic BLOCKED posture fails the run;
+  # CLASSIFICATION REQUIRED/ADVISORY/NOT PROVEN are recorded but never block
+  # (the arming clock is a later PR).
 
   - name: staged_tree_identity
     tier: commit
@@ -167,6 +172,137 @@ gates:
     tags:
       - staged
       - wiring-proof
+
+  - name: whitespace_check
+    tier: commit
+    description: "git diff --cached --check: trailing whitespace + conflict markers in the staged diff"
+    required: true
+    command: cargo xtask commit-check whitespace_check
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+
+  - name: conflict_markers_staged
+    tier: commit
+    description: "Full-content scan of staged files for leftover merge-conflict markers"
+    required: true
+    command: cargo xtask commit-check conflict_markers_staged
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - conflict-markers
+
+  - name: staged_exec_mode_policy
+    tier: commit
+    description: "Staged executable-bit policy via git ls-tree (core.fileMode=false safe; the R1 chmod defect class)"
+    required: true
+    command: cargo xtask commit-check staged_exec_mode_policy
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - file-mode
+
+  - name: staged_config_syntax
+    tier: commit
+    description: "Malformed staged JSON/TOML/YAML"
+    required: true
+    command: cargo xtask commit-check staged_config_syntax
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - config
+
+  - name: forbidden_machine_paths
+    tier: commit
+    description: "Machine-specific absolute paths (Windows user profile, POSIX home dir) in staged non-doc files"
+    required: true
+    command: cargo xtask commit-check forbidden_machine_paths
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+
+  - name: staged_oversized_or_binary
+    tier: commit
+    description: "Oversized staged files and disallowed native-binary extensions"
+    required: true
+    command: cargo xtask commit-check staged_oversized_or_binary
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+
+  - name: changie_fragment_staged
+    tier: commit
+    description: "Changie fragment schema validity for staged .changes/unreleased/*.yaml (dry-render deferred to pre-push, #3985)"
+    required: true
+    command: cargo xtask commit-check changie_fragment_staged
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - changelog
+
+  - name: rustfmt_staged
+    tier: commit
+    description: "rustfmt --check against staged Rust blob content (not the working-tree file)"
+    required: true
+    command: cargo xtask commit-check rustfmt_staged
+    timeout_seconds: 20
+    retry_count: 0
+    budgets:
+      max_duration_ms: 15000
+    quarantine: false
+    tags:
+      - formatting
+      - staged
+
+  - name: from_raw_staged
+    tier: commit
+    description: "ExitStatus::from_raw() policy over staged Rust content (folds in .ci/hooks/pre-commit)"
+    required: true
+    command: cargo xtask commit-check from_raw_staged
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - process-policy
 
   # ===========================================================================
   # Tier: pr_fast
