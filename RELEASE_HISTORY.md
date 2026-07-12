@@ -139,7 +139,6 @@ standalone 0.13.4 publication and should not be used as such.
 [gh-0.15.1]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.1
 [gh-0.15.0]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.0
 [gh-0.14.0]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.14.0
-[gh-0.13.4]: #lineage-corrections
 [gh-0.13.3]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.3
 [gh-0.13.2]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.2
 [gh-0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.1
