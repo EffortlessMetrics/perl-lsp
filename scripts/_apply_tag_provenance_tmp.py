@@ -12,6 +12,31 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def update_manifest_shas() -> None:
+    path = Path("policy/release-tag-provenance.toml")
+    replacements = {
+        "cc801735bdfd81d79da056de6145c32381b081d1":
+            "cc801735b004f89dc1c1b8789658f7abc73bf4aa",
+        "181d2b2db1fb56c3c30135cd9ed7b5e9f0470a96":
+            "181d2b2d2d8a5fc7e65fbceda648117eb04631a9",
+        "4e4099cde6ba96d19b43d93f56e7bd5297116dfa":
+            "4e4099cdd9f5e29f21412285224cfc95db4f9c53",
+        "0e9c5d7864f4c8cb19e02887cfd76a8fb74020de":
+            "0e9c5d789836938845dbe0921549cde881f47a21",
+        "15cbe7e6cdb831eb4738ed8d5b7b14451ac24182":
+            "15cbe7e6295a67ea0cba506c3cade628ee4847f6",
+    }
+    text = path.read_text(encoding="utf-8")
+    for old, new in replacements.items():
+        count = text.count(old)
+        if count != 1:
+            raise SystemExit(
+                f"manifest SHA correction {old[:8]}: expected one match, found {count}"
+            )
+        text = text.replace(old, new, 1)
+    path.write_text(text, encoding="utf-8")
+
+
 def update_release_history() -> None:
     path = Path("RELEASE_HISTORY.md")
     replace_once(
@@ -142,6 +167,7 @@ After all workflows complete, verify:
 
 
 def main() -> None:
+    update_manifest_shas()
     update_release_history()
     update_changelog()
     update_release_process()
