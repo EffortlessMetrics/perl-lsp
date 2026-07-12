@@ -789,7 +789,10 @@ fn selects_commit_tier_gate(policy: &GatePolicy, config: &GateRunnerConfig) -> R
     // guard's job is only "would this proceed against a commit-tier gate
     // without --staged", not gate-name validation.
     if let Some(gate_name) = &config.gate_filter {
-        return Ok(policy.gates.iter().any(|gate| gate.name == *gate_name && gate.tier == "commit"));
+        return Ok(policy
+            .gates
+            .iter()
+            .any(|gate| gate.name == *gate_name && gate.tier == "commit"));
     }
 
     Ok(match config.tier {
@@ -2226,7 +2229,9 @@ fn run_internal_commit_check(
                 // check itself would be, rather than losing the report.
                 Err(render_err) => (
                     "error".to_string(),
-                    format!("Internal xtask execution failed: CheckReport render error: {render_err:#}"),
+                    format!(
+                        "Internal xtask execution failed: CheckReport render error: {render_err:#}"
+                    ),
                 ),
             }
         }

@@ -312,8 +312,8 @@ mod tests {
     }
 
     #[test]
-    fn read_staged_path_text_errors_rather_than_silently_skipping_an_unreadable_path()
-    -> Result<()> {
+    fn read_staged_path_text_errors_rather_than_silently_skipping_an_unreadable_path() -> Result<()>
+    {
         // A `git show :path` failure — the path genuinely isn't staged, a
         // corrupted object, a permissions problem — must be a real `Err`,
         // never `Ok(None)`. `Ok(None)` is reserved for the one legitimate

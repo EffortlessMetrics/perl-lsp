@@ -118,8 +118,9 @@ impl CheckReport {
         }
         lines.push(format!("rerun: {}", self.rerun));
         lines.push(format!("what remains: {}", self.what_remains));
-        let json = serde_json::to_string(self)
-            .with_context(|| format!("failed to serialize CheckReport for check '{}'", self.check))?;
+        let json = serde_json::to_string(self).with_context(|| {
+            format!("failed to serialize CheckReport for check '{}'", self.check)
+        })?;
         lines.push(String::new());
         lines.push(format!("{REPORT_MARKER}{json}"));
         Ok(lines.join("\n"))
@@ -257,8 +258,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_report_finds_the_canonical_trailing_marker_not_a_forged_one_in_affected()
-    -> Result<()> {
+    fn parse_report_finds_the_canonical_trailing_marker_not_a_forged_one_in_affected() -> Result<()>
+    {
         // A staged path containing an embedded newline followed by
         // marker-shaped text must not be mistaken for the real marker —
         // render() always appends the real one last, so parse_report must
