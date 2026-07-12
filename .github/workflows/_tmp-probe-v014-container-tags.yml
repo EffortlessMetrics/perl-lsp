@@ -2,15 +2,11 @@ name: Temporary probe v0.14.0 container tags
 
 on:
   push:
-    branches:
-      - ops/probe-v0.14-container-tags
-    paths:
-      - .github/workflows/_tmp-probe-v014-container-tags.yml
+    branches: [ops/probe-v0.14-container-tags]
+    paths: [.github/workflows/_tmp-probe-v014-container-tags.yml]
   pull_request:
-    branches:
-      - master
-    paths:
-      - .github/workflows/_tmp-probe-v014-container-tags.yml
+    branches: [master]
+    paths: [.github/workflows/_tmp-probe-v014-container-tags.yml]
 
 permissions:
   contents: read
@@ -21,65 +17,36 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Query GitHub package metadata
+      - name: Inspect authenticated GHCR manifests
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
-          for package in perl-lsp perl-lsp-perl; do
-            echo "GHCR_PACKAGE=$package"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin >/dev/null
+          for image in ghcr.io/effortlessmetrics/perl-lsp:0.14.0 ghcr.io/effortlessmetrics/perl-lsp-perl:0.14.0; do
+            file="${RUNNER_TEMP}/$(printf '%s' "$image" | tr '/:' '__').json"
             set +e
-            result="$(gh api "/orgs/EffortlessMetrics/packages/container/${package}/versions?per_page=100" \
-              --jq '.[] | select(.metadata.container.tags | index("0.14.0")) | [.id,.created_at,.updated_at,(.metadata.container.tags|join(","))] | @tsv' 2>&1)"
+            docker manifest inspect "$image" >"$file" 2>"${file}.stderr"
             rc=$?
             set -e
-            echo "GHCR_API_EXIT=$rc"
-            if [ "$rc" -eq 0 ] && [ -n "$result" ]; then
-              echo "GHCR_API_RESULT=present"
-              printf '%s\n' "$result" | while IFS=$'\t' read -r id created updated tags; do
-                echo "GHCR_VERSION_ID=$id"
-                echo "GHCR_CREATED_AT=$created"
-                echo "GHCR_UPDATED_AT=$updated"
-                echo "GHCR_TAGS=$tags"
-              done
-            elif [ "$rc" -eq 0 ]; then
-              echo "GHCR_API_RESULT=tag-not-found"
-            else
-              echo "GHCR_API_RESULT=inaccessible-or-absent"
-              printf '%s\n' "$result" | head -n 3
-            fi
-            echo "GHCR_API_END"
-          done
-
-      - name: Authenticate and inspect GHCR manifests
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          login_output="$(printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin 2>&1)"
-          login_rc=$?
-          set -e
-          echo "GHCR_LOGIN_EXIT=$login_rc"
-          printf '%s\n' "$login_output" | head -n 2
-
-          for image in \
-            ghcr.io/effortlessmetrics/perl-lsp:0.14.0 \
-            ghcr.io/effortlessmetrics/perl-lsp-perl:0.14.0
-          do
             echo "GHCR_IMAGE=$image"
-            set +e
-            manifest="$(docker manifest inspect "$image" 2>&1)"
-            rc=$?
-            set -e
-            echo "GHCR_MANIFEST_EXIT=$rc"
+            echo "GHCR_EXIT=$rc"
             if [ "$rc" -eq 0 ]; then
-              echo "GHCR_MANIFEST_RESULT=present"
-              printf '%s' "$manifest" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("GHCR_MEDIA_TYPE="+d.get("mediaType","unknown")); [print("GHCR_PLATFORM="+(x.get("platform") or {}).get("os","unknown")+"/"+(x.get("platform") or {}).get("architecture","unknown")) for x in d.get("manifests",[])]'
+              python3 - "$file" <<'PY'
+          import json, pathlib, sys
+          d = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          print("GHCR_RESULT=present")
+          print("GHCR_MEDIA_TYPE=" + d.get("mediaType", "unknown"))
+          manifests = d.get("manifests") or []
+          print("GHCR_MANIFEST_COUNT=" + str(len(manifests) if manifests else "single"))
+          for item in manifests:
+              p = item.get("platform") or {}
+              print("GHCR_PLATFORM=" + p.get("os", "unknown") + "/" + p.get("architecture", "unknown"))
+          PY
             else
-              echo "GHCR_MANIFEST_RESULT=absent-or-inaccessible"
-              printf '%s\n' "$manifest" | head -n 3
+              echo "GHCR_RESULT=absent-or-inaccessible"
+              head -n 3 "${file}.stderr"
             fi
-            echo "GHCR_MANIFEST_END"
+            echo "GHCR_END"
           done
