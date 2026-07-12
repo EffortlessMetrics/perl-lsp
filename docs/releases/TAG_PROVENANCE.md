@@ -116,6 +116,10 @@ Validate the manifest without touching Git or the network:
 python3 scripts/check_release_tag_provenance.py
 ```
 
+The parser uses Python 3.11's built-in `tomllib`; Python 3.10 and older may use
+the compatible `tomli` package. When neither parser is available, the command
+fails with an installation requirement rather than an import traceback.
+
 In a full-history checkout with tags fetched, verify live refs and ancestry:
 
 ```bash
@@ -125,9 +129,12 @@ python3 scripts/check_release_tag_provenance.py --verify-git
 
 The second command fails when:
 
+- a fetched SemVer release tag is absent from the manifest;
 - a live tag no longer resolves to its pinned `current_sha`;
 - a tag classified as `linear` does not descend from its predecessor;
-- a pair classified as `diverged` becomes ancestral in either direction.
+- a pair classified as `diverged` becomes ancestral in either direction;
+- Git is unavailable, a ref cannot be resolved, or `merge-base` reports a real
+  execution error rather than ordinary non-ancestry.
 
 It deliberately does not contact GitHub. The checkout and fetched refs are the
 operator-controlled input.
