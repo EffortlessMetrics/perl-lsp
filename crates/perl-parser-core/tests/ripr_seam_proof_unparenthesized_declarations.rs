@@ -31,7 +31,7 @@
 mod cpan_test_helpers;
 
 use cpan_test_helpers::{assert_clean_parse, assert_has_error};
-use perl_parser_core::hir::{HirKind, lower_ast};
+use perl_parser_core::hir::{lower_ast, HirKind};
 use perl_parser_core::{Node, NodeKind, Parser};
 
 fn parse_program(source: &str) -> Result<Node, String> {
@@ -265,6 +265,23 @@ fn arrow_postfix_after_declared_variable_still_parses_cleanly() -> Result<(), St
     Ok(())
 }
 
+// NOTE (issue #3742): the fixture below is INVALID Perl, not a valid
+// multi-declaration form. Ground truth, `perl 5.42.2`:
+//
+//   $ perl -c -e 'my $first :Attr, %second;'
+//   Invalid separator character ',' in attribute list at -e line 1, near "$first :Attr"
+//   syntax error at -e line 1, near "$first :Attr"
+//   -e had compilation errors.
+//
+// Real Perl attribute lists are separated by `:` (or whitespace before the
+// next `:name`), never by a bare `,` — a comma directly after an attribute
+// name is a syntax error, not a continuation into a second declared
+// variable. `assert_clean_parse` below is verifying an AST-shape property
+// (no Error/Missing nodes) of the parser's current PERMISSIVE recovery for
+// this malformed input, not that the source is syntactically valid Perl.
+// Inherited unchanged from the #3627-era file; do not read this as an
+// oracle-verified valid-Perl fixture. See `attributed_first_variable_fixture_documents_invalid_perl_status`
+// below, which pins this comment against silent removal.
 #[test]
 fn attributed_first_variable_declares_only_that_variable_with_its_attribute() -> Result<(), String>
 {
@@ -300,5 +317,38 @@ fn attributed_first_variable_declares_only_that_variable_with_its_attribute() ->
     let my_decl = my_decl.ok_or_else(|| "expected my-declaration HIR item".to_string())?;
     assert_eq!(my_decl.variables.len(), 1);
     assert_eq!(my_decl.attribute_count, 1);
+    Ok(())
+}
+
+/// Regression guard for issue #3742: `my $first :Attr, %second;` is invalid
+/// Perl (`perl -c` rejects it with "Invalid separator character ',' in
+/// attribute list"), yet the test above exercises the parser's permissive
+/// recovery on it via `assert_clean_parse`. Without the explanatory comment
+/// directly above that test, a reader could mistake the fixture for a
+/// verified-valid multi-declaration form. This meta-test fails if that
+/// label comment is ever silently dropped or detached from the test it
+/// documents.
+#[test]
+fn attributed_first_variable_fixture_documents_invalid_perl_status() -> Result<(), String> {
+    let own_source = include_str!("ripr_seam_proof_unparenthesized_declarations.rs");
+    let label_marker = "NOTE (issue #3742): the fixture below is INVALID Perl";
+    let oracle_marker = "Invalid separator character ',' in attribute list at -e line 1";
+    let fn_marker = "fn attributed_first_variable_declares_only_that_variable_with_its_attribute";
+
+    let label_pos = own_source
+        .find(label_marker)
+        .ok_or_else(|| "expected the #3742 invalid-Perl label comment to be present".to_string())?;
+    let oracle_pos = own_source.find(oracle_marker).ok_or_else(|| {
+        "expected the perl -c oracle output to be quoted in the comment".to_string()
+    })?;
+    let fn_pos = own_source.find(fn_marker).ok_or_else(|| {
+        "expected the attributed_first_variable test fn to be present".to_string()
+    })?;
+
+    assert!(
+        label_pos < oracle_pos && oracle_pos < fn_pos,
+        "expected the invalid-Perl label comment (with its perl -c oracle quote) to \
+         immediately precede the attributed_first_variable test function"
+    );
     Ok(())
 }
