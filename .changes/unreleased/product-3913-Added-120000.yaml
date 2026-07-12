@@ -1,0 +1,11 @@
+project: product
+component: Developer experience
+kind: Added
+body: >-
+  Document the Swarm v3 lifecycle-state model (docs/source-of-truth/swarm-v2.md)
+  and extend the PR review-convergence test suite with writer-set-staleness
+  regression coverage (a reviewer who posts a fix disposition cannot verify
+  their own fix). Internal control-plane tooling; no product behavior change.
+custom:
+  PR: "3913"
+  Breaking: "no"

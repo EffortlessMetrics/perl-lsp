@@ -409,6 +409,48 @@ test_advisory_emits_warn_not_block() {
     fi
 }
 
+# ── Test 21: reviewer who posts a fix disposition joins the writer set —
+#    their own later verification at that head is REJECTED (Swarm v3 R1,
+#    #3886). Isolates the writer-set-staleness mechanic from the
+#    writer==PR-author case Test 13 already covers: here the PR author is
+#    "bob", and "alice" — a reviewer, not the author — becomes a writer
+#    solely via her `disposition:v1 {"by":"alice", ...}` marker. She then
+#    tries to verify her own fix at the same head; WRITER_SET = [bob, alice]
+#    rejects her (verifier ∈ writer set), so verification_receipt_head_match
+#    must be false. All other R1 axes are clean (0 missing markers, 0
+#    unreachable commits) so this isolates the ONE axis under test.
+test_reviewer_who_fixes_becomes_author_for_new_head_blocks_under_enforce() {
+    run_case_enforce "reviewer-who-fixes-becomes-author-for-new-head-blocks"
+    local converged vmatch missing unreach
+    converged="$(json_field "$RUN_STDOUT" '.converged')"
+    vmatch="$(json_field "$RUN_STDOUT" '.verification_receipt_head_match')"
+    missing="$(json_field "$RUN_STDOUT" '.dispositions_missing_marker')"
+    unreach="$(json_field "$RUN_STDOUT" '.unreachable_fix_commits')"
+    if [[ "$RUN_EXIT" -eq 1 && "$converged" == "false" && "$vmatch" == "false" && \
+          "$missing" -eq 0 && "$unreach" -eq 0 ]]; then
+        pass "reviewer who posts a fix disposition cannot verify their own fix at that head (exit 1, verification_receipt_head_match:false, isolated from other axes)"
+    else
+        fail "reviewer-turned-writer self-verification should block under enforce — got exit=$RUN_EXIT converged=$converged verification_receipt_head_match=$vmatch dispositions_missing_marker=$missing unreachable_fix_commits=$unreach"
+    fi
+}
+
+# ── Test 22: counter-fixture for Test 21 — a DISTINCT third reviewer (not
+#    the PR author, not the disposer) verifies the same fix at the same
+#    head and PASSES. Discriminates Test 21: proves the block above is
+#    specifically about writer-set membership, not an unconditional
+#    rejection of every disposition-then-verification sequence.
+test_independent_verifier_after_fix_disposition_passes_under_enforce() {
+    run_case_enforce "independent-verifier-after-fix-disposition-passes"
+    local converged vmatch
+    converged="$(json_field "$RUN_STDOUT" '.converged')"
+    vmatch="$(json_field "$RUN_STDOUT" '.verification_receipt_head_match')"
+    if [[ "$RUN_EXIT" -eq 0 && "$converged" == "true" && "$vmatch" == "true" ]]; then
+        pass "a distinct third reviewer (outside the writer set) can verify a reviewer's fix disposition (exit 0, converged:true, verification_receipt_head_match:true)"
+    else
+        fail "independent third-reviewer verification should converge under enforce — got exit=$RUN_EXIT converged=$converged verification_receipt_head_match=$vmatch"
+    fi
+}
+
 # ── Run all tests ─────────────────────────────────────────────────────────────
 
 echo "=== check-pr-review-convergence test suite ==="
@@ -434,6 +476,8 @@ test_receipt_older_head_blocks_under_enforce
 test_valid_fixed_proof_converges_under_enforce
 test_resolved_to_clear_3647_blocks_all
 test_advisory_emits_warn_not_block
+test_reviewer_who_fixes_becomes_author_for_new_head_blocks_under_enforce
+test_independent_verifier_after_fix_disposition_passes_under_enforce
 
 echo ""
 echo "=== Results: $PASS_COUNT passed, $FAIL_COUNT failed ==="
