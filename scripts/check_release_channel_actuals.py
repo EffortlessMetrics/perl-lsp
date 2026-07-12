@@ -62,7 +62,7 @@ def parse_frontmatter(path: Path) -> tuple[dict[str, str], dict[str, str]]:
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
 
-        if raw == "channels:":
+        if raw.rstrip() == "channels:":
             in_channels = True
             continue
 
@@ -152,10 +152,12 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
             errors.append(f"{prefix}.tag_commit must be lowercase 40-hex")
         if not isinstance(published, str) or DATE_RE.fullmatch(published) is None:
             errors.append(f"{prefix}.published_date_utc must be an ISO date")
+        repository = data.get("repository")
         if (
             not isinstance(release_url, str)
-            or release_url
-            != f"https://github.com/EffortlessMetrics/perl-lsp/releases/tag/{tag}"
+            or not isinstance(repository, str)
+            or not isinstance(tag, str)
+            or release_url != f"https://github.com/{repository}/releases/tag/{tag}"
         ):
             errors.append(f"{prefix}.release_url must be the canonical tag release URL")
 

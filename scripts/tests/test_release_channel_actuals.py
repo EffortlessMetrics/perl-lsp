@@ -11,6 +11,7 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
 
 from check_release_channel_actuals import (  # noqa: E402
+    ChannelActualsError,
     load_manifest,
     validate_manifest,
     validate_notes,
@@ -115,7 +116,7 @@ class ManifestValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "actuals.json"
             path.write_text("{not json", encoding="utf-8")
-            with self.assertRaises(Exception):
+            with self.assertRaises(ChannelActualsError):
                 load_manifest(path)
 
 
