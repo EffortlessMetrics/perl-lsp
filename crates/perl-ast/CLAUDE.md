@@ -84,5 +84,7 @@ match &node.kind {
 - `ast::Node` is a concrete struct, not a trait -- work with it via pattern matching on `NodeKind`
 - `Node::to_sexp()` produces tree-sitter-compatible S-expressions for test comparison
 - `NodeKind::kind_name()` returns a static string name; `NodeKind::ALL_KIND_NAMES` lists all names
+- `NodeKind::grammar_kind_name_static()` is the allocation-free canonical grammar-kind table; `grammar_kind_name()` handles only runtime-derived names
+- Adding a new `NodeKind` variant also requires deliberate classification in `grammar_kind_name_static()`; its exhaustive match is part of the metadata drift guard
 - Adding new `NodeKind` variants requires updating `to_sexp()`, `to_sexp_inner()`, `kind_name()`, and the `visit_children()` method — `ALL_KIND_NAMES` is auto-derived and does not need manual updating
 - Dependents: `perl-parser-core`, `perl-tokenizer`, `perl-pragma`, `perl-error`

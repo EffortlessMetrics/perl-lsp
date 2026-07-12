@@ -742,29 +742,7 @@ impl Node {
 
             NodeKind::FunctionCall { name, args } => {
                 // Special handling for functions that should use call format in tree-sitter tests
-                if matches!(
-                    name.as_str(),
-                    "bless"
-                        | "shift"
-                        | "unshift"
-                        | "open"
-                        | "die"
-                        | "warn"
-                        | "print"
-                        | "printf"
-                        | "say"
-                        | "push"
-                        | "pop"
-                        | "map"
-                        | "sort"
-                        | "grep"
-                        | "keys"
-                        | "values"
-                        | "each"
-                        | "defined"
-                        | "scalar"
-                        | "ref"
-                ) {
+                if is_call_form_function(name) {
                     let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                     if args.is_empty() {
                         format!("(call {} ())", name)
@@ -2510,6 +2488,211 @@ impl NodeKind {
         }
     }
 
+    /// Return the grammar kind when it is determined solely by the node variant.
+    ///
+    /// This is the allocation-free metadata path used by tree-sitter-style
+    /// facades.  `None` is reserved for variants whose grammar kind depends on
+    /// a runtime field such as an operator, keyword, or interpolation mode;
+    /// callers should use [`grammar_kind_name`](Self::grammar_kind_name) when
+    /// they need the complete name.
+    pub fn grammar_kind_name_static(&self) -> Option<&'static str> {
+        match self {
+            NodeKind::Program { .. } => Some("source_file"),
+            NodeKind::ExpressionStatement { .. } => Some("expression_statement"),
+            NodeKind::VariableDeclaration { .. }
+            | NodeKind::VariableListDeclaration { .. }
+            | NodeKind::Assignment { .. }
+            | NodeKind::Binary { .. }
+            | NodeKind::Unary { .. }
+            | NodeKind::String { .. }
+            | NodeKind::Heredoc { .. }
+            | NodeKind::If { .. }
+            | NodeKind::While { .. }
+            | NodeKind::StatementModifier { .. }
+            | NodeKind::Subroutine { .. }
+            | NodeKind::LoopControl { .. }
+            | NodeKind::FunctionCall { .. }
+            | NodeKind::Match { .. }
+            | NodeKind::PhaseBlock { .. } => None,
+            NodeKind::NestedVariableList { .. } => Some("nested_variable_list"),
+            NodeKind::Variable { .. } => Some("variable"),
+            NodeKind::VariableWithAttributes { .. } => Some("variable_with_attributes"),
+            NodeKind::Ternary { .. } => Some("ternary"),
+            NodeKind::Diamond => Some("diamond"),
+            NodeKind::Ellipsis => Some("ellipsis"),
+            NodeKind::Undef => Some("undef"),
+            NodeKind::Readline { .. } => Some("readline"),
+            NodeKind::Glob { .. } => Some("glob"),
+            NodeKind::Typeglob { .. } => Some("typeglob"),
+            NodeKind::Number { .. } => Some("number"),
+            NodeKind::VString { .. } => Some("vstring"),
+            NodeKind::ArrayLiteral { .. } => Some("array"),
+            NodeKind::HashLiteral { .. } => Some("hash"),
+            NodeKind::Block { .. } => Some("block"),
+            NodeKind::Eval { .. } => Some("eval"),
+            NodeKind::Do { .. } => Some("do"),
+            NodeKind::Defer { .. } => Some("defer"),
+            NodeKind::Try { .. } => Some("try"),
+            NodeKind::LabeledStatement { .. } => Some("labeled_statement"),
+            NodeKind::Tie { .. } => Some("tie"),
+            NodeKind::Untie { .. } => Some("untie"),
+            NodeKind::For { .. } => Some("for"),
+            NodeKind::Foreach { .. } => Some("foreach"),
+            NodeKind::Given { .. } => Some("given"),
+            NodeKind::When { .. } => Some("when"),
+            NodeKind::Default { .. } => Some("default"),
+            NodeKind::Prototype { .. } => Some("prototype"),
+            NodeKind::Signature { .. } => Some("signature"),
+            NodeKind::MandatoryParameter { .. } => Some("mandatory_parameter"),
+            NodeKind::OptionalParameter { .. } => Some("optional_parameter"),
+            NodeKind::SlurpyParameter { .. } => Some("slurpy_parameter"),
+            NodeKind::NamedParameter { .. } => Some("named_parameter"),
+            NodeKind::Method { .. } => Some("method_declaration_statement"),
+            NodeKind::Return { .. } => Some("return"),
+            NodeKind::Goto { .. } => Some("goto"),
+            NodeKind::MethodCall { .. } => Some("method_call"),
+            NodeKind::IndirectCall { .. } => Some("indirect_call"),
+            NodeKind::Regex { .. } => Some("regex"),
+            NodeKind::Substitution { .. } => Some("substitution"),
+            NodeKind::Transliteration { .. } => Some("transliteration"),
+            NodeKind::Package { .. } => Some("package"),
+            NodeKind::Use { .. } => Some("use"),
+            NodeKind::No { .. } => Some("no"),
+            NodeKind::DataSection { .. } => Some("data_section"),
+            NodeKind::Class { .. } => Some("class"),
+            NodeKind::Format { .. } => Some("format"),
+            NodeKind::Identifier { .. } => Some("identifier"),
+            NodeKind::Error { .. } => Some("ERROR"),
+            NodeKind::MissingExpression => Some("missing_expression"),
+            NodeKind::MissingStatement => Some("missing_statement"),
+            NodeKind::MissingIdentifier => Some("missing_identifier"),
+            NodeKind::MissingBlock => Some("missing_block"),
+            NodeKind::UnknownRest => Some("UNKNOWN_REST"),
+        }
+    }
+
+    /// Return the tree-sitter-style grammar kind without serializing the subtree.
+    ///
+    /// Most variants use [`grammar_kind_name_static`](Self::grammar_kind_name_static),
+    /// so lookup is O(1) and independent of subtree size. The returned `String`
+    /// may still allocate; the performance win is avoiding a full S-expression
+    /// traversal and allocation. Only runtime-derived names take the dynamic path.
+    pub fn grammar_kind_name(&self) -> String {
+        if let Some(name) = self.grammar_kind_name_static() {
+            return name.to_string();
+        }
+
+        match self {
+            NodeKind::VariableDeclaration { declarator, .. }
+            | NodeKind::VariableListDeclaration { declarator, .. } => {
+                format!("{declarator}_declaration")
+            }
+            NodeKind::Assignment { op, .. } => {
+                format!("assignment_{}", op.replace('=', "assign"))
+            }
+            NodeKind::Binary { op, .. } => format_binary_operator(op),
+            NodeKind::Unary { op, .. } => format_unary_operator(op),
+            NodeKind::String { interpolated, .. } => {
+                if *interpolated { "string_interpolated" } else { "string" }.to_string()
+            }
+            NodeKind::Heredoc { interpolated, indented, command, .. } => {
+                let name = if *command {
+                    "heredoc_command"
+                } else if *indented {
+                    if *interpolated { "heredoc_indented_interpolated" } else { "heredoc_indented" }
+                } else if *interpolated {
+                    "heredoc_interpolated"
+                } else {
+                    "heredoc"
+                };
+                name.to_string()
+            }
+            NodeKind::If { keyword, .. } => keyword.as_deref().unwrap_or("if").to_string(),
+            NodeKind::While { keyword, .. } => keyword.as_deref().unwrap_or("while").to_string(),
+            NodeKind::StatementModifier { modifier, .. } => {
+                format!("statement_modifier_{modifier}")
+            }
+            NodeKind::Subroutine { name, .. } => {
+                if name.is_some() { "sub" } else { "anonymous_subroutine_expression" }.to_string()
+            }
+            NodeKind::LoopControl { op, .. } => op.clone(),
+            NodeKind::FunctionCall { name, args } => if is_call_form_function(name) {
+                "call"
+            } else if args.is_empty() {
+                "function_call_expression"
+            } else {
+                "ambiguous_function_call_expression"
+            }
+            .to_string(),
+            NodeKind::Match { negated, .. } => {
+                if *negated { "not_match" } else { "match" }.to_string()
+            }
+            NodeKind::PhaseBlock { phase, .. } => phase.clone(),
+            // Every variant with a runtime-derived grammar name is covered
+            // above; the exhaustive match is the drift guard for this table.
+            NodeKind::NestedVariableList { .. }
+            | NodeKind::Variable { .. }
+            | NodeKind::VariableWithAttributes { .. }
+            | NodeKind::Ternary { .. }
+            | NodeKind::Diamond
+            | NodeKind::Ellipsis
+            | NodeKind::Undef
+            | NodeKind::Readline { .. }
+            | NodeKind::Glob { .. }
+            | NodeKind::Typeglob { .. }
+            | NodeKind::Number { .. }
+            | NodeKind::VString { .. }
+            | NodeKind::ArrayLiteral { .. }
+            | NodeKind::HashLiteral { .. }
+            | NodeKind::Block { .. }
+            | NodeKind::Eval { .. }
+            | NodeKind::Do { .. }
+            | NodeKind::Defer { .. }
+            | NodeKind::Try { .. }
+            | NodeKind::LabeledStatement { .. }
+            | NodeKind::Tie { .. }
+            | NodeKind::Untie { .. }
+            | NodeKind::For { .. }
+            | NodeKind::Foreach { .. }
+            | NodeKind::Given { .. }
+            | NodeKind::When { .. }
+            | NodeKind::Default { .. }
+            | NodeKind::Prototype { .. }
+            | NodeKind::Signature { .. }
+            | NodeKind::MandatoryParameter { .. }
+            | NodeKind::OptionalParameter { .. }
+            | NodeKind::SlurpyParameter { .. }
+            | NodeKind::NamedParameter { .. }
+            | NodeKind::Method { .. }
+            | NodeKind::Return { .. }
+            | NodeKind::Goto { .. }
+            | NodeKind::MethodCall { .. }
+            | NodeKind::IndirectCall { .. }
+            | NodeKind::Regex { .. }
+            | NodeKind::Substitution { .. }
+            | NodeKind::Transliteration { .. }
+            | NodeKind::Package { .. }
+            | NodeKind::Use { .. }
+            | NodeKind::No { .. }
+            | NodeKind::DataSection { .. }
+            | NodeKind::Class { .. }
+            | NodeKind::Format { .. }
+            | NodeKind::Identifier { .. }
+            | NodeKind::Error { .. }
+            | NodeKind::MissingExpression
+            | NodeKind::MissingStatement
+            | NodeKind::MissingIdentifier
+            | NodeKind::MissingBlock
+            | NodeKind::UnknownRest
+            | NodeKind::Program { .. }
+            | NodeKind::ExpressionStatement { .. } => {
+                // The preceding static lookup handled these variants.
+                self.grammar_kind_name_static()
+                    .map_or_else(|| self.kind_name().to_string(), str::to_owned)
+            }
+        }
+    }
+
     /// Canonical list of **all** `kind_name()` strings, in declaration order.
     ///
     /// Auto-derived from the `NodeKind` enum via `strum::VariantNames` — adding a new
@@ -2610,6 +2793,36 @@ fn format_unary_operator(op: &str) -> String {
         // Default case for unknown operators
         _ => format!("unary_{}", op.replace(' ', "_")),
     }
+}
+
+/// Whether a function call uses the explicit `(call name (args...))` form.
+///
+/// This predicate is shared by S-expression rendering and grammar-kind
+/// metadata so those two public representations cannot drift apart.
+fn is_call_form_function(name: &str) -> bool {
+    matches!(
+        name,
+        "bless"
+            | "shift"
+            | "unshift"
+            | "open"
+            | "die"
+            | "warn"
+            | "print"
+            | "printf"
+            | "say"
+            | "push"
+            | "pop"
+            | "map"
+            | "sort"
+            | "grep"
+            | "keys"
+            | "values"
+            | "each"
+            | "defined"
+            | "scalar"
+            | "ref"
+    )
 }
 
 /// Format binary operator for S-expression output
@@ -2720,10 +2933,11 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    /// Build a dummy instance for every `NodeKind` variant and return its
-    /// `kind_name()`.  This ensures the compiler forces us to update here
-    /// whenever a variant is added/removed.
-    fn all_kind_names_from_variants() -> BTreeSet<&'static str> {
+    /// Build a dummy instance for every `NodeKind` variant.
+    ///
+    /// Keeping this constructor exhaustive makes metadata tests fail at compile
+    /// time when a new variant is added without being classified deliberately.
+    fn all_node_kinds() -> Vec<NodeKind> {
         let loc = SourceLocation { start: 0, end: 0 };
         let dummy_node = || Node::new(NodeKind::Undef, loc);
 
@@ -2936,7 +3150,12 @@ mod tests {
             NodeKind::UnknownRest,
         ];
 
-        variants.iter().map(|v| v.kind_name()).collect()
+        variants
+    }
+
+    /// Return the set of `kind_name()` values represented by every variant.
+    fn all_kind_names_from_variants() -> BTreeSet<&'static str> {
+        all_node_kinds().iter().map(|v| v.kind_name()).collect()
     }
 
     #[test]
@@ -2998,12 +3217,106 @@ mod tests {
         );
     }
 
+    #[test]
+    fn static_grammar_kind_metadata_matches_sexp_roots() {
+        let loc = SourceLocation { start: 0, end: 0 };
+
+        for kind in all_node_kinds() {
+            if kind.grammar_kind_name_static().is_none() {
+                continue;
+            }
+
+            let grammar_kind = kind.grammar_kind_name();
+            let sexp = Node::new(kind, loc).to_sexp();
+            if sexp.starts_with("((") {
+                // VariableWithAttributes preserves its child as the outer
+                // S-expression form, but still has a stable facade kind.
+                assert_eq!(grammar_kind, "variable_with_attributes");
+                continue;
+            }
+
+            let root = sexp.trim_start_matches('(');
+            let end = root.find([' ', ')']).unwrap_or(root.len());
+            assert_eq!(grammar_kind, root[..end]);
+        }
+    }
+
+    #[test]
+    fn dynamic_grammar_kind_metadata_matches_sexp_roots() {
+        let loc = SourceLocation { start: 0, end: 0 };
+        let leaf = || Node::new(NodeKind::Number { value: "1".into() }, loc);
+        let cases = [
+            NodeKind::VariableDeclaration {
+                declarator: "my".into(),
+                variable: Box::new(leaf()),
+                attributes: vec![],
+                initializer: None,
+            },
+            NodeKind::Assignment { lhs: Box::new(leaf()), rhs: Box::new(leaf()), op: "+=".into() },
+            NodeKind::Binary { op: "->{}".into(), left: Box::new(leaf()), right: Box::new(leaf()) },
+            NodeKind::Unary { op: "!".into(), operand: Box::new(leaf()) },
+            NodeKind::String { value: "x".into(), interpolated: true },
+            NodeKind::Heredoc {
+                delimiter: "END".into(),
+                content: String::new(),
+                interpolated: true,
+                indented: false,
+                command: false,
+                body_span: None,
+            },
+            NodeKind::If {
+                condition: Box::new(leaf()),
+                then_branch: Box::new(leaf()),
+                elsif_branches: vec![],
+                else_branch: None,
+                keyword: Some("unless".into()),
+            },
+            NodeKind::StatementModifier {
+                statement: Box::new(leaf()),
+                modifier: "unless".into(),
+                condition: Box::new(leaf()),
+            },
+            NodeKind::Subroutine {
+                name: None,
+                name_span: None,
+                declarator: None,
+                prototype: None,
+                signature: None,
+                attributes: vec![],
+                body: Box::new(leaf()),
+            },
+            NodeKind::LoopControl { op: "next".into(), label: None },
+            NodeKind::FunctionCall { name: "print".into(), args: vec![] },
+            NodeKind::FunctionCall { name: "custom".into(), args: vec![leaf()] },
+            NodeKind::Match {
+                expr: Box::new(leaf()),
+                pattern: "x".into(),
+                modifiers: String::new(),
+                has_embedded_code: false,
+                negated: true,
+            },
+            NodeKind::PhaseBlock {
+                phase: "BEGIN".into(),
+                phase_span: None,
+                block: Box::new(leaf()),
+            },
+        ];
+
+        for kind in cases {
+            let grammar_kind = kind.grammar_kind_name();
+            let sexp = Node::new(kind, loc).to_sexp();
+            let root = sexp.trim_start_matches('(');
+            let end = root.find([' ', ')']).unwrap_or(root.len());
+            assert_eq!(grammar_kind, root[..end]);
+        }
+    }
+
     /// Construct recovery variants and return their `kind_name()` strings.
     ///
     /// Adding a recovery variant to `NodeKind` without updating `RECOVERY_KIND_NAMES`
     /// will cause `recovery_kind_names_is_consistent_with_kind_name` to fail.
     fn recovery_kind_names_from_variants() -> BTreeSet<&'static str> {
-        vec![
+        [
             NodeKind::Error {
                 message: String::new(),
                 expected: vec![],

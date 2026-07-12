@@ -366,9 +366,9 @@ impl<'tree> Node<'tree> {
     /// upstream tree-sitter Perl grammar.
     /// Error nodes use `"ERROR"` (uppercase), matching tree-sitter convention.
     ///
-    /// For most nodes the grammar name is a simple lowercase mapping. For some
-    /// nodes (e.g., operator-named `Binary`, dynamic `VariableDeclaration`) the
-    /// name depends on runtime data; this method extracts it from `to_sexp()`.
+    /// For most nodes the grammar name is an allocation-free static mapping. For
+    /// nodes whose name depends on runtime data (e.g., operator-named `Binary`
+    /// or dynamic `VariableDeclaration`), only that node's fields are inspected.
     ///
     /// # Example
     ///
@@ -381,24 +381,7 @@ impl<'tree> Node<'tree> {
     /// assert_eq!(tree.unwrap().root_node().grammar_kind(), "source_file");
     /// ```
     pub fn grammar_kind(&self) -> String {
-        // Extract the node type from the leading `(word` in the S-expression.
-        // to_sexp() always starts with `(kind_name` or just `(kind_name)`.
-        //
-        // Edge case: NodeKind::VariableWithAttributes produces a double-paren sexp
-        // of the form `((variable $ foo) (attributes :lvalue))` because it delegates
-        // the outer wrapper to the child variable's to_sexp(). In that case the sexp
-        // does not begin with `(kind_name` -- it begins with `((child_kind`. We detect
-        // this and fall back to the v3 kind_name() converted to snake_case.
-        let sexp = self.to_sexp();
-        if sexp.starts_with("((") {
-            // Double-paren form: no independent grammar kind token in the sexp.
-            // Derive a stable snake_case name from the v3 kind_name() as fallback.
-            return pascal_to_snake(self.inner.kind.kind_name());
-        }
-        let inner = sexp.trim_start_matches('(');
-        // Take up to the first space or closing paren.
-        let end = inner.find([' ', ')']).unwrap_or(inner.len());
-        inner[..end].to_string()
+        self.inner.kind.grammar_kind_name()
     }
 
     /// Returns a tree-sitter-compatible S-expression for this node and its subtree.
@@ -681,20 +664,6 @@ fn resolve_path<'tree>(root: &'tree AstNode, path: &[usize]) -> &'tree AstNode {
     current
 }
 
-/// Convert a PascalCase kind name (e.g. `"VariableWithAttributes"`) to snake_case
-/// (e.g. `"variable_with_attributes"`). Used as a fallback in [`Node::grammar_kind`]
-/// when the S-expression does not have a simple `(kind_name ...)` prefix.
-fn pascal_to_snake(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 4);
-    for (i, c) in s.char_indices() {
-        if c.is_uppercase() && i > 0 {
-            out.push('_');
-        }
-        out.extend(c.to_lowercase());
-    }
-    out
-}
-
 fn byte_to_point(source: &str, byte: usize) -> Point {
     let clamped = byte.min(source.len());
     let mut row = 0usize;
@@ -935,14 +904,6 @@ mod tests {
     // Tests for grammar_kind() method
 
     #[test]
-    fn test_pascal_to_snake_helper() {
-        assert_eq!(pascal_to_snake("VariableWithAttributes"), "variable_with_attributes");
-        assert_eq!(pascal_to_snake("Program"), "program");
-        assert_eq!(pascal_to_snake("FunctionCall"), "function_call");
-        assert_eq!(pascal_to_snake("If"), "if");
-    }
-
-    #[test]
     fn test_grammar_kind_returns_source_file_for_root() {
         let mut p = Parser::new();
         let tree = must_some(p.parse("my $x = 42;"));
@@ -971,15 +932,19 @@ mod tests {
 
     #[test]
     fn test_grammar_kind_double_paren_edge_case() {
-        // Test that grammar_kind() handles the double-paren sexp form correctly.
+        // Test that grammar_kind() remains independent of the double-paren sexp form.
         // VariableWithAttributes produces ((variable $ foo) (attributes :lvalue))
-        // and should fall back to pascal_to_snake() to derive the grammar kind.
         let mut p = Parser::new();
-        let tree = must_some(p.parse("my $x : lvalue = 42;"));
+        let tree = must_some(p.parse("my ($x : lvalue);"));
         let root = tree.root_node();
         let sexp = root.to_sexp();
-        // Verify the structure includes a my_declaration.
-        assert!(sexp.contains("my_declaration"), "sexp should include my_declaration");
+        assert!(sexp.contains("((variable"), "sexp should include the double-paren variable form");
+        let declaration =
+            must_some(root.children().find(|node| node.grammar_kind() == "my_declaration"));
+        let variable = must_some(
+            declaration.children().find(|node| node.grammar_kind() == "variable_with_attributes"),
+        );
+        assert_eq!(variable.grammar_kind(), "variable_with_attributes");
     }
 
     // Tests for PerlLanguage descriptor
