@@ -1,0 +1,53 @@
+name: Temporary v0.13.0-rc1 ledger correction
+
+on:
+  push:
+    branches:
+      - docs/release-lineage-0.13
+    paths:
+      - scripts/_fix_013rc_ledger_tmp.py
+      - .github/workflows/_tmp-fix-013rc-ledger.yml
+  pull_request:
+    branches:
+      - master
+    paths:
+      - scripts/_fix_013rc_ledger_tmp.py
+      - .github/workflows/_tmp-fix-013rc-ledger.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout correction branch
+        uses: actions/checkout@v7
+        with:
+          ref: docs/release-lineage-0.13
+          fetch-depth: 0
+
+      - name: Apply and validate RC ledger correction
+        run: |
+          set -euo pipefail
+          python3 scripts/_fix_013rc_ledger_tmp.py
+          grep -q '\[yes\]\[gh-0.13.0-rc1\] (prerelease)' RELEASE_HISTORY.md
+          grep -q '^\[gh-0.13.0-rc1\]:' RELEASE_HISTORY.md
+          grep -q '11 assets' docs/releases/v0.13.0-rc1.md
+          git diff --check
+
+      - name: Remove one-shot machinery
+        run: |
+          rm scripts/_fix_013rc_ledger_tmp.py
+          rm .github/workflows/_tmp-fix-013rc-ledger.yml
+
+      - name: Commit correction
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs(release): record published v0.13.0-rc1 prerelease (#9961)'
+          git push origin HEAD:refs/heads/docs/release-lineage-0.13
