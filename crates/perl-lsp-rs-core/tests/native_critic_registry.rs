@@ -138,13 +138,11 @@ fn registry_built_in_profiles_have_unique_rule_ids() {
 }
 
 #[test]
-fn registry_recommended_helper_matches_strict_profile() {
-    // `NativeCriticRegistry::recommended()` is documented as a compatibility
-    // shim: it currently returns the strict profile. Pin that contract here
-    // so a quiet roster change doesn't slip past.
+fn registry_recommended_helper_matches_recommended_profile() {
     let recommended_helper = NativeCriticRegistry::recommended().rule_ids();
-    let strict_profile = NativeCriticRegistry::for_profile(NativeCriticProfile::Strict).rule_ids();
-    assert_eq!(recommended_helper, strict_profile);
+    let recommended_profile =
+        NativeCriticRegistry::for_profile(NativeCriticProfile::Recommended).rule_ids();
+    assert_eq!(recommended_helper, recommended_profile);
 }
 
 // ---- NativeCriticRegistry::check: include / exclude / severity gates --------
