@@ -41,15 +41,13 @@ fn main() {
 
     let mut parser = Parser::new();
     let start = Instant::now();
-    let result = parser.parse(&code);
+    let result = parser.parse_detailed(&code);
     let duration = start.elapsed().as_micros();
+    let has_error = result.has_error();
 
-    match result {
+    match result.tree {
         Some(_tree) => {
-            // The v3 parser is error-tolerant; a successful parse may still
-            // contain recovered error nodes. We report error=false here because
-            // the facade returned a tree (same convention as bench_parser_c).
-            println!("status=success error=false duration_us={}", duration);
+            println!("status=success error={} duration_us={}", has_error, duration);
         }
         None => {
             println!("status=failure error=true duration_us={}", duration);

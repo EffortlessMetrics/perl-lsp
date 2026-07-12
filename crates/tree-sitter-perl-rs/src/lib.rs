@@ -51,10 +51,12 @@
 
 use perl_ast::{Node as AstNode, NodeKind};
 use perl_module::parse_module_import_head;
-use perl_parser_core::Parser as CoreParser;
+use perl_parser_core::{ParseOutput, Parser as CoreParser};
 use perl_pragma::{PragmaState, PragmaTracker};
 use perl_semantic_analyzer::semantic::SemanticModel;
 
+/// Parser diagnostics surfaced by [`Parser::parse_detailed`].
+pub use perl_parser_core::ParseError as ParseDiagnostic;
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
 /// Mirrors `tree_sitter::InputEdit` field layout for drop-in compatibility.
@@ -116,9 +118,36 @@ impl Parser {
     pub fn parse(&mut self, source: &str) -> Option<Tree> {
         let mut core = CoreParser::new(source);
         match core.parse() {
-            Ok(root) => Some(Tree { root, source: source.to_string(), pending_edits: Vec::new() }),
+            Ok(root) => Some(Tree {
+                root,
+                source: source.to_string(),
+                pending_edits: Vec::new(),
+                diagnostics: core.errors().to_vec(),
+            }),
             Err(_) => None,
         }
+    }
+
+    /// Parse `source` and preserve recovery diagnostics and catastrophic failures.
+    ///
+    /// A recovered parse returns `tree: Some(_)` with one or more diagnostics. A
+    /// catastrophic failure returns `tree: None` and a typed [`ParseFailure`]. Existing
+    /// callers that only need the compatibility `Option` API can continue using
+    /// [`parse`][Parser::parse].
+    pub fn parse_detailed(&mut self, source: &str) -> ParseOutcome {
+        let mut core = CoreParser::new(source);
+        let ParseOutput { ast, diagnostics, terminated_early, .. } = core.parse_with_recovery();
+        let failure = terminated_early
+            .then(|| diagnostics.iter().find_map(ParseFailure::from_diagnostic))
+            .flatten();
+        let tree = failure.is_none().then(|| Tree {
+            root: ast,
+            source: source.to_string(),
+            pending_edits: Vec::new(),
+            diagnostics: diagnostics.clone(),
+        });
+
+        ParseOutcome { tree, diagnostics, failure }
     }
 
     /// Parse `source` using `old_tree` as a hint for incremental re-parsing.
@@ -212,6 +241,67 @@ pub struct Tree {
     source: String,
     /// Pending edits recorded via [`Tree::edit`].
     pending_edits: Vec<InputEdit>,
+    diagnostics: Vec<ParseDiagnostic>,
+}
+
+/// The result of [`Parser::parse_detailed`].
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct ParseOutcome {
+    /// The recovered syntax tree, when parsing did not fail catastrophically.
+    pub tree: Option<Tree>,
+    /// Diagnostics collected during parsing, including recoverable errors.
+    pub diagnostics: Vec<ParseDiagnostic>,
+    /// The typed reason parsing could not produce a usable tree, if any.
+    pub failure: Option<ParseFailure>,
+}
+
+impl ParseOutcome {
+    /// Returns `true` when diagnostics or an explicit error node were observed.
+    pub fn has_error(&self) -> bool {
+        self.diagnostics.iter().any(ParseDiagnostic::blocks_clean_parse)
+            || self.tree.as_ref().is_some_and(Tree::has_error)
+    }
+
+    /// Returns `true` when a tree was produced with recovery diagnostics.
+    pub fn is_recovered(&self) -> bool {
+        self.tree.is_some() && self.has_error()
+    }
+}
+
+/// Typed catastrophic parse failures surfaced by [`Parser::parse_detailed`].
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum ParseFailure {
+    /// The parser recursion budget was exceeded.
+    RecursionLimit,
+    /// The parser's structural nesting budget was exceeded.
+    NestingTooDeep {
+        /// Observed nesting depth.
+        depth: usize,
+        /// Configured maximum nesting depth.
+        max_depth: usize,
+    },
+    /// Parsing was cancelled by the caller.
+    Cancelled,
+    /// A future or currently unclassified catastrophic failure.
+    Other {
+        /// The original parser diagnostic.
+        diagnostic: ParseDiagnostic,
+    },
+}
+
+impl ParseFailure {
+    fn from_diagnostic(diagnostic: &ParseDiagnostic) -> Option<Self> {
+        match diagnostic {
+            ParseDiagnostic::RecursionLimit => Some(Self::RecursionLimit),
+            ParseDiagnostic::NestingTooDeep { depth, max_depth } => {
+                Some(Self::NestingTooDeep { depth: *depth, max_depth: *max_depth })
+            }
+            ParseDiagnostic::Cancelled => Some(Self::Cancelled),
+            _ => Some(Self::Other { diagnostic: diagnostic.clone() }),
+        }
+    }
 }
 
 /// Experimental semantic overlay query handle.
@@ -261,6 +351,17 @@ impl Tree {
     /// Returns the source text this tree was built from.
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    /// Returns the diagnostics collected while building this tree.
+    pub fn diagnostics(&self) -> &[ParseDiagnostic] {
+        &self.diagnostics
+    }
+
+    /// Returns `true` when parsing produced diagnostics or an explicit error node.
+    pub fn has_error(&self) -> bool {
+        self.diagnostics.iter().any(ParseDiagnostic::blocks_clean_parse)
+            || ast_has_error(&self.root)
     }
 
     /// Records a source edit on this tree, invalidating affected byte ranges.
@@ -382,6 +483,16 @@ impl<'tree> Node<'tree> {
     /// ```
     pub fn grammar_kind(&self) -> String {
         self.inner.kind.grammar_kind_name()
+    }
+
+    /// Returns `true` when this node is an explicit parser error node.
+    pub fn is_error(&self) -> bool {
+        matches!(self.inner.kind, NodeKind::Error { .. })
+    }
+
+    /// Returns `true` when this node or one of its descendants is an error node.
+    pub fn has_error(&self) -> bool {
+        ast_has_error(self.inner)
     }
 
     /// Returns a tree-sitter-compatible S-expression for this node and its subtree.
@@ -605,6 +716,14 @@ fn ast_child_count(node: &AstNode) -> usize {
     let mut count = 0usize;
     node.for_each_child(|_| count += 1);
     count
+}
+
+fn ast_has_error(node: &AstNode) -> bool {
+    if matches!(node.kind, NodeKind::Error { .. }) {
+        return true;
+    }
+
+    node.children().iter().any(|child| ast_has_error(child))
 }
 
 #[inline]

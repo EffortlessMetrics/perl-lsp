@@ -56,7 +56,7 @@
 
 use crate::{
     ast::{GotoTargetForm, Node, NodeKind, SourceLocation},
-    error::{ParseError, ParseOutput, ParseResult, RecoveryKind, RecoverySite},
+    error::{BudgetTracker, ParseError, ParseOutput, ParseResult, RecoveryKind, RecoverySite},
     heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_at_declaration_offsets},
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
@@ -419,8 +419,8 @@ impl<'a> Parser<'a> {
     /// assert!(!output.diagnostics.is_empty() || matches!(output.ast.kind, perl_parser_core::NodeKind::Program { .. }));
     /// ```
     pub fn parse_with_recovery(&mut self) -> ParseOutput {
-        let ast = match self.parse() {
-            Ok(node) => node,
+        let (ast, terminated_early) = match self.parse() {
+            Ok(node) => (node, false),
             Err(e) => {
                 // If parse() returned Err, it was a non-recoverable error (e.g. recursion limit)
                 // Ensure it's recorded if not already
@@ -429,14 +429,19 @@ impl<'a> Parser<'a> {
                 }
 
                 // Return a dummy Program node with the error
-                Node::new(
-                    NodeKind::Program { statements: vec![] },
-                    SourceLocation { start: 0, end: 0 },
+                (
+                    Node::new(
+                        NodeKind::Program { statements: vec![] },
+                        SourceLocation { start: 0, end: 0 },
+                    ),
+                    true,
                 )
             }
         };
 
-        ParseOutput::with_errors(ast, self.errors.clone())
+        let mut budget_usage = BudgetTracker::new();
+        budget_usage.errors_emitted = self.errors.len();
+        ParseOutput::finish(ast, self.errors.clone(), budget_usage, terminated_early)
     }
 }
 

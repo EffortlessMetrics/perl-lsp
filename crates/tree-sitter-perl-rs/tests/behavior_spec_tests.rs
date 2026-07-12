@@ -4,7 +4,7 @@
 //! parser ergonomics, traversal, source extraction, and resilience on malformed input.
 
 use perl_tdd_support::{must, must_some};
-use tree_sitter_perl_rs::Parser;
+use tree_sitter_perl_rs::{ParseFailure, Parser};
 
 fn parse(source: &str) -> tree_sitter_perl_rs::Tree {
     let mut parser = Parser::new();
@@ -82,6 +82,61 @@ fn when_parsing_malformed_input_then_error_tolerant_tree_is_still_produced() {
     let tree = parser.parse("sub { @@@@invalid{{{{");
 
     assert!(tree.is_some());
+    let tree = must_some(tree);
+    assert!(tree.has_error());
+    assert!(!tree.diagnostics().is_empty());
+}
+
+#[test]
+fn when_parse_detailed_receives_clean_input_then_no_error_is_reported() {
+    let mut parser = Parser::new();
+
+    let outcome = parser.parse_detailed("my $x = 42;");
+
+    assert!(outcome.tree.is_some());
+    assert!(outcome.diagnostics.is_empty());
+    assert!(!outcome.has_error());
+    assert!(!outcome.is_recovered());
+}
+
+#[test]
+fn when_parse_detailed_sees_an_advisory_then_valid_tree_is_not_marked_as_error() {
+    let mut parser = Parser::new();
+
+    let outcome = parser.parse_detailed("my $re = /(a+)+/;");
+
+    assert!(outcome.tree.is_some());
+    assert!(outcome.diagnostics.iter().any(|diagnostic| !diagnostic.blocks_clean_parse()));
+    assert!(!outcome.has_error());
+    assert!(!outcome.is_recovered());
+    assert!(!must_some(outcome.tree.as_ref()).has_error());
+}
+
+#[test]
+fn when_parse_detailed_recovers_then_tree_and_error_status_are_both_available() {
+    let mut parser = Parser::new();
+
+    let outcome = parser.parse_detailed("my $x = ;");
+
+    assert!(outcome.tree.is_some());
+    assert!(!outcome.diagnostics.is_empty());
+    assert!(outcome.has_error());
+    assert!(outcome.is_recovered());
+    assert!(must_some(outcome.tree.as_ref()).has_error());
+}
+
+#[test]
+fn when_parse_detailed_hits_nesting_limit_then_failure_is_typed() {
+    let source = "(".repeat(600);
+    let mut parser = Parser::new();
+
+    let outcome = parser.parse_detailed(&source);
+
+    assert!(matches!(
+        outcome.failure,
+        Some(ParseFailure::RecursionLimit | ParseFailure::NestingTooDeep { .. })
+    ));
+    assert!(outcome.tree.is_none());
 }
 
 #[test]

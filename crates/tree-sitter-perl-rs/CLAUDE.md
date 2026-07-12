@@ -24,12 +24,15 @@ pub struct Parser { /* wraps perl-parser-core */ }
 impl Parser {
     pub fn new() -> Self;
     pub fn parse(&mut self, source: &str) -> Option<Tree>;
+    pub fn parse_detailed(&mut self, source: &str) -> ParseOutcome;
 }
 
 pub struct Tree { /* owns the v3 AST */ }
 impl Tree {
     pub fn root_node(&self) -> Node;
     pub fn source(&self) -> &str;
+    pub fn diagnostics(&self) -> &[ParseDiagnostic];
+    pub fn has_error(&self) -> bool;
     pub fn walk(&self) -> TreeCursor<'_>;
     pub fn edit(&mut self, edit: &InputEdit);
 }
@@ -39,6 +42,8 @@ impl<'tree> Node<'tree> {
     pub fn kind(&self) -> String;              // canonical grammar name, e.g. "source_file"
     pub fn native_kind(&self) -> &'static str; // v3 internal name, e.g. "Program"
     pub fn grammar_kind(&self) -> String;      // compatibility alias of kind()
+    pub fn is_error(&self) -> bool;
+    pub fn has_error(&self) -> bool;
     pub fn to_sexp(&self) -> String;           // delegates to perl_ast::Node::to_sexp()
     pub fn child_count(&self) -> usize;
     pub fn child(&self, i: usize) -> Option<Node<'tree>>;
@@ -64,6 +69,9 @@ impl<'tree> TreeCursor<'tree> {
 }
 
 pub use perl_parser_core::edit::Edit as InputEdit;
+pub use perl_parser_core::ParseError as ParseDiagnostic;
+pub struct ParseOutcome { /* tree + diagnostics + typed failure */ }
+pub enum ParseFailure { /* recursion/nesting/cancellation failure */ }
 pub struct PerlLanguage { /* language descriptor */ }
 pub fn language() -> PerlLanguage;
 pub static LANGUAGE: PerlLanguage;
