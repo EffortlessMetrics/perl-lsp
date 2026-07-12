@@ -101,9 +101,10 @@ jobs:
       - name: Verify GHCR builder version tag is multi-architecture
         if: github.event.inputs.push != 'false'
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.init.outputs.version }}
+          VERSION: ${{ needs.init.outputs.version }}
         run: |
           set -euo pipefail
+          IMAGE="$(printf '%s/%s:%s' "$REGISTRY" "$IMAGE_NAME" "$VERSION" | tr '[:upper:]' '[:lower:]')"
           manifest="$(mktemp)"
           for attempt in 1 2 3 4 5; do
             if docker manifest inspect "$IMAGE" > "$manifest"; then
@@ -190,9 +191,10 @@ jobs:
       - name: Verify GHCR runtime version tag is multi-architecture
         if: github.event.inputs.push != 'false'
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-perl:${{ needs.init.outputs.version }}
+          VERSION: ${{ needs.init.outputs.version }}
         run: |
           set -euo pipefail
+          IMAGE="$(printf '%s/%s-perl:%s' "$REGISTRY" "$IMAGE_NAME" "$VERSION" | tr '[:upper:]' '[:lower:]')"
           manifest="$(mktemp)"
           for attempt in 1 2 3 4 5; do
             if docker manifest inspect "$IMAGE" > "$manifest"; then
