@@ -1,0 +1,47 @@
+name: Temporary remove unused release reference
+
+on:
+  push:
+    branches:
+      - docs/release-tag-provenance
+    paths:
+      - scripts/_remove_unused_release_ref_tmp.py
+      - .github/workflows/_tmp-remove-unused-release-ref.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: docs/release-tag-provenance
+          fetch-depth: 0
+
+      - name: Apply and validate cleanup
+        run: |
+          set -euo pipefail
+          python3 scripts/_remove_unused_release_ref_tmp.py
+          ! grep -q '^\[gh-0.13.4\]:' RELEASE_HISTORY.md
+          python3 scripts/check_release_tag_provenance.py
+          python3 scripts/tests/test_release_tag_provenance.py
+          git diff --check
+
+      - name: Remove one-shot machinery
+        run: |
+          rm scripts/_remove_unused_release_ref_tmp.py
+          rm .github/workflows/_tmp-remove-unused-release-ref.yml
+
+      - name: Commit cleanup
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs(release): remove unused 0.13.4 release link'
+          git push origin HEAD:refs/heads/docs/release-tag-provenance
