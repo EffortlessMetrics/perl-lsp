@@ -1,5 +1,6 @@
 name: Temporary release tag provenance audit
 
+# One-shot branch workflow; the successful run removes this file.
 on:
   push:
     branches:
