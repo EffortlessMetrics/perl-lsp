@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "audited_at": "2026-07-12",
+  "repository": "EffortlessMetrics/perl-lsp",
+  "evidence_runs": [29192188862, 29192323459],
+  "releases": [
+    {
+      "version": "0.15.0",
+      "note_channel_value": "Docker Hub amd64/arm64 verified; GHCR builder/runtime tags exist but are arm64-only",
+      "docker_hub": {
+        "builder": {
+          "tag": "0.15.0",
+          "pushed_at": "2026-05-22T21:31:48.610622Z",
+          "digest": "sha256:ee8dde346af168d418066d7a8e32d756ba485c5a2cf3abc42a4bde9974bc4732",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        },
+        "runtime": {
+          "tag": "0.15.0-perl",
+          "pushed_at": "2026-05-22T20:31:14.272362Z",
+          "digest": "sha256:998b3f80b3839ef142c6be94a4b98fc3e7ff2702a43568dc54468f5b92ffa71e",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        }
+      },
+      "ghcr": {
+        "builder": {
+          "package": "perl-lsp",
+          "created_at": "2026-05-22T21:23:06Z",
+          "platforms": ["linux/arm64"]
+        },
+        "runtime": {
+          "package": "perl-lsp-perl",
+          "created_at": "2026-05-22T20:31:20Z",
+          "platforms": ["linux/arm64"]
+        }
+      }
+    },
+    {
+      "version": "0.15.1",
+      "note_channel_value": "Docker Hub amd64/arm64 verified; GHCR builder/runtime tags exist but are arm64-only",
+      "docker_hub": {
+        "builder": {
+          "tag": "0.15.1",
+          "pushed_at": "2026-05-26T20:43:59.886534Z",
+          "digest": "sha256:b0dd05f856b71bb04a4a226672589342d37f9fd1fbad871add9a02243561b25e",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        },
+        "runtime": {
+          "tag": "0.15.1-perl",
+          "pushed_at": "2026-05-26T19:44:39.159396Z",
+          "digest": "sha256:c04761a9b2bb25f85b2fea05bad8ec916318cd8bc165a0e9dda336717bffb045",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        }
+      },
+      "ghcr": {
+        "builder": {
+          "package": "perl-lsp",
+          "created_at": "2026-05-26T20:14:18Z",
+          "platforms": ["linux/arm64"]
+        },
+        "runtime": {
+          "package": "perl-lsp-perl",
+          "created_at": "2026-05-26T19:43:23Z",
+          "platforms": ["linux/arm64"]
+        }
+      }
+    },
+    {
+      "version": "0.15.2",
+      "note_channel_value": "Docker Hub amd64/arm64 verified; GHCR builder/runtime tags exist but are arm64-only",
+      "docker_hub": {
+        "builder": {
+          "tag": "0.15.2",
+          "pushed_at": "2026-05-26T22:51:53.017230Z",
+          "digest": "sha256:7c339268874a87aaf8a3de57399277dadc3ea97042b2865830c05434181b2121",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        },
+        "runtime": {
+          "tag": "0.15.2-perl",
+          "pushed_at": "2026-05-26T22:05:51.263719Z",
+          "digest": "sha256:6a1ab126c232056f134ad3446d4e1ff4a12f29b74cad77396dda99202b5d8240",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        }
+      },
+      "ghcr": {
+        "builder": {
+          "package": "perl-lsp",
+          "created_at": "2026-05-26T22:59:06Z",
+          "platforms": ["linux/arm64"]
+        },
+        "runtime": {
+          "package": "perl-lsp-perl",
+          "created_at": "2026-05-26T21:55:00Z",
+          "platforms": ["linux/arm64"]
+        }
+      }
+    },
+    {
+      "version": "0.16.0",
+      "note_channel_value": "Docker Hub amd64/arm64 verified; GHCR builder/runtime tags exist but are arm64-only",
+      "docker_hub": {
+        "builder": {
+          "tag": "0.16.0",
+          "pushed_at": "2026-06-06T18:23:59.006501Z",
+          "digest": "sha256:b14ad370207fa159a8a2cc0bd6b47736d2b71292fa5e18d8d5ef3a1279d5185a",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        },
+        "runtime": {
+          "tag": "0.16.0-perl",
+          "pushed_at": "2026-06-06T17:19:07.824357Z",
+          "digest": "sha256:850087b3b425258336e05b7f0cafdb522b55c6d9179320a56bf8fb12d53b5a47",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        }
+      },
+      "ghcr": {
+        "builder": {
+          "package": "perl-lsp",
+          "created_at": "2026-06-06T18:08:51Z",
+          "platforms": ["linux/arm64"]
+        },
+        "runtime": {
+          "package": "perl-lsp-perl",
+          "created_at": "2026-06-06T17:16:58Z",
+          "platforms": ["linux/arm64"]
+        }
+      }
+    },
+    {
+      "version": "0.17.0",
+      "note_channel_value": "Docker Hub amd64/arm64 verified; GHCR builder/runtime tags exist but are arm64-only",
+      "docker_hub": {
+        "builder": {
+          "tag": "0.17.0",
+          "pushed_at": "2026-06-28T22:50:23.960571Z",
+          "digest": "sha256:21276d1b10e820e9f6dbc2236123761c870ad798d056973f412a36c87a66d2f1",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        },
+        "runtime": {
+          "tag": "0.17.0-perl",
+          "pushed_at": "2026-06-28T21:44:45.913182Z",
+          "digest": "sha256:11b878cefea65d4dd073d7a6bf9347d1b9f4358dcf20c13010e3f96cfbae482c",
+          "platforms": ["linux/amd64", "linux/arm64"]
+        }
+      },
+      "ghcr": {
+        "builder": {
+          "package": "perl-lsp",
+          "created_at": "2026-06-28T22:37:10Z",
+          "platforms": ["linux/arm64"]
+        },
+        "runtime": {
+          "package": "perl-lsp-perl",
+          "created_at": "2026-06-28T21:41:39Z",
+          "platforms": ["linux/arm64"]
+        }
+      }
+    }
+  ]
+}
