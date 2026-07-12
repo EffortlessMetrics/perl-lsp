@@ -61,6 +61,9 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Node::child_count() -> usize` | Number of direct children |
 | `Node::child(i: usize) -> Option<Node>` | `i`-th direct child |
 | `Node::children() -> impl Iterator<Item = Node>` | Iterator over direct children |
+| `Node::child_by_field_name(name: &str) -> Option<Node>` | First direct child for a canonical named field |
+| `Node::children_by_field_name(name: &str) -> impl Iterator<Item = Node>` | All direct children for a repeated named field |
+| `Node::field_name_for_child(i: usize) -> Option<&'static str>` | Canonical field name for a positional child |
 | `Node::start_byte() -> usize` | Start byte offset in source (inclusive) |
 | `Node::end_byte() -> usize` | End byte offset in source (exclusive) |
 | `Node::start_position() -> Point` | `(row, column)` of the first byte |
@@ -72,6 +75,7 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `TreeCursor` | Zero-allocation cursor; `node()`, `goto_first_child()`, `goto_next_sibling()`, `goto_parent()` |
 | `InputEdit` | Source-edit descriptor (re-export of `perl_parser_core::edit::Edit`) |
 | `PerlLanguage` / `language()` / `LANGUAGE` | Language descriptor for Rust-native tooling (not `tree_sitter::Language`) |
+| `FieldId` | Stable named-field identifier shared by the AST and facade |
 | `PerlNodeKind` | Re-export of `perl_ast::NodeKind` for pattern matching |
 | `ParseOutcome` / `ParseFailure` / `ParseDiagnostic` | Detailed recovery and catastrophic-failure reporting |
 
@@ -99,7 +103,6 @@ catastrophic recursion or nesting failures have `tree == None` and a typed `Pars
 
 The following APIs are not yet implemented and remain on the backlog:
 
-- Field-name accessors (named children by field name, as in `node.child_by_field_name("body")`)
 - Predicate / query API (pattern matching over the AST)
 
 ## License

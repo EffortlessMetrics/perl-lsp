@@ -52,6 +52,6 @@ pub use perl_ast_v2 as v2;
 /// Discriminant for the three semantically distinct forms of Perl's `goto` statement.
 pub use ast::GotoTargetForm;
 /// Primary AST node -- the building block of every syntax tree.
-pub use ast::{Node, NodeKind};
+pub use ast::{FieldId, Node, NodeKind};
 /// Byte-offset span indicating where a node appears in source text.
 pub use perl_position_tracking::SourceLocation;

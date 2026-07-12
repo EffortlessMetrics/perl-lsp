@@ -4,7 +4,7 @@
 //! parser ergonomics, traversal, source extraction, and resilience on malformed input.
 
 use perl_tdd_support::{must, must_some};
-use tree_sitter_perl_rs::{ParseFailure, Parser};
+use tree_sitter_perl_rs::{ParseFailure, Parser, language};
 
 fn parse(source: &str) -> tree_sitter_perl_rs::Tree {
     let mut parser = Parser::new();
@@ -48,6 +48,47 @@ fn when_iterating_children_then_iterator_count_matches_indexed_access() {
         let first_from_index = must_some(root.child(0));
         assert_eq!(first_from_index.kind(), first_from_iter.kind());
     }
+}
+
+#[test]
+fn when_requesting_named_fields_then_structural_children_are_resolved() {
+    let tree = parse("if ($x) { $y; }");
+    let if_node = must_some(tree.root_node().children().find(|node| node.kind() == "if"));
+
+    let condition = must_some(if_node.child_by_field_name("condition"));
+    let then_branch = must_some(if_node.child_by_field_name("then_branch"));
+    let conditions: Vec<_> = if_node.children_by_field_name("condition").collect();
+    assert_eq!(condition.kind(), "variable");
+    assert_eq!(then_branch.kind(), "block");
+    assert_eq!(conditions.len(), 1);
+    assert_eq!(if_node.field_name_for_child(0), Some("condition"));
+    assert_eq!(if_node.field_name_for_child(1), Some("then_branch"));
+    assert!(if_node.child_by_field_name("does_not_exist").is_none());
+}
+
+#[test]
+fn when_requesting_ternary_fields_then_false_expression_uses_else_expr() {
+    let tree = parse("my $x = $condition ? $then : $otherwise;");
+    let ternary =
+        must_some(tree.root_node().children().find(|node| node.kind() == "my_declaration"))
+            .children()
+            .find(|node| node.kind() == "ternary");
+    let ternary = must_some(ternary);
+
+    assert_eq!(must_some(ternary.child_by_field_name("then_expr")).kind(), "variable");
+    assert_eq!(must_some(ternary.child_by_field_name("else_expr")).kind(), "variable");
+    assert!(ternary.child_by_field_name("else_branch").is_none());
+}
+
+#[test]
+fn when_describing_language_fields_then_names_are_stable_and_resolvable() {
+    let descriptor = language();
+    assert!(descriptor.field_names().iter().any(|field| field.name() == "condition"));
+    assert_eq!(
+        descriptor.field_id_for_name("condition").map(|field| field.name()),
+        Some("condition")
+    );
+    assert!(descriptor.field_id_for_name("does_not_exist").is_none());
 }
 
 #[test]

@@ -107,6 +107,7 @@ pub use perl_position_tracking::SourceLocation;
 pub use perl_token::{Token, TokenKind};
 use std::cell::Cell;
 use std::fmt;
+use std::ops::ControlFlow;
 use strum::VariantNames as _;
 
 /// Maximum AST traversal depth for recursive operations.
@@ -169,6 +170,79 @@ pub enum GotoTargetForm {
     /// This includes `goto $label_var` (dynamic label) and other computed forms
     /// that are not a plain identifier (Label) or an ampersand-prefixed coderef (Sub).
     Expr,
+}
+
+/// Stable identifier for a named child relationship in the syntax tree.
+///
+/// Field identifiers are represented by canonical static names so the AST,
+/// facade, and future query engine share one vocabulary without allocating at
+/// traversal time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct FieldId(&'static str);
+
+macro_rules! define_field_ids {
+    ($(($constant:ident, $name:literal)),+ $(,)?) => {
+        impl FieldId {
+            $(pub const $constant: Self = Self($name);)+
+
+            /// All field identifiers emitted by [`Node::for_each_child_with_field`].
+            pub const ALL: &'static [Self] = &[$(Self::$constant),+];
+
+            /// Return the canonical external name for this field.
+            pub const fn name(self) -> &'static str {
+                self.0
+            }
+
+            /// Resolve a canonical field name without allocating.
+            pub fn from_name(name: &str) -> Option<Self> {
+                match name {
+                    $($name => Some(Self::$constant),)+
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
+define_field_ids! {
+    (STATEMENTS, "statements"),
+    (EXPRESSION, "expression"),
+    (VARIABLE, "variable"),
+    (PACKAGE, "package"),
+    (STATEMENT, "statement"),
+    (INITIALIZER, "initializer"),
+    (ITEMS, "items"),
+    (LHS, "lhs"),
+    (RHS, "rhs"),
+    (LEFT, "left"),
+    (RIGHT, "right"),
+    (CONDITION, "condition"),
+    (THEN_BRANCH, "then_branch"),
+    (THEN_EXPR, "then_expr"),
+    (ELSE_EXPR, "else_expr"),
+    (ELSE_BRANCH, "else_branch"),
+    (OPERAND, "operand"),
+    (ELEMENTS, "elements"),
+    (KEY, "key"),
+    (VALUE, "value"),
+    (BLOCK, "block"),
+    (BODY, "body"),
+    (CATCH, "catch"),
+    (FINALLY, "finally"),
+    (CONTINUE_BLOCK, "continue_block"),
+    (INIT, "init"),
+    (UPDATE, "update"),
+    (LIST, "list"),
+    (EXPR, "expr"),
+    (PROTOTYPE, "prototype"),
+    (SIGNATURE, "signature"),
+    (PARAMETERS, "parameters"),
+    (DEFAULT_VALUE, "default_value"),
+    (TARGET, "target"),
+    (OBJECT, "object"),
+    (ARGS, "args"),
+    (PARTIAL, "partial"),
 }
 
 /// Core AST node representing any Perl language construct within parsing workflows.
@@ -1172,236 +1246,247 @@ impl Node {
         }
     }
 
-    /// Call a function on every direct child node of this node (immutable version).
+    /// Visit direct children with short-circuiting and preserve their structural fields.
     ///
-    /// This enables depth-first traversal for read-only operations like AST analysis.
-    /// The closure receives an immutable reference to each child node.
+    /// `None` identifies an intentionally unnamed child. Repeated children in
+    /// list-like fields use the same [`FieldId`] for each element.
     #[inline]
-    pub fn for_each_child<'a, F: FnMut(&'a Node)>(&'a self, mut f: F) {
+    pub fn try_for_each_child_with_field<'a, F, B>(&'a self, mut f: F) -> ControlFlow<B>
+    where
+        F: FnMut(Option<FieldId>, &'a Node) -> ControlFlow<B>,
+    {
+        macro_rules! emit {
+            ($field:expr, $child:expr) => {
+                if let ControlFlow::Break(b) = f(Some($field), $child) {
+                    return ControlFlow::Break(b);
+                }
+            };
+        }
+
         match &self.kind {
             NodeKind::Tie { variable, package, args } => {
-                f(variable);
-                f(package);
+                emit!(FieldId::VARIABLE, variable);
+                emit!(FieldId::PACKAGE, package);
                 for arg in args {
-                    f(arg);
+                    emit!(FieldId::ARGS, arg);
                 }
             }
-            NodeKind::Untie { variable } => f(variable),
+            NodeKind::Untie { variable } => emit!(FieldId::VARIABLE, variable),
 
             // Root program node
             NodeKind::Program { statements } => {
                 for stmt in statements {
-                    f(stmt);
+                    emit!(FieldId::STATEMENTS, stmt);
                 }
             }
 
             // Statement wrappers
-            NodeKind::ExpressionStatement { expression } => f(expression),
+            NodeKind::ExpressionStatement { expression } => emit!(FieldId::EXPRESSION, expression),
 
             // Variable declarations
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
-                f(variable);
+                emit!(FieldId::VARIABLE, variable);
                 if let Some(init) = initializer {
-                    f(init);
+                    emit!(FieldId::INITIALIZER, init);
                 }
             }
             NodeKind::VariableListDeclaration { variables, initializer, .. } => {
                 for var in variables {
-                    f(var);
+                    emit!(FieldId::VARIABLE, var);
                 }
                 if let Some(init) = initializer {
-                    f(init);
+                    emit!(FieldId::INITIALIZER, init);
                 }
             }
             NodeKind::NestedVariableList { items } => {
                 for item in items {
-                    f(item);
+                    emit!(FieldId::ITEMS, item);
                 }
             }
-            NodeKind::VariableWithAttributes { variable, .. } => f(variable),
+            NodeKind::VariableWithAttributes { variable, .. } => emit!(FieldId::VARIABLE, variable),
 
             // Binary operations
             NodeKind::Binary { left, right, .. } => {
-                f(left);
-                f(right);
+                emit!(FieldId::LEFT, left);
+                emit!(FieldId::RIGHT, right);
             }
             NodeKind::Ternary { condition, then_expr, else_expr } => {
-                f(condition);
-                f(then_expr);
-                f(else_expr);
+                emit!(FieldId::CONDITION, condition);
+                emit!(FieldId::THEN_EXPR, then_expr);
+                emit!(FieldId::ELSE_EXPR, else_expr);
             }
-            NodeKind::Unary { operand, .. } => f(operand),
+            NodeKind::Unary { operand, .. } => emit!(FieldId::OPERAND, operand),
             NodeKind::Assignment { lhs, rhs, .. } => {
-                f(lhs);
-                f(rhs);
+                emit!(FieldId::LHS, lhs);
+                emit!(FieldId::RHS, rhs);
             }
 
             // Control flow
             NodeKind::Block { statements } => {
                 for stmt in statements {
-                    f(stmt);
+                    emit!(FieldId::STATEMENTS, stmt);
                 }
             }
             NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
-                f(condition);
-                f(then_branch);
+                emit!(FieldId::CONDITION, condition);
+                emit!(FieldId::THEN_BRANCH, then_branch);
                 for (elsif_cond, elsif_body) in elsif_branches {
-                    f(elsif_cond);
-                    f(elsif_body);
+                    emit!(FieldId::CONDITION, elsif_cond);
+                    emit!(FieldId::BODY, elsif_body);
                 }
                 if let Some(else_body) = else_branch {
-                    f(else_body);
+                    emit!(FieldId::ELSE_BRANCH, else_body);
                 }
             }
             NodeKind::While { condition, body, continue_block, .. } => {
-                f(condition);
-                f(body);
+                emit!(FieldId::CONDITION, condition);
+                emit!(FieldId::BODY, body);
                 if let Some(cont) = continue_block {
-                    f(cont);
+                    emit!(FieldId::CONTINUE_BLOCK, cont);
                 }
             }
             NodeKind::For { init, condition, update, body, continue_block, .. } => {
                 if let Some(i) = init {
-                    f(i);
+                    emit!(FieldId::INIT, i);
                 }
                 if let Some(c) = condition {
-                    f(c);
+                    emit!(FieldId::CONDITION, c);
                 }
                 if let Some(u) = update {
-                    f(u);
+                    emit!(FieldId::UPDATE, u);
                 }
-                f(body);
+                emit!(FieldId::BODY, body);
                 if let Some(cont) = continue_block {
-                    f(cont);
+                    emit!(FieldId::CONTINUE_BLOCK, cont);
                 }
             }
             NodeKind::Foreach { variable, list, body, continue_block } => {
-                f(variable);
-                f(list);
-                f(body);
+                emit!(FieldId::VARIABLE, variable);
+                emit!(FieldId::LIST, list);
+                emit!(FieldId::BODY, body);
                 if let Some(cb) = continue_block {
-                    f(cb);
+                    emit!(FieldId::CONTINUE_BLOCK, cb);
                 }
             }
             NodeKind::Given { expr, body } => {
-                f(expr);
-                f(body);
+                emit!(FieldId::EXPR, expr);
+                emit!(FieldId::BODY, body);
             }
             NodeKind::When { condition, body } => {
-                f(condition);
-                f(body);
+                emit!(FieldId::CONDITION, condition);
+                emit!(FieldId::BODY, body);
             }
-            NodeKind::Default { body } => f(body),
+            NodeKind::Default { body } => emit!(FieldId::BODY, body),
             NodeKind::StatementModifier { statement, condition, .. } => {
-                f(statement);
-                f(condition);
+                emit!(FieldId::STATEMENT, statement);
+                emit!(FieldId::CONDITION, condition);
             }
-            NodeKind::LabeledStatement { statement, .. } => f(statement),
+            NodeKind::LabeledStatement { statement, .. } => emit!(FieldId::STATEMENT, statement),
 
             // Eval and Do blocks
-            NodeKind::Eval { block } => f(block),
-            NodeKind::Do { block } => f(block),
-            NodeKind::Defer { block } => f(block),
+            NodeKind::Eval { block } => emit!(FieldId::BLOCK, block),
+            NodeKind::Do { block } => emit!(FieldId::BLOCK, block),
+            NodeKind::Defer { block } => emit!(FieldId::BLOCK, block),
             NodeKind::Try { body, catch_blocks, finally_block } => {
-                f(body);
+                emit!(FieldId::BODY, body);
                 for (_, catch_body) in catch_blocks {
-                    f(catch_body);
+                    emit!(FieldId::CATCH, catch_body);
                 }
                 if let Some(finally) = finally_block {
-                    f(finally);
+                    emit!(FieldId::FINALLY, finally);
                 }
             }
 
             // Function calls
             NodeKind::FunctionCall { args, .. } => {
                 for arg in args {
-                    f(arg);
+                    emit!(FieldId::ARGS, arg);
                 }
             }
             NodeKind::MethodCall { object, args, .. } => {
-                f(object);
+                emit!(FieldId::OBJECT, object);
                 for arg in args {
-                    f(arg);
+                    emit!(FieldId::ARGS, arg);
                 }
             }
             NodeKind::IndirectCall { object, args, .. } => {
-                f(object);
+                emit!(FieldId::OBJECT, object);
                 for arg in args {
-                    f(arg);
+                    emit!(FieldId::ARGS, arg);
                 }
             }
 
             // Functions
             NodeKind::Subroutine { prototype, signature, body, .. } => {
                 if let Some(proto) = prototype {
-                    f(proto);
+                    emit!(FieldId::PROTOTYPE, proto);
                 }
                 if let Some(sig) = signature {
-                    f(sig);
+                    emit!(FieldId::SIGNATURE, sig);
                 }
-                f(body);
+                emit!(FieldId::BODY, body);
             }
             NodeKind::Method { signature, body, .. } => {
                 if let Some(sig) = signature {
-                    f(sig);
+                    emit!(FieldId::SIGNATURE, sig);
                 }
-                f(body);
+                emit!(FieldId::BODY, body);
             }
             NodeKind::Return { value } => {
                 if let Some(v) = value {
-                    f(v);
+                    emit!(FieldId::VALUE, v);
                 }
             }
-            NodeKind::Goto { target, .. } => f(target),
+            NodeKind::Goto { target, .. } => emit!(FieldId::TARGET, target),
             NodeKind::Signature { parameters } => {
                 for param in parameters {
-                    f(param);
+                    emit!(FieldId::PARAMETERS, param);
                 }
             }
-            NodeKind::MandatoryParameter { variable } => f(variable),
+            NodeKind::MandatoryParameter { variable } => emit!(FieldId::VARIABLE, variable),
             NodeKind::OptionalParameter { variable, default_value } => {
-                f(variable);
-                f(default_value);
+                emit!(FieldId::VARIABLE, variable);
+                emit!(FieldId::DEFAULT_VALUE, default_value);
             }
-            NodeKind::SlurpyParameter { variable } => f(variable),
+            NodeKind::SlurpyParameter { variable } => emit!(FieldId::VARIABLE, variable),
             NodeKind::NamedParameter { variable, default_value, .. } => {
-                f(variable);
+                emit!(FieldId::VARIABLE, variable);
                 if let Some(default) = default_value {
-                    f(default);
+                    emit!(FieldId::DEFAULT_VALUE, default);
                 }
             }
 
             // Pattern matching
-            NodeKind::Match { expr, .. } => f(expr),
-            NodeKind::Substitution { expr, .. } => f(expr),
-            NodeKind::Transliteration { expr, .. } => f(expr),
+            NodeKind::Match { expr, .. } => emit!(FieldId::EXPR, expr),
+            NodeKind::Substitution { expr, .. } => emit!(FieldId::EXPR, expr),
+            NodeKind::Transliteration { expr, .. } => emit!(FieldId::EXPR, expr),
 
             // Containers
             NodeKind::ArrayLiteral { elements } => {
                 for elem in elements {
-                    f(elem);
+                    emit!(FieldId::ELEMENTS, elem);
                 }
             }
             NodeKind::HashLiteral { pairs } => {
                 for (key, value) in pairs {
-                    f(key);
-                    f(value);
+                    emit!(FieldId::KEY, key);
+                    emit!(FieldId::VALUE, value);
                 }
             }
 
             // Package system
             NodeKind::Package { block, .. } => {
                 if let Some(b) = block {
-                    f(b);
+                    emit!(FieldId::BLOCK, b);
                 }
             }
-            NodeKind::PhaseBlock { block, .. } => f(block),
-            NodeKind::Class { body, .. } => f(body),
+            NodeKind::PhaseBlock { block, .. } => emit!(FieldId::BLOCK, block),
+            NodeKind::Class { body, .. } => emit!(FieldId::BODY, body),
 
             // Error node might have a partial valid tree
             NodeKind::Error { partial, .. } => {
                 if let Some(node) = partial {
-                    f(node);
+                    emit!(FieldId::PARTIAL, node);
                 }
             }
 
@@ -1431,6 +1516,23 @@ impl Node {
             | NodeKind::MissingBlock
             | NodeKind::UnknownRest => {}
         }
+
+        ControlFlow::Continue(())
+    }
+
+    /// Call a function on every direct child, preserving its structural field.
+    #[inline]
+    pub fn for_each_child_with_field<'a, F: FnMut(Option<FieldId>, &'a Node)>(&'a self, mut f: F) {
+        let _ = self.try_for_each_child_with_field(|field, child| {
+            f(field, child);
+            ControlFlow::<()>::Continue(())
+        });
+    }
+
+    /// Call a function on every direct child without field metadata.
+    #[inline]
+    pub fn for_each_child<'a, F: FnMut(&'a Node)>(&'a self, mut f: F) {
+        self.for_each_child_with_field(|_, child| f(child));
     }
 
     /// Count the total number of nodes in this subtree (inclusive).
@@ -3192,6 +3294,138 @@ mod tests {
             vec!["x", "y"],
             "for_each_child should visit all items in NestedVariableList"
         );
+    }
+
+    #[test]
+    fn field_ids_round_trip_through_canonical_names() {
+        for field in FieldId::ALL {
+            assert_eq!(FieldId::from_name(field.name()), Some(*field));
+        }
+    }
+
+    #[test]
+    fn field_aware_traversal_preserves_structural_order() {
+        let loc = SourceLocation { start: 0, end: 1 };
+        let leaf = || Node::new(NodeKind::Number { value: "1".into() }, loc);
+        let node = Node::new(
+            NodeKind::If {
+                condition: Box::new(leaf()),
+                then_branch: Box::new(leaf()),
+                elsif_branches: vec![(Box::new(leaf()), Box::new(leaf()))],
+                else_branch: Some(Box::new(leaf())),
+                keyword: None,
+            },
+            loc,
+        );
+
+        let fields: Vec<_> = {
+            let mut fields = Vec::new();
+            node.for_each_child_with_field(|field, child| {
+                fields.push((field.map(FieldId::name), child.kind.kind_name()));
+            });
+            fields
+        };
+
+        assert_eq!(
+            fields,
+            vec![
+                (Some("condition"), "Number"),
+                (Some("then_branch"), "Number"),
+                (Some("condition"), "Number"),
+                (Some("body"), "Number"),
+                (Some("else_branch"), "Number"),
+            ]
+        );
+        assert_eq!(node.children().len(), fields.len());
+    }
+
+    #[test]
+    fn field_aware_traversal_labels_repeated_container_children() {
+        let loc = SourceLocation { start: 0, end: 1 };
+        let leaf = || Node::new(NodeKind::Number { value: "1".into() }, loc);
+        let node = Node::new(
+            NodeKind::HashLiteral { pairs: vec![(leaf(), leaf()), (leaf(), leaf())] },
+            loc,
+        );
+        let mut names = Vec::new();
+        node.for_each_child_with_field(|field, _| names.push(field.map(FieldId::name)));
+        assert_eq!(names, vec![Some("key"), Some("value"), Some("key"), Some("value")]);
+    }
+
+    #[test]
+    fn field_aware_metadata_covers_declarations_calls_signatures_and_recovery() {
+        let loc = SourceLocation { start: 0, end: 1 };
+        let leaf = || Node::new(NodeKind::Number { value: "1".into() }, loc);
+        let names = |node: &Node| {
+            let mut names = Vec::new();
+            node.for_each_child_with_field(|field, _| names.push(field.map(FieldId::name)));
+            names
+        };
+
+        let declaration = Node::new(
+            NodeKind::VariableDeclaration {
+                declarator: "my".into(),
+                variable: Box::new(leaf()),
+                attributes: vec!["lvalue".into()],
+                initializer: Some(Box::new(leaf())),
+            },
+            loc,
+        );
+        assert_eq!(names(&declaration), vec![Some("variable"), Some("initializer")]);
+
+        let binary = Node::new(
+            NodeKind::Binary { op: "+".into(), left: Box::new(leaf()), right: Box::new(leaf()) },
+            loc,
+        );
+        assert_eq!(names(&binary), vec![Some("left"), Some("right")]);
+
+        let call = Node::new(
+            NodeKind::MethodCall {
+                object: Box::new(leaf()),
+                method: "run".into(),
+                args: vec![leaf(), leaf()],
+            },
+            loc,
+        );
+        assert_eq!(names(&call), vec![Some("object"), Some("args"), Some("args")]);
+
+        let subroutine = Node::new(
+            NodeKind::Subroutine {
+                name: Some("run".into()),
+                name_span: None,
+                declarator: None,
+                prototype: Some(Box::new(leaf())),
+                signature: Some(Box::new(leaf())),
+                attributes: vec![],
+                body: Box::new(leaf()),
+            },
+            loc,
+        );
+        assert_eq!(names(&subroutine), vec![Some("prototype"), Some("signature"), Some("body")]);
+
+        let recovery = Node::new(
+            NodeKind::Error {
+                message: "bad".into(),
+                expected: vec![],
+                found: None,
+                partial: Some(Box::new(leaf())),
+            },
+            loc,
+        );
+        assert_eq!(names(&recovery), vec![Some("partial")]);
+
+        let heredoc = Node::new(
+            NodeKind::Heredoc {
+                delimiter: "END".into(),
+                content: "body".into(),
+                interpolated: true,
+                indented: false,
+                command: false,
+                body_span: None,
+            },
+            loc,
+        );
+        assert!(names(&heredoc).is_empty());
     }
 
     #[test]

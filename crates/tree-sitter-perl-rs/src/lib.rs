@@ -54,6 +54,7 @@ use perl_module::parse_module_import_head;
 use perl_parser_core::{ParseOutput, Parser as CoreParser};
 use perl_pragma::{PragmaState, PragmaTracker};
 use perl_semantic_analyzer::semantic::SemanticModel;
+use std::ops::ControlFlow;
 
 /// Parser diagnostics surfaced by [`Parser::parse_detailed`].
 pub use perl_parser_core::ParseError as ParseDiagnostic;
@@ -193,6 +194,7 @@ impl Default for Parser {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PerlLanguage {
     kind_names: &'static [&'static str],
+    field_names: &'static [perl_ast::FieldId],
 }
 
 impl PerlLanguage {
@@ -214,6 +216,16 @@ impl PerlLanguage {
     pub fn node_kind_is_named(&self, kind: &str) -> bool {
         self.kind_names.contains(&kind)
     }
+
+    /// Returns the stable named-field identifiers exposed by the AST.
+    pub fn field_names(&self) -> &'static [FieldId] {
+        self.field_names
+    }
+
+    /// Returns the field identifier for a canonical field name.
+    pub fn field_id_for_name(&self, name: &str) -> Option<FieldId> {
+        perl_ast::FieldId::from_name(name)
+    }
 }
 
 impl Default for PerlLanguage {
@@ -230,7 +242,10 @@ pub fn language() -> PerlLanguage {
 }
 
 /// The [`PerlLanguage`] descriptor as a constant.
-pub static LANGUAGE: PerlLanguage = PerlLanguage { kind_names: perl_ast::NodeKind::ALL_KIND_NAMES };
+pub static LANGUAGE: PerlLanguage = PerlLanguage {
+    kind_names: perl_ast::NodeKind::ALL_KIND_NAMES,
+    field_names: perl_ast::FieldId::ALL,
+};
 
 /// The result of a successful parse: an owned syntax tree and the source text.
 ///
@@ -514,6 +529,42 @@ impl<'tree> Node<'tree> {
             .map(|child| Node { inner: child, tree_source: self.tree_source })
     }
 
+    /// Returns the first direct child carrying the given named field.
+    ///
+    /// Unknown field names and fields absent from this node return `None`.
+    pub fn child_by_field_name(&self, name: &str) -> Option<Node<'tree>> {
+        let field = FieldId::from_name(name)?;
+        let mut found = None;
+        let _ = self.inner.try_for_each_child_with_field(|candidate, child| {
+            if candidate == Some(field) {
+                found = Some(Node { inner: child, tree_source: self.tree_source });
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        found
+    }
+
+    /// Returns all direct children carrying the given named field, in source order.
+    pub fn children_by_field_name(&self, name: &str) -> impl Iterator<Item = Node<'tree>> + '_ {
+        let field = FieldId::from_name(name);
+        let mut children = Vec::new();
+        if let Some(field) = field {
+            self.inner.for_each_child_with_field(|candidate, child| {
+                if candidate == Some(field) {
+                    children.push(Node { inner: child, tree_source: self.tree_source });
+                }
+            });
+        }
+        children.into_iter()
+    }
+
+    /// Returns the named field associated with the `index`-th direct child.
+    pub fn field_name_for_child(&self, index: usize) -> Option<&'static str> {
+        ast_child_field(self.inner, index).map(FieldId::name)
+    }
+
     /// Returns an iterator over direct children.
     ///
     /// The iterator yields [`Node`] values sharing the same `'tree` lifetime as `self`.
@@ -591,7 +642,7 @@ impl<'tree> Node<'tree> {
 
 /// Re-export of [`perl_ast::NodeKind`] so callers can pattern-match node variants
 /// without a direct dependency on `perl-ast`.
-pub use perl_ast::NodeKind as PerlNodeKind;
+pub use perl_ast::{FieldId, NodeKind as PerlNodeKind};
 
 /// Stateful cursor for navigating a subtree.
 ///
@@ -728,13 +779,26 @@ fn ast_has_error(node: &AstNode) -> bool {
 
 #[inline]
 fn ast_child_at(node: &AstNode, index: usize) -> Option<&AstNode> {
+    ast_child_with_field(node, index).map(|(_, child)| child)
+}
+
+#[inline]
+fn ast_child_field(node: &AstNode, index: usize) -> Option<FieldId> {
+    ast_child_with_field(node, index).and_then(|(field, _)| field)
+}
+
+#[inline]
+fn ast_child_with_field(node: &AstNode, index: usize) -> Option<(Option<FieldId>, &AstNode)> {
     let mut idx = 0usize;
     let mut found = None;
-    node.for_each_child(|child| {
-        if found.is_none() && idx == index {
-            found = Some(child);
+    let _ = node.try_for_each_child_with_field(|field, child| {
+        if idx == index {
+            found = Some((field, child));
+            ControlFlow::Break(())
+        } else {
+            idx += 1;
+            ControlFlow::Continue(())
         }
-        idx += 1;
     });
     found
 }
