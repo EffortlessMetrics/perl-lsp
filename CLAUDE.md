@@ -41,6 +41,17 @@ disposition same-lane active work before starting another branch. One change, on
 proof, one PR. **Never weaken a test or ratchet for green** — a red gate is signal,
 not an obstacle to route around.
 
+## Issue-first implementation
+
+Before creating a writer worktree, branch, or production edit for substantive work,
+establish or reconcile one controlling issue whose latest plan revision carries a
+`BUILD` verdict (research → synthesize plan → independent verdict). Read-only
+investigation may precede `builder-ready`. Run `/start-work <issue>` before taking
+write ownership — it is an advisory pre-mutation guard, not a required check.
+Comments carry evidence; labels are navigation, not authorization. Full model:
+[#3971](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3971) /
+[#3807](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3807).
+
 ## Delegation
 
 Haiku for search/mechanical-verify/external-fact-check/narrow-review; Sonnet for
