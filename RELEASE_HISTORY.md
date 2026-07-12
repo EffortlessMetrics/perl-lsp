@@ -24,6 +24,7 @@ Tag commit timestamps may differ from release dates.
 | [0.13.3] | `v0.13.3` | [yes][gh-0.13.3] | 2026-05-03 | `06fc1443` | [v0.13.2...v0.13.3] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.3 (31 crates) | [perl-lsp-rs][vsce] | [v0.13.3][n-0.13.3] |
 | [0.13.2] | `v0.13.2` | [yes][gh-0.13.2] | 2026-05-02 | `0e9c5d78` | [v0.13.1...v0.13.2] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.2 (31 crates) | [perl-lsp-rs][vsce] | [v0.13.2][n-0.13.2] |
 | [0.13.1] | `v0.13.1` | [yes][gh-0.13.1] (prerelease) | 2026-05-01 | `6ef20484` | [v0.13.0...v0.13.1] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.1 (32 crates) | [perl-lsp-rs][vsce] | [v0.13.1][n-0.13.1] |
+| [0.13.0-rc1] | `v0.13.0-rc1` | unreconciled | 2026-04-30 (tag) | `4e4099cd` | [v0.12.4...v0.13.0-rc1] | pending verification | pending verification | pending verification | [v0.13.0-rc1][n-0.13.0-rc1] |
 | [0.12.4] | `v0.12.4` | [yes][gh-0.12.4] | 2026-04-12 | `5ebb37aa` | [v0.12.3...v0.12.4] | 9 (7 binaries, SHA256SUMS, SBOM) | deferred | [perl-lsp-rs][vsce] | [v0.12.4][n-0.12.4] |
 | [0.12.3] | `v0.12.3` | [yes][gh-0.12.3] | 2026-04-09 | `a86af221` | [v0.12.2...v0.12.3] | 10 (+ VSIX) | deferred | [perl-lsp-rs][vsce] | [v0.12.3][n-0.12.3] |
 | [0.12.2] | `v0.12.2` | [yes][gh-0.12.2] | 2026-04-04 | `1c0620d8` | [v0.12.1...v0.12.2] | 9 | 0.12.2 (2026-04-08) | [perl-lsp-rs][vsce] | [v0.12.2][n-0.12.2] |
@@ -44,12 +45,29 @@ Tag commit timestamps may differ from release dates.
 | 0.5.0 | `v0.5.0` | — | 2025-08-03 (tag) | `60190640` | — | — | — | — | — |
 | 0.1.0-pest | `v0.1.0-pest` | — | 2025-07-20 (tag) | `4f92dc57` | — | — | — | — | — |
 
+## Lineage corrections
+
+### 2026-07-12 — 0.13 release boundaries
+
+The ledger rows are append-only. The following corrections supersede the cited
+cells without erasing the original record:
+
+| Entry | Original ledger statement | Corrected interpretation |
+|---|---|---|
+| `0.13.1` predecessor | `v0.13.0` | No final `v0.13.0` tag exists. The actual predecessor is `v0.13.0-rc1`; use [v0.13.0-rc1...v0.13.1]. |
+| `0.13.4` artifact | Tagged release with assets pending | No `v0.13.4` ref exists. This was a prepared/versioned changelog milestone, not a distinct tagged artifact. Its historical note is retained as a source-state inventory. |
+| `0.14.0` predecessor | `v0.13.4` | The previous actual tag is `v0.13.3`; use [v0.13.3...v0.14.0]. That cumulative comparison includes the untagged 0.13.4 milestone and is not a narrow 0.14-only logical ledger. |
+
+The original `v0.13.4` asset count and channel cells are not evidence of a
+standalone 0.13.4 publication and should not be used as such.
+
 ### Legend
 
 - **"—"** = does not exist / not applicable
 - **"deferred"** = release published to GitHub but crates.io publish intentionally postponed
+- **"unreconciled"** = a tag exists, but GitHub Release and channel state have not been independently closed out
 - **"(CL)"** = date from CHANGELOG only (no tag or release exists)
-- **"(tag)"** = date from tag commit (no GitHub Release exists)
+- **"(tag)"** = date from tag commit (no verified GitHub Release date)
 - Versions without a tag or GitHub Release are CHANGELOG-only scope markers that never shipped as distinct artifacts
 - The v0.11.0 release included two VSIX files (`perl-lsp-0.11.0.vsix` and `perl-lsp-rs-0.11.0.vsix`) due to the extension rename
 
@@ -75,6 +93,7 @@ Tag commit timestamps may differ from release dates.
 [n-0.13.3]: docs/releases/v0.13.3.md
 [n-0.13.2]: docs/releases/v0.13.2.md
 [n-0.13.1]: docs/releases/v0.13.1.md
+[n-0.13.0-rc1]: docs/releases/v0.13.0-rc1.md
 [n-0.12.4]: docs/releases/v0.12.4.md
 [n-0.12.3]: docs/releases/v0.12.3.md
 [n-0.12.2]: docs/releases/v0.12.2.md
@@ -99,6 +118,7 @@ Tag commit timestamps may differ from release dates.
 [0.13.3]: docs/releases/v0.13.3.md
 [0.13.2]: docs/releases/v0.13.2.md
 [0.13.1]: docs/releases/v0.13.1.md
+[0.13.0-rc1]: docs/releases/v0.13.0-rc1.md
 [0.12.4]: docs/releases/v0.12.4.md
 [0.12.3]: docs/releases/v0.12.3.md
 [0.12.2]: docs/releases/v0.12.2.md
@@ -119,7 +139,7 @@ Tag commit timestamps may differ from release dates.
 [gh-0.15.1]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.1
 [gh-0.15.0]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.0
 [gh-0.14.0]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.14.0
-[gh-0.13.4]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.4
+[gh-0.13.4]: #lineage-corrections
 [gh-0.13.3]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.3
 [gh-0.13.2]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.2
 [gh-0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.1
@@ -138,11 +158,14 @@ Tag commit timestamps may differ from release dates.
 [v0.15.1...v0.15.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.15.1...v0.15.2
 [v0.15.0...v0.15.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.15.0...v0.15.1
 [v0.14.0...v0.15.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.14.0...v0.15.0
-[v0.13.4...v0.14.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.4...v0.14.0
-[v0.13.3...v0.13.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.3...v0.13.4
+[v0.13.4...v0.14.0]: #lineage-corrections
+[v0.13.3...v0.13.4]: #lineage-corrections
+[v0.13.3...v0.14.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.3...v0.14.0
 [v0.13.2...v0.13.3]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.2...v0.13.3
 [v0.13.1...v0.13.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.1...v0.13.2
-[v0.13.0...v0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0...v0.13.1
+[v0.13.0...v0.13.1]: #lineage-corrections
+[v0.13.0-rc1...v0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0-rc1...v0.13.1
+[v0.12.4...v0.13.0-rc1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.4...v0.13.0-rc1
 [v0.12.3...v0.12.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.3...v0.12.4
 [v0.12.2...v0.12.3]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.2...v0.12.3
 [v0.12.1...v0.12.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.1...v0.12.2
