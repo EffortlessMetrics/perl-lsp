@@ -1,7 +1,7 @@
 # Pipeline Gates — Gate Model Reference
 
 **Status**: Active doctrine (introduced 2026-04-27)
-**Related**: [CLAUDE.md](../../CLAUDE.md) | [SKILL_AND_AGENT_DESIGN.md](./SKILL_AND_AGENT_DESIGN.md)
+**Related**: [CLAUDE.md](../../CLAUDE.md) | [SKILL_AND_AGENT_DESIGN.md](./SKILL_AND_AGENT_DESIGN.md) | [ISSUE_PLAN_DOCTRINE.md](./ISSUE_PLAN_DOCTRINE.md)
 
 ---
 

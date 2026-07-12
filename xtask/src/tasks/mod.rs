@@ -78,6 +78,7 @@ pub mod inline_completion_quality;
 pub mod inline_completion_smoke;
 pub mod install_surface_check;
 pub mod intent_diff_gate;
+pub mod issue_plan;
 pub mod label_projector;
 pub mod layer_check;
 pub mod lsp_318_claims;

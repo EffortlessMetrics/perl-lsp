@@ -1,0 +1,182 @@
+name: Builder-Ready Plan
+description: A fully structured work-order proposal — problem, fix plan, acceptance tests, non-goals, dependencies, risk
+labels: ["swarm-discovered", "needs-plan-review"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Builder-Ready Plan
+
+        This template captures the **quality bar** for a builder-ready issue:
+        everything a builder needs to implement without rediscovering the problem.
+
+        **Filing this template does not grant the `builder-ready` label.** It
+        enters at `needs-plan-review`. The `builder-ready` label is *earned* by
+        passing Gate-2 review (plan-review, and architecture-review when the
+        change touches crate boundaries, public API/AST shape, LSP/DAP protocol,
+        CI policy, or workflow routing). `builder-ready` means builder-ready.
+
+        Answer every section — even if the answer is "none" or "not applicable."
+        See [ISSUE_PLAN_DOCTRINE.md](https://github.com/EffortlessMetrics/perl-lsp-swarm/blob/main/docs/reference/ISSUE_PLAN_DOCTRINE.md).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Problem"
+      description: What is wrong, in one or two paragraphs. Be specific enough that a reader can understand it cold.
+      placeholder: |
+        `parse_phase_block` in declarations.rs misidentifies `CHECK:` used as a
+        statement label as a phase block, emitting "CHECK must be followed by a block."
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "Current evidence"
+      description: Link the artifacts that prove the problem is real and current.
+      placeholder: |
+        - Source: crates/perl-parser-core/src/engine/parser/declarations.rs:845
+        - Tests: crates/perl-parser-core/tests/phase_block.rs (no label coverage)
+        - Docs / receipt: target/receipts/corpus_sweep.json
+        - Related PRs: #123
+        - Related issues: #456
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "Reproduction / example"
+      description: A minimal example, command, or workflow that demonstrates the problem. If repro is unavailable, explain why.
+      placeholder: |
+        ```perl
+        CHECK: for (my $i = 0; $i < 10; $i++) { print $i }
+        ```
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: root_area
+    attributes:
+      label: "Suspected root area"
+      description: Where to look. Name the file/module, function/type, and ownership boundary.
+      placeholder: |
+        - File/module: crates/perl-parser-core/src/engine/parser/declarations.rs
+        - Function/type: parse_phase_block
+        - Ownership boundary: perl-parser-core (parser dispatch)
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix_plan
+    attributes:
+      label: "Fix plan"
+      description: The decided approach as ordered steps. Not a menu of options — the plan.
+      placeholder: |
+        1. Peek for `TokenKind::Colon` before emitting the phase-block error.
+        2. If Colon found, return control to the statement parser for label handling.
+        3. Apply the same guard to BEGIN/END/INIT/UNITCHECK via a shared helper.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance tests"
+      description: Concrete tests or commands that prove the fix. Include a negative case and a regression guard.
+      placeholder: |
+        - [ ] Test/command: `cargo test -p perl-parser-core -- test_check_as_label --exact`
+        - [ ] Negative case: a real `CHECK { ... }` phase block still parses as a phase block
+        - [ ] Regression guard: corpus file Mojo/Exception.pm parses clean
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: "Non-goals"
+      description: What this issue explicitly does NOT do. Scope boundaries and deferrals.
+      placeholder: |
+        - Do not: refactor the keyword-dispatch table wholesale.
+        - Defer: nested-ternary `expected_colon` bucket (#2393) to a separate issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: "Dependencies / sequencing"
+      description: What this blocks, what blocks it, what it must land before/after, and the conflict surface.
+      placeholder: |
+        - Blocks: #914 (consumer migration)
+        - Blocked by: #911 (shared classification API)
+        - Should land before: traversal follow-up
+        - Conflict surface: declarations.rs, statements.rs
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: "Risk / rollback"
+      description: The risk of the change, how to roll it back, and the rollout mode.
+      placeholder: |
+        - Risk: peek-before-dispatch could mask a genuine missing-block error.
+        - Rollback: revert the single commit; no data migration.
+        - Rollout mode: direct fix (report-only / warn-only / fail-gate / direct fix)
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: "Verification notes"
+      description: Prove the issue is grounded and deduped.
+      placeholder: |
+        - Verified against main at: <commit SHA>
+        - Checked for duplicates: searched open+closed issues for "phase block label"
+        - Checked related PRs: #123 (merged, did not address labels)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - parser
+        - lsp
+        - dap
+        - performance
+        - testing
+        - documentation
+        - infrastructure
+        - security
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Effort estimate
+      options:
+        - size/S (<2h)
+        - size/M (2-8h)
+        - size/L (>8h)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: architecture_sensitive
+    attributes:
+      label: Architecture-sensitive?
+      description: Does this touch crate boundaries, public API/AST shape, LSP/DAP protocol, CI policy, or workflow routing? If yes, it needs architecture review before builder-ready.
+      options:
+        - "no"
+        - "yes — needs architecture review"
+    validations:
+      required: true
