@@ -154,13 +154,23 @@ impl<'a> Parser<'a> {
 
             // Accept both simple `=` and compound operators (`||=`, `//=`, `.=`, etc.)
             // Perl allows `our $x ||= 0;` and `my $y .= "suffix";`
+            //
+            // The RHS is parsed at ASSIGNMENT precedence, not comma
+            // (`parse_expression`) precedence. Per perlop, `=` binds tighter
+            // than `,`, so `my $a = 1, $b;` deparses as
+            // `((my($a) = 1), $b);` — the initializer of `$a` is just `1`,
+            // and `$b` is a separate trailing comma term picked up by the
+            // statement-level comma continuation (see the comment below).
+            // A parenthesized RHS (`my $a = (1, $b);`) is unaffected: the
+            // parens are parsed as a single primary term by `parse_ternary`
+            // regardless of the outer precedence level.
             let assign_op = self.peek_compound_assign_op();
             let initializer = if let Some(op) = assign_op {
                 let op_token = self.tokens.next()?;
                 let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
                     missing
                 } else {
-                    self.parse_expression()?
+                    self.parse_assignment()?
                 };
                 if op == "=" {
                     Some(Box::new(rhs))

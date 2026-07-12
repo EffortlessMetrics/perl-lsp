@@ -2134,3 +2134,40 @@ created = "2026-07-10"
 review_after = "2026-08-10"
 expires = "2026-09-30"
 removal_criteria = "ripr correctly recognizes the guarding assert!/assert_eq! as the discriminator for a preceding `?`/send() in Result<()> test functions, OR ripr#1428 is fixed upstream."
+
+# -----------------------------------------------------------------------------
+# my-declaration comma-precedence fixture: match-arm error-reporting branches
+# in a new Result<(), String> test file (fix #3748):
+#
+# PR #3908 adds fix_3748_my_assign_comma_rhs.rs, a Result<(), String>-returning
+# integration test file per this repo's mandated test convention. ripr 0.9.x
+# reports 3 severe-gap findings (error_path, reachable_unrevealed) at lines 53,
+# 88, and 145 -- each is the `));` that closes a
+# `other => return Err(format!("...", other))` fallback arm inside a `match`
+# over the parsed AST shape. These arms exist so a shape the fix does NOT
+# produce fails the test with a diagnostic message instead of an unwrap/panic
+# (per this repo's coding standards for tests). ripr reports reach/infect/
+# propagate=yes but observe/discriminate=no because it cannot recognize that
+# the SAME match's happy-path arms (the assert_eq!/element-count assertions a
+# few lines above each flagged line) are exactly what proves the guarded
+# "unexpected shape" condition does not occur -- the match itself IS the
+# oracle; the `other =>` arm is its failure-reporting path, not a separate
+# unproven seam. Same ripr#1428 class (test-harness plumbing flagged as
+# production seams) as ripr-suppress-navigation-toctou-regression-test-helpers
+# and ripr-suppress-references-include-declaration-quality-tests above.
+#
+# Suppression is narrow: single test file, one PR. Remove when ripr#1428 is
+# fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-my-assign-comma-rhs-test-helpers"
+kind = "test_receipt_surface"
+paths = ["crates/perl-parser-core/tests/fix_3748_my_assign_comma_rhs.rs"]
+classification = ["error_path", "reachable_unrevealed"]
+owner = "parser-lane"
+issue = "#3748"
+reason = "PR #3908 (fix #3748: my-declaration initializer RHS binds at assignment precedence) adds fix_3748_my_assign_comma_rhs.rs, a Result<(), String>-returning integration test file. ripr 0.9.x flags 3 findings (error_path/reachable_unrevealed) at lines 53, 88, and 145, each the closing `));` of an `other => return Err(format!(...))` fallback arm in a `match` over the parsed AST node shape. These are ripr#1428-class false-positives: the arms are test-diagnostic plumbing (fail loudly with a message instead of unwrap/panic, per repo test-coding standards), not unproven production behavior -- the SAME match's preceding happy-path arms carry the real assert_eq!/element-count oracle assertions that prove the guarded shape mismatch does not occur. The production fix (crates/perl-parser-core/src/engine/parser/variables.rs) is separately classified 'exposed' by the same ripr run. Same class as ripr-suppress-navigation-toctou-regression-test-helpers and ripr-suppress-references-include-declaration-quality-tests. Remove when ripr#1428 is fixed upstream."
+created = "2026-07-11"
+review_after = "2026-08-11"
+expires = "2026-09-30"
+removal_criteria = "ripr correctly recognizes the guarding assert_eq!/happy-path match arms as the discriminator for a sibling `other => return Err(...)` fallback arm in Result<(), String> test functions, OR ripr#1428 is fixed upstream."
