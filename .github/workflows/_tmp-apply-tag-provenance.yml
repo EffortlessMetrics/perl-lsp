@@ -8,6 +8,12 @@ on:
     paths:
       - scripts/_apply_tag_provenance_tmp.py
       - .github/workflows/_tmp-apply-tag-provenance.yml
+  pull_request:
+    branches:
+      - docs/release-lineage-0.13
+    paths:
+      - scripts/_apply_tag_provenance_tmp.py
+      - .github/workflows/_tmp-apply-tag-provenance.yml
 
 permissions:
   contents: write
