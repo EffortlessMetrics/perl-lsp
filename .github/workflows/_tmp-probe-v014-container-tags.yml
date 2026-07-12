@@ -1,0 +1,91 @@
+name: Temporary probe v0.14.0 container tags
+
+on:
+  push:
+    branches:
+      - ops/probe-v0.14-container-tags
+    paths:
+      - .github/workflows/_tmp-probe-v014-container-tags.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Probe expected public manifests
+        shell: bash
+        run: |
+          set -u
+
+          probe_manifest() {
+            local image="$1"
+            local slug
+            slug="$(printf '%s' "$image" | tr '/:' '__')"
+            local stdout_file="${RUNNER_TEMP}/${slug}.stdout"
+            local stderr_file="${RUNNER_TEMP}/${slug}.stderr"
+
+            set +e
+            docker manifest inspect "$image" >"$stdout_file" 2>"$stderr_file"
+            local rc=$?
+            set -e
+
+            echo "PROBE_IMAGE=$image"
+            echo "PROBE_EXIT=$rc"
+            if [ -s "$stderr_file" ]; then
+              echo "PROBE_STDERR_BEGIN"
+              cat "$stderr_file"
+              echo "PROBE_STDERR_END"
+            fi
+            if [ "$rc" -eq 0 ]; then
+              echo "PROBE_RESULT=present"
+              python3 - "$stdout_file" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print(f"PROBE_MEDIA_TYPE={data.get('mediaType', 'unknown')}")
+          manifests = data.get("manifests")
+          if isinstance(manifests, list):
+              print(f"PROBE_MANIFEST_COUNT={len(manifests)}")
+              for item in manifests:
+                  platform = item.get("platform") or {}
+                  print(
+                      "PROBE_PLATFORM="
+                      f"{platform.get('os', 'unknown')}/"
+                      f"{platform.get('architecture', 'unknown')}"
+                  )
+          else:
+              print("PROBE_MANIFEST_COUNT=single")
+          PY
+            else
+              echo "PROBE_RESULT=absent-or-inaccessible"
+            fi
+            echo "PROBE_END"
+            echo
+          }
+
+          probe_manifest "effortlessmetrics/perl-lsp:0.14.0"
+          probe_manifest "effortlessmetrics/perl-lsp:0.14.0-perl"
+          probe_manifest "ghcr.io/effortlessmetrics/perl-lsp:0.14.0"
+          probe_manifest "ghcr.io/effortlessmetrics/perl-lsp-perl:0.14.0"
+
+      - name: Probe Docker Hub tag API
+        shell: bash
+        run: |
+          set -u
+          for tag in 0.14.0 0.14.0-perl; do
+            url="https://hub.docker.com/v2/repositories/effortlessmetrics/perl-lsp/tags/${tag}"
+            set +e
+            response="$(curl --silent --show-error --location --write-out $'\nHTTP_STATUS=%{http_code}\n' "$url" 2>&1)"
+            rc=$?
+            set -e
+            echo "DOCKER_HUB_TAG=$tag"
+            echo "CURL_EXIT=$rc"
+            printf '%s\n' "$response"
+            echo "DOCKER_HUB_END"
+            echo
+          done
