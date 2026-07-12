@@ -92,7 +92,7 @@ records observable repository state and installs a drift guard.
 
 ## Release-channel corrections
 
-### 2026-07-12 — v0.15.0 through v0.17.0 GitHub Release actuals
+### 2026-07-12 — v0.15.0 through v0.17.0 release-channel actuals
 
 The original ledger rows remain visible as historical records. The following
 facts supersede their `pending` GitHub Release, release-date, live-tag, asset, and
@@ -100,11 +100,11 @@ selected channel cells where stated:
 
 | Version | GitHub Release actual | Live tag commit | Asset accounting at audit | Other channel boundary |
 |---|---|---|---|---|
-| `0.15.0` | [published 2026-05-22][gh-0.15.0] | `ac8e281e73c6e14ae9d94ddf010ae0d45d1187d2` | GitHub UI reported 12 entries, including its two generated source archives; uploaded-artifact inventory was not separately reconciled. | crates.io, editor marketplaces, and containers remain unreconciled. |
-| `0.15.1` | [published 2026-05-26][gh-0.15.1] | `15cbe7e6295a67ea0cba506c3cade628ee4847f6` | GitHub UI reported 12 entries, including its two generated source archives; uploaded-artifact inventory was not separately reconciled. | GitHub binaries remain usable. The crates.io package is superseded by `0.15.2` for fresh Cargo installs; marketplace and container state remain unreconciled. |
-| `0.15.2` | [published 2026-05-26][gh-0.15.2] | `746edcb78fe0fa8f48d87386fd4f110502588a87` | Original closeout verified 10 uploaded artifacts; GitHub UI reported 12 entries after including its two generated source archives. | PR #9617 verified crates.io install smokes, VS Code Marketplace, Open VSX, and Docker Hub. GHCR publish CI succeeded, but public manifest verification returned `denied`. |
-| `0.16.0` | [published 2026-06-06][gh-0.16.0] | `b6d9f12b995ad8ad78ca641940bd73e4b1a3c26d` | GitHub UI reported 11 entries, including its two generated source archives; uploaded-artifact inventory was not separately reconciled. | crates.io, editor marketplaces, and containers remain unreconciled. |
-| `0.17.0` | [published 2026-06-28][gh-0.17.0] | `ffee2824938f415e54923112c7b79e3f22040699` | GitHub UI reported 12 entries, including its two generated source archives; uploaded-artifact inventory was not separately reconciled. | crates.io, editor marketplaces, and containers remain unreconciled. |
+| `0.15.0` | [published 2026-05-22][gh-0.15.0] | `ac8e281e73c6e14ae9d94ddf010ae0d45d1187d2` | GitHub UI reported 12 entries, including its two generated source archives; uploaded-artifact inventory was not separately reconciled. | crates.io and editor marketplaces remain unreconciled. Docker Hub builder/runtime tags expose `linux/amd64` and `linux/arm64`; GHCR builder/runtime tags exist but are `linux/arm64`-only. |
+| `0.15.1` | [published 2026-05-26][gh-0.15.1] | `15cbe7e6295a67ea0cba506c3cade628ee4847f6` | GitHub UI reported 12 entries, including its two generated source archives; uploaded-artifact inventory was not separately reconciled. | GitHub binaries remain usable. The crates.io package is superseded by `0.15.2` for fresh Cargo installs; marketplace state remains unreconciled. Docker Hub is amd64/arm64; GHCR is arm64-only. |
+| `0.15.2` | [published 2026-05-26][gh-0.15.2] | `746edcb78fe0fa8f48d87386fd4f110502588a87` | Original closeout verified 10 uploaded artifacts; GitHub UI reported 12 entries after including its two generated source archives. | PR #9617 verified crates.io install smokes, VS Code Marketplace, Open VSX, and Docker Hub. A later authenticated audit resolved GHCR as published but incomplete: both tags are arm64-only and lack amd64. |
+| `0.16.0` | [published 2026-06-06][gh-0.16.0] | `b6d9f12b995ad8ad78ca641940bd73e4b1a3c26d` | GitHub UI reported 11 entries, including its two generated source archives; uploaded-artifact inventory was not separately reconciled. | crates.io and editor marketplaces remain unreconciled. Docker Hub builder/runtime tags expose amd64/arm64; GHCR builder/runtime tags are arm64-only. |
+| `0.17.0` | [published 2026-06-28][gh-0.17.0] | `ffee2824938f415e54923112c7b79e3f22040699` | GitHub UI reported 12 entries, including its two generated source archives; uploaded-artifact inventory was not separately reconciled. | crates.io and editor marketplaces remain unreconciled. Docker Hub builder/runtime tags expose amd64/arm64; GHCR builder/runtime tags are arm64-only. |
 
 GitHub's rendered `Assets N` value and this ledger's uploaded-artifact count are
 not interchangeable. The UI total includes the generated source ZIP and tarball;
@@ -112,8 +112,11 @@ the ledger records uploaded artifacts only when an independent inventory or
 closeout receipt exists.
 
 The note-level channel actuals and restored `v0.15.2` closeout receipt are tracked
-in #9965. A GitHub Release page is not evidence that crates.io, Marketplace,
-Open VSX, Docker Hub, or GHCR completed.
+in #9965. The container classifications come from the read-only registry audit in
+#9973 (workflow runs `29192188862` and `29192323459`); #9972 fixes the GHCR
+multi-architecture publishing defect going forward. A GitHub Release page alone
+is not evidence that crates.io, Marketplace, Open VSX, Docker Hub, or GHCR
+completed.
 
 ## Legend
 
