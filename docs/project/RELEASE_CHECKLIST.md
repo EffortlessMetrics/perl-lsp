@@ -24,6 +24,7 @@ Use `NEW_VERSION` as the target semver string for the release you are preparing.
 Resolve these values to immutable SHAs before the source sync or version bump:
 
 ```bash
+export SWARM_DIR="${SWARM_DIR:-../perl-lsp-swarm}"
 export PREVIOUS_RC=<previous-swarm-release-sha>
 export RC_SHA=<new-swarm-freeze-sha>
 export SYNC_SHA=<perl-lsp-history-preserving-sync-sha>
@@ -33,13 +34,13 @@ export SYNC_SHA=<perl-lsp-history-preserving-sync-sha>
 - [ ] The logical development range is forward-moving:
 
   ```bash
-  git merge-base --is-ancestor "$PREVIOUS_RC" "$RC_SHA"
+  git -C "$SWARM_DIR" merge-base --is-ancestor "$PREVIOUS_RC" "$RC_SHA"
   ```
 
 - [ ] The logical squash-merge ledger was reviewed with first-parent history:
 
   ```bash
-  git log --first-parent --reverse --format='%H%x09%s' "$PREVIOUS_RC..$RC_SHA"
+  git -C "$SWARM_DIR" log --first-parent --reverse --format='%H%x09%s' "$PREVIOUS_RC..$RC_SHA"
   ```
 
 - [ ] Every user-visible `feat` and `fix` in that ledger appears in the release note or has an explicit exclusion reason.
@@ -57,7 +58,7 @@ export SYNC_SHA=<perl-lsp-history-preserving-sync-sha>
   ```
 
 - [ ] `git diff --name-only "$SYNC_SHA" "$RC_SHA"` contains only documented release-repo exclusions.
-- [ ] The release note classifies the source tag comparison as `safe`, `inflated`, `incomplete`, or `tree-only` when it is not a clean logical ledger.
+- [ ] The release note records the source tag comparison as `safe`, `inflated`, `incomplete`, or `tree-only`; include an explanation whenever it is not `safe`.
 - [ ] The release note contains an explicit claim boundary for disabled, capability-gated, config-gated, shadow-only, and compiler-substrate work.
 - [ ] The generated GitHub Release body was compared with the curated note; the generated body does not silently replace the logical-change review.
 

@@ -45,7 +45,7 @@ Before writing prose, record this block in the release PR and the release note:
 | Development repository | `EffortlessMetrics/perl-lsp-swarm` |
 | Previous development anchor | Exact RC/freeze SHA associated with the previous release |
 | New development freeze | Exact reviewed swarm SHA being promoted |
-| Logical range | `<previous-anchor>...<new-freeze>` |
+| Logical range | `<previous-anchor>..<new-freeze>`, traversed with `git log --first-parent --reverse` |
 | Release repository | `EffortlessMetrics/perl-lsp` |
 | Release sync commit | Exact two-parent sync SHA |
 | Sync method | History-preserving complete-tree merge |
@@ -64,6 +64,7 @@ Record the previous release's development anchor and the new RC SHA before the
 release sync begins.
 
 ```bash
+export SWARM_DIR="${SWARM_DIR:-../perl-lsp-swarm}"
 export PREVIOUS_RC=<previous-swarm-release-sha>
 export RC_SHA=<new-swarm-freeze-sha>
 ```
@@ -71,7 +72,7 @@ export RC_SHA=<new-swarm-freeze-sha>
 Confirm both commits exist and the range is forward-moving:
 
 ```bash
-git -C ../perl-lsp-swarm merge-base --is-ancestor "$PREVIOUS_RC" "$RC_SHA"
+git -C "$SWARM_DIR" merge-base --is-ancestor "$PREVIOUS_RC" "$RC_SHA"
 ```
 
 ### 2. Enumerate logical changes
@@ -79,7 +80,7 @@ git -C ../perl-lsp-swarm merge-base --is-ancestor "$PREVIOUS_RC" "$RC_SHA"
 Use first-parent history so each squash-merged PR remains one reviewable unit:
 
 ```bash
-git -C ../perl-lsp-swarm log \
+git -C "$SWARM_DIR" log \
   --first-parent \
   --reverse \
   --format='%H%x09%s' \
