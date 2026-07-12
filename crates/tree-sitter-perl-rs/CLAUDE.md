@@ -48,6 +48,9 @@ impl<'tree> Node<'tree> {
     pub fn child_count(&self) -> usize;
     pub fn child(&self, i: usize) -> Option<Node<'tree>>;
     pub fn children(&self) -> impl Iterator<Item = Node<'tree>>;
+    pub fn child_by_field_name(&self, name: &str) -> Option<Node<'tree>>;
+    pub fn children_by_field_name(&self, name: &str) -> impl Iterator<Item = Node<'tree>>;
+    pub fn field_name_for_child(&self, i: usize) -> Option<&'static str>;
     pub fn start_byte(&self) -> usize;
     pub fn end_byte(&self) -> usize;
     pub fn start_position(&self) -> Point;
@@ -77,6 +80,11 @@ pub fn language() -> PerlLanguage;
 pub static LANGUAGE: PerlLanguage;
 
 pub use perl_ast::NodeKind as PerlNodeKind;  // for pattern matching without perl-ast dep
+
+#[cfg(feature = "queries")]
+pub struct Query;       // structural Phase 2a query compiler
+#[cfg(feature = "queries")]
+pub struct QueryCursor; // pre-order query execution with byte ranges
 ```
 
 ## How it differs from `tree-sitter-perl-c`
@@ -105,5 +113,5 @@ cargo doc -p tree-sitter-perl-rs --open     # View documentation
 
 ## Backlog follow-ups
 
-- Field-name accessors (named children by field name)
-- Predicate / query API
+- Query predicates and additional tree-sitter query syntax
+- Incremental reparsing with measured subtree reuse

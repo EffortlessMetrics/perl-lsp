@@ -58,10 +58,16 @@ use std::ops::ControlFlow;
 
 /// Parser diagnostics surfaced by [`Parser::parse_detailed`].
 pub use perl_parser_core::ParseError as ParseDiagnostic;
+
+#[cfg(feature = "queries")]
+mod query;
+
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
 /// Mirrors `tree_sitter::InputEdit` field layout for drop-in compatibility.
 pub use perl_parser_core::edit::Edit as InputEdit;
+#[cfg(feature = "queries")]
+pub use query::{Query, QueryCapture, QueryCursor, QueryError, QueryMatch, QueryMatches};
 
 /// A tree-sitter-compatible source position.
 ///
@@ -452,6 +458,7 @@ impl<'tree> SemanticOverlay<'tree> {
 ///
 /// Mirrors the tree-sitter `Node` API surface. Lifetime `'tree` is tied to the
 /// owning [`Tree`].
+#[derive(Clone, Copy)]
 pub struct Node<'tree> {
     inner: &'tree AstNode,
     tree_source: &'tree str,

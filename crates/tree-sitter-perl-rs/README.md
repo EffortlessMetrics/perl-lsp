@@ -78,6 +78,20 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `FieldId` | Stable named-field identifier shared by the AST and facade |
 | `PerlNodeKind` | Re-export of `perl_ast::NodeKind` for pattern matching |
 | `ParseOutcome` / `ParseFailure` / `ParseDiagnostic` | Detailed recovery and catastrophic-failure reporting |
+| `Query` / `QueryCursor` | Structural AST matching when the `queries` feature is enabled |
+
+### Structural queries
+
+Enable the optional `queries` feature for Phase 2a query support:
+
+```toml
+tree-sitter-perl-rs = { version = "...", features = ["queries"] }
+```
+
+The supported subset includes node kinds, wildcards, nested children, named fields,
+captures, multiple top-level patterns, and byte-range restriction. Query predicates and
+other unsupported tree-sitter query syntax return a typed `QueryError`; they are not
+silently ignored.
 
 ## Error tolerance
 
@@ -98,12 +112,6 @@ catastrophic recursion or nesting failures have `tree == None` and a typed `Pars
 - `RecursionLimit` / `NestingTooDeep` parse errors produce `None` from `parse()` and a typed
   failure from `parse_detailed()` rather than a partial tree.
 - `Node::kind()` now returns grammar-canonical names (e.g. `"source_file"`) for tree-sitter compatibility. Use `Node::native_kind()` when you need the v3 internal PascalCase name.
-
-## Backlog roadmap
-
-The following APIs are not yet implemented and remain on the backlog:
-
-- Predicate / query API (pattern matching over the AST)
 
 ## License
 
