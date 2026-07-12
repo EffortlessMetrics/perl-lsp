@@ -24,6 +24,8 @@ TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 DOCKER_PLATFORMS = {"linux/amd64", "linux/arm64"}
 GHCR_PLATFORMS = {"linux/arm64"}
+REQUIRED_EVIDENCE_RUNS = {29192188862, 29192323459}
+REQUIRED_VERSIONS = {"0.15.0", "0.15.1", "0.15.2", "0.16.0", "0.17.0"}
 
 
 class ContainerActualsError(RuntimeError):
@@ -107,13 +109,21 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
     audited_at = data.get("audited_at")
     if not isinstance(audited_at, str) or DATE_RE.fullmatch(audited_at) is None:
         errors.append("audited_at must be an ISO date")
+
     evidence_runs = data.get("evidence_runs")
     if (
         not isinstance(evidence_runs, list)
         or not evidence_runs
-        or not all(isinstance(run, int) and run > 0 for run in evidence_runs)
+        or not all(type(run) is int and run > 0 for run in evidence_runs)
     ):
         errors.append("evidence_runs must be a non-empty array of positive integers")
+    else:
+        evidence_set = set(evidence_runs)
+        if len(evidence_set) != len(evidence_runs):
+            errors.append("evidence_runs must not contain duplicates")
+        missing_runs = sorted(REQUIRED_EVIDENCE_RUNS - evidence_set)
+        if missing_runs:
+            errors.append(f"evidence_runs is missing required receipts: {missing_runs}")
 
     records = data.get("releases")
     if not isinstance(records, list) or not records:
@@ -166,6 +176,14 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
                     prefix=f"{prefix}.ghcr.{flavor}",
                     errors=errors,
                 )
+
+    if versions != REQUIRED_VERSIONS:
+        missing = sorted(REQUIRED_VERSIONS - versions)
+        unexpected = sorted(versions - REQUIRED_VERSIONS)
+        errors.append(
+            "audited release coverage mismatch: "
+            f"missing={missing or 'none'}, unexpected={unexpected or 'none'}"
+        )
 
     return errors
 
