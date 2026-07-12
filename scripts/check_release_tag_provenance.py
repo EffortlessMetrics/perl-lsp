@@ -12,10 +12,23 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
-import tomllib
 from typing import Any
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        tomllib = None  # type: ignore[assignment]
+
+if tomllib is None:
+    TOMLDecodeError = ValueError
+else:
+    TOMLDecodeError = tomllib.TOMLDecodeError
 
 TAG_RE = re.compile(r"^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
@@ -30,10 +43,15 @@ class ManifestError(RuntimeError):
 
 
 def load_manifest(path: Path) -> dict[str, Any]:
+    if tomllib is None:
+        raise ManifestError(
+            "Python 3.11+ or the 'tomli' package is required to parse TOML"
+        )
+
     try:
         with path.open("rb") as handle:
             data = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+    except (OSError, TOMLDecodeError) as exc:
         raise ManifestError(f"cannot read {path}: {exc}") from exc
 
     if not isinstance(data, dict):
@@ -187,10 +205,30 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 def verify_git_refs(data: dict[str, Any], repo_root: Path) -> list[str]:
     """Compare the manifest against refs in a local full-history checkout."""
 
+    if shutil.which("git") is None:
+        return ["git executable not found on PATH"]
+
     errors: list[str] = []
     tags = data.get("tag", [])
     if not isinstance(tags, list):
         return ["cannot verify git refs: tag records are not a list"]
+
+    manifest_names = {
+        raw["name"]
+        for raw in tags
+        if isinstance(raw, dict) and isinstance(raw.get("name"), str)
+    }
+    list_result = _git(repo_root, "tag", "--list", "v*")
+    if list_result.returncode != 0:
+        errors.append(f"cannot list local tags: {list_result.stderr.strip()}")
+    else:
+        local_release_tags = {
+            line.strip()
+            for line in list_result.stdout.splitlines()
+            if TAG_RE.fullmatch(line.strip()) is not None
+        }
+        for extra_tag in sorted(local_release_tags - manifest_names):
+            errors.append(f"local release tag is missing from manifest: {extra_tag}")
 
     resolved: dict[str, str] = {}
     for raw in tags:
@@ -225,7 +263,20 @@ def verify_git_refs(data: dict[str, Any], repo_root: Path) -> list[str]:
             continue
 
         forward = _git(repo_root, "merge-base", "--is-ancestor", predecessor, name)
+        if forward.returncode not in (0, 1):
+            errors.append(
+                f"git merge-base failed for {predecessor} and {name}: "
+                f"{forward.stderr.strip()}"
+            )
+            continue
         reverse = _git(repo_root, "merge-base", "--is-ancestor", name, predecessor)
+        if reverse.returncode not in (0, 1):
+            errors.append(
+                f"git merge-base failed for {name} and {predecessor}: "
+                f"{reverse.stderr.strip()}"
+            )
+            continue
+
         predecessor_is_ancestor = forward.returncode == 0
         tag_is_ancestor = reverse.returncode == 0
 
