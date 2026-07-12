@@ -167,6 +167,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rename ignores non-code package text during scope lookup.** (#3112)
 - **Rename validates keywords by context** — `$if`/`@while` are allowed as
   variable names, while `sub if` is still rejected. (#3109)
+- **The workspace reference index no longer silently drops references inside
+  block-form `package Foo { ... }`/`class Foo { ... }` bodies, typeglob
+  aliasing, `goto &coderef`, regex-bind expressions (`=~`), `tie` argument
+  lists, indirect-object call arguments, subroutine signature default
+  values, and non-variable assignment/increment targets** — "Find All
+  References", rename, and `workspace/symbol` now see these previously
+  unindexed reference sites. Consolidating the workspace indexer's two
+  independent reference walks into one traversal closed these
+  pre-existing coverage gaps as a side effect. (#1711)
 
 #### Debugger (DAP)
 

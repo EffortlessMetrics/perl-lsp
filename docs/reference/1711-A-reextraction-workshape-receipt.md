@@ -186,3 +186,65 @@ edit-class tests is a hard `assert_eq!`/`assert_ne!`; the structural counts
 are additionally mechanically bound via the checked-in `.snap` file; every
 timing number is `eprintln!`-only (never asserted against a threshold, never
 part of the snapshot).
+
+## 1711-B cutover remeasurement (this PR)
+
+The 1711-B recommendation above ("consolidate to a single authoritative
+extraction spine") has now shipped to production:
+`WorkspaceIndex::index_file_with_generation` calls
+`FileExtractionBundle::build_unified` (which runs `IndexVisitor::visit_unified`
+once), instead of running `IndexVisitor::visit` and
+`build_canonical_fact_shard_for_ast`'s internal `extract_symbol_refs(ast)` call
+as two independent full-AST reference walks. Declaration extraction,
+eval-sub-boundary extraction, generated-member extraction, and
+import/use-lib extraction are all UNCHANGED by this cutover -- only the
+reference walk was consolidated (declarations remain a separable follow-up,
+tracked on #1711).
+
+**Work-count evidence (same `reindex_workshape_measurement` harness, same
+80-sub/565+-LOC fixture, rerun after the cutover):** the checked-in `.snap`
+file's `canonical_ref_extract_calls` field dropped from `1` to `0` for every
+accepted-generation edit class (comment-only, reference-only,
+declaration-changing, dynamic-fact, revert-to-original) -- `visitor_visit_calls`
+stays at `1` (now `IndexVisitor::visit_unified`, doing double duty for both
+projections in that one call). Total walk-equivalents per
+`index_file_with_generation` call dropped from 2 (`visit` + `extract_symbol_refs`)
+to 1 (`visit_unified` only) for every edit class, including the key
+comment-only case (class 1) this issue exists to ask about.
+
+**Informational timing (NOT gated -- same measurement discipline as above,
+same caveats: single-sample and 15-iteration `cargo test` dev-profile
+numbers on shared/debug hardware, not a benchmark claim):**
+
+| Metric | Pre-cutover (1711-A) | Post-cutover (this PR) |
+|---|---|---|
+| Comment-only edit, single-sample extraction total | ~1.0 ms | ~0.42 ms |
+| Comment-only edit x15, min/median/max | 0.84 ms / 1.23 ms / 1.60 ms | 0.46 ms / 0.57 ms / 0.87 ms |
+| Reference-only edit, single-sample extraction total | ~1.2-1.8 ms (approx., same order as other classes) | ~0.51 ms |
+| Declaration-changing edit, single-sample extraction total | ~1.2-1.8 ms (approx.) | ~0.61 ms |
+| Dynamic-fact edit, single-sample extraction total | ~1.2-1.8 ms (approx.) | ~0.51 ms |
+
+The comment-only case (class 1) -- the specific edit class #1711 asks
+about -- shows roughly a 2-3x reduction in instrumented extraction time on
+this fixture, consistent with retiring one of the two full-AST reference
+walks. This is the SAME measurement-discipline caveat as 1711-A: timing is
+`eprintln!`-only, never gated by an assertion, and noisy on shared hardware
+-- the durable, mechanically-bound evidence is the WORK COUNT drop
+(`canonical_ref_extract_calls: 1 -> 0`), not the millisecond figures.
+
+**Disposition update:** the comment-only edit class is now cheaper (one
+walk instead of two) but is **not yet eliminated** -- `index_file_with_generation`
+still unconditionally re-runs declaration extraction (twice, once per
+projection -- unchanged by this cutover), eval-sub extraction,
+generated-member extraction, import extraction, and use-lib extraction on
+every edit, including comment-only ones, and still churns this file's own
+legacy symbol/search/global-reference-index CONTRIBUTION through the
+removal-then-re-add routine every time (see the unchanged
+`file_symbol_contribution_removed`/`_added` counts in the `.snap` file).
+Whether the REMAINING work is now "bounded" (cheap enough not to warrant
+further consolidation) or still "material" (large enough to justify a
+1711-C: declaration-walk unification and/or category-hash-gated skipping)
+is a judgment call for the maintainer bounded by these numbers, not a claim
+this PR makes on its own -- the honest reading is: **materially cheaper,
+not yet bounded** (declaration extraction is still duplicated, and the
+per-file cache-contribution churn is untouched by this cutover).
