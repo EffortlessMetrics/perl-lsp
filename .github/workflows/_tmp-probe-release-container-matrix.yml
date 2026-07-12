@@ -34,5 +34,5 @@ jobs:
         run: |
           curl --fail --silent --show-error --location \
             --output "${RUNNER_TEMP}/probe.py" \
-            "https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/ops/probe-v0.14-container-tags/scripts/_tmp_probe_container_matrix.py"
+            "https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/3c5a2da3c420ae7bb73e283f0fb13bdeef15eb66/scripts/_tmp_probe_container_matrix.py"
           python3 "${RUNNER_TEMP}/probe.py"
