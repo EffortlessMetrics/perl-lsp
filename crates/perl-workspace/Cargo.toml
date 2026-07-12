@@ -42,6 +42,7 @@ criterion.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
 perl-tdd-support = { workspace = true }
+insta = { version = "1.47.2" }
 
 [features]
 default = []

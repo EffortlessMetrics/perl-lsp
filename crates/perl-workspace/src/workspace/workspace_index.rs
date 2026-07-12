@@ -1904,6 +1904,8 @@ impl WorkspaceIndex {
                     existing_index.pending_generation =
                         existing_index.pending_generation.max(generation);
                     // Content unchanged, skip re-indexing
+                    #[cfg(test)]
+                    reindex_metrics::record_content_hash_short_circuit();
                     return Ok(());
                 }
                 // Same monotonic generation guard as the one under the later
@@ -1919,6 +1921,8 @@ impl WorkspaceIndex {
                 // out-of-order task here.
                 let high_water = existing_index.generation.max(existing_index.pending_generation);
                 if generation > 0 && high_water > 0 && high_water > generation {
+                    #[cfg(test)]
+                    reindex_metrics::record_stale_rejected_pre_parse();
                     return Ok(());
                 }
                 // Reserve this generation NOW, before parsing -- not just at
@@ -2003,7 +2007,11 @@ impl WorkspaceIndex {
             ..Default::default()
         };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
+        #[cfg(test)]
+        let visit_start = Instant::now();
         visitor.visit(&ast, &mut file_index);
+        #[cfg(test)]
+        reindex_metrics::record_visit(visit_start.elapsed());
 
         let canonical_shard =
             Self::build_canonical_fact_shard_for_ast(&uri_str, content_hash, &ast);
@@ -2026,10 +2034,18 @@ impl WorkspaceIndex {
         // separately from (and after) `files`/`symbols`/`global_references` to
         // match the consistent lock-order used throughout this file.
         let file_id = Self::hash_uri_to_file_id(&uri_str);
+        #[cfg(test)]
+        let import_start = Instant::now();
         let import_specs =
             crate::semantic::workspace_import_extractor::extract_import_specs(&ast, file_id);
+        #[cfg(test)]
+        reindex_metrics::record_import_extract(import_start.elapsed());
+        #[cfg(test)]
+        let use_lib_start = Instant::now();
         let use_lib_facts =
             crate::semantic::workspace_import_extractor::extract_use_lib_facts(&ast, file_id);
+        #[cfg(test)]
+        reindex_metrics::record_use_lib_extract(use_lib_start.elapsed());
 
         // Update the index, refresh the global symbol cache, and replace this file's
         // contribution in the global reference index.
@@ -2094,6 +2110,8 @@ impl WorkspaceIndex {
             if generation > 0 {
                 if let Some(existing) = files.get(&key) {
                     if existing.generation > 0 && existing.generation > generation {
+                        #[cfg(test)]
+                        reindex_metrics::record_stale_rejected_post_parse();
                         return Ok(());
                     }
                 }
@@ -2102,6 +2120,10 @@ impl WorkspaceIndex {
             // Remove stale global references from previous version of this file
             if let Some(old_index) = files.get(&key) {
                 let mut global_refs = self.global_references.write();
+                #[cfg(test)]
+                reindex_metrics::record_global_refs_removed(
+                    old_index.references.values().map(std::vec::Vec::len).sum(),
+                );
                 Self::remove_file_global_refs(&mut global_refs, old_index, &uri_str);
             }
 
@@ -2109,6 +2131,10 @@ impl WorkspaceIndex {
             if let Some(old_index) = files.get(&key) {
                 let mut symbols = self.symbols.write();
                 let mut search_idx = self.search_index.write();
+                #[cfg(test)]
+                reindex_metrics::record_legacy_symbols_removed(old_index.symbols.len());
+                #[cfg(test)]
+                reindex_metrics::record_legacy_search_removed(old_index.symbols.len());
                 Self::incremental_remove_symbols(&files, &mut symbols, old_index);
                 Self::incremental_remove_search(&mut search_idx, old_index);
                 drop(search_idx);
@@ -2131,12 +2157,20 @@ impl WorkspaceIndex {
             let mut symbols = self.symbols.write();
             let mut search_idx = self.search_index.write();
             if let Some(new_index) = files.get(&key) {
+                #[cfg(test)]
+                reindex_metrics::record_legacy_symbols_added(new_index.symbols.len());
+                #[cfg(test)]
+                reindex_metrics::record_legacy_search_added(new_index.symbols.len());
                 Self::incremental_add_symbols(&mut symbols, new_index);
                 Self::incremental_add_search(&mut search_idx, new_index);
             }
 
             if let Some(file_index) = files.get(&key) {
                 let mut global_refs = self.global_references.write();
+                #[cfg(test)]
+                reindex_metrics::record_global_refs_added(
+                    file_index.references.values().map(std::vec::Vec::len).sum(),
+                );
                 for (name, refs) in &file_index.references {
                     let entry = global_refs.entry(name.clone()).or_default();
                     for reference in refs {
@@ -2145,6 +2179,8 @@ impl WorkspaceIndex {
                 }
             }
             self.replace_fact_shard_incremental(&key, fact_shard);
+            #[cfg(test)]
+            reindex_metrics::record_generation_accepted();
         }
 
         // Update the import/export index with the freshly extracted import specs
@@ -2888,8 +2924,16 @@ impl WorkspaceIndex {
         let file_id = Self::hash_uri_to_file_id(uri);
 
         // Extract declarations and references from the AST.
+        #[cfg(test)]
+        let decl_start = Instant::now();
         let decls = extract_symbol_decls(ast, None);
+        #[cfg(test)]
+        reindex_metrics::record_decl_extract(decl_start.elapsed());
+        #[cfg(test)]
+        let ref_start = Instant::now();
         let refs = extract_symbol_refs(ast);
+        #[cfg(test)]
+        reindex_metrics::record_ref_extract(ref_start.elapsed());
 
         // Run the canonical adapters.
         let decl_facts = symbol_decls_to_semantic_facts(&decls, file_id);
@@ -2902,14 +2946,22 @@ impl WorkspaceIndex {
         // Extract dynamic boundary evidence for `eval "sub NAME { ... }"` patterns.
         // Non-literal evals (e.g. `eval $code`) are intentionally skipped — the
         // sub name is not statically known and no evidence is emitted.
+        #[cfg(test)]
+        let eval_sub_start = Instant::now();
         let eval_sub_triples =
             crate::semantic::eval_sub_extractor::extract_eval_sub_boundaries(ast, file_id);
+        #[cfg(test)]
+        reindex_metrics::record_eval_sub(eval_sub_start.elapsed());
         let dynamic_boundaries: Vec<perl_semantic_facts::OccurrenceFact> =
             eval_sub_triples.iter().map(|(_, _, occ)| occ.clone()).collect();
+        #[cfg(test)]
+        let generated_member_start = Instant::now();
         let generated_member_facts =
             crate::semantic::generated_member_extractor::extract_generated_member_facts(
                 ast, file_id,
             );
+        #[cfg(test)]
+        reindex_metrics::record_generated_member(generated_member_start.elapsed());
 
         // Build synthetic entity/anchor slices from eval-sub triples.
         // IMPORTANT: The triple is (entity, anchor, occurrence).  Only idx 0
@@ -5066,6 +5118,177 @@ pub mod lsp_adapter {
     fn parse_url(s: &str) -> Option<LspUrl> {
         use std::str::FromStr;
         LspUrl::from_str(s).ok()
+    }
+}
+
+/// Test-only instrumentation for measuring `didChange` re-extraction
+/// work-shape (perl-lsp-swarm#1711 / PR 1711-A).
+///
+/// Every function here is compiled ONLY under `#[cfg(test)]` -- there is no
+/// production build in which this module, or any call into it, exists. This
+/// is a **measurement receipt vehicle**, not a runtime feature: it changes
+/// no extraction/propagation behavior, only records how much work the
+/// EXISTING `index_file_with_generation` path already does, per call site,
+/// on the calling thread.
+///
+/// A thread-local (not a global static) is used because
+/// `index_file_with_generation` runs synchronously on the caller's thread
+/// whenever there is no Tokio runtime installed -- exactly how every
+/// measurement test in `reindex_workshape_measurement` (below) invokes it.
+/// `cargo test` runs tests in parallel on separate OS threads, so a
+/// thread-local avoids cross-test interference without needing a mutex or
+/// serial-test annotation.
+#[cfg(test)]
+pub(crate) mod reindex_metrics {
+    use std::cell::RefCell;
+    use std::time::Duration;
+
+    /// Work-shape counters/timers captured for a single
+    /// `index_file_with_generation` call.
+    #[derive(Debug, Default, Clone, Copy)]
+    pub(crate) struct ReindexWorkMetrics {
+        pub visit_calls: u32,
+        pub visit_time: Duration,
+        pub decl_extract_calls: u32,
+        pub decl_extract_time: Duration,
+        pub ref_extract_calls: u32,
+        pub ref_extract_time: Duration,
+        pub eval_sub_calls: u32,
+        pub eval_sub_time: Duration,
+        pub generated_member_calls: u32,
+        pub generated_member_time: Duration,
+        pub import_extract_calls: u32,
+        pub import_extract_time: Duration,
+        pub use_lib_extract_calls: u32,
+        pub use_lib_extract_time: Duration,
+        /// THIS URI's own `FileIndex::symbols` contribution -- the count of
+        /// entries passed through the legacy symbol-table removal routine
+        /// on this call. NOT necessarily the number of entries removed from
+        /// the global qualified/bare-name map (dual-indexing may write each
+        /// contributed symbol under up to two global keys), and NOT a
+        /// whole-workspace rebuild -- only this one file's contribution.
+        pub legacy_symbols_removed: usize,
+        /// Same file-scoped contribution, on the re-add side of this call.
+        pub legacy_symbols_added: usize,
+        /// THIS URI's contribution passed through the search-index removal
+        /// routine (same file-scoped caveat as `legacy_symbols_removed`).
+        pub legacy_search_removed: usize,
+        pub legacy_search_added: usize,
+        /// THIS URI's own global-reference-index contribution (not the
+        /// whole workspace-wide reference cache) passed through the
+        /// removal routine on this call.
+        pub global_refs_removed: usize,
+        pub global_refs_added: usize,
+        /// `true` when this call took the whole-file content-hash
+        /// short-circuit (cheapest possible outcome -- no re-extraction at
+        /// all).
+        pub content_hash_short_circuit: bool,
+        /// `true` when this call was rejected by the pre-parse high-water
+        /// monotonic-generation guard.
+        pub stale_generation_rejected_pre_parse: bool,
+        /// `true` when this call was rejected by the post-parse monotonic
+        /// generation guard.
+        pub stale_generation_rejected_post_parse: bool,
+        /// `true` when this call's generation was genuinely committed.
+        pub generation_accepted: bool,
+    }
+
+    thread_local! {
+        static CURRENT: RefCell<Option<ReindexWorkMetrics>> = const { RefCell::new(None) };
+    }
+
+    /// Begin recording on the calling thread. Any prior unread recording on
+    /// this thread is discarded.
+    pub(crate) fn start() {
+        CURRENT.with(|c| *c.borrow_mut() = Some(ReindexWorkMetrics::default()));
+    }
+
+    /// Stop recording and return whatever was captured since the last
+    /// `start()` on this thread (a zeroed value if `start()` was never
+    /// called).
+    pub(crate) fn take() -> ReindexWorkMetrics {
+        CURRENT.with(|c| c.borrow_mut().take().unwrap_or_default())
+    }
+
+    fn record(f: impl FnOnce(&mut ReindexWorkMetrics)) {
+        CURRENT.with(|c| {
+            if let Some(m) = c.borrow_mut().as_mut() {
+                f(m);
+            }
+        });
+    }
+
+    pub(crate) fn record_visit(d: Duration) {
+        record(|m| {
+            m.visit_calls += 1;
+            m.visit_time += d;
+        });
+    }
+    pub(crate) fn record_decl_extract(d: Duration) {
+        record(|m| {
+            m.decl_extract_calls += 1;
+            m.decl_extract_time += d;
+        });
+    }
+    pub(crate) fn record_ref_extract(d: Duration) {
+        record(|m| {
+            m.ref_extract_calls += 1;
+            m.ref_extract_time += d;
+        });
+    }
+    pub(crate) fn record_eval_sub(d: Duration) {
+        record(|m| {
+            m.eval_sub_calls += 1;
+            m.eval_sub_time += d;
+        });
+    }
+    pub(crate) fn record_generated_member(d: Duration) {
+        record(|m| {
+            m.generated_member_calls += 1;
+            m.generated_member_time += d;
+        });
+    }
+    pub(crate) fn record_import_extract(d: Duration) {
+        record(|m| {
+            m.import_extract_calls += 1;
+            m.import_extract_time += d;
+        });
+    }
+    pub(crate) fn record_use_lib_extract(d: Duration) {
+        record(|m| {
+            m.use_lib_extract_calls += 1;
+            m.use_lib_extract_time += d;
+        });
+    }
+    pub(crate) fn record_legacy_symbols_removed(n: usize) {
+        record(|m| m.legacy_symbols_removed += n);
+    }
+    pub(crate) fn record_legacy_search_removed(n: usize) {
+        record(|m| m.legacy_search_removed += n);
+    }
+    pub(crate) fn record_global_refs_removed(n: usize) {
+        record(|m| m.global_refs_removed += n);
+    }
+    pub(crate) fn record_legacy_symbols_added(n: usize) {
+        record(|m| m.legacy_symbols_added += n);
+    }
+    pub(crate) fn record_legacy_search_added(n: usize) {
+        record(|m| m.legacy_search_added += n);
+    }
+    pub(crate) fn record_global_refs_added(n: usize) {
+        record(|m| m.global_refs_added += n);
+    }
+    pub(crate) fn record_content_hash_short_circuit() {
+        record(|m| m.content_hash_short_circuit = true);
+    }
+    pub(crate) fn record_stale_rejected_pre_parse() {
+        record(|m| m.stale_generation_rejected_pre_parse = true);
+    }
+    pub(crate) fn record_stale_rejected_post_parse() {
+        record(|m| m.stale_generation_rejected_post_parse = true);
+    }
+    pub(crate) fn record_generation_accepted() {
+        record(|m| m.generation_accepted = true);
     }
 }
 
@@ -9412,5 +9635,758 @@ mod file_fact_shard_serde_tests {
             "cross-scope my variable must not appear in find_unused_symbols; got: {:?}",
             unused_names
         );
+    }
+}
+
+/// # PR 1711-A -- didChange re-extraction work-shape measurement.
+///
+/// Measures how much re-extraction work `index_file_with_generation` (the
+/// production `didChange` -> shard-update path) does per edit, on a large
+/// file (500+ LOC / 80+ symbols), across the six edit classes called for by
+/// perl-lsp-swarm#1711:
+///
+/// 1. comment/whitespace-only (categories unchanged) -- the key waste case;
+/// 2. reference-only (occurrence changes, decl/entity reusable);
+/// 3. declaration/entity-changing (entity + anchor change);
+/// 4. generated/dynamic-fact (`eval "sub NAME {...}"` synthetic category);
+/// 5. revert-to-original (determinism -- no drift);
+/// 6. superseded generation (no stale publication).
+///
+/// This module is a MEASUREMENT RECEIPT, not a behavior change: every
+/// assertion below observes either (a) existing public API
+/// (`file_fact_shard`'s per-category hashes) or (b) the `reindex_metrics`
+/// counters/timers added above, which are themselves compiled only under
+/// `#[cfg(test)]` and never run in a production build. See
+/// `docs/reference/1711-A-reextraction-workshape-receipt.md` for the
+/// human-readable summary and the bounded-vs-material disposition.
+///
+/// The structural evidence (category-hash-changed flags, call counts,
+/// per-file cache-contribution counts) is MECHANICALLY BOUND via
+/// `reextraction_workshape_receipt_snapshot`'s checked-in `insta` snapshot --
+/// so those numbers cannot silently drift from what the Markdown receipt
+/// claims without `cargo insta review`/`INSTA_UPDATE=no` failing. Timing
+/// stays informational-only (`eprintln!`, no assertion, excluded from the
+/// snapshot) -- it is not deterministic on shared/debug hardware.
+#[cfg(test)]
+mod reindex_workshape_measurement {
+    // Measurement receipts are only useful if a human can read them: `cargo
+    // test -- --nocapture` is the whole point of this module. Scoped to this
+    // test-only module (same pattern as `xtask/src/main.rs`), never touches
+    // production code.
+    #![allow(clippy::print_stderr, clippy::print_stdout)]
+
+    use super::*;
+    use perl_tdd_support::{must, must_some};
+
+    /// Number of `sub` declarations in the large-file fixture. 80 subs (plus
+    /// the enclosing package) comfortably clears the spec's "500+ LOC / 50+
+    /// symbols" bar -- see the LOC assertion in `fixture_is_large_enough`.
+    const SUB_COUNT: usize = 80;
+
+    /// `origin/main` commit this measurement's baseline sits on
+    /// (`git merge-base HEAD origin/main` at PR-1711-A creation time). A
+    /// fixed label, not introspected via `git` at test run time -- git
+    /// introspection would be fragile under shallow clones, tarball
+    /// checkouts, and CI sandboxes with no `.git` directory, and would make
+    /// the snapshot's determinism depend on the runner's checkout depth
+    /// rather than on the code being measured. Update by hand only if
+    /// `index_file_with_generation`'s extraction logic is materially
+    /// re-baselined.
+    const BASE_SHA: &str = "393f167d006fcd79bf6009a93aefe872b3807e67";
+
+    /// Commit that introduced this measurement instrumentation
+    /// (perl-lsp-swarm PR #4013, "1711-A"). Same update policy as
+    /// `BASE_SHA` -- a traceability label, not a live git lookup.
+    const MEASUREMENT_INTRODUCED_AT_SHA: &str = "6ebbc1fd4be43ed46872b960a836c7586dc0aefe";
+
+    /// Builds the shared fixture body (package header + `SUB_COUNT` subs),
+    /// WITHOUT the trailing `1;\n`. Every edit class appends its own content
+    /// immediately before a `1;\n` it supplies itself, so callers control
+    /// exactly what comes last.
+    fn fixture_prefix(sub_count: usize) -> String {
+        let mut src = String::new();
+        src.push_str("package Big::Reextraction::Fixture;\n");
+        src.push_str("use strict;\n");
+        src.push_str("use warnings;\n\n");
+        for i in 0..sub_count {
+            src.push_str(&format!(
+                "sub sub_{i} {{\n    my ($x, $y) = @_;\n    my $sum = $x + $y + {i};\n    # sub_{i} body comment for LOC padding\n    return $sum;\n}}\n\n"
+            ));
+        }
+        src
+    }
+
+    /// A block of pure comment lines, safe to append strictly after all
+    /// other content (so no existing anchor's byte span shifts).
+    fn trailing_comment_block(lines: usize) -> String {
+        let mut block = String::new();
+        for i in 0..lines {
+            block.push_str(&format!(
+                "# trailing commentary line {i} -- pure whitespace/comment edit\n"
+            ));
+        }
+        block
+    }
+
+    // `SUB_COUNT + 1 >= 50` (subs + the enclosing package) is a compile-time
+    // property of the constant, not a runtime check -- enforced here instead
+    // of via a trivially-true `assert!` in the test body below.
+    const _: () = assert!(SUB_COUNT + 1 >= 50, "fixture must have 50+ symbols (subs + package)");
+
+    #[test]
+    fn fixture_is_large_enough() {
+        let prefix = fixture_prefix(SUB_COUNT);
+        let full = format!("{prefix}1;\n");
+        let loc = full.lines().count();
+        assert!(loc >= 500, "fixture must be 500+ LOC per the #1711-A spec; got {loc}");
+    }
+
+    /// Runs `index_file_with_generation` once, recording `reindex_metrics`
+    /// on the calling thread for the duration of the call (safe under
+    /// parallel `cargo test` execution -- see the module doc comment on
+    /// `reindex_metrics`).
+    fn index_and_measure(
+        index: &WorkspaceIndex,
+        uri: &str,
+        text: String,
+        generation: u32,
+    ) -> (Result<(), String>, reindex_metrics::ReindexWorkMetrics) {
+        let url = must(url::Url::parse(uri));
+        reindex_metrics::start();
+        let result = index.index_file_with_generation(url, text, generation);
+        let metrics = reindex_metrics::take();
+        (result, metrics)
+    }
+
+    type CategoryHashes = (u64, Option<u64>, Option<u64>, Option<u64>, Option<u64>);
+
+    /// Fetches `(content_hash, anchors_hash, entities_hash, occurrences_hash,
+    /// edges_hash)` for a URI via the existing public `file_fact_shard` API
+    /// -- no new instrumentation needed for shard-category comparison.
+    fn category_hashes(index: &WorkspaceIndex, uri: &str) -> Option<CategoryHashes> {
+        index.file_fact_shard(uri).map(|s| {
+            (s.content_hash, s.anchors_hash, s.entities_hash, s.occurrences_hash, s.edges_hash)
+        })
+    }
+
+    /// Sum of instrumented extraction timers for one call -- INFORMATIONAL
+    /// only (see the measurement-discipline note on the module doc comment:
+    /// no hard-millisecond threshold is asserted anywhere in this file).
+    fn total_extraction_time(m: &reindex_metrics::ReindexWorkMetrics) -> std::time::Duration {
+        m.visit_time
+            + m.decl_extract_time
+            + m.ref_extract_time
+            + m.eval_sub_time
+            + m.generated_member_time
+            + m.import_extract_time
+            + m.use_lib_extract_time
+    }
+
+    /// Whether an `index_file_with_generation` call was rejected by either
+    /// monotonic generation guard (as opposed to accepted, or short-circuited
+    /// by an unchanged content hash).
+    fn was_stale_rejected(m: &reindex_metrics::ReindexWorkMetrics) -> bool {
+        m.stale_generation_rejected_pre_parse || m.stale_generation_rejected_post_parse
+    }
+
+    /// One evidence bucket for a per-category shard-hash comparison. Kept as
+    /// an explicit three-state enum (not `bool`) because "rejected, so shard
+    /// replacement never ran at all" is a materially different fact from
+    /// "ran, and this category happened to be unchanged" -- collapsing them
+    /// into `false` would hide that a superseded generation never reaches
+    /// shard replacement in the first place.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum CategoryDelta {
+        Changed,
+        Unchanged,
+        /// The call was rejected before any shard replacement occurred (a
+        /// stale/superseded generation) -- "changed vs unchanged" does not
+        /// apply.
+        NotApplicableRejected,
+    }
+
+    /// Deterministic, checked-in STRUCTURAL receipt for one edit class.
+    /// Every field is a compile-time constant, a call count, a per-file
+    /// cache-contribution count, or a category-hash-changed flag -- nothing
+    /// timing-based. This is the type `reextraction_workshape_receipt_snapshot`
+    /// snapshots; the Markdown receipt
+    /// (`docs/reference/1711-A-reextraction-workshape-receipt.md`) treats
+    /// this snapshot as the source of truth for counts, not hand-transcribed
+    /// numbers.
+    #[derive(Debug, Clone)]
+    // snapshot record: fields are read collectively by derive(Debug) into the
+    // insta snapshot, which the dead_code lint does not count as per-field use
+    #[allow(dead_code)]
+    struct EditClassReceipt {
+        base_sha: &'static str,
+        measurement_introduced_at_sha: &'static str,
+        edit_class: &'static str,
+        anchors_hash: CategoryDelta,
+        entities_hash: CategoryDelta,
+        occurrences_hash: CategoryDelta,
+        edges_hash: CategoryDelta,
+        /// `IndexVisitor::visit` call count (legacy symbol/reference walk).
+        visitor_visit_calls: u32,
+        /// Canonical declaration extractor (`extract_symbol_decls`) call count.
+        canonical_decl_extract_calls: u32,
+        /// Canonical reference extractor (`extract_symbol_refs`) call count.
+        canonical_ref_extract_calls: u32,
+        /// Dynamic-boundary extractor (`extract_eval_sub_boundaries`, e.g.
+        /// `eval "sub NAME {...}"`) call count.
+        dynamic_boundary_extract_calls: u32,
+        /// Generated-member extractor (`extract_generated_member_facts`,
+        /// e.g. Moo/Moose `has`) call count.
+        generated_member_extract_calls: u32,
+        import_extract_calls: u32,
+        use_lib_extract_calls: u32,
+        /// This file's own symbol-table CONTRIBUTION -- i.e. the number of
+        /// entries in `FileIndex::symbols` for THIS URI that were passed
+        /// through the legacy-cache removal routine on this call. This is
+        /// NOT necessarily the number of entries removed from the global
+        /// qualified/bare-name map: the dual-indexing pattern
+        /// (`perl-workspace/CLAUDE.md`, PR #122) may write each contributed
+        /// symbol under up to two global keys, and it is not a
+        /// whole-workspace rebuild -- only this one file's contribution is
+        /// touched.
+        file_symbol_contribution_removed: usize,
+        /// Same file-scoped contribution, on the re-add side of the same call.
+        file_symbol_contribution_added: usize,
+        /// This file's contribution passed through the search-index
+        /// removal routine (same caveat as `file_symbol_contribution_removed`).
+        file_search_contribution_removed: usize,
+        file_search_contribution_added: usize,
+        /// This file's own global-reference-index CONTRIBUTION (only this
+        /// URI's entries, not the whole workspace-wide reference cache)
+        /// passed through the removal routine.
+        file_global_ref_contribution_removed: usize,
+        file_global_ref_contribution_added: usize,
+        /// `"accepted"` | `"content_hash_short_circuit"` |
+        /// `"stale_rejected_pre_parse"` | `"stale_rejected_post_parse"`.
+        generation_outcome: &'static str,
+    }
+
+    /// Builds one `EditClassReceipt` from a before/after category-hash pair
+    /// and the metrics recorded for the (second, edited) call.
+    fn build_receipt(
+        edit_class: &'static str,
+        before: CategoryHashes,
+        after: CategoryHashes,
+        m: &reindex_metrics::ReindexWorkMetrics,
+    ) -> EditClassReceipt {
+        let rejected = was_stale_rejected(m);
+        let delta = |b: Option<u64>, a: Option<u64>| {
+            if rejected {
+                CategoryDelta::NotApplicableRejected
+            } else if b == a {
+                CategoryDelta::Unchanged
+            } else {
+                CategoryDelta::Changed
+            }
+        };
+        let generation_outcome = if m.generation_accepted {
+            "accepted"
+        } else if m.content_hash_short_circuit {
+            "content_hash_short_circuit"
+        } else if m.stale_generation_rejected_pre_parse {
+            "stale_rejected_pre_parse"
+        } else if m.stale_generation_rejected_post_parse {
+            "stale_rejected_post_parse"
+        } else {
+            "unknown"
+        };
+        EditClassReceipt {
+            base_sha: BASE_SHA,
+            measurement_introduced_at_sha: MEASUREMENT_INTRODUCED_AT_SHA,
+            edit_class,
+            anchors_hash: delta(before.1, after.1),
+            entities_hash: delta(before.2, after.2),
+            occurrences_hash: delta(before.3, after.3),
+            edges_hash: delta(before.4, after.4),
+            visitor_visit_calls: m.visit_calls,
+            canonical_decl_extract_calls: m.decl_extract_calls,
+            canonical_ref_extract_calls: m.ref_extract_calls,
+            dynamic_boundary_extract_calls: m.eval_sub_calls,
+            generated_member_extract_calls: m.generated_member_calls,
+            import_extract_calls: m.import_extract_calls,
+            use_lib_extract_calls: m.use_lib_extract_calls,
+            file_symbol_contribution_removed: m.legacy_symbols_removed,
+            file_symbol_contribution_added: m.legacy_symbols_added,
+            file_search_contribution_removed: m.legacy_search_removed,
+            file_search_contribution_added: m.legacy_search_added,
+            file_global_ref_contribution_removed: m.global_refs_removed,
+            file_global_ref_contribution_added: m.global_refs_added,
+            generation_outcome,
+        }
+    }
+
+    /// **Edit class 1 -- comment/whitespace-only edit. The key waste case.**
+    ///
+    /// The trailing comment block is appended strictly after the existing
+    /// `1;\n`, so no anchor/entity/occurrence/edge byte span moves. All four
+    /// category hashes must therefore be bit-identical before/after, while
+    /// the whole-file `content_hash` must differ (real bytes were added).
+    ///
+    /// Returns `(before, after, metrics-of-the-comment-edit)` so both the
+    /// correctness assertions below and the snapshot test can share one
+    /// code path.
+    fn run_class_1_comment_only()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/comment_only.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let comment_only = format!("{baseline}{}", trailing_comment_block(30));
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline, 1);
+        r0?;
+        let before = must_some(category_hashes(&index, uri));
+        let (r1, m1) = index_and_measure(&index, uri, comment_only, 2);
+        r1?;
+        let after = must_some(category_hashes(&index, uri));
+        Ok((before, after, m1))
+    }
+
+    #[test]
+    fn edit_class_1_comment_only_reextracts_unconditionally_despite_unchanged_categories()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m1) = run_class_1_comment_only()?;
+
+        assert_ne!(before.0, after.0, "content_hash must change -- real bytes were added");
+        assert_eq!(
+            before.1, after.1,
+            "anchors_hash must be unchanged by a trailing comment-only edit"
+        );
+        assert_eq!(
+            before.2, after.2,
+            "entities_hash must be unchanged by a trailing comment-only edit"
+        );
+        assert_eq!(
+            before.3, after.3,
+            "occurrences_hash must be unchanged by a trailing comment-only edit"
+        );
+        assert_eq!(
+            before.4, after.4,
+            "edges_hash must be unchanged by a trailing comment-only edit"
+        );
+
+        // THE KEY MEASUREMENT: despite zero category change, every canonical
+        // extractor still runs exactly once -- this is the avoidable work
+        // #1711 asks about.
+        assert_eq!(m1.visit_calls, 1);
+        assert_eq!(m1.decl_extract_calls, 1);
+        assert_eq!(m1.ref_extract_calls, 1);
+        assert_eq!(m1.eval_sub_calls, 1);
+        assert_eq!(m1.generated_member_calls, 1);
+        assert_eq!(m1.import_extract_calls, 1);
+        assert_eq!(m1.use_lib_extract_calls, 1);
+        assert!(
+            m1.generation_accepted,
+            "comment-only edit must be accepted as a new generation, not rejected"
+        );
+        assert!(
+            !m1.content_hash_short_circuit,
+            "the comment-only edit changes real bytes, so it must not take the \
+             unchanged-content short-circuit path"
+        );
+
+        // Legacy cache CONTRIBUTION churn: this file's own symbol-table
+        // contribution is torn down and rebuilt in full even though the
+        // symbol SET is byte-for-byte identical. This is THIS FILE's
+        // contribution passing through the removal/re-add routine, not a
+        // whole-workspace cache rebuild -- see `EditClassReceipt`'s field
+        // docs for the exact caveat (dual-indexing may write each
+        // contributed symbol under up to two global keys).
+        assert_eq!(m1.legacy_symbols_removed, m1.legacy_symbols_added);
+        assert!(
+            m1.legacy_symbols_removed >= SUB_COUNT,
+            "expected this file's full symbol-contribution churn on a comment-only edit; got {}",
+            m1.legacy_symbols_removed
+        );
+
+        eprintln!(
+            "[1711-A receipt] comment-only edit: extraction_total={:?} \
+             file_symbol_contribution_churned={} file_global_ref_contribution_churned={}",
+            total_extraction_time(&m1),
+            m1.legacy_symbols_removed,
+            m1.global_refs_removed
+        );
+        Ok(())
+    }
+
+    /// **Edit class 1, repeated -- timing distribution (informational).**
+    ///
+    /// A single sample is noisy (scheduler jitter, cache warmth). This runs
+    /// 15 successive trailing-comment-only edits on the SAME large fixture
+    /// (each edit still strictly appends after all prior content, so
+    /// category hashes never change across any of the 15 steps -- verified
+    /// on every iteration, not just the first) and reports min/median/max
+    /// extraction-vs-parse time. Per the measurement-discipline directive,
+    /// this is INFORMATIONAL ONLY -- no assertion anywhere in this file
+    /// gates on an absolute millisecond value; the decision rests on the
+    /// WORK counts asserted in the sibling test above (and mechanically
+    /// bound in `reextraction_workshape_receipt_snapshot`).
+    #[test]
+    fn edit_class_1_repeated_comment_only_edits_timing_distribution()
+    -> Result<(), Box<dyn std::error::Error>> {
+        const ITERATIONS: usize = 15;
+        let uri = "file:///big/comment_only_repeated.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline.clone(), 1);
+        r0?;
+        let original = must_some(category_hashes(&index, uri));
+
+        let mut extraction_samples = Vec::with_capacity(ITERATIONS);
+        let mut parse_samples = Vec::with_capacity(ITERATIONS);
+        let mut text = baseline;
+        for step in 0..ITERATIONS {
+            text.push_str(&format!("# repeated trailing comment step {step}\n"));
+
+            let parse_start = std::time::Instant::now();
+            let _ = Parser::new(&text).parse();
+            parse_samples.push(parse_start.elapsed());
+
+            let (r, m) = index_and_measure(
+                &index,
+                uri,
+                text.clone(),
+                u32::try_from(step + 2).map_err(|e| format!("generation overflow: {e}"))?,
+            );
+            r?;
+
+            let after = must_some(category_hashes(&index, uri));
+            assert_eq!(
+                original.1, after.1,
+                "anchors_hash must stay unchanged across every repeated comment-only step"
+            );
+            assert_eq!(
+                original.2, after.2,
+                "entities_hash must stay unchanged across every repeated comment-only step"
+            );
+            assert_eq!(
+                original.3, after.3,
+                "occurrences_hash must stay unchanged across every repeated comment-only step"
+            );
+            assert_eq!(
+                original.4, after.4,
+                "edges_hash must stay unchanged across every repeated comment-only step"
+            );
+            assert_eq!(
+                m.decl_extract_calls, 1,
+                "extraction still runs every step despite no category change"
+            );
+
+            extraction_samples.push(total_extraction_time(&m));
+        }
+
+        extraction_samples.sort();
+        parse_samples.sort();
+        let mid = ITERATIONS / 2;
+        eprintln!(
+            "[1711-A receipt] comment-only x{ITERATIONS} -- extraction(min/median/max)={:?}/{:?}/{:?} \
+             parse(min/median/max)={:?}/{:?}/{:?}",
+            extraction_samples[0],
+            extraction_samples[mid],
+            extraction_samples[ITERATIONS - 1],
+            parse_samples[0],
+            parse_samples[mid],
+            parse_samples[ITERATIONS - 1],
+        );
+        Ok(())
+    }
+
+    /// **Edit class 2 -- reference-only edit.**
+    ///
+    /// Appends a single call to an EXISTING sub as the last statement before
+    /// `1;\n`. No new declaration is added, so `entities_hash` must be
+    /// unaffected. `occurrences_hash` must change (a new call-site
+    /// occurrence exists).
+    ///
+    /// `anchors_hash` ALSO changes here -- an initially counter-intuitive
+    /// finding worth recording: `symbol_refs_to_semantic_facts`
+    /// (`crates/perl-symbol/src/surface/facts.rs`) emits one `AnchorFact`
+    /// per REFERENCE, not just per declaration (`SymbolRefSemanticFacts`
+    /// doc: "Source-span anchors, one per reference"). So the `anchors`
+    /// category conflates declaration-anchors and reference-anchors; any
+    /// edit that adds/removes a reference touches `anchors_updated` too,
+    /// not just `occurrences_updated`. This matters for the bounded/material
+    /// disposition: a hypothetical category-hash-gated skip would still
+    /// have to treat "anchors changed" as common (any new reference trips
+    /// it), not just "rare" -- it does NOT undermine the comment-only
+    /// case (class 1), where no reference is added either.
+    fn run_class_2_reference_only()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/reference_only.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let reference_only = format!("{prefix}sub_0(1, 2);\n1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline, 1);
+        r0?;
+        let before = must_some(category_hashes(&index, uri));
+        let (r1, m1) = index_and_measure(&index, uri, reference_only, 2);
+        r1?;
+        let after = must_some(category_hashes(&index, uri));
+        Ok((before, after, m1))
+    }
+
+    #[test]
+    fn edit_class_2_reference_only_edit_changes_occurrences_and_reference_anchors()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m1) = run_class_2_reference_only()?;
+
+        assert_ne!(before.0, after.0, "content_hash must change");
+        assert_ne!(
+            before.1, after.1,
+            "anchors_hash changes too -- reference anchors share the anchors category with decl anchors"
+        );
+        assert_eq!(before.2, after.2, "entities_hash must be unaffected -- no new declaration");
+        assert_ne!(
+            before.3, after.3,
+            "occurrences_hash must change -- a new call-site reference was added"
+        );
+        assert_eq!(m1.decl_extract_calls, 1);
+        assert_eq!(m1.ref_extract_calls, 1);
+
+        eprintln!(
+            "[1711-A receipt] reference-only edit: extraction_total={:?}",
+            total_extraction_time(&m1)
+        );
+        Ok(())
+    }
+
+    /// **Edit class 3 -- declaration/entity-changing edit.**
+    ///
+    /// Appends a brand-new `sub` before `1;\n`. Both `anchors_hash` and
+    /// `entities_hash` must change; this is the case category-scoped
+    /// propagation is already designed to detect.
+    fn run_class_3_declaration_changing()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/decl_edit.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let decl_changed = format!("{prefix}sub sub_new_extra {{\n    return 999;\n}}\n\n1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline, 1);
+        r0?;
+        let before = must_some(category_hashes(&index, uri));
+        let (r1, m1) = index_and_measure(&index, uri, decl_changed, 2);
+        r1?;
+        let after = must_some(category_hashes(&index, uri));
+        Ok((before, after, m1))
+    }
+
+    #[test]
+    fn edit_class_3_declaration_edit_changes_entities_and_anchors()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m1) = run_class_3_declaration_changing()?;
+
+        assert_ne!(
+            before.1, after.1,
+            "anchors_hash must change -- a new declaration anchor was added"
+        );
+        assert_ne!(before.2, after.2, "entities_hash must change -- a new sub entity was added");
+        assert_eq!(m1.decl_extract_calls, 1);
+
+        eprintln!(
+            "[1711-A receipt] declaration-changing edit: extraction_total={:?}",
+            total_extraction_time(&m1)
+        );
+        Ok(())
+    }
+
+    /// **Edit class 4 -- generated/dynamic-fact edit.**
+    ///
+    /// Appends `eval "sub NAME { ... }"` before `1;\n`, exercising the
+    /// dynamic-boundary extractor's synthetic entity/anchor/occurrence path.
+    /// Synthetic facts must stay honestly classified (they flow through the
+    /// SAME anchors/entities categories, not a hidden fifth category).
+    fn run_class_4_dynamic_fact()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/dynamic_fact.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let dynamic_fact =
+            format!("{prefix}eval \"sub dynamic_generated_1 {{ return 123; }}\";\n\n1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline, 1);
+        r0?;
+        let before = must_some(category_hashes(&index, uri));
+        let (r1, m1) = index_and_measure(&index, uri, dynamic_fact, 2);
+        r1?;
+        let after = must_some(category_hashes(&index, uri));
+        Ok((before, after, m1))
+    }
+
+    #[test]
+    fn edit_class_4_dynamic_eval_sub_edit_changes_synthetic_categories()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m1) = run_class_4_dynamic_fact()?;
+
+        assert_ne!(
+            before.1, after.1,
+            "anchors_hash must change -- synthetic anchor from eval-sub boundary"
+        );
+        assert_ne!(
+            before.2, after.2,
+            "entities_hash must change -- synthetic entity from eval-sub boundary"
+        );
+        assert_eq!(m1.eval_sub_calls, 1, "eval-sub extractor must run on the dynamic edit");
+
+        eprintln!(
+            "[1711-A receipt] dynamic-fact edit: extraction_total={:?}",
+            total_extraction_time(&m1)
+        );
+        Ok(())
+    }
+
+    /// **Edit class 5 -- revert-to-original.**
+    ///
+    /// baseline -> edited -> baseline again. The final call's recomputed
+    /// category hashes must be bit-identical to the FIRST call's -- proving
+    /// extraction is a deterministic pure function of content, with no
+    /// accumulated drift across generations. Returns
+    /// `(original, reverted, metrics-of-the-revert-call)`.
+    fn run_class_5_revert_to_original()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/revert.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let edited = format!("{prefix}sub sub_new_extra {{\n    return 999;\n}}\n\n1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline.clone(), 1);
+        r0?;
+        let original = must_some(category_hashes(&index, uri));
+
+        let (r1, _m1) = index_and_measure(&index, uri, edited, 2);
+        r1?;
+
+        let (r2, m2) = index_and_measure(&index, uri, baseline, 3);
+        r2?;
+        let reverted = must_some(category_hashes(&index, uri));
+        Ok((original, reverted, m2))
+    }
+
+    #[test]
+    fn edit_class_5_revert_to_original_is_deterministic() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let (original, reverted, m2) = run_class_5_revert_to_original()?;
+
+        assert_eq!(
+            original, reverted,
+            "reverting to byte-identical original text must reproduce bit-identical category hashes"
+        );
+        assert!(
+            m2.generation_accepted,
+            "the revert-to-original call must be accepted as a new generation, not rejected"
+        );
+        Ok(())
+    }
+
+    /// **Edit class 6 -- superseded generation.**
+    ///
+    /// A newer generation commits first; an older, out-of-order generation
+    /// then arrives late and must be rejected without publishing its stale
+    /// content (the monotonic generation guard already covers this --
+    /// asserting it here documents that correctness is not at risk, only
+    /// cost/overlap, matching the issue's own framing). Returns
+    /// `(after_new, after_old_attempt, metrics-of-the-rejected-old-call)`.
+    fn run_class_6_superseded_generation()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/superseded.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let gen1_text = format!("{prefix}1;\n");
+        let gen2_text = format!("{prefix}sub sub_new_extra {{\n    return 999;\n}}\n\n1;\n");
+
+        let index = WorkspaceIndex::new();
+
+        // Newer generation (2) commits first.
+        let (r_new, m_new) = index_and_measure(&index, uri, gen2_text, 2);
+        r_new?;
+        if !m_new.generation_accepted {
+            return Err(format!(
+                "expected the newer generation to commit before the superseded one arrives; got {m_new:?}"
+            ));
+        }
+        let after_new = must_some(category_hashes(&index, uri));
+
+        // An OLDER, out-of-order generation (1) arrives late.
+        let (r_old, m_old) = index_and_measure(&index, uri, gen1_text, 1);
+        r_old?;
+        let after_old_attempt = must_some(category_hashes(&index, uri));
+        Ok((after_new, after_old_attempt, m_old))
+    }
+
+    #[test]
+    fn edit_class_6_superseded_generation_never_publishes_stale_content()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (after_new, after_old_attempt, m_old) = run_class_6_superseded_generation()?;
+
+        assert!(
+            was_stale_rejected(&m_old),
+            "an out-of-order older generation must be rejected, not published; got {:?}",
+            m_old
+        );
+        assert!(
+            !m_old.generation_accepted,
+            "stale/older generation must be rejected, so it must never reach the accepted outcome"
+        );
+        assert_eq!(
+            after_new, after_old_attempt,
+            "the stale older generation must never overwrite the newer, already-committed shard"
+        );
+        Ok(())
+    }
+
+    /// **Mechanically-bound structural receipt (item 1 of the maintainer
+    /// review on PR #4013).** Re-runs all six edit classes (via the SAME
+    /// `run_class_*` helpers the correctness tests above use -- not a
+    /// parallel reimplementation) and snapshots the resulting
+    /// `Vec<EditClassReceipt>`. `insta` fails this test (and `INSTA_UPDATE=no`
+    /// CI runs) if any structural count or category-hash-changed flag drifts
+    /// from the checked-in `.snap` file -- so the Markdown receipt's claims
+    /// are traceable back to a mechanically-enforced source of truth, not a
+    /// hand-typed transcription that could silently go stale.
+    ///
+    /// Timing is deliberately absent from `EditClassReceipt` and therefore
+    /// from this snapshot -- see the module doc comment's measurement-
+    /// discipline note.
+    #[test]
+    fn reextraction_workshape_receipt_snapshot() -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m) = run_class_1_comment_only()?;
+        let comment_only = build_receipt("comment_only", before, after, &m);
+
+        let (before, after, m) = run_class_2_reference_only()?;
+        let reference_only = build_receipt("reference_only", before, after, &m);
+
+        let (before, after, m) = run_class_3_declaration_changing()?;
+        let declaration_changing = build_receipt("declaration_changing", before, after, &m);
+
+        let (before, after, m) = run_class_4_dynamic_fact()?;
+        let dynamic_fact = build_receipt("dynamic_fact", before, after, &m);
+
+        let (before, after, m) = run_class_5_revert_to_original()?;
+        let revert_to_original = build_receipt("revert_to_original", before, after, &m);
+
+        let (before, after, m) = run_class_6_superseded_generation()?;
+        let superseded_generation = build_receipt("superseded_generation", before, after, &m);
+
+        let receipts = vec![
+            comment_only,
+            reference_only,
+            declaration_changing,
+            dynamic_fact,
+            revert_to_original,
+            superseded_generation,
+        ];
+
+        insta::assert_debug_snapshot!("reindex_workshape_receipt", receipts);
+        Ok(())
     }
 }

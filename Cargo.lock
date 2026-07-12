@@ -2023,6 +2023,7 @@ version = "0.17.0"
 dependencies = [
  "anyhow",
  "criterion",
+ "insta",
  "lsp-types",
  "parking_lot",
  "perl-parser-core",
