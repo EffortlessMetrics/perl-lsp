@@ -27,7 +27,7 @@
 //! ```
 
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{document_symbol_names, ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::{ScenarioConfig, UxHarness, document_symbol_names};
 use serde_json::json;
 use std::time::Duration;
 

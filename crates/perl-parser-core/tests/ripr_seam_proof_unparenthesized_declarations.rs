@@ -31,7 +31,7 @@
 mod cpan_test_helpers;
 
 use cpan_test_helpers::{assert_clean_parse, assert_has_error};
-use perl_parser_core::hir::{lower_ast, HirKind};
+use perl_parser_core::hir::{HirKind, lower_ast};
 use perl_parser_core::{Node, NodeKind, Parser};
 
 fn parse_program(source: &str) -> Result<Node, String> {
