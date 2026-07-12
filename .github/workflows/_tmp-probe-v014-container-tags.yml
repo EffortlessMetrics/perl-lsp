@@ -14,83 +14,175 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Probe expected public manifests
+      - name: Summarize Docker Hub tag metadata
         shell: bash
         run: |
           set -u
-
-          probe_manifest() {
-            local image="$1"
-            local slug
-            slug="$(printf '%s' "$image" | tr '/:' '__')"
-            local stdout_file="${RUNNER_TEMP}/${slug}.stdout"
-            local stderr_file="${RUNNER_TEMP}/${slug}.stderr"
-
+          for tag in 0.14.0 0.14.0-perl; do
+            output="${RUNNER_TEMP}/dockerhub-${tag}.json"
+            url="https://hub.docker.com/v2/repositories/effortlessmetrics/perl-lsp/tags/${tag}"
             set +e
-            docker manifest inspect "$image" >"$stdout_file" 2>"$stderr_file"
-            local rc=$?
+            status="$(curl --silent --show-error --location --output "$output" --write-out '%{http_code}' "$url")"
+            rc=$?
             set -e
-
-            echo "PROBE_IMAGE=$image"
-            echo "PROBE_EXIT=$rc"
-            if [ -s "$stderr_file" ]; then
-              echo "PROBE_STDERR_BEGIN"
-              cat "$stderr_file"
-              echo "PROBE_STDERR_END"
-            fi
-            if [ "$rc" -eq 0 ]; then
-              echo "PROBE_RESULT=present"
-              python3 - "$stdout_file" <<'PY'
+            echo "DOCKER_HUB_TAG=$tag"
+            echo "DOCKER_HUB_CURL_EXIT=$rc"
+            echo "DOCKER_HUB_HTTP_STATUS=$status"
+            if [ "$rc" -eq 0 ] && [ "$status" = "200" ]; then
+              python3 - "$output" <<'PY'
           import json
           import pathlib
           import sys
 
           data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-          print(f"PROBE_MEDIA_TYPE={data.get('mediaType', 'unknown')}")
-          manifests = data.get("manifests")
-          if isinstance(manifests, list):
-              print(f"PROBE_MANIFEST_COUNT={len(manifests)}")
-              for item in manifests:
-                  platform = item.get("platform") or {}
-                  print(
-                      "PROBE_PLATFORM="
-                      f"{platform.get('os', 'unknown')}/"
-                      f"{platform.get('architecture', 'unknown')}"
-                  )
-          else:
-              print("PROBE_MANIFEST_COUNT=single")
+          print(f"DOCKER_HUB_RESULT=present")
+          print(f"DOCKER_HUB_NAME={data.get('name', 'unknown')}")
+          print(f"DOCKER_HUB_TAG_LAST_PUSHED={data.get('tag_last_pushed', 'unknown')}")
+          print(f"DOCKER_HUB_TAG_LAST_PULLED={data.get('tag_last_pulled', 'unknown')}")
+          print(f"DOCKER_HUB_LAST_UPDATED={data.get('last_updated', 'unknown')}")
+          print(f"DOCKER_HUB_DIGEST={data.get('digest', 'unknown')}")
+          for image in data.get("images") or []:
+              print(
+                  "DOCKER_HUB_IMAGE="
+                  f"{image.get('os', 'unknown')}/"
+                  f"{image.get('architecture', 'unknown')}|"
+                  f"{image.get('digest', 'unknown')}|"
+                  f"{image.get('last_pushed', 'unknown')}"
+              )
           PY
             else
-              echo "PROBE_RESULT=absent-or-inaccessible"
+              echo "DOCKER_HUB_RESULT=absent-or-error"
+              head -c 500 "$output" 2>/dev/null || true
+              echo
             fi
-            echo "PROBE_END"
+            echo "DOCKER_HUB_END"
             echo
-          }
+          done
 
-          probe_manifest "effortlessmetrics/perl-lsp:0.14.0"
-          probe_manifest "effortlessmetrics/perl-lsp:0.14.0-perl"
-          probe_manifest "ghcr.io/effortlessmetrics/perl-lsp:0.14.0"
-          probe_manifest "ghcr.io/effortlessmetrics/perl-lsp-perl:0.14.0"
-
-      - name: Probe Docker Hub tag API
+      - name: Probe Docker Hub manifests
         shell: bash
         run: |
           set -u
-          for tag in 0.14.0 0.14.0-perl; do
-            url="https://hub.docker.com/v2/repositories/effortlessmetrics/perl-lsp/tags/${tag}"
+          for image in \
+            effortlessmetrics/perl-lsp:0.14.0 \
+            effortlessmetrics/perl-lsp:0.14.0-perl
+          do
             set +e
-            response="$(curl --silent --show-error --location --write-out $'\nHTTP_STATUS=%{http_code}\n' "$url" 2>&1)"
+            raw="$(docker manifest inspect "$image" 2>&1)"
             rc=$?
             set -e
-            echo "DOCKER_HUB_TAG=$tag"
-            echo "CURL_EXIT=$rc"
-            printf '%s\n' "$response"
-            echo "DOCKER_HUB_END"
+            echo "MANIFEST_IMAGE=$image"
+            echo "MANIFEST_EXIT=$rc"
+            if [ "$rc" -eq 0 ]; then
+              printf '%s' "$raw" | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          print("MANIFEST_RESULT=present")
+          print(f"MANIFEST_MEDIA_TYPE={data.get(chr(109)+chr(101)+chr(100)+chr(105)+chr(97)+chr(84)+chr(121)+chr(112)+chr(101), "unknown")}")
+          for item in data.get("manifests") or []:
+              p = item.get("platform") or {}
+              print(f"MANIFEST_PLATFORM={p.get("os", "unknown")}/{p.get("architecture", "unknown")}")
+          '
+            else
+              echo "MANIFEST_RESULT=absent-or-inaccessible"
+              printf '%s\n' "$raw" | head -n 5
+            fi
+            echo "MANIFEST_END"
+            echo
+          done
+
+      - name: Authenticate to GHCR with package-read token
+        id: ghcr_login
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          rc=$?
+          set -e
+          echo "GHCR_LOGIN_EXIT=$rc"
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: Probe GHCR manifests
+        shell: bash
+        run: |
+          set -u
+          for image in \
+            ghcr.io/effortlessmetrics/perl-lsp:0.14.0 \
+            ghcr.io/effortlessmetrics/perl-lsp-perl:0.14.0
+          do
+            set +e
+            raw="$(docker manifest inspect "$image" 2>&1)"
+            rc=$?
+            set -e
+            echo "GHCR_IMAGE=$image"
+            echo "GHCR_MANIFEST_EXIT=$rc"
+            if [ "$rc" -eq 0 ]; then
+              echo "GHCR_MANIFEST_RESULT=present"
+              printf '%s' "$raw" | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          print(f"GHCR_MEDIA_TYPE={data.get(chr(109)+chr(101)+chr(100)+chr(105)+chr(97)+chr(84)+chr(121)+chr(112)+chr(101), "unknown")}")
+          for item in data.get("manifests") or []:
+              p = item.get("platform") or {}
+              print(f"GHCR_PLATFORM={p.get("os", "unknown")}/{p.get("architecture", "unknown")}")
+          '
+            else
+              echo "GHCR_MANIFEST_RESULT=absent-or-inaccessible"
+              printf '%s\n' "$raw" | head -n 5
+            fi
+            echo "GHCR_MANIFEST_END"
+            echo
+          done
+
+      - name: Query GitHub container package metadata
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          for package in perl-lsp perl-lsp-perl; do
+            output="${RUNNER_TEMP}/ghcr-${package}.json"
+            error_output="${RUNNER_TEMP}/ghcr-${package}.stderr"
+            endpoint="/orgs/EffortlessMetrics/packages/container/${package}/versions?per_page=100"
+            set +e
+            gh api --paginate "$endpoint" >"$output" 2>"$error_output"
+            rc=$?
+            set -e
+            echo "GHCR_PACKAGE=$package"
+            echo "GHCR_API_EXIT=$rc"
+            if [ "$rc" -eq 0 ]; then
+              python3 - "$output" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          records = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          matches = []
+          for record in records:
+              tags = ((record.get("metadata") or {}).get("container") or {}).get("tags") or []
+              if "0.14.0" in tags:
+                  matches.append(record)
+          print(f"GHCR_API_RESULT={'present' if matches else 'tag-not-found'}")
+          for record in matches:
+              tags = ((record.get("metadata") or {}).get("container") or {}).get("tags") or []
+              print(f"GHCR_VERSION_ID={record.get('id', 'unknown')}")
+              print(f"GHCR_CREATED_AT={record.get('created_at', 'unknown')}")
+              print(f"GHCR_UPDATED_AT={record.get('updated_at', 'unknown')}")
+              print(f"GHCR_TAGS={','.join(tags)}")
+          PY
+            else
+              echo "GHCR_API_RESULT=inaccessible-or-absent"
+              head -n 5 "$error_output"
+            fi
+            echo "GHCR_API_END"
             echo
           done
