@@ -21,9 +21,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Checkout probe
-        uses: actions/checkout@v7
-
       - name: Authenticate to GHCR
         shell: bash
         env:
@@ -34,4 +31,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/_tmp_probe_container_matrix.py
+        run: |
+          curl --fail --silent --show-error --location \
+            --output "${RUNNER_TEMP}/probe.py" \
+            "https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/ops/probe-v0.14-container-tags/scripts/_tmp_probe_container_matrix.py"
+          python3 "${RUNNER_TEMP}/probe.py"
