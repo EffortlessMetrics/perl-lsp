@@ -46,7 +46,21 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --force --tags origin
-          python3 scripts/check_release_tag_provenance.py --verify-git
+          set +e
+          python3 scripts/check_release_tag_provenance.py --verify-git \
+            > /tmp/tag-provenance-verification.txt 2>&1
+          status=$?
+          set -e
+          cat /tmp/tag-provenance-verification.txt
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/tag-provenance-verification.txt tag-provenance-errors.txt
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add tag-provenance-errors.txt
+            git commit -m 'chore: capture tag provenance verification failure'
+            git push origin HEAD:refs/heads/docs/release-tag-provenance
+            exit "$status"
+          fi
 
       - name: Validate documentation contracts
         run: |
@@ -63,6 +77,7 @@ jobs:
         run: |
           rm scripts/_apply_tag_provenance_tmp.py
           rm .github/workflows/_tmp-apply-tag-provenance.yml
+          rm -f tag-provenance-errors.txt
 
       - name: Commit final provenance audit
         run: |
