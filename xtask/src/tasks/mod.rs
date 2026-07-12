@@ -33,6 +33,7 @@ pub mod ci_pr_summary;
 pub mod ci_route;
 pub mod ci_scope;
 pub mod clean;
+pub mod commit_checks;
 pub mod compare;
 #[cfg(feature = "parser-tasks")]
 pub mod compare_parsers;
@@ -133,6 +134,7 @@ pub mod semantic_shadow_compare;
 pub mod semantic_token_classes;
 pub mod session_receipt;
 pub mod srp_microcrates;
+pub mod staged;
 pub mod supported_editor_inline_smoke;
 pub mod swarm_agent_roster;
 pub mod swarm_summary;

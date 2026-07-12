@@ -1708,6 +1708,32 @@ enum Commands {
         /// Verbose output (include quarantined gates)
         #[arg(long, short)]
         verbose: bool,
+
+        /// Explicit opt-in that this run inspects the staged tree (`git
+        /// write-tree`), never the working tree. Required for `--tier
+        /// commit` (issue #3786).
+        #[arg(long)]
+        staged: bool,
+    },
+
+    /// Ergonomic alias for `gates --tier commit --staged` (issue #3786).
+    ///
+    /// Commit-tier checks always inspect the staged tree — this subcommand
+    /// exists so the feedback-ladder command an agent types before `git
+    /// commit` is short and self-explanatory. There is no `--staged` flag
+    /// here (unlike `gates`): "precommit" already means staged by
+    /// definition, and a presence-only clap bool flag can't express "the
+    /// user explicitly opted out" anyway. Calls the exact same
+    /// implementation as `gates --tier commit --staged`; there is one
+    /// policy authority.
+    Precommit {
+        /// Output format (default: human)
+        #[arg(long, short, value_enum, default_value = "human")]
+        format: GatesOutputFormat,
+
+        /// Emit receipt JSON (also writes to target/receipts/receipt.json)
+        #[arg(long, short)]
+        receipt: bool,
     },
 
     /// Inspect and validate effective gate policy profiles.
@@ -4209,6 +4235,7 @@ fn run_cli(cli: Cli) -> Result<()> {
             fail_fast,
             parallel,
             verbose,
+            staged,
         } => gates::run(gates::GateRunnerConfig {
             tier,
             gate_filter: gate,
@@ -4221,6 +4248,14 @@ fn run_cli(cli: Cli) -> Result<()> {
             fail_fast,
             parallel,
             verbose,
+            staged,
+        }),
+        Commands::Precommit { format, receipt } => gates::run(gates::GateRunnerConfig {
+            tier: GateTier::Commit,
+            output_format: format,
+            emit_receipt: receipt,
+            staged: true,
+            ..gates::GateRunnerConfig::default()
         }),
         Commands::GatePolicy { command } => match command {
             GatePolicyCommand::Check => tasks::gate_policy::check(),
