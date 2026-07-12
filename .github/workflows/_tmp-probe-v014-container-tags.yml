@@ -6,6 +6,11 @@ on:
       - ops/probe-v0.14-container-tags
     paths:
       - .github/workflows/_tmp-probe-v014-container-tags.yml
+  pull_request:
+    branches:
+      - master
+    paths:
+      - .github/workflows/_tmp-probe-v014-container-tags.yml
 
 permissions:
   contents: read
