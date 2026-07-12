@@ -159,8 +159,13 @@ def print_markdown(data: dict) -> None:
         print()
 
 
-def print_receipt(data: dict) -> None:
-    """Print benchmark results in receipt format."""
+def print_receipt(data: dict) -> int:
+    """Print benchmark results in receipt format.
+
+    Returns the total benchmark count so callers can fail closed when it is
+    zero -- a receipt that always prints "STATUS: COMPLETE" regardless of
+    whether anything actually ran is a vacuous pass (#3979).
+    """
     # Extract metadata
     timestamp_raw = data.get("timestamp") or data.get("metadata", {}).get("date")
     if timestamp_raw:
@@ -215,8 +220,13 @@ def print_receipt(data: dict) -> None:
         print(f"  Passed targets:    {passed}")
         print(f"  Failed targets:    {failed}")
     print()
-    print("STATUS: COMPLETE")
+    if total_benchmarks == 0:
+        print("STATUS: INVALID (0 benchmarks -- vacuous run, see #3979)")
+    else:
+        print("STATUS: COMPLETE")
     print("=" * 50)
+
+    return total_benchmarks
 
 
 def main():
@@ -237,7 +247,9 @@ def main():
     if args.markdown:
         print_markdown(data)
     elif args.receipt:
-        print_receipt(data)
+        total_benchmarks = print_receipt(data)
+        if total_benchmarks == 0:
+            sys.exit(1)
     else:
         print_pretty(data)
 

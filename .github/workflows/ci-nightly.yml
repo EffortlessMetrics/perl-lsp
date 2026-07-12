@@ -123,6 +123,15 @@ jobs:
       with:
         tool: just
 
+    - name: Run benchmark harness fixture tests
+      # Fixture tests for the extraction/guard logic itself (both Criterion
+      # on-disk layouts, stale/malformed-estimate rejection, zero-benchmark
+      # and missing-expected-id fail-closed behavior). If these regress, the
+      # steps below cannot be trusted to catch a vacuous benchmark run (#3979).
+      run: |
+        python3 benchmarks/scripts/test_extract_criterion.py -v
+        python3 benchmarks/scripts/test_benchmark_guards.py -v
+
     - name: Build perl-lsp binary for real-repo UX perf lane
       run: cargo build -p perl-lsp-rs --bin perl-lsp --locked
 
@@ -135,13 +144,96 @@ jobs:
           --test ux_scenario_18_real_repo_perf -- --test-threads=1 --nocapture \
           2>&1 | tee benchmarks/results/real-repo-perf.txt
 
-    - name: Run benchmarks
+    - name: Run benchmarks (explicit Criterion targets)
       run: |
-        # Run full benchmark suite
-        cargo bench --workspace --locked -- --noplot 2>&1 | tee benchmarks/results/raw-output.txt || true
+        set -euo pipefail
 
-        # Extract structured results from Criterion
-        python3 ./benchmarks/scripts/extract-criterion.py --output benchmarks/results/latest.json
+        # Delete any stale target/criterion/ before running so a leftover
+        # estimate from a previous job/run can never satisfy the "did this
+        # run produce results" check below (#3979).
+        rm -rf target/criterion
+        mkdir -p benchmarks/results
+
+        # Invoke each *declared* Criterion bench target explicitly
+        # (`cargo bench -p <crate> --bench <name>`) instead of a blanket
+        # `cargo bench --workspace`. The blanket form forwards `-- --noplot`
+        # (a Criterion-only flag) to every workspace bench target,
+        # INCLUDING plain libtest unit-test/bench harnesses that cargo also
+        # builds for a `--workspace` bench run (e.g. `perl-ast --lib`), and
+        # libtest rejects it outright:
+        #   error: Unrecognized option: 'noplot'
+        #   error: bench failed, to rerun pass `-p perl-ast --lib`
+        # That failure previously aborted the whole `cargo bench --workspace`
+        # invocation before any Criterion target ran at all, and `|| true`
+        # (removed here) swallowed it, producing "Total benchmarks: 0" (#3979).
+        #
+        # Entries are "crate:bench-target:required-feature" (feature may be empty).
+        # This list must stay a superset of every real bench target
+        # `cargo metadata --no-deps --format-version 1` reports (`.targets[]
+        # | select(.kind == ["bench"])`) -- since this REPLACES the blanket
+        # `cargo bench --workspace`, an omitted target here is silent
+        # coverage loss the old command wouldn't have had. Verified against
+        # the current metadata (14 bench targets, all 14 listed below); if a
+        # new bench target is added to the workspace, add it here too.
+        declare -a BENCH_TARGETS=(
+          "perl-workspace:workspace_index_benchmark:workspace"
+          "perl-token:token_scorecard:"
+          "perl-symbol:symbol_benchmarks:"
+          "perl-pragma:pragma_benchmarks:"
+          "perl-parser:parser_benchmark:"
+          "perl-parser:incremental_benchmark:incremental"
+          "perl-parser:scope_benchmark:"
+          "perl-parser:cpan_patterns_benchmark:"
+          "perl-parser:positions_bench:"
+          "perl-parser:substitution_performance:"
+          "perl-lsp-rs:rope_performance_benchmark:"
+          "perl-lexer:lexer_benchmarks:"
+          "perl-dap:dap_benchmarks:"
+          "perl-incremental-parsing:incremental_parsing_benchmarks:"
+        )
+
+        for entry in "${BENCH_TARGETS[@]}"; do
+          IFS=':' read -r crate bench feature <<< "$entry"
+          echo "=== cargo bench -p $crate --bench $bench ${feature:+(features: $feature)} ==="
+          if [ -n "$feature" ]; then
+            cargo bench -p "$crate" --locked --features "$feature" --bench "$bench" -- --noplot
+          else
+            cargo bench -p "$crate" --locked --bench "$bench" -- --noplot
+          fi
+        done 2>&1 | tee benchmarks/results/raw-output.txt
+
+        # Extract structured results from Criterion. --strict fails closed
+        # when target/criterion/ has no results at all, or when any
+        # --expect-id benchmark is missing. Each --expect-id below is one
+        # representative benchmark per declared target above, proving that
+        # *specific* target actually executed rather than merely that
+        # *something* did.
+        #
+        # Verified against a real run (29186609858): "cpan/moose_oo_class" is
+        # a *direct* `c.bench_function("cpan/moose_oo_class", ...)` call, not
+        # an explicit `benchmark_group`. Criterion sanitizes the literal "/"
+        # in a direct id into "_" and writes a single flat directory
+        # (target/criterion/cpan_moose_oo_class/new/...), unlike a real
+        # group/name pair (e.g. "document_insertions/rope_insertion" below),
+        # which genuinely nests. The id here must match what's actually on
+        # disk, not the source-code string passed to bench_function.
+        python3 ./benchmarks/scripts/extract-criterion.py \
+          --output benchmarks/results/latest.json \
+          --strict \
+          --expect-id "incremental update single file" \
+          --expect-id "token_scorecard_recorded" \
+          --expect-id "cursor_extract_ascii" \
+          --expect-id "build_small_file" \
+          --expect-id "parse_simple_script" \
+          --expect-id "incremental small edit" \
+          --expect-id "scope_analysis_many_vars" \
+          --expect-id "cpan_moose_oo_class" \
+          --expect-id "document_insertions/rope_insertion" \
+          --expect-id "simple_tokens" \
+          --expect-id "configuration_validation/launch_config_validation" \
+          --expect-id "offset_to_pos16_cached" \
+          --expect-id "parse_basic_substitution" \
+          --expect-id "undo_redo/edit_undo_redo"
 
     - name: Real-repo first-diagnostics perf gate (Catalyst 5000+ lines)
       run: |
@@ -149,6 +241,13 @@ jobs:
           real_project_first_diagnostics_catalyst_5000_lines_under_5s \
           -- --include-ignored --nocapture
 
+    # Regression gating stays advisory (continue-on-error) until a real,
+    # calibrated baseline exists: benchmarks/baselines/v0.9.0.json
+    # self-identifies as a placeholder with fabricated values
+    # ("Placeholder baseline - run 'just bench' and compare to update with
+    # real values"), so it is not authoritative and must not gate merges.
+    # Integrity (did the harness actually run, see above) and regression
+    # policy (did performance get worse) are deliberately separate (#3979).
     - name: Compare against baseline
       id: compare
       continue-on-error: true
@@ -163,11 +262,13 @@ jobs:
         fi
 
     - name: Generate benchmark receipt
+      if: always()
       run: |
         python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --receipt > benchmark_receipt.txt
         cat benchmark_receipt.txt
 
     - name: Generate markdown report
+      if: always()
       run: |
         python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --markdown > benchmark_report.md
 
@@ -210,6 +311,7 @@ jobs:
           }
 
     - name: Upload benchmark artifacts
+      if: always()
       uses: actions/upload-artifact@v7
       with:
         name: benchmark-results-${{ github.sha }}
@@ -221,6 +323,7 @@ jobs:
           benchmark_report.md
           comparison.txt
           alert.md
+        if-no-files-found: warn
         retention-days: 30
 
   real-repo-latency:
