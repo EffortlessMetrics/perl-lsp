@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       push:
-        description: 'Push to Docker Hub'
+        description: 'Push images to GHCR and Docker Hub'
         required: false
         type: boolean
         default: true
@@ -49,16 +49,10 @@ jobs:
           echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build builder image (${{ matrix.platform }})
+    name: Build and publish builder image to GHCR
     runs-on: ubuntu-24.04
     needs: init
     timeout-minutes: 150
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
 
     steps:
       - name: Checkout
@@ -90,12 +84,12 @@ jobs:
             type=raw,value=${{ needs.init.outputs.major }}
             type=raw,value=latest
 
-      - name: Build and push
+      - name: Build and push multi-arch builder image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: .
           file: .docker/rust/Dockerfile
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event.inputs.push != 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -104,17 +98,52 @@ jobs:
           provenance: true
           sbom: true
 
+      - name: Verify GHCR builder version tag is multi-architecture
+        if: github.event.inputs.push != 'false'
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.init.outputs.version }}
+        run: |
+          set -euo pipefail
+          manifest="$(mktemp)"
+          for attempt in 1 2 3 4 5; do
+            if docker manifest inspect "$IMAGE" > "$manifest"; then
+              break
+            fi
+            if [[ "$attempt" -eq 5 ]]; then
+              echo "Unable to inspect $IMAGE after $attempt attempts" >&2
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          python3 - "$IMAGE" "$manifest" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          image = sys.argv[1]
+          data = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+          platforms = {
+              f"{platform.get('os')}/{platform.get('architecture')}"
+              for item in data.get("manifests", [])
+              for platform in [item.get("platform") or {}]
+              if platform.get("os") not in (None, "unknown")
+              and platform.get("architecture") not in (None, "unknown")
+          }
+          required = {"linux/amd64", "linux/arm64"}
+          missing = sorted(required - platforms)
+          if missing:
+              raise SystemExit(
+                  f"{image}: missing required platforms {missing}; "
+                  f"observed {sorted(platforms)}"
+              )
+          print(f"{image}: verified platforms {sorted(platforms)}")
+          PY
+
   build-perl-runtime:
-    name: Build perl-lsp runtime image (${{ matrix.platform }})
+    name: Build and publish runtime image to GHCR
     runs-on: ubuntu-24.04
     needs: init
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
 
     steps:
       - name: Checkout
@@ -144,12 +173,12 @@ jobs:
             type=raw,value=${{ needs.init.outputs.major }}
             type=raw,value=latest
 
-      - name: Build and push perl-lsp runtime image
+      - name: Build and push multi-arch runtime image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: .
           file: .docker/perl-lsp/Dockerfile
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event.inputs.push != 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -157,6 +186,47 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+
+      - name: Verify GHCR runtime version tag is multi-architecture
+        if: github.event.inputs.push != 'false'
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-perl:${{ needs.init.outputs.version }}
+        run: |
+          set -euo pipefail
+          manifest="$(mktemp)"
+          for attempt in 1 2 3 4 5; do
+            if docker manifest inspect "$IMAGE" > "$manifest"; then
+              break
+            fi
+            if [[ "$attempt" -eq 5 ]]; then
+              echo "Unable to inspect $IMAGE after $attempt attempts" >&2
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          python3 - "$IMAGE" "$manifest" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          image = sys.argv[1]
+          data = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+          platforms = {
+              f"{platform.get('os')}/{platform.get('architecture')}"
+              for item in data.get("manifests", [])
+              for platform in [item.get("platform") or {}]
+              if platform.get("os") not in (None, "unknown")
+              and platform.get("architecture") not in (None, "unknown")
+          }
+          required = {"linux/amd64", "linux/arm64"}
+          missing = sorted(required - platforms)
+          if missing:
+              raise SystemExit(
+                  f"{image}: missing required platforms {missing}; "
+                  f"observed {sorted(platforms)}"
+              )
+          print(f"{image}: verified platforms {sorted(platforms)}")
+          PY
 
   publish-dockerhub:
     name: Publish to Docker Hub
@@ -264,25 +334,25 @@ jobs:
         id: version
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Summary
         run: |
-          echo "## Docker Images Published" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Builder image (Rust CI)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Runtime image (perllsp + Perl)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/${{ github.repository }}-perl:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}-perl\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Usage" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "# Run LSP server with your project mounted (stdio transport)" >> $GITHUB_STEP_SUMMARY
-          echo "docker run --rm -i -v \"\${PWD}:/workspace\" effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}-perl" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "## Docker Images Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version**: ${{ steps.version.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Platforms**: linux/amd64, linux/arm64" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Builder image (Rust CI)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Runtime image (perllsp + Perl)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`ghcr.io/${{ github.repository }}-perl:${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}-perl\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Usage" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "# Run LSP server with your project mounted (stdio transport)" >> "$GITHUB_STEP_SUMMARY"
+          echo 'docker run --rm -i -v "${PWD}:/workspace" effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}-perl' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
