@@ -24,7 +24,7 @@ Tag commit timestamps may differ from release dates.
 | [0.13.3] | `v0.13.3` | [yes][gh-0.13.3] | 2026-05-03 | `06fc1443` | [v0.13.2...v0.13.3] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.3 (31 crates) | [perl-lsp-rs][vsce] | [v0.13.3][n-0.13.3] |
 | [0.13.2] | `v0.13.2` | [yes][gh-0.13.2] | 2026-05-02 | `0e9c5d78` | [v0.13.1...v0.13.2] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.2 (31 crates) | [perl-lsp-rs][vsce] | [v0.13.2][n-0.13.2] |
 | [0.13.1] | `v0.13.1` | [yes][gh-0.13.1] (prerelease) | 2026-05-01 | `6ef20484` | [v0.13.0...v0.13.1] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.1 (32 crates) | [perl-lsp-rs][vsce] | [v0.13.1][n-0.13.1] |
-| [0.13.0-rc1] | `v0.13.0-rc1` | unreconciled | 2026-04-30 (tag) | `4e4099cd` | [v0.12.4...v0.13.0-rc1] | pending verification | pending verification | pending verification | [v0.13.0-rc1][n-0.13.0-rc1] |
+| [0.13.0-rc1] | `v0.13.0-rc1` | [yes][gh-0.13.0-rc1] (prerelease) | 2026-04-30 | `4e4099cd` | [v0.12.4...v0.13.0-rc1] | 11 | pending verification | pending verification | [v0.13.0-rc1][n-0.13.0-rc1] |
 | [0.12.4] | `v0.12.4` | [yes][gh-0.12.4] | 2026-04-12 | `5ebb37aa` | [v0.12.3...v0.12.4] | 9 (7 binaries, SHA256SUMS, SBOM) | deferred | [perl-lsp-rs][vsce] | [v0.12.4][n-0.12.4] |
 | [0.12.3] | `v0.12.3` | [yes][gh-0.12.3] | 2026-04-09 | `a86af221` | [v0.12.2...v0.12.3] | 10 (+ VSIX) | deferred | [perl-lsp-rs][vsce] | [v0.12.3][n-0.12.3] |
 | [0.12.2] | `v0.12.2` | [yes][gh-0.12.2] | 2026-04-04 | `1c0620d8` | [v0.12.1...v0.12.2] | 9 | 0.12.2 (2026-04-08) | [perl-lsp-rs][vsce] | [v0.12.2][n-0.12.2] |
@@ -143,6 +143,7 @@ standalone 0.13.4 publication and should not be used as such.
 [gh-0.13.3]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.3
 [gh-0.13.2]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.2
 [gh-0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.1
+[gh-0.13.0-rc1]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.0-rc1
 [gh-0.12.4]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4
 [gh-0.12.3]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.3
 [gh-0.12.2]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.2
