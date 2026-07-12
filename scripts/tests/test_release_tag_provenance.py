@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
@@ -82,6 +84,16 @@ class ManifestValidationTests(unittest.TestCase):
         self.assertTrue(any("marked stale" in error for error in errors))
 
 
+class GitAvailabilityTests(unittest.TestCase):
+    @patch("check_release_tag_provenance.shutil.which", return_value=None)
+    def test_missing_git_returns_actionable_error(self, _which: object) -> None:
+        self.assertEqual(
+            ["git executable not found on PATH"],
+            verify_git_refs({"tag": []}, Path(".")),
+        )
+
+
+@unittest.skipUnless(shutil.which("git"), "git executable not found on PATH")
 class GitVerificationTests(unittest.TestCase):
     def run_git(self, root: Path, *args: str) -> str:
         result = subprocess.run(
@@ -131,6 +143,38 @@ class GitVerificationTests(unittest.TestCase):
             errors = verify_git_refs(manifest, root)
             self.assertTrue(any("v0.2.0 drifted" in error for error in errors))
             self.assertNotEqual(second, "f" * 40)
+
+    def test_unlisted_local_release_tag_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.init_repo(root)
+            first = self.write_commit(root, "first")
+            self.run_git(root, "tag", "v0.1.0")
+            second = self.write_commit(root, "second")
+            self.run_git(root, "tag", "v0.2.0")
+            self.write_commit(root, "third")
+            self.run_git(root, "tag", "v0.3.0")
+
+            manifest = {
+                "tag": [
+                    {
+                        "name": "v0.1.0",
+                        "current_sha": first,
+                        "lineage": "root",
+                    },
+                    {
+                        "name": "v0.2.0",
+                        "current_sha": second,
+                        "predecessor": "v0.1.0",
+                        "lineage": "linear",
+                    },
+                ]
+            }
+            errors = verify_git_refs(manifest, root)
+            self.assertIn(
+                "local release tag is missing from manifest: v0.3.0",
+                errors,
+            )
 
     def test_diverged_lineage_is_accepted_when_neither_ref_is_ancestral(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
