@@ -147,7 +147,7 @@ lineage = "linear"
 
 [[tag]]
 name = "v0.12.3"
-current_sha = "cc801735bdfd81d79da056de6145c32381b081d1"
+current_sha = "cc801735b004f89dc1c1b8789658f7abc73bf4aa"
 record_status = "stale"
 recorded_sha = "a86af2211169c2f7799f4b52256a3e34e576cbfd"
 recorded_reachable = false
@@ -156,7 +156,7 @@ lineage = "linear"
 
 [[tag]]
 name = "v0.12.4"
-current_sha = "181d2b2db1fb56c3c30135cd9ed7b5e9f0470a96"
+current_sha = "181d2b2d2d8a5fc7e65fbceda648117eb04631a9"
 record_status = "stale"
 recorded_sha = "5ebb37aad3ebedec59fb8626a5d82f6878199f7b"
 recorded_reachable = false
@@ -165,7 +165,7 @@ lineage = "linear"
 
 [[tag]]
 name = "v0.13.0-rc1"
-current_sha = "4e4099cde6ba96d19b43d93f56e7bd5297116dfa"
+current_sha = "4e4099cdd9f5e29f21412285224cfc95db4f9c53"
 record_status = "unrecorded"
 predecessor = "v0.12.4"
 lineage = "linear"
@@ -182,7 +182,7 @@ lineage = "linear"
 
 [[tag]]
 name = "v0.13.2"
-current_sha = "0e9c5d7864f4c8cb19e02887cfd76a8fb74020de"
+current_sha = "0e9c5d789836938845dbe0921549cde881f47a21"
 record_status = "match"
 recorded_sha = "0e9c5d78"
 recorded_reachable = true
@@ -217,7 +217,7 @@ lineage = "linear"
 
 [[tag]]
 name = "v0.15.1"
-current_sha = "15cbe7e6cdb831eb4738ed8d5b7b14451ac24182"
+current_sha = "15cbe7e6295a67ea0cba506c3cade628ee4847f6"
 record_status = "match"
 recorded_sha = "15cbe7e6"
 recorded_reachable = true

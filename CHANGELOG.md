@@ -2164,6 +2164,13 @@ For the detailed receipts behind this release, see [docs/project/CURRENT_STATUS.
 
 Release notes: [v0.11.0](docs/releases/v0.11.0.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.11.0)
 
+> **Tag provenance correction.** The live `v0.11.0` ref is
+> `8dfa68860cdf8fc220b1345d3b943668d1393ad2`; the previously recorded
+> `d22ac7346c832db6b92c41d354eb90099f8b5d53` no longer resolves. The current
+> tagged predecessor is `v0.9.1`, because `0.10.0` was changelog-only and the
+> current `v0.8.5` / `v0.9.1` refs are divergent. Use
+> [`v0.9.1...v0.11.0`](https://github.com/EffortlessMetrics/perl-lsp/compare/v0.9.1...v0.11.0).
+
 This release finalizes the 0.11.0 distribution pipeline across GitHub releases,
 crates.io, and the VS Code extension so the workspace can ship from a single,
 repeatable release flow.
@@ -2277,6 +2284,12 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 ## [0.9.1] - 2026-02-20
 
 Release notes: [v0.9.1](docs/releases/v0.9.1.md) (tag only — no GitHub Release)
+
+> **Tag provenance correction.** The live `v0.9.1` ref is
+> `0e52877de7763d8654e0fb6d7afe6a257639e584`; the previously recorded
+> `c82a1604987f315868973a4e5804112e031cec92` no longer resolves. The current
+> tag is on a divergent line from `v0.8.5`, so no forward comparison from
+> `v0.8.5` is claimed.
 
 ### Added
 - **Initial Public Alpha Release**: Substantially complete feature set for early testing.
