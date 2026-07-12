@@ -42,7 +42,7 @@ jobs:
           import sys
 
           data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-          print(f"DOCKER_HUB_RESULT=present")
+          print("DOCKER_HUB_RESULT=present")
           print(f"DOCKER_HUB_NAME={data.get('name', 'unknown')}")
           print(f"DOCKER_HUB_TAG_LAST_PUSHED={data.get('tag_last_pushed', 'unknown')}")
           print(f"DOCKER_HUB_TAG_LAST_PULLED={data.get('tag_last_pulled', 'unknown')}")
@@ -74,25 +74,33 @@ jobs:
             effortlessmetrics/perl-lsp:0.14.0 \
             effortlessmetrics/perl-lsp:0.14.0-perl
           do
+            output="${RUNNER_TEMP}/$(printf '%s' "$image" | tr '/:' '__').json"
             set +e
-            raw="$(docker manifest inspect "$image" 2>&1)"
+            docker manifest inspect "$image" >"$output" 2>"${output}.stderr"
             rc=$?
             set -e
             echo "MANIFEST_IMAGE=$image"
             echo "MANIFEST_EXIT=$rc"
             if [ "$rc" -eq 0 ]; then
-              printf '%s' "$raw" | python3 -c '
-          import json, sys
-          data = json.load(sys.stdin)
+              python3 - "$output" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
           print("MANIFEST_RESULT=present")
-          print(f"MANIFEST_MEDIA_TYPE={data.get(chr(109)+chr(101)+chr(100)+chr(105)+chr(97)+chr(84)+chr(121)+chr(112)+chr(101), "unknown")}")
+          print(f"MANIFEST_MEDIA_TYPE={data.get('mediaType', 'unknown')}")
           for item in data.get("manifests") or []:
-              p = item.get("platform") or {}
-              print(f"MANIFEST_PLATFORM={p.get("os", "unknown")}/{p.get("architecture", "unknown")}")
-          '
+              platform = item.get("platform") or {}
+              print(
+                  "MANIFEST_PLATFORM="
+                  f"{platform.get('os', 'unknown')}/"
+                  f"{platform.get('architecture', 'unknown')}"
+              )
+          PY
             else
               echo "MANIFEST_RESULT=absent-or-inaccessible"
-              printf '%s\n' "$raw" | head -n 5
+              head -n 5 "${output}.stderr"
             fi
             echo "MANIFEST_END"
             echo
@@ -119,25 +127,33 @@ jobs:
             ghcr.io/effortlessmetrics/perl-lsp:0.14.0 \
             ghcr.io/effortlessmetrics/perl-lsp-perl:0.14.0
           do
+            output="${RUNNER_TEMP}/$(printf '%s' "$image" | tr '/:' '__').json"
             set +e
-            raw="$(docker manifest inspect "$image" 2>&1)"
+            docker manifest inspect "$image" >"$output" 2>"${output}.stderr"
             rc=$?
             set -e
             echo "GHCR_IMAGE=$image"
             echo "GHCR_MANIFEST_EXIT=$rc"
             if [ "$rc" -eq 0 ]; then
-              echo "GHCR_MANIFEST_RESULT=present"
-              printf '%s' "$raw" | python3 -c '
-          import json, sys
-          data = json.load(sys.stdin)
-          print(f"GHCR_MEDIA_TYPE={data.get(chr(109)+chr(101)+chr(100)+chr(105)+chr(97)+chr(84)+chr(121)+chr(112)+chr(101), "unknown")}")
+              python3 - "$output" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          data = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print("GHCR_MANIFEST_RESULT=present")
+          print(f"GHCR_MEDIA_TYPE={data.get('mediaType', 'unknown')}")
           for item in data.get("manifests") or []:
-              p = item.get("platform") or {}
-              print(f"GHCR_PLATFORM={p.get("os", "unknown")}/{p.get("architecture", "unknown")}")
-          '
+              platform = item.get("platform") or {}
+              print(
+                  "GHCR_PLATFORM="
+                  f"{platform.get('os', 'unknown')}/"
+                  f"{platform.get('architecture', 'unknown')}"
+              )
+          PY
             else
               echo "GHCR_MANIFEST_RESULT=absent-or-inaccessible"
-              printf '%s\n' "$raw" | head -n 5
+              head -n 5 "${output}.stderr"
             fi
             echo "GHCR_MANIFEST_END"
             echo
