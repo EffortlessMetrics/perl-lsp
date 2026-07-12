@@ -363,6 +363,17 @@ impl<'a> Parser<'a> {
             ));
         }
 
+        // `${Foo::bar}` (no internal whitespace): the lexer's braced-variable
+        // scan consumes `::`-delimited segments to the matching `}` as one
+        // token (issue #3593). Fold to the scalar `$Foo::bar`, matching
+        // perlref's "Not-so-symbolic references" rule.
+        if let Some(name) = Self::qualified_braced_scalar_token_name(text) {
+            return Ok(Node::new(
+                NodeKind::Variable { sigil: String::from("$"), name: name.to_string() },
+                SourceLocation { start: token.start, end: token.end },
+            ));
+        }
+
         // Special handling for @{, %{, and ${ (array/hash/scalar dereference)
         // e.g. @{$ref}, %{$hash}, ${"${pkg}::$sym"}
         if &**text == "@{" || &**text == "%{" || &**text == "${" {
@@ -626,31 +637,58 @@ impl<'a> Parser<'a> {
         chars.next().is_some_and(|c| c.is_alphanumeric() || c == '_')
     }
 
+    /// Parse `${Foo::bar}` when the tokens inside the braces are a
+    /// package-qualified scalar name, in either token shape the lexer can
+    /// produce for it:
+    ///
+    /// - Multi-token: `Identifier("Foo")` `DoubleColon` `Identifier("bar")`
+    ///   `...` — walked segment-by-segment by [`Self::parse_qualified_scalar_tail`].
+    /// - Single merged token: `Identifier("Foo::bar")` immediately followed
+    ///   by `RightBrace` — produced when the general bareword scanner (not
+    ///   the sigil's braced-variable scan) already folded the `::`-segments
+    ///   into one token, e.g. inside `${ Foo::bar }` where the leading
+    ///   whitespace routes tokenization through the general word scanner.
+    ///
+    /// Returns `None` (not a package-qualified name) so callers can fall
+    /// back to general expression parsing for real dereferences like
+    /// `${$ref}` (issue #3593).
     fn try_parse_braced_qualified_scalar(&mut self) -> ParseResult<Option<Node>> {
         if self.peek_kind() != Some(TokenKind::Identifier) {
             return Ok(None);
         }
 
-        if self.tokens.peek_second()?.kind != TokenKind::DoubleColon {
-            return Ok(None);
+        if self.tokens.peek_second()?.kind == TokenKind::DoubleColon {
+            let first = self.tokens.next()?;
+            return self
+                .parse_qualified_scalar_tail(first.text.to_string(), first.start, first.end)
+                .map(Some);
         }
 
-        let first = self.tokens.next()?;
-        self.parse_qualified_scalar_tail(first.text.to_string(), first.start, first.end)
-            .map(Some)
+        if is_package_qualified_scalar_name(&self.tokens.peek()?.text)
+            && self.tokens.peek_second()?.kind == TokenKind::RightBrace
+        {
+            let name_token = self.tokens.next()?;
+            return Ok(Some(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: name_token.text.to_string() },
+                SourceLocation { start: name_token.start, end: name_token.end },
+            )));
+        }
+
+        Ok(None)
     }
 
     /// Parse the body of a `${...}` and report whether it was already
     /// folded to a bare scalar variable by the `${name}` == `$name` rule
-    /// (perlref), via `try_parse_simple_braced_scalar`.
+    /// (perlref), via `try_parse_simple_braced_scalar` or
+    /// `try_parse_braced_qualified_scalar`.
     ///
     /// When the returned flag is `true`, the caller MUST NOT wrap the node
     /// in `Unary{"${}"}` — it is already the correct scalar variable node.
-    /// All other cases (caret-special variables, qualified names, and real
-    /// scalar-ref dereferences such as `${$ref}`) return `false` and must
-    /// still be wrapped — even though `${$ref}` produces a structurally
-    /// identical `Variable` node once parsed, so the flag (not the node
-    /// shape) is what distinguishes folding from dereferencing.
+    /// All other cases (caret-special variables and real scalar-ref
+    /// dereferences such as `${$ref}`) return `false` and must still be
+    /// wrapped — even though `${$ref}` produces a structurally identical
+    /// `Variable` node once parsed, so the flag (not the node shape) is
+    /// what distinguishes folding from dereferencing.
     fn parse_braced_scalar_body(&mut self) -> ParseResult<(Node, bool)> {
         if let Some(expr) = self.try_parse_braced_caret_special_scalar()? {
             return Ok((expr, false));
@@ -661,7 +699,7 @@ impl<'a> Parser<'a> {
         }
 
         match self.try_parse_braced_qualified_scalar()? {
-            Some(expr) => Ok((expr, false)),
+            Some(expr) => Ok((expr, true)),
             None => Ok((self.parse_expression()?, false)),
         }
     }
@@ -692,6 +730,22 @@ impl<'a> Parser<'a> {
     fn simple_braced_scalar_token_name(text: &str) -> Option<&str> {
         let inner = text.strip_prefix("${")?.strip_suffix('}')?;
         if is_simple_scalar_name(inner) {
+            Some(inner)
+        } else {
+            None
+        }
+    }
+
+    /// Extract the package-qualified name from a token whose full text is a
+    /// closed braced scalar with a `::`-delimited name, e.g.
+    /// `"${Foo::bar}"` -> `"Foo::bar"`. Produced by the lexer's
+    /// braced-variable scan when it consumes `::` segments to a matching
+    /// `}` with no internal whitespace (see `perl-lexer`'s braced-variable
+    /// scan). Mirrors `simple_braced_scalar_token_name` for the qualified
+    /// case (issue #3593).
+    fn qualified_braced_scalar_token_name(text: &str) -> Option<&str> {
+        let inner = text.strip_prefix("${")?.strip_suffix('}')?;
+        if is_package_qualified_scalar_name(inner) {
             Some(inner)
         } else {
             None
@@ -1553,6 +1607,33 @@ fn is_simple_scalar_name(name: &str) -> bool {
         return false;
     }
     chars.all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// `true` when `name` is a package-qualified scalar name made of two or
+/// more `::`-delimited identifier segments, e.g. `"Foo::bar"` or
+/// `"Foo::Bar::baz"`. Each segment must independently satisfy
+/// [`is_simple_scalar_name`]; a single segment (no `::`) is rejected so
+/// callers don't overlap with the plain-name fold path.
+///
+/// Used to fold `${Foo::bar}` to the scalar `$Foo::bar` (perlref
+/// "Not-so-symbolic references"): `${NAME}` === `$NAME` for any bareword
+/// `NAME`, including package-qualified ones.
+fn is_package_qualified_scalar_name(name: &str) -> bool {
+    let mut segments = name.split("::");
+    let Some(first) = segments.next() else {
+        return false;
+    };
+    if !is_simple_scalar_name(first) {
+        return false;
+    }
+    let mut has_more_segments = false;
+    for segment in segments {
+        has_more_segments = true;
+        if !is_simple_scalar_name(segment) {
+            return false;
+        }
+    }
+    has_more_segments
 }
 
 #[cfg(test)]

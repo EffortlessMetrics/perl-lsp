@@ -1,0 +1,9 @@
+project: product
+component: Language intelligence
+kind: Fixed
+body: Package-qualified braced scalars like ${Foo::bar} now fold to the plain scalar $Foo::bar instead of parsing as a symbolic dereference.
+time: 2026-07-11T00:00:00Z
+custom:
+  PR: "3939"
+  Slug: braced-qualified-scalar-fold
+  Breaking: "no"

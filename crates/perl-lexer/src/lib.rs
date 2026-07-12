@@ -1339,6 +1339,33 @@ impl<'a> PerlLexer<'a> {
                                     break;
                                 } else if is_perl_identifier_continue(ch) {
                                     self.advance();
+                                } else if ch == ':'
+                                    && self.peek_char(1) == Some(':')
+                                    && self.qualified_name_closes_brace_from_here()
+                                {
+                                    // Package-qualified segment inside braces,
+                                    // e.g. ${Foo::bar} — mirror the bare
+                                    // $Foo::bar scan below (lines ~1359-1370)
+                                    // so `::`-delimited names are consumed as
+                                    // part of the same braced-variable token,
+                                    // BUT only when the qualified name is the
+                                    // entire braced content (this `::` chain
+                                    // leads directly to `}`, verified by the
+                                    // guard above without consuming). A
+                                    // partial-deref/postfix-chain case like
+                                    // ${Foo::bar->{baz}} or ${Foo::bar[0]}
+                                    // must NOT fold `::` here — stop at the
+                                    // same "Foo" boundary the pre-fix lexer
+                                    // used, so `::`/`bar`/`->`/... remain
+                                    // separate tokens and the parser's
+                                    // existing multi-token qualified-scalar
+                                    // walk (parse_qualified_scalar_tail)
+                                    // reconstructs `Foo::bar` as the variable
+                                    // operand of the postfix chain instead of
+                                    // losing it to a merged bareword
+                                    // Identifier token (issue #3939).
+                                    self.advance();
+                                    self.advance();
                                 } else {
                                     break;
                                 }

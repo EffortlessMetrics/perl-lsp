@@ -225,3 +225,84 @@ fn qr_with_modifier_flag_is_quote_regex_token() -> TestResult {
     assert_eq!(token.text.as_ref(), input, "modifier 'i' must be included in token text");
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Braced-variable `::`-folding boundary (issue #3939 /
+// `qualified_name_closes_brace_from_here`, crates/perl-lexer/src/lib.rs).
+//
+// The braced-variable scan only folds a `::`-delimited segment into the
+// identifier token when it sees TWO colons (`ch == ':' && peek_char(1) ==
+// Some(':')`). A single colon must NOT trigger that branch — it must stop
+// the scan exactly at the colon and let the colon become a separate token,
+// same as any other non-identifier character. This pins the `ch == ':'`
+// boundary directly at the lexer/token level (call-observation on
+// `PerlLexer::next_token`), independent of the parser-level
+// `${Foo::}`-error and `${Foo::bar->{baz}}`-partial-deref regression tests
+// in `perl-parser-core`.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn braced_variable_single_colon_does_not_fold_qualified_name() -> TestResult {
+    // `${Foo:bar}` — a single colon (not `::`) right after the identifier
+    // inside the braces. `qualified_name_closes_brace_from_here` must never
+    // even be reached: the compound guard's first colon check passes but
+    // `peek_char(1) == Some(':')` is false (next char is `b`), so the scan
+    // must break immediately at the colon rather than folding `Foo:bar`
+    // into one token.
+    let input = "${Foo:bar}";
+    let mut lexer = PerlLexer::new(input);
+
+    let ident = next_non_trivia(&mut lexer).ok_or("expected identifier token")?;
+    assert_eq!(
+        ident.token_type,
+        TokenType::Identifier(std::sync::Arc::from("${Foo")),
+        "braced scan must stop at the single colon, got text {:?}",
+        ident.text
+    );
+    assert_eq!(
+        ident.text.as_ref(),
+        "${Foo",
+        "identifier token must not swallow past the single colon"
+    );
+    let colon_pos = input.find(':').ok_or("test input must contain a colon")?;
+    assert_eq!(
+        ident.end, colon_pos,
+        "identifier token must end exactly at the single colon boundary"
+    );
+
+    let colon = next_non_trivia(&mut lexer).ok_or("expected a separate colon token")?;
+    assert_eq!(
+        colon.token_type,
+        TokenType::Operator(std::sync::Arc::from(":")),
+        "the un-folded single colon must surface as its own token (not be swallowed into the \
+         identifier), got {:?}",
+        colon.token_type
+    );
+    assert_eq!(colon.text.as_ref(), ":");
+
+    Ok(())
+}
+
+#[test]
+fn braced_variable_double_colon_folds_qualified_name_into_one_token() -> TestResult {
+    // Contrast case: `${Foo::bar}` — a real `::` immediately followed by an
+    // identifier segment and then `}` — DOES hit
+    // `qualified_name_closes_brace_from_here` and folds the whole braced
+    // qualified name into a single Identifier token, confirming the
+    // single-colon test above is discriminating the intended boundary and
+    // not just an unrelated lexer quirk.
+    let input = "${Foo::bar}";
+    let mut lexer = PerlLexer::new(input);
+
+    let ident = next_non_trivia(&mut lexer).ok_or("expected identifier token")?;
+    assert_eq!(
+        ident.token_type,
+        TokenType::Identifier(std::sync::Arc::from(input)),
+        "double-colon qualified name must fold into a single braced-variable token, got text {:?}",
+        ident.text
+    );
+    assert_eq!(ident.text.as_ref(), input);
+    assert_eq!(ident.end, input.len(), "folded token must consume the whole `${{Foo::bar}}` span");
+
+    Ok(())
+}
