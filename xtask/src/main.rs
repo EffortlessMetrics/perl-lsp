@@ -1711,6 +1711,18 @@ enum Commands {
         command: ChangelogCommand,
     },
 
+    /// Workflow Contracts checks — actionlint + zizmor + native contract
+    /// checks (issue #3788, parent #3785).
+    ///
+    /// FOUNDATION / ADVISORY-UNARMED: prints findings and always exits 0 in
+    /// this PR (the advisory boundary itself is not yet armed); never blocks
+    /// a PR. Does not prove repo-specific merge semantics — see
+    /// `xtask/src/tasks/workflows.rs` module docs for the boundary.
+    Workflows {
+        #[command(subcommand)]
+        command: WorkflowsCommand,
+    },
+
     /// Detect contradictory PR label states and emit a methodology receipt.
     MethodologyGate {
         /// Fixture JSON file (local snapshot or GitHub event payload).
@@ -2389,6 +2401,34 @@ enum ChangelogCommand {
         /// instead of checking a PR's changed files.
         #[arg(long)]
         self_test: bool,
+
+        /// Override the repository root. Testing seam; unused in CI.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkflowsCommand {
+    /// Advisory check of `.github/workflows/*.yml` against the Workflow
+    /// Contracts policy: actionlint + zizmor + native local-ref/permissions/
+    /// pinning checks.
+    Check {
+        /// Base ref to resolve the policy boundary against (default:
+        /// `origin/main`).
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Skip actionlint/zizmor if not installed locally (degrades to an
+        /// INFO skip instead of an instrument failure); still runs all
+        /// native checks against the real tree. For local dev; CI always
+        /// installs both tools first and omits this flag.
+        #[arg(long)]
+        self_test: bool,
+
+        /// Write a JSON findings receipt to this path.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
 
         /// Override the repository root. Testing seam; unused in CI.
         #[arg(long, hide = true)]
@@ -4173,6 +4213,30 @@ fn run_cli(cli: Cli) -> Result<()> {
                     }
                     Err(e) => {
                         eprintln!("changelog check: instrument failure: {e}");
+                        std::process::exit(2);
+                    }
+                }
+            }
+        },
+        Commands::Workflows { command } => match command {
+            WorkflowsCommand::Check { base, self_test, receipt, root } => {
+                // Same three-outcome contract as `Commands::Changelog` above
+                // (see xtask/src/tasks/workflows.rs docs):
+                //   Ok(PolicySatisfied | AdvisoryFinding) => exit 0.
+                //   Ok(BlockingViolation)                 => exit 1 (unreachable
+                //     until policy/workflow-contracts.toml's clocks are armed).
+                //   Err(instrument/config failure)         => exit 2.
+                match tasks::workflows::check(base, self_test, receipt, root) {
+                    Ok(
+                        tasks::workflows::CheckOutcome::PolicySatisfied
+                        | tasks::workflows::CheckOutcome::AdvisoryFinding,
+                    ) => Ok(()),
+                    Ok(tasks::workflows::CheckOutcome::BlockingViolation) => {
+                        eprintln!("workflows check: blocking policy violation");
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("workflows check: instrument failure: {e}");
                         std::process::exit(2);
                     }
                 }

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/perl-lsp/workflow-contracts.schema.json",
+  "title": "workflow-contracts receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "receipt_kind",
+    "passed",
+    "finding_count",
+    "findings"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "receipt_kind": {
+      "const": "workflow_contracts"
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "finding_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["level", "code", "message"],
+        "properties": {
+          "level": {
+            "enum": ["error", "warning"]
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

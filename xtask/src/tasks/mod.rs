@@ -147,6 +147,7 @@ pub mod ux_scorecard;
 pub mod validate_workspace_exclusions;
 pub mod workflow_policy_lint;
 pub mod workflow_trigger_lint;
+pub mod workflows;
 pub mod workspace_symbol_classes;
 pub mod worktree_allocator;
 pub mod worktrees;
