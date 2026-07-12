@@ -53,6 +53,7 @@ The README is a front door, not the metric source of truth. Current release post
 | Parser corpus and coverage | [parser status](docs/project/status/parser.md) |
 | Workspace/indexing | [workspace status](docs/project/status/workspace.md) |
 | Native formatter and critic | [native tooling status](docs/project/status/native_tooling.md) |
+| Editor intelligence scorecard | [editor scorecard](docs/project/status/editor.md), [live metrics](docs/project/status/editor_ux.md) |
 
 ## What works
 

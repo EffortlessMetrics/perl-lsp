@@ -324,6 +324,18 @@ impl TestServer {
         )
     }
 
+    /// Request rename at a position with the given new name
+    pub fn get_rename(&self, uri: &str, line: u32, character: u32, new_name: &str) -> Value {
+        self.request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "newName": new_name
+            }),
+        )
+    }
+
     /// Request signature help
     pub fn get_signature_help(&self, uri: &str, line: u32, character: u32) -> Value {
         self.request(

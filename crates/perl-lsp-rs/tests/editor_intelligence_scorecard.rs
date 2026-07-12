@@ -29,9 +29,9 @@ mod common;
 use common::test_utils::TestServerBuilder;
 use perl_corpus::gold::{
     CompletionAssertionKind, CompletionGoldFixture, GoldAssertion, GoldFixture, GotoAssertionKind,
-    GotoGoldFixture, HoverAssertionKind, HoverGoldFixture, load_completion_gold_fixtures,
-    load_document_symbol_gold_fixtures, load_gold_fixtures, load_goto_gold_fixtures,
-    load_hover_gold_fixtures,
+    GotoGoldFixture, HoverAssertionKind, HoverGoldFixture, RenameAssertionKind, RenameGoldFixture,
+    load_completion_gold_fixtures, load_document_symbol_gold_fixtures, load_gold_fixtures,
+    load_goto_gold_fixtures, load_hover_gold_fixtures, load_rename_gold_fixtures,
 };
 use perl_corpus::{DocumentSymbolAssertionKind, DocumentSymbolGoldFixture};
 use serde_json::Value;
@@ -520,6 +520,107 @@ fn test_document_symbols_gold_corpus() -> TestResult {
     assert!(
         failures.is_empty(),
         "Document symbols gold corpus: {} assertion(s) failed out of {}:\n{}",
+        failures.len(),
+        total,
+        failures.join("\n")
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Rename correctness test
+// ---------------------------------------------------------------------------
+
+fn rename_total_edit_count(resp: &Value) -> usize {
+    resp["result"]["changes"]
+        .as_object()
+        .map_or(0, |changes| changes.values().map(|v| v.as_array().map_or(0, |e| e.len())).sum())
+}
+
+fn rename_is_null(resp: &Value) -> bool {
+    resp["result"].is_null() || resp.get("error").is_some()
+}
+
+/// Extract the JSON-RPC error message from a rename response, if any, for
+/// failure diagnostics. Without this, a failed assertion only reports "0
+/// edits" — indistinguishable from a request that legitimately found
+/// nothing to rename — hiding the actual server error.
+fn rename_error_message(resp: &Value) -> Option<&str> {
+    resp.get("error").and_then(|error| error["message"].as_str())
+}
+
+/// Run all rename gold fixtures and assert every assertion passes.
+/// Reports rename success rate to stdout under --nocapture.
+#[test]
+fn test_rename_gold_corpus() -> TestResult {
+    let root = gold_corpus_root();
+    let fixtures: Vec<RenameGoldFixture> = match load_rename_gold_fixtures(&root) {
+        Ok(f) if !f.is_empty() => f,
+        Ok(_) => {
+            eprintln!("SKIP: no rename gold fixtures found in {}", root.display());
+            return Ok(());
+        }
+        Err(e) => return Err(e),
+    };
+
+    let server = TestServerBuilder::new().build();
+
+    let mut total = 0usize;
+    let mut passed = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+
+    for fixture in &fixtures {
+        let code = std::fs::read_to_string(&fixture.fixture_path)?;
+
+        let uri = format!("file:///gold/{}.pl", fixture.name);
+        server.open_document(&uri, &code);
+
+        for assertion in &fixture.rename_assertions {
+            total += 1;
+            let resp =
+                server.get_rename(&uri, assertion.line, assertion.character, &assertion.new_name);
+
+            let ok = match &assertion.kind {
+                RenameAssertionKind::RenameSucceeds => {
+                    !rename_is_null(&resp) && rename_total_edit_count(&resp) >= 1
+                }
+                RenameAssertionKind::RenameNull => rename_is_null(&resp),
+                RenameAssertionKind::RenameEditCountAtLeast { min } => {
+                    rename_total_edit_count(&resp) >= *min
+                }
+            };
+
+            if ok {
+                passed += 1;
+            } else {
+                failures.push(format!(
+                    "  FAIL [{}] {:?} at line:{} char:{} new_name:{:?} — edits: {}, error: {}",
+                    fixture.name,
+                    assertion.kind,
+                    assertion.line,
+                    assertion.character,
+                    assertion.new_name,
+                    rename_total_edit_count(&resp),
+                    rename_error_message(&resp).unwrap_or("<none>"),
+                ));
+            }
+        }
+    }
+
+    println!(
+        "\nRename gold corpus: {}/{} assertions passed ({:.0}%)",
+        passed,
+        total,
+        if total > 0 { passed as f64 / total as f64 * 100.0 } else { 100.0 }
+    );
+    for f in &failures {
+        println!("{f}");
+    }
+
+    assert!(
+        failures.is_empty(),
+        "Rename gold corpus: {} assertion(s) failed out of {}:\n{}",
         failures.len(),
         total,
         failures.join("\n")

@@ -465,6 +465,94 @@ pub fn load_document_symbol_gold_fixtures<P: AsRef<Path>>(
     Ok(fixtures)
 }
 
+// ---------------------------------------------------------------------------
+// Editor Intelligence — Rename
+// ---------------------------------------------------------------------------
+
+/// Assertion kind for rename gold corpus entries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum RenameAssertionKind {
+    /// Rename must return a non-null WorkspaceEdit with at least one edit
+    RenameSucceeds,
+    /// Rename must return null or an error (symbol is not renamable)
+    RenameNull,
+    /// WorkspaceEdit must contain at least `min` text edits across all files
+    RenameEditCountAtLeast { min: usize },
+}
+
+/// A single rename assertion at a given (line, character) position
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenameAssertion {
+    #[serde(flatten)]
+    pub kind: RenameAssertionKind,
+    pub line: u32,
+    pub character: u32,
+    pub new_name: String,
+    #[serde(default)]
+    pub rationale: String,
+}
+
+/// On-disk representation of `expected_rename.json`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenameGoldExpected {
+    pub version: u32,
+    pub fixture: String,
+    pub assertions: Vec<RenameAssertion>,
+}
+
+/// A rename gold fixture (fixture.pl + expected_rename.json)
+#[derive(Debug, Clone)]
+pub struct RenameGoldFixture {
+    pub name: String,
+    pub fixture_path: PathBuf,
+    pub rename_assertions: Vec<RenameAssertion>,
+}
+
+/// Load all rename gold fixtures from a directory.
+///
+/// Silently skips directories that lack `expected_rename.json`.
+pub fn load_rename_gold_fixtures<P: AsRef<Path>>(
+    root: P,
+) -> Result<Vec<RenameGoldFixture>, Box<dyn std::error::Error>> {
+    let root = root.as_ref();
+    let mut fixtures = Vec::new();
+
+    if !root.exists() {
+        return Err(format!("Gold fixtures directory not found: {}", root.display()).into());
+    }
+
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let fixture_path = path.join("fixture.pl");
+        let rename_path = path.join("expected_rename.json");
+
+        if !fixture_path.exists() || !rename_path.exists() {
+            continue;
+        }
+
+        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let json = fs::read_to_string(&rename_path)?;
+        let expected: RenameGoldExpected = serde_json::from_str(&json)
+            .map_err(|e| format!("Parsing {}: {e}", rename_path.display()))?;
+
+        fixtures.push(RenameGoldFixture {
+            name,
+            fixture_path,
+            rename_assertions: expected.assertions,
+        });
+    }
+
+    fixtures.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(fixtures)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

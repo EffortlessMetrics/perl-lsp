@@ -1,0 +1,9 @@
+project: product
+component: Developer experience
+kind: Added
+body: "Editor intelligence scorecard now has a stable landing page (`docs/project/status/editor.md`), a rename gold-corpus fixture (`test_corpus/gold/rename_basic`), and a `test_rename_gold_corpus` regression test wired into `crates/perl-lsp-rs/tests/editor_intelligence_scorecard.rs`."
+time: 2026-07-12T00:00:00Z
+custom:
+  PR: "3445"
+  Slug: editor-intelligence-scorecard-2970
+  Breaking: "no"
