@@ -4,30 +4,46 @@ use super::quick_fixes;
 use super::types::{CodeAction, QuickFixDiagnostic};
 use crate::providers::diagnostics::Diagnostic;
 use perl_diagnostics::codes::DiagnosticCode;
+use perl_parser_core::Node;
 
 /// Convert Diagnostic to QuickFixDiagnostic.
 ///
 /// Since Diagnostic already uses byte offsets, this is a simple copy.
-fn to_quick_fix_diagnostic(diag: &Diagnostic) -> QuickFixDiagnostic {
-    QuickFixDiagnostic { range: diag.range, message: diag.message.clone(), code: diag.code.clone() }
+fn to_quick_fix_diagnostic(diag: &Diagnostic, ast: Option<&Node>) -> QuickFixDiagnostic {
+    let metadata = diag.code.as_deref().and_then(|code| {
+        matches!(code, "PL405" | "native.common.printf_format_arity")
+            .then(|| ast.and_then(|ast| quick_fixes::printf_format_arity_metadata(ast, diag.range)))
+            .flatten()
+    });
+    QuickFixDiagnostic {
+        range: diag.range,
+        message: diag.message.clone(),
+        code: diag.code.clone(),
+        metadata,
+    }
 }
 
 pub(super) fn quick_fixes_for_diagnostics(
     source: &str,
+    ast: Option<&Node>,
     diagnostics: &[Diagnostic],
 ) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
     for diagnostic in diagnostics {
-        actions.extend(quick_fixes_for_diagnostic(source, diagnostic));
+        actions.extend(quick_fixes_for_diagnostic(source, ast, diagnostic));
     }
 
     actions
 }
 
-fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+fn quick_fixes_for_diagnostic(
+    source: &str,
+    ast: Option<&Node>,
+    diagnostic: &Diagnostic,
+) -> Vec<CodeAction> {
     let mut actions = Vec::new();
-    let qf_diag = to_quick_fix_diagnostic(diagnostic);
+    let qf_diag = to_quick_fix_diagnostic(diagnostic, ast);
 
     let Some(code) = &diagnostic.code else {
         return actions;
@@ -244,7 +260,7 @@ mod tests {
             "`next MISSING` references a label that is not defined in this file",
         );
 
-        let actions = quick_fixes_for_diagnostics(source, &[diagnostic]);
+        let actions = quick_fixes_for_diagnostics(source, None, &[diagnostic]);
 
         let action =
             must_some(actions.iter().find(|action| action.title == "Remove undefined label"));
@@ -265,7 +281,7 @@ mod tests {
             "`next MISSING` references a label that is not defined in this file",
         );
 
-        let actions = quick_fixes_for_diagnostics(source, &[diagnostic]);
+        let actions = quick_fixes_for_diagnostics(source, None, &[diagnostic]);
 
         assert!(actions.is_empty());
     }
@@ -280,7 +296,7 @@ mod tests {
             "`next MISSING` references a label that is not defined in this file",
         );
 
-        let actions = quick_fixes_for_diagnostic(source, &diagnostic);
+        let actions = quick_fixes_for_diagnostic(source, None, &diagnostic);
 
         assert_eq!(actions.len(), 0);
     }
