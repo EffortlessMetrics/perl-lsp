@@ -27,7 +27,7 @@
 //! ```
 
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness, document_symbol_names};
+use perl_lsp_ux_tests::{document_symbol_names, ScenarioConfig, UxHarness};
 use serde_json::json;
 use std::time::Duration;
 
@@ -453,6 +453,61 @@ fn scenario_21_signature_help_for_helper_call_in_app_pm() -> anyhow::Result<()> 
             }
         }
     }
+
+    harness.assert_no_crash();
+    Ok(())
+}
+
+/// Hard assert — signature help for `helper(` call in App.pm must return a
+/// non-empty signatures array whose first label mentions `helper`.
+#[test]
+fn scenario_21_signature_help_for_helper_call_in_app_pm_hard_assert() -> anyhow::Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_21: perl-lsp binary not found");
+        return Ok(());
+    }
+
+    let harness = create_harness()?;
+    harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
+    harness.open_file("lib/RealBaseline/Util.pm", UTIL_PM)?;
+
+    let uri = harness.workspace.uri("lib/RealBaseline/App.pm");
+    let resp = harness.client.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 13, "character": 11 }
+        }),
+        Duration::from_secs(5),
+    )?;
+
+    assert!(
+        resp.get("error").is_none(),
+        "signatureHelp for `helper(` call in App.pm must not return a JSON-RPC error. \
+         Got: {:?}",
+        resp.get("error")
+    );
+
+    assert!(
+        !resp["result"].is_null(),
+        "signatureHelp must return a SignatureHelp result, got null"
+    );
+
+    let signatures =
+        resp["result"].get("signatures").and_then(|s| s.as_array()).ok_or_else(|| {
+            anyhow::anyhow!("signatureHelp result has no `signatures` array: {:?}", resp["result"])
+        })?;
+
+    assert!(
+        !signatures.is_empty(),
+        "signatureHelp for `helper(` call in App.pm must return at least one signature. Got: []"
+    );
+
+    let label = signatures[0].get("label").and_then(|l| l.as_str()).unwrap_or("");
+    assert!(
+        label.contains("helper"),
+        "signatureHelp first signature label must contain 'helper'. Got: {label:?}"
+    );
 
     harness.assert_no_crash();
     Ok(())
