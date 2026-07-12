@@ -1,3 +1,20 @@
+# Reconciliation (2026-07-12): the CORE freshness invariant (didChange commits
+# text and returns before parsing, off-lock, generation-gated publish) is DONE
+# and verified merged on origin/main -- see the five work items below flipped
+# to status = "done", each citing its merged PR. This does NOT mean the lane
+# or the broader goal is complete. Remaining before the goal is done:
+#   - fact provenance (#3046) -- lsp-freshness-fact-producer-provenance
+#   - legacy-overlap retirement: workspace-index full re-extraction (#1711,
+#     lsp-freshness-index-publication) and references request-time
+#     full-workspace scan (#1658/#2674, lsp-freshness-references-replay +
+#     lsp-freshness-request-scan-retirement)
+#   - a responsiveness-regression receipt for the freshness path, and
+#     provenance-backed zero-false-exact on stale/dynamic/ambiguous fixtures,
+#     are NOT yet confirmed as durable repository receipts.
+# See docs/reference/FRESH_FACTS_FAST_DONE_CONDITIONS.md for the narrower
+# "off-lock async parse worker" program proof (COMPLETE 2026-07-11) -- that
+# document covers #3396's core substrate only, not the #3046/#1711/#1658/#2674
+# goal-level extensions tracked by this manifest.
 id = "plsp-swarm-lsp-freshness"
 title = "Fresh Facts Fast (LSP freshness) lane"
 status = "active"
@@ -64,11 +81,11 @@ claim_boundaries = [
 ]
 
 [current]
-phase = "phase-1"
+phase = "phase-6" # core seam (phases 1-5) done; goal extensions (#3046/#1711/#1658/#2674) remain
 lane = "reliability"
 repo = "perl-lsp-swarm"
 release_lineage_repo = "perl-lsp"
-status = "parsed_snapshot_seam_active"
+status = "core_freshness_invariant_done_goal_extensions_remain"
 
 [limits]
 reliability_prs = 1
@@ -108,7 +125,7 @@ rule = "One main-red sidecar PR at a time. No HIR/PIR expansion without a separa
 
 [[work_item]]
 id = "lsp-freshness-parsed-snapshot"
-status = "active"
+status = "completed" # merged via #3579
 lane = "reliability"
 claim_boundary = "Owned Arc accessors, no dual state, invariant-owning construction, 3-way generation validation at publish. No provider cutover, no parser grammar changes."
 files = [
@@ -120,7 +137,7 @@ commands = [
 
 [[work_item]]
 id = "lsp-freshness-pending-parse-contract"
-status = "ready"
+status = "completed" # merged via #3589
 lane = "trust"
 claim_boundary = "Explicit pending-parse provider contract plus a sub-foo->bar rename canary. Stacked on the ParsedSnapshot seam; no live provider behavior change beyond the pending-state contract."
 files = [
@@ -132,7 +149,7 @@ commands = [
 
 [[work_item]]
 id = "lsp-freshness-latest-only-worker"
-status = "planned"
+status = "completed" # merged via #3618
 lane = "reliability"
 claim_boundary = "didChange returns before parse; deterministic barriers, not sleeps. No TextDocumentSyncKind change."
 files = [
@@ -144,7 +161,7 @@ commands = [
 
 [[work_item]]
 id = "lsp-freshness-current-provider-policy"
-status = "planned"
+status = "completed" # merged via #3610 (+ #3589)
 lane = "trust"
 claim_boundary = "Providers drop the document-map guard before analysis; lock-hold instrumentation added. No provider support-tier promotion without a promotion-ledger row."
 files = [
@@ -156,7 +173,7 @@ commands = [
 
 [[work_item]]
 id = "lsp-freshness-generation-owned-analysis"
-status = "planned"
+status = "completed" # merged via #3765 (+ #3811 hover cache retirement)
 lane = "substrate"
 claim_boundary = "Analyzer/type-env/facts are generation-owned, lazy, built once per generation with explicit eviction. No HIR/PIR expansion."
 files = [
