@@ -4,7 +4,11 @@ import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { execFile } from 'child_process';
 import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node';
-import type { LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
+import type {
+  LanguageClientOptions,
+  ServerOptions,
+  StateChangeEvent,
+} from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import {
   activateDebugger,
@@ -25,6 +29,8 @@ import { registerGherkinStepDefinitionSupport } from './gherkinStepDefinitions';
 import { selectTestCommandAtPosition } from './runTestAtCursor';
 import { StreamingCompletionController } from './streamingCompletion';
 import { registerMcpSupport } from './mcpSupport';
+import { ExtensionLanguageClientLifecycle } from './extensionComposition';
+import type { LifecycleState } from './languageClientLifecycle';
 import {
   classifyStartupError,
   formatStartupFailureDialog,
@@ -38,6 +44,9 @@ import type {
   ReinstallCommandResult,
 } from './commandResults';
 
+// Compatibility projections for existing command/provider code. Lifecycle
+// ownership lives in `languageClientLifecycle`; these values are synchronized
+// from its authoritative snapshot and never drive start/stop transitions.
 let client: LanguageClient | undefined;
 let outputChannel: vscode.LogOutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
@@ -49,7 +58,9 @@ let configuredServerPathMissing: string | null = null;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let healthWidget: HealthWidget | undefined;
 let streamingController: StreamingCompletionController | undefined;
-let stateChangeDisposable: vscode.Disposable | undefined;
+let languageClientLifecycle:
+  | ExtensionLanguageClientLifecycle<LanguageClient, StateChangeEvent>
+  | undefined;
 const COEXISTENCE_GUIDE_URL =
   'https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/README.md#extension-coexistence';
 const MANAGED_BINARY_HEALTH_TIMEOUT_MS = 30_000;
@@ -57,7 +68,7 @@ const MANAGED_BINARY_HEALTH_TIMEOUT_MS = 30_000;
  * Cached startup diagnosis from the last server failure.
  *
  * Set when the LSP fails to start (`initializeLanguageClient`) or when the
- * server stops unexpectedly mid-session (`bindClientState`). Read by
+ * server stops unexpectedly mid-session (the lifecycle client-state hook). Read by
  * `serverNotRunningMessage()` so every "server not running" surface shows the
  * specific root cause (e.g. "glibc mismatch") instead of a generic hint.
  *
@@ -80,7 +91,21 @@ export function serverNotRunningMessage(): string {
   if (lastStartupDiagnosis) {
     return formatStartupFailureDialog(lastStartupDiagnosis, undefined);
   }
+  const availability = languageClientLifecycle?.availability;
+  if (availability?.kind === 'starting') {
+    return 'Perl Language Server is still starting. Try again in a moment.';
+  }
+  if (availability?.kind === 'failed') {
+    const error =
+      availability.error instanceof Error ? availability.error.message : String(availability.error);
+    return `Perl Language Server failed to start${error ? `: ${error}` : '.'}`;
+  }
   return 'Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.';
+}
+
+function syncLifecycleProjection(): void {
+  client = languageClientLifecycle?.client;
+  currentServerPath = languageClientLifecycle?.serverPath ?? null;
 }
 
 /**
@@ -1151,6 +1176,8 @@ export async function activate(context: vscode.ExtensionContext) {
   statusBarItem.show();
   healthWidget = new HealthWidget(statusBarItem);
   healthWidget.onStateChange(ClientState.Starting);
+  languageClientLifecycle = createLanguageClientLifecycle(context);
+  syncLifecycleProjection();
   context.subscriptions.push(statusBarItem);
 
   // Register showOutput command early so it's available during binary download and initialization
@@ -2180,50 +2207,107 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
   return null;
 }
 
+function createLanguageClientLifecycle(
+  context: vscode.ExtensionContext,
+): ExtensionLanguageClientLifecycle<LanguageClient, StateChangeEvent> {
+  return new ExtensionLanguageClientLifecycle({
+    resolveServerPath: () => getServerPath(context),
+    createClient: (serverPath) => createLanguageClient(serverPath),
+    onStarted: (startedClient) => finalizeStartedLanguageClient(context, startedClient),
+    onStateChange: (snapshot) => {
+      syncLifecycleProjection();
+      healthWidget?.onStateChange(clientStateForLifecycle(snapshot.state));
+    },
+    onClientStateChange: (_activeClient, event) => {
+      handleClientStateChange(event);
+    },
+    onCallbackError: (error, phase) => {
+      const message = error instanceof Error ? error.message : String(error);
+      outputChannel.appendLine(`[lifecycle] ${phase} callback failed: ${message}`);
+    },
+  });
+}
+
+function clientStateForLifecycle(state: LifecycleState): ClientState {
+  if (state === 'resolving' || state === 'starting') {
+    return ClientState.Starting;
+  }
+  if (state === 'running') {
+    return ClientState.Running;
+  }
+  return ClientState.Stopped;
+}
+
+async function finalizeStartedLanguageClient(
+  context: vscode.ExtensionContext,
+  startedClient: LanguageClient,
+): Promise<void> {
+  // This hook is part of the lifecycle controller so initial startup and
+  // restart/reinstall generations rebuild the same client integrations.
+  const serverVersion = startedClient.initializeResult?.serverInfo?.version;
+  if (serverVersion) {
+    healthWidget?.setVersion(serverVersion);
+  }
+
+  // Offer AI inline completion once if the server advertises support (#1634).
+  // Fire-and-forget; failures must not block lifecycle finalization.
+  suggestAiCompletionIfSupported(context, startedClient).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    outputChannel.appendLine(`[ai-completion] Error suggesting AI completion: ${msg}`);
+  });
+
+  await refreshTestAdapter(context);
+  refreshStreamingController(startedClient);
+  lastStartupDiagnosis = undefined;
+  outputChannel.appendLine('Perl Language Server started successfully');
+}
+
 async function initializeLanguageClient(context: vscode.ExtensionContext): Promise<boolean> {
   healthWidget?.onStateChange(ClientState.Starting);
 
-  currentServerPath = await getServerPath(context);
-  if (!currentServerPath) {
+  const lifecycle = languageClientLifecycle;
+  if (!lifecycle) {
+    outputChannel.appendLine('[startup] Language client lifecycle was not composed');
     healthWidget?.onStateChange(ClientState.Stopped);
-    const notFoundMessage = configuredServerPathMissing
-      ? `Perl Language Server not found: your perl-lsp.serverPath points to "${configuredServerPathMissing}", which does not exist. Fix the path or clear the setting to auto-download.`
-      : 'Perl Language Server (perllsp) not found.';
-    const choice = await vscode.window.showErrorMessage(
-      notFoundMessage,
-      'Install (cargo install perllsp)',
-      'Open Settings',
-    );
-
-    if (choice === 'Install (cargo install perllsp)') {
-      void vscode.window.showInformationMessage(
-        'Run in your terminal: cargo install perllsp\nThen reload VS Code.',
-      );
-    } else if (choice === 'Open Settings') {
-      void vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');
-    }
-
     return false;
   }
 
-  const startedClient = createLanguageClient(currentServerPath);
-  client = startedClient;
-  bindClientState(startedClient);
   try {
-    await startedClient.start();
+    const startedClient = await lifecycle.start();
+    if (!startedClient) {
+      return false;
+    }
+
+    const serverPath = lifecycle.serverPath;
+    if (!serverPath) {
+      outputChannel.appendLine('[startup] Lifecycle started without a server path');
+      return false;
+    }
+
+    return true;
   } catch (startError: unknown) {
     const msg = startError instanceof Error ? startError.message : String(startError);
     outputChannel.appendLine(`[startup] Language client failed to start: ${msg}`);
-    if (client === startedClient) {
-      stateChangeDisposable?.dispose();
-      stateChangeDisposable = undefined;
-      client = undefined;
+
+    if (!lifecycle.serverPath) {
       healthWidget?.onStateChange(ClientState.Stopped);
-    }
-    try {
-      void startedClient.dispose();
-    } catch {
-      /* already dead */
+      const notFoundMessage = configuredServerPathMissing
+        ? `Perl Language Server not found: your perl-lsp.serverPath points to "${configuredServerPathMissing}", which does not exist. Fix the path or clear the setting to auto-download.`
+        : 'Perl Language Server (perllsp) not found.';
+      const choice = await vscode.window.showErrorMessage(
+        notFoundMessage,
+        'Install (cargo install perllsp)',
+        'Open Settings',
+      );
+
+      if (choice === 'Install (cargo install perllsp)') {
+        void vscode.window.showInformationMessage(
+          'Run in your terminal: cargo install perllsp\nThen reload VS Code.',
+        );
+      } else if (choice === 'Open Settings') {
+        void vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');
+      }
+      return false;
     }
 
     // Probe the binary to get an actionable OS-level diagnosis (#3280).
@@ -2231,13 +2315,11 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     // back to the health check (#3312) which can detect missing Perl etc.
     // lastStartupDiagnosis is updated so that serverNotRunningMessage() in
     // command handlers surfaces the specific root cause rather than a generic prompt.
-    const probeResult = currentServerPath
-      ? await probeStartupFailure(currentServerPath)
-      : classifyStartupError('');
+    const probeResult = await probeStartupFailure(lifecycle.serverPath);
     let healthMsg: string | undefined;
     if (probeResult.kind === StartupErrorKind.Unknown) {
       const onboarding = new OnboardingManager(context, outputChannel);
-      healthMsg = await onboarding.runStartupDiagnostics(currentServerPath ?? null);
+      healthMsg = await onboarding.runStartupDiagnostics(lifecycle.serverPath);
     }
     // Cache the structured diagnosis so serverNotRunningMessage() can format
     // it; when healthMsg overrides the hint, wrap it as a synthetic diagnosis.
@@ -2257,7 +2339,7 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     if (choice === 'View Logs') {
       outputChannel.show();
     } else if (choice === 'Run Health Check') {
-      await vscode.commands.executeCommand('perl-lsp.runHealthCheck', currentServerPath);
+      await vscode.commands.executeCommand('perl-lsp.runHealthCheck', lifecycle.serverPath);
     } else if (choice === 'Reinstall') {
       await reinstallServerBinary(context);
     } else if (choice === 'Check serverPath Setting') {
@@ -2265,42 +2347,6 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     }
     return false;
   }
-
-  if (client !== startedClient) {
-    outputChannel.appendLine(
-      '[startup] Language client was replaced during startup; skipping stale startup finalization.',
-    );
-    try {
-      void startedClient.dispose();
-    } catch {
-      /* already replaced */
-    }
-    return client !== undefined;
-  }
-
-  // Expose the server version in the widget tooltip once the handshake completes.
-  const serverVersion = startedClient.initializeResult?.serverInfo?.version;
-  if (serverVersion) {
-    healthWidget?.setVersion(serverVersion);
-  }
-
-  // Offer AI inline completion once if the server advertises support (#1634).
-  // Fire-and-forget; failures must not block startup finalization.
-  suggestAiCompletionIfSupported(context, startedClient).catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    outputChannel.appendLine(`[ai-completion] Error suggesting AI completion: ${msg}`);
-  });
-
-  await refreshTestAdapter(context);
-
-  // Initialize streaming inline completion controller (config-gated)
-  refreshStreamingController(startedClient);
-
-  // Clear any stale startup diagnosis — the server started successfully so
-  // the root cause (e.g. missing Perl) no longer applies.
-  lastStartupDiagnosis = undefined;
-  outputChannel.appendLine('Perl Language Server started successfully');
-  return true;
 }
 
 export function buildDisabledFeaturesFromConfig(config: {
@@ -2608,18 +2654,20 @@ function getSupportedFeatureProfiles(): string[] {
   return ['auto', 'ga-lock', 'ga', 'prod', 'production', 'all'];
 }
 
-async function restartServer(context: vscode.ExtensionContext) {
-  if (!client && !currentServerPath) {
+async function restartServer(_context: vscode.ExtensionContext) {
+  const lifecycle = languageClientLifecycle;
+  if (!lifecycle || (!client && !currentServerPath && !lifecycle.hasPendingServerPathOverride)) {
     vscode.window.showWarningMessage('Perl Language Server is not initialized yet.');
     return;
   }
 
   try {
-    await disposeLanguageClient();
-    const started = await initializeLanguageClient(context);
+    disposeClientIntegrations();
+    const started = await lifecycle.restart();
     if (!started) {
       return;
     }
+    syncLifecycleProjection();
     vscode.window
       .showInformationMessage('Perl Language Server restarted', 'Show Output')
       .then((selection) => {
@@ -3415,8 +3463,10 @@ async function reinstallServerBinary(
   // Windows releases its handle on the existing perllsp.exe. On failure
   // we restart with the previous binary so the user is never left worse
   // off than before they invoked Reinstall.
-  const wasRunning = client !== undefined;
-  const previousServerPath = currentServerPath;
+  const lifecycleState = languageClientLifecycle?.snapshot.state;
+  const wasRunning =
+    lifecycleState !== undefined && lifecycleState !== 'stopped' && lifecycleState !== 'failed';
+  const previousServerPath = languageClientLifecycle?.serverPath ?? null;
 
   if (wasRunning) {
     outputChannel.appendLine('[reinstall] stopping language client to release the running binary');
@@ -3450,7 +3500,7 @@ async function reinstallServerBinary(
       });
     if (wasRunning && previousServerPath) {
       outputChannel.appendLine('[reinstall] restoring previous binary after failed download');
-      currentServerPath = previousServerPath;
+      languageClientLifecycle?.setServerPathOverride(previousServerPath);
       try {
         await restartServer(context);
       } catch {
@@ -3487,7 +3537,7 @@ async function reinstallServerBinary(
       });
     if (wasRunning && previousServerPath) {
       outputChannel.appendLine('[reinstall] restoring previous binary after failed health check');
-      currentServerPath = previousServerPath;
+      languageClientLifecycle?.setServerPathOverride(previousServerPath);
       try {
         await restartServer(context);
       } catch {
@@ -3505,7 +3555,7 @@ async function reinstallServerBinary(
     };
   }
 
-  currentServerPath = downloadedPath;
+  languageClientLifecycle?.setServerPathOverride(downloadedPath);
 
   if (wasRunning) {
     outputChannel.appendLine(
@@ -3530,33 +3580,30 @@ async function reinstallServerBinary(
   };
 }
 
-function bindClientState(languageClient: LanguageClient) {
-  stateChangeDisposable?.dispose();
-  stateChangeDisposable = languageClient.onDidChangeState((event) => {
-    // vscode-languageclient State values match ClientState numeric values:
-    // Stopped = 1, Running = 2, Starting = 3
-    healthWidget?.onStateChange(event.newState as unknown as ClientState);
+function handleClientStateChange(event: StateChangeEvent): void {
+  // Preserve the status-bar signal for an unexpected language-client crash;
+  // the controller state changes only on explicit lifecycle operations.
+  healthWidget?.onStateChange(event.newState as unknown as ClientState);
 
-    // When the server stops unexpectedly after a successful start (mid-session
-    // crash), capture a generic diagnosis so serverNotRunningMessage() returns
-    // an actionable hint instead of the stale "not running" fallback.
-    // We can't run probeStartupFailure here (async) so we set a generic
-    // "server stopped" diagnosis; the user can run Health Check for details.
-    //
-    // Note: event.newState / oldState are vscode-languageclient's `State` enum
-    // which shares numeric values with ClientState (Stopped=1, Running=2) but
-    // is a distinct nominal type, so we cast to number for comparison.
-    const newStateNum = event.newState as unknown as number;
-    const oldStateNum = event.oldState as unknown as number;
-    if (newStateNum === ClientState.Stopped && oldStateNum === ClientState.Running) {
-      lastStartupDiagnosis = {
-        kind: StartupErrorKind.Unknown,
-        hint: 'The Perl Language Server stopped unexpectedly. Check the Output panel for details.',
-        remediation:
-          'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
-      };
-    }
-  });
+  // When the server stops unexpectedly after a successful start (mid-session
+  // crash), capture a generic diagnosis so serverNotRunningMessage() returns
+  // an actionable hint instead of the stale "not running" fallback.
+  // We can't run probeStartupFailure here (async) so we set a generic
+  // "server stopped" diagnosis; the user can run Health Check for details.
+  //
+  // Note: event.newState / oldState are vscode-languageclient's `State` enum
+  // which shares numeric values with ClientState (Stopped=1, Running=2) but
+  // is a distinct nominal type, so we cast to number for comparison.
+  const newStateNum = event.newState as unknown as number;
+  const oldStateNum = event.oldState as unknown as number;
+  if (newStateNum === ClientState.Stopped && oldStateNum === ClientState.Running) {
+    lastStartupDiagnosis = {
+      kind: StartupErrorKind.Unknown,
+      hint: 'The Perl Language Server stopped unexpectedly. Check the Output panel for details.',
+      remediation:
+        'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
+    };
+  }
 }
 
 function requiresClientRefresh(event: vscode.ConfigurationChangeEvent): boolean {
@@ -3584,7 +3631,7 @@ async function promptForClientRefresh(context: vscode.ExtensionContext) {
   }
 }
 
-async function disposeLanguageClient() {
+function disposeClientIntegrations(): void {
   if (streamingController) {
     streamingController.dispose();
     streamingController = undefined;
@@ -3594,25 +3641,12 @@ async function disposeLanguageClient() {
     testAdapter.dispose();
     testAdapter = undefined;
   }
+}
 
-  stateChangeDisposable?.dispose();
-  stateChangeDisposable = undefined;
-
-  if (client) {
-    const activeClient = client;
-    client = undefined;
-    try {
-      await activeClient.stop();
-    } catch (stopErr: unknown) {
-      const msg = stopErr instanceof Error ? stopErr.message : String(stopErr);
-      outputChannel.appendLine(`[client] language client stop reported: ${msg}`);
-    } finally {
-      try {
-        void activeClient.dispose();
-      } catch (disposeErr: unknown) {
-        const msg = disposeErr instanceof Error ? disposeErr.message : String(disposeErr);
-        outputChannel.appendLine(`[client] language client dispose reported: ${msg}`);
-      }
-    }
+async function disposeLanguageClient(): Promise<void> {
+  disposeClientIntegrations();
+  if (languageClientLifecycle) {
+    await languageClientLifecycle.stop();
+    syncLifecycleProjection();
   }
 }

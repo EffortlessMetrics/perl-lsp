@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 
 const mockLanguageClientStart = jest.fn(() => new Promise<void>(() => undefined));
 const mockLanguageClientStop = jest.fn(async () => undefined);
+const mockLanguageClientDispose = jest.fn(async () => undefined);
 const mockLanguageClientSetTrace = jest.fn(async () => undefined);
 const mockLanguageClientOnDidChangeState = jest.fn(() => ({ dispose: jest.fn() }));
 
@@ -15,6 +16,7 @@ jest.mock('vscode-languageclient/node', () => ({
     setTrace: mockLanguageClientSetTrace,
     start: mockLanguageClientStart,
     stop: mockLanguageClientStop,
+    dispose: mockLanguageClientDispose,
   })),
   Trace: { Off: 'off', Messages: 'messages', Verbose: 'verbose' },
   TransportKind: { stdio: 0 },
@@ -108,5 +110,9 @@ describe('extension activation startup scheduling (#3159)', () => {
     await waitUntil(() => mockLanguageClientStart.mock.calls.length > 0, 500);
 
     expect(mockLanguageClientStart).toHaveBeenCalledTimes(1);
+
+    await deactivate();
+    expect(mockLanguageClientStop).toHaveBeenCalledTimes(1);
+    expect(mockLanguageClientDispose).toHaveBeenCalledTimes(1);
   });
 });
