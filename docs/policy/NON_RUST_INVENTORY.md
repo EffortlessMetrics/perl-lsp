@@ -2271,7 +2271,6 @@
 | `.ci/receipts/schemas/fmt.schema.json` | config | `non-rust-ci-config` | release/ci |
 | `.ci/receipts/schemas/generated-files.schema.json` | config | `non-rust-ci-config` | release/ci |
 | `.ci/receipts/schemas/intent-diff-gate.schema.json` | config | `non-rust-ci-config` | release/ci |
-| `.ci/receipts/schemas/label-projection.schema.json` | config | `non-rust-ci-config` | release/ci |
 | `.ci/receipts/schemas/memory-plateau.schema.json` | config | `non-rust-ci-config` | release/ci |
 | `.ci/receipts/schemas/merge-readiness.schema.json` | config | `non-rust-ci-config` | release/ci |
 | `.ci/receipts/schemas/methodology-gate.schema.json` | config | `non-rust-ci-config` | release/ci |
@@ -2307,7 +2306,6 @@
 | `.ci/scripts/measure-ci-time.sh` | config | `non-rust-ci-config` | release/ci |
 | `.ci/scripts/quarantine-flaky.sh` | config | `non-rust-ci-config` | release/ci |
 | `.ci/scripts/test-hooks.sh` | config | `non-rust-ci-config` | release/ci |
-| `.ci/state/label-projection.toml` | config | `non-rust-ci-config` | release/ci |
 | `.ci/ux-flakes.json` | config | `non-rust-ci-config` | release/ci |
 | `.claude/README.md` | documentation | `non-rust-root-governance-docs` | docs |
 | `.claude/agents/AGENT_CATALOG.md` | documentation | `non-rust-root-governance-docs` | docs |
@@ -3744,7 +3742,6 @@
 | `docs/ci/github-state-orchestration.md` | documentation | `non-rust-docs-tree` | docs |
 | `docs/ci/intent-diff-closeout-gate.md` | documentation | `non-rust-docs-tree` | docs |
 | `docs/ci/inventory.md` | documentation | `non-rust-docs-tree` | docs |
-| `docs/ci/label-projection.md` | documentation | `non-rust-docs-tree` | docs |
 | `docs/ci/labels.md` | documentation | `non-rust-docs-tree` | docs |
 | `docs/ci/learned-estimates.md` | documentation | `non-rust-docs-tree` | docs |
 | `docs/ci/lem-budgeting.md` | documentation | `non-rust-docs-tree` | docs |
