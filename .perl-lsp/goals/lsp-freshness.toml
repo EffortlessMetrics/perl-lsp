@@ -4,10 +4,11 @@
 # to status = "done", each citing its merged PR. This does NOT mean the lane
 # or the broader goal is complete. Remaining before the goal is done:
 #   - fact provenance (#3046) -- lsp-freshness-fact-producer-provenance
-#   - legacy-overlap retirement: workspace-index full re-extraction (#1711,
-#     lsp-freshness-index-publication) and references request-time
-#     full-workspace scan (#1658/#2674, lsp-freshness-references-replay +
-#     lsp-freshness-request-scan-retirement)
+#   - declaration extraction/cache churn remains a bounded #1711/#4047
+#     follow-up; the duplicate reference traversal and replay evidence are
+#     complete through #4022/#3998/#4057
+#   - references request-time full-workspace scan retirement remains a
+#     class-scoped #1658/#4002/#4046 successor lane
 #   - a responsiveness-regression receipt for the freshness path, and
 #     provenance-backed zero-false-exact on stale/dynamic/ambiguous fixtures,
 #     are NOT yet confirmed as durable repository receipts.
@@ -81,7 +82,7 @@ claim_boundaries = [
 ]
 
 [current]
-phase = "phase-6" # core seam (phases 1-5) done; goal extensions (#3046/#1711/#1658/#2674) remain
+phase = "phase-9" # core seam and representative references replay are complete; scan retirement and producer provenance remain
 lane = "reliability"
 repo = "perl-lsp-swarm"
 release_lineage_repo = "perl-lsp"
@@ -197,9 +198,9 @@ commands = [
 
 [[work_item]]
 id = "lsp-freshness-index-publication"
-status = "planned"
+status = "completed" # duplicate production reference traversal retired via #4013/#4022
 lane = "reliability"
-claim_boundary = "Workspace fact publication and extraction receipts for current-generation only. Tracked by #1711. Requires a receipt proving any preview pass costs less than the extraction it avoids."
+claim_boundary = "Duplicate production reference traversal and index publication cutover completed via #4013/#4022. Declaration extraction and cache-churn follow-up is bounded and transferred to #4047; no claim that all changed-file re-extraction is retired."
 files = [
   "crates/perl-workspace/src/",
 ]
@@ -209,9 +210,9 @@ commands = [
 
 [[work_item]]
 id = "lsp-freshness-references-replay"
-status = "planned"
+status = "completed" # measurement replay merged via #3998/#4057
 lane = "trust"
-claim_boundary = "References representative replay scorecard. Tracked by #2674. No fallback deletion without representative correctness replay."
+claim_boundary = "Corpus-weighted representative references replay merged via #3998/#4057. Six initialized-lexical candidate gaps remain; method-shaped and Mojolicious package-sub rows are unexercised. No fallback deletion or traffic-weighted claim."
 files = [
   "crates/perl-lsp-rs/src/",
 ]
@@ -221,9 +222,9 @@ commands = [
 
 [[work_item]]
 id = "lsp-freshness-request-scan-retirement"
-status = "blocked"
+status = "planned"
 lane = "trust"
-claim_boundary = "Remove ready-index request-time workspace scan only after replay proves parity or names the refusal boundary. Tracked by #1658; blocked on the references replay work item."
+claim_boundary = "Class-scoped retirement tracked by #1658/#4002/#4046. Proven source-backed exact classes must bypass text scanning; residual fallback remains bounded and explicitly partial."
 files = [
   "crates/perl-workspace/src/",
 ]
@@ -233,9 +234,9 @@ commands = [
 
 [[work_item]]
 id = "lsp-freshness-closeout"
-status = "planned"
+status = "blocked" # core runtime program is closed; successor lanes remain active
 lane = "reliability"
-claim_boundary = "Closure receipts, manifest updates, cleanup, successor routing. Tracked by #3396 closure. Docs and receipts only; no new production code."
+claim_boundary = "Freshness runtime program closeout after successor ownership is recorded. #3046 owns producer provenance; #1658/#4002/#4046 own class-scoped scan retirement; #4047 owns declaration/cache churn; #4048/#4049/#4050 own readiness and workload follow-up. Docs and receipts only; no new production code."
 files = [
   ".perl-lsp/goals/lsp-freshness.toml",
   "plans/lsp-freshness/implementation-plan.md",

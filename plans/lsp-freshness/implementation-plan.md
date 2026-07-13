@@ -1,9 +1,11 @@
 # Fresh Facts Fast (LSP Freshness) Implementation Plan
 
-Status: Phases 1-5 done (core freshness invariant merged and verified on
-origin/main); Phases 6-9 remain (workspace-index scoping #1711, fact
-provenance #3046, references replay #2674, request-scan retirement #1658);
-Phase 10 (closeout) blocked on 6-9. See
+Status: Phases 1-5 done; Phase 6's duplicate production traversal and Phase
+8's representative replay are complete. Declaration extraction/cache churn
+remains a bounded #4047 follow-up; fact provenance remains with #3046;
+request-scan retirement remains a class-scoped #1658/#4002/#4046 lane.
+Phase 10 (freshness runtime closeout) is blocked only on explicit successor
+routing. See
 [docs/reference/FRESH_FACTS_FAST_DONE_CONDITIONS.md](../../docs/reference/FRESH_FACTS_FAST_DONE_CONDITIONS.md)
 for the narrower off-lock-async-parse-worker program proof (that document's
 program scope is #3396's core substrate only — it does not cover the
@@ -26,7 +28,7 @@ a routing map for the `lsp-freshness` work items, not a product-claim
 document. It mirrors the compiler-program plan's shape
 ([plans/compiler-program/implementation-plan.md](../compiler-program/implementation-plan.md)).
 
-## Current State (reconciled 2026-07-12)
+## Current State (reconciled 2026-07-13)
 
 - `textDocument/didChange` commits the text-only mutation, `drop(documents)`s
   the document-map guard, then hands off to `ParseWorker::enqueue` — it
@@ -42,14 +44,15 @@ document. It mirrors the compiler-program plan's shape
 - Status pointers: [lsp status](../../docs/project/status/lsp.md),
   [status index](../../docs/project/status/index.md),
   [neovim didChange latency receipt](../../docs/project/status/neovim-didchange-latency-receipt.md).
-- Remaining before the broader goal (not just the #3396 core substrate) is
-  complete: workspace-index full re-extraction scoping (#1711), fact
-  provenance (#3046), references representative replay (#2674), and
-  request-time full-workspace scan retirement (#1658) — see Phases 6-9
-  below, still `planned`/`blocked` in the goal manifest. A
-  responsiveness-regression receipt for the freshness path and
-  provenance-backed zero-false-exact confirmation on stale/dynamic/ambiguous
-  fixtures are not yet produced as durable repository receipts.
+- The duplicate production reference traversal is retired through #4013/#4022;
+  declaration extraction/cache churn remains bounded follow-up #4047.
+- The representative references replay is merged through #3998/#4057. It is
+  corpus-weighted measurement evidence, not a traffic-weighted report, and it
+  authorizes no scan removal.
+- Remaining successor work is fact provenance (#3046), class-scoped request
+  scan retirement (#1658/#4002/#4046), and startup/readiness measurement plus
+  workload/indexing follow-up (#4048/#4049/#4050). A responsiveness receipt and
+  provenance-backed zero-false-exact confirmation remain future evidence.
 
 ## Objective
 
@@ -140,14 +143,16 @@ observable and tested. **Met — merged via #3765 (generation-owned lazy
 analyzer + type environment); #3811 migrated hover to it and retired the
 legacy uri+hash caches.**
 
-### Phase 6 — Current-generation workspace fact publication (#1711) — REMAINING
+### Phase 6 — Current-generation workspace fact publication (#1711) — COMPLETE
 
 Workspace-index updates and extraction receipts are current-generation only.
 Any preview/pre-pass added on this path must ship a receipt proving it costs
 less than the extraction it avoids.
 
-Stop condition: index publication is current-generation gated, with an
-extraction-cost receipt attached. **Not yet met — tracked by #1711.**
+Stop condition: duplicate production traversal is retired and publication is
+current-generation gated. **Met for the cutover via #4013/#4022.** Remaining
+declaration extraction/cache-churn measurement is intentionally transferred
+to #4047; it is not claimed complete here.
 
 ### Phase 7 — Fact producer provenance (#3046) — REMAINING
 
@@ -158,32 +163,35 @@ Stop condition: provenance is attached to emitted facts and verified against
 the real producer for each fact family touched. **Not yet met — tracked by
 #3046.**
 
-### Phase 8 — References representative replay (#2674) — REMAINING
+### Phase 8 — References representative replay (#2674) — COMPLETE
 
-A references scorecard proves representative correctness on the current
+A references scorecard measures representative behavior on the current
 generation-owned model before any fallback is removed.
 
 Stop condition: the references replay scorecard is captured and attached.
-**Not yet met — tracked by #2674.**
+**Met via #3998/#4057.** Six initialized-lexical candidates remain for
+#4002; method-shaped and Mojolicious package-sub rows are unexercised.
 
 ### Phase 9 — Request-time workspace scan retirement (#1658) — REMAINING
 
-Remove the `ready-index` full-workspace request-time text scan only after
-Phase 8's replay evidence proves parity, or the refusal boundary is
-explicitly documented instead.
+Retire the `ready-index` full-workspace request-time text scan by request
+class only after first-failure instrumentation (#4002), bounded fallback
+receipts (#4046), and representative parity/refusal evidence. Never remove it
+globally from the replay result alone.
 
 Stop condition: either parity evidence retires the scan, or a documented
 refusal boundary replaces it — never a silent removal.
 
-### Phase 10 — Closeout
+### Phase 10 — Freshness runtime closeout — BLOCKED
 
 Closure receipts (ranged-edit, generation-gap, latest-only worker, fact
 build/reuse, references scorecard, sub-foo->bar canary) are consolidated.
-Goal manifest and this plan are updated to `status = "complete"`. Successor
-work is routed to a follow-up tracker.
+The runtime closeout records successor ownership in the manifest; the broader
+product trust goal is not closed by this runtime closeout.
 
-Stop condition: all closure receipts listed above exist and are linked from
-this plan; tracker #3396 is closed with a merge-proof comment.
+Stop condition: successor ownership is explicit in the manifest and tracker
+#3396 is closed with a merge-proof comment. The remaining successor lanes keep
+their own claims and proof obligations.
 
 ## Work Items
 
