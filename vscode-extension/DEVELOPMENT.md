@@ -44,10 +44,18 @@ This bypasses the auto-download and uses your local build.
 ```bash
 npm run typecheck   # Type-check only (tsc --noEmit) — TypeScript 7 is the sole type-check authority
 npm run typecheck:all # Check source, unit tests, integration, published smoke, and scripts
+npm run typecheck:strictness # Advisory noUncheckedIndexedAccess baseline; rejects debt growth
 npm run compile     # Single build (Rolldown bundles out/extension.js — does NOT type-check)
 npm run watch       # Rebuild out/extension.js on every file change (use during active development)
 npm run watch:types # Optional companion: live tsc --noEmit type-check loop in a separate terminal
 ```
+
+The strictness command runs all TypeScript authority configurations with
+`noUncheckedIndexedAccess` enabled while the existing indexed-access debt is
+being burned down. Its committed baseline is countable by configuration,
+diagnostic code, and file; baseline refreshes require the explicit
+`node scripts/check-typescript-strictness.js --update-baseline` command and
+must not silently absorb growth.
 
 ## Run and test in VS Code
 
