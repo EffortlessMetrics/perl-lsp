@@ -345,26 +345,27 @@ sub bar { return compute() =~ /x/; }
         )
         .unwrap_or(json!(null));
 
-    assert!(
-        !result.is_null(),
-        "references request must return a result -- got null for `compute`"
-    );
+    assert!(!result.is_null(), "references request must return a result -- got null for `compute`");
     assert!(result.is_array(), "References should return an array, got: {:?}", result);
 
     let references = result.as_array().ok_or("Expected array result")?;
     for reference in references {
         assert_valid_location(reference);
         let uri = reference.get("uri").and_then(|u| u.as_str());
-        assert_eq!(uri, Some("file:///regex_bind_refs.pl"), "Reference URI should match the document");
+        assert_eq!(
+            uri,
+            Some("file:///regex_bind_refs.pl"),
+            "Reference URI should match the document"
+        );
     }
 
     // The newly-indexed reference: `compute()` nested inside the regex-bind
     // `compute() =~ /x/` on line 2 (0-indexed). Before the #1711-B cutover
     // this location was silently absent from the legacy `FileIndex`
     // projection that backs `find_references`.
-    let has_regex_bind_call_reference = references.iter().any(|r| {
-        r.pointer("/range/start/line").and_then(serde_json::Value::as_u64) == Some(2)
-    });
+    let has_regex_bind_call_reference = references
+        .iter()
+        .any(|r| r.pointer("/range/start/line").and_then(serde_json::Value::as_u64) == Some(2));
     assert!(
         has_regex_bind_call_reference,
         "find_references(\"compute\") must include the call nested inside the regex-bind \
@@ -376,9 +377,9 @@ sub bar { return compute() =~ /x/; }
 
     // Sanity: the declaration itself (line 1) should also be present given
     // includeDeclaration: true.
-    let has_declaration_reference = references.iter().any(|r| {
-        r.pointer("/range/start/line").and_then(serde_json::Value::as_u64) == Some(1)
-    });
+    let has_declaration_reference = references
+        .iter()
+        .any(|r| r.pointer("/range/start/line").and_then(serde_json::Value::as_u64) == Some(1));
     assert!(
         has_declaration_reference,
         "find_references(\"compute\") should include the declaration on line 1 when \
