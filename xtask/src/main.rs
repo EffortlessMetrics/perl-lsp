@@ -3282,29 +3282,6 @@ enum QueueCommand {
         #[arg(long)]
         fixture: Option<PathBuf>,
     },
-
-    /// Project UI labels from canonical PR state receipts.
-    ProjectLabels {
-        /// Path to canonical queue state JSON.
-        #[arg(long, default_value = "target/receipts/queue-state.json")]
-        state: PathBuf,
-
-        /// Plan label changes without applying them (default).
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Apply projected label changes against GitHub. Requires GH_TOKEN.
-        #[arg(long)]
-        apply: bool,
-
-        /// Optional output path for the label-projection receipt JSON.
-        #[arg(long)]
-        receipt: Option<PathBuf>,
-
-        /// Path to projection rules TOML.
-        #[arg(long, default_value = ".ci/state/label-projection.toml")]
-        config: PathBuf,
-    },
 }
 
 #[derive(Subcommand)]
@@ -3463,15 +3440,6 @@ fn run_cli(cli: Cli) -> Result<()> {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {
                 queue_health::run(queue_health::QueueHealthArgs { receipt, fixture })
-            }
-            QueueCommand::ProjectLabels { state, dry_run, apply, receipt, config } => {
-                label_projector::run_project_labels(label_projector::LabelProjectorArgs {
-                    state,
-                    dry_run,
-                    apply,
-                    receipt,
-                    config,
-                })
             }
         },
         Commands::Pr { command } => match command {
