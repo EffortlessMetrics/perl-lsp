@@ -52,7 +52,7 @@ mod routing_matrix {
     use crate::util::is_word_boundary;
     use parking_lot::Mutex;
     use perl_parser::workspace_index::IndexCoordinator;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::fs;
     use std::io::Cursor;
     use std::path::{Path, PathBuf};
@@ -2656,8 +2656,8 @@ use warnings;
     /// `references_representative_replay_genuine_stale_generation_downgrades_index_state`
     /// below for that.
     #[test]
-    fn references_representative_replay_stale_index_never_source_backed(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn references_representative_replay_stale_index_never_source_backed()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut server = create_server();
         let files = open_project(&server, "mojolicious_skeleton")?;
         set_index_building(&mut server);
@@ -2708,8 +2708,8 @@ use warnings;
     /// `index_state` downgrade and the resulting inability to reach
     /// `semantic_source_backed`).
     #[test]
-    fn references_representative_replay_genuine_stale_generation_downgrades_index_state(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn references_representative_replay_genuine_stale_generation_downgrades_index_state()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = create_server();
         let files = open_project(&server, "mojolicious_skeleton")?;
         let content = fixture_content(&files, "lib/Mojolicious.pm")?;
@@ -2764,8 +2764,8 @@ use warnings;
     // ─────────────────────────────────────────────────────────────────────────
 
     #[test]
-    fn exact_match_check_accepts_correct_set_regardless_of_order(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn exact_match_check_accepts_correct_set_regardless_of_order()
+    -> Result<(), Box<dyn std::error::Error>> {
         let key = |line: u32, character: u32| ("file:///t.pl".to_string(), line, character);
         let actual = vec![key(1, 12), key(2, 5)];
         let expected = vec![key(2, 5), key(1, 12)];
@@ -2776,8 +2776,8 @@ use warnings;
     /// occurrence were reintroduced into a decl-excluding expected set, this
     /// comparison MUST reject it as a mismatch.
     #[test]
-    fn exact_match_check_rejects_declaration_reintroduced_into_expected(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn exact_match_check_rejects_declaration_reintroduced_into_expected()
+    -> Result<(), Box<dyn std::error::Error>> {
         let key = |line: u32, character: u32| ("file:///t.pl".to_string(), line, character);
         // `actual` = a correct includeDeclaration:false result (usage only).
         let actual = vec![key(1, 12)];
@@ -2801,8 +2801,8 @@ use warnings;
     /// Revert-proves: adding a known-false location into the actual result
     /// (e.g. an over-broad index hit) must prevent parity.
     #[test]
-    fn forbidden_check_rejects_known_false_location_present(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn forbidden_check_rejects_known_false_location_present()
+    -> Result<(), Box<dyn std::error::Error>> {
         let key = |line: u32, character: u32| ("file:///t.pl".to_string(), line, character);
         let actual = vec![key(1, 12), key(5, 0)];
         let forbidden = vec![key(5, 0)];
@@ -2816,8 +2816,8 @@ use warnings;
     }
 
     #[test]
-    fn validate_receipt_has_required_fields_accepts_complete_receipt(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_receipt_has_required_fields_accepts_complete_receipt()
+    -> Result<(), Box<dyn std::error::Error>> {
         let receipt = json!({
             "decision": "acted",
             "reason": "live_provider_result",
@@ -2838,8 +2838,8 @@ use warnings;
     /// validation rather than silently passing with an author-supplied
     /// stand-in.
     #[test]
-    fn validate_receipt_has_required_fields_rejects_missing_reason(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn validate_receipt_has_required_fields_rejects_missing_reason()
+    -> Result<(), Box<dyn std::error::Error>> {
         let receipt = json!({
             "decision": "acted",
             "fallback_state": "live_provider",
@@ -2964,8 +2964,8 @@ use warnings;
     /// at all stays the plain `unexercised` bucket regardless of shape,
     /// unaffected by this check.
     #[test]
-    fn classify_disposition_requires_method_specific_evidence_for_method_shaped_package_sub_coverage_gap(
-    ) {
+    fn classify_disposition_requires_method_specific_evidence_for_method_shaped_package_sub_coverage_gap()
+     {
         let empty_locations: Vec<(String, u32, u32)> = Vec::new();
 
         // Function-call control activated, but the method-shaped control did
