@@ -231,25 +231,22 @@ Capability split:
   scoped write. Not in the cohort.
 - **publisher / ops**: post findings or dispositions; no product-source edit.
 
-Two mechanical layers enforce this:
+One mechanical layer enforces this:
 1. **Tool allowlist** (config): parsed and enforced by
    `cargo xtask check-agent-capabilities` — fails if any review/audit agent
    grants a write/mutating tool or lacks an explicit allowlist. Runs in the
    `Agent Capability Gate` workflow and as a `#[test]` under `cargo test`
    (`xtask::tasks::agent_capability_policy`). The cohort list lives in that
    module — **add a new review/audit agent's name there** when you add one.
-2. **Read-only shell** (`CLAUDE_AGENT_READONLY=1`): the `pre-tool-use.sh`
-   PreToolUse hook rejects mutating `git`/`gh`/filesystem commands before
-   execution when a review/audit agent is spawned with this env flag set, while
-   read-only inspection (`git diff`, `gh pr view`, `cargo check`) passes. Guard
-   test: `.claude/hooks/tests/test_pre_tool_use_readonly.sh`.
+
+(A second layer — a PreToolUse hook shell gated on an env flag no agent
+spawn ever set — was removed in #4005 as dormant dead code. Independence is
+enforced relationally — current-head review (#3693) plus this tool
+allowlist — not by a persona handcuff.)
 
 Negative-capability proof (reviewer cannot write, can still read):
 - `Edit`/`Write`/`NotebookEdit`/`Agent` are absent from the allowlist → the tool
   call is rejected as not-in-allowlist (verify: `cargo xtask check-agent-capabilities`).
-- `git commit` / `git push` / `git worktree add` / `gh pr comment|review|merge` /
-  `gh ... --add-label` / file redirects are rejected by the hook under
-  `CLAUDE_AGENT_READONLY=1` (verify: `bash .claude/hooks/tests/test_pre_tool_use_readonly.sh`).
 - `Read` / `Grep` / `Glob` / `git diff` / `gh pr view` / `cargo check` still work.
 
 ## Design Principles
