@@ -9,7 +9,10 @@
 - `is_leaf()`, `inner()`, `tree_source()` — utility and escape hatch
 - `TreeCursor` — zero-allocation streaming traversal (`walk()`, `goto_first_child()`, `goto_next_sibling()`, `goto_parent()`)
 - `Tree::edit()` / `Parser::parse_with_old_tree()` / `InputEdit` — compatibility edit journal
-  with an unchanged-source fast path; changed source is currently fully reparsed
+  with unchanged-source reuse and bounded token replay for one validated edit; ASTs are rebuilt
+  from the resulting token stream and unsafe or unsupported cases use typed full-parse fallback
+- `ReparseMode` / `IncrementalMetrics` / `Tree::reprocessed_ranges()` — explicit operation
+  classification and lexer-work measurements without claiming structural changed ranges
 - `Parser::parse_detailed()` / `Tree::diagnostics()` / `Tree::has_error()` / `Node::is_error()` /
   `Node::has_error()` — recovery and catastrophic-failure observability
 - `PerlLanguage` descriptor, `language()` function, and `LANGUAGE` constant for Rust-native tooling
