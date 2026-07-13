@@ -44,7 +44,7 @@ use crate::tasks::changelog::{self, Fragment};
 use crate::tasks::ci_policy::{
     ALLOWED_FROM_RAW_PATTERN, FROM_RAW_PATTERN, SEARCH_ROOTS, is_disallowed_from_raw_line,
 };
-use crate::tasks::staged;
+use crate::tasks::staged::{self, StagedPathText};
 use crate::utils::project_root;
 use color_eyre::eyre::{Context, ContextCompat, Result, bail};
 use regex::Regex;
@@ -188,7 +188,18 @@ fn rerun_for(check: &str) -> String {
 /// not pinned to a single snapshot.
 pub fn run_named_check(name: &str, tree_oid: Option<&str>) -> Result<CommitCheckOutcome> {
     let root = project_root()?;
-    match name {
+    // `other => bail!(...)` short-circuits the whole function (an unknown
+    // check name is a `.ci/gate-policy.yaml` wiring bug, not a runtime
+    // instrument failure of a specific check — it should keep hard-erring,
+    // matching `run_named_check_rejects_unknown_names`). Every OTHER arm's
+    // `Result` is caught below and converted to a NOT PROVEN report rather
+    // than bubbling as a hard "error" gate status (issue #4031 item 8): a
+    // check whose git/tool subprocess fails, times out, or produces
+    // undecodable output didn't verify anything, which is not the same as
+    // the staged tree being clean (never silent SUCCESS) and not the same
+    // as a real Blocked finding either (never a hard failure that reads as
+    // a product/policy violation).
+    let result: Result<CommitCheckOutcome> = match name {
         "staged_tree_identity" => staged_tree_identity_at(&root, tree_oid),
         "whitespace_check" => whitespace_check_at(&root, tree_oid),
         "conflict_markers_staged" => conflict_markers_staged_at(&root, tree_oid),
@@ -200,6 +211,30 @@ pub fn run_named_check(name: &str, tree_oid: Option<&str>) -> Result<CommitCheck
         "rustfmt_staged" => rustfmt_staged_at(&root, tree_oid),
         "from_raw_staged" => from_raw_staged_at(&root, tree_oid),
         other => bail!("unknown commit-tier check '{other}'"),
+    };
+    Ok(result
+        .unwrap_or_else(|err| CommitCheckOutcome::Flagged(instrument_failure_report(name, &err))))
+}
+
+/// Convert an internal check failure — a `?`-propagated git/tool error:
+/// process spawn failure, a malformed ref, a genuinely undecodable read —
+/// into a coach-style `NOT PROVEN` report instead of letting it surface as
+/// a hard gate "error" status. See [`run_named_check`]'s doc comment and
+/// issue #4031 item 8.
+fn instrument_failure_report(check: &str, err: &color_eyre::eyre::Error) -> CheckReport {
+    CheckReport {
+        check: check.to_string(),
+        posture: Posture::NotProven,
+        result: format!("the {check} instrument failed to run to completion"),
+        why: "a tool/subprocess error, timeout, or undecodable output means this check didn't \
+              actually verify anything -- that is not the same as the staged tree being clean"
+            .to_string(),
+        affected: Vec::new(),
+        fix: Some(format!("investigate and re-run: {err:#}")),
+        rerun: rerun_for(check),
+        what_remains: "this check did not run to completion; its verification is still \
+                       outstanding"
+            .to_string(),
     }
 }
 
@@ -294,7 +329,7 @@ fn whitespace_check_at(root: &Path, tree_oid: Option<&str>) -> Result<CommitChec
         check: "whitespace_check".to_string(),
         posture: Posture::Blocked,
         result: format!(
-            "`git diff --cached --check` found {} issue(s) in the staged diff",
+            "`git diff {base} {tree_oid} --check` found {} issue(s) in the staged diff",
             affected.len()
         ),
         why: "trailing whitespace and unresolved merge-conflict markers break formatting and, \
@@ -342,7 +377,9 @@ fn conflict_markers_staged_at(root: &Path, tree_oid: Option<&str>) -> Result<Com
     let paths = staged::staged_diff_paths(root, Some(&tree_oid))?;
     let mut files = Vec::new();
     for path in &paths {
-        if let Some(text) = staged::read_staged_path_text(root, path, Some(&tree_oid))? {
+        if let StagedPathText::Present(text) =
+            staged::read_staged_path_text(root, path, Some(&tree_oid))?
+        {
             files.push((path.clone(), text));
         }
     }
@@ -467,11 +504,21 @@ fn staged_config_syntax_at(root: &Path, tree_oid: Option<&str>) -> Result<Commit
         if !matches!(ext.as_str(), "json" | "yaml" | "yml" | "toml") {
             continue;
         }
-        let Some(text) = staged::read_staged_path_text(root, path, Some(&tree_oid))? else {
-            continue;
-        };
-        if let Some(message) = config_syntax_error(&ext, &text) {
-            affected.push(format!("{path}: {message}"));
+        match staged::read_staged_path_text(root, path, Some(&tree_oid))? {
+            StagedPathText::Present(text) => {
+                if let Some(message) = config_syntax_error(&ext, &text) {
+                    affected.push(format!("{path}: {message}"));
+                }
+            }
+            // Issue #4031 item 1: a non-UTF-8 config must surface as a
+            // finding, not be silently skipped — `continue`-ing here
+            // reported a malformed staged config as clean.
+            StagedPathText::Binary => {
+                affected.push(format!("{path}: staged content is not valid UTF-8, cannot parse"));
+            }
+            // A deleted config (issue #4031 item 5) has nothing to
+            // validate -- legitimately nothing to report.
+            StagedPathText::Absent => {}
         }
     }
     if affected.is_empty() {
@@ -500,8 +547,17 @@ fn staged_config_syntax_at(root: &Path, tree_oid: Option<&str>) -> Result<Commit
 
 const FORBIDDEN_PATH_SCAN_EXCLUDE_PREFIXES: &[&str] = &["docs/"];
 const FORBIDDEN_PATH_SCAN_EXCLUDE_SUFFIXES: &[&str] = &[".md"];
+// `(?i)`: case-insensitive over the whole alternation (issue #4031 item 2) —
+// `c:\users\...` (lowercase drive/segment) must match just as `C:\Users\...`
+// does. `[\\/]` in both separator positions: a Windows path can use either
+// `\` or `/` (or, staged from a mixed-tooling checkout, both in the same
+// path), so `C:/Users/...` must match too, not just the backslash form.
+// `[^\\/]+` (not `[^\\\s]+`) for the user-directory segment: the prior
+// pattern explicitly excluded whitespace, which let a Windows user
+// directory with a space in it (`C:\Users\John Doe\...`, common on
+// Windows) slip past undetected.
 const FORBIDDEN_PATH_PATTERN: &str =
-    r"([A-Za-z]:\\Users\\[^\\\s]+\\|/home/[A-Za-z0-9_.-]+/|/Users/[A-Za-z0-9_.-]+/)";
+    r"(?i)([A-Za-z]:[\\/]Users[\\/][^\\/]+[\\/]|/home/[A-Za-z0-9_.-]+/|/Users/[A-Za-z0-9_.-]+/)";
 
 // AGENTS.md code-quality bar: regexes are `static LazyLock<Regex>`, never
 // `Regex::new()` per invocation.
@@ -512,7 +568,12 @@ static FORBIDDEN_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
 
 fn is_forbidden_path_scan_excluded(path: &str) -> bool {
     FORBIDDEN_PATH_SCAN_EXCLUDE_PREFIXES.iter().any(|prefix| path.starts_with(prefix))
-        || FORBIDDEN_PATH_SCAN_EXCLUDE_SUFFIXES.iter().any(|suffix| path.ends_with(suffix))
+        // Case-insensitive extension match (issue #4031 item 2): an
+        // uppercase `README.MD` is a valid staged Markdown path and must
+        // hit the documented markdown exclusion the same as `README.md`.
+        || FORBIDDEN_PATH_SCAN_EXCLUDE_SUFFIXES
+            .iter()
+            .any(|suffix| path.to_ascii_lowercase().ends_with(suffix))
 }
 
 fn evaluate_forbidden_paths<'a>(
@@ -538,7 +599,9 @@ fn forbidden_machine_paths_at(root: &Path, tree_oid: Option<&str>) -> Result<Com
     let paths = staged::staged_diff_paths(root, Some(&tree_oid))?;
     let mut files = Vec::new();
     for path in &paths {
-        if let Some(text) = staged::read_staged_path_text(root, path, Some(&tree_oid))? {
+        if let StagedPathText::Present(text) =
+            staged::read_staged_path_text(root, path, Some(&tree_oid))?
+        {
             files.push((path.clone(), text));
         }
     }
@@ -671,13 +734,16 @@ fn is_fragment_path(path: &str) -> bool {
 /// or passing an invalid one, depending on which way the unstaged edit
 /// drifted.
 fn load_staged_changie_config(root: &Path, tree_oid: &str) -> Result<changelog::ChangieConfig> {
-    let text = staged::read_staged_path_text(root, changelog::CHANGIE_CONFIG, Some(tree_oid))?
-        .with_context(|| {
-            format!(
-                "staged {} is not valid UTF-8 (or was not found in the staged tree)",
-                changelog::CHANGIE_CONFIG
-            )
-        })?;
+    let text = match staged::read_staged_path_text(root, changelog::CHANGIE_CONFIG, Some(tree_oid))?
+    {
+        StagedPathText::Present(text) => text,
+        StagedPathText::Binary => {
+            bail!("staged {} is not valid UTF-8", changelog::CHANGIE_CONFIG)
+        }
+        StagedPathText::Absent => {
+            bail!("staged {} was not found in the staged tree", changelog::CHANGIE_CONFIG)
+        }
+    };
     changelog::parse_config(&text)
         .with_context(|| format!("failed to parse staged {}", changelog::CHANGIE_CONFIG))
 }
@@ -694,18 +760,40 @@ fn changie_fragment_staged_at(root: &Path, tree_oid: Option<&str>) -> Result<Com
     let cfg = load_staged_changie_config(root, &tree_oid)
         .context("failed to load staged .changie.yaml")?;
     let mut blocked = Vec::new();
+    // Paths actually read and schema-checked -- distinct from
+    // `fragment_paths`, which (since issue #4031 item 5) can also contain
+    // paths staged for DELETION. A deleted fragment never reaches
+    // `read_staged_path_text`'s `Present` arm, so it must not be counted
+    // among "N fragments parse and pass schema validation" below (issue
+    // #4031 item 5/6 interaction: a deleted fragment validated nothing).
+    let mut validated = Vec::new();
     for path in &fragment_paths {
-        let Some(text) = staged::read_staged_path_text(root, path, Some(&tree_oid))? else {
-            continue;
-        };
-        match serde_yaml_ng::from_str::<Fragment>(&text) {
-            Err(err) => blocked.push(format!("{path}: malformed YAML — {err}")),
-            Ok(frag) => {
-                let findings = changelog::validate_fragment(&frag, &cfg);
-                if !findings.is_empty() {
-                    blocked.push(format!("{path}: {}", findings.join("; ")));
+        match staged::read_staged_path_text(root, path, Some(&tree_oid))? {
+            StagedPathText::Present(text) => {
+                validated.push(path.clone());
+                match serde_yaml_ng::from_str::<Fragment>(&text) {
+                    Err(err) => blocked.push(format!("{path}: malformed YAML — {err}")),
+                    Ok(frag) => {
+                        let findings = changelog::validate_fragment(&frag, &cfg);
+                        if !findings.is_empty() {
+                            blocked.push(format!("{path}: {}", findings.join("; ")));
+                        }
+                    }
                 }
             }
+            // Issue #4031 item 1: a non-UTF-8 fragment must surface as a
+            // finding, not be silently skipped — `continue`-ing here
+            // reported a malformed Changie fragment as schema-valid.
+            StagedPathText::Binary => {
+                blocked.push(format!(
+                    "{path}: staged content is not valid UTF-8, cannot parse as a Changie \
+                     fragment"
+                ));
+            }
+            // A deleted fragment (issue #4031 item 5) has nothing to
+            // validate -- legitimately nothing to report, and NOT counted
+            // as "validated" either.
+            StagedPathText::Absent => {}
         }
     }
 
@@ -730,17 +818,27 @@ fn changie_fragment_staged_at(root: &Path, tree_oid: Option<&str>) -> Result<Com
         }));
     }
 
+    if validated.is_empty() {
+        // Every fragment path in this commit was a staged DELETION (issue
+        // #4031 item 5) -- nothing was actually read or schema-checked, so
+        // this is a clean no-op, not a "parses and passes" claim about
+        // content that no longer exists.
+        return Ok(CommitCheckOutcome::Pass(
+            "no staged Changie fragments requiring validation (all were deletions)".to_string(),
+        ));
+    }
+
     Ok(CommitCheckOutcome::Flagged(CheckReport {
         check: "changie_fragment_staged".to_string(),
         posture: Posture::NotProven,
         result: format!(
             "{} staged Changie fragment(s) parse and pass schema validation",
-            fragment_paths.len()
+            validated.len()
         ),
         why: "schema validity doesn't prove the fragment renders through `changie batch` — that \
               step needs the full working checkout"
             .to_string(),
-        affected: fragment_paths,
+        affected: validated,
         fix: None,
         rerun: rerun_for("changie_fragment_staged"),
         what_remains: "`changie batch --dry-run` render still required before merge (pre-push / \
@@ -840,7 +938,14 @@ fn load_staged_rustfmt_config(root: &Path, tree_oid: &str) -> Result<Option<Stri
     if !staged::staged_path_exists(root, tree_oid, RUSTFMT_CONFIG_FILE)? {
         return Ok(None);
     }
-    staged::read_staged_path_text(root, RUSTFMT_CONFIG_FILE, Some(tree_oid))
+    match staged::read_staged_path_text(root, RUSTFMT_CONFIG_FILE, Some(tree_oid))? {
+        StagedPathText::Present(text) => Ok(Some(text)),
+        StagedPathText::Binary => bail!("staged {RUSTFMT_CONFIG_FILE} is not valid UTF-8"),
+        // TOCTOU: `staged_path_exists` just confirmed it was there; treat a
+        // vanished-in-between read as benign Absent (None), not an error —
+        // matching the pre-fix "no config" fallback behavior.
+        StagedPathText::Absent => Ok(None),
+    }
 }
 
 fn rustfmt_staged_at(root: &Path, tree_oid: Option<&str>) -> Result<CommitCheckOutcome> {
@@ -872,7 +977,9 @@ fn rustfmt_staged_at(root: &Path, tree_oid: Option<&str>) -> Result<CommitCheckO
     let config_text = load_staged_rustfmt_config(root, &tree_oid)?;
     let mut affected = Vec::new();
     for path in &paths {
-        let Some(text) = staged::read_staged_path_text(root, path, Some(&tree_oid))? else {
+        let StagedPathText::Present(text) =
+            staged::read_staged_path_text(root, path, Some(&tree_oid))?
+        else {
             continue;
         };
         if rustfmt_would_reformat(config_text.as_deref(), &text)? {
@@ -944,7 +1051,9 @@ fn from_raw_staged_at(root: &Path, tree_oid: Option<&str>) -> Result<CommitCheck
 
     let mut affected = Vec::new();
     for path in &paths {
-        let Some(text) = staged::read_staged_path_text(root, path, Some(&tree_oid))? else {
+        let StagedPathText::Present(text) =
+            staged::read_staged_path_text(root, path, Some(&tree_oid))?
+        else {
             continue;
         };
         for (idx, line) in text.lines().enumerate() {
@@ -1122,13 +1231,50 @@ mod tests {
         Ok(())
     }
 
+    /// Issue #4031 item 8, decisive execution proof: a check whose internal
+    /// git/tool call fails must surface through `run_named_check` as a
+    /// `NOT PROVEN` `CommitCheckOutcome::Flagged`, never as a bubbled `Err`
+    /// (which `gates::run_internal_commit_check` maps to a hard "error"
+    /// gate status — the silent-failure-reads-as-product-failure class this
+    /// item exists to close).
+    ///
+    /// `run_named_check` always resolves `root` via `project_root()`
+    /// internally (it takes no `root` parameter), so a temp-repo fixture
+    /// can't be used here — any tree OID handed to it is resolved against
+    /// THIS repo, not a fixture. A syntactically malformed OID makes every
+    /// check's first `staged::staged_diff_paths` call fail immediately
+    /// (`git diff` rejects it as an unknown revision) — a deterministic,
+    /// host-repo-state-independent instrument failure.
+    #[test]
+    fn run_named_check_converts_an_instrument_failure_to_not_proven_not_a_hard_error() -> Result<()>
+    {
+        match run_named_check("conflict_markers_staged", Some("not-a-real-oid"))? {
+            CommitCheckOutcome::Flagged(report) => {
+                assert_eq!(
+                    report.posture,
+                    Posture::NotProven,
+                    "an internal instrument failure (a malformed tree OID makes git fail) must \
+                     classify as NOT PROVEN, not any other posture: {report:?}"
+                );
+                assert_eq!(report.check, "conflict_markers_staged");
+            }
+            CommitCheckOutcome::Pass(summary) => {
+                bail!(
+                    "expected the instrument failure to be caught and reported, never silently \
+                     Pass (the silent-false-clean class): {summary}"
+                )
+            }
+        }
+        Ok(())
+    }
+
     // -------------------------------------------------------------------
     // Pure-logic unit tests for the nine structural checks (issue #3786-B).
     // No git process, no filesystem.
     // -------------------------------------------------------------------
 
     #[test]
-    fn conflict_marker_regex_flags_seven_char_markers_only() {
+    fn conflict_marker_regex_flags_seven_char_markers_only() -> Result<()> {
         let files = vec![
             ("a.rs", "fn main() {}\n<<<<<<< HEAD\nfoo\n=======\nbar\n>>>>>>> branch\n"),
             ("b.rs", "// <<<<< not seven chars, not a marker\n"),
@@ -1139,10 +1285,11 @@ mod tests {
             affected,
             vec!["a.rs:2".to_string(), "a.rs:4".to_string(), "a.rs:6".to_string()]
         );
+        Ok(())
     }
 
     #[test]
-    fn exec_mode_policy_flags_non_script_executables_only() {
+    fn exec_mode_policy_flags_non_script_executables_only() -> Result<()> {
         let entries = vec![
             ("crates/foo/src/lib.rs", true), // unexpected: Rust source marked +x
             ("scripts/run.sh", true),        // allowlisted prefix
@@ -1151,10 +1298,11 @@ mod tests {
         ];
         let flagged = evaluate_exec_mode(entries.into_iter());
         assert_eq!(flagged, vec!["crates/foo/src/lib.rs".to_string()]);
+        Ok(())
     }
 
     #[test]
-    fn config_syntax_error_flags_malformed_json_yaml_toml() {
+    fn config_syntax_error_flags_malformed_json_yaml_toml() -> Result<()> {
         assert!(config_syntax_error("json", "{ not json").is_some());
         assert!(config_syntax_error("json", "{}").is_none());
         assert!(config_syntax_error("yaml", "a: [unterminated").is_some());
@@ -1165,6 +1313,7 @@ mod tests {
             config_syntax_error("rs", "fn main() {").is_none(),
             "non-config extensions are skipped"
         );
+        Ok(())
     }
 
     #[test]
@@ -1174,25 +1323,41 @@ mod tests {
             ("crates/foo/src/lib.rs", "windows path: C:\\Users\\steven\\scratch\\file.rs"),
             ("crates/foo/src/lib.rs", "posix path: /home/agent/work/file.rs"),
             ("crates/foo/src/lib.rs", "relative path: crates/foo/src/lib.rs"),
+            // Issue #4031 item 2: lowercase drive/segment.
+            ("crates/foo/src/lib.rs", "lowercase: c:\\users\\steven\\scratch\\file.rs"),
+            // Forward-slash separator (mixed-tooling checkouts stage
+            // these too).
+            ("crates/foo/src/lib.rs", "forward slash: C:/Users/steven/scratch/file.rs"),
+            // A username containing a space — common on Windows.
+            ("crates/foo/src/lib.rs", "spaced: C:\\Users\\John Doe\\scratch\\file.rs"),
         ];
         let affected = evaluate_forbidden_paths(&re, files.into_iter());
         assert_eq!(
             affected.len(),
-            2,
-            "expected exactly the two machine-specific paths: {affected:?}"
+            5,
+            "expected every machine-specific path variant (mixed case, forward slash, spaced \
+             user dir) to be flagged: {affected:?}"
         );
         Ok(())
     }
 
     #[test]
-    fn forbidden_paths_excludes_docs_and_markdown() {
+    fn forbidden_paths_excludes_docs_and_markdown() -> Result<()> {
         assert!(is_forbidden_path_scan_excluded("docs/reference/GUIDE.md"));
         assert!(is_forbidden_path_scan_excluded("README.md"));
         assert!(!is_forbidden_path_scan_excluded("crates/foo/src/lib.rs"));
+        // Issue #4031 item 2: the extension half of the exclusion must be
+        // case-insensitive — an uppercase `README.MD` is scanned by the
+        // documented markdown exclusion just like `README.md` is.
+        assert!(
+            is_forbidden_path_scan_excluded("README.MD"),
+            "an uppercase .MD extension must hit the markdown exclusion, not be scanned"
+        );
+        Ok(())
     }
 
     #[test]
-    fn oversized_or_binary_flags_disallowed_extension_and_size_threshold() {
+    fn oversized_or_binary_flags_disallowed_extension_and_size_threshold() -> Result<()> {
         let entries = vec![
             ("target/release/tool.exe", 10u64),
             ("crates/foo/src/lib.rs", 500u64),
@@ -1202,6 +1367,7 @@ mod tests {
         assert_eq!(affected.len(), 2, "expected the .exe and the oversized file: {affected:?}");
         assert!(affected[0].contains("tool.exe"));
         assert!(affected[1].contains("huge.bin"));
+        Ok(())
     }
 
     // -------------------------------------------------------------------
@@ -1253,6 +1419,16 @@ mod tests {
             std::fs::write(path, content).context("failed to write file in temp repo")
         }
 
+        /// Write raw, possibly non-UTF-8, bytes — for item 1's "a config or
+        /// fragment that isn't valid UTF-8" fixtures.
+        fn write_bytes(&self, rel_path: &str, content: &[u8]) -> Result<()> {
+            let path = self.root().join(rel_path);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(path, content).context("failed to write binary fixture in temp repo")
+        }
+
         fn add(&self, rel_path: &str) -> Result<()> {
             let status = Command::new("git")
                 .current_dir(self.root())
@@ -1273,6 +1449,21 @@ mod tests {
                 .context("failed to run git commit")?;
             if !status.success() {
                 bail!("git commit failed");
+            }
+            Ok(())
+        }
+
+        /// Stage a deletion of an already-committed path (`git rm --cached`)
+        /// — for item 5's "a deleted staged path must be classified, not
+        /// dropped" fixtures.
+        fn remove_cached(&self, rel_path: &str) -> Result<()> {
+            let status = Command::new("git")
+                .current_dir(self.root())
+                .args(["rm", "--cached", "--quiet", rel_path])
+                .status()
+                .context("failed to run git rm --cached")?;
+            if !status.success() {
+                bail!("git rm --cached {rel_path} failed");
             }
             Ok(())
         }
@@ -1332,6 +1523,28 @@ mod tests {
         Ok(())
     }
 
+    /// Issue #4031 item 5, decisive execution proof: a staged DELETION of a
+    /// Rust file must not crash the content-scanning checks — there's
+    /// nothing left to read for conflict markers, so it must be a clean
+    /// no-op, not an error propagated from a now-absent staged path.
+    #[test]
+    fn conflict_markers_staged_ignores_a_staged_deletion() -> Result<()> {
+        let repo = TempRepo::init()?;
+        repo.write("doomed.rs", "fn main() {}\n")?;
+        repo.add("doomed.rs")?;
+        repo.commit("initial")?;
+
+        repo.remove_cached("doomed.rs")?;
+
+        match conflict_markers_staged_at(repo.root(), None)? {
+            CommitCheckOutcome::Pass(_) => {}
+            CommitCheckOutcome::Flagged(report) => {
+                bail!("expected a staged deletion to be a clean no-op, not a finding: {report:?}")
+            }
+        }
+        Ok(())
+    }
+
     #[test]
     fn staged_exec_mode_policy_reads_git_mode_not_filesystem_mode() -> Result<()> {
         let repo = TempRepo::init()?;
@@ -1360,6 +1573,50 @@ mod tests {
                     "expected a BLOCKED report for a Rust file staged as executable — the check \
                      did not read the staged git mode. Pass summary: {summary}"
                 );
+            }
+        }
+        Ok(())
+    }
+
+    /// Issue #4031 item 5: a staged deletion doesn't appear in
+    /// `list_staged_entries` of the NEW tree (the file is gone), so it must
+    /// simply be absent from consideration here — no crash, no false
+    /// finding, even though it's now part of `staged_diff_paths`'s output.
+    #[test]
+    fn staged_exec_mode_policy_ignores_a_staged_deletion() -> Result<()> {
+        let repo = TempRepo::init()?;
+        repo.write("doomed.rs", "fn main() {}\n")?;
+        repo.add("doomed.rs")?;
+        repo.commit("initial")?;
+
+        repo.remove_cached("doomed.rs")?;
+
+        match staged_exec_mode_policy_at(repo.root(), None)? {
+            CommitCheckOutcome::Pass(_) => {}
+            CommitCheckOutcome::Flagged(report) => {
+                bail!("expected a staged deletion to be a clean no-op, not a finding: {report:?}")
+            }
+        }
+        Ok(())
+    }
+
+    /// Issue #4031 item 5: same property as
+    /// `staged_exec_mode_policy_ignores_a_staged_deletion` for the other
+    /// `list_staged_entries`-based check — a deleted staged path can't have
+    /// a size or a binary extension to flag, and must not crash.
+    #[test]
+    fn staged_oversized_or_binary_ignores_a_staged_deletion() -> Result<()> {
+        let repo = TempRepo::init()?;
+        repo.write("doomed.bin", "not actually oversized\n")?;
+        repo.add("doomed.bin")?;
+        repo.commit("initial")?;
+
+        repo.remove_cached("doomed.bin")?;
+
+        match staged_oversized_or_binary_at(repo.root(), None)? {
+            CommitCheckOutcome::Pass(_) => {}
+            CommitCheckOutcome::Flagged(report) => {
+                bail!("expected a staged deletion to be a clean no-op, not a finding: {report:?}")
             }
         }
         Ok(())
@@ -1414,6 +1671,62 @@ mod tests {
                 bail!(
                     "expected malformed content in a .YAML (uppercase extension) file to block, \
                      not be silently skipped by a case-sensitive extension match: {summary}"
+                )
+            }
+        }
+        Ok(())
+    }
+
+    /// Issue #4031 item 1, decisive execution proof: a staged config file
+    /// that isn't valid UTF-8 must be reported as a finding, not silently
+    /// pass. Before the fix, `read_staged_path_text` returning `None` hit a
+    /// bare `continue`, which reported this file as clean.
+    #[test]
+    fn staged_config_syntax_flags_non_utf8_content_instead_of_silently_passing() -> Result<()> {
+        let repo = TempRepo::init()?;
+        repo.write_bytes("bad.json", &[b'{', 0xff, 0xfe, b'}'])?;
+        repo.add("bad.json")?;
+
+        match staged_config_syntax_at(repo.root(), None)? {
+            CommitCheckOutcome::Flagged(report) => {
+                assert_eq!(report.posture, Posture::Blocked);
+                assert!(
+                    report.affected.iter().any(|a| a.starts_with("bad.json:")),
+                    "expected the non-UTF-8 config to be reported as a finding: {:?}",
+                    report.affected
+                );
+            }
+            CommitCheckOutcome::Pass(summary) => {
+                bail!(
+                    "expected a non-UTF-8 staged config to be flagged, not silently reported \
+                     clean: {summary}"
+                )
+            }
+        }
+        Ok(())
+    }
+
+    /// Issue #4031 item 5, decisive execution proof: a staged DELETION of a
+    /// config file must not crash the check — before the fix,
+    /// `staged_diff_paths`'s `ACMR`-only filter never even surfaced a
+    /// deleted path here, so this exact scenario was structurally
+    /// unreachable; the fix (D+T in the filter, `Absent` handled explicitly)
+    /// makes it reachable and correctly a no-op.
+    #[test]
+    fn staged_config_syntax_skips_a_deleted_config_without_erroring() -> Result<()> {
+        let repo = TempRepo::init()?;
+        repo.write("doomed.toml", "a = 1\n")?;
+        repo.add("doomed.toml")?;
+        repo.commit("initial")?;
+
+        repo.remove_cached("doomed.toml")?;
+
+        match staged_config_syntax_at(repo.root(), None)? {
+            CommitCheckOutcome::Pass(_) => {}
+            CommitCheckOutcome::Flagged(report) => {
+                bail!(
+                    "expected a staged deletion of a config file to be a clean no-op, not a \
+                     finding (there's nothing left to validate): {report:?}"
                 )
             }
         }
@@ -1697,6 +2010,78 @@ mod tests {
         Ok(())
     }
 
+    const CHANGIE_CONFIG_FIXTURE: &str = "projects:\n  - key: product\ncomponents: []\nkinds:\n  - label: Added\nbody:\n  minLength: 0\n";
+
+    /// Issue #4031 item 1, decisive execution proof: a staged Changie
+    /// fragment that isn't valid UTF-8 must be reported as a finding, not
+    /// silently pass as schema-valid. Before the fix, `read_staged_path_text`
+    /// returning `None` hit a bare `continue`, which left the fragment out
+    /// of `blocked` entirely — reported as NotProven (schema-valid) instead
+    /// of the actual malformed content.
+    #[test]
+    fn changie_fragment_staged_flags_non_utf8_content_instead_of_silently_passing() -> Result<()> {
+        let repo = TempRepo::init()?;
+        repo.write(".changie.yaml", CHANGIE_CONFIG_FIXTURE)?;
+        repo.add(".changie.yaml")?;
+        repo.commit("initial")?;
+
+        repo.write_bytes(
+            ".changes/unreleased/product-1-Added-000000.yaml",
+            &[b'k', b'i', b'n', b'd', b':', 0xff, 0xfe],
+        )?;
+        repo.add(".changes/unreleased/product-1-Added-000000.yaml")?;
+
+        match changie_fragment_staged_at(repo.root(), None)? {
+            CommitCheckOutcome::Flagged(report) => {
+                assert_eq!(report.posture, Posture::Blocked);
+                assert!(
+                    report.affected.iter().any(|a| a.starts_with("product-1-Added-000000.yaml")
+                        || a.contains("product-1-Added-000000.yaml")),
+                    "expected the non-UTF-8 fragment to be reported as a finding: {:?}",
+                    report.affected
+                );
+            }
+            CommitCheckOutcome::Pass(summary) => {
+                bail!(
+                    "expected a non-UTF-8 staged fragment to be flagged, not silently passed: \
+                     {summary}"
+                )
+            }
+        }
+        Ok(())
+    }
+
+    /// Issue #4031 item 5, decisive execution proof: a staged DELETION of a
+    /// Changie fragment must not crash the check. Before the fix,
+    /// `staged_diff_paths`'s `ACMR`-only filter never surfaced a deleted
+    /// path here at all; the fix makes it reachable and correctly a no-op
+    /// (a deleted fragment isn't a new fragment to validate).
+    #[test]
+    fn changie_fragment_staged_skips_a_deleted_fragment_without_erroring() -> Result<()> {
+        let repo = TempRepo::init()?;
+        repo.write(".changie.yaml", CHANGIE_CONFIG_FIXTURE)?;
+        repo.add(".changie.yaml")?;
+        repo.write(
+            ".changes/unreleased/product-1-Added-000000.yaml",
+            "project: product\nkind: Added\nbody: something happened\n",
+        )?;
+        repo.add(".changes/unreleased/product-1-Added-000000.yaml")?;
+        repo.commit("initial")?;
+
+        repo.remove_cached(".changes/unreleased/product-1-Added-000000.yaml")?;
+
+        match changie_fragment_staged_at(repo.root(), None)? {
+            CommitCheckOutcome::Pass(_) => {}
+            CommitCheckOutcome::Flagged(report) => {
+                bail!(
+                    "expected a staged deletion of a fragment to be a clean no-op, not a \
+                     finding: {report:?}"
+                )
+            }
+        }
+        Ok(())
+    }
+
     /// Mutation-checked regression proof for the deep-review send-back on
     /// PR #4020 (bot thread, P2): `.changie.yaml` must be read from the
     /// pinned STAGED tree, never `std::fs::read_to_string` against the
@@ -1757,12 +2142,13 @@ mod tests {
     }
 
     #[test]
-    fn is_fragment_path_matches_only_unreleased_yaml() {
+    fn is_fragment_path_matches_only_unreleased_yaml() -> Result<()> {
         assert!(is_fragment_path(".changes/unreleased/product-1-Added-000000.yaml"));
         assert!(is_fragment_path(".changes/unreleased/product-1-Added-000000.yml"));
         assert!(!is_fragment_path(".changes/samples/product-1-Added-000000.yaml"));
         assert!(!is_fragment_path(".changes/unreleased/.gitkeep"));
         assert!(!is_fragment_path("crates/foo/src/lib.rs"));
+        Ok(())
     }
 
     /// Regression for the deep-review send-back on PR #4020: the extension
@@ -1772,12 +2158,13 @@ mod tests {
     /// makes this test fail — `.YAML`/`.Yml` would no longer match
     /// `.ends_with(".yaml")`/`.ends_with(".yml")`.
     #[test]
-    fn is_fragment_path_matches_extension_case_insensitively() {
+    fn is_fragment_path_matches_extension_case_insensitively() -> Result<()> {
         assert!(is_fragment_path(".changes/unreleased/product-1-Added-000000.YAML"));
         assert!(is_fragment_path(".changes/unreleased/product-1-Added-000000.Yml"));
         // The directory prefix stays case-sensitive: an uppercase
         // "Unreleased" is a different (non-matching) path on a
         // case-sensitive filesystem, same as git tracks it.
         assert!(!is_fragment_path(".changes/Unreleased/product-1-Added-000000.yaml"));
+        Ok(())
     }
 }
