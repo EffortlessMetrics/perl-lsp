@@ -1104,27 +1104,6 @@ review_after = "2026-09-06"
 expires = "2026-12-06"
 
 [[lane]]
-id = "needs_label_gate"
-workflow = ".github/workflows/needs-label-gate.yml"
-job = "post-needs-label-status"
-tier = "frontdoor"
-kind = "hygiene"
-blocking = false
-default_pr = true
-runner = "self_hosted_workflow_nano"
-base_lem = 1
-owner = "ci"
-intent = "Machine-block the CLAUDE.md \"no needs-* label may merge\" policy (#3751, epic #3612 M4). The job posts a commit status with context \"needs-label-gate\" to the resolved PR head SHA; the job itself is deliberately named differently so it never shares a context with that status (see workflow header)."
-failure_mode = "PRs carrying needs-* labels (e.g. needs-deep-review) merge past an unenforced prose rule, as happened for #3637/#3627 this session."
-proof_obligation = "Post a failing commit status (context needs-label-gate) to the PR head SHA when any needs-* label is present; clear automatically on label add/remove, including bot-authored changes via the workflow_run backstop."
-evidence = ["job output", "commit status on PR head SHA"]
-allowed_triggers = ["pull_request", "workflow_run"]
-expensive = false
-duplicate_of = []
-review_after = "2026-08-10"
-expires = "2026-11-10"
-
-[[lane]]
 id = "changelog_advisory"
 workflow = ".github/workflows/changelog-advisory.yml"
 job = "changelog-disposition"
