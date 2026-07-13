@@ -57,6 +57,11 @@ diagnostic code, and file; baseline refreshes require the explicit
 `node scripts/check-typescript-strictness.js --update-baseline` command and
 must not silently absorb growth.
 
+The shared TypeScript configuration also enables `noImplicitOverride` as a
+blocking check. All source, test, integration, published-smoke, and script
+authority configurations are clean under this policy, so it does not need a
+debt baseline.
+
 ## Run and test in VS Code
 
 1. Open the `vscode-extension/` folder in VS Code.
