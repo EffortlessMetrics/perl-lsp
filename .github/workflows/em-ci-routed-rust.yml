@@ -327,6 +327,9 @@ jobs:
               cargo check --workspace --locked
               cargo test --locked -p perl-parser --test semantic_smoke_tests -- --nocapture
               cargo test --locked -p perl-lsp-rs --test lsp_smoke -- --test-threads=1 --nocapture
+              scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | awk '/: test$/{count++} END {print count+0}')
+              test "$scorecard_tests" -gt 0
+              INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
               sccache --show-stats || true
             '
 
@@ -481,6 +484,9 @@ jobs:
               cargo check --workspace --locked
               cargo test --locked -p perl-parser --test semantic_smoke_tests -- --nocapture
               cargo test --locked -p perl-lsp-rs --test lsp_smoke -- --test-threads=1 --nocapture
+              scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | awk '/: test$/{count++} END {print count+0}')
+              test "$scorecard_tests" -gt 0
+              INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
               sccache --show-stats || true
             '
 
@@ -531,16 +537,20 @@ jobs:
           set -euo pipefail
           cargo fetch --locked
           cargo check --workspace --locked
+          scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | awk '/: test$/{count++} END {print count+0}')
+          test "$scorecard_tests" -gt 0
+          INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
           git diff --check
 
   # ── Disk-full failover ──────────────────────────────────────────────────────
   # Defense-in-depth: if the primary self-hosted runner's preflight disk-guard
   # still fails AFTER aggressive cleanup (orphan reap + sccache cap + docker
   # prune), fall back to GitHub-hosted so the PR is not blocked by a disk-full
-  # runner.  This job is intentionally narrow — it only runs cargo check, not
-  # the full Docker-based test suite — because the failing runner needs ops
-  # attention (the ::warning annotation in this job's summary is the signal).
-  # The aggregate Result job below accepts this success the same as the primary.
+  # runner. This job remains intentionally narrow: it runs cargo check plus
+  # the references scorecard guard, not the full Docker-based test suite,
+  # because the failing runner needs ops attention (the ::warning annotation
+  # in this job's summary is the signal).
+  # The aggregate Result job below accepts this narrow success the same as the primary.
   rust-small-fallback:
     name: Perl LSP Rust Small (Disk-Full Fallback)
     needs:
@@ -549,7 +559,7 @@ jobs:
       - rust-small-cx43
     # Trigger ONLY when the primary self-hosted job failed AND the preflight step
     # explicitly recorded preflight_ok=false (written to GITHUB_OUTPUT before exit 1).
-    # This prevents a real test failure from masking under a GH-hosted cargo-check-only run.
+    # This prevents a real test failure from masking under a GH-hosted narrow run.
     # If preflight_ok is empty (job OOM-killed before the step could write output), we
     # do NOT trigger the fallback — that case needs ops investigation, not a workaround.
     if: >-
@@ -599,6 +609,9 @@ jobs:
           set -euo pipefail
           cargo fetch --locked
           cargo check --workspace --locked
+          scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | awk '/: test$/{count++} END {print count+0}')
+          test "$scorecard_tests" -gt 0
+          INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
           git diff --check
 
   rust-small-result:
