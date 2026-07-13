@@ -92,9 +92,14 @@ function readCompletedReceipts(paths) {
 function summarizeReceipts(receipts) {
   const metrics = {};
   for (const [name, readMetric] of Object.entries(METRIC_READERS)) {
-    const values = receipts
-      .map(({ receipt }) => readMetric(receipt))
-      .filter((value) => typeof value === 'number' && Number.isFinite(value));
+    /** @type {number[]} */
+    const values = [];
+    for (const { receipt } of receipts) {
+      const value = readMetric(receipt);
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        values.push(value);
+      }
+    }
     metrics[name] = {
       count: values.length,
       min: values.length > 0 ? Math.min(...values) : null,

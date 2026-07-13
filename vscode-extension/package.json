@@ -1311,7 +1311,7 @@
     "typecheck:integration": "tsc --noEmit -p ./tsconfig.integration.json",
     "typecheck:published": "tsc --noEmit -p ./tsconfig.published-smoke.json",
     "typecheck:scripts": "tsc --noEmit -p ./tsconfig.scripts.json",
-    "typecheck:strictness": "node scripts/check-typescript-strictness.js",
+    "typecheck:strictness": "node scripts/check-typescript-strictness.js && node scripts/check-typescript-strictness.js --option exactOptionalPropertyTypes",
     "typecheck:all": "npm run typecheck && npm run typecheck:test && npm run typecheck:integration && npm run typecheck:published && npm run typecheck:scripts && npm run typecheck:strictness",
     "clean:out": "node -e \"const fs=require('fs'),path=require('path'); if(fs.existsSync('out')){for(const f of fs.readdirSync('out')){if(f!=='test')fs.rmSync(path.join('out',f),{recursive:true,force:true});}}\"",
     "compile": "npm run clean:out && rolldown -c rolldown.config.mjs",

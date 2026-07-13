@@ -5,6 +5,7 @@ const {
   parseDiagnostics,
   summarizeDiagnostics,
   validateCompilerResult,
+  getOption,
 } = require('./check-typescript-strictness');
 
 void test('parses and buckets TypeScript diagnostics by config, code, and file', () => {
@@ -63,5 +64,17 @@ void test('rejects compiler failures without parseable diagnostics', () => {
         'missing.json',
       ),
     /TypeScript failed for missing\.json without parsed diagnostics/,
+  );
+});
+
+void test('selects only supported strictness policies', () => {
+  assert.equal(getOption(['node', 'check.js']), 'noUncheckedIndexedAccess');
+  assert.equal(
+    getOption(['node', 'check.js', '--option', 'exactOptionalPropertyTypes']),
+    'exactOptionalPropertyTypes',
+  );
+  assert.throws(
+    () => getOption(['node', 'check.js', '--option', 'unknownPolicy']),
+    /Unsupported TypeScript strictness option: unknownPolicy/,
   );
 });

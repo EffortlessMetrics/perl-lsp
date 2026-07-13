@@ -6,7 +6,10 @@ const { spawnSync } = require('child_process');
 
 const EXTENSION_ROOT = path.resolve(__dirname, '..');
 const TYPESCRIPT_CLI = path.join(EXTENSION_ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
-const BASELINE_PATH = path.join(EXTENSION_ROOT, 'scripts', 'typescript-strictness-baseline.json');
+const POLICIES = {
+  noUncheckedIndexedAccess: 'typescript-strictness-baseline.json',
+  exactOptionalPropertyTypes: 'typescript-exact-optional-baseline.json',
+};
 const CONFIGS = [
   'tsconfig.json',
   'tsconfig.test.json',
@@ -84,19 +87,19 @@ function validateCompilerResult(result, diagnostics, config) {
   }
 }
 
-function runConfig(config) {
+function getOption(args = process.argv) {
+  const optionIndex = args.indexOf('--option');
+  const option = optionIndex === -1 ? 'noUncheckedIndexedAccess' : args[optionIndex + 1];
+  if (typeof option !== 'string' || !Object.hasOwn(POLICIES, option)) {
+    throw new Error(`Unsupported TypeScript strictness option: ${option ?? 'missing value'}`);
+  }
+  return option;
+}
+
+function runConfig(config, option) {
   const result = spawnSync(
     process.execPath,
-    [
-      TYPESCRIPT_CLI,
-      '--noEmit',
-      '--project',
-      config,
-      '--noUncheckedIndexedAccess',
-      'true',
-      '--pretty',
-      'false',
-    ],
+    [TYPESCRIPT_CLI, '--noEmit', '--project', config, `--${option}`, 'true', '--pretty', 'false'],
     { cwd: EXTENSION_ROOT, encoding: 'utf8', windowsHide: true },
   );
   if (result.error) {
@@ -109,23 +112,29 @@ function runConfig(config) {
 }
 
 function main() {
-  const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
-  const diagnostics = CONFIGS.flatMap(runConfig);
+  const option = getOption();
+  const baselinePath = path.join(EXTENSION_ROOT, 'scripts', POLICIES[option]);
+  const updateBaseline = process.argv.includes('--update-baseline');
+  const baseline =
+    updateBaseline && !fs.existsSync(baselinePath)
+      ? null
+      : JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+  const diagnostics = CONFIGS.flatMap((config) => runConfig(config, option));
   const actual = summarizeDiagnostics(diagnostics);
-  if (process.argv.includes('--update-baseline')) {
+  if (updateBaseline) {
     fs.writeFileSync(
-      BASELINE_PATH,
-      `${JSON.stringify({ schema_version: 1, option: 'noUncheckedIndexedAccess', ...actual }, null, 2)}\n`,
+      baselinePath,
+      `${JSON.stringify({ schema_version: 1, option, ...actual }, null, 2)}\n`,
     );
-    process.stdout.write(`Updated ${BASELINE_PATH}\n`);
+    process.stdout.write(`Updated ${baselinePath}\n`);
     return;
   }
   const violations = compareToBaseline(actual, baseline);
   const { diagnostics: detailedDiagnostics, ...summary } = actual;
   const report = {
     schema_version: 1,
-    option: 'noUncheckedIndexedAccess',
-    baseline: BASELINE_PATH,
+    option,
+    baseline: baselinePath,
     ...summary,
     ...(process.argv.includes('--verbose') ? { diagnostics: detailedDiagnostics } : {}),
     status: violations.length === 0 ? 'advisory_within_baseline' : 'growth_detected',
@@ -151,4 +160,5 @@ module.exports = {
   parseDiagnostics,
   summarizeDiagnostics,
   validateCompilerResult,
+  getOption,
 };

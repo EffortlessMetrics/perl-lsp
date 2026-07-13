@@ -9,6 +9,7 @@
     "noEmit": true,
     "rootDir": ".",
     "strict": false,
+    "strictNullChecks": true,
     "types": ["node"]
   },
   "include": ["scripts/**/*.js"],
