@@ -1876,8 +1876,27 @@ enum Commands {
         crate_dir: String,
     },
 
-    /// Remove stale `.claude/worktrees` entries and prune Git metadata.
-    WorktreeCleanup,
+    /// Report (and, with `--force`, remove) stale `.claude/worktrees` entries.
+    ///
+    /// Defaults to a dry-run report: every agent worktree is classified
+    /// KEEP or REMOVE with a reason, but nothing is deleted. A worktree is
+    /// always classified KEEP — never force-removed — when it is dirty
+    /// (uncommitted changes), locked, on a branch with an open PR (or PR
+    /// status could not be determined), or is the root checkout. Pass
+    /// `--force` to actually remove the REMOVE-classified worktrees. See
+    /// issue #4097.
+    WorktreeCleanup {
+        /// Repository root whose `.claude/worktrees/` entries should be
+        /// evaluated. Defaults to the perl-lsp workspace root. Override for
+        /// testing against a fixture repository.
+        #[arg(long)]
+        root: Option<PathBuf>,
+
+        /// Actually remove worktrees classified REMOVE. Default is a
+        /// dry-run report only — nothing is deleted without this flag.
+        #[arg(long)]
+        force: bool,
+    },
 
     /// Validate the committed Claude swarm agent roster contract.
     ValidateSwarmAgentRoster {
@@ -4398,7 +4417,7 @@ fn run_cli(cli: Cli) -> Result<()> {
             println!("{name}");
             Ok(())
         }
-        Commands::WorktreeCleanup => worktrees::cleanup(),
+        Commands::WorktreeCleanup { root, force } => worktrees::cleanup(root, force),
         Commands::ValidateSwarmAgentRoster { root } => swarm_agent_roster::run(root),
         Commands::CheckAgentCapabilities { root } => agent_capability_policy::run(root),
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
