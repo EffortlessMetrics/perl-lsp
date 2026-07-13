@@ -4,7 +4,7 @@
   "categories": {
     "correctness": "off"
   },
-  "ignorePatterns": ["out/**", "out-test/**", "node_modules/**", "src/test/**", "*.js"],
+  "ignorePatterns": ["out/**", "out-test/**", "node_modules/**"],
   "rules": {
     "typescript/no-explicit-any": "warn",
     "typescript/consistent-type-imports": ["warn", { "prefer": "type-imports" }],

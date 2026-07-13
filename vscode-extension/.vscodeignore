@@ -23,6 +23,7 @@ jest.config.js
 **/*.ts
 rolldown.config.mjs
 scripts/**
+docs/migrations/**
 *.vsix
 *.tgz
 .github/**
