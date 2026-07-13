@@ -14,6 +14,7 @@ pub mod bindings;
 pub mod build;
 pub mod build_timing;
 pub mod bump_version;
+pub mod change_set;
 pub mod changelog;
 pub mod check;
 pub mod check_agent_context;
