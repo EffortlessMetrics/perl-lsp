@@ -2,7 +2,12 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
-import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node';
+import {
+  LanguageClient,
+  State as LanguageClientState,
+  TransportKind,
+  Trace,
+} from 'vscode-languageclient/node';
 import type {
   LanguageClientOptions,
   ServerOptions,
@@ -45,6 +50,12 @@ import { StreamingCompletionController } from './streamingCompletion';
 import { registerMcpSupport } from './mcpSupport';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
+import type {
+  BinaryResolutionSource,
+  LanguageClientStartupMetricsSnapshot,
+  LanguageClientStartupMilestone,
+} from './languageClientStartupMetrics';
+import { LanguageClientStartupMetrics } from './languageClientStartupMetrics';
 import { registerWorkspaceConfigurationEvents } from './extensionWorkspaceEvents';
 import {
   buildDisabledFeaturesFromConfig,
@@ -85,6 +96,17 @@ let streamingController: StreamingCompletionController | undefined;
 let languageClientLifecycle:
   | ExtensionLanguageClientLifecycle<LanguageClient, StateChangeEvent>
   | undefined;
+const languageClientStartupMetrics = new LanguageClientStartupMetrics();
+
+export function getLanguageClientStartupMetrics(): LanguageClientStartupMetricsSnapshot {
+  return languageClientStartupMetrics.snapshot();
+}
+
+export function markLanguageClientStartupMilestone(
+  milestone: LanguageClientStartupMilestone,
+): void {
+  languageClientStartupMetrics.markMilestone(milestone);
+}
 /**
  * Cached startup diagnosis from the last server failure.
  *
@@ -1018,6 +1040,7 @@ export async function copyProviderDecisionReceiptCommand(
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+  languageClientStartupMetrics.markMilestone('activate_entered');
   outputChannel = vscode.window.createOutputChannel('Perl Language Server', { log: true });
   const mcpDisposable = registerMcpSupport(outputChannel);
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -1844,6 +1867,7 @@ export async function activate(context: vscode.ExtensionContext) {
     ...registerGherkinStepDefinitionSupport(),
     ...registerPodPreview(context),
   );
+  languageClientStartupMetrics.markMilestone('commands_registered');
 
   // Initialize debug adapter
   activateDebugger(context);
@@ -1853,14 +1877,29 @@ export async function activate(context: vscode.ExtensionContext) {
     process.env.PERL_LSP_EXTENSION_TEST_SKIP_STARTUP === '1'
   ) {
     outputChannel.appendLine('[extension-test] Skipping automatic server startup.');
-    return;
+    languageClientStartupMetrics.markMilestone('activate_returned');
+    return {
+      getLanguageClientStartupMetrics,
+      markLanguageClientStartupMilestone,
+      stop: deactivate,
+    };
   }
 
   startLanguageClientAfterActivation(context, whatsNewManager);
+  languageClientStartupMetrics.markMilestone('activate_returned');
+  return {
+    getLanguageClientStartupMetrics,
+    markLanguageClientStartupMilestone,
+    stop: deactivate,
+  };
 }
 
 export async function deactivate() {
-  await disposeLanguageClient();
+  try {
+    await disposeLanguageClient();
+  } finally {
+    languageClientStartupMetrics.markMilestone('shutdown');
+  }
 }
 
 function startLanguageClientAfterActivation(
@@ -1878,7 +1917,10 @@ async function finishStartupAfterActivation(
   context: vscode.ExtensionContext,
   whatsNewManager: WhatsNewManager,
 ): Promise<void> {
-  await initializeLanguageClient(context);
+  const initialized = await initializeLanguageClient(context);
+  if (initialized) {
+    languageClientStartupMetrics.markMilestone('workspace_ready');
+  }
   await validateIncludePaths(context);
   await suggestDiscoveredIncludePaths(context);
   await warnAboutPerlExtensionConflicts(context);
@@ -1943,7 +1985,9 @@ export function diagnoseConfiguredServerPath(
   return userPath;
 }
 
-async function getServerPath(context: vscode.ExtensionContext): Promise<string | null> {
+async function getServerPath(
+  context: vscode.ExtensionContext,
+): Promise<{ path: string | null; source: BinaryResolutionSource }> {
   // First check user settings
   const config = vscode.workspace.getConfiguration('perl-lsp');
   const userPath = config.get<string>('serverPath');
@@ -1952,7 +1996,7 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
   if (userPath && userPathExists) {
     outputChannel.appendLine(`Using user-configured Perl LSP binary: ${userPath}`);
     configuredServerPathMissing = null;
-    return userPath;
+    return { path: userPath, source: 'configured' };
   }
 
   configuredServerPathMissing = diagnoseConfiguredServerPath(
@@ -2017,18 +2061,18 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
   if (preferPathBeforeBundled) {
     const pathCandidate = findInPath();
     if (pathCandidate) {
-      return pathCandidate;
+      return { path: pathCandidate, source: 'path' };
     }
   }
 
   const bundledCandidate = findBundled();
   if (bundledCandidate) {
-    return bundledCandidate;
+    return { path: bundledCandidate, source: 'bundled' };
   }
 
   const pathCandidate = findInPath();
   if (pathCandidate) {
-    return pathCandidate;
+    return { path: pathCandidate, source: 'path' };
   }
 
   // Check if auto-download is enabled
@@ -2041,28 +2085,61 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
 
     if (downloadedPath) {
       outputChannel.appendLine(`Downloaded Perl LSP binary to: ${downloadedPath}`);
-      return downloadedPath;
+      return { path: downloadedPath, source: 'downloaded' };
     }
   } else {
     outputChannel.appendLine('Perl LSP binary not found and auto-download is disabled');
   }
 
   outputChannel.appendLine('Failed to obtain a Perl LSP binary');
-  return null;
+  return { path: null, source: 'unavailable' };
 }
 
 function createLanguageClientLifecycle(
   context: vscode.ExtensionContext,
 ): ExtensionLanguageClientLifecycle<LanguageClient, StateChangeEvent> {
   return new ExtensionLanguageClientLifecycle({
-    resolveServerPath: () => getServerPath(context),
-    createClient: (serverPath) => createLanguageClient(serverPath),
-    onStarted: (startedClient) => finalizeStartedLanguageClient(context, startedClient),
+    resolveServerPath: async () => {
+      languageClientStartupMetrics.beginBinaryResolution();
+      try {
+        const resolution = await getServerPath(context);
+        languageClientStartupMetrics.finishBinaryResolution(
+          resolution.path ? 'ok' : 'unavailable',
+          resolution.source,
+        );
+        return resolution.path;
+      } catch (error: unknown) {
+        languageClientStartupMetrics.finishBinaryResolution('error');
+        throw error;
+      }
+    },
+    createClient: (serverPath) => {
+      languageClientStartupMetrics.beginServerStart();
+      languageClientStartupMetrics.beginInitialize();
+      return createLanguageClient(serverPath);
+    },
+    onStarted: async (startedClient) => {
+      languageClientStartupMetrics.finishServerStart('ok');
+      languageClientStartupMetrics.finishInitialize('ok');
+      languageClientStartupMetrics.setServerVersion(
+        startedClient.initializeResult?.serverInfo?.version,
+      );
+      await finalizeStartedLanguageClient(context, startedClient);
+    },
+    onFailed: () => {
+      languageClientStartupMetrics.finishServerStart('error');
+      languageClientStartupMetrics.finishInitialize('error');
+    },
     onStateChange: (snapshot) => {
+      languageClientStartupMetrics.setLifecycleState(snapshot.state);
       syncLifecycleProjection();
       healthWidget?.onStateChange(clientStateForLifecycle(snapshot.state));
     },
     onClientStateChange: (_activeClient, event) => {
+      if (event.newState === LanguageClientState.Starting) {
+        languageClientStartupMetrics.markMilestone('process_started');
+        languageClientStartupMetrics.finishServerStart('ok');
+      }
       handleClientStateChange(event);
     },
     onCallbackError: (error, phase) => {
@@ -2468,6 +2545,7 @@ async function restartServer(_context: vscode.ExtensionContext) {
     if (!started) {
       return;
     }
+    languageClientStartupMetrics.markMilestone('restart');
     syncLifecycleProjection();
     vscode.window
       .showInformationMessage('Perl Language Server restarted', 'Show Output')
