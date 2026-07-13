@@ -1,0 +1,42 @@
+{
+  "target_branch": "(detached)",
+  "requested_base": "origin/main",
+  "is_root_checkout": true,
+  "head": {
+    "symbolic_ref": null,
+    "resolved_sha": "6fade008cae4aabc5d558ba7cabd8990fd0b4be9",
+    "dangling": false,
+    "error": null
+  },
+  "shadow_refs": {
+    "refs": [],
+    "error": null
+  },
+  "canonical_base": {
+    "remote_sha": "6fade008cae4aabc5d558ba7cabd8990fd0b4be9",
+    "selected_sha": null,
+    "error": null
+  },
+  "worktree_mapping": {
+    "entries": [
+      { "path": "/repo", "branch": null }
+    ],
+    "error": null
+  },
+  "dirty": {
+    "status_count": 0,
+    "unpushed_commits": 0,
+    "error": null
+  },
+  "disk": {
+    "avail_gb": 500.0,
+    "total_gb": 2000.0,
+    "worktree_count": 1,
+    "error": null
+  },
+  "pr_ownership": {
+    "status": "none",
+    "pr_number": null,
+    "error": null
+  }
+}

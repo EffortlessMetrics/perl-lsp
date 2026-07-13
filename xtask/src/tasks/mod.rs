@@ -154,3 +154,4 @@ pub mod workflows;
 pub mod workspace_symbol_classes;
 pub mod worktree_allocator;
 pub mod worktrees;
+pub mod writer_admission;

@@ -224,6 +224,57 @@ enum Commands {
         command: IssuePlanSubcommand,
     },
 
+    /// Writer admission — read-only pre-admission diagnostic (#3957 W1).
+    /// Reports a PASS/BLOCK/NOT_PROVEN verdict with per-check reasons.
+    /// Never mutates git state, the filesystem, or GitHub.
+    #[command(name = "writer-admission")]
+    WriterAdmission {
+        /// Target branch being admitted (defaults to the current branch).
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Canonical base ref (e.g. origin/main).
+        #[arg(long, default_value = "origin/main")]
+        base: String,
+
+        /// Worktree/checkout path to inspect (defaults to the CWD).
+        #[arg(long)]
+        worktree: Option<PathBuf>,
+
+        /// Expected SHA for the canonical base. Omit to skip the
+        /// base-ref-mismatch comparison.
+        #[arg(long)]
+        expected_base_sha: Option<String>,
+
+        /// GitHub repo (owner/name) for the writer-collision PR-ownership
+        /// check.
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// JSON fixture (offline / deterministic tests) instead of live
+        /// git/gh.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Emit JSON instead of human-readable text.
+        #[arg(long)]
+        json: bool,
+
+        /// Disk-floor GB threshold (matches clean-worktrees.sh FLOOR_GB).
+        #[arg(long, default_value_t = 200.0)]
+        floor_gb: f64,
+
+        /// Disk-floor percentage threshold (matches clean-worktrees.sh
+        /// FLOOR_PCT).
+        #[arg(long, default_value_t = 5.0)]
+        floor_pct: f64,
+
+        /// Large-staged-change-set threshold (synthetic mass-staged
+        /// additions guard).
+        #[arg(long, default_value_t = 1000)]
+        large_staged_threshold: u32,
+    },
+
     /// Build project with various configurations
     Build {
         /// Build in release mode
@@ -4346,6 +4397,29 @@ fn run_cli(cli: Cli) -> Result<()> {
                 })
             }
         },
+        Commands::WriterAdmission {
+            branch,
+            base,
+            worktree,
+            expected_base_sha,
+            repo,
+            fixture,
+            json,
+            floor_gb,
+            floor_pct,
+            large_staged_threshold,
+        } => writer_admission::run(writer_admission::AdmissionConfig {
+            branch,
+            base,
+            worktree,
+            expected_base_sha,
+            repo,
+            fixture,
+            json,
+            floor_gb,
+            floor_pct,
+            large_staged_threshold,
+        }),
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::ResolvePackageName { crate_dir } => {
             // Use the current working directory as workspace root so this subcommand
