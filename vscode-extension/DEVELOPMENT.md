@@ -125,14 +125,15 @@ The `.vsix` file can be installed directly in VS Code via **Extensions → Insta
 
 ## Common tasks
 
-| Task                          | Command                      |
-| ----------------------------- | ---------------------------- |
-| Compile TypeScript            | `npm run compile`            |
-| Watch mode                    | `npm run watch`              |
-| Run unit tests                | `npm test`                   |
-| Lint                          | `npm run lint`               |
-| Build `.vsix` package         | `npm run package`            |
-| Full marketplace verification | `npm run verify:marketplace` |
+| Task                          | Command                           |
+| ----------------------------- | --------------------------------- |
+| Compile TypeScript            | `npm run compile`                 |
+| Watch mode                    | `npm run watch`                   |
+| Run unit tests                | `npm test`                        |
+| Lint                          | `npm run lint`                    |
+| Build `.vsix` package         | `npm run package`                 |
+| Check VSIX inventory baseline | `npm run check:package-inventory` |
+| Full marketplace verification | `npm run verify:marketplace`      |
 
 ## Extension entry point
 
