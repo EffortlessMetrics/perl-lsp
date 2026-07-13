@@ -1,6 +1,7 @@
 # VS Code client/toolchain modernization lane closeout
 
-Status: complete on `main` at `fbc5a95738151a7e645a80548e4d84d4122607f6`.
+Status: complete on `main`; this closeout is merged after the final runtime
+slice and records the handoff boundary for the resulting history.
 
 This closeout records the reviewable PR trail and the evidence boundary for
 the modernization lane. It does not publish, tag, release, or synchronize
