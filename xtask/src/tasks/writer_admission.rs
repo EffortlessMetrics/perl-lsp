@@ -647,6 +647,14 @@ fn git_lines(root: &Path, args: &[&str]) -> Result<Vec<String>, String> {
     Ok(text.lines().filter(|l| !l.is_empty()).map(str::to_string).collect())
 }
 
+/// Builds the early-return `HeadInfo` for a `git` spawn failure encountered
+/// while gathering HEAD info. Carries forward whatever fields an earlier
+/// `git` call already resolved (e.g. `symbolic_ref`) so a later spawn error
+/// can never silently discard already-known state via `..Default::default()`.
+fn head_info_spawn_error(symbolic_ref: Option<String>, message: String) -> HeadInfo {
+    HeadInfo { symbolic_ref, error: Some(message), ..Default::default() }
+}
+
 fn gather_head_info(root: &Path) -> HeadInfo {
     let symbolic =
         Command::new("git").args(["symbolic-ref", "-q", "HEAD"]).current_dir(root).output();
@@ -659,10 +667,7 @@ fn gather_head_info(root: &Path) -> HeadInfo {
         // HEAD, not an error.
         Ok(_) => None,
         Err(e) => {
-            return HeadInfo {
-                error: Some(format!("failed to spawn git symbolic-ref: {e}")),
-                ..Default::default()
-            };
+            return head_info_spawn_error(None, format!("failed to spawn git symbolic-ref: {e}"));
         }
     };
 
@@ -677,10 +682,10 @@ fn gather_head_info(root: &Path) -> HeadInfo {
         }
         Ok(_) => None,
         Err(e) => {
-            return HeadInfo {
-                error: Some(format!("failed to spawn git rev-parse: {e}")),
-                ..Default::default()
-            };
+            return head_info_spawn_error(
+                symbolic_ref,
+                format!("failed to spawn git rev-parse: {e}"),
+            );
         }
     };
 
@@ -1286,6 +1291,44 @@ mod tests {
              match list: {info:?}"
         );
         assert!(info.refs.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn head_info_spawn_error_preserves_already_gathered_symbolic_ref() -> Result<()> {
+        use perl_tdd_support::must_some;
+        // Regression for the writer-admission fast-follow (#3957 W1): the
+        // `git rev-parse` spawn-error arm of `gather_head_info` used to
+        // build its early-return `HeadInfo` with `..Default::default()`,
+        // which reset `symbolic_ref` back to `None` even though it had
+        // already been successfully resolved by the prior `git
+        // symbolic-ref` call. `head_info_spawn_error` is the exact helper
+        // that arm calls, so this pins the fix at the unit the bug lived
+        // in: the already-known `symbolic_ref` must survive a later
+        // spawn error, not be silently discarded.
+        let info = head_info_spawn_error(
+            Some("refs/heads/impl/1234-feature".to_string()),
+            "failed to spawn git rev-parse: boom".to_string(),
+        );
+        let symbolic_ref = must_some(info.symbolic_ref.clone());
+        assert_eq!(symbolic_ref, "refs/heads/impl/1234-feature");
+        let error = must_some(info.error.clone());
+        assert_eq!(error, "failed to spawn git rev-parse: boom");
+        assert_eq!(info.resolved_sha, None);
+        assert!(!info.dangling);
+        Ok(())
+    }
+
+    #[test]
+    fn head_info_spawn_error_with_no_prior_symbolic_ref_stays_none() -> Result<()> {
+        use perl_tdd_support::must_some;
+        // Symmetric case: the `git symbolic-ref` spawn-error arm has
+        // nothing gathered yet, so it correctly passes `None` through.
+        let info =
+            head_info_spawn_error(None, "failed to spawn git symbolic-ref: boom".to_string());
+        assert_eq!(info.symbolic_ref, None);
+        let error = must_some(info.error.clone());
+        assert_eq!(error, "failed to spawn git symbolic-ref: boom");
         Ok(())
     }
 }
