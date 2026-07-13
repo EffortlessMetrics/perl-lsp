@@ -1974,6 +1974,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-test-facts"
+version = "0.17.0"
+
+[[package]]
 name = "perl-test-generators"
 version = "0.17.0"
 dependencies = [
