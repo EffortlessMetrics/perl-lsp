@@ -17,6 +17,11 @@ All notable changes to the Perl Language Server extension will be documented in 
 - **Removed the legacy `ts-jest`, ESLint, and `@typescript-eslint`
   compiler-API dependencies.** No TypeScript or JavaScript toolchain
   binaries are shipped inside the extension. (#3645, #3690)
+- **Made extension development and packaging reproducible:** npm/Node
+  authority, all TypeScript authority configurations, non-growing strictness
+  and lint baselines, exact-source VSIX/current-server smoke, repeated startup
+  receipts, and VSIX inventory/size checks now have explicit gates and current
+  documentation.
 
 ### Added
 
