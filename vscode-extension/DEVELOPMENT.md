@@ -46,6 +46,7 @@ npm run typecheck   # Type-check only (tsc --noEmit) — TypeScript 7 is the sol
 npm run typecheck:all # Check source, unit tests, integration, published smoke, and scripts
 npm run typecheck:strictness # Advisory indexed-access and exact-optional baselines; rejects debt growth
 npm run compile     # Single build (Rolldown bundles out/extension.js — does NOT type-check)
+npm run sample:published:local # Repeat exact-source VSIX smoke and write p50/p95 receipt summary
 npm run watch       # Rebuild out/extension.js on every file change (use during active development)
 npm run watch:types # Optional companion: live tsc --noEmit type-check loop in a separate terminal
 ```
@@ -61,6 +62,12 @@ The shared TypeScript configuration also enables `noImplicitOverride` as a
 blocking check. All source, test, integration, published-smoke, and script
 authority configurations are clean under this policy, so it does not need a
 debt baseline.
+
+`npm run sample:published:local` runs the exact-source local VSIX smoke three
+times by default, stores each receipt in a separate sample directory, and
+writes the combined p50/p95 summary. Set `PERL_LSP_VSCODE_SAMPLE_RUNS` or pass
+`--runs N` for a different sample count; the command still requires the same
+current-source server variables as `npm run test:published:local`.
 
 ## Run and test in VS Code
 
