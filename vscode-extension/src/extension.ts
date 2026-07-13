@@ -16,6 +16,7 @@ import {
   parseDebugTestLaunchTarget,
 } from './debugAdapter';
 import { BinaryDownloader, parseLocalVersion } from './downloader';
+import { runLanguageServerHealthCheck } from './languageServerHealth';
 import { OnboardingManager } from './onboarding';
 import type { HealthCheckResult } from './onboarding';
 import {
@@ -84,7 +85,6 @@ let streamingController: StreamingCompletionController | undefined;
 let languageClientLifecycle:
   | ExtensionLanguageClientLifecycle<LanguageClient, StateChangeEvent>
   | undefined;
-const MANAGED_BINARY_HEALTH_TIMEOUT_MS = 30_000;
 /**
  * Cached startup diagnosis from the last server failure.
  *
@@ -2374,42 +2374,6 @@ async function probeStartupFailure(serverPath: string): Promise<StartupErrorDiag
   });
 }
 
-/**
- * Run `perllsp --health` and return `true` if the binary responds with `ok`.
- *
- * Waits up to 30 seconds. Returns `false` on timeout, non-zero exit, or if
- * stdout does not start with `ok`.
- */
-async function runHealthCheck(serverPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    execFile(
-      serverPath,
-      ['--health'],
-      { timeout: MANAGED_BINARY_HEALTH_TIMEOUT_MS },
-      (err: Error | null, stdout: string, stderr: string) => {
-        if (err) {
-          outputChannel.appendLine(`[health-check] Failed: ${err.message}`);
-          const stderrText = stderr.trim();
-          if (stderrText) {
-            outputChannel.appendLine(`[health-check] stderr: ${stderrText}`);
-          }
-          const stdoutText = stdout.trim();
-          if (stdoutText) {
-            outputChannel.appendLine(`[health-check] stdout: ${stdoutText}`);
-          }
-          resolve(false);
-          return;
-        }
-        const ok = stdout.trim().startsWith('ok');
-        if (!ok) {
-          outputChannel.appendLine(`[health-check] Unexpected output: ${stdout.trim()}`);
-        }
-        resolve(ok);
-      },
-    );
-  });
-}
-
 function getTraceLevel(): Trace {
   const traceSetting = vscode.workspace
     .getConfiguration('perl-lsp')
@@ -2889,7 +2853,7 @@ async function reinstallServerBinary(
     };
   }
 
-  const healthOk = await runHealthCheck(downloadedPath);
+  const healthOk = await runLanguageServerHealthCheck(downloadedPath, outputChannel);
   const version = await readInstalledServerVersion(downloadedPath);
   if (!healthOk) {
     vscode.window
