@@ -6,23 +6,23 @@
 
 | Metric | Count |
 |---|---|
-| Total tracked files | 9800 |
-| Rust-family files | 2986 |
-| Non-Rust files | 6814 |
-| Allowlisted | 4651 |
-| Unclassified | 2163 |
+| Total tracked files | 9833 |
+| Rust-family files | 2988 |
+| Non-Rust files | 6845 |
+| Allowlisted | 4675 |
+| Unclassified | 2170 |
 
 ## Non-Rust files by category
 
 | Category | Count |
 |---|---|
-| config | 231 |
-| documentation | 2296 |
+| config | 229 |
+| documentation | 2297 |
 | generated | 1 |
-| production | 127 |
-| test | 1709 |
-| tooling | 287 |
-| unclassified | 2163 |
+| production | 152 |
+| test | 1710 |
+| tooling | 286 |
+| unclassified | 2170 |
 
 ## Unclassified files
 
@@ -2106,8 +2106,6 @@
 | `xtask/tests/fixtures/intent-diff/valid-closeout-target-path-passes.json` | `json` |
 | `xtask/tests/fixtures/issue-plan/clean.json` | `json` |
 | `xtask/tests/fixtures/issue-plan/drift.json` | `json` |
-| `xtask/tests/fixtures/label-projector/merge-ready-missing-receipt.json` | `json` |
-| `xtask/tests/fixtures/label-projector/needs-builder-fix.json` | `json` |
 | `xtask/tests/fixtures/merge-ready/blocked.json` | `json` |
 | `xtask/tests/fixtures/merge-ready/stale-head.json` | `json` |
 | `xtask/tests/fixtures/merge-ready/valid.json` | `json` |
@@ -2193,6 +2191,15 @@
 | `xtask/tests/fixtures/worktree-allocator/duplicate-branch.json` | `json` |
 | `xtask/tests/fixtures/worktree-allocator/gc-stale.json` | `json` |
 | `xtask/tests/fixtures/worktree-allocator/unique-branch.json` | `json` |
+| `xtask/tests/fixtures/writer-admission/base-mismatch.json` | `json` |
+| `xtask/tests/fixtures/writer-admission/dangling-head.json` | `json` |
+| `xtask/tests/fixtures/writer-admission/detached-main-root.json` | `json` |
+| `xtask/tests/fixtures/writer-admission/gh-unavailable-not-proven.json` | `json` |
+| `xtask/tests/fixtures/writer-admission/healthy-feature-branch.json` | `json` |
+| `xtask/tests/fixtures/writer-admission/low-disk.json` | `json` |
+| `xtask/tests/fixtures/writer-admission/root-checkout-on-feature-branch.json` | `json` |
+| `xtask/tests/fixtures/writer-admission/shadow-ref.json` | `json` |
+| `xtask/tests/fixtures/writer-admission/writer-collision-open-pr.json` | `json` |
 
 ## Allowlisted non-Rust files
 
@@ -2471,7 +2478,6 @@
 | `.claude/hooks/pre-tool-use.sh` | tooling | `non-rust-claude-config` | developer-experience |
 | `.claude/hooks/subagent-stop.sh` | tooling | `non-rust-claude-config` | developer-experience |
 | `.claude/hooks/task-completed.sh` | tooling | `non-rust-claude-config` | developer-experience |
-| `.claude/hooks/tests/test_pre_tool_use_readonly.sh` | tooling | `non-rust-claude-config` | developer-experience |
 | `.claude/hooks/tests/test_pre_tool_use_worktree.sh` | tooling | `non-rust-claude-config` | developer-experience |
 | `.claude/hooks/tests/test_task_completed_no_receipt_gate.sh` | tooling | `non-rust-claude-config` | developer-experience |
 | `.claude/reference/review-convergence.md` | documentation | `non-rust-root-governance-docs` | docs |
@@ -2544,7 +2550,6 @@
 | `.github/workflows/lsp-318-claim-guard.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/merge-ready-reconciler.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/methodology-gate.yml` | config | `non-rust-github-workflows` | release/ci |
-| `.github/workflows/needs-label-gate.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/perl-core-harness.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/perl-version-matrix.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/pipeline-labels.yml` | config | `non-rust-github-workflows` | release/ci |
@@ -2566,6 +2571,7 @@
 | `.github/workflows/ub-review.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/ux-regression-gate.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/version-bump.yml` | config | `non-rust-github-workflows` | release/ci |
+| `.github/workflows/vscode-current-source-linux-smoke.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/vscode-managed-binary-smoke.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/vscode-published-extension-smoke.yml` | config | `non-rust-github-workflows` | release/ci |
 | `.github/workflows/winget-bump.yml` | config | `non-rust-github-workflows` | release/ci |
@@ -3105,6 +3111,7 @@
 | `crates/perl-lsp-rs/LICENSE-MIT` | documentation | `non-rust-license-files` | release/legal |
 | `crates/perl-lsp-rs/README.md` | documentation | `non-rust-root-governance-docs` | docs |
 | `crates/perl-lsp-rs/ROADMAP.md` | documentation | `non-rust-root-governance-docs` | docs |
+| `crates/perl-lsp-rs/src/runtime/language/snapshots/perl_lsp__runtime__language__references_tier_scorecard_tests__routing_matrix__references_representative_replay_receipt.snap` | test | `non-rust-insta-snapshots` | parser/snapshots |
 | `crates/perl-lsp-rs/tests/fixtures/Module.pm` | test | `non-rust-perl-modules` | parser/lsp-fixtures |
 | `crates/perl-lsp-rs/tests/fixtures/cancellation/edge_cases/recovery_scenarios.pl` | test | `non-rust-perl-fixtures` | parser/lsp-fixtures |
 | `crates/perl-lsp-rs/tests/fixtures/cancellation/parser/complex_syntax.pm` | test | `non-rust-perl-modules` | parser/lsp-fixtures |
@@ -6708,6 +6715,9 @@
 | `vscode-extension/assets/demo-project/lib/Utils.pm` | test | `non-rust-perl-modules` | parser/lsp-fixtures |
 | `vscode-extension/assets/demo-project/main.pl` | test | `non-rust-perl-fixtures` | parser/lsp-fixtures |
 | `vscode-extension/build.sh` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/docs/migrations/jest-vs-vitest-decision.md` | documentation | `non-rust-root-governance-docs` | docs |
+| `vscode-extension/docs/migrations/oxlint-warning-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/docs/migrations/oxlint-warning-baseline.md` | documentation | `non-rust-root-governance-docs` | docs |
 | `vscode-extension/docs/migrations/ts7-compiler-swap-receipts.md` | documentation | `non-rust-root-governance-docs` | docs |
 | `vscode-extension/docs/migrations/ts7-prep-1-jest-decouple-receipts.md` | documentation | `non-rust-root-governance-docs` | docs |
 | `vscode-extension/docs/migrations/ts7-prep-2-oxlint-receipts.md` | documentation | `non-rust-root-governance-docs` | docs |
@@ -6736,9 +6746,23 @@
 | `vscode-extension/rolldown.config.mjs` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/build-release-local.sh` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/bundle-lsp.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/check-oxlint-warning-budget.d.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/check-oxlint-warning-budget.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/check-typescript-strictness.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/check-typescript-strictness.test.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/check-vsix-inventory.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/check-vsix-inventory.test.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/lint-canary.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/run-jest.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/run-local-vsix-smoke.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/sample-local-vsix-smoke.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/sample-local-vsix-smoke.test.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/summarize-vscode-receipts.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/summarize-vscode-receipts.test.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/toolchain-doctor.js` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/typescript-exact-optional-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/typescript-strictness-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/scripts/vsix-inventory-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/snippets/launch.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/snippets/perl.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/commandResults.ts` | production | `non-rust-vscode-extension` | editor/vscode |
@@ -6746,12 +6770,17 @@
 | `vscode-extension/src/downloader.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/extension.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/extensionComposition.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/extensionWorkspaceEvents.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/extensionWorkspaceGuidance.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/fileCreation.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/formattingErrors.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/gherkinProviders.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/gherkinStepDefinitions.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/healthWidget.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/languageClientConfiguration.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/languageClientLifecycle.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/languageClientStartupMetrics.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/languageServerHealth.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/mcpSupport.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/onboarding.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/podPreview.ts` | production | `non-rust-vscode-extension` | editor/vscode |
@@ -6768,6 +6797,8 @@
 | `vscode-extension/src/test/downloader.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/extensionComposition.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/extensionUx.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/test/extensionWorkspaceEvents.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/test/extensionWorkspaceGuidance.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/fileCreation.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/formatting.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/gherkinProviders.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
@@ -6779,7 +6810,10 @@
 | `vscode-extension/src/test/integration/suite/index.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/jestVerbosity.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/languageClientArgs.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/test/languageClientConfiguration.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/languageClientLifecycle.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/test/languageClientStartupMetrics.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
+| `vscode-extension/src/test/languageServerHealth.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/onboarding.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/oxfmt.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/src/test/oxlint.test.ts` | production | `non-rust-vscode-extension` | editor/vscode |
