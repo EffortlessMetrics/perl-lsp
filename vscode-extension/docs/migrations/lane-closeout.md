@@ -29,6 +29,9 @@ this repository into `perl-lsp`.
 | #4136 | Optional-feature deferral decision                   | Merged |
 | #4138 | Active documentation and changelog reconciliation    | Merged |
 | #4042 | Downloader stream lifecycle race                     | Merged |
+| #4070 | Routed Rust shell quoting repair                     | Merged |
+| #4142 | Exact-source editor-host lifecycle contract          | Merged |
+| #4144 | VSIX package inventory baseline refresh              | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -57,8 +60,7 @@ The rescue checkpoint was not merged wholesale.
 
 ## Evidence boundary
 
-The following extension checks passed on the merged downloader head before
-merge:
+The following checks and receipts are present on the current merged history:
 
 ```text
 npm run fmt:check
@@ -69,17 +71,21 @@ npm run test:ci
 ```
 
 The focused downloader run passed 113 tests; the full CI suite passed 735
-tests with one existing skip. The hosted current-source Linux smoke and the
-exact-source VSIX smoke are part of the merged harness history. These checks
-prove the exercised behavior and packaging paths; they do not establish a
-performance budget or prove every platform-specific release condition.
+tests with one existing skip. The current-source Linux smoke passed on the
+package-baseline refresh and exercised the exact-source editor-host contract:
+activation, initialization, provider request, restart, shutdown, invalid-path
+health guidance, source identity, and VSIX identity. The package inventory
+check passed with 28 inventoried files and no allowlist violations. These
+checks prove the exercised behavior and packaging paths; they do not establish
+a performance budget or prove every platform-specific release condition.
 
 PR #4042's required routed Rust result was merged through the maintainer
-override path. Both routed attempts failed in the unchanged
+override path because both routed attempts failed in the unchanged
 `.github/workflows/em-ci-routed-rust.yml` shell wrapper at the existing nested
 `bash -c`/`awk` quoting, after the Rust checks themselves reached the scorecard
-command. The PR changed only the downloader implementation and its focused
-tests; no unrelated Rust or workflow files were modified.
+command. PR #4070 subsequently repaired that quoting in the workflow. The
+downloader PR changed only its implementation and focused tests; the repair
+was kept as a separate workflow PR.
 
 ## Remaining work and sync boundary
 
