@@ -700,11 +700,24 @@ export class BinaryDownloader {
         return;
       }
 
-      const file = fs.createWriteStream(dest);
+      const file = this.createWriteStream(dest);
       let timedOut = false;
+      let timeout: NodeJS.Timeout | undefined;
+
+      // Install the listener before any request activity. A refused request
+      // can destroy the stream before a response callback runs; leaving the
+      // stream unobserved turns a normal download failure into an unhandled
+      // ENOENT when a caller cleans up its temporary directory.
+      file.once('error', (err: NodeJS.ErrnoException) => {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        this.removePartialFile(dest);
+        reject(err);
+      });
 
       // Set timeout
-      const timeout = setTimeout(() => {
+      timeout = setTimeout(() => {
         timedOut = true;
         file.destroy();
         reject(new Error(`Download timeout after ${timeoutMs / 1000} seconds`));
@@ -758,12 +771,6 @@ export class BinaryDownloader {
             resolve();
           }
         });
-
-        file.on('error', (err) => {
-          clearTimeout(timeout);
-          fs.unlink(dest, () => {});
-          reject(err);
-        });
       });
 
       request.on('error', (err) => {
@@ -792,6 +799,14 @@ export class BinaryDownloader {
     callback: (response: http.IncomingMessage) => void,
   ): http.ClientRequest {
     return isHttps ? https.get(url, options, callback) : http.get(url, options, callback);
+  }
+
+  private createWriteStream(dest: string): fs.WriteStream {
+    return fs.createWriteStream(dest);
+  }
+
+  private removePartialFile(dest: string): void {
+    fs.unlink(dest, () => {});
   }
 
   private async calculateSHA256(filePath: string): Promise<string> {

@@ -867,6 +867,155 @@ describe('BinaryDownloader download URL security', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Download stream lifecycle
+// ---------------------------------------------------------------------------
+describe('BinaryDownloader download stream lifecycle', () => {
+  type TestFile = EventEmitter & {
+    destroy: jest.Mock;
+    close: jest.Mock;
+  };
+  type TestRequest = EventEmitter & {
+    destroy: jest.Mock;
+  };
+  type TestResponse = EventEmitter & {
+    statusCode: number;
+    pipe: jest.Mock;
+  };
+  type DownloaderSeams = {
+    downloadFile: (url: string, dest: string, timeoutMs?: number) => Promise<void>;
+    createWriteStream: (dest: string) => TestFile;
+    removePartialFile: (dest: string) => void;
+    httpGet: (...args: unknown[]) => TestRequest;
+  };
+
+  let downloader: BinaryDownloader;
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dl-stream-'));
+    downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    jest.restoreAllMocks();
+  });
+
+  function observeUncaughtErrors(): { errors: unknown[]; dispose: () => void } {
+    const errors: unknown[] = [];
+    const handler = (error: unknown): void => {
+      errors.push(error);
+    };
+    process.once('uncaughtException', handler);
+    return {
+      errors,
+      dispose: () => process.removeListener('uncaughtException', handler),
+    };
+  }
+
+  test('observes stream errors before request failure and temporary-directory cleanup', async () => {
+    const destination = path.join(tmpDir, 'partial.bin');
+    const seams = downloader as unknown as DownloaderSeams;
+    const file = new EventEmitter() as TestFile;
+    file.destroy = jest.fn();
+    file.close = jest.fn();
+    const createWriteStream = jest.spyOn(seams, 'createWriteStream').mockReturnValue(file);
+    const removePartialFile = jest.spyOn(seams, 'removePartialFile');
+
+    const request = new EventEmitter() as TestRequest;
+    request.destroy = jest.fn();
+    const requestError = Object.assign(new Error('request failed'), { code: 'ECONNRESET' });
+    const streamError = Object.assign(new Error('destination disappeared'), { code: 'ENOENT' });
+    let listenerCountBeforeRequestActivity = 0;
+    jest.spyOn(seams, 'httpGet').mockImplementation(() => {
+      listenerCountBeforeRequestActivity = file.listenerCount('error');
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      process.nextTick(() => {
+        request.emit('error', requestError);
+        setImmediate(() => file.emit('error', streamError));
+      });
+      return request;
+    });
+
+    const uncaught = observeUncaughtErrors();
+    try {
+      await expect(seams.downloadFile('http://localhost/file', destination, 1000)).rejects.toBe(
+        requestError,
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(listenerCountBeforeRequestActivity).toBe(1);
+      expect(createWriteStream).toHaveBeenCalledWith(destination);
+      expect(removePartialFile).toHaveBeenCalledTimes(1);
+      expect(uncaught.errors).toEqual([]);
+    } finally {
+      uncaught.dispose();
+    }
+  });
+
+  test('cleans up exactly once when the download times out', async () => {
+    const destination = path.join(tmpDir, 'timed-out.bin');
+    const seams = downloader as unknown as DownloaderSeams;
+    const file = new EventEmitter() as TestFile;
+    file.close = jest.fn();
+    file.destroy = jest.fn(() => {
+      process.nextTick(() =>
+        file.emit('error', Object.assign(new Error('stream closed'), { code: 'ENOENT' })),
+      );
+    });
+    jest.spyOn(seams, 'createWriteStream').mockReturnValue(file);
+    const removePartialFile = jest.spyOn(seams, 'removePartialFile');
+    const request = new EventEmitter() as TestRequest;
+    request.destroy = jest.fn();
+    jest.spyOn(seams, 'httpGet').mockReturnValue(request);
+
+    const uncaught = observeUncaughtErrors();
+    try {
+      await expect(seams.downloadFile('http://localhost/file', destination, 10)).rejects.toThrow(
+        'Download timeout after 0.01 seconds',
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(file.destroy).toHaveBeenCalledTimes(1);
+      expect(removePartialFile).toHaveBeenCalledTimes(1);
+      expect(uncaught.errors).toEqual([]);
+    } finally {
+      uncaught.dispose();
+    }
+  });
+
+  test('removes a partial file once when the response stream errors', async () => {
+    const destination = path.join(tmpDir, 'partial-response.bin');
+    const seams = downloader as unknown as DownloaderSeams;
+    const file = new EventEmitter() as TestFile;
+    file.destroy = jest.fn();
+    file.close = jest.fn();
+    jest.spyOn(seams, 'createWriteStream').mockReturnValue(file);
+    const removePartialFile = jest.spyOn(seams, 'removePartialFile');
+
+    const response = new EventEmitter() as TestResponse;
+    response.statusCode = 200;
+    const streamError = Object.assign(new Error('partial response failed'), { code: 'EPIPE' });
+    response.pipe = jest.fn(() => {
+      file.emit('error', streamError);
+      return file;
+    });
+    const request = new EventEmitter() as TestRequest;
+    request.destroy = jest.fn();
+    jest.spyOn(seams, 'httpGet').mockImplementation((_https, _url, _options, callback) => {
+      (callback as (value: unknown) => void)(response);
+      return request;
+    });
+
+    await expect(seams.downloadFile('http://localhost/file', destination, 1000)).rejects.toBe(
+      streamError,
+    );
+    expect(response.pipe).toHaveBeenCalledTimes(1);
+    expect(removePartialFile).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Asset name validation (path traversal prevention)
 // ---------------------------------------------------------------------------
 describe('asset name validation', () => {
