@@ -31,6 +31,16 @@ import { StreamingCompletionController } from './streamingCompletion';
 import { registerMcpSupport } from './mcpSupport';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
+import { registerWorkspaceConfigurationEvents } from './extensionWorkspaceEvents';
+import {
+  buildDisabledFeaturesFromConfig,
+  buildPerlCriticConfiguration as buildPerlCriticConfigurationPayload,
+  CRITIC_SETTINGS,
+  hasExplicitPerlCriticOverrides,
+  syncLanguageClientConfiguration,
+  syncPerlCriticConfiguration as syncPerlCriticConfigurationFromConfig,
+} from './languageClientConfiguration';
+export { buildDisabledFeaturesFromConfig } from './languageClientConfiguration';
 import {
   classifyStartupError,
   formatStartupFailureDialog,
@@ -119,183 +129,11 @@ export function _setLastStartupDiagnosisForTest(
   lastStartupDiagnosis = diagnosis;
 }
 
-// Native critic settings (`perl-lsp.critic.*`) are the product surface. The
-// legacy `perl-lsp.perlcritic.*` keys are kept as deprecated aliases; the Rust
-// server parses the `critic` block after `perlcritic`, so `critic.*` wins when
-// both are present. The extension forwards both blocks untouched and lets the
-// server resolve precedence.
-type NativeCriticSyncSettings = {
-  enabled?: boolean;
-  engine?: string;
-  profile?: string;
-  severity?: number;
-  include?: string[];
-  exclude?: string[];
-};
-
-type LegacyPerlCriticSyncSettings = {
-  enabled?: boolean;
-  severity?: number;
-  profile?: string;
-  theme?: string;
-};
-
-// The native `critic.*` keys and the legacy `perlcritic.*` aliases that mirror
-// them. `theme` has no native equivalent and stays legacy-only.
-const NATIVE_CRITIC_KEYS = [
-  'critic.enabled',
-  'critic.engine',
-  'critic.profile',
-  'critic.severity',
-  'critic.include',
-  'critic.exclude',
-] as const;
-const LEGACY_CRITIC_KEYS = [
-  'perlcritic.enabled',
-  'perlcritic.severity',
-  'perlcritic.profile',
-  'perlcritic.theme',
-] as const;
-
-function hasExplicitOverride(config: vscode.WorkspaceConfiguration, key: string): boolean {
-  const value = config.inspect(key) as
-    | {
-        globalValue?: unknown;
-        workspaceValue?: unknown;
-        workspaceFolderValue?: unknown;
-        globalLanguageValue?: unknown;
-        workspaceLanguageValue?: unknown;
-        workspaceFolderLanguageValue?: unknown;
-      }
-    | undefined;
-  // Also honor language-specific overrides — VS Code users commonly configure
-  // these settings inside a `"[perl]"` block in settings.json, which populates
-  // the *LanguageValue fields rather than the plain scope fields.
-  return Boolean(
-    value &&
-    (value.globalValue !== undefined ||
-      value.workspaceValue !== undefined ||
-      value.workspaceFolderValue !== undefined ||
-      value.globalLanguageValue !== undefined ||
-      value.workspaceLanguageValue !== undefined ||
-      value.workspaceFolderLanguageValue !== undefined),
-  );
-}
-
-function getNativeCriticSyncSettings(
-  config: vscode.WorkspaceConfiguration,
-  severityOverride?: number,
-): NativeCriticSyncSettings {
-  const settings: NativeCriticSyncSettings = {};
-
-  if (hasExplicitOverride(config, 'critic.enabled')) {
-    settings.enabled = config.get<boolean>('critic.enabled', true);
-  }
-  if (hasExplicitOverride(config, 'critic.engine')) {
-    settings.engine = config.get<string>('critic.engine', 'native');
-  }
-  if (hasExplicitOverride(config, 'critic.profile')) {
-    settings.profile = config.get<string>('critic.profile', 'recommended');
-  }
-  if (severityOverride !== undefined) {
-    settings.severity = severityOverride;
-  } else if (hasExplicitOverride(config, 'critic.severity')) {
-    settings.severity = config.get<number>('critic.severity', 3);
-  }
-  if (hasExplicitOverride(config, 'critic.include')) {
-    settings.include = config.get<string[]>('critic.include', []);
-  }
-  if (hasExplicitOverride(config, 'critic.exclude')) {
-    settings.exclude = config.get<string[]>('critic.exclude', []);
-  }
-
-  return settings;
-}
-
-function getLegacyPerlCriticSyncSettings(
-  config: vscode.WorkspaceConfiguration,
-): LegacyPerlCriticSyncSettings {
-  const settings: LegacyPerlCriticSyncSettings = {};
-
-  if (hasExplicitOverride(config, 'perlcritic.enabled')) {
-    settings.enabled = config.get<boolean>('perlcritic.enabled', false);
-  }
-  if (hasExplicitOverride(config, 'perlcritic.severity')) {
-    settings.severity = config.get<number>('perlcritic.severity', 3);
-  }
-  if (hasExplicitOverride(config, 'perlcritic.profile')) {
-    settings.profile = config.get<string>('perlcritic.profile', '');
-  }
-  if (hasExplicitOverride(config, 'perlcritic.theme')) {
-    settings.theme = config.get<string>('perlcritic.theme', '');
-  }
-
-  return settings;
-}
-
-// Resolve the `perl-lsp` configuration for critic syncing. The scope carries
-// `languageId: 'perl'` so that `inspect()` populates the *LanguageValue fields —
-// otherwise a `"[perl]": { "perl-lsp.critic.*": ... }` override in settings.json
-// is invisible to `hasExplicitOverride` and never forwarded to the server. When
-// there is no document (the config-change path passes `undefined`), the
-// language-only scope still exposes language-block overrides.
-function getPerlCriticConfiguration(documentUri?: vscode.Uri): vscode.WorkspaceConfiguration {
-  const scope: { uri?: vscode.Uri; languageId: string } = documentUri
-    ? { uri: documentUri, languageId: 'perl' }
-    : { languageId: 'perl' };
-  return vscode.workspace.getConfiguration('perl-lsp', scope);
-}
-
-// Build the `didChangeConfiguration` payload. Native `critic.*` and legacy
-// `perlcritic.*` blocks are forwarded under their own keys so the server can
-// apply precedence (critic wins). A `severityOverride` (from Set Critic
-// Severity) is applied to the native block.
-function buildPerlCriticConfiguration(
-  documentUri?: vscode.Uri,
-  severityOverride?: number,
-): Record<string, unknown> | undefined {
-  const config = getPerlCriticConfiguration(documentUri);
-  const critic = getNativeCriticSyncSettings(config, severityOverride);
-  const perlcritic = getLegacyPerlCriticSyncSettings(config);
-
-  const perl: Record<string, unknown> = {};
-  if (Object.keys(critic).length > 0) {
-    perl.critic = critic;
-  }
-  if (Object.keys(perlcritic).length > 0) {
-    perl.perlcritic = perlcritic;
-  }
-
-  if (Object.keys(perl).length === 0) {
-    return undefined;
-  }
-
-  return {
-    settings: {
-      perl,
-    },
-  };
-}
-
-function hasExplicitPerlCriticOverrides(documentUri?: vscode.Uri): boolean {
-  const config = getPerlCriticConfiguration(documentUri);
-  return [...NATIVE_CRITIC_KEYS, ...LEGACY_CRITIC_KEYS].some((key) =>
-    hasExplicitOverride(config, key),
-  );
-}
-
 export async function syncPerlCriticConfiguration(
   activeClient: Pick<LanguageClient, 'sendNotification'> | undefined = client,
   documentUri?: vscode.Uri,
 ): Promise<void> {
-  if (!activeClient) {
-    return;
-  }
-
-  const payload = buildPerlCriticConfiguration(documentUri);
-  if (payload) {
-    await activeClient.sendNotification('workspace/didChangeConfiguration', payload);
-  }
+  await syncPerlCriticConfigurationFromConfig(activeClient, documentUri);
 }
 
 export async function runPerlCriticOnActiveFile(
@@ -412,7 +250,7 @@ export async function setPerlCriticSeverity(
       : vscode.ConfigurationTarget.Global;
   // Write the native `critic.severity` key — the product-surface setting.
   await config.update('critic.severity', severity, target);
-  const payload = buildPerlCriticConfiguration(resourceUri, severity);
+  const payload = buildPerlCriticConfigurationPayload(resourceUri, severity);
   if (activeClient && payload) {
     await activeClient.sendNotification('workspace/didChangeConfiguration', payload);
   }
@@ -1878,45 +1716,40 @@ export async function activate(context: vscode.ExtensionContext) {
     event.waitUntil(formatDocumentOnSave(event.document));
   });
 
-  const configurationWatcher = vscode.workspace.onDidChangeConfiguration(async (event) => {
-    if (event.affectsConfiguration('perl-lsp.enableTestIntegration')) {
-      await refreshTestAdapter(context);
-    }
+  const configurationWatcher = registerWorkspaceConfigurationEvents({
+    onLiveConfigurationChanged: async (event) => {
+      if (event.affectsConfiguration('perl-lsp.trace.server') && client) {
+        const newTrace = getTraceLevel();
+        await client.setTrace(newTrace);
+        outputChannel.appendLine(`Trace level changed to: ${newTrace}`);
+      }
 
-    if (event.affectsConfiguration('perl-lsp.trace.server') && client) {
-      const newTrace = getTraceLevel();
-      void client.setTrace(newTrace);
-      outputChannel.appendLine(`Trace level changed to: ${newTrace}`);
-    }
+      if (event.affectsConfiguration('perl-lsp.includePaths')) {
+        await validateIncludePaths(context);
+      }
 
-    if (
-      event.affectsConfiguration('perl-lsp.aiCompletion.enabled') ||
-      event.affectsConfiguration('perl-lsp.aiCompletion.streaming.enabled')
-    ) {
-      refreshStreamingController(client);
-    }
+      const criticChanged = CRITIC_SETTINGS.some((setting) => event.affectsConfiguration(setting));
+      if (event.affectsConfiguration('perl-lsp.includePaths') || criticChanged) {
+        await syncLanguageClientConfiguration(client);
+      }
+    },
+    onReconstructConfigurationChanged: async (event) => {
+      if (event.affectsConfiguration('perl-lsp.enableTestIntegration')) {
+        await refreshTestAdapter(context);
+      }
 
-    if (event.affectsConfiguration('perl-lsp.includePaths')) {
-      await validateIncludePaths(context);
-    }
-
-    if (
-      event.affectsConfiguration('perl-lsp.critic.enabled') ||
-      event.affectsConfiguration('perl-lsp.critic.engine') ||
-      event.affectsConfiguration('perl-lsp.critic.profile') ||
-      event.affectsConfiguration('perl-lsp.critic.severity') ||
-      event.affectsConfiguration('perl-lsp.critic.include') ||
-      event.affectsConfiguration('perl-lsp.critic.exclude') ||
-      event.affectsConfiguration('perl-lsp.perlcritic.enabled') ||
-      event.affectsConfiguration('perl-lsp.perlcritic.severity') ||
-      event.affectsConfiguration('perl-lsp.perlcritic.profile')
-    ) {
-      await syncPerlCriticConfiguration(client);
-    }
-
-    if (requiresClientRefresh(event)) {
-      await promptForClientRefresh(context);
-    }
+      if (
+        event.affectsConfiguration('perl-lsp.aiCompletion.enabled') ||
+        event.affectsConfiguration('perl-lsp.aiCompletion.streaming.enabled')
+      ) {
+        refreshStreamingController(client);
+      }
+    },
+    onRestartRequired: () => promptForClientRefresh(context),
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      outputChannel.appendLine(`[configuration] change handling failed: ${message}`);
+    },
   });
 
   const fileCreationWatcher = vscode.workspace.onDidCreateFiles(async (event) => {
@@ -2258,6 +2091,12 @@ async function finalizeStartedLanguageClient(
 
   await refreshTestAdapter(context);
   refreshStreamingController(startedClient);
+  try {
+    await syncLanguageClientConfiguration(startedClient);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[configuration] initial synchronization failed: ${message}`);
+  }
   lastStartupDiagnosis = undefined;
   outputChannel.appendLine('Perl Language Server started successfully');
 }
@@ -2347,19 +2186,6 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     }
     return false;
   }
-}
-
-export function buildDisabledFeaturesFromConfig(config: {
-  get<T>(key: string, defaultValue: T): T;
-}): string[] {
-  const base = config.get<string[]>('disabledFeatures', []).slice();
-  if (!config.get<boolean>('enableSemanticTokens', true) && !base.includes('lsp.semantic_tokens')) {
-    base.push('lsp.semantic_tokens');
-  }
-  if (!config.get<boolean>('enableFormatting', true) && !base.includes('lsp.formatting')) {
-    base.push('lsp.formatting');
-  }
-  return base;
 }
 
 function createLanguageClient(serverPath: string): LanguageClient {
@@ -3604,19 +3430,6 @@ function handleClientStateChange(event: StateChangeEvent): void {
         'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
     };
   }
-}
-
-function requiresClientRefresh(event: vscode.ConfigurationChangeEvent): boolean {
-  return [
-    'perl-lsp.serverPath',
-    'perl-lsp.autoDownload',
-    'perl-lsp.channel',
-    'perl-lsp.versionTag',
-    'perl-lsp.downloadBaseUrl',
-    'perl-lsp.featureProfile',
-    'perl-lsp.enableSemanticTokens',
-    'perl-lsp.enableFormatting',
-  ].some((setting) => event.affectsConfiguration(setting));
 }
 
 async function promptForClientRefresh(context: vscode.ExtensionContext) {
