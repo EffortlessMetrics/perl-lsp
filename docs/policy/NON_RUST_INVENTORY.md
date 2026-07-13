@@ -6,10 +6,10 @@
 
 | Metric | Count |
 |---|---|
-| Total tracked files | 9835 |
+| Total tracked files | 9836 |
 | Rust-family files | 2988 |
-| Non-Rust files | 6847 |
-| Allowlisted | 4677 |
+| Non-Rust files | 6848 |
+| Allowlisted | 4678 |
 | Unclassified | 2170 |
 
 ## Non-Rust files by category
@@ -17,7 +17,7 @@
 | Category | Count |
 |---|---|
 | config | 229 |
-| documentation | 2299 |
+| documentation | 2300 |
 | generated | 1 |
 | production | 152 |
 | test | 1710 |
@@ -6717,6 +6717,7 @@
 | `vscode-extension/build.sh` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/docs/migrations/README.md` | documentation | `non-rust-root-governance-docs` | docs |
 | `vscode-extension/docs/migrations/jest-vs-vitest-decision.md` | documentation | `non-rust-root-governance-docs` | docs |
+| `vscode-extension/docs/migrations/lane-closeout.md` | documentation | `non-rust-root-governance-docs` | docs |
 | `vscode-extension/docs/migrations/optional-feature-deferral-decision.md` | documentation | `non-rust-root-governance-docs` | docs |
 | `vscode-extension/docs/migrations/oxlint-warning-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/docs/migrations/oxlint-warning-baseline.md` | documentation | `non-rust-root-governance-docs` | docs |

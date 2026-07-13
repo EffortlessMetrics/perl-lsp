@@ -5,6 +5,9 @@ this directory preserve the evidence captured at each historical commit; their
 old versions, package counts, and “next PREP” language are as-of statements,
 not the current toolchain contract.
 
+For the complete client/toolchain modernization lane, merged PR trail, and
+bounded sync handoff, see [`lane-closeout.md`](lane-closeout.md).
+
 ## Completed train
 
 | Concern                              | Historical receipt                                                             | Current authority                                                               |
