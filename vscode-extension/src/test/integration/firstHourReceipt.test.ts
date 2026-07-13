@@ -115,6 +115,40 @@ function sampleLabels(items: readonly vscode.CompletionItem[]): string[] {
   });
 }
 
+function assertSuccessfulStartupMetrics(metrics: Record<string, unknown>, label: string): void {
+  assert.equal(metrics.binary_resolution_status, 'ok', `${label} binary resolution should succeed`);
+  assert.equal(metrics.server_start_status, 'ok', `${label} server start should succeed`);
+  assert.equal(metrics.initialize_status, 'ok', `${label} initialize should succeed`);
+  assert.equal(metrics.lifecycle_state, 'running', `${label} lifecycle should be running`);
+
+  const milestones = metrics.milestones;
+  assert.ok(milestones && typeof milestones === 'object', `${label} milestones should be present`);
+  const values = milestones as Record<string, unknown>;
+  const activationOrdered = [
+    'extension_load',
+    'activate_entered',
+    'commands_registered',
+    'activate_returned',
+  ] as const;
+  const startupOrdered = [
+    'binary_resolution_started',
+    'binary_resolution_completed',
+    'process_started',
+    'initialize_completed',
+    'workspace_ready',
+    'first_useful_request',
+  ] as const;
+  for (const ordered of [activationOrdered, startupOrdered]) {
+    let previous = -1;
+    for (const milestone of ordered) {
+      const value = values[milestone];
+      assert.equal(typeof value, 'number', `${label} must record ${milestone}`);
+      assert.ok((value as number) >= previous, `${label} milestone ${milestone} must be monotonic`);
+      previous = value as number;
+    }
+  }
+}
+
 async function collectProviderMoment(
   label: string,
   classification: MomentResult['classification'],
@@ -432,6 +466,36 @@ suite('First-hour VS Code receipt', function () {
       };
     }
 
+    let failureGuidance: Record<string, unknown> | null = null;
+    if (currentSourceSmoke) {
+      const failureGuidanceStart = monotonicNow();
+      const missingServerPath = path.join(workspacePath, 'zz_missing_perllsp');
+      const failureResult = (await withTimeout(
+        'failure guidance health check',
+        vscode.commands.executeCommand('perl-lsp.runHealthCheck', missingServerPath),
+        20_000,
+      )) as {
+        ok?: boolean;
+        checks?: Array<{ label?: unknown; status?: unknown }>;
+      };
+      assert.equal(
+        failureResult.ok,
+        false,
+        'invalid server path should produce a failed health result',
+      );
+      assert.ok(
+        failureResult.checks?.some(
+          (check) => check.label === 'LSP binary' && check.status === 'error',
+        ),
+        'failure guidance should identify the invalid LSP binary',
+      );
+      failureGuidance = {
+        status: 'ok',
+        duration_ms: Math.round(monotonicNow() - failureGuidanceStart),
+        result: failureResult,
+      };
+    }
+
     const probeDocument = await vscode.workspace.openTextDocument(probePath);
     await vscode.window.showTextDocument(probeDocument);
     const completionPosition = probeDocument.positionAt(
@@ -460,6 +524,9 @@ suite('First-hour VS Code receipt', function () {
       status: 'unavailable',
       limitation: 'extension activation API did not expose startup metrics',
     };
+    if (currentSourceSmoke) {
+      assertSuccessfulStartupMetrics(initialLanguageClientMetrics, 'initial startup');
+    }
 
     let lifecycle: Record<string, unknown> | undefined;
     let restartedMoment: MomentResult | undefined;
@@ -471,6 +538,15 @@ suite('First-hour VS Code receipt', function () {
         90_000,
       );
       const restartMetrics = extensionApi?.getLanguageClientStartupMetrics?.();
+      assert.ok(restartMetrics, 'current-source smoke must expose restart metrics');
+      assertSuccessfulStartupMetrics(restartMetrics, 'restart startup');
+      const restartMilestones = restartMetrics.milestones;
+      assert.ok(
+        restartMilestones &&
+          typeof restartMilestones === 'object' &&
+          typeof (restartMilestones as Record<string, unknown>).restart === 'number',
+        'restart startup should record the restart milestone',
+      );
       const restarted = await collectProviderMoment(
         'after_restart',
         'post_restart',
@@ -515,6 +591,19 @@ suite('First-hour VS Code receipt', function () {
           extensionMain.getLanguageClientStartupMetrics?.() ??
           extensionApi?.getLanguageClientStartupMetrics?.();
       }
+      assert.ok(shutdownMetrics, 'current-source smoke must expose shutdown metrics');
+      assert.equal(
+        shutdownMetrics.lifecycle_state,
+        'stopped',
+        'shutdown should stop the lifecycle',
+      );
+      const shutdownMilestones = shutdownMetrics.milestones;
+      assert.ok(
+        shutdownMilestones &&
+          typeof shutdownMilestones === 'object' &&
+          typeof (shutdownMilestones as Record<string, unknown>).shutdown === 'number',
+        'shutdown should record the shutdown milestone',
+      );
       lifecycle = {
         restart: {
           status: restartStatus,
@@ -573,6 +662,7 @@ suite('First-hour VS Code receipt', function () {
         language_client: receiptLanguageClientMetrics,
         health,
         indexing_announcement_observed: 'not_observable_from_extension_host_public_api',
+        failure_guidance: failureGuidance,
       },
       moments: {
         immediate,
