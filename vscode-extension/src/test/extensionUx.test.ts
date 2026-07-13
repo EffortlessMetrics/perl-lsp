@@ -23,19 +23,21 @@ import {
   explainDiagnosticCommand,
   explainMissingModuleLookupCommand,
   explainProviderDecisionCommand,
-  openDemoProjectCommand,
   previewPackageRenameCommand,
   previewSafeDeleteCommand,
   showWorkspaceTrustReportCommand,
-  suggestAiCompletionIfSupported,
-  suggestDiscoveredIncludePaths,
-  validateIncludePaths,
   runPerlCriticOnActiveFile,
   setPerlCriticSeverity,
   syncPerlCriticConfiguration,
-  warnAboutPerlExtensionConflicts,
   workspaceTrustClientRuntimeState,
 } from '../extension';
+import {
+  openDemoProjectCommand,
+  suggestAiCompletionIfSupported,
+  suggestDiscoveredIncludePaths,
+  validateIncludePaths,
+  warnAboutPerlExtensionConflicts,
+} from '../extensionWorkspaceGuidance';
 
 function makeContext(version = '0.12.3'): any {
   return {
