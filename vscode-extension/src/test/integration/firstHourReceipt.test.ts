@@ -68,6 +68,10 @@ function writeFirstHourReceipt(receipt: Record<string, unknown>): void {
   );
 }
 
+function currentSourceSmokeEnabled(): boolean {
+  return process.env.PERL_LSP_CURRENT_SOURCE_SMOKE === '1';
+}
+
 function walkFiles(root: string, maxEntries: number): string[] {
   const results: string[] = [];
   const stack = [root];
@@ -294,6 +298,24 @@ suite('First-hour VS Code receipt', function () {
 
     const extension = vscode.extensions.getExtension('EffortlessMetrics.perl-lsp-rs');
     assert.ok(extension, 'extension should be available in the extension host');
+    const currentSourceSmoke = currentSourceSmokeEnabled();
+    if (currentSourceSmoke) {
+      const expectedExtensionsDir = process.env.PERL_LSP_PUBLISHED_EXTENSIONS_DIR ?? '';
+      assert.ok(
+        expectedExtensionsDir,
+        'current-source smoke requires the clean extensions directory',
+      );
+      let extensionPath = path.resolve(extension.extensionPath);
+      let extensionsDir = path.resolve(expectedExtensionsDir);
+      if (process.platform === 'win32') {
+        extensionPath = extensionPath.toLowerCase();
+        extensionsDir = extensionsDir.toLowerCase();
+      }
+      assert.ok(
+        extensionPath === extensionsDir || extensionPath.startsWith(`${extensionsDir}${path.sep}`),
+        `extension must be loaded from the clean installed profile: ${extensionPath}`,
+      );
+    }
     const baseReceipt = {
       schema_version: 1,
       issue: 3102,
@@ -304,7 +326,11 @@ suite('First-hour VS Code receipt', function () {
         vscode_version: vscode.version,
         extension_id: 'EffortlessMetrics.perl-lsp-rs',
         extension_version: extension.packageJSON?.version ?? null,
+        extension_path: extension.extensionPath,
         server_path: serverPath,
+        source_revision: process.env.PERL_LSP_CURRENT_SOURCE_SHA ?? null,
+        server_source_revision: process.env.PERL_LSP_SERVER_SOURCE_SHA ?? null,
+        vsix_sha256: process.env.PERL_LSP_VSIX_SHA256 ?? null,
       },
       workspace: {
         path: workspacePath,
@@ -399,13 +425,68 @@ suite('First-hour VS Code receipt', function () {
       completionPosition,
       symbolPosition,
     );
-    await delay(30_000);
-    const afterThirtySeconds = await collectProviderMoment(
-      'after_30_seconds',
-      probeDocument,
-      completionPosition,
-      symbolPosition,
-    );
+    if (currentSourceSmoke) {
+      assert.equal(
+        immediate.completion.status,
+        'ok',
+        'current-source smoke requires a successful completion provider response',
+      );
+    }
+
+    let lifecycle: Record<string, unknown> | undefined;
+    let restartedMoment: MomentResult | undefined;
+    if (currentSourceSmoke) {
+      const restartStart = Date.now();
+      await withTimeout(
+        'language client restart',
+        vscode.commands.executeCommand('perl-lsp.restart'),
+        90_000,
+      );
+      const restarted = await collectProviderMoment(
+        'after_restart',
+        probeDocument,
+        completionPosition,
+        symbolPosition,
+      );
+      assert.equal(
+        restarted.completion.status,
+        'ok',
+        'current-source smoke requires a successful completion after restart',
+      );
+      restartedMoment = restarted;
+
+      const deactivateStart = Date.now();
+      const mainScript = extension.packageJSON?.main;
+      assert.ok(mainScript, 'extension package.json must define a main script');
+      const extensionMain = require(path.join(extension.extensionPath, mainScript)) as {
+        deactivate?: () => Promise<void>;
+      };
+      assert.equal(typeof extensionMain.deactivate, 'function', 'extension must export deactivate');
+      await withTimeout('language client shutdown', extensionMain.deactivate!(), 30_000);
+      lifecycle = {
+        restart: {
+          status: 'ok',
+          duration_ms: Date.now() - restartStart,
+          provider: restarted,
+        },
+        shutdown: {
+          status: 'ok',
+          duration_ms: Date.now() - deactivateStart,
+        },
+      };
+    }
+
+    const afterThirtySeconds = currentSourceSmoke
+      ? restartedMoment!
+      : await (async () => {
+          await delay(30_000);
+          return collectProviderMoment(
+            'after_30_seconds',
+            probeDocument,
+            completionPosition,
+            symbolPosition,
+          );
+        })();
 
     const badDocument = await vscode.workspace.openTextDocument(badPath);
     await vscode.window.showTextDocument(badDocument);
@@ -426,6 +507,7 @@ suite('First-hour VS Code receipt', function () {
         immediate,
         after_30_seconds: afterThirtySeconds,
       },
+      lifecycle,
       diagnostics_probe: {
         file: path.basename(badPath),
         count: badDiagnostics.length,

@@ -1319,6 +1319,7 @@
     "test:grammar:update": "vscode-tmgrammar-snap --config package.json -u \"test/grammar/fixtures/*.pl\"",
     "test:integration": "npm run typecheck && npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
     "test:published": "tsc -p ./tsconfig.published-smoke.json && node ./out/test/published/runPublishedSmoke.js",
+    "test:published:local": "node ./scripts/run-local-vsix-smoke.js",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
     "package": "npx @vscode/vsce package",
     "publish": "npx @vscode/vsce publish",

@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["node", "vscode", "mocha"]
   },
-  "include": ["src/test/published/**/*.ts"],
+  "include": ["src/test/published/**/*.ts", "src/test/integration/firstHourReceipt.test.ts"],
   "exclude": ["node_modules", "out"]
 }

@@ -192,6 +192,34 @@ async function installExtension(
   throw new Error(`Failed to install published extension ${installTarget}\n${lastFailure}`);
 }
 
+function configureCurrentSourceSmoke(userDataDir: string, extensionsDir: string): void {
+  const serverPath = envValue('PERL_LSP_FIRST_HOUR_SERVER_PATH');
+  if (!serverPath) {
+    return;
+  }
+
+  if (!fs.existsSync(serverPath)) {
+    throw new Error(`Current-source server binary does not exist: ${serverPath}`);
+  }
+
+  const settingsDir = path.join(userDataDir, 'User');
+  fs.mkdirSync(settingsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(settingsDir, 'settings.json'),
+    JSON.stringify(
+      {
+        'perl-lsp.autoDownload': false,
+        'perl-lsp.serverPath': path.resolve(serverPath),
+        'perl-lsp.includePaths': [],
+        'perl-lsp.critic.enabled': false,
+      },
+      null,
+      2,
+    ),
+  );
+  process.env.PERL_LSP_PUBLISHED_EXTENSIONS_DIR = extensionsDir;
+}
+
 async function main(): Promise<void> {
   const source = publishedSource();
   const workspacePath = fs.mkdtempSync(
@@ -205,8 +233,6 @@ async function main(): Promise<void> {
   const harnessExtensionPath = path.resolve(process.cwd(), 'src/test/published/harness');
   const extensionTestsPath = path.resolve(__dirname, './suite');
   const repoRoot = path.resolve(__dirname, '../../../..');
-  const vscodeExecutablePath = await downloadAndUnzipVSCode();
-  const installTarget = await resolveInstallTarget(source, downloadDir);
   const receiptsRoot =
     process.env.PERL_LSP_SMOKE_RECEIPTS_DIR ||
     path.join(repoRoot, 'target', 'receipts', 'vscode-smoke');
@@ -217,27 +243,42 @@ async function main(): Promise<void> {
     'use strict;\nuse warnings;\nprint "ok\\n";\n',
   );
 
-  await installExtension(vscodeExecutablePath, installTarget, userDataDir, extensionsDir);
+  try {
+    const vscodeExecutablePath = await downloadAndUnzipVSCode();
+    const installTarget = await resolveInstallTarget(source, downloadDir);
+    configureCurrentSourceSmoke(userDataDir, extensionsDir);
+    await installExtension(vscodeExecutablePath, installTarget, userDataDir, extensionsDir);
 
-  await runTests({
-    vscodeExecutablePath,
-    extensionDevelopmentPath: harnessExtensionPath,
-    extensionTestsPath,
-    extensionTestsEnv: {
-      ...process.env,
-      PERL_LSP_EXTENSION_TEST_SKIP_STARTUP: '1',
-      PERL_LSP_PUBLISHED_EXTENSION_ID: envValue('PERL_LSP_PUBLISHED_EXTENSION_ID') || EXTENSION_ID,
-      PERL_LSP_PUBLISHED_EXTENSION_SOURCE: source,
-      PERL_LSP_SMOKE_RECEIPTS_DIR: receiptsRoot,
-      PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || source,
-    },
-    launchArgs: [
-      workspacePath,
-      '--disable-workspace-trust',
-      `--user-data-dir=${userDataDir}`,
-      `--extensions-dir=${extensionsDir}`,
-    ],
-  });
+    await runTests({
+      vscodeExecutablePath,
+      extensionDevelopmentPath: harnessExtensionPath,
+      extensionTestsPath,
+      extensionTestsEnv: {
+        ...process.env,
+        PERL_LSP_EXTENSION_TEST_SKIP_STARTUP: '1',
+        PERL_LSP_PUBLISHED_EXTENSION_ID:
+          envValue('PERL_LSP_PUBLISHED_EXTENSION_ID') || EXTENSION_ID,
+        PERL_LSP_PUBLISHED_EXTENSION_SOURCE: source,
+        PERL_LSP_SMOKE_RECEIPTS_DIR: receiptsRoot,
+        PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || source,
+      },
+      launchArgs: [
+        workspacePath,
+        '--disable-workspace-trust',
+        `--user-data-dir=${userDataDir}`,
+        `--extensions-dir=${extensionsDir}`,
+      ],
+    });
+  } finally {
+    for (const directory of [workspacePath, userDataDir, extensionsDir, downloadDir]) {
+      try {
+        fs.rmSync(directory, { recursive: true, force: true });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`[published-smoke] cleanup failed for ${directory}: ${message}\n`);
+      }
+    }
+  }
 }
 
 main().catch((error: unknown) => {
