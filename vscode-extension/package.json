@@ -7,8 +7,11 @@
   "preview": true,
   "markdown": "github",
   "engines": {
+    "node": ">=20.19.0",
+    "npm": "10.8.2",
     "vscode": "^1.125.0"
   },
+  "packageManager": "npm@10.8.2",
   "categories": [
     "Programming Languages",
     "Linters",
@@ -1301,8 +1304,14 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run typecheck && npm run compile",
+    "vscode:prepublish": "npm run doctor && npm run typecheck:all && npm run compile",
+    "doctor": "node scripts/toolchain-doctor.js",
     "typecheck": "tsc --noEmit -p ./tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p ./tsconfig.test.json",
+    "typecheck:integration": "tsc --noEmit -p ./tsconfig.integration.json",
+    "typecheck:published": "tsc --noEmit -p ./tsconfig.published-smoke.json",
+    "typecheck:scripts": "tsc --noEmit -p ./tsconfig.scripts.json",
+    "typecheck:all": "npm run typecheck && npm run typecheck:test && npm run typecheck:integration && npm run typecheck:published && npm run typecheck:scripts",
     "clean:out": "node -e \"const fs=require('fs'),path=require('path'); if(fs.existsSync('out')){for(const f of fs.readdirSync('out')){if(f!=='test')fs.rmSync(path.join('out',f),{recursive:true,force:true});}}\"",
     "compile": "npm run clean:out && rolldown -c rolldown.config.mjs",
     "clean:test": "node -e \"require('fs').rmSync('out-test',{recursive:true,force:true})\"",
@@ -1321,9 +1330,9 @@
     "test:published": "tsc -p ./tsconfig.published-smoke.json && node ./out/test/published/runPublishedSmoke.js",
     "test:published:local": "node ./scripts/run-local-vsix-smoke.js",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
-    "package": "npx @vscode/vsce package",
-    "publish": "npx @vscode/vsce publish",
-    "verify:marketplace": "npm run typecheck && npm run compile && npm run bundle-lsp && npm run package",
+    "package": "npm exec -- @vscode/vsce package",
+    "publish": "npm exec -- @vscode/vsce publish",
+    "verify:marketplace": "npm run bundle-lsp && npm run package",
     "publish:openvsx": "npx ovsx publish",
     "check:openvsx": "npx ovsx --version"
   },

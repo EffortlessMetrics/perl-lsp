@@ -2,14 +2,10 @@
 
 ## Prerequisites
 
-1. **Node.js and npm** installed
+1. **Node.js 20.19.0 or newer and npm 10.8.2** installed
 2. **Visual Studio Code** installed
-3. **vsce** (Visual Studio Code Extension manager) and **ovsx** (Open VSX CLI) installed:
-   ```bash
-   npm install -g @vscode/vsce ovsx
-   ```
-4. **Publisher account** on Visual Studio Marketplace
-5. **Open VSX access token** for `EffortlessMetrics` publisher
+3. **Publisher account** on Visual Studio Marketplace
+4. **Open VSX access token** for `EffortlessMetrics` publisher
 
 ## Build Process
 
@@ -27,7 +23,8 @@ cargo build -p perllsp --release
 
 ```bash
 # From vscode-extension/
-npm install
+npm run doctor
+npm ci
 npm run verify:marketplace
 ```
 
@@ -119,7 +116,7 @@ If you haven't already:
 ### 6. Login to vsce
 
 ```bash
-vsce login <publisher-id>
+npm exec -- @vscode/vsce login <publisher-id>
 # Enter your Personal Access Token when prompted
 ```
 
@@ -133,9 +130,9 @@ npm run publish -- --pat "$VSCE_PAT"
 npm run publish:openvsx -- perl-lsp-rs-*.vsix --pat "$OVSX_PAT"
 
 # Or publish with version bump on Marketplace
-vsce publish minor  # 0.5.0 -> 0.6.0
-vsce publish major  # 0.5.0 -> 0.9.x
-vsce publish 0.5.1  # Specific version
+npm exec -- @vscode/vsce publish minor  # 0.5.0 -> 0.6.0
+npm exec -- @vscode/vsce publish major  # 0.5.0 -> 0.9.x
+npm exec -- @vscode/vsce publish 0.5.1  # Specific version
 ```
 
 ## Post-Publishing

@@ -4,8 +4,8 @@
   // traces and coverage map back to the original .ts. This decouples the Jest
   // suite from the TypeScript compiler API (previously via ts-jest, whose
   // `typescript` peer is capped at `<7`) — Jest now runs the tsc-emitted JS
-  // with no transformer, which is what lets the compiler move to TypeScript 7
-  // in a follow-up without ts-jest blocking the upgrade.
+  // with no transformer while TypeScript 7 remains the checked-in compiler
+  // authority.
   //
   // Integration (@vscode/test-electron) and published-smoke suites are Mocha,
   // not Jest; they keep their own tsconfig + runner and are excluded here.

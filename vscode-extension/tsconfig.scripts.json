@@ -1,0 +1,16 @@
+{
+  // The build/test scripts are intentionally CommonJS JavaScript, not runtime
+  // extension TypeScript. TypeScript still checks this surface so tool changes
+  // cannot silently introduce syntax or module-resolution drift.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "rootDir": ".",
+    "strict": false,
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.js"],
+  "exclude": ["node_modules"]
+}

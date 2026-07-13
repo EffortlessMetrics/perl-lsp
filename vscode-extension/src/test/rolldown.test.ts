@@ -59,7 +59,7 @@ describe('Rolldown bundle configuration', () => {
     expect(source).toContain("platform: 'node'");
   });
 
-  test('package.json compile script cleans out/ then runs rolldown; typecheck script runs tsc --noEmit', () => {
+  test('package.json prepublish verifies the toolchain, typechecks all surfaces, then compiles', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'));
     // "clean:out" first: out/ is a shared build directory (the integration/
     // published-smoke test harnesses also emit into out/test/** via a
@@ -73,7 +73,9 @@ describe('Rolldown bundle configuration', () => {
     expect(pkg.scripts.typecheck).toContain('--noEmit');
     // The real release/packaging path must typecheck before bundling — a
     // bundler alone cannot catch a type error.
-    expect(pkg.scripts['vscode:prepublish']).toBe('npm run typecheck && npm run compile');
+    expect(pkg.scripts['vscode:prepublish']).toBe(
+      'npm run doctor && npm run typecheck:all && npm run compile',
+    );
   });
 
   test('package.json has rolldown devDependency, exactly pinned (no ^/~)', () => {

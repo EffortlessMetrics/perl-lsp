@@ -15,7 +15,9 @@ test/**
 # dependency files alongside the bundle that already contains them.
 node_modules/**
 **/tsconfig.json
+tsconfig.*.json
 tsconfig.test.json
+jest.config.js
 **/.eslintrc.json
 **/*.map
 **/*.ts

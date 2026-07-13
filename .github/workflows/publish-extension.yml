@@ -37,7 +37,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "20.19.0"
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
@@ -45,6 +45,7 @@ jobs:
         working-directory: vscode-extension
         run: |
           npm ci
+          npm run doctor
           npm install -g @vscode/vsce
 
       - name: Set version
@@ -129,7 +130,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "20.19.0"
 
       - name: Install Marketplace publisher
         run: npm install -g @vscode/vsce
@@ -179,7 +180,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "20.19.0"
 
       - name: Install Open VSX publisher
         run: npm install -g ovsx
@@ -264,12 +265,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "20.19.0"
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify Node and npm authority
+        run: npm run doctor
 
       - name: Smoke published Marketplace extension
         run: xvfb-run -a npm run test:published
@@ -301,12 +305,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "20.19.0"
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify Node and npm authority
+        run: npm run doctor
 
       - name: Smoke published Open VSX extension
         run: xvfb-run -a npm run test:published
