@@ -135,6 +135,7 @@ pub enum PirOperation {
     Assign,
     Call { callee: PirCallee },
     MethodCall { receiver: PirReceiver, method: PirMethod },
+    Deref { aggregate: DerefAggregateKind, operand: DerefOperandKind },
     Branch { condition: PirId },
     Loop { condition: Option<PirId> },
     Return,
@@ -196,6 +197,7 @@ PIR v0 must distinguish:
 - lexical writes
 - stash/package reads
 - stash/package writes
+- aggregate and slot dereferences with preserved operand shape
 - typeglob or symbolic access boundaries
 - dynamic dereference boundaries
 

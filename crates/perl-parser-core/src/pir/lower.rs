@@ -10,8 +10,8 @@ use std::collections::HashMap;
 
 use crate::hir::{
     AccessMode, AssignMode, BranchShell, CallForm, ControlTransferKind, DeclStorageClass,
-    DynamicBoundaryKind, HIR_BODY_MODEL_VERSION, HirBody, HirBodyId, HirExpr, HirExprId, HirFile,
-    HirItem, HirKind, HirScopeId, HirStmt, LoopShell, Sigil, UnaryMode, VariableKind,
+    DerefExpr, DynamicBoundaryKind, HIR_BODY_MODEL_VERSION, HirBody, HirBodyId, HirExpr, HirExprId,
+    HirFile, HirItem, HirKind, HirScopeId, HirStmt, LoopShell, Sigil, UnaryMode, VariableKind,
 };
 
 use super::model::{
@@ -48,6 +48,9 @@ struct Lowerer {
     /// `CallExpr { form: Coderef }` item, so PIR links the two rather than
     /// synthesizing a second boundary.
     pending_dynamic_callee: Option<PirId>,
+    /// Most recent dereference HIR item, awaiting its adjacent symbolic
+    /// reference boundary when the operand is source-proven dynamic.
+    pending_deref: Option<PirId>,
     unsupported: HashMap<&'static str, usize>,
     source_identity: Option<String>,
 }
@@ -60,6 +63,7 @@ impl Lowerer {
             next_id: 0,
             last_in_scope: HashMap::new(),
             pending_dynamic_callee: None,
+            pending_deref: None,
             unsupported: HashMap::new(),
             source_identity,
         }
@@ -76,6 +80,14 @@ impl Lowerer {
         if !consumes_pending_callee {
             self.pending_dynamic_callee = None;
         }
+        let preserves_pending_deref = matches!(
+            &item.kind,
+            HirKind::DynamicBoundary(boundary)
+                if boundary.kind == DynamicBoundaryKind::SymbolicReferenceDeref
+        );
+        if !preserves_pending_deref {
+            self.pending_deref = None;
+        }
 
         match &item.kind {
             HirKind::VariableDecl(decl) => self.lower_variable_decl(item, decl),
@@ -86,6 +98,7 @@ impl Lowerer {
             HirKind::IndirectCallExpr(call) => {
                 self.lower_method_call(item, &call.method, call.object_kind, call.arg_count)
             }
+            HirKind::DerefExpr(deref) => self.lower_deref(item, deref),
             HirKind::DynamicBoundary(boundary) => {
                 self.lower_dynamic_boundary(
                     item,
@@ -182,6 +195,16 @@ impl Lowerer {
         self.push_node(item, anchor, operation, PirContext::Unknown, None);
     }
 
+    fn lower_deref(&mut self, item: &HirItem, deref: &DerefExpr) {
+        let anchor = PirSourceAnchor::explicit(item.range, item.id);
+        let operation = PirOperation::Deref {
+            aggregate_kind: deref.aggregate_kind,
+            operand_kind: deref.operand_kind,
+        };
+        let id = self.push_node(item, anchor, operation, PirContext::Unknown, None);
+        self.pending_deref = Some(id);
+    }
+
     fn lower_dynamic_boundary(
         &mut self,
         item: &HirItem,
@@ -202,6 +225,15 @@ impl Lowerer {
         if kind == PirDynamicBoundaryKind::DynamicCallee {
             // Hold this boundary for the coderef call HIR emits next.
             self.pending_dynamic_callee = Some(id);
+        }
+        if kind == PirDynamicBoundaryKind::SymbolicReference {
+            if let Some(deref_id) = self.pending_deref.take() {
+                if let Some(deref) = self.nodes.iter_mut().find(|node| {
+                    node.id == deref_id && node.source_anchor.range == Some(item.range)
+                }) {
+                    deref.dynamic_boundary = Some(id);
+                }
+            }
         }
         id
     }
@@ -923,7 +955,7 @@ mod tests {
     use super::super::model::PirAnchorKind;
     use super::*;
     use crate::Parser;
-    use crate::hir::lower_ast;
+    use crate::hir::{DerefAggregateKind, DerefOperandKind, lower_ast};
     use perl_tdd_support::must_some;
 
     fn lower(source: &str) -> PirGraph {
@@ -968,6 +1000,41 @@ mod tests {
         assert_eq!(graph.nodes[0].context, PirContext::Lvalue);
         assert_eq!(graph.nodes[1].operation.name(), "Assign");
         assert_eq!(graph.nodes[1].context, PirContext::Void);
+    }
+
+    #[test]
+    fn aggregate_dereference_lowers_to_typed_pir_operation() {
+        for (source, expected_kind) in [
+            ("${$ref};", DerefAggregateKind::Scalar),
+            ("@{$ref};", DerefAggregateKind::Array),
+            ("%{$ref};", DerefAggregateKind::Hash),
+            ("&{$ref}();", DerefAggregateKind::Code),
+        ] {
+            let graph = lower(source);
+            assert!(
+                graph.nodes.iter().any(|node| matches!(node.operation, PirOperation::Deref { .. })),
+                "expected a Deref operation for `{source}`"
+            );
+            let deref = must_some(
+                graph
+                    .nodes
+                    .iter()
+                    .find(|node| matches!(node.operation, PirOperation::Deref { .. })),
+            );
+
+            match &deref.operation {
+                PirOperation::Deref { aggregate_kind, operand_kind } => {
+                    assert_eq!(*aggregate_kind, expected_kind);
+                    assert_eq!(*operand_kind, DerefOperandKind::Variable);
+                }
+                _ => assert!(false, "expected Deref operation for `{source}`"),
+            }
+
+            assert!(deref.source_anchor.is_anchored());
+            assert_eq!(deref.context, PirContext::Unknown);
+            assert_eq!(graph.receipt.unsupported_construct_counts.get("DerefExpr"), None);
+            assert_eq!(graph.receipt.operation_counts.get("Deref"), Some(&1));
+        }
     }
 
     #[test]
@@ -1124,6 +1191,17 @@ mod tests {
     fn symbolic_string_reference_creates_boundary() {
         let graph = lower("no strict 'refs'; my $v = ${\"name\"};");
         assert_eq!(graph.receipt.dynamic_boundary_counts.get("SymbolicReference"), Some(&1));
+        assert_eq!(graph.receipt.operation_counts.get("Deref"), Some(&1));
+        assert_eq!(graph.receipt.unsupported_construct_counts.get("DerefExpr"), None);
+        let deref = must_some(
+            graph.nodes.iter().find(|node| matches!(node.operation, PirOperation::Deref { .. })),
+        );
+        let boundary_id = must_some(deref.dynamic_boundary);
+        let boundary = must_some(graph.node(boundary_id));
+        assert!(matches!(
+            boundary.operation,
+            PirOperation::DynamicBoundary { kind: PirDynamicBoundaryKind::SymbolicReference, .. }
+        ));
     }
 
     #[test]
