@@ -1,0 +1,133 @@
+name: Research Finding
+description: A raw observation or hypothesis to verify and dedupe before it enters plan review
+labels: ["swarm-discovered"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Research Finding
+
+        Use this for a **hypothesis**, not a decided plan. A finding is at the
+        `candidate`/`researched` stage: something you observed that may or may
+        not be a real, distinct, current problem.
+
+        This template enters with only `swarm-discovered` applied (`needs-triage`
+        is a proposed label, not yet created — see ISSUE_PLAN_DOCTRINE.md's label
+        reconciliation table). The desk's source-grounding and dedupe pass
+        promotes a distinct, verified finding to `needs-plan-review` (or
+        closes/links it if it turns out to be a duplicate, stale, or a wrong
+        premise). Findings are **not** builder-ready and do not get that label.
+
+        If you already have a verified root cause, a decided fix plan, and
+        acceptance tests, use the **Builder-Ready Plan** template instead. See
+        [ISSUE_PLAN_DOCTRINE.md](https://github.com/EffortlessMetrics/perl-lsp-swarm/blob/main/docs/reference/ISSUE_PLAN_DOCTRINE.md).
+
+  - type: input
+    id: source
+    attributes:
+      label: Discovering agent / source
+      description: Who or what found this, and during what work?
+      placeholder: "e.g. scout-parser sweeping the expected_colon bucket"
+    validations:
+      required: true
+
+  - type: textarea
+    id: finding
+    attributes:
+      label: "Finding — what did you observe?"
+      description: Describe what you saw. Include file:line references and any error output.
+      placeholder: |
+        While sweeping corpus failures, several files fail with "CHECK must be
+        followed by a block" when `CHECK:` is used as a statement label.
+    validations:
+      required: true
+
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: "Hypothesis — what do you think is going on?"
+      description: Your best guess at the cause. Flag your uncertainty — being roughly right and honest beats confidently wrong.
+      placeholder: |
+        The phase-keyword dispatch likely matches CHECK before the label arm.
+        Unverified — I have not traced the dispatch order yet.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence_so_far
+    attributes:
+      label: "Evidence so far"
+      description: The artifacts you have already looked at. Treat scout summaries as hypotheses, not facts.
+      placeholder: |
+        - Source skimmed: declarations.rs (not yet traced)
+        - Corpus files affected: Mojo/Exception.pm
+        - Not yet checked: tests, related PRs
+    validations:
+      required: true
+
+  - type: textarea
+    id: where_to_verify
+    attributes:
+      label: "Where to verify next"
+      description: What a grounding pass should check against — source, tests, docs, receipts, linked PRs, current main.
+      placeholder: |
+        - Trace dispatch order in statements.rs
+        - Check whether main already fixed this
+        - Confirm the behavior is a bug, not unsupported/dynamic
+    validations:
+      required: true
+
+  - type: textarea
+    id: dedupe_check
+    attributes:
+      label: "Duplicate check"
+      description: What existing issues did you search for, and what did you find? Dedupe by failure mode, not by title or shared file.
+      placeholder: |
+        Searched open + closed for "phase block label" — found #456 (different
+        failure mode: END as label, closed). This looks distinct.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: classification
+    attributes:
+      label: Suspected classification
+      description: Your best read on what this is. The triage pass confirms or corrects it.
+      options:
+        - new finding
+        - weak existing issue (needs improvement)
+        - duplicate candidate
+        - stale / superseded by main
+        - architecture-sensitive
+        - scope too broad (should split)
+        - wrong premise
+        - unsure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: confidence
+    attributes:
+      label: Confidence
+      options:
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - parser
+        - lsp
+        - dap
+        - performance
+        - testing
+        - documentation
+        - infrastructure
+        - security
+    validations:
+      required: true

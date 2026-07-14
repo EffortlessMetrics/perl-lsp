@@ -225,7 +225,7 @@
         "tier": {
           "type": "string",
           "description": "Gate tier determining when it runs",
-          "enum": ["pr_fast", "merge_gate", "nightly", "release"],
+          "enum": ["commit", "pr_fast", "merge_gate", "nightly", "release"],
           "examples": ["pr_fast"]
         },
         "status": {
@@ -405,6 +405,9 @@
           "description": "Breakdown of results by tier",
           "additionalProperties": false,
           "properties": {
+            "commit": {
+              "$ref": "#/$defs/tier_summary"
+            },
             "pr_fast": {
               "$ref": "#/$defs/tier_summary"
             },
@@ -459,7 +462,7 @@
         "is_latest": { "type": "boolean" },
         "tier": {
           "type": "string",
-          "enum": ["pr_fast", "merge_gate", "nightly", "all"]
+          "enum": ["commit", "pr_fast", "merge_gate", "nightly", "all"]
         },
         "scope": { "$ref": "#/$defs/agent_scope" },
         "selected_lanes": {
@@ -476,6 +479,16 @@
         },
         "plan": {
           "$ref": "#/$defs/agent_plan_receipt"
+        },
+        "staged_tree_oid": {
+          "type": ["string", "null"],
+          "description": "git write-tree OID of the staged tree this run inspected (issue #3786). Present only for GateTier::Commit runs invoked with --staged.",
+          "examples": ["a1b2c3d4e5f6", null]
+        },
+        "advisories": {
+          "type": "array",
+          "description": "Non-blocking commit-tier findings (CLASSIFICATION REQUIRED / ADVISORY / NOT PROVEN). Blocking findings are in `failures` instead; always empty for non-commit tiers.",
+          "items": { "$ref": "#/$defs/agent_advisory" }
         }
       }
     },
@@ -551,12 +564,63 @@
     },
     "agent_failure": {
       "type": "object",
-      "required": ["lane", "summary", "repro"],
+      "required": ["lane", "summary", "repro", "posture"],
       "additionalProperties": false,
       "properties": {
         "lane": { "type": "string" },
         "summary": { "type": "string" },
-        "repro": { "type": "string" }
+        "repro": { "type": "string" },
+        "posture": {
+          "type": "string",
+          "description": "GUIDANCE_STYLE §5 posture (issue #3786). Always \"BLOCKED\" today: `failures` only ever holds a hard-blocking status, and only Posture::Blocked maps a commit-tier check into one. Non-commit-tier gates default to \"BLOCKED\" for the same reason (a `fail`/`timeout`/`error` status is inherently blocking).",
+          "enum": ["BLOCKED", "CLASSIFICATION REQUIRED", "ADVISORY", "NOT PROVEN"],
+          "examples": ["BLOCKED"]
+        },
+        "affected": {
+          "type": "array",
+          "description": "Affected files/packages, when the check identified them (commit-tier only; empty for the generic pr_fast/merge_gate path).",
+          "items": { "type": "string" }
+        },
+        "fix": {
+          "type": ["string", "null"],
+          "description": "A single mechanical fix command, when the repair is unambiguous (commit-tier only). `repro` remains the generic rerun command for every tier.",
+          "examples": ["cargo xtask fmt", null]
+        }
+      }
+    },
+    "agent_advisory": {
+      "type": "object",
+      "description": "One non-blocking commit-tier finding (issue #3786), following the same result/why/affected/fix/rerun/what-remains shape as agent_failure.",
+      "required": ["lane", "posture", "summary", "why", "rerun", "what_remains"],
+      "additionalProperties": false,
+      "properties": {
+        "lane": { "type": "string" },
+        "posture": {
+          "type": "string",
+          "description": "Never \"BLOCKED\" — a Posture::Blocked finding is surfaced via agent_failure instead.",
+          "enum": ["CLASSIFICATION REQUIRED", "ADVISORY", "NOT PROVEN"],
+          "examples": ["ADVISORY"]
+        },
+        "summary": { "type": "string" },
+        "why": {
+          "type": "string",
+          "description": "Why this finding matters — the reasoning half of the result/why shape (CheckReport.why)."
+        },
+        "affected": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "fix": {
+          "type": ["string", "null"]
+        },
+        "rerun": {
+          "type": "string",
+          "description": "Command that re-checks just this gate."
+        },
+        "what_remains": {
+          "type": "string",
+          "description": "What is deferred, not waived — e.g. a proof obligation still required before merge."
+        }
       }
     },
     "debt_status": {

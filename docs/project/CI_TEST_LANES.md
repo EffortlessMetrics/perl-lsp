@@ -26,12 +26,14 @@ just release-check
 
 ## Active Labels
 
-The nightly workflow currently uses these labels:
+The nightly workflow currently uses these PR labels:
 
-- `ci:coverage`
 - `ci:bench`
 - `ci:strict`
 - `ci:mutation`
+
+Coverage is not PR-label gated. Coverage diagnostics run from the scheduled or
+manually dispatched coverage workflow only.
 
 Nightly benchmark runs also execute a real-repo LSP latency assertion:
 `real_project_first_diagnostics_catalyst_5000_lines_under_5s` in

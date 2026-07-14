@@ -1,0 +1,9 @@
+project: product
+component: Developer experience
+kind: Fixed
+body: "`cargo xtask parser-corpus-sweep` now accepts `--profile <PROFILE>`, threading it into `SweepConfig.corpus_profile` for receipt naming instead of failing with an unexpected-argument error."
+time: 2026-07-11T22:51:54Z
+custom:
+  PR: "3929"
+  Slug: xtask-corpus-sweep-profile-flag
+  Breaking: "no"

@@ -18,6 +18,7 @@ layers compose.
 - `ParseError`, `ParseResult`, `ParseOutput`
 - `Node`, `NodeKind`, `SourceLocation`
 - `TokenStream`, `Token`, `TokenKind`
+- `incremental::IncrementalState` and `incremental::IncrementalMetrics`
 - `PositionMapper` and `LineEnding`
 - `Trivia`, `TriviaPreservingParser`, `format_with_trivia`
 
@@ -36,3 +37,7 @@ assert!(!ast.to_sexp().is_empty());
 Use `perl-parser-core` when you are building parser-adjacent tooling or adding
 new syntax behavior. If you want the higher-level analysis and refactoring
 re-exports in one crate, use `perl-parser`.
+
+The `incremental` module provides checkpoint-bounded token replay with explicit
+fallback metrics. It reuses parser tokens outside the edit window and rebuilds the
+AST from the assembled stream; it does not claim AST subtree reuse.

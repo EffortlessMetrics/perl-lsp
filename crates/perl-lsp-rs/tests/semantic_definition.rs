@@ -6,6 +6,11 @@
 //! The LSP handler at lsp_server.rs:3463 already uses SemanticAnalyzer::find_definition().
 //! These tests validate that it works correctly for common Perl patterns.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod common;
 
 #[cfg(test)]

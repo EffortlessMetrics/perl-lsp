@@ -26,6 +26,9 @@ mod latency;
 mod lifecycle;
 mod notebook;
 pub(crate) mod outbound;
+pub(crate) mod parse_worker;
+#[cfg(feature = "workspace")]
+pub(crate) mod readiness;
 mod refresh;
 /// Routing module for lifecycle-aware index access
 pub mod routing;
@@ -36,6 +39,8 @@ mod symbol_extraction;
 mod test_api;
 mod test_runners;
 mod text_sync;
+/// `PERL_LSP_TIMING` phase-1 instrumentation sink (opt-in span timings).
+pub(crate) mod timing;
 mod types;
 mod window;
 mod workspace;
@@ -56,7 +61,6 @@ use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
     declaration::ParentMap,
-    position::LineStartsCache,
     tdd_basic::TestGenerator,
     test_runner::{TestKind, TestRunner},
 };
@@ -81,7 +85,6 @@ use crate::features::{
     document_highlight::DocumentHighlightProvider,
     formatting::{CodeFormatter, FormattingOptions},
     implementation_provider::ImplementationProvider,
-    semantic_tokens_provider::{SemanticTokensProvider, encode_semantic_tokens},
     type_hierarchy::TypeHierarchyProvider,
 };
 
@@ -113,8 +116,10 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+use std::sync::atomic::AtomicU64;
 use std::sync::{
-    Arc,
+    Arc, Weak,
     atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
 };
 use url::Url;
@@ -203,6 +208,13 @@ pub struct LspServer {
     refresh_controller: refresh::RefreshController,
     /// Diagnostic publication debouncer (installed after Arc wrapping in Scheduler::new)
     diagnostic_debouncer: Mutex<Option<diagnostic_debounce::DiagnosticDebouncer>>,
+    /// Off-lock async parse worker (#3396 Phase 3), installed after Arc
+    /// wrapping in `Scheduler::new` (production) or explicitly by tests
+    /// that want to exercise the real async gap. `None` means the
+    /// synchronous fallback path is active -- see
+    /// `LspServer::install_default_parse_worker` and
+    /// `handle_did_change_with_cancellation`.
+    parse_worker_handle: Mutex<Option<Arc<parse_worker::ParseWorker>>>,
     /// File watcher change debouncer (installed after Arc wrapping in Scheduler::new)
     file_watcher_debouncer: Mutex<Option<file_watcher_debounce::FileWatcherDebouncer>>,
     /// Notebook document store (LSP 3.17)
@@ -223,20 +235,23 @@ pub struct LspServer {
     /// the `initialized` gate fired, without needing to set up a real
     /// workspace on disk.
     pub(crate) workspace_indexing_invocation_count: Arc<std::sync::atomic::AtomicUsize>,
+    /// Test-only routing key for the workspace readiness receipt observer.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) readiness_receipt_observer_id: AtomicU64,
     /// Cache of extracted POD documentation keyed by resolved file path.
     pod_cache: Arc<Mutex<HashMap<PathBuf, PodCacheEntry>>>,
-    /// Cache of SemanticAnalyzer results keyed by (normalized_uri, content_hash).
-    ///
-    /// Avoids re-running the full O(n) AST traversal on repeated hover/definition
-    /// requests to the same document version. Content hash provides automatic
-    /// invalidation when source text changes — no TTL needed.
-    pub(crate) semantic_analyzer_cache:
-        Arc<Mutex<HashMap<(String, u64), Arc<crate::semantic::SemanticAnalyzer>>>>,
     /// Last provider-local decision receipt by provider name.
     ///
     /// `perl.explainProviderDecision` can attach these transient per-server
     /// receipts when the caller does not provide a request-local receipt.
     pub(crate) provider_decision_traces: Arc<Mutex<HashMap<String, Value>>>,
+    /// Most recent semantic-tokens result per document URI.
+    ///
+    /// Keyed by document URI, each entry records the `resultId` returned to the
+    /// client and the flat encoded token data. This backs
+    /// `textDocument/semanticTokens/full/delta`, which computes minimal edits
+    /// against the previously returned result.
+    pub(crate) semantic_tokens_cache: Arc<Mutex<HashMap<String, SemanticTokensCacheEntry>>>,
     /// Short-TTL cache for module prefix directory scans (issue #8514).
     ///
     /// Typing a multi-segment `use` prefix (e.g. `use Mojo::Cont|`) triggers a
@@ -325,6 +340,12 @@ pub struct LspServer {
     /// users with identical `window/showMessage` warnings.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) critic_workspace_warnings_sent: Mutex<std::collections::HashSet<String>>,
+    /// Test-only hook invoked after push diagnostics capture their document
+    /// snapshot and before the stale-generation guard decides whether to
+    /// publish. This keeps concurrency boundary tests deterministic without
+    /// adding production synchronization.
+    #[cfg(test)]
+    pub(crate) diagnostic_after_snapshot_hook: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     /// Optional AI inline-completion backend.
     ///
     /// When `Some`, the `handle_inline_completion` handler will attempt
@@ -333,12 +354,35 @@ pub struct LspServer {
     pub(crate) ai_inline_backend: Mutex<
         Option<Arc<dyn perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend>>,
     >,
+    /// When `true`, eagerly maintain the per-document incremental parsing state
+    /// (`incremental_doc` / `incremental_state`) inside the `didChange` mutation
+    /// critical section.
+    ///
+    /// Defaults to `false`. The committed AST that every provider reads is always
+    /// produced by the full parse; the incremental machinery does **not** feed
+    /// that AST (see `docs`/#3396). Keeping it updated on every keystroke costs
+    /// ~14x the full parse while contributing nothing to the read path, so it is
+    /// opt-in: enable it only when exercising the (dormant) incremental fast-path
+    /// itself. Toggling this changes neither the committed AST, parse errors,
+    /// parent map, nor the stale-read generation semantics.
+    #[cfg(feature = "incremental")]
+    pub(crate) incremental_eager: AtomicBool,
 }
 
 #[derive(Clone)]
 struct PodCacheEntry {
     modified: Option<std::time::SystemTime>,
     doc: perl_pod::PodDoc,
+}
+
+/// A cached semantic-tokens result, used to answer
+/// `textDocument/semanticTokens/full/delta` requests.
+#[derive(Clone)]
+pub(crate) struct SemanticTokensCacheEntry {
+    /// The `resultId` that was returned to the client for this result.
+    pub(crate) result_id: String,
+    /// The flat encoded token data (LSP groups of 5 `u32` per token).
+    pub(crate) data: Vec<u32>,
 }
 
 #[cfg(any(test, feature = "expose_lsp_test_api"))]
@@ -349,8 +393,6 @@ pub struct MemoryStateSnapshot {
     pub documents: usize,
     /// Total bytes of source text held by open document state.
     pub open_text_bytes: usize,
-    /// Number of cached semantic analyzer entries.
-    pub semantic_analyzer_cache: usize,
     /// Number of per-document parse cancellation flags still retained.
     pub parse_cancel_flags: usize,
     /// Number of active inline-completion stream sessions.
@@ -633,8 +675,10 @@ impl LspServer {
         }
 
         {
-            let mut cache = self.semantic_analyzer_cache.lock();
-            cache.retain(|(cached_uri, _), _| !uri_keys.iter().any(|key| key == cached_uri));
+            let mut cache = self.semantic_tokens_cache.lock();
+            for key in &uri_keys {
+                cache.remove(key);
+            }
         }
 
         {
@@ -716,7 +760,6 @@ impl LspServer {
         MemoryStateSnapshot {
             documents: document_count,
             open_text_bytes,
-            semantic_analyzer_cache: self.semantic_analyzer_cache.lock().len(),
             parse_cancel_flags: self.parse_cancel_flags.lock().len(),
             stream_sessions: self.stream_sessions().len(),
             pending_index_tasks: self.pending_index_task_count.load(Ordering::SeqCst),
@@ -780,6 +823,32 @@ impl LspServer {
         let folders = self.workspace_folders.lock();
         best_workspace_folder_for_doc(&folders, doc_uri)
             .map(|folder| folder.effective_workspace_config.clone())
+    }
+
+    pub(crate) fn declared_dependency_for_doc(
+        &self,
+        doc_uri: &str,
+        module_name: &str,
+    ) -> Option<perl_lsp_rs_core::config::DeclaredDependency> {
+        let config =
+            self.config_for_doc(doc_uri).unwrap_or_else(|| self.workspace_config.lock().clone());
+        config.declared_dependencies.into_iter().find(|dependency| dependency.module == module_name)
+    }
+
+    pub(crate) fn declared_dependency_summary(
+        dependency: &perl_lsp_rs_core::config::DeclaredDependency,
+    ) -> String {
+        let mut summary = format!("declared in {}", dependency.source.display_name());
+        if !dependency.kind.is_empty() {
+            if let Some(version) =
+                dependency.version.as_deref().filter(|version| !version.is_empty())
+            {
+                summary.push_str(&format!(" ({} {})", dependency.kind, version));
+            } else {
+                summary.push_str(&format!(" ({})", dependency.kind));
+            }
+        }
+        summary
     }
 
     /// Get all include paths for a document (from its folder and others).
@@ -984,7 +1053,7 @@ impl LspServer {
             .map(|(k, v)| DocumentScanView {
                 uri: k.clone(),
                 text: v.text.clone(),
-                ast: v.ast.clone(),
+                ast: v.current_parsed().and_then(|p| p.ast().cloned()),
             })
             .collect()
     }
@@ -1108,6 +1177,108 @@ impl LspServer {
         }
     }
 
+    /// Install the off-lock async parse worker (#3396 Phase 3).
+    ///
+    /// Requires `Arc<Self>` because the worker's post-publish callback calls
+    /// back into `LspServer` methods (symbol reindex, diagnostics,
+    /// workspace index) from a background thread -- mirrors how
+    /// `Scheduler::new` builds the diagnostic debouncer's `publish_fn`
+    /// closure. Called from `Scheduler::new` for the production runtime
+    /// (the path a real editor's `didChange` traffic takes). Tests that
+    /// want to exercise the real async gap (rather than the #3589
+    /// forced test-only gap) call this explicitly on an `Arc<LspServer>`
+    /// they construct themselves; a bare `LspServer::new()` with no worker
+    /// installed keeps the synchronous fallback (`handle_did_change` parses
+    /// inline, exactly as before this PR).
+    pub(crate) fn install_default_parse_worker(self: &Arc<Self>) {
+        let cb_server = Arc::downgrade(self);
+        let on_published: Arc<dyn Fn(parse_worker::PublishedParseTicket) + Send + Sync> = {
+            let cb_server = Weak::clone(&cb_server);
+            Arc::new(move |ticket: parse_worker::PublishedParseTicket| {
+                // Break the Arc cycle: if the server has been dropped (shutdown path),
+                // skip the side-effect cleanly. If the server is still live, invoke
+                // the callback. This ensures the server can drop and its worker threads
+                // can join on shutdown.
+                if let Some(server) = cb_server.upgrade() {
+                    server.run_post_parse_side_effects(ticket);
+                }
+                // If server has been dropped, this is a clean no-op during shutdown.
+            })
+        };
+        // #3618/#3660: `on_activated` and `on_settled` together couple BOTH
+        // the increment and the decrement of a URI's pending-parse lifecycle
+        // to `active`-claim ownership under `Coordinator::state`'s single
+        // lock -- see `ParseWorker::spawn_with_pending_count_hooks`'s doc
+        // comment. Same `Weak<Self>` pattern as `on_published` above and for
+        // the same reason in both: a strong `Arc<Self>` captured here would
+        // recreate the LspServer<->ParseWorker cycle #3618 exists to break.
+        //
+        // `on_activated` fires exactly once per NEW pending-parse lifecycle,
+        // synchronously inside `Coordinator::enqueue`'s critical section,
+        // strictly before any worker thread can be woken to process that
+        // job -- calling this increment from `handle_did_change_with_cancellation`
+        // itself (the caller of `ParseWorker::enqueue`) after `enqueue`
+        // returns left a window where an unusually fast worker could
+        // dequeue, process, and settle (decrementing, which floors at 0)
+        // BEFORE this increment ever ran, permanently stranding the counter.
+        let on_activated: Arc<dyn Fn(&str) + Send + Sync> = {
+            let cb_server = Weak::clone(&cb_server);
+            Arc::new(move |uri: &str| {
+                if let Some(server) = cb_server.upgrade() {
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = server.coordinator() {
+                        coordinator.notify_change(uri);
+                    }
+                }
+            })
+        };
+        // `on_settled` fires exactly once per lifecycle, when its LAST job
+        // finishes processing regardless of how it ended (publish, panic,
+        // or terminal stale-reject) -- see `Coordinator::finish`'s return
+        // value and `FinishGuard`.
+        let on_settled: Arc<dyn Fn(&str) + Send + Sync> = {
+            let cb_server = Weak::clone(&cb_server);
+            Arc::new(move |uri: &str| {
+                if let Some(server) = cb_server.upgrade() {
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = server.coordinator() {
+                        coordinator.notify_parse_complete(uri);
+                    }
+                }
+            })
+        };
+        let worker = parse_worker::ParseWorker::spawn_with_pending_count_hooks(
+            Arc::clone(&self.documents),
+            Arc::clone(&self.ast_cache),
+            on_published,
+            on_activated,
+            on_settled,
+        );
+        // If every worker thread failed to spawn (resource exhaustion), do
+        // NOT install it: the async `didChange` path only checks
+        // `self.parse_worker().is_some()` to decide whether to enqueue
+        // instead of parsing inline, and an installed-but-threadless worker
+        // would silently accept jobs no thread will ever process -- a
+        // permanent stall instead of a crash. Leaving `parse_worker_handle`
+        // as `None` here keeps the existing synchronous fallback path (the
+        // one hundreds of unit tests and any editor session already
+        // exercise) as the effective behavior instead.
+        if worker.is_operational() {
+            *self.parse_worker_handle.lock() = Some(Arc::new(worker));
+        } else {
+            tracing::error!(
+                "parse worker pool failed to spawn any threads; \
+                 falling back to the synchronous parse path"
+            );
+        }
+    }
+
+    /// The installed off-lock parse worker, if any. `None` means the
+    /// synchronous fallback path is active.
+    pub(crate) fn parse_worker(&self) -> Option<Arc<parse_worker::ParseWorker>> {
+        self.parse_worker_handle.lock().clone()
+    }
+
     /// Install the file watcher debouncer (called from Scheduler::new after Arc wrapping).
     pub fn install_file_watcher_debouncer(
         &self,
@@ -1145,6 +1316,10 @@ pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
     use crate::features::formatting::FormatRange;
     use crate::runtime::types::workspace_folder_matches_doc_uri;
@@ -1491,24 +1666,9 @@ mod tests {
         let uri = "file:///test.pl";
         let text = "package Foo;"; // No trailing newline
         let rope = Rope::from_str(text);
-        let line_starts = LineStartsCache::new_rope(&rope);
         server.documents.lock().insert(
             uri.to_string(),
-            DocumentState {
-                rope,
-                text: text.to_string(),
-                version: 1,
-                ast: None,
-                parse_errors: Vec::new(),
-                parent_map: ParentMap::default(),
-                line_starts,
-                generation: Arc::new(AtomicU32::new(0)),
-                degradation_tier: crate::state::DegradationTier::Minimal,
-                #[cfg(feature = "incremental")]
-                incremental_doc: None,
-                #[cfg(feature = "incremental")]
-                incremental_state: None,
-            },
+            DocumentState::from_parts(rope, text.to_string(), 1, Arc::new(AtomicU32::new(0))),
         );
 
         let result =

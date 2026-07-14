@@ -1,8 +1,26 @@
 //! Outbound message channel
 //!
 //! Decouples message serialization from I/O by sending outbound messages through
-//! an unbounded channel to a dedicated writer thread. This eliminates the writer
+//! a bounded channel to a dedicated writer thread. This eliminates the writer
 //! lock as a contention point and enables concurrent handler execution.
+//!
+//! ## Backpressure policy
+//!
+//! The channel capacity is capped at [`OUTBOUND_CAPACITY`] (matching the inbound
+//! scheduler queues in `runtime/scheduler.rs`). Producers call [`try_send`] — the
+//! non-blocking variant — so they never block or deadlock when the channel is full.
+//! When the channel is full, `send_*` methods return [`io::ErrorKind::WouldBlock`],
+//! signalling that the client is not consuming messages fast enough. Callers that
+//! propagate this error via `?` will tear down the request, which is the correct
+//! backpressure response: a client that can't keep up should not receive more work.
+//!
+//! ## Deadlock analysis
+//!
+//! `try_send` is non-blocking — it never waits on the consumer. The writer thread
+//! holds the `output` lock (for `spawn_writer_shared`) only while performing the
+//! actual write, and it reads from the channel via `blocking_recv`/`try_recv` with
+//! no other lock held. No producer holds a lock when calling `try_send`. Therefore
+//! there is no circular lock+channel dependency and deadlock is impossible.
 
 #[cfg(test)]
 use crate::protocol::JsonRpcId;
@@ -12,6 +30,15 @@ use crate::transport::frame;
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::thread;
+
+/// Capacity of the bounded outbound message channel.
+///
+/// Matches the `QUEUE_CAPACITY` constant in `runtime/scheduler.rs` (64) so that
+/// the outbound queue applies the same memory budget as the inbound queues.
+/// A slow or disconnected client will fill this buffer before backpressure kicks
+/// in, bounding peak memory usage for outbound messages to roughly
+/// 64 × (max serialized message size).
+pub(crate) const OUTBOUND_CAPACITY: usize = 64;
 
 /// An outbound LSP message (response, notification, or server→client request).
 pub(crate) enum OutboundMessage {
@@ -29,22 +56,37 @@ pub(crate) enum OutboundMessage {
 /// all messages are serialized by the single writer thread.
 #[derive(Clone)]
 pub(crate) struct OutboundSender {
-    tx: tokio::sync::mpsc::UnboundedSender<OutboundMessage>,
+    tx: tokio::sync::mpsc::Sender<OutboundMessage>,
+}
+
+/// Map a [`tokio::sync::mpsc::error::TrySendError`] to an [`io::Error`].
+///
+/// - `Closed` → `BrokenPipe` (writer thread has exited)
+/// - `Full`   → `WouldBlock` (client is not consuming fast enough; caller should
+///   propagate this to tear down the in-flight request — the correct backpressure
+///   response)
+fn map_try_send_error<T>(e: tokio::sync::mpsc::error::TrySendError<T>) -> io::Error {
+    match e {
+        tokio::sync::mpsc::error::TrySendError::Full(_) => {
+            io::Error::new(io::ErrorKind::WouldBlock, "outbound channel full")
+        }
+        tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+            io::Error::new(io::ErrorKind::BrokenPipe, "outbound channel closed")
+        }
+    }
 }
 
 impl OutboundSender {
     /// Send a JSON-RPC response.
     pub fn send_response(&self, response: JsonRpcResponse) -> io::Result<()> {
-        self.tx
-            .send(OutboundMessage::Response(response))
-            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "outbound channel closed"))
+        self.tx.try_send(OutboundMessage::Response(response)).map_err(map_try_send_error)
     }
 
     /// Send a JSON-RPC notification.
     pub fn send_notification(&self, method: &str, params: Value) -> io::Result<()> {
         self.tx
-            .send(OutboundMessage::Notification { method: method.to_string(), params })
-            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "outbound channel closed"))
+            .try_send(OutboundMessage::Notification { method: method.to_string(), params })
+            .map_err(map_try_send_error)
     }
 
     /// Send a server→client JSON-RPC request.
@@ -55,8 +97,8 @@ impl OutboundSender {
         params: Value,
     ) -> io::Result<()> {
         self.tx
-            .send(OutboundMessage::Request { id, method: method.to_string(), params })
-            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "outbound channel closed"))
+            .try_send(OutboundMessage::Request { id, method: method.to_string(), params })
+            .map_err(map_try_send_error)
     }
 }
 
@@ -67,7 +109,7 @@ impl OutboundSender {
 pub(crate) fn spawn_writer(
     output: Box<dyn Write + Send>,
 ) -> (OutboundSender, thread::JoinHandle<()>) {
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, rx) = tokio::sync::mpsc::channel(OUTBOUND_CAPACITY);
     let handle = thread::spawn(move || writer_loop_batched(rx, output));
     (OutboundSender { tx }, handle)
 }
@@ -78,14 +120,14 @@ pub(crate) fn spawn_writer(
 pub(crate) fn spawn_writer_shared(
     output: std::sync::Arc<parking_lot::Mutex<Box<dyn Write + Send>>>,
 ) -> (OutboundSender, thread::JoinHandle<()>) {
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, rx) = tokio::sync::mpsc::channel(OUTBOUND_CAPACITY);
     let handle = thread::spawn(move || writer_loop_batched_shared(rx, output));
     (OutboundSender { tx }, handle)
 }
 
 /// Create an already-closed sender for shutdown replacement paths.
 pub(crate) fn closed_sender() -> OutboundSender {
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, rx) = tokio::sync::mpsc::channel(1);
     drop(rx);
     OutboundSender { tx }
 }
@@ -95,7 +137,7 @@ pub(crate) fn closed_sender() -> OutboundSender {
 /// Drains the channel and writes all immediately-available messages
 /// in a single write+flush cycle, reducing syscalls under burst load.
 fn writer_loop_batched(
-    mut rx: tokio::sync::mpsc::UnboundedReceiver<OutboundMessage>,
+    mut rx: tokio::sync::mpsc::Receiver<OutboundMessage>,
     mut output: Box<dyn Write + Send>,
 ) {
     let mut batch_buf = Vec::with_capacity(4096);
@@ -128,7 +170,7 @@ fn writer_loop_batched(
 /// Same coalescing strategy as [`writer_loop_batched`] but acquires the
 /// shared lock once per batch rather than once per message.
 fn writer_loop_batched_shared(
-    mut rx: tokio::sync::mpsc::UnboundedReceiver<OutboundMessage>,
+    mut rx: tokio::sync::mpsc::Receiver<OutboundMessage>,
     output: std::sync::Arc<parking_lot::Mutex<Box<dyn Write + Send>>>,
 ) {
     let mut batch_buf = Vec::with_capacity(4096);
@@ -331,5 +373,60 @@ mod tests {
         assert_eq!(payloads[1]["method"], "client/registerCapability");
 
         Ok(())
+    }
+
+    /// Verify that the outbound channel is bounded: once the capacity is exhausted
+    /// by a non-draining consumer, further sends return `WouldBlock` rather than
+    /// queuing indefinitely.
+    ///
+    /// Strategy: create a `Sender` with a small test capacity (2 slots) directly,
+    /// wrap it in an `OutboundSender`, fill both slots, then assert the third send
+    /// fails with `WouldBlock`. This avoids spawning threads and is deterministic.
+    #[test]
+    fn outbound_sender_returns_would_block_when_channel_is_full() -> Result<(), Box<dyn Error>> {
+        // Use a tiny capacity so we don't have to send 64 messages.
+        let (tx, _rx) = tokio::sync::mpsc::channel::<OutboundMessage>(2);
+        let sender = OutboundSender { tx };
+
+        // Fill both slots.
+        sender.send_notification("slot/one", json!({}))?;
+        sender.send_notification("slot/two", json!({}))?;
+
+        // Channel is now at capacity — the next send must NOT succeed.
+        let result = sender.send_notification("slot/overflow", json!({}));
+        assert!(
+            matches!(&result, Err(e) if e.kind() == std::io::ErrorKind::WouldBlock),
+            "expected WouldBlock when outbound channel is full, got {result:?}"
+        );
+
+        // _rx is still live, so the channel is full (not closed).
+        // Explicitly verify it is NOT BrokenPipe.
+        assert!(
+            !matches!(&result, Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe),
+            "full channel must not masquerade as BrokenPipe"
+        );
+
+        Ok(())
+    }
+
+    /// Verify that `OUTBOUND_CAPACITY` is a finite, non-zero constant that matches
+    /// the inbound queue capacity convention.
+    #[test]
+    fn outbound_capacity_constant_is_sane() {
+        // Must be non-zero (channel(0) would panic in tokio). OUTBOUND_CAPACITY is a
+        // const, so this is a genuine compile-time check (clippy::assertions_on_constants).
+        const { assert!(OUTBOUND_CAPACITY > 0, "OUTBOUND_CAPACITY must be positive") };
+        // Must be finite / reasonable (not usize::MAX, not absurdly large).
+        const {
+            assert!(
+                OUTBOUND_CAPACITY <= 1024,
+                "OUTBOUND_CAPACITY is suspiciously large — check the value"
+            )
+        };
+        // Must match the inbound QUEUE_CAPACITY convention (64).
+        assert_eq!(
+            OUTBOUND_CAPACITY, 64,
+            "OUTBOUND_CAPACITY should match the inbound scheduler QUEUE_CAPACITY (64)"
+        );
     }
 }

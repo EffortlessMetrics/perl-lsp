@@ -50,12 +50,12 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: 1.95.0
 
       - name: Install just
-        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145  # v2.83.1
         with:
           tool: just
 
@@ -400,21 +400,53 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: '20'
+          node-version: '26.5.0'
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Select npm authority
+        run: npm install --global npm@11.18.0
 
       - name: Install dependencies (npm ci)
         working-directory: vscode-extension
         run: npm ci
 
-      - name: Lint (eslint)
+      - name: Verify Node and npm authority
+        working-directory: vscode-extension
+        run: npm run doctor
+
+      # `npm run lint` runs scripts/lint-canary.js first (blocking): it proves
+      # type-aware `typescript/no-floating-promises` genuinely executed
+      # against a committed fixture pair before the real lint runs. Because
+      # Oxlint's type-aware backend (oxlint-tsgolint) is alpha, a green lint
+      # check alone is not proof the engine ran — the canary makes that
+      # observable and blocking. See vscode-extension/scripts/lint-canary.js.
+      - name: Lint (oxlint --type-aware, with type-aware canary)
         working-directory: vscode-extension
         run: npm run lint
 
-      - name: Typecheck (tsc)
+      # Oxfmt (PREP-3, #3662) is the sole formatter for vscode-extension/** —
+      # no Prettier. fmt:check fails the build on any unformatted file so
+      # drift can't land; `npm run fmt` applies fixes locally.
+      - name: Format check (oxfmt)
+        working-directory: vscode-extension
+        run: npm run fmt:check
+
+      # TypeScript 7 is the sole type-check authority — Rolldown (the build
+      # step below) does not type-check, it only bundles already-valid TS.
+      - name: Typecheck (tsc --noEmit, TS7)
+        working-directory: vscode-extension
+        run: npm run typecheck
+
+      # Rolldown (#3662, final step of the TS7 migration train) replaces TS
+      # emission as the production artifact builder: src/extension.ts ->
+      # the single out/extension.js CJS bundle. Built here (not just left to
+      # the jest suite's own beforeAll fallback) so a Rolldown-specific
+      # build failure surfaces as its own clearly-named, non-required-check
+      # CI step rather than being buried inside a jest failure.
+      - name: Build (rolldown)
         working-directory: vscode-extension
         run: npm run compile
 

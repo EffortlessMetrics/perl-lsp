@@ -11,6 +11,7 @@ use color_eyre::eyre::{Context, Result, eyre};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 
+use crate::tasks::change_set::{self, ArtifactIdentity};
 use crate::utils::project_root;
 
 /// Check mode: which checks to run on changed crates.
@@ -22,72 +23,6 @@ pub enum CheckMode {
     Test,
     /// Run both clippy and tests
     All,
-}
-
-/// Resolve a git ref, using fallbacks when the primary ref is not valid.
-fn resolve_base_ref(base: &str) -> Result<String> {
-    let mut candidates = Vec::new();
-    if base != "auto" {
-        candidates.push(base.to_string());
-    }
-    // NOTE: HEAD is intentionally excluded from the fallback chain.
-    // Using HEAD as a base ref causes `git diff HEAD...HEAD` to return an
-    // empty file list, which silently reports zero changed files and causes
-    // all targeted checks to be skipped — a false-negative worse than an error.
-    candidates.extend(
-        ["origin/main", "origin/master", "main", "master", "HEAD~1"]
-            .into_iter()
-            .map(str::to_string),
-    );
-
-    for candidate in candidates {
-        let verify = cmd("git", &["rev-parse", "--verify", &candidate])
-            .stdout_null()
-            .stderr_null()
-            .unchecked()
-            .run()
-            .context("Failed to run git rev-parse")?;
-        if verify.status.success() {
-            if base != "auto" && candidate != base {
-                eprintln!("Warning: Base ref '{}' not found; using fallback '{}'", base, candidate);
-            }
-            return Ok(candidate);
-        }
-    }
-
-    Err(eyre!(
-        "Could not resolve a valid base ref from '{}', origin/main, origin/master, main, master, or HEAD~1. \
-         Ensure the repository has at least one commit and the remote is reachable.",
-        base
-    ))
-}
-
-/// Get the list of files changed between base_ref and HEAD.
-fn changed_files(base_ref: &str) -> Result<Vec<String>> {
-    let diff_spec = format!("{}...HEAD", base_ref);
-    let output = cmd("git", &["diff", "--name-only", &diff_spec])
-        .stdout_capture()
-        .stderr_capture()
-        .unchecked()
-        .run()
-        .context("Failed to run git diff")?;
-
-    if !output.status.success() {
-        // Fall back to two-dot diff (works when there's no merge base)
-        let diff_spec_two = format!("{}..HEAD", base_ref);
-        let output2 = cmd("git", &["diff", "--name-only", &diff_spec_two])
-            .stdout_capture()
-            .stderr_capture()
-            .run()
-            .context("Failed to run git diff (two-dot fallback)")?;
-
-        let stdout =
-            String::from_utf8(output2.stdout).context("git diff output was not valid UTF-8")?;
-        return Ok(stdout.lines().map(|l| l.to_string()).collect());
-    }
-
-    let stdout = String::from_utf8(output.stdout).context("git diff output was not valid UTF-8")?;
-    Ok(stdout.lines().map(|l| l.to_string()).collect())
 }
 
 /// Extract unique crate directory prefixes (e.g., "crates/perl-parser") from changed files.
@@ -228,6 +163,10 @@ fn run_checks(
 }
 
 /// Entry point for the targeted-checks subcommand.
+///
+/// Base resolution and the changed-path diff are delegated to the shared
+/// `change_set::resolve_change_set` resolver (#3985 Slice 2) rather than a
+/// private copy of the main-first candidate chain + three-dot/two-dot diff.
 pub fn run(base: String, mode: CheckMode) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     let style = ProgressStyle::default_spinner()
@@ -238,10 +177,19 @@ pub fn run(base: String, mode: CheckMode) -> Result<()> {
     let root = project_root()?;
     spinner.set_message("Resolving base ref...");
 
-    let base_ref = resolve_base_ref(&base)?;
+    let identity = ArtifactIdentity::CommitRange { base, head: "HEAD".to_string() };
+    let resolved = change_set::resolve_change_set(identity, &root)?;
+    let base_ref = match resolved.identity {
+        ArtifactIdentity::CommitRange { base, .. } => base,
+        ArtifactIdentity::StagedTree { .. } => {
+            return Err(eyre!(
+                "resolve_change_set returned a StagedTree identity for a CommitRange input"
+            ));
+        }
+    };
 
     spinner.set_message(format!("Detecting changes since {}...", base_ref));
-    let files = changed_files(&base_ref)?;
+    let files = resolved.changed_paths;
 
     let crate_dirs = extract_crate_dirs(&files);
     if crate_dirs.is_empty() {

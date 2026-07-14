@@ -24,7 +24,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::walk_node;
-    use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
+    use perl_parser_core::{GotoTargetForm, Node, NodeKind, Parser, SourceLocation};
 
     fn loc(start: usize) -> SourceLocation {
         SourceLocation { start, end: start + 1 }
@@ -317,7 +317,13 @@ mod tests {
                 loc(63),
             ),
             Node::new(
-                NodeKind::NamedParameter { variable: Box::new(leaf_variable(64, "named")) },
+                NodeKind::NamedParameter {
+                    variable: Box::new(leaf_variable(64, "named")),
+                    external_name: String::new(),
+                    default_operator: None,
+                    default_value: None,
+                    required: true,
+                },
                 loc(64),
             ),
             Node::new(
@@ -337,6 +343,7 @@ mod tests {
                         NodeKind::Identifier { name: "LBL".to_string() },
                         loc(67),
                     )),
+                    form: GotoTargetForm::Label,
                 },
                 loc(67),
             ),

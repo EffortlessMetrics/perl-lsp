@@ -21,6 +21,9 @@ pub fn parse_error_code(error: &ParseError) -> DiagnosticCode {
         ParseError::SyntaxError { message, .. } => {
             DiagnosticCode::from_message(message).unwrap_or(DiagnosticCode::SyntaxError)
         }
+        ParseError::Advisory { message, .. } => {
+            DiagnosticCode::from_message(message).unwrap_or(DiagnosticCode::ParseError)
+        }
         _ => DiagnosticCode::ParseError,
     }
 }
@@ -38,6 +41,7 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
     let location = match error {
         ParseError::UnexpectedToken { location, .. } => *location,
         ParseError::SyntaxError { location, .. } => *location,
+        ParseError::Advisory { location, .. } => *location,
         _ => 0,
     };
 
@@ -84,7 +88,7 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
                 None
             }
         }
-        ParseError::SyntaxError { .. } => None,
+        ParseError::SyntaxError { .. } | ParseError::Advisory { .. } => None,
         ParseError::Cancelled => None,
         // Recovered errors: the parser continued with a synthetic node.
         // No user-facing suggestion is needed — the partial AST is still usable.
@@ -104,6 +108,10 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
 
 /// Derive the user-facing severity for a parser error.
 pub fn parse_error_severity(error: &ParseError) -> DiagnosticSeverity {
+    if !error.blocks_clean_parse() {
+        return DiagnosticSeverity::Warning;
+    }
+
     if matches!(error, ParseError::SyntaxError { .. })
         && (matches!(parse_error_code(error), DiagnosticCode::InvalidPrototype)
             || matches!(
@@ -120,4 +128,41 @@ pub fn parse_error_severity(error: &ParseError) -> DiagnosticSeverity {
 
 fn is_unknown_subroutine_attribute_warning(message: &str) -> bool {
     message.starts_with("unknown subroutine attribute ':")
+}
+
+#[cfg(test)]
+mod tests {
+    use perl_diagnostics::codes::{DiagnosticCode, DiagnosticSeverity};
+    use perl_parser_core::error::ParseError;
+
+    use super::{parse_error_code, parse_error_severity};
+
+    #[test]
+    fn advisory_uses_a_non_syntax_error_code() {
+        let advisory = ParseError::nested_quantifier_advisory(12);
+
+        assert_eq!(parse_error_code(&advisory), DiagnosticCode::ParseError);
+    }
+
+    #[test]
+    fn nested_quantifier_advisory_remains_an_lsp_warning() {
+        let advisory = ParseError::nested_quantifier_advisory(12);
+
+        assert_eq!(
+            parse_error_severity(&advisory),
+            DiagnosticSeverity::Warning,
+            "valid nested quantifiers must remain visible without becoming errors"
+        );
+    }
+
+    #[test]
+    fn blocking_syntax_error_remains_an_lsp_error() {
+        let syntax_error = ParseError::syntax("expected expression", 12);
+
+        assert_eq!(
+            parse_error_severity(&syntax_error),
+            DiagnosticSeverity::Error,
+            "malformed syntax must remain parse-blocking"
+        );
+    }
 }

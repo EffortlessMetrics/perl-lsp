@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# scripts/reviews/run — review-run / verification receipt poster (#3693 R1, FILE 4)
+#
+# Posts the PR-level `<!-- review-run:v1 … -->` and `<!-- verification:v1 … -->`
+# markers the convergence closeout reads. Every receipt is stamped
+# head==the PR's CURRENT headRefOid, so a receipt is bound to the exact push
+# it verified — a receipt from an older head reads as a head mismatch in the
+# closeout (deep_review_receipt_head_match / verification_receipt_head_match),
+# never as stale-green.
+#
+#   review-start → posts a review-run marker with status=running
+#   review-done  → posts a review-run marker with status=done
+#   verify       → posts a verification marker (result=pass|fail)
+#
+# WRITE-SIDE writer!=verifier enforcement: `verify` REFUSES to post when the
+# verifier equals the PR author or a fix-commit author (the closeout re-checks
+# this READ-SIDE — defense in depth, per enforcement-over-doctrine).
+#
+# ── Usage ────────────────────────────────────────────────────────────────────
+#   scripts/reviews/run review-start --pr <n> --kind <deep|standard> --reviewer <id> [--repo r] [--head sha] [--dry-run]
+#   scripts/reviews/run review-done  --pr <n> --kind <deep|standard> --reviewer <id> [--repo r] [--head sha] [--dry-run]
+#   scripts/reviews/run verify       --pr <n> --verifier <id> --result <pass|fail> [--findings <json>] [--repo r] [--head sha] [--dry-run]
+#
+# ── Exit codes ───────────────────────────────────────────────────────────────
+#   0 success (marker posted, or dry-run printed the plan)
+#   2 usage/validation error, writer==verifier refusal, or API error
+#
+# ── Test seam ────────────────────────────────────────────────────────────────
+#   --dry-run prints the marker body and makes NO network call.
+set -euo pipefail
+
+die_usage() { echo "ERROR: $1" >&2; exit 2; }
+
+[[ $# -ge 1 ]] || die_usage "missing subcommand (review-start|review-done|verify)"
+SUBCMD="$1"; shift
+
+PR="" KIND="" REVIEWER="" VERIFIER="" RESULT="" FINDINGS="0" REPO="" HEAD="" DRY_RUN=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --pr)       PR="${2:-}"; shift 2 ;;
+        --kind)     KIND="${2:-}"; shift 2 ;;
+        --reviewer) REVIEWER="${2:-}"; shift 2 ;;
+        --verifier) VERIFIER="${2:-}"; shift 2 ;;
+        --result)   RESULT="${2:-}"; shift 2 ;;
+        --findings) FINDINGS="${2:-}"; shift 2 ;;
+        --repo)     REPO="${2:-}"; shift 2 ;;
+        --head)     HEAD="${2:-}"; shift 2 ;;
+        --dry-run)  DRY_RUN=1; shift ;;
+        *) die_usage "unknown argument: $1" ;;
+    esac
+done
+
+[[ -n "$PR" ]] || die_usage "--pr is required"
+command -v jq >/dev/null 2>&1 || die_usage "jq not found on PATH"
+
+# Resolve repo + head (live path) — receipts are always stamped at HEAD.
+resolve_repo_head() {
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+        command -v gh >/dev/null 2>&1 || die_usage "gh not found on PATH (required unless --dry-run)"
+        [[ -n "$REPO" ]] || REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+        [[ -n "$HEAD" ]] || HEAD="$(gh pr view "$PR" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+    else
+        [[ -n "$HEAD" ]] || HEAD="DRYRUN-HEAD"
+    fi
+}
+
+post_pr_comment() {
+    local body="$1"
+    gh pr comment "$PR" --repo "$REPO" --body "$body"
+}
+
+emit() {
+    # $1 = kind label (review-run|verification), $2 = marker json, $3 = preamble
+    local body
+    body="$(printf '%s\n\n<!-- %s:v1 %s -->' "$3" "$1" "$2")"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        echo "DRY-RUN $1 receipt for PR #$PR at head $HEAD"
+        printf '%s\n' "$body"
+        return 0
+    fi
+    if ! post_pr_comment "$body" >/dev/null; then
+        echo "ERROR: failed to post $1 receipt to PR #$PR" >&2
+        exit 2
+    fi
+    echo "OK posted $1 receipt to PR #$PR at head $HEAD"
+}
+
+case "$SUBCMD" in
+    review-start|review-done)
+        [[ "$KIND" == "deep" || "$KIND" == "standard" ]] || die_usage "$SUBCMD requires --kind <deep|standard>"
+        [[ -n "$REVIEWER" ]] || die_usage "$SUBCMD requires --reviewer <id>"
+        resolve_repo_head
+        local_status="running"
+        [[ "$SUBCMD" == "review-done" ]] && local_status="done"
+        marker="$(jq -cn --arg kind "$KIND" --arg head "$HEAD" --arg rev "$REVIEWER" --arg st "$local_status" \
+            '{v:1, kind:$kind, head:$head, reviewer:$rev, status:$st}')"
+        emit "review-run" "$marker" "Review pass ($KIND) $local_status by $REVIEWER at head $HEAD."
+        ;;
+    verify)
+        [[ -n "$VERIFIER" ]] || die_usage "verify requires --verifier <id>"
+        [[ "$RESULT" == "pass" || "$RESULT" == "fail" ]] || die_usage "verify requires --result <pass|fail>"
+        resolve_repo_head
+        # WRITE-SIDE writer!=verifier: refuse if verifier is the PR author or a
+        # fix-commit author. (Live path only — dry-run skips the lookup.)
+        if [[ "$DRY_RUN" -eq 0 ]]; then
+            pr_author="$(gh pr view "$PR" --repo "$REPO" --json author --jq '.author.login' 2>/dev/null || echo "")"
+            commit_authors="$(gh pr view "$PR" --repo "$REPO" --json commits --jq '[.commits[].authors[].login] | unique | .[]' 2>/dev/null || echo "")"
+            if [[ -n "$pr_author" && "$VERIFIER" == "$pr_author" ]]; then
+                echo "REFUSE verifier '$VERIFIER' is the PR author — a writer cannot verify their own work (see #3693)" >&2
+                exit 2
+            fi
+            while IFS= read -r ca; do
+                [[ -z "$ca" ]] && continue
+                if [[ "$VERIFIER" == "$ca" ]]; then
+                    echo "REFUSE verifier '$VERIFIER' authored a commit on this PR — a writer cannot verify their own work (see #3693)" >&2
+                    exit 2
+                fi
+            done <<< "$commit_authors"
+        fi
+        # findings may be a bare int or a json object; normalize to json.
+        if [[ "$FINDINGS" =~ ^[0-9]+$ ]]; then findings_json="$FINDINGS"; else findings_json="$(jq -c '.' <<< "$FINDINGS" 2>/dev/null || echo '0')"; fi
+        marker="$(jq -cn --arg head "$HEAD" --arg v "$VERIFIER" --argjson f "$findings_json" --arg r "$RESULT" \
+            '{v:1, head:$head, verifier:$v, findings:$f, result:$r}')"
+        emit "verification" "$marker" "Independent verification ($RESULT) by $VERIFIER at head $HEAD."
+        ;;
+    *)
+        die_usage "unknown subcommand '$SUBCMD' (review-start|review-done|verify)"
+        ;;
+esac
+exit 0

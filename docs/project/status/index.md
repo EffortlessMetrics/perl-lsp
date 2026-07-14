@@ -5,7 +5,7 @@
 
 ## What's True Right Now
 
-- **Release posture**: `v0.15.0` shipped 2026-05-22 (JSON-RPC type safety + LSP4IJ file-watcher crash fix). The workspace version line is `v0.15.0`, the published crate surface is 31 crates, and `v0.16.0` is the next planned train.
+- **Release posture**: `v0.16.0` is the current workspace version (Perldoc virtual documents, LSP 3.18 applyEdit metadata, DAP improvements). The published crate surface is 31 crates. Release is pending; see `docs/releases/v0.16.0.md` for ship readiness.
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
 - **LSP server**: `features.toml` is the canonical capability catalog; 60 user-visible features at 100% coverage (125/125 including plumbing protocol methods and DAP handlers) — see generated [lsp.md](lsp.md) for current numbers
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `cargo xtask ignored-tests` is the tracked-test-debt source
@@ -40,8 +40,8 @@
 
 ## What's Next
 
-**Now (active milestone: v0.16.0 planning — v0.15.0 shipped 2026-05-22)**
-- `v0.15.0` is out: JSON-RPC type safety and LSP4IJ file-watcher crash fix shipped
+**Now (active milestone: v0.16.0 release pending)**
+- `v0.16.0` in-flight: Perldoc virtual documents, LSP 3.18 applyEdit metadata, DAP improvements, quality hardening
 - Keep public-alpha wording consistent: package versions use normal SemVer, but the product posture is not stable/GA
 - Keep the three parser verification lanes explicit and green: `just corpus-sweep-check`, `just cpan-corpus-check`, and `just parser-audit`, with `just common-corpus-check` covering the pinned strict-clean subset
 - Keep the top-level README, status docs, and release runbooks aligned with the actual `perllsp` asset line, the `perl-lsp-rs` extension package, and the 31-crate published surface

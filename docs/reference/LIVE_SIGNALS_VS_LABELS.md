@@ -19,36 +19,36 @@ Every label in the repo, classified by whether live ground truth exists for it:
 | `ci-green` | Yes | `statusCheckRollup` for current HEAD SHA | Informational: "green-ci agent ran a pass and it was green at that time" |
 | `needs-ci-fix` | Yes | Same | Informational: "green-ci flagged this needs follow-up at time of check" |
 | `mergeable` | Yes | `mergeStateStatus` on the PR | Not a label — queried directly from the API |
-| `needs-plan-review` | No | — | Authoritative: routing entry to verification pipeline |
-| `accuracy-reviewed` | No | — | Authoritative: signoff that accuracy-scout completed its pass |
-| `research-reviewed` | No | — | Authoritative: signoff that research-verifier completed its pass |
-| `oppositional-reviewed` | No | — | Authoritative: signoff that oppositional-planner completed its pass |
-| `diaboli-reviewed` | No | — | Authoritative: signoff that advocatus-diaboli completed its pass |
-| `architecture-reviewed` | No | — | Authoritative: signoff that architecture-reviewer completed its pass |
-| `maintainer-issue-reviewed` | No | — | Authoritative: signoff that maintainer-issue completed its pass |
-| `plan-reviewed` | No | — | Authoritative: signoff that plan-reviewer completed its pass |
-| `spec-reviewed` | No | — | Authoritative: spec-planner created impl branch with `.spec/` files |
-| `red-tdd-reviewed` | No | — | Authoritative: red-tdd committed failing tests to impl branch |
-| `green-tdd-reviewed` | No | — | Authoritative: green-tdd added edge case and regression tests |
-| `review-reviewed` | No | — | Authoritative: standards reviewer completed its pass |
-| `maintainer-pr-reviewed` | No | — | Authoritative: maintainer-pr completed project-fit check |
-| `pr-responded` | No | — | Authoritative: pr-responder addressed bot comments and CI failures |
-| `refactor-planner-reviewed` | No | — | Authoritative: refactor-planner posted simplification plan |
-| `green-refactor-reviewed` | No | — | Authoritative: green-refactor simplified implementation |
-| `deep-reviewed` | No | — | Authoritative: reviewer-deep correctness check passed |
-| `needs-deep-review` | No | — | Authoritative: routing flag for deep review pass |
-| `diff-audited` | No | — | Authoritative: diff-auditor signoff on coherence and cleanliness |
-| `needs-diff-fix` | No | — | Authoritative: diff-auditor bounce — diff has artifacts or drift |
-| `needs-builder-fix` | No | — | Authoritative: routing flag back to builder (typed split planned) |
-| `builder-ready` | No | — | Authoritative: spec finalized, build pipeline may start |
-| `in-build` | No | — | Authoritative: builder actively working |
-| `in-review` | No | — | Authoritative: PR in review process |
-| `merge-ready` | No | — | Authoritative: composite signoff, all gates passed |
-| `already-fixed` | No | — | Authoritative: close without build |
-| `structural-blocker` | No | — | Authoritative: blocks parallel work |
-| `follow-up-recommended` | No | — | Authoritative: needs follow-up issue |
+| `needs-plan-review` | No | — | Navigation: routing entry to verification pipeline |
+| `accuracy-reviewed` | No | — | Navigation: signoff that accuracy-scout completed its pass |
+| `research-reviewed` | No | — | Navigation: signoff that research-verifier completed its pass |
+| `oppositional-reviewed` | No | — | Navigation: signoff that oppositional-planner completed its pass |
+| `diaboli-reviewed` | No | — | Navigation: signoff that advocatus-diaboli completed its pass |
+| `architecture-reviewed` | No | — | Navigation: signoff that architecture-reviewer completed its pass |
+| `maintainer-issue-reviewed` | No | — | Navigation: signoff that maintainer-issue completed its pass |
+| `plan-reviewed` | No | — | Navigation: signoff that plan-reviewer completed its pass |
+| `spec-reviewed` | No | — | Navigation: spec-planner created impl branch with `.spec/` files |
+| `red-tdd-reviewed` | No | — | Navigation: red-tdd committed failing tests to impl branch |
+| `green-tdd-reviewed` | No | — | Navigation: green-tdd added edge case and regression tests |
+| `review-reviewed` | No | — | Navigation, receipt-reconciled: standards reviewer completed its pass; a current-head `NeedsBuilder` review receipt strips it |
+| `maintainer-pr-reviewed` | No | — | Navigation: maintainer-pr completed project-fit check |
+| `pr-responded` | No | — | Navigation: pr-responder addressed bot comments and CI failures |
+| `refactor-planner-reviewed` | No | — | Navigation: refactor-planner posted simplification plan |
+| `green-refactor-reviewed` | No | — | Navigation: green-refactor simplified implementation |
+| `deep-reviewed` | No | — | Navigation: reviewer-deep correctness check passed; not receipt-reconciled — see below |
+| `needs-deep-review` | No | — | Navigation: routing flag for deep review pass; not receipt-reconciled — see below |
+| `diff-audited` | No | — | Navigation, receipt-reconciled: diff-auditor signoff on coherence and cleanliness; a current-head `NeedsBuilder` or `NeedsDiff` review receipt strips it |
+| `needs-diff-fix` | No | — | Navigation, receipt-reconciled: diff-auditor bounce — diff has artifacts or drift; a current-head independent `Approved` review receipt strips it |
+| `needs-builder-fix` | No | — | Navigation, receipt-reconciled: routing flag back to builder (typed split planned); a current-head independent `Approved` review receipt strips it |
+| `builder-ready` | No | — | Navigation: spec finalized, build pipeline may start |
+| `in-build` | No | — | Navigation: builder actively working |
+| `in-review` | No | — | Navigation: PR in review process |
+| `merge-ready` | No | — | Navigation: composite signoff signal; the reconciler strips it when live CI is red or a non-CI `needs-*` label is present — never a merge check itself |
+| `already-fixed` | No | — | Navigation: close without build |
+| `structural-blocker` | No | — | Navigation: blocks parallel work |
+| `follow-up-recommended` | No | — | Navigation: needs follow-up issue |
 
-**The key split:** `ci-green` and `needs-ci-fix` are the only labels with live ground truth. Every other label is the only signal that the corresponding agent activity occurred.
+**The key split:** `ci-green` and `needs-ci-fix` are the only labels with live ground truth. Every other label is navigation — a record that the corresponding agent activity occurred, not an authority. A subset of the review-label pairs (`diff-audited`/`needs-diff-fix`, `review-reviewed`/`needs-builder-fix`) are additionally reconciled against a SHA-bound review receipt (see below); `deep-reviewed`/`needs-deep-review` has no receipt mapping and is left fully un-arbitrated.
 
 ---
 
@@ -62,7 +62,7 @@ For labels with live ground truth (`ci-green`, `needs-ci-fix`), the reconciler d
 - Live CI red: leave `needs-ci-fix`; `ci-green` is stale but harmless — the live red blocks merge
 - Live CI green and neither label exists: PR may still be mergeable; absence of `ci-green` means "green-ci hasn't formally signed off" — not that CI is red
 
-For no-live-signal labels (every other label), the reconciler uses GitHub timeline: if both `deep-reviewed` and `needs-deep-review` exist, the later-applied label wins.
+For no-live-signal labels, the reconciler no longer arbitrates by GitHub timeline ("later-applied label wins") — click-order was retired as an authority source (#4005 D5). Two review-label pairs are instead resolved against a SHA-bound review receipt (`ReviewReceipt` / `contradictions_from_current_review_receipt`), with an asymmetric per-verdict mapping: a current-head *independent* `Approved` receipt (one where `fix_forward_applied` is `false`) strips both routing labels if present (`needs-builder-fix` and `needs-diff-fix`); a `NeedsBuilder` verdict strips both sign-off labels if present (`review-reviewed` and `diff-audited`); a `NeedsDiff` verdict strips only `diff-audited` — it does **not** strip `review-reviewed`. The `deep-reviewed`/`needs-deep-review` pair has no receipt-verdict mapping — with timestamp arbitration gone, that pair is simply left un-arbitrated: both labels can coexist until an agent or operator resolves it directly.
 
 The reconciler implementation: `xtask/src/tasks/queue_reconciler.rs`
 

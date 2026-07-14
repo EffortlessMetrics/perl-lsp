@@ -1,0 +1,91 @@
+name: Changelog Ledger (Advisory)
+
+# ADVISORY / NON-REQUIRED (tracking issue #3784 — the Changie program; #3768
+# is the retrospective baseline artifact only). Prints the PR's changelog
+# disposition (Changie fragment OR exemption) and validates any added
+# fragment. It is intentionally NOT listed in
+# `.ci/policies/required-checks.toml`, so it can never block a merge today —
+# but it is NOT a bare "always exit 0" script. `cargo xtask changelog check`
+# has three distinct exit codes (0 = satisfied/advisory finding, 1 = blocking
+# violation — unreachable while `blocking_enforced_from` is unset, 2 =
+# instrument/config failure). A follow-up PR decides if/when a missing
+# disposition becomes merge-blocking. This workflow changes no release
+# execution.
+#
+# Ubuntu-only (no Windows job — see CI runner economics).
+
+on:
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-advisory-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
+
+env:
+  # Pinned to the nixpkgs devShell version (flake.nix) for local/CI parity.
+  CHANGIE_VERSION: "1.25.0"
+  # SHA-256 of changie_1.25.0_linux_amd64.tar.gz, independently verified
+  # against the release's own checksums.txt at
+  # https://github.com/miniscruff/changie/releases/download/v1.25.0/checksums.txt
+  CHANGIE_LINUX_AMD64_SHA256: "f8c012073cd7865783d6db5123c59cdc006b2244309ce80243c8f6a1dda7aa5a"
+
+jobs:
+  changelog-disposition:
+    name: Changelog disposition (advisory)
+    # Self-hosted Ubuntu runner only — never add a Windows/non-Ubuntu job here
+    # (see CI runner economics: any non-Ubuntu job falls back to billed
+    # GitHub-hosted minutes).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Full history so we can diff against the PR base SHA.
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.95.0
+
+      - name: Install changie (pinned + checksum-verified)
+        run: |
+          set -euo pipefail
+          asset="changie_${CHANGIE_VERSION}_linux_amd64.tar.gz"
+          url="https://github.com/miniscruff/changie/releases/download/v${CHANGIE_VERSION}/${asset}"
+          curl -fsSL "$url" -o "/tmp/${asset}"
+
+          echo "${CHANGIE_LINUX_AMD64_SHA256}  /tmp/${asset}" | sha256sum -c -
+
+          mkdir -p /tmp/changie-bin
+          tar -xzf "/tmp/${asset}" -C /tmp/changie-bin changie
+          echo "/tmp/changie-bin" >> "$GITHUB_PATH"
+          "/tmp/changie-bin/changie" --version | tee /tmp/changie-version.txt
+          grep -q "${CHANGIE_VERSION}" /tmp/changie-version.txt
+
+      - name: Config self-test (parse + render samples)
+        run: cargo xtask changelog check --self-test
+
+      - name: Disposition check (advisory)
+        if: github.event_name == 'pull_request'
+        env:
+          # Passed via env (not shell-interpolated) to avoid injection.
+          CHANGELOG_PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          # No `|| true` here: a failing `git diff` must surface as a real CI
+          # failure (this step, not the merge gate — the workflow isn't
+          # required), not silently degrade to an empty changed-file list.
+          # `cargo xtask changelog check` applies the same rule internally
+          # (exit 2) for any other path that resolves the changed-file list.
+          git diff --name-only "${base}...HEAD" > /tmp/changed-files.txt
+          echo "Changed files:"
+          cat /tmp/changed-files.txt
+          echo "---"
+          cargo xtask changelog check --changed-files /tmp/changed-files.txt

@@ -22,6 +22,34 @@ use std::sync::{Arc, Mutex};
 
 // ============= AST Validation Utilities (AC7) =============
 
+/// Combine a prior breakpoint message with the condition-invalid error.
+///
+/// When a breakpoint has both a line-validation message (e.g. "Breakpoint set on
+/// blank line, adjusted to line 5") **and** fails condition validation, both pieces
+/// of information must be surfaced to the user.  Prior to this helper the `else`
+/// branch in `set_breakpoints` unconditionally overwrote any existing message.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// // Prior adjustment message is preserved
+/// let msg = combine_condition_message(Some("adjusted to line 5".to_string()));
+/// let text = msg.as_deref().unwrap_or("");
+/// assert!(text.contains("adjusted to line 5"));
+/// assert!(text.contains("Conditional breakpoint expression is invalid"));
+///
+/// // No prior message — just the condition error
+/// let msg = combine_condition_message(None);
+/// assert_eq!(msg.as_deref(), Some("Conditional breakpoint expression is invalid"));
+/// ```
+pub(crate) fn combine_condition_message(prior: Option<String>) -> Option<String> {
+    const COND_ERR: &str = "Conditional breakpoint expression is invalid";
+    Some(match prior {
+        Some(m) => format!("{m}; {COND_ERR}"),
+        None => COND_ERR.to_string(),
+    })
+}
+
 /// Validate a breakpoint against source using the dedicated breakpoint microcrate.
 ///
 /// Returns `(verified, resolved_line, message)` where `resolved_line` may differ from
@@ -147,14 +175,30 @@ fn evaluate_hit_condition(raw: Option<&str>, hit_count: u64) -> Option<bool> {
     parse_hit_condition_operand(expr).map(|n| hit_count == n)
 }
 
+/// Returns true if `haystack` ends with `suffix` and the match starts at a path-component
+/// boundary (i.e. the character immediately before the suffix is `/` or `\`).
+/// When the suffix is exactly as long as the haystack, the strings are equal — also true.
+fn path_suffix_matches(haystack: &str, suffix: &str) -> bool {
+    if !haystack.ends_with(suffix) {
+        return false;
+    }
+    let prefix_len = haystack.len().wrapping_sub(suffix.len());
+    if prefix_len == 0 {
+        // Equal lengths and ends_with holds → exact match.
+        return true;
+    }
+    // The byte immediately before the suffix must be a path separator.
+    matches!(haystack.as_bytes()[prefix_len - 1], b'/' | b'\\')
+}
+
 fn file_paths_match(stored: &str, observed: &str) -> bool {
     if stored == observed {
         return true;
     }
-    if stored.ends_with(observed) || observed.ends_with(stored) {
-        return true;
-    }
-    false
+    // Allow suffix matching for relative-vs-absolute path pairs (e.g. "bar.pl" matches
+    // "/abs/path/bar.pl"), but require a path-component boundary before the matched suffix
+    // to prevent mid-component false matches (e.g. "bar.pl" must NOT match "foobar.pl").
+    path_suffix_matches(stored, observed) || path_suffix_matches(observed, stored)
 }
 
 /// Interpolate logpoint message template with variable values.
@@ -440,7 +484,7 @@ impl BreakpointStore {
                     message
                 } else {
                     verified = false;
-                    Some("Conditional breakpoint expression is invalid".to_string())
+                    combine_condition_message(message)
                 }
             } else {
                 message
@@ -1364,6 +1408,25 @@ EOF
     }
 
     #[test]
+    fn test_file_paths_match_mid_component_rejected() {
+        // "bar.pl" must NOT match "foobar.pl" — the suffix starts in the middle of a component
+        assert!(!file_paths_match("foobar.pl", "bar.pl"));
+        assert!(!file_paths_match("bar.pl", "foobar.pl"));
+        assert!(!file_paths_match("/path/to/foobar.pl", "bar.pl"));
+        assert!(!file_paths_match("bar.pl", "/path/to/foobar.pl"));
+    }
+
+    #[test]
+    fn test_file_paths_match_boundary_positive() {
+        // Relative-vs-absolute with a path separator boundary must still match
+        assert!(file_paths_match("/abs/path/bar.pl", "bar.pl"));
+        assert!(file_paths_match("bar.pl", "/abs/path/bar.pl"));
+        // Windows-style separator
+        assert!(file_paths_match(r"C:\abs\path\bar.pl", "bar.pl"));
+        assert!(file_paths_match("bar.pl", r"C:\abs\path\bar.pl"));
+    }
+
+    #[test]
     fn test_breakpoint_hit_count_isolated_by_directory() -> Result<(), Box<dyn std::error::Error>> {
         // Integration: two temp files with same basename in different dirs
         let dir_a = must(tempfile::tempdir());
@@ -1485,6 +1548,101 @@ EOF
         assert!(
             records[1].message.as_deref().unwrap_or("").contains("newline"),
             "stored record must carry the newline-rejection message"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // combine_condition_message — unit tests for the message-combine helper
+    // -----------------------------------------------------------------------
+
+    /// Bug regression: prior to the fix, a pre-existing message (e.g. "adjusted to line N")
+    /// was silently overwritten when the condition failed validation.  After the fix both
+    /// pieces of information are present in the combined message.
+    #[test]
+    fn test_combine_condition_message_preserves_prior_adjustment() {
+        let prior = Some("Breakpoint set on blank line, adjusted to line 5".to_string());
+        let combined = combine_condition_message(prior);
+        let text = combined.as_deref().unwrap_or("");
+        assert!(
+            text.contains("adjusted to line 5"),
+            "combined message must retain the adjustment note; got: {text:?}"
+        );
+        assert!(
+            text.contains("Conditional breakpoint expression is invalid"),
+            "combined message must include the condition-invalid note; got: {text:?}"
+        );
+        // Both parts are joined with "; " — exact shape matters for the DAP client.
+        assert_eq!(
+            text,
+            "Breakpoint set on blank line, adjusted to line 5; Conditional breakpoint expression is invalid",
+            "exact combined message mismatch"
+        );
+    }
+
+    /// When there is no prior message (the common case for a breakpoint on a
+    /// valid line), `combine_condition_message` must produce just the condition
+    /// error — no leading delimiter, no empty prefix.
+    #[test]
+    fn test_combine_condition_message_no_prior_gives_condition_error_only() {
+        let combined = combine_condition_message(None);
+        assert_eq!(
+            combined.as_deref(),
+            Some("Conditional breakpoint expression is invalid"),
+            "with no prior message the result must be exactly the condition error"
+        );
+    }
+
+    /// Integration test: a breakpoint on a valid line with an empty condition expression
+    /// (explicitly rejected by the validator) must produce `verified=false` and a message
+    /// that contains the condition-invalid text.
+    ///
+    /// Uses an empty string condition because the validator explicitly rejects it before
+    /// the parser step — this is the most reliable way to trigger condition rejection in
+    /// an integration test without depending on parser error-recovery behavior.
+    #[test]
+    fn test_set_breakpoints_invalid_condition_marks_unverified_with_message() {
+        let (_file, source_path) = create_test_perl_file();
+        let store = BreakpointStore::new();
+
+        let args = SetBreakpointsArguments {
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 5, // "my $x = 1;" — valid, executable line
+                column: None,
+                // Empty condition is explicitly rejected by the validator (no parser ambiguity).
+                condition: Some(String::new()),
+                hit_condition: None,
+                log_message: None,
+            }]),
+            source_modified: None,
+        };
+
+        let responses = store.set_breakpoints(&args);
+        assert_eq!(responses.len(), 1);
+
+        let bp = &responses[0];
+        assert!(
+            !bp.verified,
+            "breakpoint with invalid condition must be unverified; got verified={}",
+            bp.verified
+        );
+        let msg = bp.message.as_deref().unwrap_or("");
+        assert!(
+            msg.contains("Conditional breakpoint expression is invalid"),
+            "message must mention the condition error; got: {msg:?}"
+        );
+
+        // Stored record must also be unverified with the condition-error message.
+        let records = store.get_breakpoints(&source_path);
+        assert_eq!(records.len(), 1);
+        assert!(!records[0].verified, "stored record must be unverified");
+        assert!(
+            records[0]
+                .message
+                .as_deref()
+                .unwrap_or("")
+                .contains("Conditional breakpoint expression is invalid"),
+            "stored message must include condition-invalid note"
         );
     }
 }

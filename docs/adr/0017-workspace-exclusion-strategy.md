@@ -88,4 +88,4 @@ members = [
 
 - [ARCHITECTURE_OVERVIEW.md](../reference/ARCHITECTURE_OVERVIEW.md) - Workspace configuration strategy
 - [CRATE_ARCHITECTURE_GUIDE.md](../reference/CRATE_ARCHITECTURE_GUIDE.md) - Excluded crates section
-- [WORKSPACE_TEST_REPORT.md](../project/WORKSPACE_TEST_REPORT.md) - Current workspace status
+- [status/index.md](../project/status/index.md) - Current workspace status

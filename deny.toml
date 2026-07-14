@@ -19,13 +19,6 @@ feature-depth = 1
 
 [advisories]
 ignore = [
-    # atomic-polyfill is unmaintained (RUSTSEC-2023-0089).
-    # Transitive dep chain: postcard -> heapless -> atomic-polyfill.
-    # postcard is used by tree-sitter-perl. No upgrade path exists until
-    # postcard drops heapless or heapless migrates to portable-atomic.
-    # Risk: Low -- atomic-polyfill is a thin polyfill crate with no known
-    # security vulnerability; the advisory is "unmaintained" only.
-    { id = "RUSTSEC-2023-0089", reason = "atomic-polyfill unmaintained (postcard -> heapless -> atomic-polyfill). No upgrade path. Risk: low (unmaintained, not vulnerable)." },
 ]
 
 # -- Licenses ------------------------------------------------------------------

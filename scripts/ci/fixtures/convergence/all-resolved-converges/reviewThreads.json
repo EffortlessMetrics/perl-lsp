@@ -1,0 +1,46 @@
+[
+  {
+    "id": "PRRT_resolved_active_shape_1",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/handlers/completion.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        },
+        {
+          "author": {
+            "login": "replier"
+          },
+          "body": "Superseded.\n\n<!-- disposition:v1 {\"v\":1,\"class\":\"superseded\",\"thread_id\":\"PRRT_resolved_active_shape_1\",\"by\":\"alice\",\"head\":\"cccc3333cccc3333cccc3333cccc3333cccc3333\",\"evidence\":{\"superseded_by\":\"#4243\"}} -->"
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_resolved_outdated_shape_1",
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "crates/perl-lsp-rs/src/handlers/references.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "author": {
+            "login": "alice"
+          }
+        },
+        {
+          "author": {
+            "login": "replier"
+          },
+          "body": "Superseded.\n\n<!-- disposition:v1 {\"v\":1,\"class\":\"superseded\",\"thread_id\":\"PRRT_resolved_outdated_shape_1\",\"by\":\"alice\",\"head\":\"cccc3333cccc3333cccc3333cccc3333cccc3333\",\"evidence\":{\"superseded_by\":\"#4244\"}} -->"
+        }
+      ]
+    }
+  }
+]

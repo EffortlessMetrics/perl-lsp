@@ -92,6 +92,105 @@ fn decoded_semantic_tokens(
     Ok(decoded)
 }
 
+fn decoded_named_semantic_tokens(
+    response: &serde_json::Value,
+    advertised_legend: &[String],
+) -> Result<Vec<(usize, usize, usize, String)>, BoxError> {
+    decoded_semantic_tokens(response)?
+        .into_iter()
+        .map(|(line, col, len, type_idx, _mods)| {
+            let type_name = advertised_legend
+                .get(type_idx)
+                .cloned()
+                .unwrap_or_else(|| format!("OUT_OF_RANGE({type_idx})"));
+            Ok((line, col, len, type_name))
+        })
+        .collect()
+}
+
+fn semantic_tokens_for_source(
+    uri: &str,
+    source: &str,
+) -> Result<Vec<(usize, usize, usize, String)>, BoxError> {
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut child = Command::new(bin)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+
+    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let mut reader = BufReader::new(stdout);
+
+    let init_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "capabilities": {
+                "general": { "positionEncodings": ["utf-16"] }
+            }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &init_req)?;
+    let init_resp = recv_until_id(&mut reader, 1)?;
+    let advertised_legend: Vec<String> =
+        init_resp["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"]
+            .as_array()
+            .ok_or("semanticTokensProvider.legend.tokenTypes missing from initialize response")?
+            .iter()
+            .map(|v| v.as_str().unwrap_or("").to_string())
+            .collect();
+
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","method":"initialized","params":{}}).to_string(),
+    )?;
+
+    let did_open = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didOpen",
+        "params": {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": source
+            }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &did_open)?;
+
+    let sem_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "textDocument/semanticTokens/full",
+        "params": {
+            "textDocument": { "uri": uri }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &sem_req)?;
+    let sem_resp = recv_until_id(&mut reader, 2)?;
+    let decoded = decoded_named_semantic_tokens(&sem_resp, &advertised_legend)?;
+
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}).to_string(),
+    )?;
+    let _ = recv_until_id(&mut reader, 3)?;
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","method":"exit","params":null}).to_string(),
+    )?;
+    let _ = child.wait();
+
+    Ok(decoded)
+}
+
 #[test]
 fn semantic_token_label_type_decodes_for_perl_labels() -> Result<(), BoxError> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
@@ -488,6 +587,78 @@ fn semantic_token_indices_match_advertised_legend() -> Result<(), BoxError> {
     send_msg(&mut stdin, &exit_notif)?;
 
     let _ = child.wait();
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_keep_sub_keyword_distinct_from_subroutine_name() -> Result<(), BoxError> {
+    let fixtures = [
+        (
+            "file:///semantic_sub_named_regression.pl",
+            "sub foo { return 1; }\n",
+            (0, 0, 3),
+            (0, 4, 3),
+        ),
+        (
+            "file:///semantic_lexical_sub_regression.pl",
+            "my sub lexical_name { return 1; }\n",
+            (0, 3, 3),
+            (0, 7, 12),
+        ),
+        (
+            "file:///semantic_attributed_sub_regression.pl",
+            "sub index :Path :Args(0) { return 1; }\n",
+            (0, 0, 3),
+            (0, 4, 5),
+        ),
+    ];
+
+    for (uri, source, sub_span, name_span) in fixtures {
+        let decoded = semantic_tokens_for_source(uri, source)?;
+        assert!(
+            decoded.contains(&(sub_span.0, sub_span.1, sub_span.2, "keyword".to_string())),
+            "`sub` should decode as keyword for {source:?}; decoded={decoded:?}"
+        );
+        assert!(
+            decoded.contains(&(name_span.0, name_span.1, name_span.2, "function".to_string())),
+            "subroutine name should decode as function for {source:?}; decoded={decoded:?}"
+        );
+        assert!(
+            !decoded.iter().any(|(line, col, _len, token_type)| (*line, *col) == (0, sub_span.1)
+                && token_type == "function"),
+            "no function token should start at the `sub` keyword for {source:?}; decoded={decoded:?}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_do_not_emit_function_name_for_anonymous_sub() -> Result<(), BoxError> {
+    let decoded = semantic_tokens_for_source(
+        "file:///semantic_anonymous_sub_regression.pl",
+        "my $cb = sub { return 1; };\n",
+    )?;
+
+    assert!(
+        decoded.contains(&(0, 9, 3, "keyword".to_string())),
+        "anonymous-sub `sub` should decode as keyword; decoded={decoded:?}"
+    );
+    assert!(
+        !decoded.iter().any(|(line, col, _len, token_type)| {
+            (*line, *col) == (0, 9) && token_type == "function"
+        }),
+        "anonymous sub must not emit a function-name token at the `sub` keyword; decoded={decoded:?}"
+    );
+    assert!(
+        decoded.iter().any(|(_line, _col, _len, token_type)| token_type == "variable"),
+        "anonymous-sub fixture should still emit variable tokens; decoded={decoded:?}"
+    );
+    assert!(
+        decoded.iter().any(|(_line, _col, _len, token_type)| token_type == "keyword"),
+        "anonymous-sub fixture should still emit keyword tokens, including return; decoded={decoded:?}"
+    );
+
     Ok(())
 }
 

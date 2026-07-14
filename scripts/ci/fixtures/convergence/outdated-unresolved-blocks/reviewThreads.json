@@ -1,0 +1,8 @@
+[
+  {
+    "id": "PRRT_outdated_unresolved_1",
+    "isResolved": false,
+    "isOutdated": true,
+    "path": "crates/perl-lsp-rs/src/handlers/hover.rs"
+  }
+]

@@ -42,6 +42,34 @@ See [docs/reference/PROVIDER_READINESS_CONTRACT.md](../reference/PROVIDER_READIN
 for the reliability doctrine and [docs/reference/CI_GATE_PLAYBOOK.md](../reference/CI_GATE_PLAYBOOK.md)
 for the contributor gate playbook.
 
+
+## Active Cleanup: Native Stack Product Surface
+
+The native Rust stack is the product surface. External Perl tools such as
+`perltidy`, `perlcritic`, and `Perl::LanguageServer` may remain as explicit
+compatibility, migration, or conformance surfaces, but they must not appear as
+normal first-mile runtime dependencies. The canonical policy is
+[Native Stack Product Policy](../reference/NATIVE_STACK_POLICY.md), and the
+implementation packet breakdown is
+[PLSP-SPEC-0015](../specs/PLSP-SPEC-0015-native-stack-product-surface.md).
+
+Priority packets for agents:
+
+| # | Packet | Scope | Done when |
+|---|--------|-------|-----------|
+| 1 | Native-only DAP docs | `docs/tutorials/DAP_USER_GUIDE.md`, `book/src/dap/user-guide.md`, `crates/perl-dap/README.md`, legacy bridge reference | Public DAP guide and book surface no longer mention PLS/BridgeAdapter; legacy setup is quarantined |
+| 2 | DAP dependency tests | `crates/perl-dap/tests/dap_dependency_tests.rs` | Tests enforce native guide absence and legacy reference presence |
+| 3 | DAP CLI/API stance | `crates/perl-dap/src/*` | Bridge mode is hidden/de-emphasized or removed according to the chosen compatibility stance |
+| 4 | VS Code native-first copy | `vscode-extension/package.json`, extension docs, config reference | Formatter/critic settings no longer say external tools are required by default |
+| 5 | Native-first critic command | `crates/perl-lsp-rs/src/execute_command/provider.rs` | `perl.runCritic` defaults to native and uses external `perlcritic` only by explicit configuration |
+| 6 | Formatter default guard | formatter selection/config tests | `perltidy` on `PATH` does not change default native formatting |
+| 7 | Status/downstream cleanup | `docs/project/status/dap.md`, `docs/reference/DOWNSTREAM_DAP_INTEGRATIONS.md` | Distribution readiness is native-DAP focused; bridge is legacy-only if mentioned |
+| 8 | Negative packaging guard | release artifact checks and docs | Release archives fail checks if they bundle external Perl tooling payloads |
+
+This cleanup is documentation/control-plane work until a packet explicitly
+changes runtime behavior. Keep PRs packet-sized and cite the policy/spec in PR
+bodies so parallel agents do not reintroduce legacy wording into native surfaces.
+
 ## Current Framing
 
 ## Active Swarm Roadmap: Multi-Lane Trust Hardening

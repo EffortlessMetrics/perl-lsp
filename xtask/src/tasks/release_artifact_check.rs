@@ -63,6 +63,11 @@ struct TargetSpec {
 struct ArchiveEntry {
     /// Final path component, e.g. `perl-dap` from `perllsp-1.2.3-.../perl-dap`.
     base_name: String,
+    /// Normalized (forward-slash) path within the archive, e.g.
+    /// `perllsp-1.2.3-x86_64-unknown-linux-gnu/perl-dap`. Used by the
+    /// native-stack negative check to match nested module payloads such as
+    /// `.../Perl/LanguageServer.pm`.
+    path: String,
     /// Unix permission bits (0 when the archive does not record them, e.g. zip
     /// produced on Windows).
     mode: u32,
@@ -205,6 +210,7 @@ fn validate_dist(
         let archive_entries = read_archive_entries(&path, &ext)
             .with_context(|| format!("reading archive {}", path.display()))?;
         check_required_binaries(file_name, &archive_entries, spec, &mut violations);
+        check_no_external_tooling(file_name, &archive_entries, &mut violations);
 
         seen_triples.insert(triple);
     }
@@ -322,6 +328,73 @@ fn check_required_binaries(
     }
 }
 
+/// Executable payloads (matched by final component, with or without a Windows
+/// executable suffix) that must never be bundled in a native-stack release
+/// archive.
+const FORBIDDEN_EXTERNAL_BINARIES: &[&str] = &["perltidy", "perlcritic"];
+
+/// Windows executable/launcher suffixes stripped before matching a payload's
+/// final component against [`FORBIDDEN_EXTERNAL_BINARIES`]. `.bat`/`.cmd`
+/// wrappers are as executable as `.exe`, so `perltidy.bat` must be flagged the
+/// same as `perltidy.exe`. Matched case-insensitively (archives may store
+/// `PERLTIDY.EXE`).
+const WINDOWS_EXECUTABLE_SUFFIXES: &[&str] = &[".exe", ".bat", ".cmd"];
+
+/// Strip a single trailing Windows executable suffix from `base_name`,
+/// case-insensitively, returning the bare stem. Returns `base_name` unchanged
+/// when no known suffix matches (e.g. a bare Unix `perltidy`).
+fn strip_windows_executable_suffix(base_name: &str) -> &str {
+    let lower = base_name.to_ascii_lowercase();
+    for suffix in WINDOWS_EXECUTABLE_SUFFIXES {
+        if lower.ends_with(suffix) {
+            return &base_name[..base_name.len() - suffix.len()];
+        }
+    }
+    base_name
+}
+
+/// Path markers for legacy conformance / external-tool module payloads that
+/// must never appear anywhere inside a native-stack release archive.
+const FORBIDDEN_EXTERNAL_PATH_MARKERS: &[&str] =
+    &["Perl/LanguageServer", "Perl::LanguageServer", "Devel/TSPerlDAP", "TSPerlDAP.pm"];
+
+/// Native-stack policy: release archives ship the native binaries only. They
+/// must NOT bundle external Perl tooling (`perltidy`, `perlcritic`) or legacy
+/// conformance payloads (`Perl::LanguageServer`, `Devel::TSPerlDAP`). Their
+/// mere presence would reintroduce the "install external tools" product story
+/// the native stack exists to remove. This is the negative half of the
+/// contract; `check_required_binaries` is the positive half.
+fn check_no_external_tooling(
+    location: &str,
+    entries: &[ArchiveEntry],
+    violations: &mut Vec<Violation>,
+) {
+    for entry in entries {
+        let stem = strip_windows_executable_suffix(&entry.base_name).to_ascii_lowercase();
+        if FORBIDDEN_EXTERNAL_BINARIES.contains(&stem.as_str()) {
+            violations.push(Violation {
+                location: location.to_string(),
+                message: format!(
+                    "external conformance tool unexpectedly present in release archive: {}",
+                    entry.path
+                ),
+            });
+            continue;
+        }
+        if let Some(marker) =
+            FORBIDDEN_EXTERNAL_PATH_MARKERS.iter().find(|m| entry.path.contains(**m))
+        {
+            violations.push(Violation {
+                location: location.to_string(),
+                message: format!(
+                    "external conformance tool unexpectedly present in release archive: {} (matched `{marker}`)",
+                    entry.path
+                ),
+            });
+        }
+    }
+}
+
 fn check_consolidated_checksums(
     dist: &Path,
     contract: &Contract,
@@ -422,8 +495,14 @@ fn read_tar_gz_entries(path: &Path) -> Result<Vec<ArchiveEntry>> {
         }
         let mode = entry.header().mode().unwrap_or(0);
         let path_in_tar = entry.path().context("decoding tar entry path")?;
-        if let Some(base) = path_in_tar.file_name().and_then(|n| n.to_str()) {
-            out.push(ArchiveEntry { base_name: base.to_string(), mode });
+        // Derive both fields from the same slash-normalized path so a tar member
+        // stored with backslashes (`pkg\bin\perltidy`) cannot yield a `base_name`
+        // that bypasses the native-stack negative check.
+        let full_path = path_in_tar.to_string_lossy().replace('\\', "/");
+        if let Some(base_name) =
+            full_path.rsplit('/').next().filter(|base| !base.is_empty()).map(str::to_string)
+        {
+            out.push(ArchiveEntry { base_name, path: full_path, mode });
         }
     }
     Ok(out)
@@ -485,7 +564,7 @@ fn read_zip_entries(path: &Path) -> Result<Vec<ArchiveEntry>> {
         if !normalized.ends_with('/') {
             let base = normalized.rsplit('/').next().unwrap_or(&normalized).to_string();
             let mode = (external_attrs >> 16) & 0xffff;
-            out.push(ArchiveEntry { base_name: base, mode });
+            out.push(ArchiveEntry { base_name: base, path: normalized, mode });
         }
         let Some(next_pos) =
             name_end.checked_add(extra_len).and_then(|n| n.checked_add(comment_len))
@@ -848,7 +927,11 @@ mod tests {
             ext: ".tar.gz".to_string(),
             require_executable_bit: true,
         };
-        let entries = vec![ArchiveEntry { base_name: "perllsp".to_string(), mode: 0o755 }];
+        let entries = vec![ArchiveEntry {
+            base_name: "perllsp".to_string(),
+            path: "pkg/perllsp".to_string(),
+            mode: 0o755,
+        }];
         let mut violations = Vec::new();
         check_required_binaries("ok.tar.gz", &entries, &spec, &mut violations);
         assert_eq!(violations.len(), 1);
@@ -862,7 +945,11 @@ mod tests {
             ext: ".tar.gz".to_string(),
             require_executable_bit: true,
         };
-        let entries = vec![ArchiveEntry { base_name: "perl-dap".to_string(), mode: 0o644 }];
+        let entries = vec![ArchiveEntry {
+            base_name: "perl-dap".to_string(),
+            path: "pkg/perl-dap".to_string(),
+            mode: 0o644,
+        }];
         let mut violations = Vec::new();
         check_required_binaries("ok.tar.gz", &entries, &spec, &mut violations);
         assert_eq!(violations.len(), 1);
@@ -876,10 +963,187 @@ mod tests {
             ext: ".zip".to_string(),
             require_executable_bit: false,
         };
-        let entries = vec![ArchiveEntry { base_name: "perl-dap.exe".to_string(), mode: 0 }];
+        let entries = vec![ArchiveEntry {
+            base_name: "perl-dap.exe".to_string(),
+            path: "pkg/perl-dap.exe".to_string(),
+            mode: 0,
+        }];
         let mut violations = Vec::new();
         check_required_binaries("ok.zip", &entries, &spec, &mut violations);
         assert!(violations.is_empty());
+    }
+
+    // --- Native-stack negative check: no bundled external tooling ---
+
+    fn entry(base: &str, path: &str, mode: u32) -> ArchiveEntry {
+        ArchiveEntry { base_name: base.to_string(), path: path.to_string(), mode }
+    }
+
+    #[test]
+    fn external_perltidy_binary_is_flagged() {
+        let entries = vec![
+            entry("perllsp", "pkg/perllsp", 0o755),
+            entry("perl-dap", "pkg/perl-dap", 0o755),
+            entry("perltidy", "pkg/perltidy", 0o755),
+        ];
+        let mut violations = Vec::new();
+        check_no_external_tooling("pkg.tar.gz", &entries, &mut violations);
+        assert_eq!(violations.len(), 1, "only perltidy should be flagged: {violations:?}");
+        assert!(violations[0].message.contains("perltidy"));
+    }
+
+    #[test]
+    fn external_perlcritic_pls_and_tsperldap_are_flagged() {
+        let entries = vec![
+            entry("perlcritic", "pkg/bin/perlcritic", 0o755),
+            entry("LanguageServer.pm", "pkg/lib/Perl/LanguageServer.pm", 0o644),
+            entry("TSPerlDAP.pm", "pkg/lib/Devel/TSPerlDAP.pm", 0o644),
+        ];
+        let mut violations = Vec::new();
+        check_no_external_tooling("pkg.tar.gz", &entries, &mut violations);
+        assert!(violations.iter().any(|v| v.message.contains("perlcritic")));
+        assert!(violations.iter().any(|v| v.message.contains("LanguageServer")));
+        assert!(violations.iter().any(|v| v.message.contains("TSPerlDAP")));
+        assert_eq!(violations.len(), 3, "each external payload flagged once: {violations:?}");
+    }
+
+    #[test]
+    fn windows_external_tool_exe_is_flagged() {
+        let entries = vec![entry("perltidy.exe", "pkg/perltidy.exe", 0)];
+        let mut violations = Vec::new();
+        check_no_external_tooling("pkg.zip", &entries, &mut violations);
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("perltidy.exe"));
+    }
+
+    #[test]
+    fn windows_external_tool_bat_and_cmd_launchers_are_flagged() {
+        // `.bat`/`.cmd` launchers are as executable as `.exe`, and archives may
+        // store them with any casing — none may slip past the stem match.
+        for (base, path) in [
+            ("perltidy.bat", "pkg/perltidy.bat"),
+            ("perlcritic.cmd", "pkg/bin/perlcritic.cmd"),
+            ("PERLTIDY.EXE", "pkg/PERLTIDY.EXE"),
+            ("PerlCritic.Bat", "pkg/PerlCritic.Bat"),
+        ] {
+            let mut violations = Vec::new();
+            check_no_external_tooling("pkg.zip", &[entry(base, path, 0)], &mut violations);
+            assert_eq!(violations.len(), 1, "`{base}` must be flagged: {violations:?}");
+            assert!(violations[0].message.contains(path));
+        }
+    }
+
+    #[test]
+    fn native_binary_with_incidental_suffix_is_not_stripped_into_a_false_positive() {
+        // Stripping a Windows suffix must not turn an allowed payload into a
+        // forbidden stem: only the exact `.exe`/`.bat`/`.cmd` tails are removed.
+        let entries = vec![
+            entry("perltidyx", "pkg/perltidyx", 0o755),
+            entry("perltidy.txt", "pkg/docs/perltidy.txt", 0o644),
+        ];
+        let mut violations = Vec::new();
+        check_no_external_tooling("pkg.tar.gz", &entries, &mut violations);
+        assert!(violations.is_empty(), "no false positives: {violations:?}");
+    }
+
+    #[test]
+    fn native_only_archive_passes_external_tooling_check() {
+        let entries = vec![
+            entry("perllsp", "pkg/perllsp", 0o755),
+            entry("perl-dap", "pkg/perl-dap", 0o755),
+            entry("README.md", "pkg/README.md", 0o644),
+            entry("SHA256SUMS.txt", "pkg/SHA256SUMS.txt", 0o644),
+            // `perl-dap` must not trip a false positive against the markers.
+            entry("perl-dap-notes.txt", "pkg/docs/perl-dap-notes.txt", 0o644),
+        ];
+        let mut violations = Vec::new();
+        check_no_external_tooling("pkg.tar.gz", &entries, &mut violations);
+        assert!(violations.is_empty(), "native-only archive must pass: {violations:?}");
+    }
+
+    /// Build a dist containing one otherwise-valid linux archive that also
+    /// bundles `perltidy`, plus a matching consolidated `SHA256SUMS`.
+    fn build_bad_dist_with_perltidy() -> Result<tempfile::TempDir> {
+        use flate2::Compression;
+        use flate2::write::GzEncoder;
+
+        let dir = tempfile::tempdir()?;
+        let archive_name = "perllsp-9.9.9-x86_64-unknown-linux-gnu.tar.gz";
+        let top = "perllsp-9.9.9-x86_64-unknown-linux-gnu";
+
+        let mut gz = GzEncoder::new(Vec::new(), Compression::fast());
+        {
+            let mut builder = tar::Builder::new(&mut gz);
+            for name in ["perllsp", "perl-dap", "perltidy"] {
+                let content: &[u8] = b"placeholder-binary";
+                let mut header = tar::Header::new_gnu();
+                header.set_size(content.len() as u64);
+                header.set_mode(0o755);
+                header.set_cksum();
+                builder.append_data(&mut header, format!("{top}/{name}"), content)?;
+            }
+            builder.finish()?;
+        }
+        let bytes = gz.finish()?;
+        let archive_path = dir.path().join(archive_name);
+        fs::write(&archive_path, &bytes)?;
+
+        let digest = sha256_hex(&archive_path)?;
+        fs::write(dir.path().join("SHA256SUMS"), format!("{digest}  {archive_name}\n"))?;
+        Ok(dir)
+    }
+
+    #[test]
+    fn validate_dist_flags_bundled_perltidy_end_to_end() -> Result<()> {
+        let dir = build_bad_dist_with_perltidy()?;
+        let contract = test_contract()?;
+        let violations = validate_dist(dir.path(), &contract, Some("9.9.9"), true)?;
+        assert!(
+            violations.iter().any(|v| v.message.contains("external conformance tool")
+                && v.message.contains("perltidy")),
+            "bundled perltidy must be flagged end-to-end: {violations:?}"
+        );
+        // The archive is otherwise valid: no missing-binary or checksum noise.
+        assert!(!violations.iter().any(|v| v.message.contains("missing required binary")));
+        assert!(!violations.iter().any(|v| v.message.contains("checksum mismatch")));
+        assert!(!violations.iter().any(|v| v.message.contains("not listed")));
+        Ok(())
+    }
+
+    #[test]
+    fn tar_entry_with_backslash_path_is_normalized_and_flagged() -> Result<()> {
+        use flate2::Compression;
+        use flate2::write::GzEncoder;
+
+        let dir = tempfile::tempdir()?;
+        let archive = dir.path().join("weird.tar.gz");
+        let mut gz = GzEncoder::new(Vec::new(), Compression::fast());
+        {
+            let mut builder = tar::Builder::new(&mut gz);
+            let content: &[u8] = b"x";
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_mode(0o755);
+            header.set_cksum();
+            // A member stored with backslash separators must not be able to hide
+            // a forbidden binary from the base_name-based match.
+            builder.append_data(&mut header, "pkg\\bin\\perltidy", content)?;
+            builder.finish()?;
+        }
+        fs::write(&archive, gz.finish()?)?;
+
+        let entries = read_archive_entries(&archive, ".tar.gz")?;
+        assert!(
+            entries.iter().any(|e| e.base_name == "perltidy" && e.path == "pkg/bin/perltidy"),
+            "backslash tar member must normalize to base_name `perltidy`: {entries:?}"
+        );
+        let mut violations = Vec::new();
+        check_no_external_tooling("weird.tar.gz", &entries, &mut violations);
+        assert!(
+            violations.iter().any(|v| v.message.contains("perltidy")),
+            "normalized backslash member must be flagged: {violations:?}"
+        );
+        Ok(())
     }
 
     #[test]

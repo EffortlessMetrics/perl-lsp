@@ -3,7 +3,7 @@
 # Used to generate capabilities, documentation, and compliance reports
 
 [meta]
-version = "0.16.0"
+version = "0.17.0"
 lsp_version = "3.18"
 compliance_percent = 100  # 125 total features (101 LSP-area + 24 DAP, all GA), 124/125 advertised
 
@@ -163,7 +163,7 @@ tests = [
   "crates/perl-lsp-rs/tests/lsp_formatting_tests.rs",
   "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
 ]
-description = "Document formatting with Perl::Tidy"
+description = "Native document formatting (external perltidy is an explicit opt-in compatibility mode, not required)"
 
 [[feature]]
 id = "lsp.range_formatting"
@@ -268,8 +268,8 @@ spec = "LSP 3.16"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_semantic_tokens.rs"]
-description = "Semantic syntax highlighting via 24 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context, and label for Perl statement/control labels) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable/label nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format (mandatory LSP wire encoding). Supports full (textDocument/semanticTokens/full) and range (textDocument/semanticTokens/range) requests per LSP 3.16"
+tests = ["crates/perl-lsp-rs/tests/lsp_semantic_tokens.rs", "crates/perl-lsp-rs/tests/lsp_3_17_semantic_tokens_tests.rs"]
+description = "Semantic syntax highlighting via 24 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context, and label for Perl statement/control labels) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable/label nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format (mandatory LSP wire encoding). Supports full (textDocument/semanticTokens/full), range (textDocument/semanticTokens/range), and delta (textDocument/semanticTokens/full/delta) requests; full results carry a resultId and delta requests return minimal prefix/suffix edits against the cached prior result per LSP 3.17"
 
 [[feature]]
 id = "lsp.inlay_hint"
@@ -448,7 +448,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp-rs/tests/lsp_execute_command_tests.rs"]
-description = "Execute commands (Perl::Critic, etc)"
+description = "Execute commands (native critic, code actions, etc)"
 
 [[feature]]
 id = "lsp.workspace_folders"

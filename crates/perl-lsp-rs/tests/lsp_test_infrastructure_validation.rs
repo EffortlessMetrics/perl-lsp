@@ -8,6 +8,11 @@
 //! - Graceful degradation
 //! - Enhanced error reporting
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod common;
 
 use common::test_reliability::{

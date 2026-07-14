@@ -99,6 +99,35 @@ impl CursorPosition {
     }
 }
 
+/// Return every symbol name from a `textDocument/documentSymbol` response.
+///
+/// LSP servers may return either a flat `SymbolInformation[]` response or a
+/// hierarchical `DocumentSymbol[]` tree. UX assertions that care about symbol
+/// presence should use this helper instead of inspecting only top-level names.
+pub fn document_symbol_names(symbols: &[Value]) -> Vec<&str> {
+    let mut names = Vec::new();
+    collect_document_symbol_names(symbols, &mut names);
+    names
+}
+
+fn collect_document_symbol_names<'a>(symbols: &'a [Value], names: &mut Vec<&'a str>) {
+    for symbol in symbols {
+        if let Some(name) = symbol.get("name").and_then(Value::as_str) {
+            names.push(name);
+        }
+        if let Some(children) = symbol.get("children").and_then(Value::as_array) {
+            collect_document_symbol_names(children, names);
+        }
+    }
+}
+
+fn is_index_ready_event(event: &LspEvent) -> bool {
+    let LspEvent::Other { method, params } = event else {
+        return false;
+    };
+    method == "perl-lsp/index-ready" && params.get("ready").and_then(Value::as_bool) == Some(true)
+}
+
 /// Configuration for a UX scenario.
 ///
 /// Centralises all the knobs that affect the test environment without
@@ -434,8 +463,10 @@ impl UxHarness {
 
     /// Request document symbols (`textDocument/documentSymbol`).
     ///
-    /// Returns the flat list of `SymbolInformation` or `DocumentSymbol` objects,
-    /// or an empty vec if the server returned null/empty.
+    /// Returns the top-level `SymbolInformation` or `DocumentSymbol` objects,
+    /// or an empty vec if the server returned null/empty. `DocumentSymbol`
+    /// objects may include nested `children`; use [`document_symbol_names`] for
+    /// recursive name assertions.
     pub fn document_symbols(&self, relative_path: &str) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
         let resp = self.client.request(
@@ -510,6 +541,31 @@ impl UxHarness {
         }
 
         Ok(latest)
+    }
+
+    /// Wait until the harness observes a ready workspace index.
+    pub fn wait_for_index_ready(&self, timeout: Duration) -> bool {
+        self.wait_for_index_ready_event_after(0, timeout)
+    }
+
+    /// Count ready-index notifications already observed by the harness.
+    pub fn index_ready_event_count(&self) -> usize {
+        self.client.peek_events().iter().filter(|event| is_index_ready_event(event)).count()
+    }
+
+    /// Wait until a ready-index notification arrives after `already_seen` events.
+    pub fn wait_for_index_ready_event_after(&self, already_seen: usize, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if self.index_ready_event_count() > already_seen {
+                std::thread::sleep(Duration::from_millis(50));
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 
     /// Notify the server that workspace folders changed.
@@ -1033,12 +1089,62 @@ impl FormatResult {
 
 // ─────────────────────────────── Binary Resolution ───────────────────────────
 
+/// Environment variable that flips [`binary_available`] from a silent skip
+/// into a hard failure when the `perl-lsp` binary cannot be resolved.
+///
+/// Every scenario in this crate follows the pattern
+/// `if !binary_available() { eprintln!("SKIP ..."); return Ok(()); }`, which
+/// means an unbuilt binary makes the whole UX suite report "N passed" while
+/// exercising nothing (#3596). CI jobs that are supposed to actually run
+/// these scenarios should set `PERL_LSP_UX_REQUIRE_BINARY=1` so a missing
+/// binary fails loudly instead of vacuously greening.
+pub const REQUIRE_BINARY_ENV: &str = "PERL_LSP_UX_REQUIRE_BINARY";
+
 /// Return whether the perl-lsp binary can be resolved for UX scenario tests.
 ///
 /// This is a lightweight guard for integration tests that need to skip when the
 /// server binary has not been built in the current environment.
+///
+/// When [`REQUIRE_BINARY_ENV`] is set to a truthy value, a missing binary is
+/// treated as a hard failure (a clear `assert!` panic with an actionable
+/// message) instead of a silent skip. Because every scenario funnels its skip
+/// decision through this single function, setting the env var in a CI job
+/// makes the entire suite fail loud if `cargo build -p perl-lsp-rs` was never
+/// run — see #3596. Uses `assert!` rather than `panic!` directly: this
+/// workspace denies `clippy::panic` in production code, and `assert!` is the
+/// sanctioned hard-failure idiom.
 pub fn binary_available() -> bool {
-    resolve_binary().is_ok()
+    match resolve_binary() {
+        Ok(_) => true,
+        Err(err) => {
+            assert!(
+                !strict_binary_required(),
+                "{REQUIRE_BINARY_ENV}=1 is set, which forbids the silent \
+                 UX-suite SKIP path — perl-lsp binary not built. \
+                 Run `cargo build -p perl-lsp-rs` first. \
+                 Resolution error: {err}"
+            );
+            false
+        }
+    }
+}
+
+/// True when [`REQUIRE_BINARY_ENV`] is set to `1`/`true` (case-insensitive).
+fn strict_binary_required() -> bool {
+    is_truthy_env_value(std::env::var(REQUIRE_BINARY_ENV).ok().as_deref())
+}
+
+/// Pure truthy-value predicate behind [`strict_binary_required`].
+///
+/// Factored out of the env lookup so the parsing rules can be unit tested
+/// deterministically without mutating process-global environment state —
+/// this crate denies `unsafe_code`, which `std::env::set_var`/`remove_var`
+/// require since Rust made them `unsafe fn`.
+fn is_truthy_env_value(value: Option<&str>) -> bool {
+    value.is_some_and(|v| {
+        let v = v.trim();
+        v == "1" || v.eq_ignore_ascii_case("true")
+    })
 }
 
 /// Standard skip reason for scenarios that require a runnable perl-lsp binary.
@@ -1050,10 +1156,10 @@ pub fn missing_binary_skip() -> UxScenarioSkip {
 ///
 /// Resolution order:
 /// 1. `PERL_LSP_BIN` env var (explicit override).
-/// 2. Runtime walk from `current_exe()` — finds `target/debug/perl-lsp[.exe]` by
+/// 2. Runtime walk from `current_exe()` — finds `target/<profile>/perl-lsp[.exe]` by
 ///    traversing parent directories. Avoids the `option_env!` compile-time approach
 ///    which strips backslashes on Windows CI (OS error 3 / path not found).
-/// 3. `CARGO_TARGET_DIR` env var — if set, probe its `debug/` and `release/` subdirs.
+/// 3. `CARGO_TARGET_DIR` env var — if set, probe its active/default profile subdirs.
 /// 4. `CARGO_MANIFEST_DIR`-relative workspace root walk — same approach used by
 ///    `perl-lsp-rs` integration tests.
 /// 5. `perl-lsp` / `perllsp` in PATH.
@@ -1070,10 +1176,9 @@ pub fn resolve_binary() -> Result<String> {
     //    Windows where option_env! bakes paths with backslashes stripped.
     //
     //    Test binaries live at:
-    //      <workspace>/target/debug/deps/<test-binary-name>[.exe]
+    //      <workspace>/target/<profile>/deps/<test-binary-name>[.exe]
     //    The LSP server lives at:
-    //      <workspace>/target/debug/perl-lsp[.exe]
-    //      <workspace>/target/release/perl-lsp[.exe]
+    //      <workspace>/target/<profile>/perl-lsp[.exe]
     //
     //    We walk up from current_exe() until we find a `target` directory
     //    whose parent contains `Cargo.lock` (the workspace root).
@@ -1083,24 +1188,25 @@ pub fn resolve_binary() -> Result<String> {
         }
     }
 
-    // 3. CARGO_TARGET_DIR — if set, look directly in its debug/release subdirs.
+    // 3. CARGO_TARGET_DIR — if set, look directly in its active/default profile subdirs.
     //    This covers custom target directories (e.g. agent worktrees using
     //    CARGO_TARGET_DIR=/tmp/agent-...). Note: CARGO_TARGET_DIR is the target
-    //    directory itself (not a workspace root), so we look in
-    //    CARGO_TARGET_DIR/debug/ and CARGO_TARGET_DIR/release/ directly.
+    //    directory itself (not a workspace root), so we look in profile
+    //    subdirectories directly.
     if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
         let target_path = std::path::Path::new(&target_dir);
-        let bin_name = if cfg!(windows) { "perl-lsp.exe" } else { "perl-lsp" };
-        for profile in ["debug", "release"] {
-            let candidate = target_path.join(profile).join(bin_name);
-            if candidate.exists() {
-                return Ok(candidate.to_string_lossy().into_owned());
-            }
+        let preferred =
+            std::env::var("PROFILE").ok().or_else(|| std::env::var("CARGO_PROFILE").ok());
+        if let Some(binary) = find_binary_in_target_dir_profiles(
+            target_path,
+            profile_candidates(preferred.as_deref()),
+        ) {
+            return Ok(binary);
         }
     }
 
     // 4. CARGO_MANIFEST_DIR walk — find workspace root via Cargo.lock, then
-    //    check target/{debug,release}/perl-lsp[.exe].
+    //    check target/{debug,agent,release}/perl-lsp[.exe].
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let crate_dir = std::path::Path::new(&manifest_dir);
         let workspace_root =
@@ -1126,7 +1232,7 @@ pub fn resolve_binary() -> Result<String> {
 }
 
 /// Walk up from the test binary's path to locate `perl-lsp[.exe]` in the
-/// nearest `target/debug` or `target/release` directory.
+/// nearest `target/<profile>` directory.
 ///
 /// Test binaries are placed in `<workspace>/target/<profile>/deps/`, so we
 /// ascend until we find a directory named `target` whose parent has a
@@ -1137,32 +1243,65 @@ fn find_binary_near_exe(exe: &std::path::Path) -> Option<String> {
         if ancestor.file_name().and_then(|n| n.to_str()) == Some("target") {
             let workspace_root = ancestor.parent()?;
             if workspace_root.join("Cargo.lock").exists() {
-                return find_binary_in_target(workspace_root);
+                let preferred = exe
+                    .strip_prefix(ancestor)
+                    .ok()
+                    .and_then(|relative| relative.components().next())
+                    .and_then(|component| component.as_os_str().to_str());
+                return find_binary_in_target_profiles(
+                    workspace_root,
+                    profile_candidates(preferred),
+                );
             }
         }
     }
     None
 }
 
-/// Given a workspace root, probe `target/debug` and `target/release` for
+/// Given a workspace root, probe known target profiles for
 /// the `perl-lsp` binary (with `.exe` extension on Windows).
 fn find_binary_in_target(workspace_root: &std::path::Path) -> Option<String> {
+    find_binary_in_target_profiles(workspace_root, profile_candidates(None))
+}
+
+fn find_binary_in_target_profiles(
+    workspace_root: &std::path::Path,
+    profiles: Vec<String>,
+) -> Option<String> {
+    find_binary_in_target_dir_profiles(&workspace_root.join("target"), profiles)
+}
+
+fn find_binary_in_target_dir_profiles(
+    target_dir: &std::path::Path,
+    profiles: Vec<String>,
+) -> Option<String> {
     let bin_name = if cfg!(windows) { "perl-lsp.exe" } else { "perl-lsp" };
     let alt_bin_name = if cfg!(windows) { "perllsp.exe" } else { "perllsp" };
 
-    // Prefer debug (matches `cargo test` default profile) over release.
-    let profiles = ["debug", "release"];
     for profile in profiles {
-        let candidate = workspace_root.join("target").join(profile).join(bin_name);
+        let candidate = target_dir.join(&profile).join(bin_name);
         if candidate.exists() {
             return Some(candidate.to_string_lossy().into_owned());
         }
-        let alt_candidate = workspace_root.join("target").join(profile).join(alt_bin_name);
+        let alt_candidate = target_dir.join(&profile).join(alt_bin_name);
         if alt_candidate.exists() {
             return Some(alt_candidate.to_string_lossy().into_owned());
         }
     }
     None
+}
+
+fn profile_candidates(preferred: Option<&str>) -> Vec<String> {
+    let mut profiles = Vec::new();
+    if let Some(profile) = preferred.filter(|profile| !profile.is_empty()) {
+        profiles.push(profile.to_string());
+    }
+    for profile in ["debug", "agent", "release"] {
+        if !profiles.iter().any(|existing| existing == profile) {
+            profiles.push(profile.to_string());
+        }
+    }
+    profiles
 }
 
 /// Utility: find `perl` on PATH, returning its path or `None`.
@@ -1182,10 +1321,105 @@ pub fn find_perlcritic() -> Option<String> {
 
 #[cfg(test)]
 mod normalize_tests {
-    use super::{normalize_lsp_payload, normalize_uri_for_expectations};
+    use super::{
+        document_symbol_names, find_binary_near_exe, is_index_ready_event, is_truthy_env_value,
+        normalize_lsp_payload, normalize_uri_for_expectations,
+    };
+    use crate::LspEvent;
     use serde_json::{Value, json};
     use std::path::Path;
     use tempfile::TempDir;
+
+    #[test]
+    fn document_symbol_names_collects_top_level_and_nested_names() -> anyhow::Result<()> {
+        let symbols = vec![
+            json!({
+                "name": "Latency::Symbols",
+                "children": [
+                    {
+                        "name": "alpha",
+                        "children": []
+                    }
+                ]
+            }),
+            json!({
+                "name": "beta"
+            }),
+        ];
+
+        let names = document_symbol_names(&symbols);
+        assert!(names.contains(&"Latency::Symbols"));
+        assert!(names.contains(&"alpha"));
+        assert!(names.contains(&"beta"));
+        assert!(!names.contains(&"gamma"));
+        Ok(())
+    }
+
+    #[test]
+    fn index_ready_event_requires_ready_true_notification() -> anyhow::Result<()> {
+        assert!(is_index_ready_event(&LspEvent::Other {
+            method: "perl-lsp/index-ready".to_string(),
+            params: json!({ "ready": true }),
+        }));
+        assert!(!is_index_ready_event(&LspEvent::Other {
+            method: "perl-lsp/index-ready".to_string(),
+            params: json!({ "ready": false }),
+        }));
+        assert!(!is_index_ready_event(&LspEvent::LogMessage {
+            message_type: 3,
+            message: "perl-lsp/index-ready".to_string(),
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn binary_resolver_prefers_test_binary_profile() -> anyhow::Result<()> {
+        let dir = TempDir::new()?;
+        let root = dir.path();
+        std::fs::write(root.join("Cargo.lock"), "")?;
+        let bin_name = if cfg!(windows) { "perl-lsp.exe" } else { "perl-lsp" };
+        let test_dir = root.join("target").join("agent").join("deps");
+        let server_dir = root.join("target").join("agent");
+        let release_dir = root.join("target").join("release");
+        std::fs::create_dir_all(&test_dir)?;
+        std::fs::create_dir_all(&server_dir)?;
+        std::fs::create_dir_all(&release_dir)?;
+        let agent_bin = server_dir.join(bin_name);
+        let release_bin = release_dir.join(bin_name);
+        std::fs::write(&agent_bin, "")?;
+        std::fs::write(&release_bin, "")?;
+
+        let test_exe = test_dir.join(if cfg!(windows) { "ux-test.exe" } else { "ux-test" });
+        let resolved = find_binary_near_exe(&test_exe)
+            .ok_or_else(|| anyhow::anyhow!("resolver did not find agent-profile binary"))?;
+
+        assert_eq!(resolved, agent_bin.to_string_lossy());
+        Ok(())
+    }
+
+    /// Documents the strict-mode env-var contract behind `binary_available()`'s
+    /// fail-loud guard (#3596): with the var unset or falsy, the skip path stays
+    /// allowed (returns `false`, no panic); only an explicit truthy value flips
+    /// it to strict. The panic itself is exercised indirectly — this test locks
+    /// down the pure predicate `strict_binary_required()` delegates to before
+    /// deciding whether to panic, without mutating process env (this crate
+    /// denies `unsafe_code`, which `env::set_var` now requires) or faking a
+    /// missing binary end-to-end.
+    #[test]
+    fn is_truthy_env_value_recognizes_expected_forms() {
+        assert!(
+            !is_truthy_env_value(None),
+            "unset var must not trigger strict mode (skip allowed)"
+        );
+
+        for value in ["1", "true", "TRUE", "True", "TrUe"] {
+            assert!(is_truthy_env_value(Some(value)), "{value:?} should be treated as truthy");
+        }
+
+        for value in ["0", "false", "FALSE", "yes", ""] {
+            assert!(!is_truthy_env_value(Some(value)), "{value:?} should not be treated as truthy");
+        }
+    }
 
     // ── normalize_uri_for_expectations ────────────────────────────────────────
 
@@ -1348,5 +1582,102 @@ mod normalize_tests {
         // Url::parse("file://$WORKSPACE/foo.pl") treats $WORKSPACE as host and
         // to_file_path() fails -> backslash-replace branch returns string unchanged.
         assert_eq!(result["uri"], "file://$WORKSPACE/foo.pl");
+    }
+}
+
+// ─────────────── Durable subprocess proof of the fail-loud guard (#3596) ──────
+
+#[cfg(test)]
+mod strict_binary_guard_subprocess_tests {
+    use super::{REQUIRE_BINARY_ENV, binary_available};
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    /// Target test invoked ONLY by name, from an isolated child process
+    /// spawned by `strict_mode_fails_loud_in_subprocess_when_binary_missing`
+    /// below. Its only job is to call `binary_available()` unconditionally so
+    /// the parent test can observe whether the strict-mode guard panics. When
+    /// this test runs as part of the normal in-process suite (where a real
+    /// perl-lsp binary is typically resolvable) it just returns without
+    /// panicking — it is only meaningful when driven from the subprocess
+    /// below, with a forced-missing binary and strict mode on.
+    #[test]
+    fn binary_available_panics_when_strict_and_missing() {
+        binary_available();
+    }
+
+    /// Durable regression proof for #3596: `PERL_LSP_UX_REQUIRE_BINARY=1`
+    /// with no resolvable binary must be a hard failure, not a silent skip.
+    ///
+    /// A one-off manual check of this behavior (as done for #3596's initial
+    /// build) is not durable — normal CI always builds the perl-lsp binary
+    /// before running this suite, so a broken guard would never surface
+    /// there and could regress silently. This test proves the panic path
+    /// itself, in a subprocess deliberately denied every fallback
+    /// `resolve_binary()` tries:
+    ///
+    /// 1. Copies the currently running test executable into a fresh temp
+    ///    directory with no `target`-named ancestor, which defeats the
+    ///    `current_exe()`-walk fallback (it would otherwise find the real,
+    ///    already-built `perl-lsp` sitting next to this same test binary in
+    ///    a normal CI run).
+    /// 2. Clears `PERL_LSP_BIN`, `CARGO_TARGET_DIR`, and `CARGO_MANIFEST_DIR`
+    ///    in the CHILD's environment only (never the parent's — this crate
+    ///    denies `unsafe_code`, and `std::env::set_var` on the parent
+    ///    process is `unsafe`) so none of `resolve_binary()`'s other
+    ///    fallbacks can find a real binary either.
+    ///
+    /// Note: merely pointing `PERL_LSP_BIN` at a nonexistent path does NOT
+    /// exercise this guard — `resolve_binary()`'s step 1 returns `Ok` for
+    /// any non-empty `PERL_LSP_BIN` without checking the path actually
+    /// exists, so that approach "resolves" to a bogus path and fails later
+    /// via a completely different error surface (a process-launch failure
+    /// elsewhere in the harness), not this guard's `assert!`. Removing the
+    /// var entirely is what forces a genuine `resolve_binary()` `Err`, which
+    /// is what this test needs to exercise.
+    #[test]
+    fn strict_mode_fails_loud_in_subprocess_when_binary_missing() -> anyhow::Result<()> {
+        let current_exe = std::env::current_exe()?;
+        let isolated_dir = TempDir::new()?;
+        let exe_name = current_exe
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("current_exe() has no file name"))?;
+        let isolated_exe = isolated_dir.path().join(exe_name);
+        std::fs::copy(&current_exe, &isolated_exe)?;
+
+        let output = Command::new(&isolated_exe)
+            .args([
+                // `--exact` matches on the FULLY QUALIFIED name (module path
+                // included) — the bare function name alone matches nothing.
+                "strict_binary_guard_subprocess_tests::binary_available_panics_when_strict_and_missing",
+                "--exact",
+                "--nocapture",
+            ])
+            .env_remove("PERL_LSP_BIN")
+            .env_remove("CARGO_TARGET_DIR")
+            .env_remove("CARGO_MANIFEST_DIR")
+            .env(REQUIRE_BINARY_ENV, "1")
+            .output()?;
+
+        assert!(
+            !output.status.success(),
+            "expected the child process to fail loud when strict mode is on and no binary \
+             is resolvable; got success. stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            combined.contains("forbids the silent")
+                && combined.contains("cargo build -p perl-lsp-rs"),
+            "expected the actionable fail-loud message in child output, got: {combined}"
+        );
+
+        Ok(())
     }
 }

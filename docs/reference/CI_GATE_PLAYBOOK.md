@@ -1,8 +1,8 @@
-# CI Gate Playbook — Codecov Patch-95 + ripr+
+# CI Gate Playbook — Rust Small + ripr+
 
 > **Problem this addresses:** A correct, integration-tested production change
-> can fail BOTH required gates in sequence — Codecov/Patch-95 then ripr+ — and
-> take 4+ gate iterations to land if you don't know the mechanics.
+> can fail required proof gates or optional coverage telemetry in sequence and
+> take 4+ iterations to land if you don't know the mechanics.
 > Source: [#3089](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3089),
 > observed on PR #3078.
 >
@@ -11,20 +11,19 @@
 
 ---
 
-## The three required gates
+## The required gates
 
-Every PR must pass all three before merge:
+Every PR must pass the required proof gates before merge:
 
 | Gate | What it checks | Failure rate |
 |---|---|---|
 | **fmt + clippy** | Style and lint — run per-crate, not combined | Low once you know the local preflight |
-| **Codecov / Patch 95** | Line coverage of changed lines — `--lib` ONLY | Trips integration-tested code |
+| **Perl LSP Rust Small Result** | Routed Rust compile/test aggregate | Medium |
 | **ripr+ New Gap Gate** | Mutation-killing tests at the new production call sites | Trips direct `--lib` unit tests |
 
-The gate-pincer: fixing one gate can break the other. A `--lib` unit test added
-to satisfy Codecov may fail ripr+ because it isn't a production call-observation
-test. A production call-observation test added to satisfy ripr+ may not cover
-`--lib` lines in the way Codecov counts. Run both diagnoses before adding tests.
+`Codecov / Patch 95` is advisory and does not run on PRs or merge queues. Run
+it on nightly/manual coverage lanes only; do not add tests solely to satisfy
+changed-line coverage when the required proof gates are already green.
 
 ---
 
@@ -53,17 +52,19 @@ a fmt-fix PR on `main` unblocks everyone.
 
 ---
 
-## Gate 2: Codecov / Patch 95
+## Advisory: Codecov / Patch 95
 
 ### What it measures
 
-Codecov/Patch-95 measures line coverage of **changed lines only**, and only from
-**`--lib` tests** (i.e., `cargo test -p <crate> --lib`). Coverage from
-integration tests in `tests/` does NOT count toward the patch metric.
+Codecov/Patch-95 measures line coverage of **changed lines only** in explicit
+coverage runs, and only from **`--lib` tests** (i.e.,
+`cargo test -p <crate> --lib`). Coverage from integration tests in `tests/`
+does NOT count toward the patch metric.
 
 **The gate-pincer trap:** you add a production change, cover it thoroughly with
 an integration test in `tests/integration_test.rs`, CI shows the test passing —
-and Codecov/Patch-95 still fails because `--lib` never executed those lines.
+and Codecov/Patch-95 still reports low advisory patch coverage because `--lib`
+never executed those lines.
 
 ### Diagnosing the exact uncovered lines
 
@@ -78,8 +79,9 @@ and Codecov/Patch-95 still fails because `--lib` never executed those lines.
 
 ### Fix
 
-Add `--lib` unit tests for the uncovered lines. The test does not need to be
-elaborate — it needs to execute the changed code path under `cargo test --lib`.
+If the uncovered lines reveal a real behavior gap, add focused tests that prove
+that behavior. Do not add tests solely to satisfy changed-line coverage; normal
+PR merge proof comes from RIPR+ and focused Rust checks.
 
 ### Comment staleness
 
@@ -102,6 +104,24 @@ the *production call path* is exercised, not just the function in isolation.
 **The gate-pincer in reverse:** the `--lib` tests you added for Codecov pass the
 coverage gate but may fail ripr+ because they aren't production call-observation
 tests.
+
+### What blocks the merge (exposure classes)
+
+The ripr-pr receipt (`repo-exposure.json`) records `summary.severe_gaps`, which
+sums three exposure classes: `weakly_exposed + reachable_unrevealed +
+no_static_path`. The merge gate blocks only on the **actionable** subtotal
+`reachable_unrevealed + no_static_path` — code that is genuinely
+reachable-but-unrevealed, a class a focused test can actually close (capped at
+the producer's post-suppression `severe_gaps` so path/classification
+suppressions are honored, not re-opened). `weakly_exposed` seams are reachable
+*and already observed by a test*; the static grip analysis just cannot confirm
+the observation is *strong* enough. That is an analyzer-confidence limitation,
+not a missing test — it cannot be cleared by adding tests, so it is **advisory,
+not blocking** (see #2015; empirically confirmed on #1914 across unit,
+integration, e2e, and call-presence-observer forms). All three classes remain
+reported in the producer receipt; only the blocking count excludes
+`weakly_exposed`. The count derivation lives in `genuine_new_ripr_gap_count`
+(`xtask/src/tasks/quality_gate.rs`).
 
 ### Diagnosing the exact failing seams
 
@@ -154,7 +174,7 @@ CX53 CI runs are slow: **~15-20 minutes typical**. A sparse rollup (some checks
 pending, not all green) does NOT mean the run is stuck — it means CI is still
 running. Wait for the full result before diagnosing a failure.
 
-`UNSTABLE-with-3-green` (all three required gates pass, some informative checks
+`UNSTABLE-with-required-green` (all required gates pass, some informative checks
 pending or yellow) is **mergeable**. The informative checks are not required.
 Precedent: PR #3094 merged under exactly this state.
 
@@ -165,7 +185,7 @@ Precedent: PR #3094 merged under exactly this state.
 ```
 [ ] cargo fmt --check -p <each-touched-crate>
 [ ] cargo clippy -p <each-touched-crate> --lib -- -D warnings
-[ ] cargo test -p <each-touched-crate> --lib     (Codecov gate)
+[ ] cargo test -p <each-touched-crate> --lib     (fast focused proof; advisory coverage input)
 [ ] cargo test -p <each-touched-crate> --test <integration-test>  (ripr call-observation)
 [ ] Confirm: no test passes on un-fixed main (race guards must actually guard)
 [ ] If ripr suppression added: cite the issue, covering tests, expiry date

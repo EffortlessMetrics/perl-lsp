@@ -1,3 +1,11 @@
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+// Tests are permitted to use `.expect()` on Result/Option per the repo's
+// coding standards (unlike production code, where it is banned).
+#![allow(clippy::expect_used)]
+
 use parking_lot::Mutex;
 use perl_lsp::{JsonRpcId, JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
@@ -268,7 +276,7 @@ fn test_double_initialize_is_rejected_per_lsp_spec() {
 
     let first = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".into(),
         params: Some(json!({
             "capabilities": {},
@@ -278,7 +286,7 @@ fn test_double_initialize_is_rejected_per_lsp_spec() {
 
     let second = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
         method: "initialize".into(),
         params: Some(json!({
             "capabilities": {},

@@ -1,0 +1,25 @@
+[package]
+name = "perl-core-harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Private orchestration library for upstream Perl core harness receipts"
+publish = false
+
+[dependencies]
+chrono = { version = "0.4.43", features = ["serde"] }
+color-eyre = "0.6.5"
+perl-core-harness-types = { workspace = true }
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+tempfile.workspace = true
+
+[lints]
+workspace = true

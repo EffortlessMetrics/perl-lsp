@@ -99,7 +99,7 @@ impl CodeLensProvider {
     pub fn extract(&self, ast: &Node) -> Vec<CodeLens> {
         let mut lenses = Vec::new();
 
-        // Add "Run All Tests" lens at top of .t files
+        // Add "Run All Tests" + "Debug Test File" lenses at top of .t files
         if self.file_path.as_ref().is_some_and(|p| is_test_file(p)) {
             lenses.push(CodeLens {
                 range: WireRange::empty(WirePosition::new(0, 0)),
@@ -107,6 +107,16 @@ impl CodeLensProvider {
                     title: "\u{25b6} Run All Tests".to_string(),
                     command: "perl.runTestFile".to_string(),
                     tooltip: Some("Run all Perl tests in this file".to_string()),
+                    arguments: self.file_path.as_ref().map(|p| vec![json!(p)]),
+                }),
+                data: None,
+            });
+            lenses.push(CodeLens {
+                range: WireRange::empty(WirePosition::new(0, 0)),
+                command: Some(Command {
+                    title: "\u{1f41e} Debug Test File".to_string(),
+                    command: "perl.debugTestFile".to_string(),
+                    tooltip: Some("Debug this test file through perl-dap".to_string()),
                     arguments: self.file_path.as_ref().map(|p| vec![json!(p)]),
                 }),
                 data: None,
@@ -162,8 +172,17 @@ impl CodeLensProvider {
             }
 
             NodeKind::FunctionCall { name, args } => {
-                if name == "subtest" {
+                // Same call names the subtest discovery path recognizes, so the
+                // outline and the "Run Subtest" lens never disagree (covers
+                // `subtest`, `subtest_buffered`, `subtest_streamed`).
+                if crate::providers::testing::subtest::is_subtest_call_name(name) {
                     self.add_subtest_lens(node, args, lenses);
+                    // Recurse into the subtest's block so nested subtests also
+                    // get "Run Subtest" lenses (the block is the anonymous-sub
+                    // argument). Non-subtest calls do not recurse.
+                    for arg in args {
+                        self.visit_node(arg, lenses);
+                    }
                 }
             }
 
@@ -228,13 +247,20 @@ impl CodeLensProvider {
         let name = subtest_name.unwrap_or("<anonymous>");
         let range =
             WireRange::from_byte_offsets(&self.source, node.location.start, node.location.end);
+        // Pass the file path (when known) as the first argument so the command
+        // can run the whole file and focus its output on this subtest. When no
+        // path is available, fall back to the name-only (legacy) argument shape.
+        let arguments = match self.file_path.as_deref() {
+            Some(path) => vec![json!(path), json!(name)],
+            None => vec![json!(name)],
+        };
         lenses.push(CodeLens {
             range,
             command: Some(Command {
                 title: format!("\u{25b6} Run Subtest: {name}"),
                 command: "perl.runSubtest".to_string(),
                 tooltip: Some(format!("Run Perl subtest {name}")),
-                arguments: Some(vec![json!(name)]),
+                arguments: Some(arguments),
             }),
             data: None,
         });
@@ -491,6 +517,34 @@ mod tests {
     }
 
     #[test]
+    fn test_debug_test_file_lens_for_t_file() -> Result<(), String> {
+        let source = "use Test2::V0;\nok(1);\ndone_testing();\n";
+        let lenses = extract_lenses_with_path(source, "t/basic.t")?;
+        let debug = lenses
+            .iter()
+            .find(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.debugTestFile"))
+            .ok_or("missing Debug Test File lens for .t file")?;
+        let cmd = debug.command.as_ref().ok_or("missing command")?;
+        assert_eq!(cmd.title, "\u{1f41e} Debug Test File");
+        let args = cmd.arguments.as_ref().ok_or("missing arguments")?;
+        assert_eq!(args, &[json!("t/basic.t")]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_no_debug_test_file_lens_for_pm_file() -> Result<(), String> {
+        let source = "package Foo;\nsub bar { 1 }\n1;\n";
+        let lenses = extract_lenses_with_path(source, "lib/Foo.pm")?;
+        assert!(
+            !lenses
+                .iter()
+                .any(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.debugTestFile")),
+            "should not offer Debug Test File on a .pm file"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_no_run_all_tests_for_pm_file() -> Result<(), String> {
         let source = "package Foo;\nsub bar { 1 }\n1;\n";
         let lenses = extract_lenses_with_path(source, "lib/Foo.pm")?;
@@ -538,6 +592,50 @@ mod tests {
         assert!(
             titles.contains(&"\u{25b6} Run Subtest: string ops"),
             "missing 'string ops' subtest lens"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_subtest_buffered_and_streamed_lenses() -> Result<(), String> {
+        // The discovery/outline path recognizes subtest_buffered/subtest_streamed;
+        // the "Run Subtest" lens must recognize the same variants so the two
+        // surfaces do not disagree.
+        let source = "use Test2::V0;\n\nsubtest_buffered 'buffered one' => sub {\n    ok(1);\n};\n\nsubtest_streamed 'streamed one' => sub {\n    ok(1);\n};\n\ndone_testing;\n";
+        let lenses = extract_lenses_with_path(source, "t/variants.t")?;
+        let titles: Vec<_> = lenses
+            .iter()
+            .filter(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runSubtest"))
+            .filter_map(|l| l.command.as_ref().map(|c| c.title.as_str()))
+            .collect();
+        assert!(
+            titles.contains(&"\u{25b6} Run Subtest: buffered one"),
+            "missing subtest_buffered lens, got: {titles:?}"
+        );
+        assert!(
+            titles.contains(&"\u{25b6} Run Subtest: streamed one"),
+            "missing subtest_streamed lens, got: {titles:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_nested_subtest_lenses() -> Result<(), String> {
+        let source = "use Test2::V0;\nsubtest \"outer\" => sub {\n    subtest \"inner\" => sub { ok(1) };\n};\ndone_testing();\n";
+        let lenses = extract_lenses_with_path(source, "t/nested.t")?;
+        let subtest_titles: Vec<_> = lenses
+            .iter()
+            .filter_map(|l| l.command.as_ref())
+            .filter(|c| c.command == "perl.runSubtest")
+            .map(|c| c.title.as_str())
+            .collect();
+        assert!(
+            subtest_titles.contains(&"\u{25b6} Run Subtest: outer"),
+            "missing outer subtest lens: {subtest_titles:?}"
+        );
+        assert!(
+            subtest_titles.contains(&"\u{25b6} Run Subtest: inner"),
+            "missing nested inner subtest lens: {subtest_titles:?}"
         );
         Ok(())
     }

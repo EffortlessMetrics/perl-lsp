@@ -69,35 +69,52 @@ pub fn detect_plenv_perl() -> Option<PathBuf> {
     if perl_bin.exists() && perl_bin.is_file() { Some(perl_bin) } else { None }
 }
 
-/// Resolve the perl binary path by searching the system `PATH`.
+/// Search a PATH-separator-delimited string for a Perl binary, applying the
+/// empty-entry and relative-entry RCE guard.
+///
+/// This is the testable inner core of [`resolve_perl_path`].  It accepts the
+/// raw value of a `PATH`-like string rather than reading the process
+/// environment, so callers can inject a fully controlled value in tests without
+/// mutating global state (which races other parallel test threads).
 ///
 /// # Security
 ///
-/// Empty and relative `PATH` entries are skipped.  An empty entry (`;;` or a
-/// trailing `;`) causes `PathBuf::from("").join("perl.exe")` to produce a
-/// relative path (`"perl.exe"`), which `.exists()` resolves against the process
-/// CWD (the LSP workspace root) — the same binary-planting vector as the
-/// bare-name `Command::new` RCE (#2764/#3028).  A relative entry is equally
-/// dangerous and almost always a misconfiguration.  Only absolute, non-empty
-/// directory entries are consulted.
+/// Empty and relative entries are skipped.  An empty entry (`;;` or a trailing
+/// `;`) causes `PathBuf::from("").join("perl.exe")` to produce a relative path
+/// (`"perl.exe"`), which `.exists()` resolves against the process CWD — the
+/// same binary-planting vector as the bare-name `Command::new` RCE
+/// (#2764/#3028).  A relative entry is equally dangerous.  Only absolute,
+/// non-empty directory entries are consulted.
+fn scan_path_for_perl(path_env: &str) -> Option<PathBuf> {
+    for path_dir in path_env.split(PATH_SEPARATOR) {
+        // Skip empty entries (from `;;` or trailing `;`) and relative entries.
+        // Both produce CWD-relative paths via `.join(PERL_EXECUTABLE)` and
+        // could resolve to a planted binary in the workspace root.
+        let dir = PathBuf::from(path_dir);
+        if path_dir.is_empty() || !dir.is_absolute() {
+            continue;
+        }
+        let perl_path = dir.join(PERL_EXECUTABLE);
+        if perl_path.exists() && perl_path.is_file() {
+            return Some(perl_path);
+        }
+    }
+    None
+}
+
+/// Resolve the perl binary path by searching the system `PATH`.
+///
+/// Delegates the entry-filtering logic to [`scan_path_for_perl`], which skips
+/// empty and relative `PATH` entries (the RCE guard, #2764/#3028), then falls
+/// back to hard-coded Termux candidates.
 ///
 /// # Errors
 ///
 /// Returns an error when perl cannot be found on PATH.
 pub fn resolve_perl_path() -> Result<PathBuf> {
     if let Ok(path_env) = env::var("PATH") {
-        for path_dir in path_env.split(PATH_SEPARATOR) {
-            // Skip empty entries (from `;;` or trailing `;`) and relative entries.
-            // Both produce CWD-relative paths via `.join(PERL_EXECUTABLE)` and
-            // could resolve to a planted binary in the workspace root.
-            let dir = PathBuf::from(path_dir);
-            if path_dir.is_empty() || !dir.is_absolute() {
-                continue;
-            }
-            let perl_path = dir.join(PERL_EXECUTABLE);
-            if perl_path.exists() && perl_path.is_file() {
-                return Ok(perl_path);
-            }
+        if let Some(path) = scan_path_for_perl(&path_env) {
+            return Ok(path);
         }
     }
 
@@ -261,7 +278,7 @@ mod tests {
         }
     }
 
-    // --- Empty-PATH-entry bypass regression (#3028) ---
+    // --- Empty-PATH-entry bypass regression (#3028 / #3222) ---
     //
     // An empty `;;` or trailing `;` PATH entry makes
     // `PathBuf::from("").join("perl.exe")` produce a relative candidate
@@ -270,92 +287,70 @@ mod tests {
     // would return it as the resolved interpreter — the same binary-planting
     // RCE as the bare-name `Command::new` fix.  These tests verify that
     // empty and relative PATH entries are skipped unconditionally.
+    //
+    // Both tests call the injectable `scan_path_for_perl` inner function with a
+    // fully controlled PATH string.  No global env mutation means no race
+    // condition between parallel test threads (#3222).
 
-    /// A PATH that consists only of an empty entry must NOT return the CWD
-    /// binary — the result must be `Err` (tool not found), never the relative
-    /// candidate.
+    /// A PATH that consists only of empty entries must NOT return any candidate
+    /// — the RCE guard must fire.
     ///
-    /// This test mutates `PATH`, so it must hold the env lock for its duration.
+    /// Uses the injectable `scan_path_for_perl` core — no env mutation, no race.
     #[test]
     fn resolve_perl_path_skips_empty_path_entry() {
-        use std::sync::Mutex;
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        // An empty string: split by the separator produces one empty component.
+        let result = scan_path_for_perl("");
+        assert!(result.is_none(), "empty PATH string must yield None (RCE guard); got: {result:?}");
 
-        let original = std::env::var("PATH").ok();
-
-        // SAFETY: test controls process env for the duration of this test.
-        unsafe {
-            // A PATH with only an empty entry (equivalent to `;;` reduced to
-            // just the empty string after splitting).
-            std::env::set_var("PATH", "");
-        }
-
-        let result = resolve_perl_path();
-
-        unsafe {
-            match original {
-                Some(val) => std::env::set_var("PATH", val),
-                None => std::env::remove_var("PATH"),
-            }
-        }
-
-        // With only an empty PATH entry, no absolute directory is searched —
-        // the result must be Err (not a relative/CWD candidate).
+        // Platform-native double-separator (;; Windows / :: Unix): two empty
+        // components and one empty trailing component — all skipped.
+        let double_sep = if cfg!(windows) { ";;" } else { "::" };
+        let result = scan_path_for_perl(double_sep);
         assert!(
-            result.is_err(),
-            "resolve_perl_path with an empty PATH entry must return Err, \
-             not a CWD-relative candidate; got: {result:?}"
+            result.is_none(),
+            "only-empty PATH ({double_sep:?}) must yield None (RCE guard); got: {result:?}"
         );
     }
 
-    /// A PATH with an empty entry alongside a real PATH entry must still find
-    /// the real binary — skipping empty entries must not block legitimate ones.
+    /// A PATH with empty entries alongside a real absolute directory must still
+    /// find the binary — skipping empty entries must not block legitimate ones.
+    ///
+    /// Uses a tempdir-based fake perl binary so the test does not depend on a
+    /// real `perl` binary being present on the host.  No env mutation — the
+    /// path string is injected directly into `scan_path_for_perl` (#3222).
     #[test]
-    fn resolve_perl_path_skips_empty_entry_but_finds_real_perl() {
-        use std::sync::Mutex;
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    fn resolve_perl_path_skips_empty_entry_but_finds_real_perl() -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let perl_bin = dir.path().join(PERL_EXECUTABLE);
+        std::fs::write(&perl_bin, b"")?;
 
-        let original = std::env::var("PATH").ok();
-
-        // Only run this test when perl is actually on PATH — otherwise there is
-        // nothing to find and the assertion is vacuous.
-        let real_path = match resolve_perl_path() {
-            Ok(p) => p,
-            Err(_) => return, // no perl on host — skip
-        };
-        let real_dir = match real_path.parent() {
-            Some(d) => d.to_path_buf(),
-            None => return,
-        };
-
-        // Inject an empty entry before the real directory.
-        let path_sep = if cfg!(windows) { ";" } else { ":" };
-        let new_path = format!("{}{}{}", path_sep, path_sep, real_dir.display());
-
-        unsafe {
-            // SAFETY: test controls process env; ENV_LOCK serializes access.
-            std::env::set_var("PATH", &new_path);
+        // Make the file executable on Unix so it passes an `is_file()` check
+        // (it is always a regular file on Windows regardless of permissions).
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&perl_bin)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&perl_bin, perms)?;
         }
 
-        let result = resolve_perl_path();
+        // Inject empty entries before the real directory — the guard must skip
+        // them and still find the binary.
+        let sep = if cfg!(windows) { ";" } else { ":" };
+        let path_env = format!("{sep}{sep}{}", dir.path().display());
 
-        unsafe {
-            match original {
-                Some(val) => std::env::set_var("PATH", val),
-                None => std::env::remove_var("PATH"),
-            }
-        }
-
+        let result = scan_path_for_perl(&path_env);
         assert!(
-            result.is_ok(),
-            "resolve_perl_path must find perl even when PATH has empty entries; got: {result:?}"
+            result.is_some(),
+            "must find perl even with empty entries before real dir; \
+             path_env={path_env:?}"
         );
         let found = result.expect("checked above");
         assert!(
             found.is_absolute(),
-            "resolved perl path must be absolute, not a CWD-relative candidate; got: {found:?}"
+            "resolved perl path must be absolute, not CWD-relative; got: {found:?}"
         );
+
+        Ok(())
     }
 }

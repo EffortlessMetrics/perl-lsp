@@ -8,6 +8,7 @@ import * as path from 'path';
 import {
   PerlDebugAdapterDescriptorFactory,
   PerlDebugConfigurationProvider,
+  buildDapExecutableArgs,
   buildLaunchJsonContent,
   hasLaunchJson,
   offerDebugConfigOnFirstPerlOpen,
@@ -134,9 +135,9 @@ describe('PerlDebugConfigurationProvider', () => {
     test('includes launch, attach by TCP, and attach by PID templates', () => {
       const configs = provider.provideDebugConfigurations(undefined) as any[];
 
-      const hasLaunch = configs.some(c => c.request === 'launch');
-      const hasTCPAttach = configs.some(c => c.request === 'attach' && c.port);
-      const hasPIDAttach = configs.some(c => c.request === 'attach' && c.processId);
+      const hasLaunch = configs.some((c) => c.request === 'launch');
+      const hasTCPAttach = configs.some((c) => c.request === 'attach' && c.port);
+      const hasPIDAttach = configs.some((c) => c.request === 'attach' && c.processId);
 
       expect(hasLaunch).toBe(true);
       expect(hasTCPAttach).toBe(true);
@@ -184,7 +185,7 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
       expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
         expect.stringContaining('perl-dap'),
         'Reinstall',
-        'Open Debugging Guide'
+        'Open Debugging Guide',
       );
     } finally {
       process.env.PATH = origPath;
@@ -227,6 +228,42 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
 
     expect(result.options.env.RUST_LOG).toBe('debug');
   });
+
+  test('passes --external-peer through to the descriptor when the session sets externalPeer', () => {
+    const binDir = path.join(tmpDir, 'bin', `${process.platform}-${process.arch}`);
+    fs.mkdirSync(binDir, { recursive: true });
+    const dapName = process.platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
+    const dapPath = path.join(binDir, dapName);
+    fs.writeFileSync(dapPath, '#!/bin/sh\necho ok');
+    if (process.platform !== 'win32') {
+      fs.chmodSync(dapPath, 0o755);
+    }
+
+    const ctx = makeContext(tmpDir);
+    const factory = new PerlDebugAdapterDescriptorFactory(ctx);
+    const session = { configuration: { externalPeer: 'localhost:9000' } };
+    const result = factory.createDebugAdapterDescriptor(session as any, undefined) as any;
+
+    expect(result.args).toEqual(['--external-peer', 'localhost:9000']);
+  });
+
+  test('uses empty args for a plain launch session', () => {
+    const binDir = path.join(tmpDir, 'bin', `${process.platform}-${process.arch}`);
+    fs.mkdirSync(binDir, { recursive: true });
+    const dapName = process.platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
+    const dapPath = path.join(binDir, dapName);
+    fs.writeFileSync(dapPath, '#!/bin/sh\necho ok');
+    if (process.platform !== 'win32') {
+      fs.chmodSync(dapPath, 0o755);
+    }
+
+    const ctx = makeContext(tmpDir);
+    const factory = new PerlDebugAdapterDescriptorFactory(ctx);
+    const session = { configuration: { request: 'launch', program: '/tmp/x.pl' } };
+    const result = factory.createDebugAdapterDescriptor(session as any, undefined) as any;
+
+    expect(result.args).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -245,7 +282,7 @@ describe('debug test command helpers', () => {
     expect(rewriteTestLensCommand(lens).command.command).toBe(VSCODE_DEBUG_TEST_COMMAND);
   });
 
-test('rewrites server run-test code lenses to the VS Code command', () => {
+  test('rewrites server run-test code lenses to the VS Code command', () => {
     const lens = {
       command: {
         title: 'Run Test',
@@ -281,11 +318,13 @@ test('rewrites server run-test code lenses to the VS Code command', () => {
   });
 
   test('parses a TestItem-like object into a launch target', () => {
-    expect(parseDebugTestLaunchTarget({
-      label: 'constructor',
-      uri: { fsPath: path.normalize('/workspace/t/basic.t') },
-      args: ['--verbose'],
-    })).toEqual({
+    expect(
+      parseDebugTestLaunchTarget({
+        label: 'constructor',
+        uri: { fsPath: path.normalize('/workspace/t/basic.t') },
+        args: ['--verbose'],
+      }),
+    ).toEqual({
       label: 'constructor',
       program: path.normalize('/workspace/t/basic.t'),
       args: ['--verbose'],
@@ -345,6 +384,164 @@ describe('buildLaunchJsonContent', () => {
     const cfg = parsed.configurations[0];
     expect(cfg.type).toBe('perl');
     expect(cfg.request).toBe('launch');
+  });
+
+  test('external-peer template carries the externalPeer field', () => {
+    const content = buildLaunchJsonContent('external-peer');
+    const parsed = JSON.parse(content);
+    const cfg = parsed.configurations[0];
+    expect(cfg.type).toBe('perl');
+    expect(cfg.request).toBe('attach');
+    expect(typeof cfg.externalPeer).toBe('string');
+    expect(cfg.externalPeer).toMatch(/^[^\s:]+:\d+$/);
+  });
+
+  test('all template includes the external-peer configuration', () => {
+    const content = buildLaunchJsonContent('all');
+    const parsed = JSON.parse(content);
+    const hasPeer = parsed.configurations.some((c: any) => typeof c.externalPeer === 'string');
+    expect(hasPeer).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildDapExecutableArgs
+// ---------------------------------------------------------------------------
+describe('buildDapExecutableArgs', () => {
+  test('passes --external-peer through for a valid host:port', () => {
+    expect(buildDapExecutableArgs({ externalPeer: 'localhost:9000' } as any)).toEqual([
+      '--external-peer',
+      'localhost:9000',
+    ]);
+  });
+
+  test('trims surrounding whitespace on the peer address', () => {
+    expect(buildDapExecutableArgs({ externalPeer: '  127.0.0.1:13700  ' } as any)).toEqual([
+      '--external-peer',
+      '127.0.0.1:13700',
+    ]);
+  });
+
+  test('returns no args when externalPeer is absent', () => {
+    expect(buildDapExecutableArgs({ request: 'launch' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs(undefined)).toEqual([]);
+  });
+
+  test('ignores a malformed peer address rather than passing it through', () => {
+    expect(buildDapExecutableArgs({ externalPeer: 'not-a-peer' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 'host:' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 42 } as any)).toEqual([]);
+  });
+
+  test('falls back to native for a non-connectable port in the flat shape', () => {
+    // `host:0` (0 = "allocate", not connectable) and out-of-range ports must
+    // fall back to the native adapter, consistent with the structured shape —
+    // not spawn an unconnectable `--external-peer host:0`.
+    expect(buildDapExecutableArgs({ externalPeer: 'localhost:0' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 'localhost:70000' } as any)).toEqual([]);
+  });
+
+  test('falls back to the native adapter for a bracketed IPv6 peer address', () => {
+    // The validator requires the host segment to contain no ':' (so a plain
+    // "host:port" split is unambiguous), so a bracketed IPv6 literal like
+    // "[::1]:9000" does not match and the adapter falls back to native mode
+    // rather than passing an unvalidated value through. This documents a
+    // known scope limit, not a crash or injection risk.
+    expect(buildDapExecutableArgs({ externalPeer: '[::1]:9000' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: '::1:9000' } as any)).toEqual([]);
+  });
+
+  test('rejects a peer address with embedded whitespace instead of splitting on it', () => {
+    // Guards against argv smuggling: a value like "host --some-flag:9000"
+    // must not turn into a second, attacker-controlled CLI argument for the
+    // spawned perl-dap process.
+    expect(buildDapExecutableArgs({ externalPeer: 'host --flag:9000' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 'host:9000 --flag' } as any)).toEqual([]);
+  });
+
+  test('translates the shipped structured externalDebugger (connect) shape', () => {
+    const config = {
+      debuggerBackend: 'external',
+      externalDebugger: {
+        kind: 'ptkdb',
+        mode: 'connect',
+        control: 'mirror',
+        host: '127.0.0.1',
+        port: 13604,
+      },
+    };
+    expect(buildDapExecutableArgs(config as any)).toEqual(['--external-peer', '127.0.0.1:13604']);
+  });
+
+  test('defaults host to 127.0.0.1 and mode to connect for the structured shape', () => {
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { port: 9001 },
+      } as any),
+    ).toEqual(['--external-peer', '127.0.0.1:9001']);
+  });
+
+  test('wires listen mode to --external-peer-listen (port 0 = allocate ephemeral)', () => {
+    // A concrete port binds it; port 0 / absent asks perl-dap to allocate one,
+    // so only the host is passed as the bind spec.
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 13604 },
+      } as any),
+    ).toEqual(['--external-peer-listen', '127.0.0.1:13604']);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 0 },
+      } as any),
+    ).toEqual(['--external-peer-listen', '127.0.0.1']);
+    // Defaults host to 127.0.0.1 when omitted.
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen' },
+      } as any),
+    ).toEqual(['--external-peer-listen', '127.0.0.1']);
+  });
+
+  test('does not fabricate an address for unimplemented modes or connect port 0', () => {
+    // launchPeer is not wired; connect requires a concrete port — fall back to native.
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'launchPeer', port: 13604 },
+      } as any),
+    ).toEqual([]);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'connect', port: 0 },
+      } as any),
+    ).toEqual([]);
+  });
+
+  test('rejects a listen host that could smuggle extra argv tokens', () => {
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen', host: 'host --flag' },
+      } as any),
+    ).toEqual([]);
+    expect(
+      buildDapExecutableArgs({
+        debuggerBackend: 'external',
+        externalDebugger: { mode: 'listen', host: 'a:b' },
+      } as any),
+    ).toEqual([]);
+  });
+
+  test('the native backend (or absent debuggerBackend) yields no bridge args', () => {
+    expect(buildDapExecutableArgs({ debuggerBackend: 'native', program: '/x.pl' } as any)).toEqual(
+      [],
+    );
+    expect(buildDapExecutableArgs({ request: 'launch', program: '/x.pl' } as any)).toEqual([]);
   });
 });
 
@@ -416,7 +613,7 @@ describe('offerDebugConfigOnFirstPerlOpen', () => {
       expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
         expect.stringContaining('debug configuration'),
         expect.any(String),
-        expect.any(String)
+        expect.any(String),
       );
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });

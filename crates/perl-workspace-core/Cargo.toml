@@ -1,0 +1,32 @@
+[package]
+name = "perl-workspace-core"
+version = "0.17.0"
+edition = "2024"
+description = "LSP-free project-facts substrate for Perl: files, packages, symbols, dynamic boundaries — with stable IDs, source ranges, provenance, and confidence."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/effortlessmetrics/perl-lsp-swarm"
+publish = false
+
+[dependencies]
+# Allowed leaf facts crates only (see PLSP-ADR-0006 / NATIVE_STACK_POLICY.md).
+# Deliberately NOT depended on: perl-workspace / lsp-types / perl-lsp-* / perl-dap
+# / tokio — that contract is asserted in tests/dependency_contract.rs.
+perl-parser-core = { workspace = true }
+perl-symbol = { workspace = true }
+# perl-pragma is a leaf crate (only dep: perl-ast). It owns the strict/warnings/
+# feature/version-bundle tables (the 5.10→5.42 progression), so compile-effect
+# facts reuse it rather than hand-rolling a fabricated version→feature table
+# (external-truth-gate doctrine).
+perl-pragma = { workspace = true }
+# perl-pod is a zero-dependency leaf crate; reused for structured POD facts.
+perl-pod = { workspace = true }
+serde = { workspace = true }
+# serde_json: used for META.json distribution-metadata facts (PR 7). Leaf, allowed.
+serde_json = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

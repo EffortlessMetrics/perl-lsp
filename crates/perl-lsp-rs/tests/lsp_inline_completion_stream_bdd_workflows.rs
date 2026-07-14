@@ -3,6 +3,11 @@
 //! These scenarios validate user-visible behavior across request sequencing,
 //! document edits, and document lifecycle events.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stderr doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stderr)]
+
 mod support;
 
 use serde_json::Value;

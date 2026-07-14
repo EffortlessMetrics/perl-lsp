@@ -6,6 +6,11 @@
 //! This module provides complete test coverage for all executeCommand features
 //! with focus on Issue #145 resolution and LSP 3.17+ protocol compliance.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stdout)]
+
 use serde_json::json;
 use std::time::Duration;
 
@@ -20,13 +25,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn repeat_analysis_budget() -> Duration {
     let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
 
-    if is_ci {
-        Duration::from_millis(2500)
-    } else if cfg!(windows) {
-        Duration::from_millis(2500)
-    } else {
-        Duration::from_secs(1)
-    }
+    if is_ci || cfg!(windows) { Duration::from_millis(2500) } else { Duration::from_secs(1) }
 }
 
 fn legacy_command_budget() -> Duration {
@@ -537,15 +536,23 @@ fn test_execute_command_empty_file() -> TestResult {
 
 #[test]
 #[serial]
-// Test built-in analyzer policy coverage
-fn test_builtin_analyzer_policy_coverage() -> TestResult {
+// Native analyzer policy coverage via `perl.runCritic`. Since #3299 the default
+// (Native) engine routes through the `NativeCriticRegistry` — the same engine the
+// editor's on-type pull diagnostics use — so the command reports `native.*` rule
+// IDs (e.g. `native.testing.require_use_strict`) rather than the legacy
+// `BuiltInAnalyzer` PascalCase policy names.
+fn test_native_analyzer_policy_coverage() -> TestResult {
     // Test each known policy individually
     let test_cases = vec![
-        ("missing_strict.pl", "#!/usr/bin/perl\nprint 'no strict';\n", "RequireUseStrict"),
+        (
+            "missing_strict.pl",
+            "#!/usr/bin/perl\nprint 'no strict';\n",
+            "native.testing.require_use_strict",
+        ),
         (
             "missing_warnings.pl",
             "#!/usr/bin/perl\nuse strict;\nprint 'no warnings';\n",
-            "RequireUseWarnings",
+            "native.testing.require_use_warnings",
         ),
         ("has_both.pl", "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'good';\n", "clean"),
     ];
@@ -617,7 +624,7 @@ fn test_external_tool_timeout_handling() -> TestResult {
     // Should indicate which analyzer was actually used
     let analyzer_used = result["analyzerUsed"].as_str().unwrap_or("unknown");
     assert!(
-        analyzer_used == "external" || analyzer_used == "builtin",
+        analyzer_used == "external" || analyzer_used == "native",
         "Should indicate valid analyzer type, got: {}",
         analyzer_used
     );

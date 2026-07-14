@@ -5,9 +5,9 @@
 <h1 align="center">perl-lsp</h1>
 
 <p align="center">
-  <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a>
-  <a href="https://codecov.io/gh/EffortlessMetrics/perl-lsp"><img src="https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg" alt="Codecov parser branch coverage" /></a>
-  <a href="https://github.com/EffortlessMetrics/ripr/blob/main/docs/BADGE_POLICY.md"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/badges/ripr-plus.json" alt="ripr+" /></a>
+  <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
+  <a href="https://codecov.io/gh/EffortlessMetrics/perl-lsp"><img src="https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/main/graph/badge.svg" alt="Codecov parser branch coverage" /></a>
+  <a href="https://github.com/EffortlessMetrics/ripr/blob/main/docs/BADGE_POLICY.md"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/badges/ripr-plus.json" alt="ripr+" /></a>
 </p>
 
 <p align="center">
@@ -53,6 +53,7 @@ The README is a front door, not the metric source of truth. Current release post
 | Parser corpus and coverage | [parser status](docs/project/status/parser.md) |
 | Workspace/indexing | [workspace status](docs/project/status/workspace.md) |
 | Native formatter and critic | [native tooling status](docs/project/status/native_tooling.md) |
+| Editor intelligence scorecard | [editor scorecard](docs/project/status/editor.md), [live metrics](docs/project/status/editor_ux.md) |
 
 ## What works
 
@@ -105,6 +106,7 @@ The current architecture collapsed the old microcrate graph into a smaller publi
 | Editor setup | [docs/how-to/EDITOR_SETUP.md](docs/how-to/EDITOR_SETUP.md) |
 | Getting started | [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md) |
 | Configuration | [docs/reference/CONFIG.md](docs/reference/CONFIG.md) |
+| Test2 integration | [docs/reference/TEST2_INTEGRATION.md](docs/reference/TEST2_INTEGRATION.md) |
 | Troubleshooting | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
 | Perl setup troubleshooting | [docs/how-to/PERL_SETUP_TROUBLESHOOTING.md](docs/how-to/PERL_SETUP_TROUBLESHOOTING.md) |
 | Editor trust and receipts | [docs/how-to/EDITOR_TRUST.md](docs/how-to/EDITOR_TRUST.md) |

@@ -28,13 +28,11 @@ current proof-floor branch-protection contexts are:
 
 - `Perl LSP Rust Small Result`
 - `ripr+ New Gap Gate`
-- `Codecov / Patch 95`
-- `codecov/patch`
 
-`Codecov / Patch 95` is the repo-owned coverage proof job. `codecov/patch` is
-the external Codecov status context posted after Codecov processes the upload.
-Both are required: a PR is not merge-ready while either context is missing,
-pending, skipped unexpectedly, failed, or stale for the current head.
+`Codecov / Patch 95` is the repo-owned advisory coverage job. `codecov/patch`
+is the external Codecov status context posted after Codecov processes an
+explicit coverage upload. Both are advisory and must not block normal PR or
+merge-queue flow.
 
 ## Gate graph versioning
 

@@ -3,6 +3,7 @@ use perl_module::resolution::use_lib::{
     no_lib_cancelled_paths_at_offset, resolve_use_lib_paths_from_source,
     resolve_use_lib_paths_from_source_at_offset,
 };
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 pub(super) fn lexical_paths(
@@ -43,8 +44,32 @@ pub(super) fn include_paths_with_cancellations(
     if cancelled.is_empty() {
         raw_include_paths
     } else {
-        raw_include_paths.into_iter().filter(|path| !cancelled.contains(path)).collect()
+        let cancelled_keys: HashSet<String> =
+            cancelled.iter().map(|path| include_path_key(path)).collect();
+        raw_include_paths
+            .into_iter()
+            .filter(|path| !cancelled_keys.contains(&include_path_key(path)))
+            .collect()
     }
+}
+
+fn include_path_key(path: &str) -> String {
+    Path::new(path)
+        .components()
+        .fold(PathBuf::new(), |mut acc, component| {
+            match component {
+                std::path::Component::CurDir => {}
+                std::path::Component::RootDir
+                | std::path::Component::Prefix(_)
+                | std::path::Component::ParentDir
+                | std::path::Component::Normal(_) => acc.push(component.as_os_str()),
+            }
+            acc
+        })
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string()
 }
 
 fn file_dir(doc_uri: Option<&str>) -> Option<PathBuf> {

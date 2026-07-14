@@ -518,3 +518,15 @@ The previously-discovered `perl-lsp-config → perl-dap` cycle was broken by:
 **Published count: 34 → 31 (v0.13.0 target achieved)**
 
 All three crate directories deleted; workspace membership and publish allowlist updated accordingly.
+
+---
+
+### Amendment 10 — 2026-07-03: Intentional new published crate — `perl-ripr-facts` (31 → 32)
+
+**Context:** The collapse program is a *ratchet against accidental* re-expansion of the publish surface, not a permanent freeze on ever adding a crate. PR #3294 (tracking #3293) relocates the `ripr-perl-facts-v1` exporter out of the LSP server runtime (`perl-lsp-rs`) into a new leaf crate `perl-ripr-facts`, so batch RIPR fact production no longer sits on the interactive editor stack. Because `perl-lsp-rs` is a published crate and now depends on `perl-ripr-facts`, the new crate must itself be published.
+
+**Decision:** This is a *deliberate, reviewed* increase of the published-crate count by one, from 31 to 32 — the exact case the ratchet gate's error message anticipates ("if the increase is intentional, update `xtask/published-crate-baseline.txt` explicitly in a reviewed commit"). It does not reopen microcrate proliferation; it is a single architectural placement of a batch-substrate concern below the editor layer.
+
+**Published count: 31 → 32.** `xtask/published-crate-baseline.txt` bumped to 32; `perl-ripr-facts` added to `[workspace.metadata.publish.allow]`.
+
+**Guard hygiene:** the per-crate count tests that previously hard-coded `31` were refactored to *derive* the count from the two sources of truth (the publish allowlist array and the baseline file) and assert they agree, so future intentional changes touch only Cargo.toml + the baseline file, never the guards.

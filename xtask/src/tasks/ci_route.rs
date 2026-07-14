@@ -586,7 +586,7 @@ fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> Result<C
     Ok(CiRouteReceipt {
         schema_version: "ci-route.v1",
         provider_action: "changed_file_proof_pack_route",
-        claim_boundary: "CI-enforced changed-file proof routing; selected coverage pack commands feed Codecov / Patch 95 on pull requests",
+        claim_boundary: "Advisory changed-file coverage routing; selected coverage pack commands feed manual routed coverage diagnostics",
         base: base.to_string(),
         head: head.to_string(),
         changed_files,

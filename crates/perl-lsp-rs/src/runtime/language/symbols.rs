@@ -76,7 +76,8 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     // Source-backed compiler document symbols are live for fresh,
                     // high-confidence parser syntax facts. Astless documents keep
                     // the legacy text fallback below.
@@ -86,6 +87,20 @@ impl LspServer {
                             &doc.text,
                         );
                     let mut document_symbols = document_symbols_to_json(live_result.symbols);
+
+                    // Append Test2/Test::More subtest symbols so the outline shows
+                    // the subtest tree. Subtest calls only exist in test files, so
+                    // this is empty for ordinary source.
+                    let subtests = perl_lsp_rs_core::providers::testing::subtest::discover_subtests(
+                        ast, &doc.text,
+                    );
+                    if !subtests.is_empty() {
+                        let subtest_symbols =
+                            perl_lsp_rs_core::providers::testing::subtest::subtest_document_symbols(
+                                &subtests,
+                            );
+                        document_symbols.extend(document_symbols_to_json(subtest_symbols));
+                    }
 
                     // Append POD section symbols from a direct line scan
                     document_symbols.extend(pod_section_symbols(&doc.text));
@@ -169,7 +184,8 @@ impl LspServer {
                     push_multiline_folding_range(&mut lsp_ranges, start_line, end_line, "region");
                 }
 
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     // Extract folding ranges from AST
                     let mut extractor = crate::folding::FoldingRangeExtractor::new();
                     let ranges = extractor.extract(ast);
@@ -198,6 +214,23 @@ impl LspServer {
                             lsp_ranges.push(lsp_range);
                         }
                     }
+
+                    // Dedup identical ranges (start+end+kind) that arise when both a
+                    // Subroutine node and its inner Block node map to the same line span.
+                    lsp_ranges.sort_by_key(|r| {
+                        (
+                            r["startLine"].as_u64().unwrap_or(0),
+                            r["endLine"].as_u64().unwrap_or(0),
+                            r.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        )
+                    });
+                    lsp_ranges.dedup_by_key(|r| {
+                        (
+                            r["startLine"].as_u64().unwrap_or(0),
+                            r["endLine"].as_u64().unwrap_or(0),
+                            r.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        )
+                    });
 
                     // If no ranges from AST, try fallback
                     if lsp_ranges.is_empty() {
@@ -329,6 +362,95 @@ fn lsp_inclusive_multiline_end_line(start_line: usize, raw_end_line: usize) -> O
     (lsp_end_line > start_line).then_some(lsp_end_line)
 }
 
+impl LspServer {
+    /// Document symbol runtime quality receipt for the source-backed live slice.
+    ///
+    /// Calls the live `textDocument/documentSymbol` handler and wraps the result
+    /// in a typed receipt that records the fresh parser-syntax symbols promoted
+    /// live. Astless, generated/no-source, stale, dynamic, low-confidence, and
+    /// ambiguous cases keep fallback or gated behavior.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn document_symbols_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let (compiler_receipt, source_backed_count) =
+            self.document_symbols_source_backed_receipt(params.as_ref())?;
+        let live_provider_result = self.handle_document_symbol(params)?;
+        let live_provider_count = match live_provider_result.as_ref() {
+            Some(Value::Array(items)) => items.len(),
+            _ => 0,
+        };
+        let no_live_behavior_change = source_backed_count == 0;
+
+        Ok(Some(json!({
+            "provider": "document_symbols",
+            "live_provider_result": live_provider_result,
+            "live_provider_count": live_provider_count,
+            "shadow_state": "partial_live_source_backed",
+            "compiler_receipt": compiler_receipt,
+            "no_live_behavior_change": no_live_behavior_change,
+            "notes": [
+                format!(
+                    "document-symbol runtime quality receipt: live_provider_count={}; \
+                     source_backed_compiler_symbols={}; \
+                     source-backed parser syntax document symbols are live; \
+                     astless, stale, dynamic, generated/no-source, and ambiguous cases keep fallback",
+                    live_provider_count,
+                    source_backed_count
+                )
+            ]
+        })))
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    fn document_symbols_source_backed_receipt(
+        &self,
+        params: Option<&Value>,
+    ) -> Result<(Value, usize), JsonRpcError> {
+        let Some(params) = params else {
+            return Ok((document_symbols_empty_compiler_receipt("missing_params"), 0));
+        };
+        let uri = req_uri(params)?;
+        let documents = self.documents_guard();
+        let Some(doc) = self.get_document(&documents, uri) else {
+            return Ok((document_symbols_empty_compiler_receipt("unknown_uri"), 0));
+        };
+        let parsed = doc.current_parsed();
+        let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) else {
+            return Ok((document_symbols_empty_compiler_receipt("ast_unavailable"), 0));
+        };
+
+        let live_result =
+            perl_lsp_rs_core::providers::document_symbols::source_backed_document_symbols_from_ast(
+                ast, &doc.text,
+            );
+        let source_backed_count = live_result.fact_traces.len();
+        Ok((
+            json!({
+                "source": "ParserSyntax",
+                "provenance": "ExactAst",
+                "confidence": "High",
+                "freshness": "Fresh",
+                "fallback_state": "Primary",
+                "source_backed_count": source_backed_count,
+                "fact_source_traces": live_result.fact_traces,
+            }),
+            source_backed_count,
+        ))
+    }
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn document_symbols_empty_compiler_receipt(reason: &str) -> Value {
+    json!({
+        "source_backed_count": 0,
+        "fallback_state": "Fallback",
+        "reason": reason,
+        "fact_source_traces": [],
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -438,92 +560,4 @@ mod tests {
 
         Ok(())
     }
-}
-
-impl LspServer {
-    /// Document symbol runtime quality receipt for the source-backed live slice.
-    ///
-    /// Calls the live `textDocument/documentSymbol` handler and wraps the result
-    /// in a typed receipt that records the fresh parser-syntax symbols promoted
-    /// live. Astless, generated/no-source, stale, dynamic, low-confidence, and
-    /// ambiguous cases keep fallback or gated behavior.
-    #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    pub(crate) fn document_symbols_runtime_quality_receipt(
-        &self,
-        params: Option<Value>,
-    ) -> Result<Option<Value>, JsonRpcError> {
-        let (compiler_receipt, source_backed_count) =
-            self.document_symbols_source_backed_receipt(params.as_ref())?;
-        let live_provider_result = self.handle_document_symbol(params)?;
-        let live_provider_count = match live_provider_result.as_ref() {
-            Some(Value::Array(items)) => items.len(),
-            _ => 0,
-        };
-        let no_live_behavior_change = source_backed_count == 0;
-
-        Ok(Some(json!({
-            "provider": "document_symbols",
-            "live_provider_result": live_provider_result,
-            "live_provider_count": live_provider_count,
-            "shadow_state": "partial_live_source_backed",
-            "compiler_receipt": compiler_receipt,
-            "no_live_behavior_change": no_live_behavior_change,
-            "notes": [
-                format!(
-                    "document-symbol runtime quality receipt: live_provider_count={}; \
-                     source_backed_compiler_symbols={}; \
-                     source-backed parser syntax document symbols are live; \
-                     astless, stale, dynamic, generated/no-source, and ambiguous cases keep fallback",
-                    live_provider_count,
-                    source_backed_count
-                )
-            ]
-        })))
-    }
-
-    #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    fn document_symbols_source_backed_receipt(
-        &self,
-        params: Option<&Value>,
-    ) -> Result<(Value, usize), JsonRpcError> {
-        let Some(params) = params else {
-            return Ok((document_symbols_empty_compiler_receipt("missing_params"), 0));
-        };
-        let uri = req_uri(params)?;
-        let documents = self.documents_guard();
-        let Some(doc) = self.get_document(&documents, uri) else {
-            return Ok((document_symbols_empty_compiler_receipt("unknown_uri"), 0));
-        };
-        let Some(ast) = doc.ast.as_ref() else {
-            return Ok((document_symbols_empty_compiler_receipt("ast_unavailable"), 0));
-        };
-
-        let live_result =
-            perl_lsp_rs_core::providers::document_symbols::source_backed_document_symbols_from_ast(
-                ast, &doc.text,
-            );
-        let source_backed_count = live_result.fact_traces.len();
-        Ok((
-            json!({
-                "source": "ParserSyntax",
-                "provenance": "ExactAst",
-                "confidence": "High",
-                "freshness": "Fresh",
-                "fallback_state": "Primary",
-                "source_backed_count": source_backed_count,
-                "fact_source_traces": live_result.fact_traces,
-            }),
-            source_backed_count,
-        ))
-    }
-}
-
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
-fn document_symbols_empty_compiler_receipt(reason: &str) -> Value {
-    json!({
-        "source_backed_count": 0,
-        "fallback_state": "Fallback",
-        "reason": reason,
-        "fact_source_traces": [],
-    })
 }

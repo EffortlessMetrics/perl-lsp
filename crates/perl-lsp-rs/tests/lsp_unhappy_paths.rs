@@ -1,4 +1,10 @@
-#![allow(dead_code)] // Some tests are feature-gated while being fixed
+#![allow(dead_code)]
+// Some tests are feature-gated while being fixed
+
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use perl_tdd_support::must;
 use serde_json::json;

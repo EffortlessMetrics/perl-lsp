@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
                 return false;
             };
             let next_kind = next_token.kind;
-            let next_text = &next_token.text;
+            let next_text = next_token.text.to_string();
 
             // These tokens *cannot* start an indirect object
             match next_kind {
@@ -154,22 +154,55 @@ impl<'a> Parser<'a> {
             }
 
             // print STDOUT ... (uppercase bareword filehandle)
+            // print try "..." (legacy `try` bareword filehandle)
             // But NOT if followed by comma — that's a regular call: open FILE, "..."
             // And NOT if followed by arrow — that's a class method chain:
             //   print Data::Dumper->new([$self])->Dump()
             // And NOT if followed by fat arrow — that's a hash-style list, NOT indirect:
             //   print STDERR => "msg"  means  print(STDERR => "msg"), not print to STDERR
-            if next_kind == TokenKind::Identifier {
-                if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
-                    if let Ok(third) = self.tokens.peek_third() {
-                        if matches!(
-                            third.kind,
-                            TokenKind::Comma | TokenKind::Arrow | TokenKind::FatArrow
-                        ) {
-                            return false;
-                        }
+            if matches!(next_kind, TokenKind::Identifier | TokenKind::Try) {
+                if let Ok(third) = self.tokens.peek_third() {
+                    if matches!(
+                        third.kind,
+                        TokenKind::Comma | TokenKind::Arrow | TokenKind::FatArrow
+                    ) {
+                        return false;
                     }
-                    return true;
+
+                    if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
+                        return true;
+                    }
+
+                    let third_text = &third.text;
+                    let third_starts_filehandle_argument =
+                        matches!(third.kind, TokenKind::String | TokenKind::LeftParen)
+                            || third_text.starts_with('$')
+                            || third_text.starts_with('@')
+                            || third_text.starts_with('%');
+                    let third_terminates_filehandle_call =
+                        Self::is_statement_terminator(Some(third.kind))
+                            || Self::is_symbolic_short_circuit_operator(Some(third.kind))
+                            || matches!(
+                                third.kind,
+                                TokenKind::WordOr
+                                    | TokenKind::WordAnd
+                                    | TokenKind::WordXor
+                                    | TokenKind::WordNot
+                                    | TokenKind::Question
+                            );
+                    if next_kind == TokenKind::Try
+                        && matches!(name, "print" | "say" | "printf")
+                        && third_starts_filehandle_argument
+                    {
+                        return true;
+                    }
+
+                    if next_kind == TokenKind::Try
+                        && matches!(name, "close")
+                        && third_terminates_filehandle_call
+                    {
+                        return true;
+                    }
                 }
             }
         }
@@ -361,6 +394,14 @@ impl<'a> Parser<'a> {
             "delete" | "exists" | "scalar" | "ref" | "defined"
         ) {
             self.parse_postfix()?
+        } else if matches!(method.as_str(), "print" | "say" | "printf" | "close")
+            && self.peek_kind() == Some(TokenKind::Try)
+        {
+            let token = self.consume_token()?;
+            Node::new(
+                NodeKind::Identifier { name: token.text.to_string() },
+                SourceLocation { start: token.start, end: token.end },
+            )
         } else {
             self.parse_primary()?
         };

@@ -8,6 +8,11 @@
 //! and symbol_at() to provide rich hover information for Perl symbols.
 //! These tests validate hover behavior across common Perl patterns.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stdout)]
+
 mod common;
 
 #[cfg(test)]

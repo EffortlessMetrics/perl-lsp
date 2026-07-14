@@ -1,9 +1,12 @@
 //! Backend command implementations for run/debug/test and analyzer actions.
 
-use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
+use crate::perl_critic::{
+    BuiltInAnalyzer, CriticAnalyzer, CriticConfig, CriticContext, NativeCriticProfile,
+    NativeCriticRegistry,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use perl_lsp_rs_core::config::PerlOracleEnv;
-use perl_lsp_rs_core::config::WorkspaceConfig;
+use perl_lsp_rs_core::config::{CriticEngine, WorkspaceConfig};
 use perl_lsp_rs_core::providers::{
     ProviderDecisionConfidence, ProviderDecisionCopyablePayload, ProviderDecisionExplanation,
     ProviderDecisionFactSource, ProviderDecisionFallback, ProviderDecisionFreshness,
@@ -74,6 +77,44 @@ pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
 pub struct ExecuteCommandProvider {
     workspace_roots: Vec<PathBuf>,
     workspace_config: Option<WorkspaceConfig>,
+    /// Configured critic engine for `perl.runCritic`.
+    ///
+    /// Defaults to [`CriticEngine::Native`]. The external (legacy `perlcritic`)
+    /// analyzer runs only when this is [`CriticEngine::Legacy`] — merely having
+    /// `perlcritic` on `PATH` must not change the default behavior.
+    critic_engine: CriticEngine,
+    /// Native critic rule configuration for `perl.runCritic` when the engine is
+    /// [`CriticEngine::Native`]. Mirrors the `ServerConfig` values the editor's
+    /// native pull-diagnostics path uses, so the command and on-type diagnostics
+    /// report the same `NativeCriticRegistry` rule set.
+    native_critic_config: NativeCriticCommandConfig,
+}
+
+/// Native-critic rule configuration plumbed into [`ExecuteCommandProvider`] from
+/// `ServerConfig`, mirroring the values the native pull-diagnostics path reads.
+#[derive(Debug, Clone)]
+pub(crate) struct NativeCriticCommandConfig {
+    /// Profile name (`recommended`, `strict`, …) selecting the rule set.
+    pub profile: String,
+    /// Rule IDs to include on top of the profile. Empty means profile-only.
+    pub include: Vec<String>,
+    /// Rule IDs to exclude from the profile.
+    pub exclude: Vec<String>,
+    /// Minimum severity (1–5) reported by the native registry.
+    pub severity: u8,
+}
+
+impl Default for NativeCriticCommandConfig {
+    fn default() -> Self {
+        // Matches `ServerConfig::default()` native-critic defaults so a provider
+        // built without explicit config behaves like the on-type native path.
+        Self {
+            profile: "recommended".to_string(),
+            include: Vec::new(),
+            exclude: Vec::new(),
+            severity: 3,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -139,12 +180,48 @@ impl ExecuteCommandProvider {
 impl ExecuteCommandProvider {
     /// Create a new execute command provider.
     pub fn new() -> Self {
-        Self { workspace_roots: Vec::new(), workspace_config: None }
+        Self {
+            workspace_roots: Vec::new(),
+            workspace_config: None,
+            critic_engine: CriticEngine::Native,
+            native_critic_config: NativeCriticCommandConfig::default(),
+        }
     }
 
     /// Create a provider with workspace root enforcement.
     pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
-        Self { workspace_roots, workspace_config: None }
+        Self {
+            workspace_roots,
+            workspace_config: None,
+            critic_engine: CriticEngine::Native,
+            native_critic_config: NativeCriticCommandConfig::default(),
+        }
+    }
+
+    /// Set the critic engine used by `perl.runCritic`.
+    ///
+    /// Defaults to [`CriticEngine::Native`]. Pass [`CriticEngine::Legacy`] to
+    /// route `perl.runCritic` through the external `perlcritic` analyzer when it
+    /// is available on `PATH`.
+    pub fn with_critic_engine(mut self, engine: CriticEngine) -> Self {
+        self.critic_engine = engine;
+        self
+    }
+
+    /// Set the native-critic rule configuration used by `perl.runCritic` under
+    /// [`CriticEngine::Native`]. Plumb the same `ServerConfig` values the native
+    /// pull-diagnostics path uses (profile, include/exclude rule IDs, severity)
+    /// so the command and on-type diagnostics report the same rule set.
+    pub fn with_native_critic_config(
+        mut self,
+        profile: String,
+        include: Vec<String>,
+        exclude: Vec<String>,
+        severity: u8,
+    ) -> Self {
+        self.native_critic_config =
+            NativeCriticCommandConfig { profile, include, exclude, severity };
+        self
     }
 
     /// Attach a workspace configuration to enable PerlOracleEnv isolation for
@@ -177,7 +254,7 @@ impl ExecuteCommandProvider {
                     .ok_or_else(|| "Missing subroutine name argument".to_string())?;
                 self.run_test_sub(&file_path, sub_name)
             }
-            "perl.debugTests" | "perl.debugFile" | "perl.debugTest" => {
+            "perl.debugTests" | "perl.debugTestFile" | "perl.debugFile" | "perl.debugTest" => {
                 let file_path = self.resolve_path_from_args(&arguments)?;
                 self.debug_tests(&file_path)
             }
@@ -187,11 +264,11 @@ impl ExecuteCommandProvider {
             }
             "perl.runSubtest" => {
                 let file_path = self.resolve_path_from_args(&arguments)?;
-                let sub_name = arguments
+                let subtest_name = arguments
                     .get(1)
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| "Missing subroutine name argument".to_string())?;
-                self.run_test_sub(&file_path, sub_name)
+                    .ok_or_else(|| "Missing subtest name argument".to_string())?;
+                self.run_subtest(&file_path, subtest_name)
             }
             "perl.runCritic" => self.run_critic_secure(&arguments),
             "perl.goToTest" => {
@@ -363,8 +440,68 @@ impl ExecuteCommandProvider {
         }
 
         crate::util::run_command_with_timeout(cmd, 30)
-            .map(|result| self.format_command_result(result, Some(("command", command.into()))))
+            .map(|result| self.format_test_command_result(result, command))
             .map_err(|error| error.to_string())
+    }
+
+    /// Format a test-runner process result, enriching the raw command output
+    /// with structured TAP facts: which runner produced it, plan/pass/fail
+    /// counts, and per-failure source locations. TODO/SKIP are reported but do
+    /// not count as hard failures. The raw `output`/`error`/`command`/`success`
+    /// fields are preserved so existing clients keep working.
+    pub(crate) fn format_test_command_result(
+        &self,
+        result: std::process::Output,
+        command: &str,
+    ) -> Value {
+        use perl_lsp_rs_core::providers::testing::tap::parse_tap;
+
+        let stdout = String::from_utf8_lossy(&result.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&result.stderr).into_owned();
+        let success = result.status.success();
+        let exit_code = result.status.code();
+        let report = parse_tap(&stdout);
+
+        let failures: Vec<Value> = report
+            .failures()
+            .into_iter()
+            .map(|test| {
+                json!({
+                    "number": test.number,
+                    "description": test.description,
+                    "file": test.file,
+                    "line": test.line,
+                    "got": test.got,
+                    "expected": test.expected,
+                    "depth": test.depth,
+                })
+            })
+            .collect();
+
+        let plan_mismatch = report
+            .plan_mismatch()
+            .map(|(actual, planned)| json!({ "actual": actual, "planned": planned }));
+
+        json!({
+            "success": success,
+            "output": stdout,
+            "error": if success { Value::Null } else { Value::String(stderr) },
+            "command": command,
+            "runner": command,
+            "exitCode": exit_code,
+            "tap": {
+                "planned": report.plan.as_ref().map(|plan| plan.count),
+                "skipAll": report.plan.as_ref().and_then(|plan| plan.skip_all.clone()),
+                "total": report.summary.total,
+                "passed": report.summary.passed,
+                "failed": report.summary.failed,
+                "skipped": report.summary.skipped,
+                "todo": report.summary.todo,
+                "bailedOut": report.bailed_out,
+                "planMismatch": plan_mismatch,
+            },
+            "failures": failures,
+        })
     }
 
     pub(crate) fn run_test_sub(&self, file_path: &Path, sub_name: &str) -> Result<Value, String> {
@@ -393,6 +530,49 @@ impl ExecuteCommandProvider {
         }
     }
 
+    /// Run a Test2/Test::More subtest by name.
+    ///
+    /// A Test2 `subtest 'name' => sub { ... }` is an anonymous block that is
+    /// part of the file's runtime — `perl-lsp` does **not** extract and execute
+    /// it in isolation (that would misrepresent the test). Instead this runs the
+    /// whole file through the configured runner and *focuses* the resulting TAP
+    /// output on the named subtest, clearly labelling the result as a
+    /// whole-file-focused run rather than filtered execution.
+    pub(crate) fn run_subtest(
+        &self,
+        file_path: &Path,
+        subtest_name: &str,
+    ) -> Result<Value, String> {
+        use perl_lsp_rs_core::providers::testing::tap::{focus_subtest, parse_tap};
+
+        let mut result = self.run_tests(file_path)?;
+
+        let raw = result.get("output").and_then(|value| value.as_str()).unwrap_or("");
+        let report = parse_tap(raw);
+        let focus = focus_subtest(&report, subtest_name);
+
+        result["requestedSubtest"] = json!(subtest_name);
+        // No cross-runner subtest filtering yet: always a whole-file run whose
+        // output we focus on the requested subtest.
+        result["subtestMode"] = json!("whole-file-focused");
+        result["subtestFocus"] = match focus {
+            Some(focus) => json!({
+                "found": true,
+                "passed": focus.passed,
+                "innerFailed": focus.inner_failed,
+                "name": focus.name,
+            }),
+            None => json!({
+                "found": false,
+                "reason": "no labelled subtest with that name in the runner output (dynamic name, or runner did not emit a subtest summary line)",
+            }),
+        };
+        result["note"] = json!(
+            "Ran the whole test file through the runner and focused output on the requested subtest. perl-lsp does not execute subtest blocks in isolation."
+        );
+        Ok(result)
+    }
+
     pub(crate) fn run_file(&self, file_path: &Path) -> Result<Value, String> {
         let ext_path = normalize_path_for_external_command(file_path);
         let mut perl_cmd = self.perl_command_for(file_path)?;
@@ -406,12 +586,44 @@ impl ExecuteCommandProvider {
         }
     }
 
-    fn debug_tests(&self, file_path: &Path) -> Result<Value, String> {
-        let file_path_str = file_path.to_string_lossy();
+    /// Build a Debug Adapter Protocol launch configuration for debugging a test
+    /// file through the native `perl-dap` adapter.
+    ///
+    /// `perl-lsp` does not run the debugger itself: it returns a launch
+    /// configuration (`action: "startDebugging"`) that the editor hands to the
+    /// `perl` debug type (backed by `perl-dap`). The program is the `.t` file
+    /// run under the real Perl interpreter — no Test2 runtime is emulated. The
+    /// working directory follows the same policy as `runTests` (the file's
+    /// directory), and `PERL_TEST_HARNESS_DUMP_TAP` is set so the session emits
+    /// TAP the editor can read back.
+    pub(crate) fn debug_tests(&self, file_path: &Path) -> Result<Value, String> {
+        let ext_path = normalize_path_for_external_command(file_path);
+        // A single-component path (bare filename) has a `Some("")` parent; an
+        // empty cwd can fail to launch, so fall back to the current directory.
+        let cwd = ext_path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let file_name = file_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| ext_path.to_string_lossy().into_owned());
+
         Ok(json!({
-            "success": false,
-            "output": format!("Debug mode not yet implemented for {}", file_path_str),
-            "error": Some("Debugging support coming soon".to_string())
+            "success": true,
+            "action": "startDebugging",
+            "adapter": "perl-dap",
+            "configuration": {
+                "type": "perl",
+                "request": "launch",
+                "name": format!("Debug Test: {file_name}"),
+                "program": ext_path.to_string_lossy(),
+                "cwd": cwd.to_string_lossy(),
+                "stopOnEntry": false,
+                "args": [],
+                "env": { "PERL_TEST_HARNESS_DUMP_TAP": "1" }
+            }
         }))
     }
 
@@ -456,13 +668,34 @@ impl ExecuteCommandProvider {
             }
         };
 
-        if command_exists("perlcritic") {
-            if let Ok(result) = self.run_external_critic(&canonical_path) {
-                return Ok(result);
+        if self.external_critic_requested() {
+            // Legacy engine: external `perlcritic` when present, else the
+            // `BuiltInAnalyzer` (Perl::Critic-compatible) fallback. Legacy
+            // behavior is unchanged.
+            if command_exists("perlcritic") {
+                if let Ok(result) = self.run_external_critic(&canonical_path) {
+                    return Ok(result);
+                }
             }
+            return self.run_builtin_critic(&canonical_path);
         }
 
-        self.run_builtin_critic(&canonical_path)
+        // Native engine (default): route through the native rule registry so the
+        // command reports the same `native.*` rule set as the editor's on-type
+        // native pull diagnostics.
+        self.run_native_critic(&canonical_path)
+    }
+
+    /// Whether the configured critic engine explicitly selects the external
+    /// (legacy `perlcritic`) analyzer.
+    ///
+    /// The native analyzer is the default: merely having `perlcritic` present
+    /// on `PATH` must not change the default behavior of `perl.runCritic`.
+    /// External critic runs only when `.perl-lsp.toml` / server config sets the
+    /// critic engine to `legacy`/`external`/`perlcritic`
+    /// ([`CriticEngine::Legacy`]).
+    pub(crate) fn external_critic_requested(&self) -> bool {
+        matches!(self.critic_engine, CriticEngine::Legacy)
     }
 
     #[deprecated(since = "0.8.9", note = "Use run_critic_secure for secure path resolution")]
@@ -479,13 +712,16 @@ impl ExecuteCommandProvider {
             ));
         }
 
-        if command_exists("perlcritic") {
-            if let Ok(result) = self.run_external_critic(path) {
-                return Ok(result);
+        if self.external_critic_requested() {
+            if command_exists("perlcritic") {
+                if let Ok(result) = self.run_external_critic(path) {
+                    return Ok(result);
+                }
             }
+            return self.run_builtin_critic(path);
         }
 
-        self.run_builtin_critic(path)
+        self.run_native_critic(path)
     }
 
     fn run_external_critic(&self, file_path: &Path) -> Result<Value, String> {
@@ -520,10 +756,105 @@ impl ExecuteCommandProvider {
         }
     }
 
+    /// Run the native critic rule registry (`NativeCriticRegistry`) — the same
+    /// engine the editor's on-type pull diagnostics use — and format its findings
+    /// into the `perl.runCritic` result shape.
+    ///
+    /// This is the default `perl.runCritic` path (engine `Native`). Unlike
+    /// [`Self::run_builtin_critic`] (which runs the Perl::Critic-compatible
+    /// `BuiltInAnalyzer` and is kept only as the legacy fallback), this reports
+    /// the profile-selected `native.*` rules — including `native.*`-only rules
+    /// such as `native.variables.unused_lexical` that the built-in analyzer does
+    /// not emit — so command results and native diagnostics agree.
+    pub(crate) fn run_native_critic(&self, file_path: &Path) -> Result<Value, String> {
+        use crate::Parser;
+
+        let content = crate::util::read_text_file_with_encoding(file_path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+
+        let code_text = perl_parser::util::code_slice(&content);
+        let mut parser = Parser::new(code_text);
+
+        let (ast, parse_error) = match parser.parse() {
+            Ok(ast) => (ast, None),
+            Err(error) => {
+                let message = error.to_string();
+                (
+                    crate::ast::Node::new(
+                        crate::ast::NodeKind::Error {
+                            message,
+                            expected: vec![],
+                            found: None,
+                            partial: None,
+                        },
+                        crate::ast::SourceLocation { start: 0, end: code_text.len() },
+                    ),
+                    Some(error),
+                )
+            }
+        };
+
+        // Build the native critic config from the plumbed server config, mirroring
+        // the editor's native pull-diagnostics path (`add_native_critic_diagnostics`).
+        // The `NativeCriticProfile` selects the rule set; `include`/`exclude`/
+        // `severity` refine it. The rc-file `profile` is an external-perlcritic
+        // concept the native registry does not consult, so it stays `None`.
+        let cfg = &self.native_critic_config;
+        let critic_config = CriticConfig {
+            severity: cfg.severity.clamp(1, 5),
+            profile: None,
+            include: cfg.include.clone(),
+            exclude: cfg.exclude.clone(),
+            ..CriticConfig::default()
+        };
+        let critic_context = CriticContext::new(code_text, &ast, &critic_config);
+        let profile =
+            NativeCriticProfile::parse(&cfg.profile).unwrap_or(NativeCriticProfile::Strict);
+        let registry = NativeCriticRegistry::for_profile(profile);
+
+        let file = file_path.to_string_lossy();
+        let mut formatted_violations: Vec<_> = registry
+            .check(&critic_context)
+            .into_iter()
+            .map(|finding| {
+                let violation = finding.to_violation(file.as_ref());
+                self.format_violation(
+                    &violation.policy,
+                    &violation.description,
+                    &violation.explanation,
+                    violation.severity as u8,
+                    (violation.range.start.line + 1) as usize,
+                    (violation.range.start.column + 1) as usize,
+                    &file,
+                )
+            })
+            .collect();
+
+        if let Some(error) = parse_error {
+            let violation = self.create_syntax_error_violation(&error, code_text, file_path);
+            formatted_violations.push(self.format_violation(
+                &violation.policy,
+                &violation.description,
+                &violation.explanation,
+                violation.severity as u8,
+                (violation.range.start.line + 1) as usize,
+                (violation.range.start.column + 1) as usize,
+                &file,
+            ));
+        }
+
+        Ok(json!({
+            "status": "success",
+            "violations": formatted_violations,
+            "violationCount": formatted_violations.len(),
+            "analyzerUsed": "native"
+        }))
+    }
+
     pub(crate) fn run_builtin_critic(&self, file_path: &Path) -> Result<Value, String> {
         use crate::Parser;
 
-        let content = std::fs::read_to_string(file_path)
+        let content = crate::util::read_text_file_with_encoding(file_path)
             .map_err(|e| format!("Failed to read file: {}", e))?;
 
         let code_text = perl_parser::util::code_slice(&content);
@@ -573,7 +904,7 @@ impl ExecuteCommandProvider {
             "status": "success",
             "violations": formatted_violations,
             "violationCount": formatted_violations.len(),
-            "analyzerUsed": "builtin"
+            "analyzerUsed": "native"
         }))
     }
 
@@ -674,7 +1005,7 @@ impl ExecuteCommandProvider {
     /// CPAN pragmas and test modules), then maps the first match to
     /// `lib/Foo/Bar.pm` relative to the workspace root.
     pub(crate) fn go_to_implementation(&self, test_path: &std::path::Path) -> Value {
-        let content = match std::fs::read_to_string(test_path) {
+        let content = match crate::util::read_text_file_with_encoding(test_path) {
             Ok(c) => c,
             Err(_) => return json!({ "found": false }),
         };
@@ -1356,6 +1687,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.runSubtest".to_string(),
         "perl.debugFile".to_string(),
         "perl.debugTest".to_string(),
+        "perl.debugTestFile".to_string(),
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
         "perl.explainProviderDecision".to_string(),

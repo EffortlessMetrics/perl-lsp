@@ -9,6 +9,9 @@ members = [
     "crates/perl-lexer",
     "crates/perl-parser",
     "crates/perl-parser-bench",
+    "crates/perl-core-harness-types",
+    "crates/perl-core-harness",
+    "crates/perl-core-test-runner",
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
     "crates/perl-parser-comparison",
@@ -70,6 +73,7 @@ members = [
     "crates/perl-uri",
     "crates/perl-pod",
     "crates/perl-corpus",
+    "crates/perl-ripr-facts",
     "crates/perl-lsp-rs",
     "crates/perl-lsp-ux-tests",
     "crates/perllsp",
@@ -79,6 +83,9 @@ members = [
     "crates/tree-sitter-perl-c",
     "crates/tree-sitter-perl-rs",
     "crates/perl-ci-hygiene",
+    "crates/perl-kwalitee",
+    "crates/perl-workspace-core",
+    "crates/perl-tree-sitter-compat",
     "xtask",
 ]
 
@@ -104,6 +111,8 @@ allow = [
     "perl-regex",
     "perl-pod",
     "tree-sitter-perl-c",
+    # Batch RIPR facts exporter - no LSP/server runtime deps.
+    "perl-ripr-facts",
     # (perl-heredoc-anti-patterns absorbed into perl-parser — Wave D)
 
     # Tier 1b — Depend only on Tier 1 crates
@@ -250,10 +259,23 @@ perl-uri = { path = "crates/perl-uri", version = "0.17.0" }
 # Wave D absorbed: perl-path-security → perl-parser-core::path_security
 perl-lsp-rs-core = { path = "crates/perl-lsp-rs-core", version = "0.17.0" }
 perl-ci-hygiene = { path = "crates/perl-ci-hygiene", version = "0.17.0" }
+# Distribution-quality (Kwalitee) evaluator. Private (publish = false) while the
+# receipt schema stabilizes; consumed by xtask's perl-kwalitee command.
+perl-kwalitee = { path = "crates/perl-kwalitee", version = "0.17.0" }
+# perl-workspace-core: LSP-free project-facts substrate (PLSP-ADR-0006). Deliberately
+# NOT dependent on perl-workspace/lsp-types (contract in tests/dependency_contract.rs).
+perl-workspace-core = { path = "crates/perl-workspace-core", version = "0.17.0" }
+# perl-tree-sitter-compat: tree-sitter-compatible output adapter over the native parser.
+perl-tree-sitter-compat = { path = "crates/perl-tree-sitter-compat", version = "0.17.0" }
 perl-pod = { path = "crates/perl-pod", version = "0.17.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.17.0" }
+# Batch RIPR facts exporter - deliberately depends on no LSP/server runtime or
+# workspace/LSP facade crates. Parser leaf crates are allowed for batch facts.
+perl-ripr-facts = { path = "crates/perl-ripr-facts", version = "0.17.0" }
 perl-dap = { path = "crates/perl-dap", version = "0.17.0" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.17.0" }
+perl-core-harness-types = { path = "crates/perl-core-harness-types", version = "0.17.0" }
+perl-core-harness = { path = "crates/perl-core-harness", version = "0.17.0" }
 # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.17.0" }
@@ -315,11 +337,12 @@ tree-sitter = "0.26.9"
 ropey = "1.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
+sha2 = "0.11.0"
 strum = { version = "0.28", features = ["derive"] }
 regex = "1.12.2"
 thiserror = "2.0.18"
 tempfile = "3.24.0"
-anyhow = "1.0.102"
+anyhow = "1.0.103"
 url = "2.5.8"
 lsp-types = "0.97.0"
 parking_lot = "0.12.5"
@@ -330,6 +353,8 @@ clap = { version = "4.5.60", features = ["derive"] }
 tokio = { version = "1.52.3", features = ["net", "rt-multi-thread", "macros", "io-util", "sync", "time"] }
 proptest = "1.11.0"
 criterion = "0.8.1"
+# Dev-only: compile-time trait-bound contracts (e.g. assert_not_impl_any!).
+static_assertions = "1.1"
 
 # Profile for development - slightly optimized for better performance
 [profile.dev]

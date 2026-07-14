@@ -3,6 +3,10 @@
 //! Tests window notifications, progress reporting, and work done progress per LSP 3.17 spec.
 
 #![allow(clippy::collapsible_if)]
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stdout)]
 
 mod support;
 

@@ -23,7 +23,8 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let offset = self.pos16_to_offset(doc, line, character);
 
                     // Find the symbol at the cursor position
@@ -274,7 +275,7 @@ impl LspServer {
         static EXPORT_ARRAY_RE: OnceLock<Option<regex::Regex>> = OnceLock::new();
 
         let export_re = EXPORT_QW_RE.get_or_init(|| {
-            regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*qw[(\[{/<|!]([^)\]}/|!>]+)[)\]}/|!>]").ok()
+            regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*qw[(\[{/<|!]([^\n)\]}/|!>]+)[)\]}/|!>]").ok()
         });
 
         if let Some(re) = export_re {

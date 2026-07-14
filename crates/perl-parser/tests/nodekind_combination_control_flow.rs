@@ -938,7 +938,7 @@ where
             }
         }
         NodeKind::LoopControl { .. } => {} // No children
-        NodeKind::Goto { target } => {
+        NodeKind::Goto { target, .. } => {
             find_nodes_recursive(target, predicate, results);
         }
         NodeKind::Tie { variable, package, args } => {
@@ -1003,8 +1003,11 @@ where
         NodeKind::SlurpyParameter { variable } => {
             find_nodes_recursive(variable, predicate, results);
         }
-        NodeKind::NamedParameter { variable } => {
+        NodeKind::NamedParameter { variable, default_value, .. } => {
             find_nodes_recursive(variable, predicate, results);
+            if let Some(default) = default_value {
+                find_nodes_recursive(default, predicate, results);
+            }
         }
         NodeKind::IndirectCall { object, args, .. } => {
             find_nodes_recursive(object, predicate, results);
@@ -1021,7 +1024,8 @@ where
         | NodeKind::MissingStatement
         | NodeKind::MissingIdentifier
         | NodeKind::MissingBlock => {} // No children
-        NodeKind::UnknownRest => {} // No children
+        NodeKind::UnknownRest => {}    // No children
+        NodeKind::VString { .. } => {} // No children — leaf literal
         NodeKind::NestedVariableList { items } => {
             for item in items {
                 find_nodes_recursive(item, predicate, results);

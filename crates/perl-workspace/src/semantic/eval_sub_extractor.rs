@@ -90,6 +90,12 @@ fn walk(node: &Node, file_id: FileId, out: &mut Vec<(EntityFact, AnchorFact, Occ
 /// - `sub NAME ;`   — forward declaration
 /// - `sub NAME (`   — named sub with prototype/signature
 ///
+/// Also recognises `package NAME;` declarations within the eval string and
+/// attributes subsequently-declared subs to that package.  For example,
+/// `eval "package Foo; sub bar { 1 }"` emits a triple with
+/// `canonical_name = "Foo::bar"`.  Multiple package switches within one
+/// eval string are supported.
+///
 /// Does NOT match:
 /// - `sub { ... }` — anonymous sub (no name)
 /// - `sub $name { ... }` — interpolated name (sigil-prefixed)
@@ -112,13 +118,25 @@ fn extract_from_eval_string(
         .trim_start_matches('\'')
         .trim_end_matches('\'');
 
+    // Pre-scan for `package NAME;` declarations in the entire eval string.
+    // `package_decls` is a list of (decl_end_offset, package_name) pairs, sorted
+    // by position.  `decl_end_offset` is the absolute byte offset in `content`
+    // just after the package name (before the `;` or `{`), so we can determine
+    // which package was active at any given `sub` position via a simple filter.
+    let package_decls = find_package_declarations(content);
+
     // Scan for `sub IDENTIFIER` patterns in the string content.
     let mut search = content;
+    let mut search_base = 0usize; // absolute offset of `search`'s start within `content`
+
     while !search.is_empty() {
         // Find the next `sub ` keyword.
         let Some(sub_pos) = find_sub_keyword(search) else {
             break;
         };
+
+        // Absolute position of this `sub` keyword within `content`.
+        let abs_sub_pos = search_base + sub_pos;
 
         let after_sub = &search[sub_pos + 3..]; // skip "sub"
 
@@ -134,6 +152,7 @@ fn extract_from_eval_string(
                 break;
             }
             search = &search[advance..];
+            search_base += advance;
             continue;
         }
 
@@ -158,7 +177,15 @@ fn extract_from_eval_string(
                     || after_name.starts_with(';')
                     || after_name.starts_with('(');
                 if plausible {
-                    emit_triple(name, node_start_byte, node_end_byte, file_id, out);
+                    // Determine the active package at this `sub` position.
+                    // The active package is the one whose declaration ended most
+                    // recently before (or at) this `sub` keyword.
+                    let active_package = package_decls
+                        .iter()
+                        .rfind(|(end, _)| *end <= abs_sub_pos)
+                        .map(|(_, pkg)| pkg.as_str());
+
+                    emit_triple(name, active_package, node_start_byte, node_end_byte, file_id, out);
                 }
             }
         }
@@ -169,7 +196,116 @@ fn extract_from_eval_string(
             break;
         }
         search = &search[advance..];
+        search_base += advance;
     }
+}
+
+/// Find the byte offset of the next `package` keyword in `text` that is
+/// preceded by a word boundary (not part of a longer identifier).
+///
+/// `package` must be followed by ASCII whitespace (not end-of-string), since
+/// bare `package;` (unnamed package) is not a named package declaration.
+fn find_package_keyword(text: &str) -> Option<usize> {
+    let mut start = 0;
+    while start < text.len() {
+        let pos = text[start..].find("package")?;
+        let abs_pos = start + pos;
+
+        // Left boundary: at start or preceded by a non-word character.
+        let left_ok = abs_pos == 0 || {
+            let b = text.as_bytes()[abs_pos - 1];
+            !b.is_ascii_alphanumeric() && b != b'_'
+        };
+
+        // Right boundary: must be followed by ASCII whitespace (not end-of-string).
+        let right_byte = text.as_bytes().get(abs_pos + 7).copied();
+        let right_ok = right_byte.is_some_and(|b| b.is_ascii_whitespace());
+
+        if left_ok && right_ok {
+            return Some(abs_pos);
+        }
+
+        start = abs_pos + 7;
+    }
+    None
+}
+
+/// Return true if `name` is a syntactically valid Perl package name.
+///
+/// Valid: `Foo`, `Foo::Bar`, `Foo::Bar::Baz`, `_Private`.
+/// Invalid: `::Foo`, `Foo::`, `Foo:::Bar`.
+fn is_valid_package_name(name: &str) -> bool {
+    !name.starts_with(':')
+        && !name.ends_with(':')
+        && !name.contains(":::")
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':')
+}
+
+/// Pre-scan `content` for `package NAME;` (or `package NAME {`) declarations.
+///
+/// Returns a list of `(decl_end_offset, package_name)` pairs in order of
+/// appearance, where `decl_end_offset` is the absolute byte offset in
+/// `content` just after the package name (before the terminating `;` or `{`).
+///
+/// This offset is used in [`extract_from_eval_string`] to determine which
+/// package was active at a given `sub` declaration position: the active
+/// package is the last entry whose `decl_end_offset` is ≤ the `sub` position.
+///
+/// # Limitations
+///
+/// Block-scoped packages (`package Foo { ... }`) are detected as activating
+/// `Foo` but the scope end (closing `}`) is not tracked.  In practice, eval
+/// strings almost always use the semicolon form.
+fn find_package_declarations(content: &str) -> Vec<(usize, String)> {
+    let mut packages = Vec::new();
+    let mut search = content;
+    let mut base_offset = 0usize;
+
+    while !search.is_empty() {
+        let Some(pkg_pos) = find_package_keyword(search) else {
+            break;
+        };
+
+        let after_pkg = &search[pkg_pos + 7..]; // skip "package"
+        let abs_pkg_end = base_offset + pkg_pos + 7;
+
+        // Skip whitespace between `package` and the name.
+        let ws_len =
+            after_pkg.len() - after_pkg.trim_start_matches(|c: char| c.is_ascii_whitespace()).len();
+        let after_ws = &after_pkg[ws_len..];
+
+        // Extract the package name: alphanumeric, `_`, and `::`.
+        let name_len = after_ws
+            .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != ':')
+            .unwrap_or(after_ws.len());
+
+        if name_len > 0 {
+            let name = &after_ws[..name_len];
+            // Must start with a letter or underscore (not a digit or colon).
+            let valid_start =
+                name.as_bytes().first().is_some_and(|&b| b.is_ascii_alphabetic() || b == b'_');
+            if valid_start && is_valid_package_name(name) {
+                // The token following the name (after optional whitespace) must be
+                // `;` (statement form) or `{` (block form).
+                let after_name = after_ws[name_len..].trim_start();
+                if after_name.starts_with(';') || after_name.starts_with('{') {
+                    // `decl_end` is just after the name, before the `;` or `{`.
+                    let decl_end = abs_pkg_end + ws_len + name_len;
+                    packages.push((decl_end, name.to_string()));
+                }
+            }
+        }
+
+        // Advance past this `package` occurrence.
+        let advance = pkg_pos + 7 + ws_len + name_len.max(1);
+        if advance >= search.len() {
+            break;
+        }
+        search = &search[advance..];
+        base_offset += advance;
+    }
+
+    packages
 }
 
 /// Find the byte offset of the next `sub` keyword in `text` that is preceded
@@ -204,15 +340,28 @@ fn find_sub_keyword(text: &str) -> Option<usize> {
 /// `node_start_byte` and `node_end_byte` are from the enclosing `Eval` AST
 /// node's `location.start` and `location.end` — these are the real source
 /// positions of the eval expression, used directly as the anchor span.
+///
+/// When `package` is `Some("Foo")`, the entity's `canonical_name` is emitted
+/// as `"Foo::name"` (package-qualified), which is how the WorkspaceIndex and
+/// dual-indexing machinery will find it under both `Foo::name` and bare `name`.
 fn emit_triple(
     name: &str,
+    package: Option<&str>,
     node_start_byte: usize,
     node_end_byte: usize,
     file_id: FileId,
     out: &mut Vec<(EntityFact, AnchorFact, OccurrenceFact)>,
 ) {
-    // Stable ID derivation: hash (file_id, node_start_byte, name).
-    let base_id = stable_id(file_id.0, node_start_byte as u64, name);
+    // Build the qualified canonical name when a package is active.
+    let canonical_name = match package {
+        Some(pkg) => format!("{pkg}::{name}"),
+        None => name.to_string(),
+    };
+
+    // Stable ID derivation: hash (file_id, node_start_byte, canonical_name).
+    // Including the full qualified name prevents collisions between Foo::bar and
+    // Bar::bar emitted from different package contexts within the same eval node.
+    let base_id = stable_id(file_id.0, node_start_byte as u64, &canonical_name);
 
     let entity_id = EntityId(base_id);
     let anchor_id = AnchorId(base_id + 1);
@@ -220,7 +369,7 @@ fn emit_triple(
 
     let entity = EntityFact {
         id: entity_id,
-        canonical_name: name.to_string(),
+        canonical_name,
         kind: EntityKind::Subroutine,
         anchor_id: Some(anchor_id),
         scope_id: None,
@@ -522,7 +671,7 @@ mod tests {
     #[test]
     fn emit_triple_normalizes_empty_or_reversed_spans() -> Result<(), Box<dyn std::error::Error>> {
         let mut out = Vec::new();
-        emit_triple("span_edge", 99, 42, FileId(13), &mut out);
+        emit_triple("span_edge", None, 99, 42, FileId(13), &mut out);
 
         assert_eq!(out.len(), 1);
         let (_entity, anchor, occurrence) = &out[0];
@@ -540,6 +689,343 @@ mod tests {
 
         let id3 = stable_id(1, 42, "bar");
         assert_ne!(id1, id3, "different names must produce different IDs");
+        Ok(())
+    }
+
+    // ── Unit tests for package-context attribution ──
+
+    #[test]
+    fn find_package_keyword_basic() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(find_package_keyword("package Foo;"), Some(0));
+        assert_eq!(find_package_keyword("  package Foo;"), Some(2));
+        assert_eq!(find_package_keyword("sub x; package Bar;"), Some(7));
+        Ok(())
+    }
+
+    #[test]
+    fn find_package_keyword_requires_whitespace_after() -> Result<(), Box<dyn std::error::Error>> {
+        // `package;` is valid Perl (unnamed) but not a named package decl — must not match.
+        assert_eq!(find_package_keyword("package;"), None);
+        // `packages` is an identifier — must not match.
+        assert_eq!(find_package_keyword("packages Foo;"), None);
+        // `unpackaged` — must not match.
+        assert_eq!(find_package_keyword("unpackaged Foo;"), None);
+        Ok(())
+    }
+
+    #[test]
+    fn is_valid_package_name_accepts_valid_names() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(is_valid_package_name("Foo"));
+        assert!(is_valid_package_name("Foo::Bar"));
+        assert!(is_valid_package_name("Foo::Bar::Baz"));
+        assert!(is_valid_package_name("_Private"));
+        assert!(is_valid_package_name("My::Module::Utils"));
+        Ok(())
+    }
+
+    #[test]
+    fn is_valid_package_name_rejects_invalid_names() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(!is_valid_package_name("::Foo"));
+        assert!(!is_valid_package_name("Foo::"));
+        assert!(!is_valid_package_name("Foo:::Bar"));
+        assert!(!is_valid_package_name("Foo::Bar::"));
+        Ok(())
+    }
+
+    #[test]
+    fn find_package_declarations_basic() -> Result<(), Box<dyn std::error::Error>> {
+        let decls = find_package_declarations("package Foo; sub bar { }");
+        assert_eq!(decls.len(), 1);
+        assert_eq!(decls[0].1, "Foo");
+        // decl_end is just after "Foo" (before ";"), i.e. offset 11
+        // "package Foo" — 'p' at 0, 'F' at 8, 'o' at 10, decl_end = 11
+        assert_eq!(decls[0].0, 11, "decl_end should be just after the package name");
+        Ok(())
+    }
+
+    #[test]
+    fn find_package_declarations_multiple_packages() -> Result<(), Box<dyn std::error::Error>> {
+        let decls = find_package_declarations("package A; sub x { } package B; sub y { }");
+        assert_eq!(decls.len(), 2);
+        assert_eq!(decls[0].1, "A");
+        assert_eq!(decls[1].1, "B");
+        Ok(())
+    }
+
+    #[test]
+    fn find_package_declarations_multipart_name() -> Result<(), Box<dyn std::error::Error>> {
+        let decls = find_package_declarations("package Foo::Bar; sub baz { }");
+        assert_eq!(decls.len(), 1);
+        assert_eq!(decls[0].1, "Foo::Bar");
+        Ok(())
+    }
+
+    #[test]
+    fn find_package_declarations_empty_content() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(find_package_declarations("sub foo { }").is_empty());
+        assert!(find_package_declarations("").is_empty());
+        Ok(())
+    }
+
+    // ── Integration: package-qualified extraction ──
+
+    #[test]
+    fn sub_in_package_context_is_qualified() -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(20);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string("package Foo; sub bar { 1 }", 0, 26, file_id, &mut out);
+            out
+        };
+
+        assert_eq!(triples.len(), 1, "should extract one sub");
+        assert_eq!(
+            triples[0].0.canonical_name, "Foo::bar",
+            "sub in package context must be package-qualified"
+        );
+        assert_eq!(triples[0].0.kind, EntityKind::Subroutine);
+        assert_eq!(triples[0].0.provenance, Provenance::DynamicBoundary);
+        Ok(())
+    }
+
+    #[test]
+    fn multiple_subs_same_package() -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(21);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string(
+                "package Foo; sub alpha { 1 } sub beta { 2 }",
+                0,
+                44,
+                file_id,
+                &mut out,
+            );
+            out
+        };
+
+        assert_eq!(triples.len(), 2);
+        let names: Vec<&str> = triples.iter().map(|(e, _, _)| e.canonical_name.as_str()).collect();
+        assert!(names.contains(&"Foo::alpha"), "alpha must be Foo-qualified");
+        assert!(names.contains(&"Foo::beta"), "beta must be Foo-qualified");
+        Ok(())
+    }
+
+    #[test]
+    fn multiple_packages_in_one_eval() -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(22);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string(
+                "package A; sub x { } package B; sub y { }",
+                0,
+                42,
+                file_id,
+                &mut out,
+            );
+            out
+        };
+
+        assert_eq!(triples.len(), 2);
+        let names: Vec<&str> = triples.iter().map(|(e, _, _)| e.canonical_name.as_str()).collect();
+        assert!(names.contains(&"A::x"), "x must be attributed to package A");
+        assert!(names.contains(&"B::y"), "y must be attributed to package B");
+        Ok(())
+    }
+
+    #[test]
+    fn sub_before_any_package_remains_unscoped() -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(23);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string(
+                "sub before { 1 } package Foo; sub after { 2 }",
+                0,
+                46,
+                file_id,
+                &mut out,
+            );
+            out
+        };
+
+        assert_eq!(triples.len(), 2);
+        let names: Vec<&str> = triples.iter().map(|(e, _, _)| e.canonical_name.as_str()).collect();
+        assert!(names.contains(&"before"), "sub before any package must be unscoped");
+        assert!(names.contains(&"Foo::after"), "sub after package Foo must be qualified");
+        Ok(())
+    }
+
+    #[test]
+    fn multipart_package_name_qualifies_sub() -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(24);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string("package Foo::Bar; sub baz { 1 }", 0, 31, file_id, &mut out);
+            out
+        };
+
+        assert_eq!(triples.len(), 1);
+        assert_eq!(triples[0].0.canonical_name, "Foo::Bar::baz");
+        Ok(())
+    }
+
+    #[test]
+    fn package_context_via_ast_parse() -> Result<(), Box<dyn std::error::Error>> {
+        // End-to-end: parse Perl source, extract from eval, verify package qualification.
+        let file_id = FileId(25);
+        let triples = parse_and_extract(r#"eval "package Dynamic; sub generated { 1 }";"#, file_id);
+
+        assert_eq!(triples.len(), 1, "should extract one sub");
+        assert_eq!(triples[0].0.canonical_name, "Dynamic::generated");
+        Ok(())
+    }
+
+    #[test]
+    fn package_switch_mid_eval_via_ast_parse() -> Result<(), Box<dyn std::error::Error>> {
+        // Call-observation test: exercises the real production entry point
+        // (extract_eval_sub_boundaries -> walk -> extract_from_eval_string) with
+        // a mid-eval package switch, rather than calling extract_from_eval_string
+        // directly with a synthetic string. Covers the package-active path
+        // through the actual AST-driven `Eval` node.
+        let file_id = FileId(28);
+        let triples = parse_and_extract(
+            r#"eval "package A; sub make_a { 1 } package B; sub make_b { 2 }";"#,
+            file_id,
+        );
+
+        assert_eq!(triples.len(), 2, "should extract two subs from two packages");
+        let names: Vec<&str> = triples.iter().map(|(e, _, _)| e.canonical_name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["A::make_a", "B::make_b"],
+            "each sub must be attributed to its own active package, in source order"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn sub_before_package_remains_unscoped_via_ast_parse() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Call-observation test for the unscoped-before-package path: no `package`
+        // keyword precedes the `sub`, so the active_package lookup (rfind over an
+        // empty/irrelevant package_decls list) must yield None and the canonical
+        // name must remain the bare sub name.
+        let file_id = FileId(29);
+        let triples = parse_and_extract(r#"eval "sub bare_helper { 42 }";"#, file_id);
+
+        assert_eq!(triples.len(), 1, "should extract exactly one sub");
+        assert_eq!(
+            triples[0].0.canonical_name, "bare_helper",
+            "sub with no preceding package declaration must be unscoped"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn three_packages_middle_sub_uses_nearest_preceding_package()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Direct test of the multi-package rfind path in extract_from_eval_string:
+        // with three package declarations, a sub positioned between the 2nd and
+        // 3rd package must attribute to the 2nd (nearest preceding), not the 3rd
+        // (which comes later in the string and must be skipped by `rfind`'s
+        // predicate, not blindly picked as "the last package in the list").
+        let file_id = FileId(30);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string(
+                "package A; sub a { 1 } package B; sub b { 2 } package C; sub c { 3 }",
+                0,
+                70,
+                file_id,
+                &mut out,
+            );
+            out
+        };
+
+        assert_eq!(triples.len(), 3, "should extract three subs");
+        let names: Vec<&str> = triples.iter().map(|(e, _, _)| e.canonical_name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["A::a", "B::b", "C::c"],
+            "each sub must attribute to the nearest preceding package, not a later one"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn three_packages_middle_sub_via_ast_parse() -> Result<(), Box<dyn std::error::Error>> {
+        // Same scenario as above but via the real production entry point
+        // (extract_eval_sub_boundaries -> walk), to confirm the rfind-skip
+        // behavior holds through the full AST-driven call path, not just the
+        // directly-invoked helper.
+        let file_id = FileId(31);
+        let triples = parse_and_extract(
+            r#"eval "package A; sub a { 1 } package B; sub b { 2 } package C; sub c { 3 }";"#,
+            file_id,
+        );
+
+        assert_eq!(triples.len(), 3, "should extract three subs");
+        let names: Vec<&str> = triples.iter().map(|(e, _, _)| e.canonical_name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["A::a", "B::b", "C::c"],
+            "middle sub must attribute to its nearest preceding package via the real AST path"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn distinct_packages_via_ast_parse_produce_distinct_ids()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Call-observation test for the id-hash-includes-qualified-name path:
+        // two subs with the *same* bare name but different active packages,
+        // reached through the real AST/eval-string pipeline, must resolve to
+        // distinct canonical names and distinct entity IDs (stable_id folds the
+        // qualified name into the hash, so `Foo::bar` and `Bar::bar` differ).
+        let file_id = FileId(32);
+        let triples = parse_and_extract(
+            r#"eval "package Foo; sub bar { 1 } package Bar; sub bar { 2 }";"#,
+            file_id,
+        );
+
+        assert_eq!(triples.len(), 2, "should extract two subs");
+        assert_eq!(triples[0].0.canonical_name, "Foo::bar");
+        assert_eq!(triples[1].0.canonical_name, "Bar::bar");
+        assert_ne!(
+            triples[0].0.id, triples[1].0.id,
+            "Foo::bar and Bar::bar reached via the real AST path must have distinct entity IDs"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn package_qualified_ids_differ_from_unqualified() -> Result<(), Box<dyn std::error::Error>> {
+        // Foo::bar and bar must produce different IDs even at the same node position.
+        let mut out_qualified = Vec::new();
+        emit_triple("bar", Some("Foo"), 0, 10, FileId(26), &mut out_qualified);
+
+        let mut out_bare = Vec::new();
+        emit_triple("bar", None, 0, 10, FileId(26), &mut out_bare);
+
+        assert_ne!(
+            out_qualified[0].0.id, out_bare[0].0.id,
+            "Foo::bar and bare bar must have distinct entity IDs"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn two_packages_in_same_eval_have_distinct_ids() -> Result<(), Box<dyn std::error::Error>> {
+        // Foo::bar and Bar::bar at the same eval node position must not collide.
+        let mut out_foo = Vec::new();
+        emit_triple("bar", Some("Foo"), 0, 10, FileId(27), &mut out_foo);
+
+        let mut out_bar_pkg = Vec::new();
+        emit_triple("bar", Some("Bar"), 0, 10, FileId(27), &mut out_bar_pkg);
+
+        assert_ne!(
+            out_foo[0].0.id, out_bar_pkg[0].0.id,
+            "Foo::bar and Bar::bar must have distinct entity IDs"
+        );
         Ok(())
     }
 }

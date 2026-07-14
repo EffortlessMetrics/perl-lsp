@@ -9,6 +9,7 @@ use crate::protocol::{req_position, req_uri};
 use crate::util::{read_text_file_with_encoding, token_under_cursor};
 use perl_parser_core::source_file::is_binary_content;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::OnceLock;
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_lsp_rs_core::providers::navigation::definition_shadow::{
@@ -18,9 +19,9 @@ use perl_lsp_rs_core::providers::navigation::definition_shadow::{
 use perl_workspace::semantic::queries::QueryContext;
 
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::readiness::IndexReadinessPolicy;
 #[cfg(feature = "workspace")]
-use std::sync::OnceLock;
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 mod core_modules;
 #[cfg(feature = "workspace")]
@@ -52,6 +53,50 @@ static GOTO_LABEL_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::n
 
 #[cfg(feature = "workspace")]
 static LABEL_DECLARATION_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+static QUOTED_FRAMEWORK_MODULE_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+/// Test-only synchronization point for deterministic same-document TOCTOU
+/// regression tests (#3613).
+///
+/// `handle_type_definition` and `handle_implementation` capture the request
+/// document's ast/text under one lock acquisition, then later re-read all
+/// open documents via `documents_text_snapshot()` for the fallback
+/// cross-file scan. This hook -- fired (and consumed) exactly once, right
+/// after the up-front capture and right before that later re-read -- lets a
+/// test pause the handler mid-flight, apply a real edit to the same
+/// document on another thread, then release the handler, so the assertion
+/// proves the fallback used the captured (generation-N) text and not the
+/// newer (generation-N+1) text a racing `didChange` produced. No sleeps: the
+/// handler blocks on `resume.recv()` until the test explicitly signals it to
+/// continue.
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+static NAVIGATION_SAME_DOC_FALLBACK_GAP: std::sync::Mutex<
+    Option<(std::sync::mpsc::Sender<()>, std::sync::mpsc::Receiver<()>)>,
+> = std::sync::Mutex::new(None);
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn wait_at_same_doc_fallback_gap() {
+    // A poisoned mutex (some earlier test panicked while holding the lock)
+    // must not silently disable this synchronization point: `.lock().ok()`
+    // would turn `Err` into `None` and the gate would just not fire, so a
+    // later race test could false-pass without ever exercising the race it
+    // claims to prove. Recover the guard instead -- the hook slot's own
+    // invariants (armed at most once, consumed via `take()`) stay intact
+    // even if a prior holder panicked.
+    let hook = match NAVIGATION_SAME_DOC_FALLBACK_GAP.lock() {
+        Ok(mut guard) => guard.take(),
+        Err(poisoned) => poisoned.into_inner().take(),
+    };
+    if let Some((reached, resume)) = hook {
+        let _ = reached.send(());
+        let _ = resume.recv();
+    }
+}
+
+#[cfg(not(any(test, feature = "expose_lsp_test_api")))]
+#[inline]
+fn wait_at_same_doc_fallback_gap() {}
 
 fn lsp_location_count(value: Option<&Value>) -> usize {
     match value {
@@ -342,6 +387,92 @@ fn get_label_declaration_regex() -> Result<&'static regex::Regex, JsonRpcError> 
         })
 }
 
+fn get_quoted_framework_module_regex() -> Result<&'static regex::Regex, JsonRpcError> {
+    QUOTED_FRAMEWORK_MODULE_RE
+        .get_or_init(|| {
+            regex::Regex::new(
+                r#"\b(with|extends|enable)\s+(?:'([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)'|"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)")"#,
+            )
+        })
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize framework module regex: {err}"
+            ))
+        })
+}
+
+fn quoted_framework_module_at_cursor(
+    text: &str,
+    cursor: usize,
+) -> Result<Option<FrameworkModuleReference>, JsonRpcError> {
+    for cap in get_quoted_framework_module_regex()?.captures_iter(text) {
+        let Some(keyword) = cap.get(1) else {
+            continue;
+        };
+        let Some(module_match) = cap.get(2).or_else(|| cap.get(3)) else {
+            continue;
+        };
+        if cursor < module_match.start() || cursor > module_match.end() {
+            continue;
+        }
+
+        return Ok(Some(normalize_framework_module_reference(
+            keyword.as_str(),
+            module_match.as_str(),
+        )));
+    }
+
+    Ok(None)
+}
+
+fn normalize_framework_module_reference(
+    keyword: &str,
+    module_name: &str,
+) -> FrameworkModuleReference {
+    let module_name = if keyword == "enable" && !module_name.contains("::") {
+        format!("Plack::Middleware::{module_name}")
+    } else {
+        module_name.to_string()
+    };
+    let kind = if keyword == "enable" && module_name.starts_with("Plack::Middleware::") {
+        FrameworkModuleKind::PlackMiddleware
+    } else {
+        FrameworkModuleKind::Package
+    };
+
+    FrameworkModuleReference { module_name, kind }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FrameworkModuleKind {
+    Package,
+    PlackMiddleware,
+}
+
+#[derive(Debug, Clone)]
+struct FrameworkModuleReference {
+    module_name: String,
+    kind: FrameworkModuleKind,
+}
+
+#[cfg(feature = "workspace")]
+impl FrameworkModuleReference {
+    fn definition_location(
+        &self,
+        workspace_index: &crate::workspace_index::WorkspaceIndex,
+    ) -> Option<crate::workspace_index::Location> {
+        match self.kind {
+            FrameworkModuleKind::Package => {
+                find_package_definition_location(workspace_index, &self.module_name)
+            }
+            FrameworkModuleKind::PlackMiddleware => {
+                find_plack_middleware_definition_location(workspace_index, &self.module_name)
+            }
+        }
+    }
+}
+
 #[cfg(feature = "workspace")]
 fn find_label_declaration_span(
     text: &str,
@@ -363,6 +494,9 @@ enum EarlyDefinitionTarget {
     /// Cursor is on a bare `Package->method` reference.
     /// @INC filtering does not apply — workspace-index method lookup is correct.
     Module(String),
+    /// Cursor is on a quoted framework package reference, such as Moo/Moose
+    /// `with`/`extends` or Plack Builder `enable`.
+    FrameworkModule(FrameworkModuleReference),
     XsBootstrap(String),
 }
 
@@ -433,6 +567,22 @@ fn find_plack_middleware_definition_location(
     }
 
     None
+}
+
+#[cfg(feature = "workspace")]
+fn find_package_definition_location(
+    workspace_index: &crate::workspace_index::WorkspaceIndex,
+    module_name: &str,
+) -> Option<crate::workspace_index::Location> {
+    workspace_index
+        .all_symbols()
+        .into_iter()
+        .find(|symbol| {
+            symbol.kind == crate::workspace_index::SymbolKind::Package
+                && (symbol.name == module_name
+                    || symbol.qualified_name.as_deref() == Some(module_name))
+        })
+        .map(|symbol| crate::workspace_index::Location { uri: symbol.uri, range: symbol.range })
 }
 
 #[cfg(feature = "workspace")]
@@ -584,11 +734,38 @@ fn lookup_workspace_definition(
         workspace_index.search_symbols(name)
     };
 
-    // Find the first matching symbol that matches the package
+    // Find the first matching symbol that matches the package.
+    //
+    // The qualified-name comparison must be anchored on the `::` package
+    // separator. A boundary-less `q.starts_with(pkg)` matches any package
+    // whose qualified name merely has `pkg` as a *string* prefix — e.g. with
+    // pkg="Foo" it matches "FooBar::new", silently navigating `Foo->new` to
+    // the unrelated `FooBar` package. Perl method resolution walks `@ISA`,
+    // never a string-prefix of package names (perlobj); `Foo` and `FooBar`
+    // are unrelated packages, so such a jump is definitively wrong. Anchor on
+    // the exact `pkg::name` symbol or the `pkg::` package boundary instead.
+    //
+    // The `pkg::` boundary alone is still not sufficient: `q.starts_with(pkg::)`
+    // also matches a symbol in a *nested subpackage*, e.g. pkg="Foo" matches
+    // "Foo::Bar::new". `Foo::Bar` is a distinct, unrelated package from `Foo`
+    // (Perl namespace nesting is purely lexical/cosmetic — it implies no
+    // `@ISA` relationship), so `Foo->new` must not resolve there either.
+    // Require the remainder after the `pkg::` prefix to contain no further
+    // `::`, i.e. the symbol's container is exactly `pkg`, not a subpackage.
+    let qualified_exact = format!("{pkg}::{name}");
+    let package_prefix = format!("{pkg}::");
     for symbol in ranked_symbols {
         // Check if this symbol matches our package
         if symbol.container_name.as_deref() == Some(pkg)
-            || symbol.qualified_name.as_ref().map(|q| q.starts_with(pkg)).unwrap_or(false)
+            || symbol
+                .qualified_name
+                .as_ref()
+                .map(|q| {
+                    *q == qualified_exact
+                        || q.strip_prefix(package_prefix.as_str())
+                            .is_some_and(|rest| !rest.contains("::"))
+                })
+                .unwrap_or(false)
         {
             if let Some(lsp_location) = crate::workspace_index::lsp_adapter::to_lsp_location(
                 &crate::workspace_index::Location { uri: symbol.uri.clone(), range: symbol.range },
@@ -619,6 +796,19 @@ fn lookup_workspace_definition(
     None
 }
 
+/// Real subs in `package UNIVERSAL` per perldoc.perl.org/UNIVERSAL: `isa`,
+/// `can`, `DOES`, `VERSION`. Goto-definition may fall back to
+/// `UNIVERSAL::<name>` for these because that symbol genuinely exists.
+///
+/// `DESTROY` (garbage-collection destructor hook) and `AUTOLOAD` (failed
+/// method-lookup hook) are deliberately excluded: per perlobj, they are
+/// interpreter special-method hooks, not subs shipped in `UNIVERSAL`. There
+/// is no `UNIVERSAL::DESTROY` or `UNIVERSAL::AUTOLOAD` to navigate to, so
+/// they must never drive the `UNIVERSAL::<name>` goto-definition fallback
+/// below. They are still recognized for completion (see
+/// `perl-lsp-rs-core/.../completion/methods.rs`) and for hover when an
+/// actual `AUTOLOAD`/`DESTROY` sub is found via real inheritance lookup
+/// (see `autoload_definition_location`, `hover.rs`).
 const UNIVERSAL_METHODS: [&str; 4] = ["can", "isa", "DOES", "VERSION"];
 
 fn is_universal_method(name: &str) -> bool {
@@ -737,18 +927,43 @@ impl LspServer {
                 params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any
+            // analysis (#3396 off-lock provider consumption).
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.navigation.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            if let Some(doc) = doc_owned.as_ref() {
+                // Covers the whole analysis block via `Drop`, so it emits
+                // correctly regardless of which `return` below fires.
+                let _analyze_span =
+                    crate::runtime::timing::ScopedSpan::start("provider.navigation.analyze", uri);
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let offset = self.pos16_to_offset(doc, line, character);
 
-                    // Use the Declaration provider - ast is already an Arc
+                    // Use the Declaration provider - ast is already an Arc.
+                    // `parsed` is guaranteed `Some` here since `ast` was
+                    // derived from it.
+                    let empty_parent_map = ParentMap::default();
+                    let parent_map = parsed.as_ref().map_or(&empty_parent_map, |p| p.parent_map());
                     let provider = crate::declaration::DeclarationProvider::new(
                         Arc::clone(ast),
                         doc.text.clone(),
                         uri.to_string(),
                     )
-                    .with_parent_map(&doc.parent_map)
+                    .with_parent_map(parent_map)
                     .with_doc_version(doc.version);
 
                     // Find declaration at the position
@@ -892,10 +1107,11 @@ impl LspServer {
                     let (text_start, text_around) =
                         self.get_text_window_around_offset(&doc.text, offset, radius);
                     let cursor_in_text = offset.min(doc.text.len()).saturating_sub(text_start);
-                    let current_package = doc.ast.as_ref().map_or_else(
-                        || "main".to_string(),
-                        |ast| crate::declaration::current_package_at(ast, offset).to_string(),
-                    );
+                    let current_package =
+                        doc.current_parsed().and_then(|p| p.ast().cloned()).map_or_else(
+                            || "main".to_string(),
+                            |ast| crate::declaration::current_package_at(&ast, offset).to_string(),
+                        );
 
                     if let Some(module_name) =
                         extract_xs_bootstrap_target(&text_around, cursor_in_text, &current_package)
@@ -910,6 +1126,14 @@ impl LspServer {
                     {
                         Some((
                             EarlyDefinitionTarget::UseModule(module_name),
+                            doc.text.clone(),
+                            offset,
+                        ))
+                    } else if let Some(module_name) =
+                        quoted_framework_module_at_cursor(&text_around, cursor_in_text)?
+                    {
+                        Some((
+                            EarlyDefinitionTarget::FrameworkModule(module_name),
                             doc.text.clone(),
                             offset,
                         ))
@@ -1026,12 +1250,65 @@ impl LspServer {
                             }])));
                         }
                     }
+                    EarlyDefinitionTarget::FrameworkModule(module_ref) => {
+                        #[cfg(feature = "workspace")]
+                        if !workspace_index_stale_for_document
+                            && let Some(coordinator) = self.coordinator()
+                            && let Some(def_location) =
+                                module_ref.definition_location(coordinator.index())
+                            && let Some(lsp_location) =
+                                crate::workspace_index::lsp_adapter::to_lsp_location(&def_location)
+                        {
+                            return Ok(Some(json!([lsp_location])));
+                        }
+
+                        if let Some(module_path) = self.resolve_module_to_path_with_doc_at_offset(
+                            &module_ref.module_name,
+                            Some(&doc_text),
+                            Some(uri),
+                            Some(doc_offset),
+                        ) {
+                            return Ok(Some(json!([{
+                                "uri": module_path,
+                                "range": {
+                                    "start": {
+                                        "line": 0,
+                                        "character": 0,
+                                    },
+                                    "end": {
+                                        "line": 0,
+                                        "character": 0,
+                                    },
+                                },
+                            }])));
+                        }
+                    }
                 }
             }
 
-            // Continue with remaining definition lookup logic that needs document access
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            // Continue with remaining definition lookup logic that needs document access.
+            // Grab an owned `DocumentState` clone under a brief documents-map
+            // lock, then drop the guard before doing any analysis (#3396
+            // off-lock provider consumption).
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.navigation.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            if let Some(doc) = doc_owned.as_ref() {
+                // Covers the whole analysis block via `Drop`, so it emits
+                // correctly regardless of which `return` below fires.
+                let _analyze_span =
+                    crate::runtime::timing::ScopedSpan::start("provider.navigation.analyze", uri);
                 let offset = self.pos16_to_offset(doc, line, character);
                 let radius = 50;
                 let (text_start, text_around) =
@@ -1075,7 +1352,8 @@ impl LspServer {
 
                 #[cfg(feature = "workspace")]
                 if !workspace_index_stale_for_document {
-                    if let Some(ref ast) = doc.ast {
+                    let parsed = doc.current_parsed();
+                    if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                         if let Some(coordinator) = self.coordinator() {
                             let workspace_index = coordinator.index();
                             let current_package =
@@ -1099,9 +1377,9 @@ impl LspServer {
 
                     // Attempt to resolve `SUPER::method` calls using the current package's
                     // inheritance chain before falling back to generic fully-qualified lookup.
-                    let current_package = doc
-                        .ast
+                    let current_package = parsed
                         .as_ref()
+                        .and_then(|p| p.ast())
                         .map(|ast| {
                             let byte_offset = self.pos16_to_offset(doc, line, character);
                             crate::declaration::current_package_at(ast, byte_offset)
@@ -1114,7 +1392,8 @@ impl LspServer {
                             && cursor_in_text >= method_match.start()
                             && cursor_in_text <= method_match.end()
                         {
-                            if let Some(ref ast) = doc.ast {
+                            let parsed = doc.current_parsed();
+                            if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                                 let analyzer =
                                     crate::semantic::SemanticAnalyzer::analyze_with_source(
                                         ast, &doc.text,
@@ -1163,28 +1442,56 @@ impl LspServer {
                     }
 
                     // Attempt to resolve fully-qualified symbols like Package::sub
+                    //
+                    // When cursor is on a package-prefix component (e.g. `Foo` in
+                    // `Foo::bar`), we must NOT fall through to the AST-based workspace
+                    // lookup below — `symbol_at_cursor_with_source` and
+                    // `DeclarationProvider` always extract the LAST component of a
+                    // qualified name regardless of cursor position and would navigate
+                    // to the wrong symbol.  Track whether the cursor is on a prefix
+                    // and return early if so.
+                    let mut cursor_on_fqn_prefix = false;
                     let fqn_regex = get_fqn_regex()?;
                     for cap in fqn_regex.captures_iter(&text_around) {
                         if let Some(m) = cap.get(1) {
                             if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
                                 let parts: Vec<&str> = m.as_str().split("::").collect();
                                 if parts.len() >= 2 {
-                                    let name = parts.last().copied().unwrap_or("");
-                                    let pkg = parts[..parts.len() - 1].join("::");
+                                    // Determine which component the cursor falls on.
+                                    // Only resolve when the cursor is on the final component
+                                    // (the sub/function name). Resolving when the cursor is
+                                    // on a package prefix (e.g. `Foo` in `Foo::bar`) would
+                                    // silently navigate to the wrong target — the sub — when
+                                    // the user clicked on the package name.
+                                    let cursor_rel = cursor_in_text.saturating_sub(m.start());
+                                    let last_sep_offset =
+                                        m.as_str().rfind("::").map_or(0, |p| p + 2);
 
-                                    if let Some(result) = lookup_workspace_definition(
-                                        self.coordinator(),
-                                        &pkg,
-                                        name,
-                                        Some(uri),
-                                    ) {
-                                        return Ok(Some(result));
+                                    if cursor_rel >= last_sep_offset {
+                                        let name = parts.last().copied().unwrap_or("");
+                                        let pkg = parts[..parts.len() - 1].join("::");
+
+                                        if let Some(result) = lookup_workspace_definition(
+                                            self.coordinator(),
+                                            &pkg,
+                                            name,
+                                            Some(uri),
+                                        ) {
+                                            return Ok(Some(result));
+                                        }
+                                    } else {
+                                        // Cursor is on a package-prefix component.  Block
+                                        // the AST-based fallback paths that ignore cursor
+                                        // position within a qualified name.
+                                        cursor_on_fqn_prefix = true;
                                     }
-                                    // Partial/None: fall through to same-file resolution
                                 }
                                 break;
                             }
                         }
+                    }
+                    if cursor_on_fqn_prefix {
+                        return Ok(None);
                     }
 
                     // Attempt to resolve Package->method calls
@@ -1251,7 +1558,10 @@ impl LspServer {
 
                                 // For $self/$this/$class, resolve using current package
                                 if var_name == "self" || var_name == "this" || var_name == "class" {
-                                    if let Some(ref ast) = doc.ast {
+                                    let self_method_parsed = doc.current_parsed();
+                                    if let Some(ast) =
+                                        self_method_parsed.as_ref().and_then(|p| p.ast())
+                                    {
                                         let byte_offset =
                                             self.pos16_to_offset(doc, line, character);
                                         let current_package =
@@ -1303,7 +1613,8 @@ impl LspServer {
                     }
                 }
 
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let offset = self.pos16_to_offset(doc, line, character);
 
                     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -1350,13 +1661,17 @@ impl LspServer {
                         }
                     }
 
-                    // Try DeclarationProvider first (it handles function calls properly)
+                    // Try DeclarationProvider first (it handles function calls properly).
+                    // `current_parsed()` is guaranteed `Some` here since `ast`
+                    // (above) was derived from it.
+                    let empty_parent_map = ParentMap::default();
+                    let parent_map = parsed.as_ref().map_or(&empty_parent_map, |p| p.parent_map());
                     let provider = crate::declaration::DeclarationProvider::new(
                         Arc::clone(ast),
                         doc.text.clone(),
                         uri.to_string(),
                     )
-                    .with_parent_map(&doc.parent_map)
+                    .with_parent_map(parent_map)
                     .with_doc_version(doc.version);
 
                     if let Some(location_links) = provider.find_declaration(offset, doc.version) {
@@ -1615,7 +1930,8 @@ impl LspServer {
         let doc = self.get_document(&documents, uri)?;
         let offset = self.pos16_to_offset(doc, line, character);
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(ast) = doc.ast.as_ref() {
+        let parsed = doc.current_parsed();
+        if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
             let current_package = crate::declaration::current_package_at(ast, offset);
             if let Some(symbol_key) = crate::declaration::symbol_at_cursor_with_source(
                 ast,
@@ -1662,6 +1978,78 @@ impl LspServer {
         let def_location = workspace_index.semantic_anchor_wire_location(candidate.anchor_id)?;
         let location: lsp_types::Location = def_location.into();
         serde_json::to_value(location).ok()
+    }
+
+    /// Builds the fallback `doc_map` shared by `handle_type_definition` and
+    /// `handle_implementation`'s same-document TOCTOU fix (#3613).
+    ///
+    /// Both handlers capture the request document's ast/text under one lock
+    /// acquisition, then later re-read all open documents via
+    /// `documents_text_snapshot()` for the fallback cross-file scan.
+    ///
+    /// Consistency note: `documents_text_snapshot()` is a fresh, independent
+    /// lock acquisition, so in general it observes whatever generation of
+    /// each document is live *at this later point* -- not necessarily the
+    /// same generation `captured_text` captured. For every *other* open
+    /// document that's fine (the provider's cross-file scan is a heuristic,
+    /// name-based search with no offset dependency on the earlier capture).
+    /// For `uri` itself it is not: the caller's `ast` was parsed from
+    /// `captured_text`'s generation, and the provider converts the
+    /// request's line/character into a byte offset using
+    /// `documents.get(uri)` -- so searching that offset against a *fresher*
+    /// re-read of the same uri (if a `didChange` races in between the two
+    /// lock acquisitions) would pair a generation-N AST with generation-N+1
+    /// text for the same document, the exact single-instance/single-
+    /// generation invariant this off-lock pattern must preserve (mirrors
+    /// the references.rs fix, #3396 / a95ad72). `uri`'s own entry is
+    /// therefore pinned to `captured_text` (the exact generation captured
+    /// by the caller) instead of the live map; every other open document
+    /// still gets the freshest read.
+    ///
+    /// The pin is applied by an unconditional `insert` after the snapshot
+    /// is collected, not a substitute-in-place during the iteration: a
+    /// concurrent `didClose` racing between the caller's up-front capture
+    /// and this later re-read removes `uri` from
+    /// `documents_text_snapshot()` entirely, so substituting only when `k
+    /// == uri` is already present would silently drop `uri` from the map
+    /// instead of pinning it -- and the provider's `documents.get(uri)?`
+    /// would then return `None` (an empty result) even though a valid
+    /// captured snapshot exists. The unconditional `insert` restores `uri`
+    /// regardless of whether the live map still has it, closing that
+    /// residual TOCTOU window.
+    fn pinned_doc_map_for(&self, uri: &str, captured_text: &str) -> HashMap<String, String> {
+        // Test-only: pauses here (no-op in production) so a race
+        // regression test can apply a real edit (or close) to `uri` before
+        // the fallback re-reads `documents_text_snapshot()` below (#3613).
+        wait_at_same_doc_fallback_gap();
+
+        let mut doc_map: HashMap<String, String> =
+            self.documents_text_snapshot().into_iter().collect();
+
+        // In the text-sync (open/change/close) path, the live map is keyed by
+        // `normalize_uri_key` (see text_sync.rs "Store document state with
+        // normalized URI"), but `uri` here is the raw request URI as received
+        // from the client -- which can differ from its normalized form (e.g.
+        // Windows drive-letter casing: `file:///C:/...` vs the normalized
+        // `file:///c:/...`). If the two differ AND the document remains open
+        // through the snapshot read, `documents_text_snapshot()` above
+        // contains this SAME document under its normalized key; inserting the
+        // pinned entry under the raw key without first removing that
+        // normalized entry would leave the same document present under two
+        // keys. A scan that iterates every entry (e.g.
+        // `find_package_definition_in_docs`) would then find the same package
+        // declaration twice, producing an "ambiguous identity"
+        // (`locations.len() > 1`) empty result -- even for a request with no
+        // race at all. Remove the normalized entry first so the pinned insert
+        // is the only copy of this document in the map (see #3613 for the
+        // didClose case where the normalized entry is absent, and #3665 for
+        // the rename path edge case).
+        let normalized = self.normalize_uri_key(uri);
+        if normalized != uri {
+            doc_map.remove(&normalized);
+        }
+        doc_map.insert(uri.to_string(), captured_text.to_string());
+        doc_map
     }
 
     /// Handle textDocument/typeDefinition request
@@ -1715,7 +2103,7 @@ impl LspServer {
                     );
                     return Ok(Some(json!([])));
                 };
-                let Some(ast) = doc.ast.as_ref() else {
+                let Some(ast) = doc.current_parsed().and_then(|p| p.ast().cloned()) else {
                     self.record_type_definition_provider_decision_trace(
                         &trace_context,
                         0,
@@ -1723,12 +2111,13 @@ impl LspServer {
                     );
                     return Ok(Some(json!([])));
                 };
-                (ast.clone(), doc.text.clone())
+                (ast, doc.text.clone())
             };
 
-            // Build doc_map outside the lock using snapshot helper
-            let doc_map: HashMap<String, String> =
-                self.documents_text_snapshot().into_iter().collect();
+            // Build doc_map outside the lock, pinning `uri`'s own entry to
+            // the captured generation -- see `pinned_doc_map_for`'s
+            // doc-comment for why (#3613).
+            let doc_map = self.pinned_doc_map_for(uri, &doc_text);
 
             let provider = TypeDefinitionProvider::new();
             if let Some(locations) =
@@ -1857,28 +2246,31 @@ impl LspServer {
             let (line, character) = req_position(&params)?;
 
             // Acquire minimal data under lock, then drop it
-            let ast = {
+            let (ast, doc_text) = {
                 let documents = self.documents_guard();
                 let Some(doc) = self.get_document(&documents, uri) else {
                     return Ok(Some(json!([])));
                 };
-                let Some(ast) = doc.ast.as_ref() else {
+                let Some(ast) = doc.current_parsed().and_then(|p| p.ast().cloned()) else {
                     return Ok(Some(json!([])));
                 };
-                ast.clone()
+                (ast, doc.text.clone())
             };
 
             #[cfg(feature = "workspace")]
             {
-                // Build doc_map outside the lock using snapshot helper
-                let doc_map: HashMap<String, String> =
-                    self.documents_text_snapshot().into_iter().collect();
+                // Build doc_map outside the lock, pinning `uri`'s own entry
+                // to the captured generation -- mirrors
+                // `handle_type_definition` above; see `pinned_doc_map_for`'s
+                // doc-comment for why (#3613, and the references.rs fix,
+                // #3396 / a95ad72).
+                let doc_map = self.pinned_doc_map_for(uri, &doc_text);
 
                 // Wait for the workspace index to finish building before querying it.
                 // Without this, an implementation request while the index is in Building
                 // state routes to Partial and returns no cross-file implementors.
                 // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
-                self.wait_for_index_ready_if_building();
+                let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
 
                 // Use routing policy - only provide workspace index in Full mode
                 let access_mode = route_index_access(self.coordinator());
@@ -1897,11 +2289,63 @@ impl LspServer {
 
             #[cfg(not(feature = "workspace"))]
             {
-                let _ = (ast, line, character, uri); // Suppress unused warnings
+                let _ = (ast, doc_text, line, character, uri); // Suppress unused warnings
             }
         }
 
         Ok(Some(json!([])))
+    }
+
+    /// Test-only entrypoint for LSP `textDocument/typeDefinition`.
+    ///
+    /// Exposes the internal [`Self::handle_type_definition`] handler for
+    /// integration tests (#3613 same-document TOCTOU regression coverage).
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_type_definition(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_type_definition(params)
+    }
+
+    /// Test-only entrypoint for LSP `textDocument/implementation`.
+    ///
+    /// Exposes the internal [`Self::handle_implementation`] handler for
+    /// integration tests (#3613 same-document TOCTOU regression coverage).
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_handle_implementation(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_implementation(params)
+    }
+
+    /// Test-only: arm [`wait_at_same_doc_fallback_gap`] for one deterministic
+    /// pause.
+    ///
+    /// The next call into `handle_type_definition` or `handle_implementation`
+    /// that reaches the same-document fallback gap will send on `reached`
+    /// and then block on `resume.recv()` until the test signals it to
+    /// continue. Consumed (armed exactly once) per call -- see #3613.
+    ///
+    /// Recovers a poisoned `NAVIGATION_SAME_DOC_FALLBACK_GAP` the same way
+    /// `wait_at_same_doc_fallback_gap` does. Without this, `if let Ok(...) =
+    /// ...lock()` would silently no-op after any prior poisoning (e.g. a
+    /// deliberate-poison test running earlier in the same process), leaving
+    /// the hook never armed and a caller's `reached_rx.recv()` blocking
+    /// forever waiting for a signal that will never come.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn test_set_navigation_same_doc_fallback_gap_hook(
+        &self,
+        reached: std::sync::mpsc::Sender<()>,
+        resume: std::sync::mpsc::Receiver<()>,
+    ) {
+        let _ = self;
+        let mut hook = match NAVIGATION_SAME_DOC_FALLBACK_GAP.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        *hook = Some((reached, resume));
     }
 
     /// Non-blocking definition handler with fallback
@@ -1935,6 +2379,19 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// Serializes tests in this module that touch
+    /// `NAVIGATION_SAME_DOC_FALLBACK_GAP`, mirroring `toctou_hook_lock` in
+    /// `tests/navigation_same_document_toctou_regression_tests.rs`: any call
+    /// into `handle_type_definition`/`handle_implementation` unconditionally
+    /// drains the hook slot via `wait_at_same_doc_fallback_gap`, so two
+    /// tests touching it concurrently (this crate's own guidance is
+    /// `--test-threads=2`, not 1) could steal each other's armed hook.
+    /// Self-heals from a poisoned lock, matching `timing::capture::test_lock`.
+    fn same_doc_fallback_gap_test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// Verifies that `handle_implementation` executes the workspace
     /// index-readiness wait when indexing is in progress (#3095).
     ///
@@ -1943,6 +2400,8 @@ mod tests {
     #[cfg(feature = "workspace")]
     #[test]
     fn test_wait_guard_fires_in_handle_implementation_when_indexing_in_progress() {
+        let _serial = same_doc_fallback_gap_test_lock();
+
         let server = LspServer::new();
         let uri = "file:///test-impl-race.pl";
         let open_result = server.test_handle_did_open(Some(json!({
@@ -1962,5 +2421,78 @@ mod tests {
             "position": { "line": 1, "character": 4 }
         })));
         assert!(result.is_ok(), "handle_implementation must not error: {result:?}");
+    }
+
+    /// Verifies `wait_at_same_doc_fallback_gap`'s poison-recovery path
+    /// (#3613): a previously panicked holder of
+    /// `NAVIGATION_SAME_DOC_FALLBACK_GAP` must not silently disable the
+    /// synchronization point for a later caller. Deliberately poisons the
+    /// static mutex (a thread panics while holding its lock), then confirms
+    /// the recovery branch (`Err(poisoned) => poisoned.into_inner().take()`)
+    /// still lets an armed hook fire instead of the `.lock().ok()` pattern
+    /// this replaces, which would turn the poisoned `Err` into `None` and
+    /// silently skip the pause.
+    ///
+    /// The deliberate `panic!` (to poison the mutex) and the `.expect()`
+    /// calls (to fail loudly, with a diagnosing message, if the recovery
+    /// path regresses) are the point of this test, not banned production
+    /// patterns creeping in -- narrowly allowed here the same way
+    /// `LazyLock` regex initializers are elsewhere in this codebase.
+    ///
+    /// Takes `same_doc_fallback_gap_test_lock()` for the same reason
+    /// `test_wait_guard_fires_in_handle_implementation_when_indexing_in_progress`
+    /// above does: any concurrently running test that reaches
+    /// `wait_at_same_doc_fallback_gap` could otherwise steal the hook this
+    /// test arms. Calls `clear_poison()` at the end so a poisoned mutex from
+    /// this deliberate test doesn't linger for the rest of the process --
+    /// every access site already recovers poison correctly, so this is
+    /// hygiene, not a correctness requirement.
+    #[test]
+    #[allow(clippy::panic, clippy::expect_used)]
+    fn test_wait_at_same_doc_fallback_gap_recovers_from_poisoned_mutex() {
+        let _serial = same_doc_fallback_gap_test_lock();
+
+        // Poison the static by panicking while holding its lock on another
+        // thread. `thread::spawn` catches the panic and reports it via
+        // `join()`'s `Err`, so this does not abort the test process.
+        let poison_result = std::thread::spawn(|| {
+            let _guard = NAVIGATION_SAME_DOC_FALLBACK_GAP.lock();
+            panic!("deliberately poisoning the hook mutex for #3613 test coverage");
+        })
+        .join();
+        assert!(poison_result.is_err(), "the poisoning thread must have panicked");
+        assert!(NAVIGATION_SAME_DOC_FALLBACK_GAP.lock().is_err(), "the mutex must now be poisoned");
+
+        // Arm the hook directly, recovering the poisoned guard the same way
+        // `wait_at_same_doc_fallback_gap` does -- this unit test lives in
+        // the same module, so it can reach the private static directly.
+        let (reached_tx, reached_rx) = std::sync::mpsc::channel();
+        let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+        {
+            let mut hook = match NAVIGATION_SAME_DOC_FALLBACK_GAP.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            *hook = Some((reached_tx, resume_rx));
+        }
+
+        // The function under test must recover the still-poisoned mutex and
+        // still fire the hook -- not silently no-op like `.lock().ok()` would.
+        let handler = std::thread::spawn(wait_at_same_doc_fallback_gap);
+        reached_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("poison recovery must still let the hook fire `reached`");
+        resume_tx.send(()).expect("resume channel must still be open");
+        handler.join().expect(
+            "wait_at_same_doc_fallback_gap must not panic after recovering a poisoned lock",
+        );
+
+        // Hygiene: clear the poison this test deliberately introduced so it
+        // doesn't linger for the rest of the process. Every access site
+        // already recovers poison correctly (that's what this test proves),
+        // so this is not required for correctness -- it just keeps the
+        // mutex's poisoned flag from being permanently true after this test
+        // runs, matching "no test leaving the mutex poisoned".
+        NAVIGATION_SAME_DOC_FALLBACK_GAP.clear_poison();
     }
 }

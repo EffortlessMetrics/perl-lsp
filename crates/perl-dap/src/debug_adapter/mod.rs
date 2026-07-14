@@ -182,6 +182,13 @@ impl Default for DebugAdapter {
     }
 }
 
+impl Drop for DebugAdapter {
+    fn drop(&mut self) {
+        self.cancel_requested.store(true, Ordering::Release);
+        self.clear_active_session_state();
+    }
+}
+
 impl DebugAdapter {
     /// Create a new debug adapter
     pub fn new() -> Self {
@@ -391,6 +398,20 @@ impl DebugAdapter {
                 }
             }
         }
+    }
+
+    /// Convert u64 values (e.g. JSON protocol IDs) to u32 with saturation.
+    /// Values above [`u32::MAX`] are clamped to [`u32::MAX`] rather than wrapping.
+    fn u64_to_u32_saturating(value: u64) -> u32 {
+        u32::try_from(value).unwrap_or(u32::MAX)
+    }
+
+    /// Convert u32 process/thread IDs to i32 (as required by Unix signal APIs) with saturation.
+    /// Values above [`i32::MAX`] are clamped to [`i32::MAX`] rather than wrapping to negatives.
+    // Windows builds do not call the Unix signal PID conversion paths.
+    #[cfg_attr(windows, allow(dead_code))]
+    fn u32_to_i32_saturating(value: u32) -> i32 {
+        i32::try_from(value).unwrap_or(i32::MAX)
     }
 
     fn line_contains_full_marker(line: &str, marker: &str) -> bool {
@@ -618,6 +639,48 @@ print "result: $final\n";
         let adapter = DebugAdapter::new();
         assert!(adapter.session.lock().ok().is_some_and(|guard| guard.is_none()));
         assert!(adapter.breakpoints.is_empty());
+    }
+
+    // --- `impl Drop for DebugAdapter` coverage (#1405) ---
+    //
+    // These are direct call-observation --lib tests proving the Drop body's two
+    // effects without spawning a real `perl -d` child process: (1) the cancel
+    // flag is set before delegating to `clear_active_session_state`, and (2)
+    // `clear_active_session_state` genuinely clears adapter-owned state when the
+    // adapter is dropped (not merely called directly). The SIGTERM/kill branches
+    // inside `terminate_child_process` sit behind a real OS process and are
+    // covered by the Perl-gated tests in `tests/dap_session_cleanup_e2e.rs`
+    // instead (see `ripr-suppress-debug-adapter-drop-process-boundary` in
+    // `policy/ripr-suppressions.toml`).
+
+    #[test]
+    fn test_drop_sets_cancel_requested_before_clearing_session_state() {
+        let adapter = DebugAdapter::new();
+        let cancel_flag = Arc::clone(&adapter.cancel_requested);
+        assert!(!cancel_flag.load(Ordering::Acquire), "cancel flag should start false");
+
+        drop(adapter);
+
+        assert!(
+            cancel_flag.load(Ordering::Acquire),
+            "Drop must set cancel_requested so any in-flight output-reader thread observes it"
+        );
+    }
+
+    #[test]
+    fn test_drop_clears_attached_pid_session_state() {
+        let adapter = DebugAdapter::new();
+        let attached_pid = Arc::clone(&adapter.attached_pid);
+        if let Ok(mut guard) = attached_pid.lock() {
+            *guard = Some(9999);
+        }
+
+        drop(adapter);
+
+        assert!(
+            attached_pid.lock().ok().is_some_and(|guard| guard.is_none()),
+            "Drop must delegate to clear_active_session_state, clearing attached_pid"
+        );
     }
 
     #[test]
@@ -2010,5 +2073,43 @@ print "result: $final\n";
             }
             _ => Err("Expected response".into()),
         }
+    }
+
+    // --- Saturating cast helper tests (#3052) ---
+
+    #[test]
+    fn test_u64_to_u32_saturating_below_max() {
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(0), 0);
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(1), 1);
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(u32::MAX as u64), u32::MAX);
+    }
+
+    #[test]
+    fn test_u64_to_u32_saturating_at_max() {
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(u32::MAX as u64), u32::MAX);
+    }
+
+    #[test]
+    fn test_u64_to_u32_saturating_above_max() {
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(u32::MAX as u64 + 1), u32::MAX);
+        assert_eq!(DebugAdapter::u64_to_u32_saturating(u64::MAX), u32::MAX);
+    }
+
+    #[test]
+    fn test_u32_to_i32_saturating_below_max() {
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(0), 0);
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(1), 1);
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(i32::MAX as u32), i32::MAX);
+    }
+
+    #[test]
+    fn test_u32_to_i32_saturating_at_max() {
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(i32::MAX as u32), i32::MAX);
+    }
+
+    #[test]
+    fn test_u32_to_i32_saturating_above_max() {
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(i32::MAX as u32 + 1), i32::MAX);
+        assert_eq!(DebugAdapter::u32_to_i32_saturating(u32::MAX), i32::MAX);
     }
 }

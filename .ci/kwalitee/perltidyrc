@@ -1,0 +1,20 @@
+# Representative .perltidyrc profile for the nightly Kwalitee compatibility check.
+#
+# This is NOT a live formatter config — it is the reference profile that
+# `cargo xtask native-format perltidy-compat` classifies against the native
+# formatter's supported surface. Every directive below maps to a native field
+# (or a documented no-op), so the resulting receipt reports
+# `external_only_count == 0`, which is what the nightly
+# `formatter.perltidy_compat_no_external_only` indicator requires.
+#
+# When the native formatter gains or drops support for a directive, update this
+# profile so the nightly signal stays meaningful. See
+# docs/reference/PERL_KWALITEE.md.
+
+-l=100    # format.line_width          — maximum line length
+-i=2      # format.indent_columns      — indent width
+-nt       # format.tabs (off)          — spaces, not tabs
+-ce       # format.else_placement      — cuddled else
+-nsok     # format.keyword_spacing     — no space after named-unary/keyword
+-atc      # format.trailing_comma      — add trailing commas
+-bl       # format.brace_placement     — opening brace on new line

@@ -1882,10 +1882,48 @@ fn ripr_binary() -> Result<String> {
     Ok(binary)
 }
 
+/// Drain all bytes from an optional I/O handle into `buf`.
+///
+/// When `pipe` is `None` (e.g. a handle that was never piped) the function
+/// returns `Ok(())` without touching `buf`. This helper is extracted so the
+/// `None` arm can be exercised in unit tests independently of spawning a real
+/// child process.
+fn drain_pipe<R: std::io::Read>(pipe: Option<R>, buf: &mut Vec<u8>, label: &str) -> Result<()> {
+    if let Some(mut r) = pipe {
+        r.read_to_end(buf).with_context(|| format!("failed to read {label}"))?;
+    }
+    Ok(())
+}
+
 fn run_output(cmd: &str, args: &[String]) -> Result<String> {
-    let output =
-        Command::new(cmd).args(args).output().with_context(|| format!("failed to run {cmd}"))?;
-    output_to_string(cmd, output)
+    // Drain stdout incrementally to avoid the Windows single-pipe-write limit (~4 MB).
+    // Command::output() calls wait_with_output() internally, which collects the full
+    // payload via a blocking pipe read; on Windows this panics with "os error 87
+    // (parameter incorrect)" when the child writes more than ~4 MB to stdout in one
+    // session (reproduced on a 487-file diff: `ripr check --format json`).
+    // Streaming via read_to_end() sidesteps that limit by draining the pipe
+    // incrementally.  Deadlock note: ripr's stderr is diagnostics-only and stays well
+    // under the OS pipe buffer, so draining stdout first then stderr is safe here.
+    let mut child = Command::new(cmd)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("failed to run {cmd}"))?;
+    let mut stdout_bytes = Vec::new();
+    drain_pipe(child.stdout.take(), &mut stdout_bytes, &format!("{cmd} stdout"))?;
+    let mut stderr_bytes = Vec::new();
+    drain_pipe(child.stderr.take(), &mut stderr_bytes, &format!("{cmd} stderr"))?;
+    let status = child.wait().with_context(|| format!("failed to wait for {cmd}"))?;
+    if !status.success() {
+        bail!(
+            "{cmd} failed with status {}\nstdout:\n{}\nstderr:\n{}",
+            status,
+            String::from_utf8_lossy(&stdout_bytes).trim(),
+            String::from_utf8_lossy(&stderr_bytes).trim()
+        );
+    }
+    String::from_utf8(stdout_bytes).with_context(|| format!("{cmd} stdout was not UTF-8"))
 }
 
 fn run_output_with_timeout(cmd: &str, args: &[String], timeout: Duration) -> Result<String> {
@@ -3848,6 +3886,106 @@ esac
             fs::set_permissions(&path, permissions)?;
             Ok(path)
         }
+    }
+
+    // ---------------------------------------------------------------------------
+    // run_output streaming tests (#1197)
+    // ---------------------------------------------------------------------------
+
+    /// Create a platform-specific script that writes exactly `byte_count` ASCII `x` bytes
+    /// to stdout. Uses `dd` + `tr` on Unix (POSIX-standard, no extra deps).
+    #[cfg(not(windows))]
+    fn write_large_output_script(dir: &Path, byte_count: usize) -> Result<PathBuf> {
+        // Round up to whole megabytes so dd's block arithmetic is exact.
+        let mb = (byte_count + 1_048_575) / 1_048_576;
+        let path = dir.join("gen_large.sh");
+        fs::write(
+            &path,
+            format!(
+                "#!/bin/sh\ndd if=/dev/zero bs=1048576 count={mb} 2>/dev/null | tr '\\0' 'x'\n"
+            ),
+        )?;
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&path)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&path, perms)?;
+        Ok(path)
+    }
+
+    #[test]
+    fn run_output_captures_small_stdout_and_propagates_exit_failure() -> Result<()> {
+        // Basic smoke-test for the new streaming run_output implementation:
+        // success path returns stdout; failure path returns an error containing stderr.
+        #[cfg(not(windows))]
+        {
+            let tmp = tempfile::tempdir()?;
+
+            // Success: printf a known value.
+            let ok = tmp.path().join("ok.sh");
+            fs::write(&ok, "#!/bin/sh\nprintf 'hello world'\n")?;
+            use std::os::unix::fs::PermissionsExt;
+            {
+                let mut p = fs::metadata(&ok)?.permissions();
+                p.set_mode(0o755);
+                fs::set_permissions(&ok, p)?;
+            }
+            let out = run_output(&ok.display().to_string(), &[])?;
+            assert_eq!(out, "hello world", "stdout must be captured verbatim");
+
+            // Failure: non-zero exit must surface stderr in the error.
+            let fail = tmp.path().join("fail.sh");
+            fs::write(&fail, "#!/bin/sh\nprintf 'detailed error' >&2\nexit 2\n")?;
+            {
+                let mut p = fs::metadata(&fail)?.permissions();
+                p.set_mode(0o755);
+                fs::set_permissions(&fail, p)?;
+            }
+            let err = run_output(&fail.display().to_string(), &[]).unwrap_err();
+            let msg = format!("{err:#}");
+            assert!(msg.contains("detailed error"), "stderr must appear in error: {msg}");
+            assert!(msg.contains("status"), "exit status must appear in error: {msg}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn run_output_streams_large_stdout_without_truncation() -> Result<()> {
+        // Regression guard for the Windows "os error 87" panic (#1197).
+        // Before this fix, Command::output() used wait_with_output() to buffer the full
+        // child stdout in one pipe read, which panics on Windows when the payload exceeds
+        // ~4 MB (reproduced on a 487-file ripr-pr diff).  The new streaming path reads
+        // incrementally; verify it collects the full payload intact.
+        const TARGET_MB: usize = 5;
+        const TARGET_BYTES: usize = TARGET_MB * 1024 * 1024;
+
+        let tmp = tempfile::tempdir()?;
+        let script = write_large_output_script(tmp.path(), TARGET_BYTES)?;
+
+        let result = run_output(&script.display().to_string(), &[])?;
+
+        assert!(
+            result.len() >= TARGET_BYTES,
+            "Expected >= {TARGET_BYTES} bytes, streaming read captured only {}",
+            result.len()
+        );
+        assert!(
+            result.bytes().all(|b| b == b'x'),
+            "Output must consist entirely of 'x' bytes — got unexpected content"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn drain_pipe_none_does_nothing_and_returns_ok() -> Result<()> {
+        // Covers the `None` arm of `drain_pipe`, which occurs when a child's
+        // stdout/stderr handle has already been consumed or was never piped.
+        // In `run_output` that arm is unreachable (Stdio::piped() is always
+        // configured), so this unit test exercises it directly.
+        let mut buf = Vec::new();
+        drain_pipe(None::<std::io::Cursor<Vec<u8>>>, &mut buf, "test-label")?;
+        assert!(buf.is_empty(), "buf must remain empty when pipe is None");
+        Ok(())
     }
 
     #[test]

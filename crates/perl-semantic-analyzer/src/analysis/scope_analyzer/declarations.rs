@@ -58,7 +58,12 @@ pub(super) fn handle_variable_declaration<'a>(
         analyzer.analyze_node(init, scope, ancestors, issues, context);
     }
 
-    if let Some(issue_kind) = analyzer.declare_variable_parts_in_context(
+    // For `our` variables, pre-compute the qualified name (e.g., "Foo::x") so we can
+    // perform package-aware redeclaration checking independent of the scope tracker.
+    let our_qualified =
+        if is_our { analyzer.package_variable_name(var_name_part, context) } else { None };
+
+    let issue_kind_opt = analyzer.declare_variable_parts_in_context(
         scope,
         sigil,
         var_name_part,
@@ -66,13 +71,58 @@ pub(super) fn handle_variable_declaration<'a>(
         is_our,
         is_initialized,
         context,
-    ) {
-        // `our` re-declares a package global — valid Perl idiom when switching
-        // packages (`package Foo; our $x; package Bar; our $x;`).  Never report
-        // VariableRedeclaration for `our` declarations.
-        if is_our && issue_kind == IssueKind::VariableRedeclaration {
-            // Silently accept: different-package re-use of the same bare name.
-        } else {
+    );
+
+    match issue_kind_opt {
+        Some(IssueKind::VariableRedeclaration) if is_our => {
+            // `our` re-declares a package global. Whether this is an error depends on
+            // the package context:
+            //   - Same package visit (no `package X` statement in between) → error.
+            //   - Different generation (package switched since last declaration) → silent
+            //     re-import; update the recorded generation so subsequent re-declarations
+            //     within this new visit are still detected.
+            let emit_error = if let Some(qname) = &our_qualified {
+                let current_gen = context.package_change_generation.get();
+                // Extract before the match so the `Ref` borrow guard is dropped before
+                // any potential `borrow_mut()` call in the match arms.
+                let prev_gen_opt = context.our_decl_generations.borrow().get(qname).copied();
+                match prev_gen_opt {
+                    Some(prev_gen) if prev_gen == current_gen => {
+                        // Same visit: genuine same-package redeclaration.
+                        true
+                    }
+                    _ => {
+                        // Different generation or first time in our_decl_generations:
+                        // package switched between declarations → re-import, silently accept.
+                        // Update the generation so further `our $x` in this visit are caught.
+                        context
+                            .our_decl_generations
+                            .borrow_mut()
+                            .insert(qname.clone(), current_gen);
+                        false
+                    }
+                }
+            } else {
+                // Qualified name unavailable (e.g., name already contains "::").
+                // Silently accept for backward compatibility.
+                false
+            };
+
+            if emit_error {
+                let line = context.get_line(variable.location.start);
+                let full_name = extracted.as_string();
+                let description =
+                    format!("Variable '{}' is already declared in this scope", full_name);
+                issues.push(ScopeIssue {
+                    kind: IssueKind::VariableRedeclaration,
+                    variable_name: full_name,
+                    line,
+                    range: (variable.location.start, variable.location.end),
+                    description,
+                });
+            }
+        }
+        Some(issue_kind) => {
             let line = context.get_line(variable.location.start);
             // Optimization: Only allocate full name string when we actually have an issue to report
             let full_name = extracted.as_string();
@@ -93,6 +143,14 @@ pub(super) fn handle_variable_declaration<'a>(
                 range: (variable.location.start, variable.location.end),
                 description,
             });
+        }
+        None => {
+            // Successful first declaration. Record the generation for `our` variables so
+            // that a later redeclaration within the same package visit can be detected.
+            if let Some(qname) = &our_qualified {
+                let pkg_gen = context.package_change_generation.get();
+                context.our_decl_generations.borrow_mut().entry(qname.clone()).or_insert(pkg_gen);
+            }
         }
     }
     false
@@ -123,7 +181,11 @@ pub(super) fn handle_variable_list_declaration<'a>(
         let extracted = analyzer.extract_variable_name(variable);
         let (sigil, var_name_part) = extracted.parts();
 
-        if let Some(issue_kind) = analyzer.declare_variable_parts_in_context(
+        // For `our` list elements, compute the qualified name for package-aware checking.
+        let our_qualified =
+            if is_our { analyzer.package_variable_name(var_name_part, context) } else { None };
+
+        let issue_kind_opt = analyzer.declare_variable_parts_in_context(
             scope,
             sigil,
             var_name_part,
@@ -131,11 +193,45 @@ pub(super) fn handle_variable_list_declaration<'a>(
             is_our,
             is_initialized,
             context,
-        ) {
-            // `our` redeclaration is always valid — see VariableDeclaration handler.
-            if is_our && issue_kind == IssueKind::VariableRedeclaration {
-                // Silently accept.
-            } else {
+        );
+
+        match issue_kind_opt {
+            Some(IssueKind::VariableRedeclaration) if is_our => {
+                // Apply the same package-context check as handle_variable_declaration.
+                let emit_error = if let Some(qname) = &our_qualified {
+                    let current_gen = context.package_change_generation.get();
+                    // Extract before the match so the `Ref` borrow guard is dropped before
+                    // any potential `borrow_mut()` call in the match arms.
+                    let prev_gen_opt = context.our_decl_generations.borrow().get(qname).copied();
+                    match prev_gen_opt {
+                        Some(prev_gen) if prev_gen == current_gen => true,
+                        _ => {
+                            context
+                                .our_decl_generations
+                                .borrow_mut()
+                                .insert(qname.clone(), current_gen);
+                            false
+                        }
+                    }
+                } else {
+                    false
+                };
+
+                if emit_error {
+                    let line = context.get_line(variable.location.start);
+                    let full_name = extracted.as_string();
+                    let description =
+                        format!("Variable '{}' is already declared in this scope", full_name);
+                    issues.push(ScopeIssue {
+                        kind: IssueKind::VariableRedeclaration,
+                        variable_name: full_name,
+                        line,
+                        range: (variable.location.start, variable.location.end),
+                        description,
+                    });
+                }
+            }
+            Some(issue_kind) => {
                 let line = context.get_line(variable.location.start);
                 // Optimization: Only allocate full name string when we actually have an issue to report
                 let full_name = extracted.as_string();
@@ -156,6 +252,17 @@ pub(super) fn handle_variable_list_declaration<'a>(
                     range: (variable.location.start, variable.location.end),
                     description,
                 });
+            }
+            None => {
+                // First declaration: record generation for `our` variables.
+                if let Some(qname) = &our_qualified {
+                    let pkg_gen = context.package_change_generation.get();
+                    context
+                        .our_decl_generations
+                        .borrow_mut()
+                        .entry(qname.clone())
+                        .or_insert(pkg_gen);
+                }
             }
         }
     }

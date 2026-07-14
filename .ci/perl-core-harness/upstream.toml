@@ -1,0 +1,5 @@
+source_url = "https://github.com/Perl/perl5"
+# Perl 5.42.2 release commit, pinned for repeatable advisory smoke receipts.
+ref = "b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed"
+profile = "base"
+modes = ["parse", "compile"]

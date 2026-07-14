@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Review Branch Lease (v1)",
+  "description": "Per-branch push lease written by scripts/reviews/lease to .ops-perl-lsp/review-leases/<sanitized-branch>.json. Keyed on BRANCH (mechanically knowable via `git rev-parse --abbrev-ref HEAD`), NOT agent identity. Substrate for the 'one editing owner per branch' invariant (R3b hook + R5 lease-audit). Default TTL 120 min (matches xtask worktree_allocator DEFAULT_LEASE_MINUTES). This is durable filesystem state, not a comment marker (#3693 R1 FILE 5).",
+  "type": "object",
+  "required": ["v", "branch", "owner", "acquired_at", "expires_at", "acquired_at_epoch", "expires_at_epoch"],
+  "additionalProperties": false,
+  "properties": {
+    "v": {"const": 1},
+    "branch": {"type": "string"},
+    "owner": {"type": "string"},
+    "pr": {"type": ["integer", "null"], "description": "Associated PR number, if known."},
+    "base_sha": {"type": ["string", "null"]},
+    "acquired_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "last_heartbeat": {"type": ["string", "null"], "format": "date-time"},
+    "acquired_at_epoch": {"type": "integer", "description": "Unix seconds — the portable comparison field (verify/audit avoid `date -d`)."},
+    "expires_at_epoch": {"type": "integer", "description": "Unix seconds — lease is expired when now >= this."}
+  }
+}

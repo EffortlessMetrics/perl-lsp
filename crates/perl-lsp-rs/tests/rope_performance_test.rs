@@ -1,3 +1,8 @@
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stdout)]
+
 use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
 use perl_lsp::textdoc::{Doc, PosEnc, apply_changes, byte_to_lsp_pos, lsp_pos_to_byte};
 use ropey::Rope;

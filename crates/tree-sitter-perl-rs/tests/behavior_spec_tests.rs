@@ -4,7 +4,7 @@
 //! parser ergonomics, traversal, source extraction, and resilience on malformed input.
 
 use perl_tdd_support::{must, must_some};
-use tree_sitter_perl_rs::Parser;
+use tree_sitter_perl_rs::{ParseFailure, Parser, language};
 
 fn parse(source: &str) -> tree_sitter_perl_rs::Tree {
     let mut parser = Parser::new();
@@ -51,6 +51,47 @@ fn when_iterating_children_then_iterator_count_matches_indexed_access() {
 }
 
 #[test]
+fn when_requesting_named_fields_then_structural_children_are_resolved() {
+    let tree = parse("if ($x) { $y; }");
+    let if_node = must_some(tree.root_node().children().find(|node| node.kind() == "if"));
+
+    let condition = must_some(if_node.child_by_field_name("condition"));
+    let then_branch = must_some(if_node.child_by_field_name("then_branch"));
+    let conditions: Vec<_> = if_node.children_by_field_name("condition").collect();
+    assert_eq!(condition.kind(), "variable");
+    assert_eq!(then_branch.kind(), "block");
+    assert_eq!(conditions.len(), 1);
+    assert_eq!(if_node.field_name_for_child(0), Some("condition"));
+    assert_eq!(if_node.field_name_for_child(1), Some("then_branch"));
+    assert!(if_node.child_by_field_name("does_not_exist").is_none());
+}
+
+#[test]
+fn when_requesting_ternary_fields_then_false_expression_uses_else_expr() {
+    let tree = parse("my $x = $condition ? $then : $otherwise;");
+    let ternary =
+        must_some(tree.root_node().children().find(|node| node.kind() == "my_declaration"))
+            .children()
+            .find(|node| node.kind() == "ternary");
+    let ternary = must_some(ternary);
+
+    assert_eq!(must_some(ternary.child_by_field_name("then_expr")).kind(), "variable");
+    assert_eq!(must_some(ternary.child_by_field_name("else_expr")).kind(), "variable");
+    assert!(ternary.child_by_field_name("else_branch").is_none());
+}
+
+#[test]
+fn when_describing_language_fields_then_names_are_stable_and_resolvable() {
+    let descriptor = language();
+    assert!(descriptor.field_names().iter().any(|field| field.name() == "condition"));
+    assert_eq!(
+        descriptor.field_id_for_name("condition").map(|field| field.name()),
+        Some("condition")
+    );
+    assert!(descriptor.field_id_for_name("does_not_exist").is_none());
+}
+
+#[test]
 fn when_requesting_out_of_bounds_child_then_none_is_returned() {
     let tree = parse("my $x = 1;");
 
@@ -82,6 +123,61 @@ fn when_parsing_malformed_input_then_error_tolerant_tree_is_still_produced() {
     let tree = parser.parse("sub { @@@@invalid{{{{");
 
     assert!(tree.is_some());
+    let tree = must_some(tree);
+    assert!(tree.has_error());
+    assert!(!tree.diagnostics().is_empty());
+}
+
+#[test]
+fn when_parse_detailed_receives_clean_input_then_no_error_is_reported() {
+    let mut parser = Parser::new();
+
+    let outcome = parser.parse_detailed("my $x = 42;");
+
+    assert!(outcome.tree.is_some());
+    assert!(outcome.diagnostics.is_empty());
+    assert!(!outcome.has_error());
+    assert!(!outcome.is_recovered());
+}
+
+#[test]
+fn when_parse_detailed_sees_an_advisory_then_valid_tree_is_not_marked_as_error() {
+    let mut parser = Parser::new();
+
+    let outcome = parser.parse_detailed("my $re = /(a+)+/;");
+
+    assert!(outcome.tree.is_some());
+    assert!(outcome.diagnostics.iter().any(|diagnostic| !diagnostic.blocks_clean_parse()));
+    assert!(!outcome.has_error());
+    assert!(!outcome.is_recovered());
+    assert!(!must_some(outcome.tree.as_ref()).has_error());
+}
+
+#[test]
+fn when_parse_detailed_recovers_then_tree_and_error_status_are_both_available() {
+    let mut parser = Parser::new();
+
+    let outcome = parser.parse_detailed("my $x = ;");
+
+    assert!(outcome.tree.is_some());
+    assert!(!outcome.diagnostics.is_empty());
+    assert!(outcome.has_error());
+    assert!(outcome.is_recovered());
+    assert!(must_some(outcome.tree.as_ref()).has_error());
+}
+
+#[test]
+fn when_parse_detailed_hits_nesting_limit_then_failure_is_typed() {
+    let source = "(".repeat(600);
+    let mut parser = Parser::new();
+
+    let outcome = parser.parse_detailed(&source);
+
+    assert!(matches!(
+        outcome.failure,
+        Some(ParseFailure::RecursionLimit | ParseFailure::NestingTooDeep { .. })
+    ));
+    assert!(outcome.tree.is_none());
 }
 
 #[test]

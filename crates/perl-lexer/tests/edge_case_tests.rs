@@ -393,6 +393,93 @@ fn substitution_paired_replacement_after_consecutive_comments() -> R {
 }
 
 #[test]
+fn substitution_paired_pattern_after_operator_comment() -> R {
+    let input = "s # comment\n [a] # replacement comment\n [b] # trailing comment\n ";
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Substitution),
+        "Expected Substitution for comment-separated paired delimiter after s, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "s # comment\n [a] # replacement comment\n [b]");
+    Ok(())
+}
+
+#[test]
+fn substitution_immediate_hash_stays_delimiter() -> R {
+    let input = "s#a#b#";
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Substitution),
+        "Expected immediate # to stay a substitution delimiter, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), input);
+    Ok(())
+}
+
+#[test]
+fn quote_ops_allow_comment_gap_before_delimiter() -> R {
+    for (input, expected_kind, expected_text) in [
+        ("q # comment\n \"b\"# tail", TokenType::QuoteSingle, "q # comment\n \"b\""),
+        ("qq # comment\n \"b\"# tail", TokenType::QuoteDouble, "qq # comment\n \"b\""),
+        ("qw # comment\n \"b\"# tail", TokenType::QuoteWords, "qw # comment\n \"b\""),
+        ("m # comment\n \"b\"# tail", TokenType::RegexMatch, "m # comment\n \"b\""),
+        ("qr # comment\n \"b\"# tail", TokenType::QuoteRegex, "qr # comment\n \"b\""),
+    ] {
+        let first = first_significant(input).ok_or("missing token")?;
+        assert_eq!(first.token_type, expected_kind, "input {input:?} got {first:?}");
+        assert_eq!(first.text.as_ref(), expected_text, "input {input:?} got {first:?}");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn quote_ops_allow_consecutive_comment_gap_before_delimiter() -> R {
+    let input = "q # first comment\n # second comment\n /body/ tail";
+    let sig = significant(input);
+    let first = sig.first().ok_or("missing quote token")?;
+    let second = sig.get(1).ok_or("missing tail token")?;
+
+    assert_eq!(first.token_type, TokenType::QuoteSingle);
+    assert_eq!(first.text.as_ref(), "q # first comment\n # second comment\n /body/");
+    assert_eq!(second.text.as_ref(), "tail");
+
+    Ok(())
+}
+
+#[test]
+fn quote_ops_immediate_hash_stays_delimiter() -> R {
+    let input = "q#body# tail";
+    let sig = significant(input);
+    let first = sig.first().ok_or("missing quote token")?;
+    let second = sig.get(1).ok_or("missing tail token")?;
+
+    assert_eq!(first.token_type, TokenType::QuoteSingle);
+    assert_eq!(first.text.as_ref(), "q#body#");
+    assert_eq!(second.text.as_ref(), "tail");
+
+    Ok(())
+}
+
+#[test]
+fn quote_ops_comment_gap_handles_crlf_before_delimiter() -> R {
+    let input = "m \r\n # comment\r\n /body/ tail";
+    let sig = significant(input);
+    let first = sig.first().ok_or("missing regex token")?;
+    let second = sig.get(1).ok_or("missing tail token")?;
+
+    assert_eq!(first.token_type, TokenType::RegexMatch);
+    assert_eq!(first.text.as_ref(), "m \r\n # comment\r\n /body/");
+    assert_eq!(second.text.as_ref(), "tail");
+
+    Ok(())
+}
+
+#[test]
 fn substitution_with_modifiers_ge() -> R {
     let input = "s/foo/bar/ge";
     let sig = significant(input);

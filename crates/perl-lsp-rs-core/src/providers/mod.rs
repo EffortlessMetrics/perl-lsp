@@ -51,6 +51,9 @@ pub mod navigation;
 // Wave G1b Phase 4 -- aggregator (original lsp_compat code from perl-lsp-providers)
 pub mod lsp_compat;
 
+// Test-framework awareness (Test2 import/export facts, subtest discovery)
+pub mod testing;
+
 // Module-level re-exports for convenient access (O2 requirement per Wave G1b spec)
 pub use ai::*;
 pub use code_actions::*;

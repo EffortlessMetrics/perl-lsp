@@ -368,6 +368,173 @@ fn test_eval_ref_without_session_returns_honest_empty() -> TestResult {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Child ref codec invariants and cache-miss short-circuit (#1857)
+// ---------------------------------------------------------------------------
+
+/// Protocol contract: Child wires in the Child band [2_000_000_000, i32::MAX]
+/// must decode as Child, NOT as Scope or EvalResult. This is the foundation of
+/// the Child ref short-circuit fix (issue #1857).
+#[test]
+fn child_ref_wire_decodes_as_child_not_scope_or_eval_result() -> TestResult {
+    for wire in [2_000_000_000_i32, 2_000_000_001, 2_000_065_537, i32::MAX] {
+        let decoded = VariableReference::decode(wire);
+        assert!(
+            matches!(decoded, Some(VariableReference::Child { .. })),
+            "child wire {wire} must decode as Child, got: {decoded:?}"
+        );
+    }
+    Ok(())
+}
+
+/// Baseline: without any session, a stale Child ref returns honest empty via
+/// the no-session path (not the fix path — the fix is in the Stopped-session branch).
+#[test]
+fn stale_child_ref_no_session_returns_honest_empty() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+    // Child band: parent=0, index=1 → wire 2_000_000_001
+    let stale_child_ref_wire: i64 = 2_000_000_001;
+
+    let response = adapter.handle_request(
+        1,
+        "variables",
+        Some(json!({ "variablesReference": stale_child_ref_wire })),
+    );
+
+    assert!(
+        is_honest_empty(&response),
+        "stale child ref without session must return honest empty; got: {response:?}"
+    );
+    Ok(())
+}
+
+/// **Core regression test** (Issue #1857):
+/// Active Stopped session + stale Child ref (cache miss after resume) -> honest empty.
+///
+/// This exercises the Child-ref short-circuit fix:
+///   1. Session IS Stopped -> passes the Running-state guard
+///   2. Cache miss for Child ref wire -> enters the else branch
+///   3. Fix: decode is Child -> short-circuit, return honest empty immediately
+///
+/// Without the fix: the code falls through to the scope-routing match, takes
+/// the None arm, and returns empty after a 75 ms wait_for_debugger_output_window
+/// delay — same output, wrong path, unnecessary latency.
+///
+/// With the fix: returns immediately without any scope routing or delay.
+#[test]
+fn active_stopped_session_stale_child_ref_returns_honest_empty() -> TestResult {
+    if !perl_available() {
+        return Ok(());
+    }
+    let mut adapter = DebugAdapter::new();
+    adapter.seed_stopped_session_with_frames_for_test(vec![]);
+
+    // Child band: parent=0, index=1 → wire 2_000_000_001
+    let stale_child_ref_wire: i64 = 2_000_000_001;
+
+    let response = adapter.handle_request(
+        1,
+        "variables",
+        Some(json!({ "variablesReference": stale_child_ref_wire })),
+    );
+
+    assert!(
+        is_honest_empty(&response),
+        "Stopped session + stale child ref must return honest empty (success=true, variables=[]); \
+         got: {response:?}"
+    );
+    Ok(())
+}
+
+/// Multiple stale Child refs (different parent/index encodings) all return honest empty.
+///
+/// Verifies the short-circuit covers the entire Child band, not just one wire value.
+#[test]
+fn active_stopped_session_multiple_stale_child_refs_all_honest_empty() -> TestResult {
+    if !perl_available() {
+        return Ok(());
+    }
+    let mut adapter = DebugAdapter::new();
+    adapter.seed_stopped_session_with_frames_for_test(vec![]);
+
+    // Range of Child wire values: base, base+1, base+2, and a value with a non-zero parent.
+    let stale_child_refs: &[i64] = &[2_000_000_000, 2_000_000_001, 2_000_000_002, 2_000_065_537];
+
+    for &child_ref_wire in stale_child_refs {
+        let response = adapter.handle_request(
+            1,
+            "variables",
+            Some(json!({ "variablesReference": child_ref_wire })),
+        );
+        assert!(
+            is_honest_empty(&response),
+            "Stopped session + stale child ref wire {child_ref_wire} must return honest empty; \
+             got: {response:?}"
+        );
+    }
+    Ok(())
+}
+
+/// Response shape for stale Child ref: the DAP shape contract must hold — success=true,
+/// command="variables", message absent, body has an empty variables array.
+#[test]
+fn stale_child_ref_response_has_correct_dap_shape() -> TestResult {
+    if !perl_available() {
+        return Ok(());
+    }
+    let mut adapter = DebugAdapter::new();
+    adapter.seed_stopped_session_with_frames_for_test(vec![]);
+
+    // Child band base value
+    let response = adapter.handle_request(
+        1,
+        "variables",
+        Some(json!({ "variablesReference": 2_000_000_001_i64 })),
+    );
+
+    match response {
+        DapMessage::Response { success, body, command, message, .. } => {
+            assert!(success, "must succeed");
+            assert_eq!(command, "variables", "command must be 'variables'");
+            assert!(message.is_none(), "must not have error message");
+            let body = body.expect("body must be present");
+            let vars = body.get("variables").expect("body must have 'variables' key");
+            let arr = vars.as_array().expect("variables must be an array");
+            assert!(arr.is_empty(), "variables array must be empty for stale child ref");
+        }
+        other => {
+            return Err(format!("expected DapMessage::Response, got: {other:?}").into());
+        }
+    }
+
+    Ok(())
+}
+
+/// Running session + stale Child ref -> honest empty via the Running-state guard
+/// (NOT the fix path, but verifies the two guards compose correctly for Child refs too).
+#[test]
+fn running_session_stale_child_ref_returns_honest_empty_via_running_guard() -> TestResult {
+    if !perl_available() {
+        return Ok(());
+    }
+    let mut adapter = DebugAdapter::new();
+    adapter.seed_running_session_for_test();
+
+    let stale_child_ref_wire: i64 = 2_000_000_001;
+    let response = adapter.handle_request(
+        1,
+        "variables",
+        Some(json!({ "variablesReference": stale_child_ref_wire })),
+    );
+
+    assert!(
+        is_honest_empty(&response),
+        "Running session + child ref must return honest empty via stale-ref guard; \
+         got: {response:?}"
+    );
+    Ok(())
+}
+
 /// Regression test from red-TDD: protocol contract -- eval_ref wires are never
 /// misinterpreted as scope refs in scope routing logic.
 #[test]

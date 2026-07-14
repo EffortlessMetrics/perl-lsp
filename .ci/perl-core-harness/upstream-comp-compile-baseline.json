@@ -1,0 +1,165 @@
+{
+  "schema_version": "perl_core_harness.compile_baseline.v1",
+  "report_schema_version": "perl_core_harness.report.v1",
+  "mode": "compile",
+  "profile": "comp",
+  "files_total": 25,
+  "files_passed": 25,
+  "files_failed": 0,
+  "tap_assertions_total": 25,
+  "tap_assertions_passed": 25,
+  "buckets": {},
+  "expected_failures": [],
+  "file_results": [
+    {
+      "path": "comp/bproto.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/cmdopt.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/colon.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/decl.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/filter_exception.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/final_line_num.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/fold.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/form_scope.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/hints.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/line_debug.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/multiline.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/opsubs.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/our.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/package_block.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/package.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/parser_run.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/parser.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/proto.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/redef.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/require.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/retainedlines.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/term.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/uproto.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/use.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "comp/utf.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    }
+  ]
+}

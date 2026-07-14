@@ -733,7 +733,10 @@ fn collect_unpinned_actions(workflow: &Value) -> Vec<String> {
     actions
 }
 
-fn is_sha_pinned(uses: &str) -> bool {
+/// Is `uses:` pinned to a full 40-hex-char commit SHA? Shared with
+/// `tasks::workflows` (the actionlint/zizmor contract layer, #3788) so the two
+/// checkers agree on what "pinned" means rather than diverging definitions.
+pub(crate) fn is_sha_pinned(uses: &str) -> bool {
     let Some((_, reference)) = uses.rsplit_once('@') else {
         return false;
     };

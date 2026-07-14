@@ -112,6 +112,129 @@ fn test_nullary_builtin_division_disambiguation() -> TestResult {
 }
 
 #[test]
+fn quote_operator_gap_skips_whitespace_led_comments() -> TestResult {
+    let mut lexer = PerlLexer::new(" \n # comment\r\n /body/");
+
+    lexer.skip_quote_operator_delimiter_gap();
+
+    assert_eq!(lexer.current_char(), Some('/'));
+    assert_eq!(lexer.position, " \n # comment\r\n ".len());
+    Ok(())
+}
+
+#[test]
+fn quote_operator_gap_preserves_immediate_hash_delimiter() -> TestResult {
+    let mut lexer = PerlLexer::new("#body#");
+
+    lexer.skip_quote_operator_delimiter_gap();
+
+    assert_eq!(lexer.current_char(), Some('#'));
+    assert_eq!(lexer.position, 0);
+    Ok(())
+}
+
+#[test]
+fn quote_operator_gap_preserves_non_whitespace_delimiter() -> TestResult {
+    let mut lexer = PerlLexer::new("/body/");
+
+    lexer.skip_quote_operator_delimiter_gap();
+
+    assert_eq!(lexer.current_char(), Some('/'));
+    assert_eq!(lexer.position, 0);
+    Ok(())
+}
+
+#[test]
+fn comment_gap_after_whitespace_skips_consecutive_comments() -> TestResult {
+    let mut lexer = PerlLexer::new(" # first\n # second\n /body/");
+
+    lexer.skip_comment_gap_after_whitespace();
+
+    assert_eq!(lexer.current_char(), Some('/'));
+    assert_eq!(lexer.position, " # first\n # second\n ".len());
+    Ok(())
+}
+
+#[test]
+fn paired_substitution_replacement_gap_skips_consecutive_comments() -> TestResult {
+    let mut lexer = PerlLexer::new(" # first\n # second\n [replacement]");
+
+    lexer.skip_paired_substitution_replacement_gap();
+
+    assert_eq!(lexer.current_char(), Some('['));
+    assert_eq!(lexer.position, " # first\n # second\n ".len());
+    Ok(())
+}
+
+#[test]
+fn peek_nonspace_and_following_skips_comment_gap() -> TestResult {
+    let lexer = PerlLexer::new(" \n # comment\r\n /body/");
+
+    let (candidate, following) = lexer.peek_nonspace_and_following();
+
+    assert_eq!(candidate, Some('/'));
+    assert_eq!(following, Some('b'));
+    Ok(())
+}
+
+#[test]
+fn peek_nonspace_and_following_preserves_immediate_hash() -> TestResult {
+    let lexer = PerlLexer::new("#body#");
+
+    let (candidate, following) = lexer.peek_nonspace_and_following();
+
+    assert_eq!(candidate, Some('#'));
+    assert_eq!(following, Some('b'));
+    Ok(())
+}
+
+#[test]
+fn peek_nonspace_and_following_handles_consecutive_comments() -> TestResult {
+    let lexer = PerlLexer::new(" # first\n # second\n /body/");
+
+    let (candidate, following) = lexer.peek_nonspace_and_following();
+
+    assert_eq!(candidate, Some('/'));
+    assert_eq!(following, Some('b'));
+    Ok(())
+}
+
+#[test]
+fn peek_nonspace_and_following_reports_end_after_gap() -> TestResult {
+    let lexer = PerlLexer::new(" # comment\n   ");
+
+    let (candidate, following) = lexer.peek_nonspace_and_following();
+
+    assert_eq!(candidate, None);
+    assert_eq!(following, None);
+    Ok(())
+}
+
+#[test]
+fn peek_quote_operator_gap_reports_candidate_following_and_gap() -> TestResult {
+    let lexer = PerlLexer::new(" \n # comment\r\n /body/");
+
+    let (candidate, following, saw_gap) = lexer.peek_quote_operator_gap_and_following();
+
+    assert_eq!(candidate, Some('/'));
+    assert_eq!(following, Some('b'));
+    assert!(saw_gap);
+    Ok(())
+}
+
+#[test]
+fn peek_quote_operator_gap_reports_immediate_candidate_without_gap() -> TestResult {
+    let lexer = PerlLexer::new("#body#");
+
+    let (candidate, following, saw_gap) = lexer.peek_quote_operator_gap_and_following();
+
+    assert_eq!(candidate, Some('#'));
+    assert_eq!(following, Some('b'));
+    assert!(!saw_gap);
+    Ok(())
+}
+
+#[test]
 fn test_peek_token_does_not_mutate_paren_depth() -> TestResult {
     // Regression guard for issue #2750: peek_token() must save and restore
     // paren_depth so that a peek at `(` does not permanently increment

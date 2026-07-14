@@ -1,0 +1,27 @@
+{
+  "schema_version": "perl_core_harness.compile_baseline.v1",
+  "report_schema_version": "perl_core_harness.report.v1",
+  "mode": "compile",
+  "profile": "base",
+  "files_total": 2,
+  "files_passed": 2,
+  "files_failed": 0,
+  "tap_assertions_total": 2,
+  "tap_assertions_passed": 2,
+  "buckets": {},
+  "expected_failures": [],
+  "file_results": [
+    {
+      "path": "base/lex.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    },
+    {
+      "path": "base/ok.t",
+      "status": "pass",
+      "assertions_passed": 1,
+      "assertions_total": 1
+    }
+  ]
+}

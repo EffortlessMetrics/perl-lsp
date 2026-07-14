@@ -51,14 +51,27 @@
 
 use perl_ast::{Node as AstNode, NodeKind};
 use perl_module::parse_module_import_head;
-use perl_parser_core::Parser as CoreParser;
+use perl_parser_core::{
+    ParseOutput, Parser as CoreParser,
+    incremental::{FallbackReason as CoreFallbackReason, IncrementalEdit, IncrementalState},
+};
 use perl_pragma::{PragmaState, PragmaTracker};
 use perl_semantic_analyzer::semantic::SemanticModel;
+use std::ops::{ControlFlow, Range};
+
+/// Parser diagnostics surfaced by [`Parser::parse_detailed`].
+pub use perl_parser_core::ParseError as ParseDiagnostic;
+pub use perl_parser_core::incremental::IncrementalMetrics;
+
+#[cfg(feature = "queries")]
+mod query;
 
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
 /// Mirrors `tree_sitter::InputEdit` field layout for drop-in compatibility.
 pub use perl_parser_core::edit::Edit as InputEdit;
+#[cfg(feature = "queries")]
+pub use query::{Query, QueryCapture, QueryCursor, QueryError, QueryMatch, QueryMatches};
 
 /// A tree-sitter-compatible source position.
 ///
@@ -116,27 +129,87 @@ impl Parser {
     pub fn parse(&mut self, source: &str) -> Option<Tree> {
         let mut core = CoreParser::new(source);
         match core.parse() {
-            Ok(root) => Some(Tree { root, source: source.to_string(), pending_edits: Vec::new() }),
+            Ok(root) => Some(tree_from_parts(root, source, core.errors().to_vec())),
             Err(_) => None,
         }
     }
 
+    /// Parse `source` and preserve recovery diagnostics and catastrophic failures.
+    ///
+    /// A recovered parse returns `tree: Some(_)` with one or more diagnostics. A
+    /// catastrophic failure returns `tree: None` and a typed [`ParseFailure`]. Existing
+    /// callers that only need the compatibility `Option` API can continue using
+    /// [`parse`][Parser::parse].
+    pub fn parse_detailed(&mut self, source: &str) -> ParseOutcome {
+        let mut core = CoreParser::new(source);
+        let ParseOutput { ast, diagnostics, terminated_early, .. } = core.parse_with_recovery();
+        let failure = terminated_early
+            .then(|| diagnostics.iter().find_map(ParseFailure::from_diagnostic))
+            .flatten();
+        let tree = failure.is_none().then(|| tree_from_parts(ast, source, diagnostics.clone()));
+
+        ParseOutcome { tree, diagnostics, failure }
+    }
+
     /// Parse `source` using `old_tree` as a hint for incremental re-parsing.
     ///
-    /// In the current implementation this performs a full re-parse (equivalent
-    /// to [`parse`][Parser::parse]). The `old_tree` parameter is accepted for
-    /// API compatibility with `tree_sitter::Parser::parse_with_old_tree`; future
-    /// versions will use it to skip unchanged regions.
+    /// A single validated edit uses the lower-tier checkpoint-bounded token replay
+    /// kernel. The AST is rebuilt from the resulting token stream; this facade does
+    /// not claim AST subtree reuse. Multiple, invalid, or missing edits use a safe
+    /// full-parse fallback and record the reason on the returned tree.
     ///
     /// Returns `None` on complete parse failure (same semantics as `parse`).
     pub fn parse_with_old_tree(&mut self, source: &str, old_tree: &Tree) -> Option<Tree> {
         // Fast path: if source is unchanged and no edits were recorded, reuse the old tree
         // instead of re-parsing. This mirrors tree-sitter's incremental no-op behavior.
         if source == old_tree.source() && old_tree.pending_edits.is_empty() {
-            return Some(old_tree.clone());
+            let mut unchanged = old_tree.clone();
+            unchanged.reparse_mode = Some(ReparseMode::Unchanged);
+            return Some(unchanged);
         }
 
-        self.parse(source)
+        let fallback_reason = match old_tree.pending_edits.as_slice() {
+            [edit] => {
+                let Some(incremental_edit) =
+                    validated_incremental_edit(old_tree.source(), source, edit)
+                else {
+                    return self.parse_with_fallback(source, FallbackReason::InvalidEdit);
+                };
+
+                let mut state = old_tree.incremental_state.as_ref().cloned().unwrap_or_else(|| {
+                    IncrementalState::with_diagnostics(old_tree.source(), old_tree.diagnostics())
+                });
+                match state.reparse(source, &incremental_edit) {
+                    Ok(root) => {
+                        let mode =
+                            state.metrics().fallback.map_or(ReparseMode::TokenReplay, |reason| {
+                                ReparseMode::FullParseFallback(FallbackReason::TokenReplay(reason))
+                            });
+                        return Some(Tree {
+                            root,
+                            source: source.to_string(),
+                            pending_edits: Vec::new(),
+                            diagnostics: state.diagnostics().to_vec(),
+                            incremental_state: Some(state),
+                            reparse_mode: Some(mode),
+                        });
+                    }
+                    Err(_) => FallbackReason::TokenReplay(CoreFallbackReason::TokenReplayFailed),
+                }
+            }
+            [] => FallbackReason::NoPendingEdit,
+            _ => FallbackReason::MultipleEdits,
+        };
+
+        self.parse_with_fallback(source, fallback_reason)
+    }
+
+    fn parse_with_fallback(&mut self, source: &str, reason: FallbackReason) -> Option<Tree> {
+        let mut tree = self.parse(source)?;
+        tree.reparse_mode = Some(ReparseMode::FullParseFallback(reason));
+        tree.incremental_state =
+            Some(IncrementalState::with_diagnostics(source, tree.diagnostics()));
+        Some(tree)
     }
 }
 
@@ -144,6 +217,42 @@ impl Default for Parser {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn validated_incremental_edit(
+    old_source: &str,
+    new_source: &str,
+    edit: &InputEdit,
+) -> Option<IncrementalEdit> {
+    if edit.start_byte > edit.old_end_byte
+        || edit.old_end_byte > old_source.len()
+        || edit.new_end_byte < edit.start_byte
+        || edit.new_end_byte > new_source.len()
+        || !old_source.is_char_boundary(edit.start_byte)
+        || !old_source.is_char_boundary(edit.old_end_byte)
+        || !new_source.is_char_boundary(edit.start_byte)
+        || !new_source.is_char_boundary(edit.new_end_byte)
+    {
+        return None;
+    }
+
+    let removed = edit.old_end_byte.checked_sub(edit.start_byte)?;
+    let inserted = edit.new_end_byte.checked_sub(edit.start_byte)?;
+    let expected_len = old_source.len().checked_sub(removed)?.checked_add(inserted)?;
+    if expected_len != new_source.len() {
+        return None;
+    }
+
+    let old_prefix = old_source.get(..edit.start_byte)?;
+    let new_prefix = new_source.get(..edit.start_byte)?;
+    let old_suffix = old_source.get(edit.old_end_byte..)?;
+    let new_suffix = new_source.get(edit.new_end_byte..)?;
+    if old_prefix != new_prefix || old_suffix != new_suffix {
+        return None;
+    }
+
+    let new_text = new_source.get(edit.start_byte..edit.new_end_byte)?;
+    Some(IncrementalEdit::new(edit.start_byte, edit.old_end_byte, new_text))
 }
 
 /// A descriptor for the Perl language as parsed by the native v3 engine.
@@ -164,6 +273,7 @@ impl Default for Parser {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PerlLanguage {
     kind_names: &'static [&'static str],
+    field_names: &'static [perl_ast::FieldId],
 }
 
 impl PerlLanguage {
@@ -185,6 +295,16 @@ impl PerlLanguage {
     pub fn node_kind_is_named(&self, kind: &str) -> bool {
         self.kind_names.contains(&kind)
     }
+
+    /// Returns the stable named-field identifiers exposed by the AST.
+    pub fn field_names(&self) -> &'static [FieldId] {
+        self.field_names
+    }
+
+    /// Returns the field identifier for a canonical field name.
+    pub fn field_id_for_name(&self, name: &str) -> Option<FieldId> {
+        perl_ast::FieldId::from_name(name)
+    }
 }
 
 impl Default for PerlLanguage {
@@ -201,17 +321,129 @@ pub fn language() -> PerlLanguage {
 }
 
 /// The [`PerlLanguage`] descriptor as a constant.
-pub static LANGUAGE: PerlLanguage = PerlLanguage { kind_names: perl_ast::NodeKind::ALL_KIND_NAMES };
+pub static LANGUAGE: PerlLanguage = PerlLanguage {
+    kind_names: perl_ast::NodeKind::ALL_KIND_NAMES,
+    field_names: perl_ast::FieldId::ALL,
+};
+
+/// The operation used to produce a tree from an old tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ReparseMode {
+    /// The source was byte-identical and the old tree was reused.
+    Unchanged,
+    /// One validated edit used checkpoint-bounded token replay.
+    TokenReplay,
+    /// The source was parsed from scratch after replay was not safe or usable.
+    FullParseFallback(FallbackReason),
+}
+
+/// Why the facade used a complete parse instead of token replay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FallbackReason {
+    /// The pending [`InputEdit`] did not describe `source`.
+    InvalidEdit,
+    /// More than one pending edit was recorded on the old tree.
+    MultipleEdits,
+    /// The source changed but no pending edit was recorded on the old tree.
+    NoPendingEdit,
+    /// The lower-tier token replay kernel rejected the incremental operation.
+    TokenReplay(CoreFallbackReason),
+}
 
 /// The result of a successful parse: an owned syntax tree and the source text.
 ///
 /// Use [`root_node`][Tree::root_node] to begin traversal.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Tree {
     root: AstNode,
     source: String,
     /// Pending edits recorded via [`Tree::edit`].
     pending_edits: Vec<InputEdit>,
+    diagnostics: Vec<ParseDiagnostic>,
+    incremental_state: Option<IncrementalState>,
+    reparse_mode: Option<ReparseMode>,
+}
+
+impl PartialEq for Tree {
+    fn eq(&self, other: &Self) -> bool {
+        self.root == other.root
+            && self.source == other.source
+            && self.pending_edits == other.pending_edits
+            && self.diagnostics == other.diagnostics
+    }
+}
+
+fn tree_from_parts(root: AstNode, source: &str, diagnostics: Vec<ParseDiagnostic>) -> Tree {
+    Tree {
+        root,
+        source: source.to_string(),
+        pending_edits: Vec::new(),
+        incremental_state: None,
+        diagnostics,
+        reparse_mode: None,
+    }
+}
+
+/// The result of [`Parser::parse_detailed`].
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct ParseOutcome {
+    /// The recovered syntax tree, when parsing did not fail catastrophically.
+    pub tree: Option<Tree>,
+    /// Diagnostics collected during parsing, including recoverable errors.
+    pub diagnostics: Vec<ParseDiagnostic>,
+    /// The typed reason parsing could not produce a usable tree, if any.
+    pub failure: Option<ParseFailure>,
+}
+
+impl ParseOutcome {
+    /// Returns `true` when diagnostics or an explicit error node were observed.
+    pub fn has_error(&self) -> bool {
+        self.diagnostics.iter().any(ParseDiagnostic::blocks_clean_parse)
+            || self.tree.as_ref().is_some_and(Tree::has_error)
+    }
+
+    /// Returns `true` when a tree was produced with recovery diagnostics.
+    pub fn is_recovered(&self) -> bool {
+        self.tree.is_some() && self.has_error()
+    }
+}
+
+/// Typed catastrophic parse failures surfaced by [`Parser::parse_detailed`].
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum ParseFailure {
+    /// The parser recursion budget was exceeded.
+    RecursionLimit,
+    /// The parser's structural nesting budget was exceeded.
+    NestingTooDeep {
+        /// Observed nesting depth.
+        depth: usize,
+        /// Configured maximum nesting depth.
+        max_depth: usize,
+    },
+    /// Parsing was cancelled by the caller.
+    Cancelled,
+    /// A future or currently unclassified catastrophic failure.
+    Other {
+        /// The original parser diagnostic.
+        diagnostic: ParseDiagnostic,
+    },
+}
+
+impl ParseFailure {
+    fn from_diagnostic(diagnostic: &ParseDiagnostic) -> Option<Self> {
+        match diagnostic {
+            ParseDiagnostic::RecursionLimit => Some(Self::RecursionLimit),
+            ParseDiagnostic::NestingTooDeep { depth, max_depth } => {
+                Some(Self::NestingTooDeep { depth: *depth, max_depth: *max_depth })
+            }
+            ParseDiagnostic::Cancelled => Some(Self::Cancelled),
+            _ => Some(Self::Other { diagnostic: diagnostic.clone() }),
+        }
+    }
 }
 
 /// Experimental semantic overlay query handle.
@@ -261,6 +493,45 @@ impl Tree {
     /// Returns the source text this tree was built from.
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    /// Returns the diagnostics collected while building this tree.
+    pub fn diagnostics(&self) -> &[ParseDiagnostic] {
+        &self.diagnostics
+    }
+
+    /// Returns the operation used to produce this tree from an old tree.
+    pub fn reparse_mode(&self) -> Option<ReparseMode> {
+        self.reparse_mode
+    }
+
+    /// Returns measurements for the most recent replay or fallback operation.
+    ///
+    /// Initial parses and unchanged-source reuse return `None`, so telemetry from
+    /// a previous operation is never exposed as a no-op result.
+    pub fn incremental_metrics(&self) -> Option<&IncrementalMetrics> {
+        match self.reparse_mode {
+            Some(ReparseMode::TokenReplay | ReparseMode::FullParseFallback(_)) => {
+                self.incremental_state.as_ref().map(IncrementalState::metrics)
+            }
+            Some(ReparseMode::Unchanged) | None => None,
+        }
+    }
+
+    /// Returns the source range reprocessed by the most recent operation.
+    ///
+    /// This reports lexer work, not a structural tree difference. Initial parses
+    /// and unchanged-source reuse return an empty vector.
+    pub fn reprocessed_ranges(&self) -> Vec<Range<usize>> {
+        self.incremental_metrics()
+            .map(|metrics| vec![metrics.changed_range.clone()])
+            .unwrap_or_default()
+    }
+
+    /// Returns `true` when parsing produced diagnostics or an explicit error node.
+    pub fn has_error(&self) -> bool {
+        self.diagnostics.iter().any(ParseDiagnostic::blocks_clean_parse)
+            || ast_has_error(&self.root)
     }
 
     /// Records a source edit on this tree, invalidating affected byte ranges.
@@ -336,6 +607,7 @@ impl<'tree> SemanticOverlay<'tree> {
 ///
 /// Mirrors the tree-sitter `Node` API surface. Lifetime `'tree` is tied to the
 /// owning [`Tree`].
+#[derive(Clone, Copy)]
 pub struct Node<'tree> {
     inner: &'tree AstNode,
     tree_source: &'tree str,
@@ -366,9 +638,9 @@ impl<'tree> Node<'tree> {
     /// upstream tree-sitter Perl grammar.
     /// Error nodes use `"ERROR"` (uppercase), matching tree-sitter convention.
     ///
-    /// For most nodes the grammar name is a simple lowercase mapping. For some
-    /// nodes (e.g., operator-named `Binary`, dynamic `VariableDeclaration`) the
-    /// name depends on runtime data; this method extracts it from `to_sexp()`.
+    /// For most nodes the grammar name is an allocation-free static mapping. For
+    /// nodes whose name depends on runtime data (e.g., operator-named `Binary`
+    /// or dynamic `VariableDeclaration`), only that node's fields are inspected.
     ///
     /// # Example
     ///
@@ -381,24 +653,17 @@ impl<'tree> Node<'tree> {
     /// assert_eq!(tree.unwrap().root_node().grammar_kind(), "source_file");
     /// ```
     pub fn grammar_kind(&self) -> String {
-        // Extract the node type from the leading `(word` in the S-expression.
-        // to_sexp() always starts with `(kind_name` or just `(kind_name)`.
-        //
-        // Edge case: NodeKind::VariableWithAttributes produces a double-paren sexp
-        // of the form `((variable $ foo) (attributes :lvalue))` because it delegates
-        // the outer wrapper to the child variable's to_sexp(). In that case the sexp
-        // does not begin with `(kind_name` -- it begins with `((child_kind`. We detect
-        // this and fall back to the v3 kind_name() converted to snake_case.
-        let sexp = self.to_sexp();
-        if sexp.starts_with("((") {
-            // Double-paren form: no independent grammar kind token in the sexp.
-            // Derive a stable snake_case name from the v3 kind_name() as fallback.
-            return pascal_to_snake(self.inner.kind.kind_name());
-        }
-        let inner = sexp.trim_start_matches('(');
-        // Take up to the first space or closing paren.
-        let end = inner.find([' ', ')']).unwrap_or(inner.len());
-        inner[..end].to_string()
+        self.inner.kind.grammar_kind_name()
+    }
+
+    /// Returns `true` when this node is an explicit parser error node.
+    pub fn is_error(&self) -> bool {
+        matches!(self.inner.kind, NodeKind::Error { .. })
+    }
+
+    /// Returns `true` when this node or one of its descendants is an error node.
+    pub fn has_error(&self) -> bool {
+        ast_has_error(self.inner)
     }
 
     /// Returns a tree-sitter-compatible S-expression for this node and its subtree.
@@ -418,6 +683,42 @@ impl<'tree> Node<'tree> {
     pub fn child(&self, i: usize) -> Option<Node<'tree>> {
         ast_child_at(self.inner, i)
             .map(|child| Node { inner: child, tree_source: self.tree_source })
+    }
+
+    /// Returns the first direct child carrying the given named field.
+    ///
+    /// Unknown field names and fields absent from this node return `None`.
+    pub fn child_by_field_name(&self, name: &str) -> Option<Node<'tree>> {
+        let field = FieldId::from_name(name)?;
+        let mut found = None;
+        let _ = self.inner.try_for_each_child_with_field(|candidate, child| {
+            if candidate == Some(field) {
+                found = Some(Node { inner: child, tree_source: self.tree_source });
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        found
+    }
+
+    /// Returns all direct children carrying the given named field, in source order.
+    pub fn children_by_field_name(&self, name: &str) -> impl Iterator<Item = Node<'tree>> + '_ {
+        let field = FieldId::from_name(name);
+        let mut children = Vec::new();
+        if let Some(field) = field {
+            self.inner.for_each_child_with_field(|candidate, child| {
+                if candidate == Some(field) {
+                    children.push(Node { inner: child, tree_source: self.tree_source });
+                }
+            });
+        }
+        children.into_iter()
+    }
+
+    /// Returns the named field associated with the `index`-th direct child.
+    pub fn field_name_for_child(&self, index: usize) -> Option<&'static str> {
+        ast_child_field(self.inner, index).map(FieldId::name)
     }
 
     /// Returns an iterator over direct children.
@@ -497,7 +798,7 @@ impl<'tree> Node<'tree> {
 
 /// Re-export of [`perl_ast::NodeKind`] so callers can pattern-match node variants
 /// without a direct dependency on `perl-ast`.
-pub use perl_ast::NodeKind as PerlNodeKind;
+pub use perl_ast::{FieldId, NodeKind as PerlNodeKind};
 
 /// Stateful cursor for navigating a subtree.
 ///
@@ -624,15 +925,36 @@ fn ast_child_count(node: &AstNode) -> usize {
     count
 }
 
+fn ast_has_error(node: &AstNode) -> bool {
+    if matches!(node.kind, NodeKind::Error { .. }) {
+        return true;
+    }
+
+    node.children().iter().any(|child| ast_has_error(child))
+}
+
 #[inline]
 fn ast_child_at(node: &AstNode, index: usize) -> Option<&AstNode> {
+    ast_child_with_field(node, index).map(|(_, child)| child)
+}
+
+#[inline]
+fn ast_child_field(node: &AstNode, index: usize) -> Option<FieldId> {
+    ast_child_with_field(node, index).and_then(|(field, _)| field)
+}
+
+#[inline]
+fn ast_child_with_field(node: &AstNode, index: usize) -> Option<(Option<FieldId>, &AstNode)> {
     let mut idx = 0usize;
     let mut found = None;
-    node.for_each_child(|child| {
-        if found.is_none() && idx == index {
-            found = Some(child);
+    let _ = node.try_for_each_child_with_field(|field, child| {
+        if idx == index {
+            found = Some((field, child));
+            ControlFlow::Break(())
+        } else {
+            idx += 1;
+            ControlFlow::Continue(())
         }
-        idx += 1;
     });
     found
 }
@@ -679,20 +1001,6 @@ fn resolve_path<'tree>(root: &'tree AstNode, path: &[usize]) -> &'tree AstNode {
         }
     }
     current
-}
-
-/// Convert a PascalCase kind name (e.g. `"VariableWithAttributes"`) to snake_case
-/// (e.g. `"variable_with_attributes"`). Used as a fallback in [`Node::grammar_kind`]
-/// when the S-expression does not have a simple `(kind_name ...)` prefix.
-fn pascal_to_snake(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 4);
-    for (i, c) in s.char_indices() {
-        if c.is_uppercase() && i > 0 {
-            out.push('_');
-        }
-        out.extend(c.to_lowercase());
-    }
-    out
 }
 
 fn byte_to_point(source: &str, byte: usize) -> Point {
@@ -935,14 +1243,6 @@ mod tests {
     // Tests for grammar_kind() method
 
     #[test]
-    fn test_pascal_to_snake_helper() {
-        assert_eq!(pascal_to_snake("VariableWithAttributes"), "variable_with_attributes");
-        assert_eq!(pascal_to_snake("Program"), "program");
-        assert_eq!(pascal_to_snake("FunctionCall"), "function_call");
-        assert_eq!(pascal_to_snake("If"), "if");
-    }
-
-    #[test]
     fn test_grammar_kind_returns_source_file_for_root() {
         let mut p = Parser::new();
         let tree = must_some(p.parse("my $x = 42;"));
@@ -971,15 +1271,19 @@ mod tests {
 
     #[test]
     fn test_grammar_kind_double_paren_edge_case() {
-        // Test that grammar_kind() handles the double-paren sexp form correctly.
+        // Test that grammar_kind() remains independent of the double-paren sexp form.
         // VariableWithAttributes produces ((variable $ foo) (attributes :lvalue))
-        // and should fall back to pascal_to_snake() to derive the grammar kind.
         let mut p = Parser::new();
-        let tree = must_some(p.parse("my $x : lvalue = 42;"));
+        let tree = must_some(p.parse("my ($x : lvalue);"));
         let root = tree.root_node();
         let sexp = root.to_sexp();
-        // Verify the structure includes a my_declaration.
-        assert!(sexp.contains("my_declaration"), "sexp should include my_declaration");
+        assert!(sexp.contains("((variable"), "sexp should include the double-paren variable form");
+        let declaration =
+            must_some(root.children().find(|node| node.grammar_kind() == "my_declaration"));
+        let variable = must_some(
+            declaration.children().find(|node| node.grammar_kind() == "variable_with_attributes"),
+        );
+        assert_eq!(variable.grammar_kind(), "variable_with_attributes");
     }
 
     // Tests for PerlLanguage descriptor

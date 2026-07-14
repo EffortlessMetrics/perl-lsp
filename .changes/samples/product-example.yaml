@@ -1,0 +1,14 @@
+# Sample `product` fragment (documentation only — NOT batched).
+#
+# Samples live outside `.changes/unreleased/`, so `changie batch` never picks
+# them up. Copy the shape into a real fragment via `changie new` or by hand.
+# `cargo xtask changelog check --self-test` validates and renders these.
+project: product
+component: Developer experience
+kind: Added
+body: Adopt Changie as the PR-time release-note ledger (advisory foundation).
+time: 2026-07-10T00:00:00Z
+custom:
+  PR: "3768"
+  Slug: changie-foundation
+  Breaking: "no"

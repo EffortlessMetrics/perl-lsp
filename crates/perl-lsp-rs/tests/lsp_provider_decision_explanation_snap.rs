@@ -41,7 +41,7 @@ fn request(
         _jsonrpc: "2.0".to_string(),
         method: method.to_string(),
         params: Some(params),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((id) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(id)),
     };
     let response =
         server.handle_request(request).ok_or("expected JSON-RPC response from server")?;

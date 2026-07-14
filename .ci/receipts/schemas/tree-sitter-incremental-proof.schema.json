@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp-swarm/.ci/receipts/schemas/tree-sitter-incremental-proof.schema.json",
+  "title": "Tree-sitter Incremental Proof Receipt",
+  "description": "Deterministic fresh-vs-token-replay measurements for the Rust-native tree-sitter facade.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "captured_at",
+    "profile",
+    "git_sha",
+    "toolchain",
+    "feature_set",
+    "input_hash",
+    "token_equivalence_proof",
+    "facade_equivalence",
+    "rows",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "kind": { "const": "tree_sitter_incremental_proof" },
+    "captured_at": { "type": "string" },
+    "profile": { "enum": ["pr", "nightly", "release"] },
+    "git_sha": { "type": "string", "minLength": 7 },
+    "toolchain": { "type": "string", "minLength": 1 },
+    "feature_set": { "type": "string", "minLength": 1 },
+    "input_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "token_equivalence_proof": { "type": "string", "minLength": 1 },
+    "facade_equivalence": { "$ref": "#/$defs/facade_equivalence" },
+    "rows": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/row" } },
+    "summary": { "$ref": "#/$defs/summary" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "facade_equivalence": {
+      "type": "object",
+      "required": ["compared", "failures"],
+      "properties": {
+        "compared": { "type": "string", "minLength": 1 },
+        "failures": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "row": {
+      "type": "object",
+      "required": [
+        "fixture",
+        "edit",
+        "edit_class",
+        "document_size_bytes",
+        "edit_position_byte",
+        "iterations",
+        "fresh_p50_ns",
+        "fresh_p95_ns",
+        "replay_p50_ns",
+        "replay_p95_ns",
+        "average_reprocessed_bytes",
+        "average_tokens_reused",
+        "average_tokens_relexed",
+        "fallback_count",
+        "fallback_rate",
+        "fallback_reasons",
+        "operation_modes",
+        "reprocessed_ranges",
+        "equivalence_failures",
+        "first_equivalence_failure"
+      ],
+      "properties": {
+        "fixture": { "type": "string" },
+        "edit": { "type": "string" },
+        "edit_class": { "type": "string" },
+        "document_size_bytes": { "type": "integer", "minimum": 0 },
+        "edit_position_byte": { "type": "integer", "minimum": 0 },
+        "iterations": { "type": "integer", "minimum": 1 },
+        "fresh_p50_ns": { "type": "integer", "minimum": 0 },
+        "fresh_p95_ns": { "type": "integer", "minimum": 0 },
+        "replay_p50_ns": { "type": "integer", "minimum": 0 },
+        "replay_p95_ns": { "type": "integer", "minimum": 0 },
+        "average_reprocessed_bytes": { "type": "integer", "minimum": 0 },
+        "average_tokens_reused": { "type": "integer", "minimum": 0 },
+        "average_tokens_relexed": { "type": "integer", "minimum": 0 },
+        "fallback_count": { "type": "integer", "minimum": 0 },
+        "fallback_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fallback_reasons": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+        "operation_modes": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+        "reprocessed_ranges": { "type": "array", "items": { "$ref": "#/$defs/range" } },
+        "equivalence_failures": { "type": "integer", "minimum": 0 },
+        "first_equivalence_failure": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "range": {
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": ["rows", "iterations", "fallback_count", "fallback_rate", "equivalence_failures", "replay_p95_faster_rows"],
+      "properties": {
+        "rows": { "type": "integer", "minimum": 1 },
+        "iterations": { "type": "integer", "minimum": 1 },
+        "fallback_count": { "type": "integer", "minimum": 0 },
+        "fallback_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "equivalence_failures": { "type": "integer", "minimum": 0 },
+        "replay_p95_faster_rows": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

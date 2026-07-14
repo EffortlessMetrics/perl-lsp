@@ -3,6 +3,11 @@
 //! These tests are structured as Given/When/Then scenarios to validate
 //! end-to-end user workflows using the real JSON-RPC harness.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stderr doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stderr)]
+
 mod support;
 
 use serde_json::{Value, json};

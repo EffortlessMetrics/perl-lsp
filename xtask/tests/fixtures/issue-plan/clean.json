@@ -1,0 +1,23 @@
+[
+  {
+    "number": 924,
+    "title": "test(lsp-rs): add e2e smoke for willSaveWaitUntil",
+    "state": "OPEN",
+    "labels": [
+      { "name": "builder-ready" },
+      { "name": "plan-reviewed" },
+      { "name": "swarm-discovered" }
+    ],
+    "body": "## Problem\nMissing coverage.\n## Reproduction / example\nRun the smoke harness.\n## Suspected root area\nperl-lsp-rs tests.\n## Acceptance tests\ncargo test passes.\n## Non-goals\nNo production change.\n## Dependencies / sequencing\nNone; blocked by nothing.\n## Risk / rollback\nLOW; revert the test commit.\n## Verification notes\nVerified against main."
+  },
+  {
+    "number": 935,
+    "title": "Inline-completion codex cluster: consolidation plan",
+    "state": "OPEN",
+    "labels": [
+      { "name": "needs-plan-review" },
+      { "name": "swarm-discovered" }
+    ],
+    "body": "A research-finding consolidation plan; not a single work order."
+  }
+]

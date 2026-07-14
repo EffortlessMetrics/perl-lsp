@@ -195,6 +195,14 @@ fn missing_use_statement_violation(
         return Vec::new();
     }
 
+    // A `use Test2::V0;` (or any Test2 bundle) turns strict/warnings on for the
+    // importer unless disabled via `-no_strict` / `-no_warnings` / `-no_pragmas`.
+    // Treat that as satisfying the pragma so ordinary Test2 tests don't get a
+    // false "missing use strict/warnings" finding.
+    if crate::providers::testing::test2::Test2Facts::from_source(content).provides_pragma(feature) {
+        return Vec::new();
+    }
+
     vec![Violation {
         policy: policy.name().to_string(),
         description: format!("Code does not use {feature}"),
@@ -597,6 +605,46 @@ eval $code;
         assert!(
             violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"),
             "use strictures should not satisfy RequireUseStrict — they are different modules"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn use_test2_v0_satisfies_strict_and_warnings() -> TestResult {
+        // `use Test2::V0;` turns strict + warnings on for the importer, so an
+        // ordinary Test2 test must not trip either requirement.
+        let source = "use Test2::V0;\nok(1);\ndone_testing;\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            !violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"),
+            "use Test2::V0 should satisfy RequireUseStrict"
+        );
+        assert!(
+            !violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseWarnings"),
+            "use Test2::V0 should satisfy RequireUseWarnings"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn use_test2_v0_no_strict_reinstates_strict_requirement() -> TestResult {
+        let source = "use Test2::V0 -no_strict => 1;\nok(1);\ndone_testing;\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"),
+            "-no_strict should re-enable the strict requirement"
+        );
+        assert!(
+            !violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseWarnings"),
+            "-no_strict leaves warnings satisfied by Test2::V0"
         );
         Ok(())
     }

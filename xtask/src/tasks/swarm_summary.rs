@@ -95,25 +95,7 @@ pub fn run(config: SwarmSummaryConfig) -> Result<()> {
     let summary = summarize_metrics(&metrics_path, cutoff.as_ref())?;
 
     if matches!(config.format, SwarmSummaryOutputFormat::Json) {
-        let payload = SerializableSummary {
-            metrics_file: metrics_path.display().to_string(),
-            entries_in_file: summary.file_entries,
-            entries_matched: summary.matched_entries,
-            window: WindowSummary {
-                since: cutoff.as_ref().map(|ts| ts.to_rfc3339()),
-                first_timestamp: summary.earliest_ts.map(|ts| ts.to_rfc3339()),
-                last_timestamp: summary.latest_ts.map(|ts| ts.to_rfc3339()),
-            },
-            counts: SummaryCounts {
-                by_event: sorted_counts(&summary.by_event, config.limit),
-                by_agent_type: sorted_counts(&summary.by_agent_type, config.limit),
-                by_agent_name: sorted_counts(&summary.by_agent_name, config.limit),
-                by_session: sorted_counts(&summary.by_session, config.limit),
-                by_location: sorted_counts(&summary.by_location, config.limit),
-            },
-            recent_entries: recent_entries(&summary.recent_entries, config.limit),
-        };
-
+        let payload = serializable_summary(&metrics_path, cutoff.as_ref(), &summary, config.limit);
         println!("{}", serde_json::to_string_pretty(&payload)?);
         return Ok(());
     }
@@ -228,6 +210,32 @@ fn summarize_metrics(path: &Path, cutoff: Option<&DateTime<Utc>>) -> Result<Summ
     Ok(summary)
 }
 
+fn serializable_summary(
+    metrics_path: &Path,
+    cutoff: Option<&DateTime<Utc>>,
+    summary: &Summary,
+    limit: usize,
+) -> SerializableSummary {
+    SerializableSummary {
+        metrics_file: metrics_path.display().to_string(),
+        entries_in_file: summary.file_entries,
+        entries_matched: summary.matched_entries,
+        window: WindowSummary {
+            since: cutoff.map(|ts| ts.to_rfc3339()),
+            first_timestamp: summary.earliest_ts.map(|ts| ts.to_rfc3339()),
+            last_timestamp: summary.latest_ts.map(|ts| ts.to_rfc3339()),
+        },
+        counts: SummaryCounts {
+            by_event: sorted_counts(&summary.by_event, limit),
+            by_agent_type: sorted_counts(&summary.by_agent_type, limit),
+            by_agent_name: sorted_counts(&summary.by_agent_name, limit),
+            by_session: sorted_counts(&summary.by_session, limit),
+            by_location: sorted_counts(&summary.by_location, limit),
+        },
+        recent_entries: recent_entries(&summary.recent_entries, limit),
+    }
+}
+
 fn parse_since_spec(spec: Option<&str>) -> Result<Option<DateTime<Utc>>> {
     let Some(spec) = spec.map(str::trim).filter(|spec| !spec.is_empty()) else {
         return Ok(None);
@@ -294,11 +302,9 @@ fn recent_entries(entries: &[SummaryEntry], limit: usize) -> Vec<SummaryEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert_cmd::cargo::cargo_bin;
     use serde_json::Value as JsonValue;
     use std::fs;
     use std::io::Write;
-    use std::process::Command;
     use tempfile::{NamedTempFile, TempDir};
 
     fn sample_file() -> Result<NamedTempFile> {
@@ -360,24 +366,7 @@ mod tests {
     fn json_output_serializes_summary_shape() -> Result<()> {
         let file = sample_file()?;
         let summary = summarize_metrics(file.path(), None)?;
-        let payload = SerializableSummary {
-            metrics_file: file.path().display().to_string(),
-            entries_in_file: summary.file_entries,
-            entries_matched: summary.matched_entries,
-            window: WindowSummary {
-                since: None,
-                first_timestamp: summary.earliest_ts.map(|ts| ts.to_rfc3339()),
-                last_timestamp: summary.latest_ts.map(|ts| ts.to_rfc3339()),
-            },
-            counts: SummaryCounts {
-                by_event: sorted_counts(&summary.by_event, 10),
-                by_agent_type: sorted_counts(&summary.by_agent_type, 10),
-                by_agent_name: sorted_counts(&summary.by_agent_name, 10),
-                by_session: sorted_counts(&summary.by_session, 10),
-                by_location: sorted_counts(&summary.by_location, 10),
-            },
-            recent_entries: recent_entries(&summary.recent_entries, 10),
-        };
+        let payload = serializable_summary(file.path(), None, &summary, 10);
 
         let json = serde_json::to_string_pretty(&payload)?;
         let parsed: JsonValue = serde_json::from_str(&json)?;
@@ -389,28 +378,12 @@ mod tests {
     }
 
     #[test]
-    fn cli_json_mode_emits_machine_readable_summary() -> Result<()> {
+    fn json_mode_builds_machine_readable_summary() -> Result<()> {
         let ops_dir = sample_ops_dir()?;
-        let ops_dir_path = ops_dir
-            .path()
-            .to_str()
-            .ok_or_else(|| std::io::Error::other("ops dir path was not UTF-8"))?;
-
-        let output = Command::new(cargo_bin("xtask"))
-            .args([
-                "swarm-summary",
-                ops_dir_path,
-                "--since",
-                "all",
-                "--limit",
-                "1",
-                "--format",
-                "json",
-            ])
-            .output()?;
-
-        assert!(output.status.success(), "xtask swarm-summary failed");
-        let stdout = String::from_utf8(output.stdout)?;
+        let metrics_path = ops_dir.path().join("swarm-metrics.jsonl");
+        let summary = summarize_metrics(&metrics_path, None)?;
+        let payload = serializable_summary(&metrics_path, None, &summary, 1);
+        let stdout = serde_json::to_string_pretty(&payload)?;
         let parsed: JsonValue = serde_json::from_str(&stdout)?;
         assert_eq!(parsed["entries_in_file"], 2);
         assert_eq!(parsed["entries_matched"], 2);

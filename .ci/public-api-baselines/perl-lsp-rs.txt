@@ -46,6 +46,8 @@ pub fn perl_lsp::execute_command::ExecuteCommandProvider::execute_command(&self,
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::module_to_test_stem(&self, module_name: &str) -> alloc::string::String
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::new() -> Self
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::resolve_debug_file_path(&self, file_path: &str) -> core::result::Result<std::path::PathBuf, alloc::string::String>
+pub fn perl_lsp::execute_command::ExecuteCommandProvider::with_critic_engine(self, engine: perl_lsp_rs_core::config::CriticEngine) -> Self
+pub fn perl_lsp::execute_command::ExecuteCommandProvider::with_native_critic_config(self, profile: alloc::string::String, include: alloc::vec::Vec<alloc::string::String>, exclude: alloc::vec::Vec<alloc::string::String>, severity: u8) -> Self
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::with_workspace_config(self, config: perl_lsp_rs_core::config::WorkspaceConfig) -> Self
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::with_workspace_roots(workspace_roots: alloc::vec::Vec<std::path::PathBuf>) -> Self
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::default() -> Self

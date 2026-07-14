@@ -7,6 +7,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 pub mod version_sync;
 
@@ -23,6 +24,51 @@ pub fn binary_path(root: &Path) -> PathBuf {
         path.set_extension(std::env::consts::EXE_EXTENSION);
     }
     path
+}
+
+/// Returns `true` if `path` should be treated as a Rust source file.
+///
+/// A file is a Rust source only when it has a `.rs` extension.  Files with no
+/// extension (e.g. `README`, `Makefile`, `LICENSE`) and files with any other
+/// extension (e.g. `.toml`, `.md`) return `false` and are excluded from
+/// Rust-source walks.
+///
+/// This is the canonical include-predicate used by all Rust-source walks in the
+/// CI hygiene tool.  Using a positive include test (`ext == "rs"`) rather than a
+/// negative skip test (`ext != "rs"`) avoids the subtle bug where
+/// `is_some_and(|ext| ext != "rs")` returns `false` for extensionless files,
+/// accidentally admitting them into the walk.
+#[must_use]
+pub fn is_rust_source_file(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "rs")
+}
+
+/// Walk `root` recursively and return the paths of all `.rs` files found.
+///
+/// Non-file entries (directories, symlinks) and files that do not have a `.rs`
+/// extension — including extensionless files like `README`, `Makefile`, and
+/// `LICENSE` — are silently excluded.
+///
+/// This is the canonical directory walker used by all Rust-source scans in the
+/// CI hygiene tool.  Using [`is_rust_source_file`] as the include predicate here
+/// ensures every walk site enforces the same extension check, and the check is
+/// covered by `--lib` tests even though the individual walk functions live in the
+/// binary entry point.
+#[must_use]
+pub fn walk_rs_files(root: &Path) -> Vec<PathBuf> {
+    WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let path = entry.path();
+            if entry.file_type().is_file() && is_rust_source_file(path) {
+                Some(path.to_path_buf())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 /// Collect the `Cargo.toml` plus every Rust source file shipped by this crate,
@@ -316,6 +362,106 @@ mod tests {
         assert!(contains_path(&paths, Path::new("crates/perl-ci-hygiene/src/main.rs")));
         assert!(contains_path(&paths, Path::new("crates/perl-ci-hygiene/src/process.rs")));
         assert!(contains_path(&paths, Path::new("crates/perl-ci-hygiene/src/commands/mod.rs")));
+
+        fs::remove_dir_all(&root)?;
+        Ok(())
+    }
+
+    /// Regression guard for #2074: extensionless files (README, Makefile, LICENSE)
+    /// must NOT be included in Rust-source walks.
+    ///
+    /// Before the fix, `is_some_and(|ext| ext != "rs")` was used as a skip
+    /// predicate: it returns `false` for extensionless files, so they slipped
+    /// through into the Rust-source walk.  The correct predicate is a positive
+    /// inclusion test: `is_some_and(|ext| ext == "rs")`.
+    #[test]
+    fn is_rust_source_file_excludes_extensionless_files() -> Result<(), Box<dyn Error>> {
+        use super::is_rust_source_file;
+        use std::path::Path;
+
+        // Must include .rs files.
+        assert!(
+            is_rust_source_file(Path::new("lib.rs")),
+            "lib.rs must be included as a Rust source"
+        );
+        assert!(
+            is_rust_source_file(Path::new("src/main.rs")),
+            "src/main.rs must be included as a Rust source"
+        );
+
+        // Must exclude extensionless files (#2074 regression guard).
+        assert!(
+            !is_rust_source_file(Path::new("README")),
+            "README (no extension) must not be treated as a Rust source"
+        );
+        assert!(
+            !is_rust_source_file(Path::new("Makefile")),
+            "Makefile (no extension) must not be treated as a Rust source"
+        );
+        assert!(
+            !is_rust_source_file(Path::new("LICENSE")),
+            "LICENSE (no extension) must not be treated as a Rust source"
+        );
+
+        // Must exclude other-extension files.
+        assert!(
+            !is_rust_source_file(Path::new("Cargo.toml")),
+            "Cargo.toml must not be treated as a Rust source"
+        );
+        assert!(
+            !is_rust_source_file(Path::new("script.py")),
+            "script.py must not be treated as a Rust source"
+        );
+        Ok(())
+    }
+
+    /// Regression guard for #2074: `walk_rs_files` must return only `.rs` files.
+    ///
+    /// Exercises the `else { None }` branch of `walk_rs_files` with extensionless
+    /// files (`README`, `Makefile`, `LICENSE`) and non-`.rs` files (`Cargo.toml`,
+    /// `build.sh`), confirming those are excluded and only `.rs` files are returned.
+    #[test]
+    fn walk_rs_files_excludes_extensionless_and_non_rs_files() -> Result<(), Box<dyn Error>> {
+        use super::walk_rs_files;
+
+        let root = unique_temp_repo_dir("walk-rs-files")?;
+
+        // Create .rs files that must be included.
+        let src = root.join("src");
+        fs::create_dir_all(&src)?;
+        fs::write(src.join("main.rs"), "fn main() {}")?;
+        fs::write(src.join("lib.rs"), "")?;
+
+        // Create extensionless files that must be excluded (#2074 regression guard).
+        fs::write(root.join("README"), "readme text")?;
+        fs::write(root.join("Makefile"), "all:\n\t@echo ok")?;
+        fs::write(root.join("LICENSE"), "")?;
+
+        // Create other-extension files that must be excluded.
+        fs::write(root.join("Cargo.toml"), "[package]\nname = \"test\"")?;
+        fs::write(root.join("build.sh"), "#!/bin/bash")?;
+
+        let rs_files = walk_rs_files(&root);
+
+        assert_eq!(
+            rs_files.len(),
+            2,
+            "only main.rs and lib.rs should be returned; got: {rs_files:?}"
+        );
+        assert!(rs_files.iter().any(|p| p.ends_with("main.rs")), "main.rs must be included");
+        assert!(rs_files.iter().any(|p| p.ends_with("lib.rs")), "lib.rs must be included");
+        assert!(
+            !rs_files.iter().any(|p| p.ends_with("README")),
+            "README must not be included (extensionless — #2074)"
+        );
+        assert!(
+            !rs_files.iter().any(|p| p.ends_with("Makefile")),
+            "Makefile must not be included (extensionless — #2074)"
+        );
+        assert!(
+            !rs_files.iter().any(|p| p.ends_with("Cargo.toml")),
+            "Cargo.toml must not be included"
+        );
 
         fs::remove_dir_all(&root)?;
         Ok(())

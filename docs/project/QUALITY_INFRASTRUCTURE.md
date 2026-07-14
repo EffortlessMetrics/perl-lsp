@@ -67,7 +67,7 @@ Purpose: catch subtle issues and track metrics over time. Non-blocking but track
 - SemVer compatibility checks (cargo-semver-checks against last release tag)
 - Tautology detection (catches `assert!(true)` and similar vacuous assertions)
 
-The nightly tier runs on schedule at 3 AM UTC and can be triggered on-demand via labels (`ci:mutation`, `ci:bench`, `ci:coverage`) or workflow dispatch.
+The nightly tier runs on schedule at 3 AM UTC and can be triggered on-demand via labels (`ci:mutation`, `ci:bench`) or workflow dispatch. Coverage diagnostics run only on schedule or workflow dispatch.
 
 ### The Escape Hatch System
 

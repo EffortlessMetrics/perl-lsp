@@ -454,7 +454,33 @@ mod tests {
         let provider = RenameProvider::new(&ast, code.to_string());
         assert!(validate_name("", SymbolKind::scalar(), &provider.symbol_table).is_err());
         assert!(validate_name("123abc", SymbolKind::scalar(), &provider.symbol_table).is_err());
-        assert!(validate_name("my", SymbolKind::scalar(), &provider.symbol_table).is_err());
+        // Variables may use keyword names: Perl permits `$my`, `$if`, `$while`, etc.
+        assert!(validate_name("my", SymbolKind::scalar(), &provider.symbol_table).is_ok());
+        assert!(validate_name("if", SymbolKind::scalar(), &provider.symbol_table).is_ok());
+        assert!(validate_name("while", SymbolKind::scalar(), &provider.symbol_table).is_ok());
+        // Subroutines must not use keyword names: `sub if { }` is a Perl syntax error.
+        assert!(validate_name("if", SymbolKind::Subroutine, &provider.symbol_table).is_err());
+        let err =
+            validate_name("while", SymbolKind::Subroutine, &provider.symbol_table).unwrap_err();
+        assert!(
+            err.contains("reserved") || err.contains("keyword"),
+            "error should mention 'reserved' or 'keyword', got: {err}"
+        );
+        // Callable kinds get the subroutine-specific message (is_callable arm).
+        let sub_err =
+            validate_name("if", SymbolKind::Subroutine, &provider.symbol_table).unwrap_err();
+        assert!(
+            sub_err.contains("subroutine names cannot be keywords"),
+            "callable rename to keyword should use the subroutine message, got: {sub_err}"
+        );
+        // Namespace kinds (Package) reject keyword names via the generic arm — neither
+        // variable nor callable, so this exercises the `else` branch of the keyword guard.
+        let pkg_err = validate_name("if", SymbolKind::Package, &provider.symbol_table).unwrap_err();
+        assert!(
+            pkg_err.contains("reserved keyword"),
+            "package rename to keyword should be rejected via the generic arm, got: {pkg_err}"
+        );
+        assert!(validate_name("for", SymbolKind::Constant, &provider.symbol_table).is_err());
         assert!(validate_name("test-var", SymbolKind::scalar(), &provider.symbol_table).is_err());
         assert!(validate_name("valid_name", SymbolKind::scalar(), &provider.symbol_table).is_ok());
         assert!(validate_name("_private", SymbolKind::scalar(), &provider.symbol_table).is_ok());

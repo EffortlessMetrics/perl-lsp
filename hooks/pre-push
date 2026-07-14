@@ -11,7 +11,9 @@
 #   * Urgent fixes during incident response, when the gate has a known bug
 #     being tracked (see hint output below for issue numbers).
 #   * The hook is failing for an environmental reason that is out of band of
-#     your change (e.g., nix store cache miss, transient toolchain issue).
+#     your change (e.g., nix store cache miss, transient toolchain issue,
+#     `cargo xtask change-set` reporting NOT PROVEN because origin/main is
+#     unreachable — see issue #3985).
 #
 # NOT OK to bypass:
 #   * "I just don't want to wait."
@@ -89,11 +91,36 @@ SINGLE_CRATE_NAMES=""
 SINGLE_CRATE_ALL_UNDER_CRATES=true
 for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
     read -r _local_ref local_sha _remote_ref remote_sha <<< "$line"
-    # For new branches, compare against merge-base with origin/master
     if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-        remote_sha="$(git merge-base "$local_sha" origin/master 2>/dev/null || echo "$local_sha")"
+        # New branch: there is no known remote SHA to diff against. Resolve
+        # the changed-path set through the single shared #3985 change_set
+        # resolver (`cargo xtask change-set` — main-first: origin/main,
+        # main, HEAD~1; never origin/master, which does not exist on this
+        # remote) instead of a second shell base-resolution algorithm.
+        #
+        # The former fallback here was
+        #   git merge-base "$local_sha" origin/master 2>/dev/null || echo "$local_sha"
+        # which always failed (origin/master is absent on this remote) and
+        # silently fell back to comparing "$local_sha" against itself —
+        # an empty self-diff for every new-branch push (issue #3985
+        # Slice 3A: the pre-push affected-proof was silently degrading to
+        # the broadest/full gate for every new branch instead of running
+        # the intended targeted proof against the real diff).
+        if ! CHANGED_FILES="$(cargo xtask change-set --base auto --head "$local_sha" --format paths)"; then
+            echo ""
+            echo "❌ NOT PROVEN: could not resolve the change set for this new-branch push."
+            echo "   'cargo xtask change-set' failed to resolve a canonical base ref"
+            echo "   (see the error above — e.g. origin/main unreachable, no network, or"
+            echo "   another git error). Refusing to silently treat this as an empty"
+            echo "   change set and skip the affected-scope proof."
+            echo "   Fix the underlying git/network issue, or bypass with:"
+            echo "   git push --no-verify (only for a genuinely environmental failure —"
+            echo "   see the bypass policy at the top of this file)."
+            exit 1
+        fi
+    else
+        CHANGED_FILES="$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null || true)"
     fi
-    CHANGED_FILES="$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null || true)"
     if [ -n "$CHANGED_FILES" ]; then
         HAS_DIFFABLE_REF=true
     fi

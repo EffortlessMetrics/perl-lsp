@@ -488,8 +488,13 @@ mod tests {
     fn build_effective_inc_roots_labels_perl5lib_paths() {
         let perl5lib_path = "/home/user/perl5/lib/perl5".to_string();
         let include_paths = vec![perl5lib_path.clone(), "lib".to_string()];
-        let roots =
-            build_effective_inc_roots(&include_paths, &[perl5lib_path.clone()], true, &[], &[]);
+        let roots = build_effective_inc_roots(
+            &include_paths,
+            std::slice::from_ref(&perl5lib_path),
+            true,
+            &[],
+            &[],
+        );
 
         assert_eq!(roots.len(), 2);
         assert_eq!(roots[0].path, PathBuf::from(&perl5lib_path));
@@ -1154,7 +1159,7 @@ use Overlay::OpenDoc;
         let result = server.resolve_module_path("Evil::Hack", Some(&doc_text));
         // The result must not be the outside module path.
         assert!(
-            result.as_ref().map_or(true, |p| p != &outside_module),
+            result.as_ref() != Some(&outside_module),
             "absolute outside-workspace use lib path should not resolve the outside module, \
              got: {result:?}"
         );

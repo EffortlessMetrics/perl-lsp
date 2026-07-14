@@ -1,0 +1,25 @@
+[
+  {
+    "id": "PRRT_reviewer_fix_2",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/handlers/def.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "author": {
+            "login": "alice"
+          },
+          "body": "This looks wrong for the trailing-edge case."
+        },
+        {
+          "author": {
+            "login": "alice"
+          },
+          "body": "Fixed it myself while I was in there.\n\n<!-- disposition:v1 {\"v\":1,\"class\":\"fixed\",\"thread_id\":\"PRRT_reviewer_fix_2\",\"by\":\"alice\",\"head\":\"8888888888888888888888888888888888888888\",\"evidence\":{\"commit\":\"8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f\"}} -->"
+        }
+      ]
+    }
+  }
+]

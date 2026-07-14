@@ -113,7 +113,7 @@ fn doctor_reports_workspace_setup() -> Result<(), Box<dyn std::error::Error>> {
             "  Read-only CLI report. It does not start the LSP, mutate config, scan the workspace, or apply editor-specific settings."
         )
     );
-    assert_eq!(stdout.ends_with('\n'), true);
+    assert!(stdout.ends_with('\n'));
     assert_eq!(
         stdout
             .matches(&format!(
@@ -291,4 +291,138 @@ fn trailing_files_without_check_flag_errors() {
     // Trailing file arguments should require --check
     let mut cmd = cargo_bin_cmd!("perl-lsp");
     cmd.arg("somefile.pl").assert().failure();
+}
+
+/// End-to-end CLI check for the `--ripr-facts` subcommand: the `perl-lsp`
+/// binary parses a workspace, writes a `ripr-perl-facts-v1` packet to the
+/// requested path, and the packet is schema-shaped and deterministic. The
+/// emitter's fact extraction is covered by `perl-ripr-facts`'s own lib tests;
+/// this proves the binary → `run_ripr_facts` → written-file production chain,
+/// which no `--lib` test exercises (#3293 final slice).
+#[test]
+fn ripr_facts_emits_schema_valid_deterministic_packet() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    std::fs::create_dir_all(dir.path().join("lib"))?;
+    std::fs::create_dir_all(dir.path().join("t"))?;
+    std::fs::write(
+        dir.path().join("lib/Calc.pm"),
+        "package Calc;\nuse strict;\nuse warnings;\n\nsub add {\n    my ($x, $y) = @_;\n    return $x + $y;\n}\n\n1;\n",
+    )?;
+    std::fs::write(
+        dir.path().join("t/calc.t"),
+        "use strict;\nuse warnings;\nuse Test::More;\nuse Calc;\n\nis(Calc::add(2, 3), 5, 'add works');\n\ndone_testing();\n",
+    )?;
+
+    // `--ripr-root` and `--ripr-out` must both be repo-relative; the tool
+    // resolves them against the working directory, so run from the fixture root.
+    let run = |out: &str| -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = cargo_bin_cmd!("perl-lsp");
+        cmd.current_dir(dir.path())
+            .args(["--ripr-facts", "--ripr-root", ".", "--ripr-out", out])
+            .assert()
+            .success();
+        Ok(())
+    };
+    run("out1.json")?;
+    run("out2.json")?;
+
+    let packet_bytes = std::fs::read(dir.path().join("out1.json"))?;
+    let second_bytes = std::fs::read(dir.path().join("out2.json"))?;
+    assert_eq!(
+        packet_bytes, second_bytes,
+        "two runs over identical inputs must produce byte-identical packets"
+    );
+
+    let packet: serde_json::Value = serde_json::from_slice(&packet_bytes)?;
+    let obj = packet.as_object().ok_or("packet is not a JSON object")?;
+
+    // The schema is `additionalProperties:false` with all 17 top-level
+    // properties required, so the packet's key set must be *exactly* these 17 —
+    // assert both directions (every required key present AND no extras) so an
+    // accidental extra top-level field is caught as the schema violation it is.
+    let required_keys = [
+        "schema_version",
+        "packet_id",
+        "packet_status",
+        "packet_fingerprint",
+        "producer",
+        "root",
+        "input",
+        "files",
+        "owners",
+        "changes",
+        "tests",
+        "oracles",
+        "relations",
+        "dynamic_boundaries",
+        "verify_commands",
+        "limitations",
+        "provenance",
+    ];
+    for key in required_keys {
+        assert!(obj.contains_key(key), "packet is missing required key `{key}`");
+    }
+    let actual_keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+    assert_eq!(
+        obj.len(),
+        required_keys.len(),
+        "packet has unexpected top-level keys (schema is additionalProperties:false); \
+         required {required_keys:?}, got {actual_keys:?}"
+    );
+
+    assert_eq!(packet["schema_version"], "ripr-perl-facts-v1");
+
+    // The fingerprint is a non-null SHA-256 digest, not the old `null` placeholder.
+    let fingerprint =
+        packet["packet_fingerprint"].as_str().ok_or("packet_fingerprint is not a string")?;
+    assert!(
+        fingerprint.starts_with("sha256:"),
+        "packet_fingerprint should be a sha256 digest, got `{fingerprint}`"
+    );
+    assert_eq!(
+        fingerprint.len(),
+        "sha256:".len() + 64,
+        "packet_fingerprint should contain a full SHA-256 hex digest"
+    );
+    assert!(
+        fingerprint["sha256:".len()..].bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "packet_fingerprint should contain only hexadecimal characters"
+    );
+
+    // The `.pm` and `.t` files were discovered as facts.
+    let files = packet["files"].as_array().ok_or("files is not an array")?;
+    assert!(!files.is_empty(), "files[] should not be empty for a parsed workspace");
+
+    // The fixture was actually *parsed*, not merely read: owners come only from
+    // successfully-parsed symbol declarations (a parse failure emits the file
+    // fact with zero owners plus a `parse_failure` limitation), so a non-empty
+    // owners[] carrying the fixture's `Calc` package proves the parser produced
+    // semantic facts — file discovery alone would leave owners[] empty.
+    let owners = packet["owners"].as_array().ok_or("owners is not an array")?;
+    let owner_names: Vec<&str> = owners.iter().filter_map(|o| o["name"].as_str()).collect();
+    assert!(
+        owner_names.contains(&"Calc"),
+        "owners[] should contain the parsed `Calc` package declaration, got {owner_names:?}"
+    );
+
+    Ok(())
+}
+
+/// The `--ripr-out` path is validated as repo-relative; an absolute path is
+/// rejected with a clear error and a non-zero exit, and no file is written.
+#[test]
+fn ripr_facts_rejects_absolute_out_path() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let abs_out = dir.path().join("packet.json");
+    let abs_out_str = abs_out.to_str().ok_or("non-UTF-8 temp path")?;
+
+    let mut cmd = cargo_bin_cmd!("perl-lsp");
+    cmd.current_dir(dir.path())
+        .args(["--ripr-facts", "--ripr-root", ".", "--ripr-out", abs_out_str])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("must be repo-relative"));
+
+    assert!(!abs_out.exists(), "no packet should be written when the out path is rejected");
+    Ok(())
 }

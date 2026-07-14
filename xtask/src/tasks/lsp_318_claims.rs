@@ -78,10 +78,6 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
         marker: "initialize_does_not_advertise_unimplemented_318_capabilities",
     },
     RequiredMarker {
-        label: "semantic token delta negative route",
-        marker: "semantic_tokens_delta_request_returns_method_not_found",
-    },
-    RequiredMarker {
         label: "CompletionList.applyKind gate",
         marker: "completion_response_does_not_emit_apply_kind_without_client_support",
     },
@@ -305,11 +301,6 @@ const CAPABILITY_ABSENCE_CHECKS: &[JsonAbsenceCheck] = &[
         reason: "inline completion is a standard top-level LSP 3.18 capability",
     },
     JsonAbsenceCheck {
-        pointer: "/semanticTokensProvider/full/delta",
-        label: "semantic-token delta",
-        reason: "delta requires resultId state and real delta responses",
-    },
-    JsonAbsenceCheck {
         pointer: "/completionProvider/applyKind",
         label: "CompletionList.applyKind",
         reason: "applyKind is a CompletionList response field, not an initialize server capability",
@@ -340,7 +331,6 @@ const RAW_SNAPSHOT_PATTERNS: &[RawPatternCheck] = &[
         needle: "experimental.inlineCompletionProvider",
         label: "experimental inline-completion provider snapshot",
     },
-    RawPatternCheck { needle: "\"delta\": true", label: "semantic-token delta snapshot" },
     RawPatternCheck { needle: "applyKind:", label: "CompletionList.applyKind snapshot" },
     RawPatternCheck { needle: "\"applyKind\"", label: "CompletionList.applyKind JSON snapshot" },
 ];
@@ -363,10 +353,6 @@ const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
     RawPatternCheck {
         needle: "experimental.inlineCompletionProvider",
         label: "experimental inline-completion provider feature claim",
-    },
-    RawPatternCheck {
-        needle: "semanticTokens/full/delta",
-        label: "semantic-token delta feature claim",
     },
     RawPatternCheck { needle: "CodeAction.tags", label: "CodeAction.tags feature claim" },
     RawPatternCheck { needle: "Command.tooltip", label: "Command.tooltip feature claim" },

@@ -163,6 +163,7 @@ fn item_kind_name(kind: &HirKind) -> &'static str {
         HirKind::LoopShell(_) => "LoopShell",
         HirKind::StatementModifierShell(_) => "StatementModifierShell",
         HirKind::ControlTransfer(_) => "ControlTransfer",
+        HirKind::DerefExpr(_) => "DerefExpr",
         HirKind::DynamicBoundary(_) => "DynamicBoundary",
         // Catch-all for any variants added in future HIR model versions.
         _ => "Unknown",
@@ -326,6 +327,32 @@ mod tests {
         assert_eq!(entry.source_hash, source_hash(src));
         // The lowerer must produce at least one item (PackageDecl or SubDecl).
         assert!(entry.hir_summary.item_count > 0, "expected HIR items from non-trivial source");
+    }
+
+    #[test]
+    fn snapshot_names_typed_dereference_items() {
+        let tmp = TempDir::new().expect("tempdir");
+        let src = "my @arr = @{\"foo\"};\n";
+        write_fixture(tmp.path(), "deref.pl", src);
+
+        let out = tmp.path().join("snapshot.json");
+        run(GenerateSemanticSnapshotArgs {
+            fixture_dir: tmp.path().to_owned(),
+            output: out.clone(),
+            check: false,
+        })
+        .expect("generate should succeed");
+
+        let json = fs::read_to_string(&out).expect("read output");
+        let manifest: SnapshotManifest = serde_json::from_str(&json).expect("deserialize manifest");
+        assert!(
+            manifest.entries[0]
+                .hir_summary
+                .item_kind_sequence
+                .iter()
+                .any(|kind| kind == "DerefExpr"),
+            "typed dereference items must have a stable snapshot name"
+        );
     }
 
     #[test]

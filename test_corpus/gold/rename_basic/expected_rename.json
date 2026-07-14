@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "fixture": "rename_basic",
+  "assertions": [
+    {
+      "kind": "rename_succeeds",
+      "line": 5,
+      "character": 7,
+      "new_name": "$total",
+      "rationale": "rename on $count declaration (line 5, char 7 = '$' in $count) must return a WorkspaceEdit"
+    },
+    {
+      "kind": "rename_edit_count_at_least",
+      "min": 3,
+      "line": 5,
+      "character": 7,
+      "new_name": "$total",
+      "rationale": "$count appears at declaration + $count++ + print + return — at least 3 edits"
+    }
+  ]
+}

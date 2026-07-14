@@ -3,6 +3,11 @@
 //! Verifies that the LSP server correctly reports all collected parse errors
 //! from a single parse pass, not just the first error encountered.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stderr doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stderr)]
+
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
@@ -15,7 +20,7 @@ fn test_451_lsp_reports_multiple_parse_errors() -> Result<(), Box<dyn std::error
     // Initialize server with diagnostic support
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -69,7 +74,7 @@ my $c = ;       # Error 3: missing expression
     // Request pull diagnostics to get all errors
     let diagnostic_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri }
@@ -118,7 +123,7 @@ fn test_451_lsp_reports_errors_in_nested_blocks() -> Result<(), Box<dyn std::err
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -171,7 +176,7 @@ while (1) {
 
     let diagnostic_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri }
@@ -202,7 +207,7 @@ fn test_451_lsp_respects_error_limit() -> Result<(), Box<dyn std::error::Error>>
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -243,7 +248,7 @@ fn test_451_lsp_respects_error_limit() -> Result<(), Box<dyn std::error::Error>>
 
     let diagnostic_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri }

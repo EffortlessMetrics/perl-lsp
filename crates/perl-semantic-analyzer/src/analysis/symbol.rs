@@ -25,11 +25,21 @@
 //! ```
 
 use crate::SourceLocation;
-use crate::ast::{Node, NodeKind};
+use crate::ast::{GotoTargetForm, Node, NodeKind};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
+/// Real subs in `package UNIVERSAL` per perldoc.perl.org/UNIVERSAL: `isa`,
+/// `can`, `DOES`, `VERSION`. Consumers use this to decide whether a
+/// `UNIVERSAL::<name>` fallback location/hover is a real fact.
+///
+/// `DESTROY` and `AUTOLOAD` are intentionally excluded — per perlobj they
+/// are interpreter special-method hooks, not subs shipped in `UNIVERSAL`.
+/// There is no `UNIVERSAL::DESTROY` or `UNIVERSAL::AUTOLOAD` to resolve to,
+/// so callers must not fall back to a `UNIVERSAL::<name>` location/hover
+/// claim for them (see `crate::analysis::semantic::mod` and
+/// `crate::analysis::declaration` fallback sites).
 const UNIVERSAL_METHODS: [&str; 4] = ["can", "isa", "DOES", "VERSION"];
 
 // Re-export the unified symbol types from perl-symbol
@@ -284,6 +294,37 @@ impl SymbolTable {
         }
         let name = reference.name.clone();
         self.references.entry(name).or_default().push(reference);
+    }
+
+    /// Find the innermost lexical scope whose source range contains `offset`.
+    ///
+    /// Scopes are pushed with the [`SourceLocation`] of the AST node that
+    /// opens them (subroutine, block, package, etc.), so a scope's range
+    /// always fully covers the ranges of any scopes nested inside it. The
+    /// scope with the greatest `location.start` that still contains
+    /// `offset` is therefore the most specific (innermost) enclosing scope.
+    ///
+    /// The start boundary is inclusive (`offset == location.start` matches)
+    /// and the end boundary is exclusive (`offset == location.end` does
+    /// not), so a scope covers `[start, end)`.
+    ///
+    /// Invariant: when two or more scopes share the same `location.start`,
+    /// the tie is broken by `id`. Scope IDs are assigned in monotonically
+    /// increasing, strictly nested push order (see [`Self::push_scope`]), so
+    /// a child scope always has a greater `id` than its parent. Ranking by
+    /// `(location.start, id)` therefore always selects the innermost scope
+    /// among same-start candidates, never an outer sibling or ancestor.
+    ///
+    /// Falls back to the global scope (`0`) when no scope's range contains
+    /// `offset` -- e.g. top-level, package-scope code before any block or
+    /// subroutine opens.
+    pub fn scope_at_offset(&self, offset: usize) -> ScopeId {
+        self.scopes
+            .values()
+            .filter(|scope| scope.location.start <= offset && offset < scope.location.end)
+            .max_by_key(|scope| (scope.location.start, scope.id))
+            .map(|scope| scope.id)
+            .unwrap_or(0)
     }
 
     /// Find symbol definitions visible from a given scope for Navigate/Analyze workflows.
@@ -710,6 +751,34 @@ impl SymbolExtractor {
 
             // Handle other node types by visiting children
             NodeKind::Assignment { lhs, rhs, .. } => {
+                // Cross-construct sub resolver (#3108): `*foo = sub { ... }` creates a
+                // callable named `foo`.  Synthesize a Subroutine symbol so workspace-index
+                // cross-file lookup can find it even without an explicit `sub foo {}`.
+                if let NodeKind::Typeglob { name: glob_name } = &lhs.kind {
+                    if matches!(rhs.kind, NodeKind::Subroutine { .. }) {
+                        let bare = glob_name.rsplit("::").next().unwrap_or(glob_name.as_str());
+                        if !bare.is_empty() {
+                            // For `*Pkg::foo = sub {}` use the package from the glob name;
+                            // for unqualified `*foo = sub {}` (or `*::foo` where "::"
+                            // is shorthand for "main::") fall back to the current package.
+                            let pkg = match glob_name.rfind("::") {
+                                Some(pos) if pos > 0 => &glob_name[..pos],
+                                _ => self.table.current_package.as_str(),
+                            };
+                            let sym = Symbol {
+                                name: bare.to_string(),
+                                qualified_name: format!("{pkg}::{bare}"),
+                                kind: SymbolKind::Subroutine,
+                                location: node.location,
+                                scope_id: self.table.current_scope(),
+                                declaration: None,
+                                documentation: None,
+                                attributes: vec![],
+                            };
+                            self.table.add_symbol(sym);
+                        }
+                    }
+                }
                 // Mark LHS as write reference
                 self.mark_write_reference(lhs);
                 self.visit_node(lhs);
@@ -989,26 +1058,53 @@ impl SymbolExtractor {
                 self.visit_node(variable);
             }
 
-            NodeKind::Goto { target } => match &target.kind {
-                NodeKind::Identifier { name } => {
-                    self.table.add_reference(SymbolReference {
-                        name: name.clone(),
-                        kind: SymbolKind::Label,
-                        location: target.location,
-                        scope_id: self.table.current_scope(),
-                        is_write: false,
-                    });
+            NodeKind::Goto { target, form } => match form {
+                GotoTargetForm::Label => {
+                    // goto LABEL — record the label as a reference for jump-to-definition.
+                    if let NodeKind::Identifier { name } = &target.kind {
+                        self.table.add_reference(SymbolReference {
+                            name: name.clone(),
+                            kind: SymbolKind::Label,
+                            location: target.location,
+                            scope_id: self.table.current_scope(),
+                            is_write: false,
+                        });
+                    } else {
+                        self.visit_node(target);
+                    }
                 }
-                NodeKind::Variable { sigil, name } if sigil == "&" => {
-                    self.table.add_reference(SymbolReference {
-                        name: name.clone(),
-                        kind: SymbolKind::Subroutine,
-                        location: target.location,
-                        scope_id: self.table.current_scope(),
-                        is_write: false,
-                    });
+                GotoTargetForm::Sub => {
+                    // goto &sub — frame replacement (tail call); record a subroutine reference
+                    // so that find-references and call-hierarchy can trace the tail-call edge.
+                    // The target may be:
+                    //   - FunctionCall { name: "foo", .. } for goto &foo or goto &Pkg::bar
+                    //   - FunctionCall { name: "$dispatch", .. } for goto &$var (NOT a subroutine ref)
+                    //   - Unary { op: "&{}", .. } for goto &{ code } (NOT a subroutine ref)
+                    // Only record a subroutine reference for FunctionCall with a plain name
+                    // (no leading sigil), which indicates a real named subroutine.
+                    match &target.kind {
+                        NodeKind::FunctionCall { name, .. }
+                            if !name.is_empty() && !name.starts_with(['$', '@', '%']) =>
+                        {
+                            // Real named subroutine: goto &foo or goto &Pkg::bar
+                            self.table.add_reference(SymbolReference {
+                                name: name.clone(),
+                                kind: SymbolKind::Subroutine,
+                                location: target.location,
+                                scope_id: self.table.current_scope(),
+                                is_write: false,
+                            });
+                        }
+                        // goto &$var or goto &{ code }: not a named subroutine reference,
+                        // but visit the target to record variable uses or other references
+                        _ => self.visit_node(target),
+                    }
                 }
-                _ => self.visit_node(target),
+                GotoTargetForm::Expr => {
+                    // goto $expr / goto EXPR — dynamic target; recurse to analyse
+                    // any sub-expressions (variable uses, method calls, etc.).
+                    self.visit_node(target);
+                }
             },
 
             // Regex related nodes - we recurse into expression
@@ -2877,7 +2973,7 @@ impl SymbolExtractor {
                 NodeKind::MandatoryParameter { variable } => variable.as_ref(),
                 NodeKind::OptionalParameter { variable, .. } => variable.as_ref(),
                 NodeKind::SlurpyParameter { variable } => variable.as_ref(),
-                NodeKind::NamedParameter { variable } => variable.as_ref(),
+                NodeKind::NamedParameter { variable, .. } => variable.as_ref(),
                 // Unexpected node kind inside a signature — skip gracefully
                 _ => continue,
             };
@@ -3468,6 +3564,278 @@ mod tests {
     use crate::parser::Parser;
     use perl_tdd_support::{must, must_some};
 
+    /// DESTROY/AUTOLOAD are interpreter special-method hooks (perlobj), not
+    /// real `UNIVERSAL::` subs (perldoc.perl.org/UNIVERSAL lists exactly
+    /// `isa`, `can`, `DOES`, `VERSION`). `is_universal_method` must reject
+    /// them so callers don't fabricate a `UNIVERSAL::DESTROY` /
+    /// `UNIVERSAL::AUTOLOAD` goto-def/hover fact that doesn't exist.
+    #[test]
+    fn destroy_and_autoload_are_not_universal_methods() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(!is_universal_method("DESTROY"));
+        assert!(!is_universal_method("AUTOLOAD"));
+        assert!(is_universal_method("can"));
+        assert!(is_universal_method("isa"));
+        assert!(is_universal_method("DOES"));
+        assert!(is_universal_method("VERSION"));
+        assert!(!is_universal_method("new"));
+        Ok(())
+    }
+
+    #[test]
+    fn extract_leading_comment_boundary_discriminator() {
+        let extractor = SymbolExtractor::new_with_source("# docs\nsub foo {}");
+
+        assert_eq!(
+            extractor.extract_leading_comment(0),
+            None,
+            "input that hits the boundary: start == 0"
+        );
+    }
+
+    /// Focused discriminator coverage for the three visibility boundaries in
+    /// `SymbolTable::find_symbol`: the direct-scope match filters on both
+    /// `symbol.scope_id == scope_id` and `symbol.kind == kind`, and the
+    /// `our`-variable fallback only fires for `scope.kind != ScopeKind::Package`.
+    /// Built by hand (not via extraction) so each boundary is exercised in
+    /// isolation without a brittle total-result count.
+    #[test]
+    fn find_symbol_boundary_discriminator() {
+        let mut table = SymbolTable::new(); // seeds Global scope 0
+
+        // package scope 1 under global; block scope 2 under the package
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Package,
+                location: SourceLocation { start: 0, end: 0 },
+                symbols: HashSet::new(),
+            },
+        );
+        table.scopes.insert(
+            2,
+            Scope {
+                id: 2,
+                parent: Some(1),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 0, end: 0 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        // `sub foo` defined in package scope 1
+        if let Some(s) = table.scopes.get_mut(&1) {
+            s.symbols.insert("foo".to_string());
+        }
+        table.symbols.entry("foo".to_string()).or_default().push(Symbol {
+            name: "foo".to_string(),
+            qualified_name: "main::foo".to_string(),
+            kind: SymbolKind::Subroutine,
+            location: SourceLocation { start: 0, end: 0 },
+            scope_id: 1,
+            declaration: None,
+            documentation: None,
+            attributes: Vec::new(),
+        });
+
+        // `our $g` declared in package scope 1
+        if let Some(s) = table.scopes.get_mut(&1) {
+            s.symbols.insert("g".to_string());
+        }
+        table.symbols.entry("g".to_string()).or_default().push(Symbol {
+            name: "g".to_string(),
+            qualified_name: "main::g".to_string(),
+            kind: SymbolKind::scalar(),
+            location: SourceLocation { start: 0, end: 0 },
+            scope_id: 1,
+            declaration: Some("our".to_string()),
+            documentation: None,
+            attributes: Vec::new(),
+        });
+
+        // Boundary: symbol.scope_id == scope_id — queried from the defining
+        // scope with the matching kind, the direct-scope branch returns it.
+        let sub_hit = table.find_symbol("foo", 1, SymbolKind::Subroutine);
+        assert_eq!(sub_hit.len(), 1, "input that hits the boundary: symbol.scope_id == scope_id");
+
+        // Boundary: symbol.kind == kind — same name and scope but the wrong
+        // kind is filtered out (a sub is not returned for a scalar query).
+        let wrong_kind = table.find_symbol("foo", 1, SymbolKind::scalar());
+        assert!(wrong_kind.is_empty(), "input that hits the boundary: symbol.kind == kind");
+
+        // Boundary: scope.kind != ScopeKind::Package — from a non-package
+        // (Block) scope, the `our`-variable fallback fires and surfaces $g.
+        let our_from_block = table.find_symbol("g", 2, SymbolKind::scalar());
+        assert!(
+            our_from_block.iter().any(|s| s.name == "g"),
+            "input that hits the boundary: scope.kind != ScopeKind::Package"
+        );
+    }
+
+    /// Direct contract tests for `SymbolTable::scope_at_offset` (issue
+    /// #3695): out-of-scope fallback, nested/sibling selection, inclusive
+    /// start / exclusive end boundaries, and the `(start, id)` tie-breaker
+    /// that makes same-start selection deterministic. Hand-built (not
+    /// extracted) so each boundary is exercised in isolation, matching the
+    /// style of `find_symbol_boundary_discriminator` above.
+    #[test]
+    fn scope_at_offset_out_of_all_scopes_falls_back_to_global() {
+        let mut table = SymbolTable::new(); // global scope 0, location {0,0}
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Subroutine,
+                location: SourceLocation { start: 10, end: 20 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        // Before and after the only non-global scope: no scope's range
+        // contains the offset, so the fallback (`unwrap_or(0)`) applies.
+        assert_eq!(table.scope_at_offset(5), 0, "offset before all scopes falls back to scope 0");
+        assert_eq!(table.scope_at_offset(25), 0, "offset after all scopes falls back to scope 0");
+    }
+
+    #[test]
+    fn scope_at_offset_selects_innermost_nested_scope() {
+        let mut table = SymbolTable::new();
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Subroutine,
+                location: SourceLocation { start: 0, end: 100 },
+                symbols: HashSet::new(),
+            },
+        );
+        table.scopes.insert(
+            2,
+            Scope {
+                id: 2,
+                parent: Some(1),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 10, end: 90 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        assert_eq!(
+            table.scope_at_offset(50),
+            2,
+            "offset inside both the sub and its nested block picks the innermost (block) scope"
+        );
+    }
+
+    #[test]
+    fn scope_at_offset_selects_correct_sibling() {
+        let mut table = SymbolTable::new();
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 10, end: 40 },
+                symbols: HashSet::new(),
+            },
+        );
+        table.scopes.insert(
+            2,
+            Scope {
+                id: 2,
+                parent: Some(0),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 50, end: 90 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        assert_eq!(table.scope_at_offset(20), 1, "offset inside the first sibling only");
+        assert_eq!(table.scope_at_offset(70), 2, "offset inside the second sibling only");
+    }
+
+    #[test]
+    fn scope_at_offset_start_boundary_is_inclusive() {
+        let mut table = SymbolTable::new();
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 10, end: 20 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        assert_eq!(
+            table.scope_at_offset(10),
+            1,
+            "offset == location.start is inside the scope (inclusive lower bound)"
+        );
+    }
+
+    #[test]
+    fn scope_at_offset_end_boundary_is_exclusive() {
+        let mut table = SymbolTable::new();
+        table.scopes.insert(
+            1,
+            Scope {
+                id: 1,
+                parent: Some(0),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 10, end: 20 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        assert_eq!(
+            table.scope_at_offset(20),
+            0,
+            "offset == location.end is outside the scope (exclusive upper bound); falls back to global"
+        );
+    }
+
+    /// Reproduction for #3695: without the `(location.start, id)` compound
+    /// key, `scope_at_offset` compares only `location.start`, so equal-start
+    /// scopes tie and `max_by_key` resolves the tie via `HashMap` iteration
+    /// order -- not scope nesting. With the fix, ranking by `(start, id)`
+    /// deterministically picks the highest-id (innermost) scope every time,
+    /// since scope IDs are assigned in strictly increasing, nested push
+    /// order (see `push_scope`). Reverting the key back to a bare
+    /// `scope.location.start` makes this test flaky-to-failing, since the
+    /// tie is then broken by unspecified `HashMap` iteration order instead
+    /// of nesting depth.
+    #[test]
+    fn scope_at_offset_ties_on_equal_start_pick_highest_id() {
+        let mut table = SymbolTable::new();
+        // Four scopes all opening at the same offset (e.g. a `sub` and a
+        // block whose opening brace coincides), inserted out of id order so
+        // "insertion order happens to match" can't explain a passing result.
+        for (id, end) in [(4, 40), (2, 80), (5, 20), (3, 60)] {
+            table.scopes.insert(
+                id,
+                Scope {
+                    id,
+                    parent: Some(0),
+                    kind: ScopeKind::Block,
+                    location: SourceLocation { start: 10, end },
+                    symbols: HashSet::new(),
+                },
+            );
+        }
+
+        assert_eq!(
+            table.scope_at_offset(15),
+            5,
+            "equal-start scopes must tie-break on the highest id (innermost), not iteration order"
+        );
+    }
+
     #[test]
     fn test_symbol_extraction() {
         let code = r#"
@@ -3812,6 +4180,277 @@ sub jump {
         assert!(
             references.iter().any(|reference| reference.kind == SymbolKind::Subroutine),
             "goto &target should produce a subroutine reference"
+        );
+    }
+
+    #[test]
+    fn test_goto_dynamic_coderef_records_no_subroutine_reference() {
+        // goto &$dispatch — Sub form, but the FunctionCall name carries a sigil
+        // (dynamic coderef), so the `_ => visit_node` arm runs and NO subroutine
+        // reference is recorded for a clean named subroutine `dispatch`.
+        let code = r#"
+sub jump {
+    goto &$dispatch;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(
+            !table
+                .references
+                .values()
+                .flatten()
+                .any(|reference| reference.kind == SymbolKind::Subroutine
+                    && reference.name == "dispatch"),
+            "goto &$dispatch (dynamic coderef) must not record a subroutine named `dispatch`"
+        );
+    }
+
+    #[test]
+    fn test_goto_expr_form_records_no_label_or_subroutine_reference() {
+        // goto $target — Expr form; the Expr arm visits the target. No Label or
+        // Subroutine reference should be recorded for the scalar target.
+        let code = r#"
+sub jump {
+    my $target = 0;
+    goto $target;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(
+            table.references.get("$target").into_iter().flatten().all(|reference| {
+                reference.kind != SymbolKind::Label && reference.kind != SymbolKind::Subroutine
+            }),
+            "goto $target (Expr form) must not record label/subroutine references"
+        );
+    }
+
+    #[test]
+    fn test_goto_label_nonidentifier_target_visits_via_else() {
+        use crate::ast::GotoTargetForm;
+        // Synthetic AST the parser never produces (Label form is only assigned to
+        // identifier targets): a Label-form goto whose target is a Number literal.
+        // Exercises the defensive `else => visit_node` branch of the Label arm.
+        let target = Node::new(
+            NodeKind::Number { value: "1".to_string() },
+            SourceLocation { start: 0, end: 1 },
+        );
+        let goto = Node::new(
+            NodeKind::Goto { target: Box::new(target), form: GotoTargetForm::Label },
+            SourceLocation { start: 0, end: 1 },
+        );
+        let table = SymbolExtractor::new().extract(&goto);
+        assert!(
+            !table
+                .references
+                .values()
+                .flatten()
+                .any(|reference| reference.kind == SymbolKind::Label),
+            "a Label goto with a non-identifier target must not record a label reference"
+        );
+    }
+
+    // =========================================================================
+    // Cross-construct sub resolver — #3108
+    //
+    // Covers the new typeglob-assignment symbol synthesis in visit_node.
+    // =========================================================================
+
+    /// `*foo = sub { ... }` synthesizes a Subroutine symbol named "foo" so that
+    /// workspace-index cross-file lookup can find it.
+    ///
+    /// Exercises the TRUE side of: `if matches!(rhs.kind, NodeKind::Subroutine { .. })`
+    /// inside the Assignment handler.
+    #[test]
+    fn typeglob_sub_assignment_synthesizes_subroutine_symbol() {
+        let code = "*foo = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(
+            table.symbols.contains_key("foo"),
+            "*foo = sub {{}} must synthesize a 'foo' symbol in the table"
+        );
+        let foo_syms = &table.symbols["foo"];
+        assert!(
+            foo_syms.iter().any(|s| s.kind == SymbolKind::Subroutine),
+            "'foo' symbol must be of kind Subroutine; got: {foo_syms:?}"
+        );
+    }
+
+    /// `*foo = 42` does NOT synthesize a Subroutine symbol for "foo" — only the
+    /// Subroutine RHS form is indexed.
+    ///
+    /// Exercises the FALSE side of: `if matches!(rhs.kind, NodeKind::Subroutine { .. })`
+    #[test]
+    fn typeglob_non_sub_assignment_does_not_synthesize_subroutine_symbol() {
+        let code = "*foo = 42;";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        // "foo" must not appear as a Subroutine symbol
+        let is_subroutine = table
+            .symbols
+            .get("foo")
+            .map(|syms| syms.iter().any(|s| s.kind == SymbolKind::Subroutine))
+            .unwrap_or(false);
+        assert!(!is_subroutine, "*foo = 42 must NOT synthesize a Subroutine symbol for 'foo'");
+    }
+
+    // =========================================================================
+    // Additional edge case tests for typeglob symbol synthesis (#3108)
+    // =========================================================================
+
+    /// Edge case: Qualified typeglob `*Pkg::foo = sub { ... }` should synthesize
+    /// a symbol for the bare name `foo` with qualified_name `"Pkg::foo"`, not the
+    /// current-package-qualified `"main::foo"`.
+    ///
+    /// Regression guard for the bug where `qualified_name` was derived from
+    /// `self.table.current_package` instead of the package encoded in the glob itself.
+    #[test]
+    fn typeglob_sub_qualified_synthesizes_bare_name_symbol() {
+        let code = "*Pkg::foo = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        // The symbol table should contain "foo" (bare name)
+        assert!(
+            table.symbols.contains_key("foo"),
+            "*Pkg::foo should synthesize a 'foo' symbol (bare name)"
+        );
+        let foo_syms = &table.symbols["foo"];
+        assert!(
+            foo_syms.iter().any(|s| s.kind == SymbolKind::Subroutine),
+            "'foo' from *Pkg::foo should be a Subroutine"
+        );
+        // qualified_name must reflect the package encoded in the glob, not the
+        // current lexical package (which is "main" by default).
+        assert!(
+            foo_syms.iter().any(|s| s.qualified_name == "Pkg::foo"),
+            "'foo' from *Pkg::foo must have qualified_name 'Pkg::foo'; got: {:?}",
+            foo_syms.iter().map(|s| &s.qualified_name).collect::<Vec<_>>()
+        );
+    }
+
+    /// Edge case: Nested package `*Pkg::Sub::foo = sub { ... }` should also
+    /// synthesize a symbol for the bare name `foo` with qualified_name `"Pkg::Sub::foo"`.
+    #[test]
+    fn typeglob_sub_nested_package_synthesizes_bare_name() {
+        let code = "*Pkg::Sub::foo = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(
+            table.symbols.contains_key("foo"),
+            "*Pkg::Sub::foo should synthesize a 'foo' symbol"
+        );
+        let foo_syms = &table.symbols["foo"];
+        assert!(
+            foo_syms.iter().any(|s| s.qualified_name == "Pkg::Sub::foo"),
+            "*Pkg::Sub::foo must have qualified_name 'Pkg::Sub::foo'; got: {:?}",
+            foo_syms.iter().map(|s| &s.qualified_name).collect::<Vec<_>>()
+        );
+    }
+
+    /// Edge case: Multiple typeglobs in the same file should all synthesize symbols.
+    #[test]
+    fn typeglob_sub_multiple_assignments_all_synthesized() {
+        let code = "*foo = sub { 1 };\n*bar = sub { 2 };\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(table.symbols.contains_key("foo"), "should have symbol for foo");
+        assert!(table.symbols.contains_key("bar"), "should have symbol for bar");
+        let bar_is_sub = table
+            .symbols
+            .get("bar")
+            .map(|syms| syms.iter().any(|s| s.kind == SymbolKind::Subroutine))
+            .unwrap_or(false);
+        assert!(bar_is_sub, "'bar' should be a Subroutine");
+    }
+
+    /// Edge case: Typeglob with underscore name should also synthesize a symbol.
+    #[test]
+    fn typeglob_sub_underscore_name_synthesized() {
+        let code = "*_private = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(table.symbols.contains_key("_private"), "*_private should synthesize a symbol");
+        let sym = &table.symbols["_private"];
+        assert!(
+            sym.iter().any(|s| s.kind == SymbolKind::Subroutine),
+            "_private should be a Subroutine"
+        );
+    }
+
+    /// Edge case: Typeglob with non-subroutine RHS (string) should NOT synthesize
+    /// a Subroutine symbol. May create a symbol of another kind, but not Subroutine.
+    #[test]
+    fn typeglob_string_rhs_does_not_synthesize_subroutine() {
+        let code = "*foo = \"hello\";";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        let is_subroutine = table
+            .symbols
+            .get("foo")
+            .map(|syms| syms.iter().any(|s| s.kind == SymbolKind::Subroutine))
+            .unwrap_or(false);
+        assert!(!is_subroutine, "*foo = \"string\" should NOT synthesize a Subroutine symbol");
+    }
+
+    /// Edge case: Typeglob alongside a named subroutine should create symbols for both.
+    #[test]
+    fn typeglob_sub_coexists_with_named_sub() {
+        let code = "sub foo { 1 }\n*foo = sub { 2 };\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        assert!(table.symbols.contains_key("foo"), "should have 'foo' symbol");
+        let foo_syms = &table.symbols["foo"];
+        // Should have multiple symbols for 'foo' (the named sub and the typeglob assignment)
+        assert!(
+            !foo_syms.is_empty(),
+            "should have at least one Subroutine symbol for 'foo'; got {count} symbol(s)",
+            count = foo_syms.len()
+        );
+        let has_subroutine = foo_syms.iter().any(|s| s.kind == SymbolKind::Subroutine);
+        assert!(has_subroutine, "at least one 'foo' symbol should be Subroutine");
+    }
+
+    /// Edge case: Case sensitivity — typeglob names are case-sensitive,
+    /// so `*Foo = sub {}` should NOT create a symbol for lowercase `foo`.
+    #[test]
+    fn typeglob_sub_case_sensitive_symbol_name() {
+        let code = "*Foo = sub { return 42; };";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        // Should have "Foo" but not "foo"
+        assert!(table.symbols.contains_key("Foo"), "should have symbol for 'Foo' (capitalized)");
+        let has_lowercase_foo_subroutine = table
+            .symbols
+            .get("foo")
+            .map(|syms| syms.iter().any(|s| s.kind == SymbolKind::Subroutine))
+            .unwrap_or(false);
+        assert!(
+            !has_lowercase_foo_subroutine,
+            "should NOT have Subroutine symbol for lowercase 'foo'"
         );
     }
 }

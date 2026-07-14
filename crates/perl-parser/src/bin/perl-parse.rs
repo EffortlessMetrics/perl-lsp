@@ -439,6 +439,11 @@ fn print_error(error: &ParseError, source: &str) {
             writeln!(stderr, "Parse error: {} at line {}, column {}", message, line, col).ok();
             print_error_context(source, *location, &mut stderr);
         }
+        ParseError::Advisory { message, location } => {
+            let (line, col) = position_to_line_col(source, *location);
+            writeln!(stderr, "Parse advisory: {} at line {}, column {}", message, line, col).ok();
+            print_error_context(source, *location, &mut stderr);
+        }
         ParseError::InvalidNumber { literal } => {
             writeln!(stderr, "Parse error: Invalid number literal: {}", literal).ok();
         }

@@ -1,0 +1,24 @@
+{
+  "type": "request",
+  "seq": 1,
+  "command": "peer/hello",
+  "arguments": {
+    "peer": "Devel::ptkdb",
+    "peerVersion": "1.1091",
+    "protocolVersion": "perl-debug-peer-v1",
+    "capabilities": {
+      "canContinue": true,
+      "canStep": true,
+      "canPause": true,
+      "canEvaluate": true,
+      "canSetBreakpoints": true,
+      "canSetFunctionBreakpoints": true,
+      "canConditionBreakpoints": true,
+      "canListStack": true,
+      "canListVariables": true,
+      "canReportSubroutines": true,
+      "canReportBreakableLines": true,
+      "controlMode": "mirror"
+    }
+  }
+}

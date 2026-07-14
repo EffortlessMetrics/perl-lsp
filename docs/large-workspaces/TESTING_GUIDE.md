@@ -116,9 +116,17 @@ fn large_workspace_symbol_lookup_finds_all_subs() {
 Run it in isolation before adding to the test suite:
 
 ```bash
-export CARGO_TARGET_DIR="/tmp/agent-$(git branch --show-current | tr '/' '-')-target"
 cargo test -p perl-workspace-index large_workspace_symbol_lookup -- --nocapture
 ```
+
+Target-dir isolation is automatic per worktree — cargo's default
+(unconfigured) `target-dir` resolves to `<workspace-root>/target`, which for
+a `git worktree` checkout is that worktree's own directory. Do **not**
+`export CARGO_TARGET_DIR` (especially not in a persistent shell profile):
+the env var overrides that per-worktree default (env > config > default),
+so a stale export left over from a prior session or a different
+worktree/branch silently defeats the isolation for every subsequently
+sourced shell (issue #3854).
 
 ---
 

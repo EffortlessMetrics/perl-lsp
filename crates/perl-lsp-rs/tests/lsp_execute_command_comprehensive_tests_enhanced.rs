@@ -257,8 +257,8 @@ fn test_enhanced_perl_run_critic_syntax_error_handling() -> TestResult {
     // AC2: Validate analyzer fallback indication
     let analyzer_used = result["analyzerUsed"].as_str().ok_or("Should indicate analyzer type")?;
     ensure!(
-        analyzer_used == "builtin" || analyzer_used == "external",
-        "Should use either 'builtin' or 'external' analyzer per dual strategy"
+        analyzer_used == "native" || analyzer_used == "external",
+        "Should use either 'native' or 'external' analyzer per dual strategy"
     );
 
     Ok(())

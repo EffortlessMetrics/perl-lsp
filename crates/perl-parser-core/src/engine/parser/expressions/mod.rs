@@ -21,10 +21,7 @@ impl<'a> Parser<'a> {
         }
 
         if let Some(finding) = nested_quantifier {
-            self.record_error(ParseError::syntax(
-                "Nested quantifiers detected (possible backtracking risk)",
-                finding.offset,
-            ));
+            self.record_error(ParseError::nested_quantifier_advisory(finding.offset));
         }
 
         Ok(has_embedded_code)

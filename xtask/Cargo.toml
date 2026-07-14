@@ -24,20 +24,25 @@ serde_json.workspace = true
 anyhow.workspace = true
 # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
 perl-lsp-rs-core = { workspace = true }
+perl-core-harness = { workspace = true }
+perl-core-harness-types = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-semantic-facts = { workspace = true }
 perl-workspace = { workspace = true }
 perl-ci-hygiene = { workspace = true }
+perl-kwalitee = { workspace = true }
 indicatif = "0.18.4"
 console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
 perl-parser = { workspace = true, features = ["incremental"] }
 perl-parser-core = { workspace = true }
+perl-position-tracking = { workspace = true }
 perl-corpus = { workspace = true }
 perl-lsp-ux-tests = { workspace = true }
 perl-parser-pest = { workspace = true, optional = true }
 tree-sitter = { workspace = true }
 tree-sitter-perl-c = { path = "../crates/tree-sitter-perl-c", optional = true }
+tree-sitter-perl-rs = { workspace = true }
 regex.workspace = true
 serde_yaml_ng = "0.10.0"
 toml = "1.1.2"
@@ -45,7 +50,7 @@ bindgen = "0.72.1"
 notify = "8.2.0"
 flate2 = "1.1.5"
 tar = "0.4.46"
-sha2 = "0.10"
+sha2 = "0.11"
 tempfile.workspace = true
 glob = "0.3.3"
 

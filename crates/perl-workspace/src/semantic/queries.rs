@@ -1117,6 +1117,12 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         //
         // This covers `eval "sub NAME { ... }"` patterns where the extractor
         // has emitted an OccurrenceFact with entity name == NAME.
+        //
+        // Order awareness (mirrors Path 1): only suppress when the eval-sub
+        // declaration's anchor `span_start_byte` is at or before `byte_offset`.
+        // This ensures `print foo;` followed by `eval "sub foo { }"` is NOT
+        // suppressed — the declaration comes after the usage.
+        // Fail closed: if the anchor cannot be found, do not suppress.
         let shard = self.shard_for_file(file_id)?;
 
         for occurrence in &shard.occurrences {
@@ -1137,7 +1143,20 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
             });
 
             if entity_matches {
-                return Some(DynamicCallableEvidence::EvalSub { occurrence: occurrence.clone() });
+                // Order check: look up the occurrence's anchor to get its byte position.
+                // Fail closed when the anchor is missing — no suppression.
+                let Some(anchor) = shard.anchors.iter().find(|a| a.id == occurrence.anchor_id)
+                else {
+                    continue;
+                };
+                // Suppress only when the eval-sub declaration precedes the usage site.
+                if anchor.span_start_byte <= byte_offset {
+                    return Some(DynamicCallableEvidence::EvalSub {
+                        occurrence: occurrence.clone(),
+                    });
+                }
+                // Declaration is after the usage — keep looking; there may be an
+                // earlier occurrence of the same name (unlikely but correct).
             }
         }
 
@@ -4976,6 +4995,196 @@ mod tests {
         let result2 =
             queries.dynamic_callable_may_be_visible_at(file_id, 100, "truly_undefined_sub");
         assert!(result2.is_none(), "should return None for different name (no evidence)");
+        Ok(())
+    }
+
+    // ── Path 2 order-guard tests (mirrors Path 1's order awareness) ──
+    //
+    // These directly call `dynamic_callable_may_be_visible_at` to exercise the
+    // eval-sub anchor lookup and the `anchor.span_start_byte <= byte_offset`
+    // order guard added alongside the fail-closed `let Some(anchor) = ... else
+    // { continue }` branch. See #1429.
+
+    #[test]
+    fn dynamic_callable_eval_sub_order_guard_returns_some_when_anchor_before_offset()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // eval-sub anchor at byte 0, usage query at byte 100 — anchor precedes
+        // usage, so the DynamicBoundary occurrence must suppress (Some).
+        let file_id = FileId(210);
+        let entity_id = EntityId(210_100);
+        let anchor_id = AnchorId(210_101);
+        let occurrence_id = OccurrenceId(210_102);
+
+        let entity = EntityFact {
+            id: entity_id,
+            canonical_name: "before_offset_sub".to_string(),
+            kind: EntityKind::Subroutine,
+            anchor_id: Some(anchor_id),
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+        let anchor = AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: 0,
+            span_end_byte: 20,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+        let occurrence = OccurrenceFact {
+            id: occurrence_id,
+            kind: OccurrenceKind::DynamicBoundary,
+            entity_id: Some(entity_id),
+            anchor_id,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+
+        let shard = make_shard(
+            "file:///test/eval_sub_before.pl",
+            file_id,
+            vec![anchor],
+            vec![entity],
+            vec![occurrence],
+            vec![],
+        );
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let result = queries.dynamic_callable_may_be_visible_at(file_id, 100, "before_offset_sub");
+        assert!(result.is_some(), "eval-sub anchor before byte_offset must suppress (return Some)");
+        match result.ok_or("expected DynamicCallableEvidence")? {
+            DynamicCallableEvidence::EvalSub { occurrence: occ } => {
+                assert_eq!(occ.id, occurrence_id);
+            }
+            DynamicCallableEvidence::DynamicImport { .. } => {
+                return Err("expected EvalSub variant".into());
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_callable_eval_sub_order_guard_returns_none_when_anchor_after_offset()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // eval-sub anchor at byte 200, usage query at byte 50 — the declaration
+        // comes AFTER the usage (e.g. `print foo; eval "sub foo {}"`), so the
+        // order guard must NOT suppress (must fire the diagnostic instead).
+        let file_id = FileId(211);
+        let entity_id = EntityId(211_100);
+        let anchor_id = AnchorId(211_101);
+        let occurrence_id = OccurrenceId(211_102);
+
+        let entity = EntityFact {
+            id: entity_id,
+            canonical_name: "after_offset_sub".to_string(),
+            kind: EntityKind::Subroutine,
+            anchor_id: Some(anchor_id),
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+        let anchor = AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: 200,
+            span_end_byte: 220,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+        let occurrence = OccurrenceFact {
+            id: occurrence_id,
+            kind: OccurrenceKind::DynamicBoundary,
+            entity_id: Some(entity_id),
+            anchor_id,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+
+        let shard = make_shard(
+            "file:///test/eval_sub_after.pl",
+            file_id,
+            vec![anchor],
+            vec![entity],
+            vec![occurrence],
+            vec![],
+        );
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let result = queries.dynamic_callable_may_be_visible_at(file_id, 50, "after_offset_sub");
+        assert!(
+            result.is_none(),
+            "eval-sub anchor AFTER byte_offset must NOT suppress (diagnostic should fire)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_callable_eval_sub_fail_closed_when_anchor_missing()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // The DynamicBoundary occurrence references an anchor_id that does not
+        // exist in the shard's anchors list. The `let Some(anchor) = ... else
+        // { continue }` branch must fail closed — no suppression — rather than
+        // panicking or defaulting to Some.
+        let file_id = FileId(212);
+        let entity_id = EntityId(212_100);
+        let missing_anchor_id = AnchorId(212_999); // deliberately not in `anchors`
+        let occurrence_id = OccurrenceId(212_102);
+
+        let entity = EntityFact {
+            id: entity_id,
+            canonical_name: "orphan_anchor_sub".to_string(),
+            kind: EntityKind::Subroutine,
+            anchor_id: None,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+        let occurrence = OccurrenceFact {
+            id: occurrence_id,
+            kind: OccurrenceKind::DynamicBoundary,
+            entity_id: Some(entity_id),
+            anchor_id: missing_anchor_id,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+
+        // Note: anchors vec is empty — `missing_anchor_id` cannot be resolved.
+        let shard = make_shard(
+            "file:///test/eval_sub_orphan.pl",
+            file_id,
+            vec![],
+            vec![entity],
+            vec![occurrence],
+            vec![],
+        );
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let result = queries.dynamic_callable_may_be_visible_at(file_id, 100, "orphan_anchor_sub");
+        assert!(
+            result.is_none(),
+            "missing anchor must fail closed (return None), not suppress or panic"
+        );
         Ok(())
     }
 

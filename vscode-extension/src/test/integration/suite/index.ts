@@ -30,7 +30,7 @@ export async function run(): Promise<void> {
   }
 
   return new Promise((resolve, reject) => {
-    const runner = mocha.run(failures => {
+    const runner = mocha.run((failures) => {
       if (runner.total === 0) {
         reject(new Error('No extension-host smoke tests matched the requested filter.'));
         return;

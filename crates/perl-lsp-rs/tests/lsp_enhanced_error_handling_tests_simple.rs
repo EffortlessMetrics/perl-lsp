@@ -5,6 +5,11 @@
 //! AC1: Enhanced LSP Error Response System
 //! AC2: Malformed Frame Recovery System
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod common;
 
 #[test]

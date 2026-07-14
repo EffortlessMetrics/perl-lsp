@@ -1,16 +1,29 @@
 .vscode/**
 .vscode-test/**
 out/test/**
+out-test/**
 coverage/**
 src/**
 test/**
 .gitignore
 .yarnrc
+# Rolldown bundles every runtime dependency (adm-zip, tar,
+# vscode-languageclient — verified pure JS, no __dirname-relative asset
+# loading, no native .node bindings anywhere in their transitive trees)
+# into the single out/extension.js artifact. node_modules/ is no longer
+# needed at runtime and would otherwise ship ~5MB of now-redundant raw
+# dependency files alongside the bundle that already contains them.
+node_modules/**
 **/tsconfig.json
+tsconfig.*.json
+tsconfig.test.json
+jest.config.js
 **/.eslintrc.json
 **/*.map
 **/*.ts
+rolldown.config.mjs
 scripts/**
+docs/migrations/**
 *.vsix
 *.tgz
 .github/**
@@ -22,7 +35,6 @@ build.sh
 icon.svg
 icon_generator.py
 package-lock.json
-pnpm-lock.yaml
 test-extension.pl
 INTERNAL_DEPLOYMENT.md
 PUBLISHING.md

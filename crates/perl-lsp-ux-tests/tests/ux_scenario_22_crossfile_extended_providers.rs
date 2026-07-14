@@ -77,7 +77,7 @@
 
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::time::Duration;
 
 // ── Fixture sources (same as scenario_21) ────────────────────────────────────
@@ -161,6 +161,37 @@ fn create_harness() -> anyhow::Result<UxHarness> {
             .with_file("lib/RealBaseline/Util.pm", UTIL_PM)
             .with_file("script/real-baseline.pl", SCRIPT_PL),
     )
+}
+
+fn wait_for_incoming_calls(
+    harness: &UxHarness,
+    item: &Value,
+    timeout: Duration,
+) -> anyhow::Result<Vec<Value>> {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        let incoming_resp = harness.client.request(
+            "callHierarchy/incomingCalls",
+            json!({ "item": item }),
+            Duration::from_secs(5),
+        )?;
+
+        if incoming_resp.get("error").is_some() {
+            return Err(anyhow::anyhow!(
+                "incomingCalls returned JSON-RPC error: {:?}",
+                incoming_resp["error"]
+            ));
+        }
+
+        let calls = incoming_resp["result"].as_array().cloned().ok_or_else(|| {
+            anyhow::anyhow!("incomingCalls result must be array: {:?}", incoming_resp["result"])
+        })?;
+        if !calls.is_empty() || std::time::Instant::now() >= deadline {
+            return Ok(calls);
+        }
+
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -417,23 +448,14 @@ fn scenario_22_call_hierarchy_incoming_to_run() -> anyhow::Result<()> {
         }
     };
 
-    // Step 2: incoming calls using the item from step 1.
-    let incoming_resp = harness.client.request(
-        "callHierarchy/incomingCalls",
-        json!({ "item": items[0] }),
-        Duration::from_secs(5),
-    )?;
+    // Step 2: incoming calls using the item from step 1. The script didOpen is a
+    // notification in the external-process harness, so poll briefly for the
+    // server to observe the caller instead of treating the first empty snapshot
+    // as final.
+    let calls = wait_for_incoming_calls(&harness, &items[0], Duration::from_secs(5))?;
+    eprintln!("status: incomingCalls/run: calls: {:?}", calls);
 
-    eprintln!("status: incomingCalls/run: raw response: {:?}", incoming_resp);
-
-    if incoming_resp.get("error").is_some() {
-        eprintln!(
-            "status: incomingCalls/run: BROKEN — JSON-RPC error: {:?}",
-            incoming_resp["error"]
-        );
-    } else if incoming_resp["result"].is_null() {
-        eprintln!("status: incomingCalls/run: BROKEN — null result");
-    } else if let Some(calls) = incoming_resp["result"].as_array() {
+    if !calls.is_empty() {
         let names: Vec<&str> = calls
             .iter()
             .filter_map(|c| c.get("from").and_then(|f| f.get("name")).and_then(|n| n.as_str()))
@@ -451,10 +473,7 @@ fn scenario_22_call_hierarchy_incoming_to_run() -> anyhow::Result<()> {
             eprintln!("status: incomingCalls/run: WORKS — at least one caller returned");
         }
     } else {
-        eprintln!(
-            "status: incomingCalls/run: BROKEN — result not an array: {:?}",
-            incoming_resp["result"]
-        );
+        eprintln!("status: incomingCalls/run: BROKEN — no callers found");
     }
 
     harness.assert_no_crash();
@@ -538,12 +557,10 @@ fn scenario_22_call_hierarchy_outgoing_from_run_hard_assert() -> anyhow::Result<
 
 /// Hard assert — callHierarchy/incomingCalls for `run` must return at least one caller.
 ///
-/// BROKEN on current main: incomingCalls returns empty [] even though
-/// script/real-baseline.pl calls `$app->run`. OO arrow-method caller lookup
-/// is not resolving back to the CallHierarchyItem.
-/// Tracking: #3093
+/// Fixed in #3093: top-level callers (not inside any `sub`) are now returned as
+/// file-level CallHierarchyItems instead of being silently dropped.
+/// script/real-baseline.pl calls `$app->run` at the top level — must appear.
 #[test]
-#[ignore = "real gap — incomingCalls returns empty for OO method callers; tracking #3093"]
 fn scenario_22_call_hierarchy_incoming_to_run_hard_assert() -> anyhow::Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_22: perl-lsp binary not found");
@@ -574,27 +591,24 @@ fn scenario_22_call_hierarchy_incoming_to_run_hard_assert() -> anyhow::Result<()
         .ok_or_else(|| anyhow::anyhow!("prepareCallHierarchy must return array"))?;
     assert!(!items.is_empty(), "prepareCallHierarchy must return at least one item");
 
-    let incoming_resp = harness.client.request(
-        "callHierarchy/incomingCalls",
-        json!({ "item": items[0] }),
-        Duration::from_secs(5),
-    )?;
-
-    assert!(
-        incoming_resp.get("error").is_none(),
-        "incomingCalls must not return a JSON-RPC error: {:?}",
-        incoming_resp.get("error")
-    );
-
-    let calls = incoming_resp["result"].as_array().ok_or_else(|| {
-        anyhow::anyhow!("incomingCalls result must be array: {:?}", incoming_resp["result"])
-    })?;
+    let calls = wait_for_incoming_calls(&harness, &items[0], Duration::from_secs(5))?;
 
     // script/real-baseline.pl calls $app->run — must appear as an incoming caller.
     assert!(
         !calls.is_empty(),
         "incomingCalls for `App::run` must return at least one caller. \
          script/real-baseline.pl calls `$app->run`. Got: []"
+    );
+
+    // The caller must be the script file — not just any non-empty result.
+    // This guards against vacuous passes where an unrelated item happens to appear.
+    let script_caller = calls.iter().find(|c| {
+        c["from"]["uri"].as_str().map(|u| u.contains("real-baseline.pl")).unwrap_or(false)
+    });
+    assert!(
+        script_caller.is_some(),
+        "incomingCalls for `App::run` must include `real-baseline.pl` as a caller \
+         (top-level `$app->run` call). Got callers: {calls:?}"
     );
 
     harness.assert_no_crash();

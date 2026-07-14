@@ -4,16 +4,14 @@ name: CI (Nightly)
 # Combines: ci-expensive.yml, quality-checks.yml, fuzz.yml
 # Cost: ~$0.15 per run (label-gated), ~$0.30 per nightly run
 #
-# merge_group added in #1232: required for the "Codecov / Patch 95" required
-# check to produce a status context in merge_group runs.  Only the test-coverage
-# job runs on merge_group; all nightly / label-gated jobs are explicitly excluded.
+# Coverage is advisory: run it on the nightly/manual lane only. Normal PR and
+# merge-queue validation use the required Rust Small and RIPR+ gates instead.
 
 on:
   pull_request:
     branches: [ main, master ]
     # Keep label-gated jobs alive after the label is applied.
     types: [opened, synchronize, reopened, ready_for_review, labeled]
-  merge_group:
   schedule:
     # Run nightly at 3am UTC
     - cron: '0 3 * * *'
@@ -80,7 +78,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with: { toolchain: 1.95.0 }
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
@@ -110,7 +108,7 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+      uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
       with:
         toolchain: stable
 
@@ -121,9 +119,18 @@ jobs:
         cache-on-failure: true
 
     - name: Install just
-      uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
+      uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145  # v2.83.1
       with:
         tool: just
+
+    - name: Run benchmark harness fixture tests
+      # Fixture tests for the extraction/guard logic itself (both Criterion
+      # on-disk layouts, stale/malformed-estimate rejection, zero-benchmark
+      # and missing-expected-id fail-closed behavior). If these regress, the
+      # steps below cannot be trusted to catch a vacuous benchmark run (#3979).
+      run: |
+        python3 benchmarks/scripts/test_extract_criterion.py -v
+        python3 benchmarks/scripts/test_benchmark_guards.py -v
 
     - name: Build perl-lsp binary for real-repo UX perf lane
       run: cargo build -p perl-lsp-rs --bin perl-lsp --locked
@@ -132,17 +139,101 @@ jobs:
       run: |
         mkdir -p benchmarks/results
         PERL_LSP_BIN="${{ github.workspace }}/target/debug/perl-lsp" \
+          PERL_LSP_UX_REQUIRE_BINARY=1 \
           cargo test -p perl-lsp-ux-tests --features integration-test \
           --test ux_scenario_18_real_repo_perf -- --test-threads=1 --nocapture \
           2>&1 | tee benchmarks/results/real-repo-perf.txt
 
-    - name: Run benchmarks
+    - name: Run benchmarks (explicit Criterion targets)
       run: |
-        # Run full benchmark suite
-        cargo bench --workspace --locked -- --noplot 2>&1 | tee benchmarks/results/raw-output.txt || true
+        set -euo pipefail
 
-        # Extract structured results from Criterion
-        python3 ./benchmarks/scripts/extract-criterion.py --output benchmarks/results/latest.json
+        # Delete any stale target/criterion/ before running so a leftover
+        # estimate from a previous job/run can never satisfy the "did this
+        # run produce results" check below (#3979).
+        rm -rf target/criterion
+        mkdir -p benchmarks/results
+
+        # Invoke each *declared* Criterion bench target explicitly
+        # (`cargo bench -p <crate> --bench <name>`) instead of a blanket
+        # `cargo bench --workspace`. The blanket form forwards `-- --noplot`
+        # (a Criterion-only flag) to every workspace bench target,
+        # INCLUDING plain libtest unit-test/bench harnesses that cargo also
+        # builds for a `--workspace` bench run (e.g. `perl-ast --lib`), and
+        # libtest rejects it outright:
+        #   error: Unrecognized option: 'noplot'
+        #   error: bench failed, to rerun pass `-p perl-ast --lib`
+        # That failure previously aborted the whole `cargo bench --workspace`
+        # invocation before any Criterion target ran at all, and `|| true`
+        # (removed here) swallowed it, producing "Total benchmarks: 0" (#3979).
+        #
+        # Entries are "crate:bench-target:required-feature" (feature may be empty).
+        # This list must stay a superset of every real bench target
+        # `cargo metadata --no-deps --format-version 1` reports (`.targets[]
+        # | select(.kind == ["bench"])`) -- since this REPLACES the blanket
+        # `cargo bench --workspace`, an omitted target here is silent
+        # coverage loss the old command wouldn't have had. Verified against
+        # the current metadata (14 bench targets, all 14 listed below); if a
+        # new bench target is added to the workspace, add it here too.
+        declare -a BENCH_TARGETS=(
+          "perl-workspace:workspace_index_benchmark:workspace"
+          "perl-token:token_scorecard:"
+          "perl-symbol:symbol_benchmarks:"
+          "perl-pragma:pragma_benchmarks:"
+          "perl-parser:parser_benchmark:"
+          "perl-parser:incremental_benchmark:incremental"
+          "perl-parser:scope_benchmark:"
+          "perl-parser:cpan_patterns_benchmark:"
+          "perl-parser:positions_bench:"
+          "perl-parser:substitution_performance:"
+          "perl-lsp-rs:rope_performance_benchmark:"
+          "perl-lexer:lexer_benchmarks:"
+          "perl-dap:dap_benchmarks:"
+          "perl-incremental-parsing:incremental_parsing_benchmarks:"
+        )
+
+        for entry in "${BENCH_TARGETS[@]}"; do
+          IFS=':' read -r crate bench feature <<< "$entry"
+          echo "=== cargo bench -p $crate --bench $bench ${feature:+(features: $feature)} ==="
+          if [ -n "$feature" ]; then
+            cargo bench -p "$crate" --locked --features "$feature" --bench "$bench" -- --noplot
+          else
+            cargo bench -p "$crate" --locked --bench "$bench" -- --noplot
+          fi
+        done 2>&1 | tee benchmarks/results/raw-output.txt
+
+        # Extract structured results from Criterion. --strict fails closed
+        # when target/criterion/ has no results at all, or when any
+        # --expect-id benchmark is missing. Each --expect-id below is one
+        # representative benchmark per declared target above, proving that
+        # *specific* target actually executed rather than merely that
+        # *something* did.
+        #
+        # Verified against a real run (29186609858): "cpan/moose_oo_class" is
+        # a *direct* `c.bench_function("cpan/moose_oo_class", ...)` call, not
+        # an explicit `benchmark_group`. Criterion sanitizes the literal "/"
+        # in a direct id into "_" and writes a single flat directory
+        # (target/criterion/cpan_moose_oo_class/new/...), unlike a real
+        # group/name pair (e.g. "document_insertions/rope_insertion" below),
+        # which genuinely nests. The id here must match what's actually on
+        # disk, not the source-code string passed to bench_function.
+        python3 ./benchmarks/scripts/extract-criterion.py \
+          --output benchmarks/results/latest.json \
+          --strict \
+          --expect-id "incremental update single file" \
+          --expect-id "token_scorecard_recorded" \
+          --expect-id "cursor_extract_ascii" \
+          --expect-id "build_small_file" \
+          --expect-id "parse_simple_script" \
+          --expect-id "incremental small edit" \
+          --expect-id "scope_analysis_many_vars" \
+          --expect-id "cpan_moose_oo_class" \
+          --expect-id "document_insertions/rope_insertion" \
+          --expect-id "simple_tokens" \
+          --expect-id "configuration_validation/launch_config_validation" \
+          --expect-id "offset_to_pos16_cached" \
+          --expect-id "parse_basic_substitution" \
+          --expect-id "undo_redo/edit_undo_redo"
 
     - name: Real-repo first-diagnostics perf gate (Catalyst 5000+ lines)
       run: |
@@ -150,6 +241,13 @@ jobs:
           real_project_first_diagnostics_catalyst_5000_lines_under_5s \
           -- --include-ignored --nocapture
 
+    # Regression gating stays advisory (continue-on-error) until a real,
+    # calibrated baseline exists: benchmarks/baselines/v0.9.0.json
+    # self-identifies as a placeholder with fabricated values
+    # ("Placeholder baseline - run 'just bench' and compare to update with
+    # real values"), so it is not authoritative and must not gate merges.
+    # Integrity (did the harness actually run, see above) and regression
+    # policy (did performance get worse) are deliberately separate (#3979).
     - name: Compare against baseline
       id: compare
       continue-on-error: true
@@ -164,11 +262,13 @@ jobs:
         fi
 
     - name: Generate benchmark receipt
+      if: always()
       run: |
         python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --receipt > benchmark_receipt.txt
         cat benchmark_receipt.txt
 
     - name: Generate markdown report
+      if: always()
       run: |
         python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --markdown > benchmark_report.md
 
@@ -211,6 +311,7 @@ jobs:
           }
 
     - name: Upload benchmark artifacts
+      if: always()
       uses: actions/upload-artifact@v7
       with:
         name: benchmark-results-${{ github.sha }}
@@ -222,6 +323,7 @@ jobs:
           benchmark_report.md
           comparison.txt
           alert.md
+        if-no-files-found: warn
         retention-days: 30
 
   real-repo-latency:
@@ -240,7 +342,7 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+      uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
       with:
         toolchain: stable
 
@@ -278,7 +380,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: 1.95.0
 
@@ -427,12 +529,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'merge_group' ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.draft != true &&
-       github.event.action != 'labeled') ||
-      github.event_name == 'schedule'
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_coverage != 'false')
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
         with:
@@ -442,10 +540,9 @@ jobs:
       - name: Emit changed-file coverage route summary
         id: coverage_route
         env:
-          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix.
           BASE_REF="${BASE_REF#refs/heads/}"
           mkdir -p target/receipts/quality
           base_ref="$BASE_REF"
@@ -466,20 +563,12 @@ jobs:
           fi
 
       - name: Install Rust
-        if: >-
-          github.event_name == 'merge_group' ||
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # nightly (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # nightly (master)
         with:
           toolchain: nightly
           components: llvm-tools-preview
 
       - name: Cache cargo dependencies
-        if: >-
-          github.event_name == 'merge_group' ||
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: ${{ runner.os }}-coverage-${{ hashFiles('Cargo.lock') }}
@@ -487,55 +576,26 @@ jobs:
           cache-on-failure: true
 
       - name: Install just
-        if: >-
-          github.event_name == 'merge_group' ||
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
-        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145  # v2.83.1
         with:
           tool: just
 
       - name: Install cargo-llvm-cov
-        if: >-
-          github.event_name == 'merge_group' ||
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
         run: rustup run nightly cargo install cargo-llvm-cov --locked
 
       - name: Create legacy LSP fixtures (CI-only)
-        if: >-
-          github.event_name == 'merge_group' ||
-          github.event_name != 'pull_request' ||
-          steps.coverage_route.outputs.coverage_required == 'true'
         run: |
           mkdir -p archive/legacy-tests/test_fixtures
           touch archive/legacy-tests/test_fixtures/main.pl
           touch archive/legacy-tests/test_fixtures/Module.pm
           touch archive/legacy-tests/test_fixtures/test.t
 
-      - name: Run routed PR coverage proof
-        if: >-
-          (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
-          steps.coverage_route.outputs.coverage_required == 'true'
-        env:
-          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
-          RUSTFLAGS: "-Cdebuginfo=0"
-          CARGO_BUILD_JOBS: 1
-        run: |
-          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix.
-          BASE_REF="${BASE_REF#refs/heads/}"
-          base_ref="$BASE_REF"
-          git fetch --no-tags --depth=200 origin "$base_ref" || true
-          just coverage-proof-routed "origin/$base_ref" "HEAD"
-
       - name: Run workspace coverage proof
-        if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
         env:
-          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
           RUSTFLAGS: "-Cdebuginfo=0"
           CARGO_BUILD_JOBS: 1
         run: |
-          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix.
           BASE_REF="${BASE_REF#refs/heads/}"
           base_ref="$BASE_REF"
           git fetch --no-tags --depth=200 origin "$base_ref" || true
@@ -560,7 +620,7 @@ jobs:
       - name: Upload coverage to Codecov
         id: codecov_upload
         # Non-fatal telemetry: the job verdict comes from the local quality-gate
-        # receipt produced above (just coverage-proof-routed / quality-gate step).
+        # receipt produced above (just coverage-proof / quality-gate step).
         # An upload failure (flake, rate-limit, empty token on re-run) must never
         # fail this required check when the gate passed.
         # Token wiring: CODECOV_TOKEN is set in env so the action can read it via
@@ -568,10 +628,7 @@ jobs:
         # uses internally. The `env.CODECOV_TOKEN != ''` guard skips the upload
         # entirely when secrets are unavailable (fork PRs, certain re-run contexts).
         if: |
-          env.CODECOV_TOKEN != '' &&
-          (github.event_name == 'merge_group' ||
-           github.event_name != 'pull_request' ||
-           steps.coverage_route.outputs.coverage_required == 'true')
+          env.CODECOV_TOKEN != ''
         continue-on-error: true
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v7.0.0
         with:
@@ -653,7 +710,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: stable
 
@@ -732,7 +789,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: 1.95.0
 
@@ -746,7 +803,7 @@ jobs:
         run: cargo install cargo-public-api --locked --version 0.50.1
 
       - name: Install just
-        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145  # v2.83.1
         with:
           tool: just
 
@@ -767,7 +824,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: 1.95.0
 
@@ -778,7 +835,7 @@ jobs:
           cache-on-failure: true
 
       - name: Install just
-        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145  # v2.83.1
         with:
           tool: just
 
@@ -799,7 +856,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: stable
 
@@ -812,6 +869,107 @@ jobs:
       - name: Run clippy (strict mode)
         run: |
           cargo clippy --workspace --locked -- -D warnings -D clippy::all -A missing_docs
+
+  perl-kwalitee:
+    name: Perl Kwalitee (advisory)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Advisory-only for now: report never fails the process, and the job is
+    # continue-on-error so a non-clean verdict does not block anything. Promote
+    # to a blocking `check --profile pr --strict` once the receipt-backed
+    # indicators are consistently green. See docs/reference/PERL_KWALITEE.md.
+    continue-on-error: true
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:kwalitee'))
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
+        with:
+          toolchain: 1.95.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          key: ${{ runner.os }}-kwalitee-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
+
+      # The `perl-kwalitee` crate is pure — it never spawns a subprocess and
+      # reads its evidence only from pre-generated JSON receipts. Without these
+      # upstream receipts every nightly receipt-backed indicator resolves as
+      # `unverified`. Generate them first (all native Rust, no perltidy/
+      # perlcritic install needed) so the nightly report reflects real signal.
+      # status/readiness aggregate the receipts above them, so they run last.
+      # See docs/reference/PERL_KWALITEE.md.
+      - name: Generate upstream Kwalitee receipts (native, no external tooling)
+        run: |
+          # Best-effort: this is an advisory report. `native-format check`/`corpus`
+          # return a non-zero exit on a fixture/corpus regression, and Actions runs
+          # `run:` under `set -e`. Without `set +e` the first failing generator would
+          # abort the step, later receipts would never be written, and the report
+          # below would revert those indicators to `unverified` — the exact symptom
+          # this job exists to surface. Disable errexit so every generator runs and
+          # a failing one shows up as a failing/unverified indicator in the report.
+          set +e
+          # --- native formatter receipts ---
+          cargo xtask native-format check
+          cargo xtask native-format corpus
+          cargo xtask native-format config \
+            --receipt target/receipts/format/native-format-config.json \
+            --summary target/receipts/format/native-format-config.md
+          cargo xtask native-format perltidy-compat --profile .ci/kwalitee/perltidyrc \
+            --receipt target/receipts/format/native-format-perltidy-compat.json \
+            --summary target/receipts/format/native-format-perltidy-compat.md
+
+          # --- native critic receipts ---
+          cargo xtask native-critic check
+          cargo xtask native-critic check \
+            --root xtask/tests/fixtures/native-critic/false-positive \
+            --receipt target/receipts/native-tooling/native-critic-false-positive.json \
+            --summary target/receipts/native-tooling/native-critic-false-positive.md
+          cargo xtask native-tooling perlcritic-compat --profile .ci/kwalitee/perlcriticrc \
+            --receipt target/receipts/native-tooling/perlcritic-compat.json \
+            --summary target/receipts/native-tooling/perlcritic-compat.md
+
+          # --- aggregation (reads all receipts above; must come last) ---
+          cargo xtask native-tooling status \
+            --receipt target/receipts/native-tooling/status.json
+          cargo xtask native-tooling readiness \
+            --status-receipt target/receipts/native-tooling/status.json \
+            --receipt target/receipts/native-tooling/readiness.json
+
+      - name: Evaluate Perl distribution Kwalitee (nightly profile)
+        # Always run the report, even if a generator above exited non-zero, so the
+        # advisory verdict reflects whatever receipts were produced rather than
+        # being skipped entirely.
+        if: always()
+        run: |
+          cargo xtask perl-kwalitee report --profile nightly \
+            --json target/receipts/kwalitee/perl-kwalitee.json \
+            --markdown target/receipts/kwalitee/perl-kwalitee.md
+          cat target/receipts/kwalitee/perl-kwalitee.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Kwalitee receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perl-kwalitee-${{ github.sha }}
+          # Upload the whole receipt directories rather than enumerating files:
+          # the generation step writes JSON receipts plus their markdown summaries
+          # (idempotence, parse-preservation, corpus-summary, per-command *.md), and
+          # only this job writes under these paths — so a directory glob captures the
+          # full evidence set for debugging without drifting out of sync on each new
+          # receipt.
+          path: |
+            target/receipts/kwalitee/
+            target/receipts/format/
+            target/receipts/native-tooling/
+          if-no-files-found: warn
+          retention-days: 30
 
   # ============================================================================
   # Fuzz Testing (nightly only)
@@ -853,7 +1011,7 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Install Rust toolchain (nightly)
-      uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # nightly (master)
+      uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # nightly (master)
       with:
         toolchain: nightly
         components: rust-src

@@ -7,12 +7,16 @@
 //!
 //! Uses the routing module for state-aware dispatch:
 //! - **Ready state**: Full workspace rename across all indexed files
-//! - **Building/Degraded state**: Bounded readiness wait, then safe same-file rename only
+//! - **Building/Degraded state**: Local renames can still use same-file proof;
+//!   package-scoped workspace renames fail closed instead of editing from stale facts
 
 use super::super::*;
-use crate::protocol::{req_position, req_uri};
+use crate::protocol::{REQUEST_FAILED, req_position, req_uri};
+#[cfg(feature = "workspace")]
+use crate::runtime::readiness::{IndexReadinessOutcome, IndexReadinessPolicy};
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use perl_lexer::is_rename_keyword;
 #[cfg(feature = "workspace")]
 use perl_lsp_rs_core::providers::navigation::rename_shadow::{
     RenamePackagePilotIneligibleReason, RenamePackagePilotResult, rename_package_pilot_proof,
@@ -57,6 +61,20 @@ fn sub_declaration_keyword_before(source: &str, symbol_start: usize) -> bool {
     let prefix = source[line_start..symbol_start].trim_end();
     let previous_word = prefix.split(perl_word_split_boundary).rfind(|word| !word.is_empty());
     matches!(previous_word, Some("sub"))
+}
+
+fn lexical_sub_declaration_keyword_before(source: &str, symbol_start: usize) -> bool {
+    if !sub_declaration_keyword_before(source, symbol_start) {
+        return false;
+    }
+
+    let line_start =
+        if symbol_start == 0 { 0 } else { source[..symbol_start].rfind('\n').map_or(0, |p| p + 1) };
+    let prefix = source[line_start..symbol_start].trim_end();
+    let sub_start = prefix.rfind("sub").unwrap_or_default();
+    let before_sub = prefix[..sub_start].trim_end();
+    let previous_word = before_sub.split(perl_word_split_boundary).rfind(|word| !word.is_empty());
+    matches!(previous_word, Some("my" | "state"))
 }
 
 fn range_starts_with_sub_declaration_name(
@@ -283,7 +301,8 @@ impl LspServer {
         let symbol_len = key.name.as_ref().len();
         let documents = self.documents_guard();
         let request_doc = self.get_document(&documents, request_uri)?;
-        let request_ast = request_doc.ast.as_ref()?;
+        let request_parsed = request_doc.current_parsed();
+        let request_ast = request_parsed.as_ref().and_then(|p| p.ast())?;
         let request_edit_uri = workspace_edit_uri_key(request_uri);
         let mut live_document_keys = BTreeSet::new();
         let mut indexed_document_keys = BTreeSet::new();
@@ -386,7 +405,7 @@ impl LspServer {
                     {
                         continue;
                     }
-                    let Ok(text) = std::fs::read_to_string(&path) else {
+                    let Ok(text) = crate::util::read_text_file_with_encoding(&path) else {
                         continue;
                     };
                     let edit_uri = workspace_edit_uri_key(&uri);
@@ -963,6 +982,18 @@ impl LspServer {
                         data: None,
                     });
                 }
+                // Non-sigiled targets are subroutine or package names.
+                // Renaming them to a reserved keyword would create a syntax error (`sub if {}`).
+                if is_rename_keyword(requested_name) {
+                    return Err(JsonRpcError {
+                        code: -32602,
+                        message: format!(
+                            "'{}' is a reserved Perl keyword; subroutine names cannot be keywords",
+                            requested_name
+                        ),
+                        data: None,
+                    });
+                }
                 Ok(requested_name.to_string())
             }
         }
@@ -979,7 +1010,7 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(_ast) = &doc.ast {
+                if doc.current_parsed().is_some_and(|p| p.ast().is_some()) {
                     let offset = self.pos16_to_offset(doc, line, character);
                     if Self::rename_blocked_at(doc, offset) {
                         return Ok(Some(json!(null)));
@@ -1142,6 +1173,34 @@ impl LspServer {
         }
     }
 
+    #[cfg(feature = "workspace")]
+    fn package_scoped_rename_requires_ready_index(
+        symbol_key: Option<&perl_parser::index::SymbolKey>,
+        rename_is_package_scoped: bool,
+        lexical_sub_declaration: bool,
+    ) -> bool {
+        if !rename_is_package_scoped {
+            return false;
+        }
+
+        symbol_key.is_some_and(|key| match key.kind {
+            perl_parser::index::SymKind::Pack => true,
+            perl_parser::index::SymKind::Sub => !lexical_sub_declaration,
+            _ => false,
+        })
+    }
+
+    #[cfg(feature = "workspace")]
+    fn rename_readiness_error(outcome: &IndexReadinessOutcome) -> JsonRpcError {
+        JsonRpcError {
+            code: REQUEST_FAILED,
+            message: format!("Rename requires a ready workspace index: {}", outcome.reason()),
+            data: Some(json!({
+                "indexReadiness": outcome.reason(),
+            })),
+        }
+    }
+
     fn handle_rename_workspace_inner(
         &self,
         params: Option<Value>,
@@ -1178,11 +1237,16 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 {
                     self.wait_for_rename_index_ready();
-                    let access_mode = route_index_access(self.coordinator());
-                    let (symbol_key, rename_byte_offset, rename_is_package_scoped) = {
+                    let (
+                        symbol_key,
+                        rename_byte_offset,
+                        rename_is_package_scoped,
+                        lexical_sub_declaration,
+                    ) = {
                         let documents = self.documents_guard();
                         self.get_document(&documents, uri).and_then(|doc| {
-                            doc.ast.as_ref().and_then(|ast| {
+                            let parsed = doc.current_parsed();
+                            parsed.as_ref().and_then(|p| p.ast()).and_then(|ast| {
                                 let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
                                 let current_pkg =
                                     crate::declaration::current_package_at(ast, offset);
@@ -1192,13 +1256,26 @@ impl LspServer {
                                     current_pkg,
                                     &doc.text,
                                 )
-                                .map(|key| (key, offset, current_pkg != "main"))
+                                .map(|key| {
+                                    let (symbol_start, _) =
+                                        self.get_token_bounds(&doc.text, offset);
+                                    let lexical_sub_declaration =
+                                        matches!(key.kind, perl_parser::index::SymKind::Sub)
+                                            && lexical_sub_declaration_keyword_before(
+                                                &doc.text,
+                                                symbol_start,
+                                            );
+                                    (key, offset, current_pkg != "main", lexical_sub_declaration)
+                                })
                             })
                         })
                     }
-                    .map_or((None, None, false), |(key, offset, package_scoped)| {
-                        (Some(key), Some(offset), package_scoped)
-                    });
+                    .map_or(
+                        (None, None, false, false),
+                        |(key, offset, package_scoped, lexical_sub_declaration)| {
+                            (Some(key), Some(offset), package_scoped, lexical_sub_declaration)
+                        },
+                    );
                     let current_symbol = {
                         let documents = self.documents_guard();
                         self.get_document(&documents, uri).map(|doc| {
@@ -1211,6 +1288,40 @@ impl LspServer {
                     let normalized_bare = strip_perl_sigil(&normalized_name);
                     let workspace_symbol_key =
                         symbol_key.as_ref().map(super::to_workspace_symbol_key);
+                    if Self::package_scoped_rename_requires_ready_index(
+                        symbol_key.as_ref(),
+                        rename_is_package_scoped,
+                        lexical_sub_declaration,
+                    ) {
+                        let pending_index_tasks = self
+                            .pending_index_task_count
+                            .load(std::sync::atomic::Ordering::Acquire);
+                        if pending_index_tasks > 0 {
+                            let readiness = IndexReadinessOutcome::Stale("pending index tasks");
+                            self.record_rename_provider_decision_trace(
+                                Some(uri),
+                                current_symbol.as_deref(),
+                                "workspace_index_not_ready",
+                                0,
+                                readiness.reason(),
+                            );
+                            return Err(Self::rename_readiness_error(&readiness));
+                        }
+                        let readiness =
+                            self.check_index_readiness(IndexReadinessPolicy::FailClosed);
+                        if readiness.is_unsafe_rejected() {
+                            self.record_rename_provider_decision_trace(
+                                Some(uri),
+                                current_symbol.as_deref(),
+                                "workspace_index_not_ready",
+                                0,
+                                readiness.reason(),
+                            );
+                            return Err(Self::rename_readiness_error(&readiness));
+                        }
+                    }
+
+                    let access_mode = route_index_access(self.coordinator());
 
                     match access_mode {
                         IndexAccessMode::Partial(reason) => {
@@ -1511,7 +1622,8 @@ impl LspServer {
                 // Same-file fallback for degraded/partial modes
                 let documents = self.documents_guard();
                 if let Some(doc) = self.get_document(&documents, uri) {
-                    if let Some(ref ast) = doc.ast {
+                    let parsed = doc.current_parsed();
+                    if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                         let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
                         let current_symbol = self.get_token_at_position(&doc.text, offset);
                         let normalized_name =
@@ -1694,6 +1806,10 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
 
     fn position_of(text: &str, needle: &str) -> Result<(u32, u32), Box<dyn std::error::Error>> {
@@ -1749,15 +1865,14 @@ mod tests {
 
     #[test]
     fn perl_word_split_boundary_discriminator_c_eq_underscore() {
-        assert_eq!(perl_word_split_boundary('_'), false, "input that hits the boundary: c == '_'");
+        assert!(!perl_word_split_boundary('_'), "input that hits the boundary: c == '_'");
     }
 
     #[test]
     fn perl_word_split_boundary_discriminator_c_ne_underscore() {
-        assert_eq!(perl_word_split_boundary(' '), true, "input that hits the boundary: c != '_'");
-        assert_eq!(
-            perl_word_split_boundary('a'),
-            false,
+        assert!(perl_word_split_boundary(' '), "input that hits the boundary: c != '_'");
+        assert!(
+            !perl_word_split_boundary('a'),
             "input that hits the boundary: c.is_alphanumeric()"
         );
     }
@@ -1766,16 +1881,14 @@ mod tests {
     fn sub_declaration_keyword_before_boundary_discriminator_symbol_start_zero()
     -> Result<(), Box<dyn std::error::Error>> {
         let boundary_source = "target();\nsub target { 1 }\n";
-        assert_eq!(
-            sub_declaration_keyword_before(boundary_source, 0),
-            false,
+        assert!(
+            !sub_declaration_keyword_before(boundary_source, 0),
             "symbol_start == 0 must not slice before the document start"
         );
 
         let sub_name_offset = boundary_source.find("target {").ok_or("missing sub target")?;
-        assert_eq!(
+        assert!(
             sub_declaration_keyword_before(boundary_source, sub_name_offset),
-            true,
             "normal sub declaration names should still detect the preceding sub keyword"
         );
 
@@ -1789,14 +1902,12 @@ mod tests {
         let invalid_offset = source.find("target { 1 }").ok_or("missing invalid sub target")?;
         let valid_offset = source.find("target { 2 }").ok_or("missing valid sub target")?;
 
-        assert_eq!(
-            sub_declaration_keyword_before(source, invalid_offset),
-            false,
+        assert!(
+            !sub_declaration_keyword_before(source, invalid_offset),
             "input that hits the boundary: c != '_'"
         );
-        assert_eq!(
+        assert!(
             sub_declaration_keyword_before(source, valid_offset),
-            true,
             "plain sub declarations should still detect the sub keyword"
         );
 
@@ -1810,18 +1921,85 @@ mod tests {
         let tab_offset = source.find("target { 1 }").ok_or("missing tab-separated sub target")?;
         let method_offset = source.find("target { 2 }").ok_or("missing method target")?;
 
-        assert_eq!(
+        assert!(
             sub_declaration_keyword_before(source, tab_offset),
-            true,
             "input that hits the boundary: !c.is_alphanumeric() && c != '_'"
         );
-        assert_eq!(
-            sub_declaration_keyword_before(source, method_offset),
-            false,
+        assert!(
+            !sub_declaration_keyword_before(source, method_offset),
             "other declaration-like keywords must not be treated as sub declarations"
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn lexical_sub_declaration_keyword_before_detects_my_and_state_subs()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "my sub lexical { 1 }\nstate sub sticky { 2 }\nsub package_sub { 3 }\n";
+        let my_sub_offset = source.find("lexical").ok_or("missing my sub name")?;
+        let state_sub_offset = source.find("sticky").ok_or("missing state sub name")?;
+        let package_sub_offset = source.find("package_sub").ok_or("missing package sub name")?;
+
+        assert!(lexical_sub_declaration_keyword_before(source, my_sub_offset));
+        assert!(lexical_sub_declaration_keyword_before(source, state_sub_offset));
+        assert!(!lexical_sub_declaration_keyword_before(source, package_sub_offset));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn package_scoped_rename_requires_ready_index_classifies_workspace_symbols() {
+        let package_key = perl_parser::index::SymbolKey {
+            pkg: "Readiness::Pkg".into(),
+            name: "Readiness::Pkg".into(),
+            sigil: None,
+            kind: perl_parser::index::SymKind::Pack,
+        };
+        let sub_key = perl_parser::index::SymbolKey {
+            pkg: "Readiness::Pkg".into(),
+            name: "target".into(),
+            sigil: None,
+            kind: perl_parser::index::SymKind::Sub,
+        };
+        let lexical_key = perl_parser::index::SymbolKey {
+            pkg: "Readiness::Pkg".into(),
+            name: "target".into(),
+            sigil: None,
+            kind: perl_parser::index::SymKind::Sub,
+        };
+        let lexical_variable_key = perl_parser::index::SymbolKey {
+            pkg: "Readiness::Pkg".into(),
+            name: "value".into(),
+            sigil: Some('$'),
+            kind: perl_parser::index::SymKind::Var,
+        };
+
+        assert!(LspServer::package_scoped_rename_requires_ready_index(
+            Some(&package_key),
+            true,
+            false
+        ));
+        assert!(LspServer::package_scoped_rename_requires_ready_index(Some(&sub_key), true, false));
+        assert!(
+            !LspServer::package_scoped_rename_requires_ready_index(Some(&lexical_key), true, true),
+            "lexical sub declarations are same-file scoped and must not fail closed on workspace index readiness"
+        );
+        assert!(
+            !LspServer::package_scoped_rename_requires_ready_index(
+                Some(&lexical_variable_key),
+                true,
+                false
+            ),
+            "lexical variables do not require workspace index readiness"
+        );
+        assert!(!LspServer::package_scoped_rename_requires_ready_index(
+            Some(&package_key),
+            false,
+            false
+        ));
+        assert!(!LspServer::package_scoped_rename_requires_ready_index(None, true, false));
     }
 
     #[cfg(feature = "workspace")]
@@ -1968,7 +2146,7 @@ mod tests {
 
     #[cfg(feature = "workspace")]
     #[test]
-    fn handle_rename_partial_index_uses_open_document_qualified_workspace_edit()
+    fn handle_rename_partial_index_package_scope_fails_closed()
     -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::default();
         let request_uri = "file:///workspace/lib/Partial/Pkg.pm";
@@ -1982,23 +2160,14 @@ mod tests {
             .map_err(std::io::Error::other)?;
 
         let (line, character) = position_of(request_source, "target {")?;
-        let rename_result = server
-            .handle_rename_workspace(Some(rename_params(request_uri, line, character, "renamed")))?
-            .ok_or("missing partial-index package rename result")?;
+        let error = server
+            .handle_rename_workspace(Some(rename_params(request_uri, line, character, "renamed")))
+            .expect_err("partial-index package rename must fail closed");
 
-        let changes = rename_result
-            .get("changes")
-            .and_then(Value::as_object)
-            .ok_or("missing partial-index workspace edit changes")?;
-        let edit_count: usize = changes.values().filter_map(Value::as_array).map(Vec::len).sum();
-        assert_eq!(edit_count, 2);
+        assert_eq!(error.code, REQUEST_FAILED);
         assert!(
-            changes.contains_key(request_uri),
-            "request declaration edit should be present: {rename_result}"
-        );
-        assert!(
-            changes.contains_key(caller_uri),
-            "open caller qualified call edit should be present: {rename_result}"
+            error.message.contains("ready workspace index"),
+            "error should explain readiness requirement: {error:?}"
         );
 
         Ok(())
@@ -2006,7 +2175,7 @@ mod tests {
 
     #[cfg(feature = "workspace")]
     #[test]
-    fn handle_rename_partial_index_falls_back_when_open_document_guard_has_no_callers()
+    fn handle_rename_partial_index_package_scope_without_callers_fails_closed()
     -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::default();
         let request_uri = "file:///workspace/lib/PartialSolo/Pkg.pm";
@@ -2017,21 +2186,14 @@ mod tests {
             .map_err(std::io::Error::other)?;
 
         let (line, character) = position_of(request_source, "target {")?;
-        let rename_result = server.handle_rename_workspace(Some(rename_params(
-            request_uri,
-            line,
-            character,
-            "renamed",
-        )))?;
+        let error = server
+            .handle_rename_workspace(Some(rename_params(request_uri, line, character, "renamed")))
+            .expect_err("partial-index package rename must fail closed");
 
+        assert_eq!(error.code, REQUEST_FAILED);
         assert!(
-            rename_result.is_none()
-                || rename_result
-                    .as_ref()
-                    .and_then(|value| value.get("changes"))
-                    .and_then(Value::as_object)
-                    .is_some_and(|changes| !changes.is_empty()),
-            "partial-index fallthrough should either produce a safe same-file edit or refuse: {rename_result:?}"
+            error.message.contains("ready workspace index"),
+            "error should explain readiness requirement: {error:?}"
         );
 
         Ok(())
@@ -2039,7 +2201,109 @@ mod tests {
 
     #[cfg(feature = "workspace")]
     #[test]
-    fn handle_rename_without_coordinator_uses_open_document_qualified_workspace_edit()
+    fn handle_rename_partial_index_lexical_variable_stays_same_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let request_uri = "file:///workspace/lib/PartialLexical/Pkg.pm";
+        let request_source = "package PartialLexical::Pkg;\nsub run { my $value = $value; }\n1;\n";
+        server.test_apply_did_open(request_uri, request_source, 1)?;
+        server
+            .test_index_file_in_building_state(request_uri, request_source)
+            .map_err(std::io::Error::other)?;
+
+        let (line, character) = position_of(request_source, "$value =")?;
+        let rename_result = server
+            .handle_rename_workspace(Some(rename_params(request_uri, line, character, "renamed")))?
+            .ok_or("missing lexical rename result")?;
+
+        let changes = rename_result
+            .get("changes")
+            .and_then(Value::as_object)
+            .ok_or("missing lexical rename changes")?;
+        let edits = changes
+            .get(request_uri)
+            .and_then(Value::as_array)
+            .ok_or("missing same-file lexical edits")?;
+        assert_eq!(changes.len(), 1, "lexical rename must stay same-file: {rename_result}");
+        assert_eq!(edits.len(), 2, "lexical rename should edit declaration and use");
+
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn handle_rename_partial_index_lexical_sub_declaration_does_not_fail_closed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let request_uri = "file:///workspace/lib/PartialLexicalSub/Pkg.pm";
+        let request_source =
+            "package PartialLexicalSub::Pkg;\nsub run { my sub target { 1 }; target(); }\n1;\n";
+        server.test_apply_did_open(request_uri, request_source, 1)?;
+        server
+            .test_index_file_in_building_state(request_uri, request_source)
+            .map_err(std::io::Error::other)?;
+
+        let (line, character) = position_of(request_source, "target {")?;
+        let rename_result = server
+            .handle_rename_workspace(Some(rename_params(request_uri, line, character, "renamed")))?
+            .ok_or("missing lexical sub rename result")?;
+
+        let changes = rename_result
+            .get("changes")
+            .and_then(Value::as_object)
+            .ok_or("missing lexical sub rename changes")?;
+        assert!(
+            changes.is_empty() || (changes.len() == 1 && changes.contains_key(request_uri)),
+            "lexical sub rename must not use partial workspace facts: {rename_result}"
+        );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn handle_rename_ready_index_with_pending_task_fails_closed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let request_uri = "file:///workspace/lib/Pending/Pkg.pm";
+        let caller_uri = "file:///workspace/lib/Pending/Caller.pm";
+        let request_source = "package Pending::Pkg;\nsub target { 1 }\n1;\n";
+        let caller_source = "package Pending::Caller;\nsub run { Pending::Pkg::target(); }\n1;\n";
+        server.test_apply_did_open(request_uri, request_source, 1)?;
+        server.test_apply_did_open(caller_uri, caller_source, 1)?;
+
+        let coordinator = server.coordinator().ok_or("missing workspace index coordinator")?;
+        coordinator
+            .index()
+            .index_file(url::Url::parse(request_uri)?, request_source.to_string())
+            .map_err(std::io::Error::other)?;
+        coordinator
+            .index()
+            .index_file(url::Url::parse(caller_uri)?, caller_source.to_string())
+            .map_err(std::io::Error::other)?;
+        coordinator.transition_to_ready(
+            coordinator.index().file_count(),
+            coordinator.index().symbol_count(),
+        );
+        server.pending_index_task_count.store(1, std::sync::atomic::Ordering::Release);
+
+        let (line, character) = position_of(request_source, "target {")?;
+        let error = server
+            .handle_rename_workspace(Some(rename_params(request_uri, line, character, "renamed")))
+            .expect_err("package rename must fail closed while index update task is pending");
+
+        assert_eq!(error.code, REQUEST_FAILED);
+        assert_eq!(
+            error.data.as_ref().and_then(|data| data.get("indexReadiness")),
+            Some(&json!("pending index tasks"))
+        );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn handle_rename_without_coordinator_package_scope_fails_closed()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut server = LspServer::default();
         server.index_coordinator = None;
@@ -2053,23 +2317,14 @@ mod tests {
         server.test_apply_did_open(caller_uri, caller_source, 1)?;
 
         let (line, character) = position_of(request_source, "target {")?;
-        let rename_result = server
-            .handle_rename_workspace(Some(rename_params(request_uri, line, character, "renamed")))?
-            .ok_or("missing no-coordinator package rename result")?;
+        let error = server
+            .handle_rename_workspace(Some(rename_params(request_uri, line, character, "renamed")))
+            .expect_err("missing-index package rename must fail closed");
 
-        let changes = rename_result
-            .get("changes")
-            .and_then(Value::as_object)
-            .ok_or("missing no-coordinator workspace edit changes")?;
-        let edit_count: usize = changes.values().filter_map(Value::as_array).map(Vec::len).sum();
-        assert_eq!(edit_count, 2);
+        assert_eq!(error.code, REQUEST_FAILED);
         assert!(
-            changes.contains_key(request_uri),
-            "request declaration edit should be present: {rename_result}"
-        );
-        assert!(
-            changes.contains_key(caller_uri),
-            "open caller qualified call edit should be present without a coordinator: {rename_result}"
+            error.message.contains("ready workspace index"),
+            "error should explain readiness requirement: {error:?}"
         );
 
         Ok(())
@@ -2626,6 +2881,20 @@ mod tests {
         assert_eq!(server.normalize_rename_target(Some("$value"), "$renamed")?, "$renamed");
         assert_eq!(server.normalize_rename_target(Some("target"), "renamed")?, "renamed");
 
+        // Non-sigiled (subroutine/package) targets renamed to a reserved keyword are rejected
+        // by the handler guard — `sub if {}` / `package for` are Perl syntax errors.
+        assert!(
+            server.normalize_rename_target(Some("greet"), "if").is_err(),
+            "renaming a subroutine to a reserved keyword must be rejected"
+        );
+        assert!(
+            server.normalize_rename_target(Some("helper"), "while").is_err(),
+            "renaming a subroutine to a control-flow keyword must be rejected"
+        );
+        // Sigiled (variable) targets may take keyword names — the sigil disambiguates (`$if`).
+        assert_eq!(server.normalize_rename_target(Some("$flag"), "$if")?, "$if");
+        assert_eq!(server.normalize_rename_target(Some("$flag"), "if")?, "$if");
+
         assert!(
             server.normalize_rename_target(Some("$value"), "").is_err(),
             "empty requested names must be rejected"
@@ -2644,6 +2913,61 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    /// Perl's reserved-word check is case-sensitive: only the exact lowercase
+    /// spellings in `RENAME_KEYWORDS` are reserved. `If`, `WHILE`, and `For` are
+    /// ordinary, unreserved subroutine names.
+    #[test]
+    fn normalize_rename_target_keyword_check_is_case_sensitive()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+
+        assert_eq!(server.normalize_rename_target(Some("greet"), "If")?, "If");
+        assert_eq!(server.normalize_rename_target(Some("greet"), "WHILE")?, "WHILE");
+        assert_eq!(server.normalize_rename_target(Some("greet"), "For")?, "For");
+
+        // The lowercase spellings remain rejected.
+        assert!(server.normalize_rename_target(Some("greet"), "if").is_err());
+        assert!(server.normalize_rename_target(Some("greet"), "while").is_err());
+
+        Ok(())
+    }
+
+    /// A bare (non-sigiled) current symbol is a subroutine/package target — a
+    /// sigil-prefixed requested name for it is not a valid bareword identifier
+    /// and must be rejected as an invalid identifier, regardless of whether the
+    /// bare name underneath happens to be a keyword.
+    #[test]
+    fn normalize_rename_target_rejects_sigil_prefixed_name_for_bare_symbol() {
+        let server = LspServer::default();
+
+        assert!(
+            server.normalize_rename_target(Some("greet"), "$if").is_err(),
+            "a subroutine rename target must not carry a sigil"
+        );
+        assert!(
+            server.normalize_rename_target(Some("greet"), "$helper").is_err(),
+            "a subroutine rename target must not carry a sigil, even for a non-keyword name"
+        );
+    }
+
+    /// Fully qualified names (`Package::name`) are not valid bare identifiers
+    /// under the current `is_valid_identifier` character rules (`::` is not
+    /// alphanumeric or `_`), so they are rejected as invalid identifiers —
+    /// independent of whether the trailing segment is a reserved keyword.
+    #[test]
+    fn normalize_rename_target_rejects_fully_qualified_name() {
+        let server = LspServer::default();
+
+        assert!(
+            server.normalize_rename_target(Some("greet"), "Foo::if").is_err(),
+            "fully qualified names are rejected as invalid identifiers"
+        );
+        assert!(
+            server.normalize_rename_target(Some("greet"), "Foo::helper").is_err(),
+            "fully qualified names are rejected even when the tail is not a keyword"
+        );
     }
 
     #[test]

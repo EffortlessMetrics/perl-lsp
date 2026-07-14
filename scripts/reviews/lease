@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# scripts/reviews/lease — per-branch push lease (#3693 R1, FILE 5)
+#
+# Substrate for the "one editing owner per branch" invariant. A lease is
+# keyed on the BRANCH name (mechanically knowable via
+# `git rev-parse --abbrev-ref HEAD`), NOT on agent identity — the PreToolUse
+# hook payload carries no agent id, so branch is the only id a future
+# `git push`-guard (R3b) can read. This script is R1 substrate ONLY: it
+# writes/reads the durable lease state. The hook that CONSUMES it (R3) and
+# the audit-driven takeover (R5) are later PRs; `audit` here emits
+# takeover-CANDIDATE lines, never performing a takeover itself (per the
+# CLAUDE.md "2h inactivity triggers lease audit, not auto-takeover" invariant).
+#
+# State file: .ops-perl-lsp/review-leases/<sanitized-branch>.json
+#   (schema: .ci/receipts/schemas/review-lease.schema.json)
+#
+# Default TTL 120 min — matches the spec's 2h and xtask worktree_allocator's
+# DEFAULT_LEASE_MINUTES=120 (deliberately NOT control-plane-lock.sh's 30 min,
+# which is a different scope).
+#
+# ── Usage ────────────────────────────────────────────────────────────────────
+#   scripts/reviews/lease acquire --branch <b> --owner <id> [--pr <n>] [--ttl-min 120] [--base-sha <sha>]
+#   scripts/reviews/lease verify  --branch <b>
+#   scripts/reviews/lease release --branch <b> --owner <id>
+#   scripts/reviews/lease audit
+#
+# ── Exit codes ───────────────────────────────────────────────────────────────
+#   acquire: 0 acquired (or refreshed by same owner); 1 held by a different
+#            owner and unexpired; 2 usage error.
+#   verify : 0 an unexpired lease exists for the branch; 1 absent/expired;
+#            2 usage error.
+#   release: 0 released (or already absent); 1 held by a different owner;
+#            2 usage error.
+#   audit  : 0 always (lists expired leases + takeover-candidate lines); 2 usage.
+#
+# ── Test seam ────────────────────────────────────────────────────────────────
+#   REVIEW_LEASES_DIR overrides the state directory (default
+#   .ops-perl-lsp/review-leases). scripts/tests/test-review-lease.sh sets it
+#   to a temp dir so tests never touch the real lease store.
+set -euo pipefail
+
+LEASES_DIR="${REVIEW_LEASES_DIR:-.ops-perl-lsp/review-leases}"
+DEFAULT_TTL_MIN=120
+
+die_usage() { echo "ERROR: $1" >&2; exit 2; }
+
+# Sanitize a branch name into a filesystem-safe basename: every char outside
+# [A-Za-z0-9._-] becomes '-'. `feat/3693-x` -> `feat-3693-x`.
+sanitize_branch() {
+    printf '%s' "$1" | sed -E 's#[^A-Za-z0-9._-]#-#g'
+}
+
+lease_path() {
+    printf '%s/%s.json' "$LEASES_DIR" "$(sanitize_branch "$1")"
+}
+
+now_epoch() { date -u +%s; }
+iso_of_epoch() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ; }
+
+# ── arg parsing ─────────────────────────────────────────────────────────────
+[[ $# -ge 1 ]] || die_usage "missing subcommand (acquire|verify|release|audit)"
+SUBCMD="$1"; shift
+
+BRANCH="" OWNER="" PR="null" TTL_MIN="$DEFAULT_TTL_MIN" BASE_SHA="null"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --branch)   BRANCH="${2:-}"; shift 2 ;;
+        --owner)    OWNER="${2:-}"; shift 2 ;;
+        --pr)       PR="${2:-}"; shift 2 ;;
+        --ttl-min)  TTL_MIN="${2:-}"; shift 2 ;;
+        --base-sha) BASE_SHA="\"${2:-}\""; shift 2 ;;
+        *) die_usage "unknown argument: $1" ;;
+    esac
+done
+
+case "$SUBCMD" in
+    acquire)
+        [[ -n "$BRANCH" ]] || die_usage "acquire requires --branch"
+        [[ -n "$OWNER" ]]  || die_usage "acquire requires --owner"
+        [[ "$TTL_MIN" =~ ^[0-9]+$ ]] || die_usage "--ttl-min must be a positive integer"
+        [[ "$PR" == "null" || "$PR" =~ ^[0-9]+$ ]] || die_usage "--pr must be numeric"
+        mkdir -p "$LEASES_DIR"
+        path="$(lease_path "$BRANCH")"
+        now="$(now_epoch)"
+        if [[ -f "$path" ]]; then
+            cur_owner="$(jq -r '.owner // ""' "$path")"
+            cur_exp="$(jq -r '.expires_at_epoch // 0' "$path")"
+            if [[ "$now" -lt "$cur_exp" && "$cur_owner" != "$OWNER" ]]; then
+                echo "REFUSE lease on '$BRANCH' is held by '$cur_owner' until $(iso_of_epoch "$cur_exp") — not '$OWNER'" >&2
+                exit 1
+            fi
+        fi
+        exp=$((now + TTL_MIN * 60))
+        acquired_iso="$(iso_of_epoch "$now")"
+        expires_iso="$(iso_of_epoch "$exp")"
+        jq -n \
+            --arg branch "$BRANCH" --arg owner "$OWNER" --argjson pr "$PR" \
+            --argjson base "$BASE_SHA" \
+            --arg aiso "$acquired_iso" --arg eiso "$expires_iso" \
+            --argjson aep "$now" --argjson eep "$exp" \
+            '{v:1, branch:$branch, owner:$owner, pr:$pr, base_sha:$base,
+              acquired_at:$aiso, expires_at:$eiso, last_heartbeat:$aiso,
+              acquired_at_epoch:$aep, expires_at_epoch:$eep}' > "$path"
+        echo "OK lease acquired on '$BRANCH' by '$OWNER' until $expires_iso"
+        exit 0
+        ;;
+    verify)
+        [[ -n "$BRANCH" ]] || die_usage "verify requires --branch"
+        path="$(lease_path "$BRANCH")"
+        if [[ ! -f "$path" ]]; then
+            echo "ABSENT no lease for '$BRANCH'" >&2
+            exit 1
+        fi
+        now="$(now_epoch)"
+        exp="$(jq -r '.expires_at_epoch // 0' "$path")"
+        owner="$(jq -r '.owner // "?"' "$path")"
+        if [[ "$now" -lt "$exp" ]]; then
+            echo "OK lease on '$BRANCH' held by '$owner' until $(iso_of_epoch "$exp")"
+            exit 0
+        fi
+        echo "EXPIRED lease on '$BRANCH' (was '$owner', expired $(iso_of_epoch "$exp"))" >&2
+        exit 1
+        ;;
+    release)
+        [[ -n "$BRANCH" ]] || die_usage "release requires --branch"
+        [[ -n "$OWNER" ]]  || die_usage "release requires --owner"
+        path="$(lease_path "$BRANCH")"
+        if [[ ! -f "$path" ]]; then
+            echo "OK no lease for '$BRANCH' — nothing to release"
+            exit 0
+        fi
+        cur_owner="$(jq -r '.owner // ""' "$path")"
+        if [[ "$cur_owner" != "$OWNER" ]]; then
+            echo "REFUSE lease on '$BRANCH' is held by '$cur_owner' — '$OWNER' cannot release it" >&2
+            exit 1
+        fi
+        rm -f "$path"
+        echo "OK lease on '$BRANCH' released by '$OWNER'"
+        exit 0
+        ;;
+    audit)
+        now="$(now_epoch)"
+        if [[ ! -d "$LEASES_DIR" ]]; then
+            echo "OK no lease directory ($LEASES_DIR) — 0 leases"
+            exit 0
+        fi
+        expired=0 active=0
+        for path in "$LEASES_DIR"/*.json; do
+            [[ -e "$path" ]] || continue
+            exp="$(jq -r '.expires_at_epoch // 0' "$path")"
+            branch="$(jq -r '.branch // "?"' "$path")"
+            owner="$(jq -r '.owner // "?"' "$path")"
+            pr="$(jq -r '.pr // "?"' "$path")"
+            if [[ "$now" -ge "$exp" ]]; then
+                expired=$((expired + 1))
+                echo "TAKEOVER-CANDIDATE branch='$branch' owner='$owner' pr=$pr expired=$(iso_of_epoch "$exp") — route to lease-audit/R5 (do NOT auto-takeover)"
+            else
+                active=$((active + 1))
+            fi
+        done
+        echo "OK lease audit: $active active, $expired expired (takeover-candidates listed above)"
+        exit 0
+        ;;
+    *)
+        die_usage "unknown subcommand '$SUBCMD' (acquire|verify|release|audit)"
+        ;;
+esac

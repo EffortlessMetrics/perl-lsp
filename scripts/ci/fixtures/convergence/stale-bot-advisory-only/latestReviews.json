@@ -1,0 +1,12 @@
+[
+  {
+    "author": { "login": "alice", "__typename": "User" },
+    "state": "APPROVED",
+    "commit": { "oid": "dddd4444dddd4444dddd4444dddd4444dddd4444" }
+  },
+  {
+    "author": { "login": "coderabbitai", "__typename": "Bot" },
+    "state": "COMMENTED",
+    "commit": { "oid": "0000000000000000000000000000000000eeee" }
+  }
+]

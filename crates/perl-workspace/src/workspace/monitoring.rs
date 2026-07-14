@@ -7,4 +7,5 @@ pub use crate::monitoring::{
     DegradationReason, EarlyExitReason, EarlyExitRecord, IndexInstrumentation,
     IndexInstrumentationSnapshot, IndexMetrics, IndexPerformanceCaps, IndexPhase,
     IndexPhaseTransition, IndexResourceLimits, IndexStateKind, IndexStateTransition, ResourceKind,
+    WorkspaceIndexingReceipt,
 };

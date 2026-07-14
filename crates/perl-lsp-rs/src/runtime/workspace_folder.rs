@@ -75,6 +75,13 @@ impl WorkspaceFolderState {
         self
     }
 
+    /// Refresh metadata-derived facts for this folder's effective workspace config.
+    pub fn refresh_workspace_metadata(&mut self) {
+        if let Some(path) = self.path.as_deref() {
+            self.effective_workspace_config.refresh_declared_dependencies(path);
+        }
+    }
+
     /// Get the URI as a string reference.
     #[must_use]
     pub fn uri(&self) -> &str {

@@ -200,6 +200,49 @@ fn missing_module_hover_gives_actionable_next_steps() {
 }
 
 #[test]
+fn missing_module_hover_mentions_declared_unindexed_dependency() {
+    use perl_lsp_rs_core::config::{DeclaredDependency, DeclaredDependencySource, WorkspaceConfig};
+
+    let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+    let mut config = WorkspaceConfig::default();
+    config.use_perl5lib = false;
+    config.use_system_inc = false;
+    config.declared_dependencies = vec![DeclaredDependency::new(
+        "JSON::PP",
+        Some("4.16"),
+        "requires",
+        DeclaredDependencySource::Cpanfile,
+    )];
+    *server.workspace_folders.lock() = vec![
+        crate::runtime::workspace_folder::WorkspaceFolderState::new(
+            "file:///workspace".to_string(),
+        )
+        .with_effective_workspace_config(config),
+    ];
+
+    let hover = server.build_module_hover(
+        "JSON::PP",
+        "use JSON::PP;\n",
+        "file:///workspace/main.pl",
+        Some(4),
+    );
+    let value = must_some(hover["contents"]["value"].as_str());
+
+    assert!(
+        value.contains("declared in cpanfile"),
+        "missing module hover should explain metadata declaration source: {value}"
+    );
+    assert!(
+        value.contains("not currently indexed"),
+        "missing module hover should distinguish declared-but-unindexed modules: {value}"
+    );
+    assert!(
+        value.contains("requires 4.16"),
+        "missing module hover should include declared dependency kind and version: {value}"
+    );
+}
+
+#[test]
 fn resolved_module_hover_links_virtual_perldoc() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
     let temp = tempfile::tempdir()?;
@@ -718,4 +761,187 @@ fn method_modifier_hover_escapes_doc_markdown() {
     );
     // Method name should appear in backtick span (not escaped — it's code)
     assert!(value.contains("`validate_input`"), "method name should appear in code span: {value}");
+}
+
+#[test]
+fn hover_off_lock_analysis_emits_lock_hold_and_analyze_timing_spans()
+-> Result<(), Box<dyn std::error::Error>> {
+    // #3396 Phase 4: `handle_hover` grabs the parsed snapshot + text under a
+    // brief documents-map lock, then drops the guard before analysis. Proves
+    // this measurably: the `lock_hold` span (the brief guarded scope) must be
+    // recorded before the `analyze` span (the off-lock work), for the same
+    // request.
+    let text = "my $var = 42;\n";
+    let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+    let uri = "file:///timing-hover.pl".to_string();
+    server.did_open(json!({
+        "textDocument": {
+            "uri": uri,
+            "languageId": "perl",
+            "version": 1,
+            "text": text
+        }
+    }))?;
+
+    let _lock = crate::runtime::timing::capture::test_lock();
+    crate::runtime::timing::capture::start();
+    let _ = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 0, "character": 4 }
+    })))?;
+    let spans = crate::runtime::timing::capture::drain();
+
+    let lock_hold_idx = spans.iter().position(|s| s.span == "provider.hover.lock_hold");
+    let analyze_idx = spans.iter().position(|s| s.span == "provider.hover.analyze");
+    assert!(lock_hold_idx.is_some(), "expected a provider.hover.lock_hold span, got: {spans:?}");
+    assert!(analyze_idx.is_some(), "expected a provider.hover.analyze span, got: {spans:?}");
+    assert!(
+        lock_hold_idx < analyze_idx,
+        "lock_hold span must be emitted before the analyze span (proves the documents-map guard \
+         is dropped before analysis runs): {spans:?}"
+    );
+
+    Ok(())
+}
+
+// ── #3766: construction-count proof for the generation-owned migration ────
+//
+// `hover_generation_owned_migration_3766.rs` (integration test, `tests/`) has
+// three "construction count" tests, but they are PROXIES: `ParsedSnapshot`'s
+// `semantic_analyzer_build_count()` / `type_environment_build_count()` are
+// `#[cfg(test)]` and `pub(crate)`, so they are reachable only from in-crate
+// unit tests, never from an external `tests/` integration crate. The tests
+// below are the real discriminators: they call `handle_hover` (the actual
+// production code path) and then read the build counters directly off the
+// snapshot the hover consumed, proving hover triggers exactly one
+// construction per generation rather than per request.
+
+/// Three hovers at different offsets on the same generation must build the
+/// snapshot's `SemanticAnalyzer` / `TypeInferenceEngine` exactly once each.
+///
+/// RED without the #3766 migration: the old `get_or_build_analyzer` /
+/// `get_or_build_type_engine` calls never touch `ParsedSnapshot`'s cells at
+/// all, so `semantic_analyzer_initialized()` / `type_environment_initialized()`
+/// would read `false` even after hovering -- this test would fail to find an
+/// initialized cell (via `must_some`-style assertion) rather than merely
+/// under-count.
+#[test]
+fn test_hover_snapshot_analyzer_built_exactly_once_per_generation()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::new();
+    let uri = "file:///hover_build_count_single_gen.pl";
+    let text = "my $a = 10;\nmy $b = 20;\nprint $a + $b;\n";
+
+    server.did_open(json!({
+        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+    }))?;
+
+    // Three hovers at three different offsets, same generation.
+    for (line, character) in [(0, 4), (1, 4), (2, 7)] {
+        let hover = server.handle_hover(Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        })))?;
+        assert!(
+            hover.is_some_and(|v| !v.is_null()),
+            "hover at ({line}, {character}) should hit a symbol"
+        );
+    }
+
+    let documents = server.documents_guard();
+    let doc = must_some(server.get_document(&documents, uri));
+    let snapshot = must_some(doc.current_parsed());
+
+    assert!(
+        snapshot.semantic_analyzer_initialized(),
+        "analyzer cell should be initialized by hover"
+    );
+    assert!(
+        snapshot.type_environment_initialized(),
+        "type-env cell should be initialized by hover"
+    );
+    assert_eq!(
+        snapshot.semantic_analyzer_build_count(),
+        1,
+        "3 hovers on one generation must build the analyzer exactly once (OnceLock reuse), got {}",
+        snapshot.semantic_analyzer_build_count()
+    );
+    assert_eq!(
+        snapshot.type_environment_build_count(),
+        1,
+        "3 hovers on one generation must build the type engine exactly once (OnceLock reuse), got {}",
+        snapshot.type_environment_build_count()
+    );
+
+    Ok(())
+}
+
+/// Each new generation must get its own fresh construction: hovering on
+/// generation N, then editing to generation N+1 and hovering again, must
+/// leave generation N's snapshot at build-count 1 and produce a build-count
+/// of 1 on the NEW generation N+1's own snapshot -- never a shared/global
+/// counter, and never a reused analyzer from the superseded generation.
+#[test]
+fn test_hover_snapshot_analyzer_not_shared_across_generations()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::new();
+    let uri = "file:///hover_build_count_multi_gen.pl";
+
+    server.did_open(json!({
+        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": "my $x = 1;\nprint $x;\n" }
+    }))?;
+    let hover_gen0 = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 6 }
+    })))?;
+    assert!(hover_gen0.is_some_and(|v| !v.is_null()), "generation 0 hover should hit $x");
+
+    let gen0_snapshot = {
+        let documents = server.documents_guard();
+        let doc = must_some(server.get_document(&documents, uri));
+        must_some(doc.current_parsed())
+    };
+    assert_eq!(
+        gen0_snapshot.semantic_analyzer_build_count(),
+        1,
+        "generation 0 snapshot should have exactly one construction"
+    );
+
+    server.handle_did_change(Some(json!({
+        "textDocument": { "uri": uri, "version": 2 },
+        "contentChanges": [{ "text": "my $y = 2;\nprint $y;\n" }]
+    })))?;
+    let hover_gen1 = server.handle_hover(Some(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 6 }
+    })))?;
+    assert!(hover_gen1.is_some_and(|v| !v.is_null()), "generation 1 hover should hit $y");
+
+    let gen1_snapshot = {
+        let documents = server.documents_guard();
+        let doc = must_some(server.get_document(&documents, uri));
+        must_some(doc.current_parsed())
+    };
+
+    // The generation-1 snapshot is a *different* object with its own cell --
+    // never the generation-0 snapshot's Arc.
+    assert!(
+        !std::sync::Arc::ptr_eq(&gen0_snapshot, &gen1_snapshot),
+        "generation 1 must be a distinct ParsedSnapshot from generation 0"
+    );
+    assert_eq!(
+        gen1_snapshot.semantic_analyzer_build_count(),
+        1,
+        "generation 1's own snapshot must independently build exactly once, got {}",
+        gen1_snapshot.semantic_analyzer_build_count()
+    );
+    // The superseded generation-0 snapshot's own counter is untouched by
+    // generation 1's hover -- proves counts are per-snapshot, not global.
+    assert_eq!(
+        gen0_snapshot.semantic_analyzer_build_count(),
+        1,
+        "generation 0 snapshot's build count must remain 1 after generation 1 activity"
+    );
+
+    Ok(())
 }

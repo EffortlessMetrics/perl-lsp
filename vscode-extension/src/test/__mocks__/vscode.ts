@@ -214,7 +214,11 @@ export const debug = {
 };
 
 export class DebugAdapterExecutable {
-  constructor(public command: string, public args: string[], public options?: any) {}
+  constructor(
+    public command: string,
+    public args: string[],
+    public options?: any,
+  ) {}
 }
 
 export const env = {
@@ -229,7 +233,9 @@ export const extensions = {
 
 export class Disposable {
   constructor(private callOnDispose: () => void) {}
-  dispose() { this.callOnDispose(); }
+  dispose() {
+    this.callOnDispose();
+  }
 }
 
 export class EventEmitter {

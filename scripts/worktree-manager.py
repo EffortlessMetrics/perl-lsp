@@ -166,11 +166,80 @@ def parse_worktree_list() -> list[dict[str, str]]:
     return entries
 
 
+def fetch_origin(refspec: str | None = None) -> subprocess.CompletedProcess[str]:
+    """Fetch from `origin` so ref resolution reflects current remote state.
+
+    Best-effort: fetch failures (offline, no `origin` remote, etc.) do not
+    raise — callers fall back to whatever local refs are already available.
+    """
+    cmd = ["fetch", "origin"]
+    if refspec:
+        cmd.append(refspec)
+    return git(cmd, check=False)
+
+
 def base_ref() -> str:
     for candidate in DEFAULT_BRANCH_BASES:
         if git(["rev-parse", "--verify", f"{candidate}^{{commit}}"], check=False).returncode == 0:
             return candidate
     return "HEAD"
+
+
+def origin_branch_ref(branch: str) -> str | None:
+    """Return ``origin/<branch>`` if `branch` exists on `origin`, having
+    verified the local tracking ref was actually fetched fresh.
+
+    Two failure modes are deliberately handled very differently (issue
+    #3749 review follow-up):
+
+    - `git ls-remote --exit-code` reports "no matching refs" (exit code 2,
+      per git's own documented ``--exit-code`` contract): origin was
+      reached successfully and the branch genuinely does not exist there.
+      Returning ``None`` here is safe -- the caller's genuinely-new-branch
+      path applies.
+    - Anything else going wrong -- origin unreachable, credentials
+      rejected, or the refspec fetch not actually landing the branch's
+      objects/ref locally -- means we cannot prove the branch either
+      doesn't exist or what its real content is. Silently falling back to
+      "treat as new" here would recreate the exact #3749 footgun (cutting a
+      fresh branch off local main that shares a name with an
+      already-pushed branch). Fail closed with a ``RuntimeError`` instead
+      of guessing.
+    """
+    wanted = normalize_branch(branch)
+    if not wanted or wanted == "HEAD":
+        return None
+
+    ls_remote = git(["ls-remote", "--exit-code", "--heads", "origin", wanted], check=False)
+    if ls_remote.returncode == 2:
+        return None
+    if ls_remote.returncode != 0:
+        raise RuntimeError(
+            f"could not reach origin to check whether branch {wanted!r} already exists "
+            f"(git ls-remote exited {ls_remote.returncode}); refusing to guess -- fix "
+            "connectivity/credentials and retry (issue #3749: treating this as a new "
+            "branch would risk re-branching an already-pushed branch off local main)"
+        )
+
+    remote_sha = ls_remote.stdout.split()[0] if ls_remote.stdout.strip() else None
+    if not remote_sha:
+        raise RuntimeError(
+            f"origin reported branch {wanted!r} exists but returned no SHA "
+            f"(ls-remote output: {ls_remote.stdout!r}); refusing to guess"
+        )
+
+    fetch_proc = fetch_origin(f"+refs/heads/{wanted}:refs/remotes/origin/{wanted}")
+    local_ref = f"origin/{wanted}"
+    verify = git(["rev-parse", "--verify", f"{local_ref}^{{commit}}"], check=False)
+    local_sha = verify.stdout.strip()
+    if fetch_proc.returncode != 0 or verify.returncode != 0 or local_sha != remote_sha:
+        raise RuntimeError(
+            f"fetched {local_ref} but could not verify it matches origin's current tip "
+            f"for {wanted!r} (remote={remote_sha}, local={local_sha or 'missing'}, "
+            f"fetch_exit={fetch_proc.returncode}); refusing to check out a possibly-stale "
+            "ref (issue #3749)"
+        )
+    return local_ref
 
 
 def branch_exists_elsewhere(branch: str, entries: list[dict[str, str]], slot_id: str | None = None) -> str | None:
@@ -363,7 +432,18 @@ def allocate(args: argparse.Namespace, state: dict[str, Any], state_path: Path, 
     if slot.get("status") not in {"idle", "missing", "retired"} and not args.force:
         raise RuntimeError(f"slot {args.slot!r} is currently {slot.get('status')!r}; use --force to reallocate")
 
-    base = args.ref or base_ref()
+    if args.ref:
+        # Explicit override: honor it as-is, no origin-branch inference.
+        base = args.ref
+    else:
+        # Issue #3749: never silently branch off local/base main when the
+        # requested branch is already pushed to origin — check out its real
+        # content instead. Only cut from base_ref() (freshly fetched) when
+        # the branch is genuinely new.
+        base = origin_branch_ref(args.branch)
+        if base is None:
+            fetch_origin()
+            base = base_ref()
     action = "reuse" if slot_path.exists() else "create"
 
     if args.dry_run:

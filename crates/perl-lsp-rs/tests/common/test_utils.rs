@@ -1,4 +1,9 @@
-#![allow(dead_code)] // This is a utility module used by other tests
+#![allow(dead_code)]
+// This is a utility module used by other tests
+// Integration tests print diagnostic output for CI troubleshooting, and tests
+// are permitted to use `.expect()`/`.expect_err()` on Result/Option per the
+// repo's coding standards; neither applies the way it does to production code.
+#![allow(clippy::print_stderr, clippy::expect_used)]
 
 //! Test utilities and helpers for LSP testing
 //!
@@ -315,6 +320,18 @@ impl TestServer {
             json!({
                 "textDocument": { "uri": uri },
                 "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Request rename at a position with the given new name
+    pub fn get_rename(&self, uri: &str, line: u32, character: u32, new_name: &str) -> Value {
+        self.request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "newName": new_name
             }),
         )
     }

@@ -1,10 +1,10 @@
 use perl_parser_core::hir::{
     BarewordFact, BarewordRole, COMPILE_EFFECT_MODEL_VERSION, CompileConfidence,
     CompileEffectFactKind, CompileEffectKind, CompileEffectSourceKind, CompileEnvironment,
-    CompileEnvironmentBoundaryKind, CompileProvenance, DynamicBoundaryKind, FrameworkAdapterKind,
-    FrameworkAdapterRegistry, FrameworkExportedSymbolKind, GlobSlotSource, HirFile, HirKind,
-    IncRootKind, ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence, ScopeGraph,
-    StashConfidence, StashGraph, StashProvenance, lower_ast,
+    CompileEnvironmentBoundaryKind, CompileProvenance, DerefAggregateKind, DerefOperandKind,
+    FrameworkAdapterKind, FrameworkAdapterRegistry, FrameworkExportedSymbolKind, GlobSlotSource,
+    HirFile, HirKind, IncRootKind, ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence,
+    ScopeGraph, ScopeKind, StashConfidence, StashGraph, StashProvenance, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use perl_semantic_facts::{
@@ -809,6 +809,7 @@ fn hir_stash_graph_records_package_slots_inheritance_and_dynamic_boundaries()
          our @EXPORT_OK;\n\
          our %CACHE;\n\
          *alias = \\&foo;\n\
+         *array_alias = \\@EXPORT_OK;\n\
          *dynamic = $target;\n\
          sub AUTOLOAD { our $AUTOLOAD; }\n",
     );
@@ -835,6 +836,7 @@ fn hir_stash_graph_records_package_slots_inheritance_and_dynamic_boundaries()
          Child::EXPORT_OK Array OurDeclaration ExactAst High target=<none>\n\
          Child::CACHE Hash OurDeclaration ExactAst High target=<none>\n\
          Child::alias Code TypeglobAlias ExactAst Medium target=foo\n\
+         Child::array_alias Array TypeglobAlias ExactAst Medium target=EXPORT_OK\n\
          Child::AUTOLOAD Code SubDeclaration ExactAst High target=<none>\n\
          Child::AUTOLOAD Scalar OurDeclaration ExactAst High target=<none>\n\
          Other::ISA Array PackageAssignment ExactAst High target=<none>\n\
@@ -1289,6 +1291,54 @@ fn hir_compile_environment_records_directives_without_provider_cutover()
 }
 
 #[test]
+fn hir_check_phase_block_defers_compile_time_execution_like_init_and_end()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Oracle: perlmod (https://perldoc.perl.org/perlmod) -- compile/run phase
+    // order is BEGIN (immediate, at parse time) -> UNITCHECK -> CHECK -> INIT
+    // -> END. CHECK runs at the end of compilation (LIFO) and INIT runs just
+    // before the main runtime (FIFO); both are deferred relative to BEGIN,
+    // which executes as soon as it is parsed. UNITCHECK runs immediately
+    // after its compilation unit finishes compiling, which is also deferred
+    // relative to BEGIN's immediate-at-parse-time execution.
+    let file = lower_source(
+        "package Phase::Demo;\n\
+         BEGIN { require Runtime::Begin; }\n\
+         UNITCHECK { require Runtime::UnitCheck; }\n\
+         CHECK { require Runtime::Check; }\n\
+         INIT { require Runtime::Init; }\n\
+         END { require Runtime::End; }\n",
+    );
+
+    assert_eq!(
+        render_compile_environment(&file.compile_environment),
+        "[directives]\n\
+         Require Runtime::Begin Module args= scope=3 pkg=Phase::Demo ExactAst High\n\
+         Require Runtime::UnitCheck Module args= scope=5 pkg=Phase::Demo ExactAst High\n\
+         Require Runtime::Check Module args= scope=7 pkg=Phase::Demo ExactAst High\n\
+         Require Runtime::Init Module args= scope=9 pkg=Phase::Demo ExactAst High\n\
+         Require Runtime::End Module args= scope=11 pkg=Phase::Demo ExactAst High\n\
+         [pragmas]\n\
+         [inc]\n\
+         [modules]\n\
+         Runtime::Begin Require Deferred pkg=Phase::Demo ExactAst High\n\
+         Runtime::UnitCheck Require Deferred pkg=Phase::Demo ExactAst High\n\
+         Runtime::Check Require Deferred pkg=Phase::Demo ExactAst High\n\
+         Runtime::Init Require Deferred pkg=Phase::Demo ExactAst High\n\
+         Runtime::End Require Deferred pkg=Phase::Demo ExactAst High\n\
+         [phase-blocks]\n\
+         Begin pkg=Phase::Demo ExactAst High\n\
+         UnitCheck pkg=Phase::Demo ExactAst High\n\
+         Check pkg=Phase::Demo ExactAst High\n\
+         Init pkg=Phase::Demo ExactAst High\n\
+         End pkg=Phase::Demo ExactAst High\n\
+         [boundaries]\n\
+         PhaseBlockExecution pkg=Phase::Demo DynamicBoundary Low reason=phase block compile-time execution is recorded but not evaluated"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn hir_compile_effect_log_links_source_mutations_facts_and_boundaries()
 -> Result<(), Box<dyn std::error::Error>> {
     let source = "package Effect::Demo;\n\
@@ -1470,7 +1520,7 @@ fn hir_compile_effect_log_links_source_mutations_facts_and_boundaries()
 }
 
 #[test]
-fn hir_symbolic_refs_emit_dynamic_boundaries_only_when_strict_refs_disabled()
+fn hir_dereferences_lower_as_runtime_expressions_without_compile_effects()
 -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"package Symbolic::Refs;
 use strict;
@@ -1481,6 +1531,9 @@ ${$strict_scalar} = 1;
     @{$loose_array} = ();
     %{$loose_hash} = ();
     &{$loose_code}();
+    ${"Symbolic::literal"} = 1;
+    ${"Symbolic::" . "computed"} = 2;
+    ${"$interpolated_symbol"} = 3;
 }
 ${$strict_again} = 2;
 *alias = \&target;
@@ -1493,28 +1546,38 @@ ${$strict_again} = 2;
     let loose_array = source.find("@{$loose_array}").ok_or("expected loose array deref")?;
     let loose_hash = source.find("%{$loose_hash}").ok_or("expected loose hash deref")?;
     let loose_code = source.find("&{$loose_code}").ok_or("expected loose code deref")?;
+    let literal_symbol =
+        source.find("${\"Symbolic::literal\"}").ok_or("expected literal symbolic deref")?;
+    let computed_symbol = source
+        .find("${\"Symbolic::\" . \"computed\"}")
+        .ok_or("expected computed symbolic deref")?;
+    let interpolated_symbol =
+        source.find("${\"$interpolated_symbol\"}").ok_or("expected interpolated symbolic deref")?;
 
-    let symbolic_items = file
+    let dereferences = file
         .items
         .iter()
         .filter_map(|item| match &item.kind {
-            HirKind::DynamicBoundary(boundary)
-                if boundary.kind == DynamicBoundaryKind::SymbolicReferenceDeref =>
-            {
-                Some((item.range.start, boundary.reason.as_str()))
+            HirKind::DerefExpr(expr) => {
+                Some((item.range.start, expr.aggregate_kind, expr.operand_kind))
             }
             _ => None,
         })
         .collect::<Vec<_>>();
     assert_eq!(
-        symbolic_items,
+        dereferences,
         vec![
-            (loose_scalar, "symbolic reference dereference is not statically known"),
-            (loose_array, "symbolic reference dereference is not statically known"),
-            (loose_hash, "symbolic reference dereference is not statically known"),
-            (loose_code, "symbolic reference dereference is not statically known"),
+            (strict_scalar, DerefAggregateKind::Scalar, DerefOperandKind::Variable),
+            (loose_scalar, DerefAggregateKind::Scalar, DerefOperandKind::Variable),
+            (loose_array, DerefAggregateKind::Array, DerefOperandKind::Variable),
+            (loose_hash, DerefAggregateKind::Hash, DerefOperandKind::Variable),
+            (loose_code, DerefAggregateKind::Code, DerefOperandKind::Variable),
+            (literal_symbol, DerefAggregateKind::Scalar, DerefOperandKind::StringLiteral),
+            (computed_symbol, DerefAggregateKind::Scalar, DerefOperandKind::Expression),
+            (interpolated_symbol, DerefAggregateKind::Scalar, DerefOperandKind::StringLiteral),
+            (strict_again, DerefAggregateKind::Scalar, DerefOperandKind::Variable),
         ],
-        "symbolic-reference HIR boundaries should follow the scoped no strict refs region"
+        "dereferences should remain runtime expressions regardless of strict refs state"
     );
 
     let symbolic_boundaries = file
@@ -1523,36 +1586,24 @@ ${$strict_again} = 2;
         .iter()
         .filter(|boundary| boundary.kind == CompileEnvironmentBoundaryKind::SymbolicReferenceDeref)
         .collect::<Vec<_>>();
-    let boundary_starts =
-        symbolic_boundaries.iter().map(|boundary| boundary.range.start).collect::<Vec<_>>();
-    assert_eq!(boundary_starts, vec![loose_scalar, loose_array, loose_hash, loose_code]);
-    assert!(
-        symbolic_boundaries.iter().all(|boundary| {
-            boundary.provenance == CompileProvenance::DynamicBoundary
-                && boundary.confidence == CompileConfidence::Low
-                && boundary.package_context.as_deref() == Some("Symbolic::Refs")
-                && boundary.reason == "symbolic reference dereference is not statically known"
-        }),
-        "symbolic-reference facts should stay fail-closed with package context"
+    assert_eq!(
+        symbolic_boundaries.iter().map(|boundary| boundary.range.start).collect::<Vec<_>>(),
+        vec![literal_symbol, computed_symbol, interpolated_symbol],
+        "only string-valued dereference operands should retain deferred symbolic boundaries"
     );
-    assert!(
-        !boundary_starts.contains(&strict_scalar) && !boundary_starts.contains(&strict_again),
-        "strict refs regions should not be marked as symbolic-reference boundaries"
-    );
-
+    assert!(symbolic_boundaries.iter().all(|boundary| {
+        boundary.provenance == CompileProvenance::DynamicBoundary
+            && boundary.confidence == CompileConfidence::Low
+            && boundary.reason == "symbolic reference dereference is deferred to runtime"
+    }));
     let effects = file.compile_effects();
-    assert!(
-        effects.iter().any(|effect| {
-            effect.kind == CompileEffectKind::EmitDynamicBoundary
-                && effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
-                && effect.fact_kind == CompileEffectFactKind::DynamicBoundary
-                && effect.fact_name.as_deref() == Some("SymbolicReferenceDeref")
-                && effect.dynamic_reason.as_deref()
-                    == Some("symbolic reference dereference is not statically known")
-                && effect.provenance == CompileProvenance::DynamicBoundary
-                && effect.confidence == CompileConfidence::Low
-        }),
-        "compile-effect log should expose symbolic-reference boundary rows"
+    assert_eq!(
+        effects
+            .iter()
+            .filter(|effect| effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref)
+            .count(),
+        3,
+        "string-valued symbolic names should remain visible as deferred compile facts"
     );
     assert!(
         effects.iter().any(|effect| {
@@ -1567,6 +1618,44 @@ ${$strict_again} = 2;
         ),
         "symbolic-reference facts must not imply live provider cutover"
     );
+
+    Ok(())
+}
+
+#[test]
+fn hir_nested_subroutine_dereference_stays_runtime_deferred()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(r#"BEGIN { no strict 'refs'; sub inspect { keys %{"hash"}; } }"#);
+
+    assert!(
+        file.items.iter().any(|item| matches!(&item.kind, HirKind::DerefExpr(_))),
+        "nested subroutine dereference should remain a typed runtime expression"
+    );
+    let symbolic_effects = file
+        .compile_effects()
+        .into_iter()
+        .filter(|effect| effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref)
+        .collect::<Vec<_>>();
+    assert_eq!(symbolic_effects.len(), 1, "the symbolic name remains an explicit deferred fact");
+    let scope_id = symbolic_effects
+        .first()
+        .and_then(|effect| effect.scope_id)
+        .ok_or("expected a scope for the nested symbolic dereference")?;
+    let mut current = Some(scope_id);
+    let mut nested_in_subroutine = false;
+    while let Some(id) = current {
+        let scope = file
+            .scope_graph
+            .scopes
+            .get(id.index() as usize)
+            .ok_or("expected the nested symbolic dereference scope to exist")?;
+        if scope.kind == ScopeKind::Subroutine {
+            nested_in_subroutine = true;
+            break;
+        }
+        current = scope.parent;
+    }
+    assert!(nested_in_subroutine, "the deferred symbolic fact must be nested in a subroutine");
 
     Ok(())
 }

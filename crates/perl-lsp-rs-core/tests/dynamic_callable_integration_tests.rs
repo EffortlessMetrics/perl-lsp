@@ -188,3 +188,26 @@ fn no_dynamic_evidence_always_diagnoses() -> Result<()> {
     );
     Ok(())
 }
+
+// ── Case 6: eval-sub declared AFTER usage → still diagnose (order-awareness) ──
+
+#[test]
+fn eval_sub_declared_after_bareword_still_diagnoses() -> Result<()> {
+    // bareword at byte 0; eval-sub at byte ~24 (after the usage site).
+    let source = r#"generated_from_string(); eval "sub generated_from_string { 1 }";"#;
+    let (file_id, shards, ref_index, ie_index) =
+        build_real_queries(source, "file:///test/c6_eval_after.pl")?;
+    let queries = WorkspaceSemanticQueries::new(&ref_index, &ie_index, &shards);
+
+    let call_offset = 0_usize;
+    let issues = vec![bareword_issue("generated_from_string", (call_offset, call_offset + 21))];
+    let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, file_id, &queries);
+
+    assert_eq!(
+        diagnostics.len(),
+        1,
+        "case 6: eval-sub declared after usage must NOT suppress UnquotedBareword — \
+         order-awareness guard must fire. Got: {diagnostics:?}"
+    );
+    Ok(())
+}

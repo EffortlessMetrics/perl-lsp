@@ -63,10 +63,12 @@ just release-check
 
 The label-gated nightly workflow is `ci-nightly.yml`. Its active labels are:
 
-- `ci:coverage`
 - `ci:bench`
 - `ci:strict`
 - `ci:mutation`
+
+Coverage is not an opt-in PR label. Coverage diagnostics run on scheduled or
+manually dispatched coverage workflows only.
 
 The security workflow is `ci-security.yml`. It runs on path-sensitive pushes
 and scheduled checks.

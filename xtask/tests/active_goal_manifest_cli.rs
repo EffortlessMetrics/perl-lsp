@@ -18,9 +18,10 @@ fn check_active_goal_manifest_passes_for_current_manifest() -> Result<()> {
         "expected success receipt in stdout; got: {stdout}"
     );
     assert!(stdout.contains("repo=perl-lsp-swarm"), "expected swarm repo in stdout; got: {stdout}");
+    assert!(stdout.contains("lane=portfolio"), "expected portfolio lane in stdout; got: {stdout}");
     assert!(
-        stdout.contains("lane=real_perl_editor_trust_v1"),
-        "expected active lane in stdout; got: {stdout}"
+        stdout.contains("2 programs (2 enabled)"),
+        "expected both programs in stdout; got: {stdout}"
     );
     assert!(stdout.contains("3 lanes"), "expected lane count in stdout; got: {stdout}");
     assert!(

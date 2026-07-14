@@ -93,6 +93,9 @@ pub use crate::workspace::monitoring::{
 };
 use perl_symbol::surface::decl::extract_symbol_decls;
 use perl_symbol::surface::facts::{symbol_decls_to_semantic_facts, symbol_refs_to_semantic_facts};
+// Only used by `build_canonical_fact_shard_for_ast`, which is now
+// `#[cfg(test)]`-gated (shadow/parity-harness-only as of the 1711-B cutover).
+#[cfg(test)]
 use perl_symbol::surface::r#ref::extract_symbol_refs;
 
 // Re-export URI utilities for backward compatibility
@@ -437,6 +440,15 @@ impl IndexCoordinator {
     /// Access the configured performance caps
     pub fn performance_caps(&self) -> &IndexPerformanceCaps {
         &self.caps
+    }
+
+    /// Current pending-parse counter (lock-free read). Exposed for tests
+    /// that need to assert the counter returns to baseline after a burst
+    /// of `notify_change`/`notify_parse_complete` calls -- e.g. proving a
+    /// coalescing or panic/stale-reject accounting fix actually balances
+    /// (#3660), rather than only checking the coarser `state()` transition.
+    pub fn pending_parse_count(&self) -> usize {
+        self.metrics.pending_count()
     }
 
     /// Snapshot lifecycle instrumentation (durations, transitions, early exits)
@@ -1025,7 +1037,10 @@ pub struct CrossFileReferenceQueryResult {
     pub references: Vec<Location>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// `PartialEq` added for 1711-B shadow-compare parity assertions (see
+// `FileExtractionBundle` / `extraction_bundle_shadow_compare`) -- every field
+// type already derives `PartialEq`, so this is purely additive.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
     /// Symbol name without package qualification
@@ -1047,6 +1062,15 @@ pub struct WorkspaceSymbol {
     pub has_body: bool,
     /// Workspace folder URI this symbol belongs to (for multi-root workspace support)
     pub workspace_folder_uri: Option<String>,
+    /// Whether this symbol is a lexically-scoped variable (`my` or `state`).
+    ///
+    /// Lexical variables cannot be correctly analysed by the bare-name unused-symbol
+    /// check in [`WorkspaceIndex::find_unused_symbols`], which lacks scope-range
+    /// information.  Setting this flag during indexing lets the function skip them
+    /// entirely, avoiding both false positives and false negatives.  Proper
+    /// lexical-unused detection is deferred to the scope-aware `ScopeAnalyzer`.
+    #[serde(default)]
+    pub is_lexical: bool,
 }
 
 fn default_has_body() -> bool {
@@ -1057,7 +1081,9 @@ fn default_has_body() -> bool {
 /// Symbol kind enums used during Index/Analyze workflows.
 pub use perl_symbol::{SymbolKind, VarKind};
 
-#[derive(Debug, Clone)]
+// `PartialEq` added for 1711-B shadow-compare parity assertions -- `Range`
+// and `ReferenceKind` already derive `PartialEq`, so this is purely additive.
+#[derive(Debug, Clone, PartialEq)]
 /// Reference to a symbol for Navigate/Analyze workflows.
 pub struct SymbolReference {
     /// File URI where the reference occurs
@@ -1131,10 +1157,85 @@ pub struct FileIndex {
     dependencies: HashSet<String>,
     /// Content hash for early-exit optimization
     content_hash: u64,
-    /// Document generation represented by this indexed snapshot.
+    /// Document generation represented by this indexed snapshot -- the
+    /// GENUINELY COMMITTED generation. Only ever advanced by a successful
+    /// late-guard `files.insert` (or the unchanged-content early exit,
+    /// which is atomic and cannot fail). Never advanced speculatively, so
+    /// `indexed_generation()` and every other reader of this field always
+    /// see a generation whose symbols/content_hash/document_store text
+    /// were actually produced -- there is nothing to roll back here on a
+    /// parse failure, because it was never spent on a guess.
     generation: u32,
+    /// High-water mark of generations *claimed* (reserved) for this key,
+    /// including in-flight attempts that have not yet committed. Bumped
+    /// early -- before parsing -- by [`ReservationGuard`] so a concurrent
+    /// out-of-order task for an older generation can be rejected before it
+    /// writes stale text into `document_store` (see `index_file_with_generation`).
+    /// Always `>= generation`. Deliberately NOT the source of truth for
+    /// "what's indexed" -- only `generation` is -- so a reservation that
+    /// never pans out (parse error, document no longer open) can never
+    /// leave the publicly-read `generation` field pointing at content that
+    /// was never actually stored.
+    pending_generation: u32,
     /// Workspace folder URI this file belongs to (for multi-root workspace support)
     folder_uri: Option<String>,
+}
+
+/// RAII reservation for `index_file_with_generation`'s early-guard claim on
+/// `FileIndex::pending_generation`.
+///
+/// Constructed once a task's generation genuinely advances the high-water
+/// mark; dropped without a call to [`Self::commit`] rolls the reservation
+/// back automatically -- covering EVERY early-return between the
+/// reservation and the late guard's successful commit (today: a parse
+/// error and a `document_store` lookup miss) uniformly, so a future third
+/// early-return in this function can't silently reintroduce the same bug
+/// class (#3618 review-3660 findings 3(a)/3(b)/3(c)).
+///
+/// The rollback restores `pending_generation` toward `FileIndex::generation`
+/// -- the last GENUINELY COMMITTED generation, which only a successful late
+/// guard ever advances -- rather than to this task's own pre-reservation
+/// snapshot. Restoring to a per-task snapshot is unsound under chained
+/// failures: if task A reserves then fails, and task B reserves a still
+/// -higher generation and ALSO fails, A's rollback correctly no-ops (B's
+/// claim is still current), but a rollback that restores to "my own
+/// pre-reservation value" would have B's own drop set the high-water mark
+/// to A's already-superseded reservation -- stranding it above the true
+/// committed floor read by nothing, but also below what a legitimate
+/// future reservation should be able to observe as "nothing is truly
+/// pending." Restoring to `generation` (never touched by any reservation)
+/// is always correct regardless of how many reservations chained and
+/// failed before this one.
+struct ReservationGuard<'a> {
+    index: &'a WorkspaceIndex,
+    key: String,
+    reserved: u32,
+    committed: bool,
+}
+
+impl ReservationGuard<'_> {
+    /// Disarm the rollback -- call this once the late guard has genuinely
+    /// committed this generation to `self.files`.
+    fn commit(mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for ReservationGuard<'_> {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        let mut files = self.index.files.write();
+        if let Some(existing) = files.get_mut(&self.key) {
+            // Only roll back if nothing newer has claimed the slot since --
+            // a concurrent task's own legitimate later reservation must
+            // never be stomped by this failure's cleanup.
+            if existing.pending_generation == self.reserved {
+                existing.pending_generation = existing.generation;
+            }
+        }
+    }
 }
 
 /// Write-through semantic fact storage for one indexed file.
@@ -1142,7 +1243,12 @@ pub struct FileIndex {
 /// Derives `Serialize, Deserialize` (Campaign 31 PR 5, perl-lsp-swarm#2592)
 /// so the `perllsp ripr-facts` exporter can serialize the shard into the
 /// `ripr-perl-facts-v1` packet. Previously derived only `Clone, Debug`.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+///
+/// Derives `PartialEq` (1711-B shadow-compare parity assertions, see
+/// `FileExtractionBundle` / `extraction_bundle_shadow_compare`) -- every
+/// field type (`AnchorFact`, `EntityFact`, `OccurrenceFact`, `EdgeFact`,
+/// `FileId`, etc.) already derives `PartialEq`, so this is purely additive.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FileFactShard {
     /// Canonical file URI for this shard.
     pub source_uri: String,
@@ -1180,6 +1286,15 @@ pub struct WorkspaceIndex {
     files: Arc<RwLock<HashMap<String, FileIndex>>>,
     /// Global symbol multimap (qualified/bare name -> ordered definition candidates)
     symbols: Arc<RwLock<HashMap<String, Vec<DefinitionCandidate>>>>,
+    /// Workspace-symbol search index for fast query lookup.
+    ///
+    /// Maps lowercase symbol name (bare or qualified) to all `WorkspaceSymbol`
+    /// instances that carry that name.  `search_source_symbols` iterates the
+    /// unique name keys in this map instead of scanning every file's symbol list,
+    /// turning the outer loop from O(total_symbols) to O(unique_lowercase_names).
+    ///
+    /// Lock order: always acquire `symbols` before `search_index`.
+    search_index: Arc<RwLock<HashMap<String, Vec<WorkspaceSymbol>>>>,
     /// Global reference index (symbol name -> locations across all files)
     ///
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
@@ -1352,6 +1467,71 @@ impl WorkspaceIndex {
                     .cmp(&Self::definition_candidate_sort_key(right))
             });
             entries.dedup();
+        }
+    }
+
+    /// Build the search index from scratch from all file indexes.
+    ///
+    /// Keyed by lowercase bare name and lowercase qualified name so that
+    /// `search_source_symbols` can iterate unique name keys (O(unique_lowercase_names))
+    /// rather than all (file, symbol) pairs (O(total_symbols)).
+    ///
+    /// Lock order: hold `symbols` write before calling; acquire `search_index` write
+    /// immediately after `symbols` write.
+    fn rebuild_search_index(
+        files: &HashMap<String, FileIndex>,
+        search_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+    ) {
+        search_index.clear();
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                let key = symbol.name.to_lowercase();
+                search_index.entry(key).or_default().push(symbol.clone());
+                if let Some(ref qname) = symbol.qualified_name {
+                    let qkey = qname.to_lowercase();
+                    search_index.entry(qkey).or_default().push(symbol.clone());
+                }
+            }
+        }
+    }
+
+    /// Incrementally add one file's symbols to the search index.
+    fn incremental_add_search(
+        search_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+        file_index: &FileIndex,
+    ) {
+        for symbol in &file_index.symbols {
+            let key = symbol.name.to_lowercase();
+            search_index.entry(key).or_default().push(symbol.clone());
+            if let Some(ref qname) = symbol.qualified_name {
+                let qkey = qname.to_lowercase();
+                search_index.entry(qkey).or_default().push(symbol.clone());
+            }
+        }
+    }
+
+    /// Incrementally remove one file's symbols from the search index by URI.
+    fn incremental_remove_search(
+        search_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+        file_index: &FileIndex,
+    ) {
+        for symbol in &file_index.symbols {
+            let key = symbol.name.to_lowercase();
+            if let Some(entries) = search_index.get_mut(&key) {
+                entries.retain(|s| s.uri != symbol.uri);
+                if entries.is_empty() {
+                    search_index.remove(&key);
+                }
+            }
+            if let Some(ref qname) = symbol.qualified_name {
+                let qkey = qname.to_lowercase();
+                if let Some(entries) = search_index.get_mut(&qkey) {
+                    entries.retain(|s| s.uri != symbol.uri);
+                    if entries.is_empty() {
+                        search_index.remove(&qkey);
+                    }
+                }
+            }
         }
     }
 
@@ -1531,6 +1711,7 @@ impl WorkspaceIndex {
         Self {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
+            search_index: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
             fact_shards: Arc::new(RwLock::new(HashMap::new())),
             semantic_reference_index: Arc::new(RwLock::new(ReferenceIndex::new())),
@@ -1572,6 +1753,7 @@ impl WorkspaceIndex {
         Self {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
+            search_index: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
             fact_shards: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             semantic_reference_index: Arc::new(RwLock::new(ReferenceIndex::new())),
@@ -1703,101 +1885,302 @@ impl WorkspaceIndex {
         text.hash(&mut hasher);
         let content_hash = hasher.finish();
 
-        // Check if content is unchanged (early-exit optimization)
+        // Check if content is unchanged (early-exit optimization), and --
+        // still under the SAME `files.write()` guard -- update
+        // `document_store`. `document_store` has its own, entirely separate
+        // internal lock (`DocumentStore::documents: Arc<RwLock<..>>`, no
+        // cross-reference to `self.files`), so holding `files.write()`
+        // across both the generation check AND the `document_store` write
+        // does not risk any lock-ordering deadlock; it makes the two
+        // genuinely atomic with respect to any other writer of this URI's
+        // entry, closing the race outright rather than narrowing it (an
+        // earlier revision applied this same generation check here but
+        // released `files.write()` before the `document_store` write,
+        // leaving a real, if nanosecond-scale, window a stale out-of-order
+        // task could still land in -- flagged again by factory-droid on
+        // PR #3618 after that partial fix).
         let key = DocumentStore::uri_key(&uri_str);
+        // Set below iff this task's generation genuinely advances the
+        // claimed high-water mark (a genuine reservation, not a
+        // same-or-older no-op). `ReservationGuard::drop` rolls the claim
+        // back automatically on ANY early return between here and the late
+        // guard's successful commit (`.commit()`, called once this task's
+        // generation is actually written to `self.files` below) -- see its
+        // doc comment for why it restores toward the last genuinely
+        // committed generation rather than a per-task snapshot.
+        let mut reservation: Option<ReservationGuard<'_>> = None;
         {
             let mut files = self.files.write();
             if let Some(existing_index) = files.get_mut(&key) {
                 if existing_index.content_hash == content_hash {
                     existing_index.generation = existing_index.generation.max(generation);
+                    existing_index.pending_generation =
+                        existing_index.pending_generation.max(generation);
                     // Content unchanged, skip re-indexing
+                    #[cfg(test)]
+                    reindex_metrics::record_content_hash_short_circuit();
                     return Ok(());
                 }
+                // Same monotonic generation guard as the one under the later
+                // `files.write()` block below (see its doc comment for the
+                // full out-of-order-completion race this closes) -- applied
+                // here too so a stale out-of-order task can't overwrite
+                // `document_store`'s text with older content even when it's
+                // correctly rejected from `self.files` by the later guard.
+                // Compares against the HIGH-WATER MARK (genuinely committed
+                // OR still-in-flight reserved), not just the committed
+                // generation, so a concurrent newer task that hasn't
+                // finished parsing yet still correctly rejects an older
+                // out-of-order task here.
+                let high_water = existing_index.generation.max(existing_index.pending_generation);
+                if generation > 0 && high_water > 0 && high_water > generation {
+                    #[cfg(test)]
+                    reindex_metrics::record_stale_rejected_pre_parse();
+                    return Ok(());
+                }
+                // Reserve this generation NOW, before parsing -- not just at
+                // the later guard, which only runs AFTER
+                // `Parser::new(&text).parse()` below completes. Without this,
+                // two concurrent tasks for adjacent generations N and N+1 can
+                // BOTH read the high-water mark here before EITHER has
+                // finished parsing, so neither guard sees the other as newer
+                // and both proceed to write `document_store` -- if N's
+                // (older) write lands after N+1's, `document_store.text`
+                // ends up holding stale content indefinitely, observable by
+                // cross-file consumers (rename, safe-delete preview,
+                // navigation, hover for other-file symbols) that read
+                // `document_store()` directly (flagged by factory-droid and
+                // cubic on PR #3618). Bumping `pending_generation` here,
+                // still under this SAME `files.write()` acquisition, makes
+                // it visible to the very next racer's early check
+                // immediately -- it does not need to wait for this task's
+                // parse to finish.
+                //
+                // This claim is tracked SEPARATELY from `generation` (the
+                // genuinely-committed field read by `indexed_generation()`
+                // and everything else) precisely so a reservation that never
+                // pans out -- parse error, or the document closing before
+                // the late guard runs -- has nothing to roll back on the
+                // field callers actually trust; only `pending_generation`
+                // needs cleanup, and `ReservationGuard` does that
+                // automatically on any early return (review-3660 findings
+                // 3(a)/3(b)/3(c) on PR #3618).
+                if generation > 0 && generation > high_water {
+                    existing_index.pending_generation = generation;
+                    reservation = Some(ReservationGuard {
+                        index: self,
+                        key: key.clone(),
+                        reserved: generation,
+                        committed: false,
+                    });
+                }
             }
-        }
 
-        // Update document store
-        if self.document_store.is_open(&uri_str) {
-            self.document_store.update(&uri_str, 1, text.clone());
-        } else {
-            self.document_store.open(uri_str.clone(), 1, text.clone());
+            // Update document store -- still holding `files.write()`, so no
+            // other writer of this URI can observe a partial state between
+            // the generation check above and this write.
+            if self.document_store.is_open(&uri_str) {
+                self.document_store.update(&uri_str, 1, text.clone());
+            } else {
+                self.document_store.open(uri_str.clone(), 1, text.clone());
+            }
         }
 
         // Parse the file
         let mut parser = Parser::new(&text);
         let ast = match parser.parse() {
             Ok(ast) => ast,
-            Err(e) => return Err(format!("Parse error: {}", e)),
+            Err(e) => {
+                // `reservation`'s `Drop` (if it holds a claim) rolls
+                // `pending_generation` back to the last genuinely committed
+                // generation -- this task never reaches the late guard's
+                // commit below.
+                return Err(format!("Parse error: {}", e));
+            }
         };
 
-        // Get the document for line index
+        // Get the document for line index. If the document was closed out
+        // from under a still-in-flight background index task (e.g. a rapid
+        // didClose racing this task's own reservation), `reservation`'s
+        // `Drop` rolls the claim back here too -- previously this early
+        // return left `self.files[key].generation`'s reservation
+        // permanently claimed with nothing that would ever commit it
+        // (#3618 review-3660 finding 3(c)).
         let mut doc = self.document_store.get(&uri_str).ok_or("Document not found")?;
 
         // Determine workspace folder URI from the file URI
         let folder_uri = self.determine_folder_uri(&uri_str);
 
-        // Extract symbols and references
-        let mut file_index = FileIndex {
-            source_uri: uri_str.clone(),
-            content_hash,
-            generation,
-            folder_uri: folder_uri.clone(),
-            ..Default::default()
-        };
-        let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
-        visitor.visit(&ast, &mut file_index);
+        // Extract symbols and references via the unified single-traversal
+        // extraction bundle (perl-lsp-swarm#1711-B cutover). One AST walk
+        // (`IndexVisitor::visit_unified`, run inside
+        // `FileExtractionBundle::build_unified`) now produces BOTH the
+        // legacy `FileIndex` reference/dependency projection AND the
+        // canonical `Vec<SymbolRef>` projection, replacing the two
+        // independent full-AST reference walks (`IndexVisitor::visit` +
+        // `extract_symbol_refs`) this path ran before. Declaration
+        // extraction, eval-sub boundary facts, generated-member facts, and
+        // import/use-lib extraction are UNCHANGED by this cutover -- only
+        // the reference walk is unified (declarations are a separable
+        // follow-up; see `FileExtractionBundle::build_unified`'s doc
+        // comment).
+        let mut bundle =
+            FileExtractionBundle::build_unified(&ast, &uri_str, content_hash, &mut doc, folder_uri);
+        // `build_unified` builds its own `FileIndex` (it has no notion of
+        // this call's `generation` parameter) -- restore it here, exactly
+        // as the pre-cutover `FileIndex { ..., generation, ... }` literal
+        // did.
+        bundle.legacy_index.generation = generation;
+        let file_index = bundle.legacy_index;
 
-        let canonical_shard =
-            Self::build_canonical_fact_shard_for_ast(&uri_str, content_hash, &ast);
-        let fact_shard = if canonical_shard.anchors.is_empty()
-            && canonical_shard.entities.is_empty()
-            && canonical_shard.occurrences.is_empty()
-            && canonical_shard.edges.is_empty()
+        let fact_shard = if bundle.canonical_shard.anchors.is_empty()
+            && bundle.canonical_shard.entities.is_empty()
+            && bundle.canonical_shard.occurrences.is_empty()
+            && bundle.canonical_shard.edges.is_empty()
         {
             Self::build_fact_shard(&uri_str, content_hash, &file_index)
         } else {
-            canonical_shard
+            bundle.canonical_shard
         };
 
-        // Extract import specs from the AST — populates ImportExportIndex so
-        // that `Foo->import(@names)` dynamic-import suppression is live in
-        // production.  This runs outside the write lock to avoid holding it
-        // longer than necessary.
+        // Update the import/export index with the import specs and use-lib
+        // facts the unified extraction bundle above already produced
+        // (`extract_import_specs`/`extract_use_lib_facts`, unchanged by
+        // this cutover) -- populates ImportExportIndex so that
+        // `Foo->import(@names)` dynamic-import suppression is live in
+        // production.
         //
         // Lock ordering note: `semantic_import_export_index` is acquired write
         // separately from (and after) `files`/`symbols`/`global_references` to
         // match the consistent lock-order used throughout this file.
         let file_id = Self::hash_uri_to_file_id(&uri_str);
-        let import_specs =
-            crate::semantic::workspace_import_extractor::extract_import_specs(&ast, file_id);
-        let use_lib_facts =
-            crate::semantic::workspace_import_extractor::extract_use_lib_facts(&ast, file_id);
+        let import_specs = bundle.import_specs;
+        let use_lib_facts = bundle.use_lib_facts;
 
         // Update the index, refresh the global symbol cache, and replace this file's
         // contribution in the global reference index.
         {
             let mut files = self.files.write();
 
+            // Monotonic generation guard: an older TRACKED generation must
+            // never overwrite a newer TRACKED one, regardless of
+            // completion order.
+            //
+            // This write path is reached by, among other callers, a
+            // fire-and-forget background indexing task (see
+            // `LspServer::run_post_parse_side_effects` in perl-lsp-rs --
+            // `handle.spawn_blocking(task)`) that returns to its caller as
+            // soon as it is *spawned*, not when it completes. Two such
+            // tasks for adjacent generations N and N+1 of the same URI can
+            // therefore run on different blocking-pool threads and finish
+            // OUT OF ORDER. Each independently passes its own
+            // pre-spawn freshness check (a single check-then-act that is
+            // NOT atomic with this write), so completion order alone
+            // decided which generation's content ended up stored here --
+            // if N finishes after N+1, N would silently overwrite N+1,
+            // producing torn state: this index at N while the document's
+            // own symbol_index/AST are already at N+1, externally
+            // observable as inconsistent `workspace/symbol` vs.
+            // same-file answers until the next edit.
+            //
+            // This check closes that hole at the STORE itself -- a second,
+            // independent line of defense that does not depend on task
+            // completion order. It is evaluated under the SAME
+            // `files.write()` acquisition as the `files.insert` below, so
+            // the check-then-act is atomic with respect to any other
+            // writer of this URI's entry.
+            //
+            // `generation == 0` is deliberately treated as "untracked" and
+            // exempt from this guard, matching every other call site in
+            // the codebase that does not thread a real per-document
+            // generation counter through `index_file_with_generation`:
+            // `index_file()` (the ungenerationed convenience wrapper used
+            // by file-watcher re-indexing, workspace-wide rescans, rename
+            // preview indexing, and most tests) and the `didOpen`
+            // background index task (`runtime/text_sync.rs`, which always
+            // passes `0` since a freshly opened document always starts at
+            // generation 0) both intentionally call this with `generation:
+            // 0` on every invocation, including *legitimate re-indexes of
+            // already-tracked documents* (e.g. reopening a file that was
+            // previously edited to some generation > 0, or an external
+            // on-disk change picked up by the file watcher after edits).
+            // A strict numeric comparison across these untracked calls and
+            // the async parse worker's tracked calls would incorrectly
+            // block those legitimate refreshes once any document reached
+            // generation > 0 -- confirmed empirically: an unconditional
+            // `existing.generation >= generation` guard here made 7
+            // existing tests fail (`test_early_exit_optimization_changed_content`
+            // et al.), all of which re-index the same URI twice through the
+            // untracked `generation: 0` convention and expect the second
+            // (later) call to win. Only comparing when BOTH sides are
+            // genuinely tracked (`> 0`) closes the out-of-order race for
+            // the async parse worker -- the only caller that ever supplies
+            // a real, monotonically-increasing generation for the same
+            // in-flight document -- without touching any untracked caller.
+            if generation > 0 {
+                if let Some(existing) = files.get(&key) {
+                    if existing.generation > 0 && existing.generation > generation {
+                        #[cfg(test)]
+                        reindex_metrics::record_stale_rejected_post_parse();
+                        return Ok(());
+                    }
+                }
+            }
+
             // Remove stale global references from previous version of this file
             if let Some(old_index) = files.get(&key) {
                 let mut global_refs = self.global_references.write();
+                #[cfg(test)]
+                reindex_metrics::record_global_refs_removed(
+                    old_index.references.values().map(std::vec::Vec::len).sum(),
+                );
                 Self::remove_file_global_refs(&mut global_refs, old_index, &uri_str);
             }
 
             // Incrementally remove old symbols before inserting new file
             if let Some(old_index) = files.get(&key) {
                 let mut symbols = self.symbols.write();
+                let mut search_idx = self.search_index.write();
+                #[cfg(test)]
+                reindex_metrics::record_legacy_symbols_removed(old_index.symbols.len());
+                #[cfg(test)]
+                reindex_metrics::record_legacy_search_removed(old_index.symbols.len());
                 Self::incremental_remove_symbols(&files, &mut symbols, old_index);
+                Self::incremental_remove_search(&mut search_idx, old_index);
+                drop(search_idx);
                 drop(symbols);
             }
             files.insert(key.clone(), file_index);
+            // This generation is now genuinely committed -- disarm the
+            // reservation's rollback so its `Drop` at function end is a
+            // no-op. Nothing left to roll back: `pending_generation` on the
+            // freshly-inserted `FileIndex` resets to its default (0), which
+            // is harmless -- `generation` (just written above) is the only
+            // field any guard or reader ever trusts as "committed", and a
+            // reset `pending_generation` only ever makes a FUTURE early
+            // guard's high-water comparison more permissive, never less
+            // correct, since `generation.max(pending_generation)` still
+            // floors at the value just committed here.
+            if let Some(reservation) = reservation.take() {
+                reservation.commit();
+            }
             let mut symbols = self.symbols.write();
+            let mut search_idx = self.search_index.write();
             if let Some(new_index) = files.get(&key) {
+                #[cfg(test)]
+                reindex_metrics::record_legacy_symbols_added(new_index.symbols.len());
+                #[cfg(test)]
+                reindex_metrics::record_legacy_search_added(new_index.symbols.len());
                 Self::incremental_add_symbols(&mut symbols, new_index);
+                Self::incremental_add_search(&mut search_idx, new_index);
             }
 
             if let Some(file_index) = files.get(&key) {
                 let mut global_refs = self.global_references.write();
+                #[cfg(test)]
+                reindex_metrics::record_global_refs_added(
+                    file_index.references.values().map(std::vec::Vec::len).sum(),
+                );
                 for (name, refs) in &file_index.references {
                     let entry = global_refs.entry(name.clone()).or_default();
                     for reference in refs {
@@ -1806,6 +2189,8 @@ impl WorkspaceIndex {
                 }
             }
             self.replace_fact_shard_incremental(&key, fact_shard);
+            #[cfg(test)]
+            reindex_metrics::record_generation_accepted();
         }
 
         // Update the import/export index with the freshly extracted import specs
@@ -1865,7 +2250,9 @@ impl WorkspaceIndex {
 
             // Incrementally remove symbols and re-insert any shadowed names.
             let mut symbols = self.symbols.write();
+            let mut search_idx = self.search_index.write();
             Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
+            Self::incremental_remove_search(&mut search_idx, &file_index);
 
             // Defensive sweep: purge any remaining cache entries whose value
             // points to this file's URI.  incremental_remove_symbols already
@@ -1891,6 +2278,12 @@ impl WorkspaceIndex {
                     !removed_uris.contains(&cand_uri)
                 });
                 !candidates.is_empty()
+            });
+            // Defensive sweep for search_index: remove any remaining entries
+            // pointing to the removed URI (mirrors the symbols sweep above).
+            search_idx.retain(|_, syms| {
+                syms.retain(|sym| !removed_uris.contains(&sym.uri.as_str()));
+                !syms.is_empty()
             });
 
             // Remove from global reference index. Two-phase cleanup: first
@@ -2145,6 +2538,7 @@ impl WorkspaceIndex {
         {
             let mut files = self.files.write();
             let mut symbols = self.symbols.write();
+            let mut search_idx = self.search_index.write();
             let mut global_refs = self.global_references.write();
 
             // Pre-allocate capacity for the incoming batch to avoid rehashing.
@@ -2176,6 +2570,7 @@ impl WorkspaceIndex {
 
             // Single rebuild at the end
             Self::rebuild_symbol_cache(&files, &mut symbols);
+            Self::rebuild_search_index(&files, &mut search_idx);
         }
 
         errors
@@ -2443,6 +2838,7 @@ impl WorkspaceIndex {
     pub fn clear(&self) {
         self.files.write().clear();
         self.symbols.write().clear();
+        self.search_index.write().clear();
         self.global_references.write().clear();
         self.fact_shards.write().clear();
         *self.semantic_reference_index.write() = ReferenceIndex::new();
@@ -2524,12 +2920,19 @@ impl WorkspaceIndex {
     }
 
     /// Build a canonical [`FileFactShard`] from the AST using the semantic
-    /// fact adapters in `perl-symbol`.
+    /// fact adapters in `perl-symbol`, calling `extract_symbol_refs(ast)`
+    /// itself (a second, independent full-AST reference walk).
     ///
-    /// This is the canonical population path that produces facts with real
-    /// byte spans, `ExactAst` provenance, and per-category hashes. It runs
-    /// alongside the legacy `build_fact_shard` path during the migration
-    /// period.
+    /// **Superseded in production by [`Self::build_canonical_fact_shard_from_symbol_refs`]
+    /// as of the 1711-B cutover** (`index_file_with_generation` now derives its
+    /// canonical `Vec<SymbolRef>` from the unified `visit_unified` walk instead
+    /// of calling `extract_symbol_refs` a second time). Kept as the
+    /// `extraction_bundle_shadow_compare` parity harness's `build_direct`/
+    /// `FileExtractionBundle::build` reference point -- the pre-cutover
+    /// dual-walk behavior this cutover's parity tests assert against.
+    /// Reachable only from `#[cfg(test)]` code (the shadow/parity harness);
+    /// gated accordingly rather than `#[allow(dead_code)]`.
+    #[cfg(test)]
     fn build_canonical_fact_shard_for_ast(
         uri: &str,
         content_hash: u64,
@@ -2538,8 +2941,16 @@ impl WorkspaceIndex {
         let file_id = Self::hash_uri_to_file_id(uri);
 
         // Extract declarations and references from the AST.
+        #[cfg(test)]
+        let decl_start = Instant::now();
         let decls = extract_symbol_decls(ast, None);
+        #[cfg(test)]
+        reindex_metrics::record_decl_extract(decl_start.elapsed());
+        #[cfg(test)]
+        let ref_start = Instant::now();
         let refs = extract_symbol_refs(ast);
+        #[cfg(test)]
+        reindex_metrics::record_ref_extract(ref_start.elapsed());
 
         // Run the canonical adapters.
         let decl_facts = symbol_decls_to_semantic_facts(&decls, file_id);
@@ -2552,14 +2963,22 @@ impl WorkspaceIndex {
         // Extract dynamic boundary evidence for `eval "sub NAME { ... }"` patterns.
         // Non-literal evals (e.g. `eval $code`) are intentionally skipped — the
         // sub name is not statically known and no evidence is emitted.
+        #[cfg(test)]
+        let eval_sub_start = Instant::now();
         let eval_sub_triples =
             crate::semantic::eval_sub_extractor::extract_eval_sub_boundaries(ast, file_id);
+        #[cfg(test)]
+        reindex_metrics::record_eval_sub(eval_sub_start.elapsed());
         let dynamic_boundaries: Vec<perl_semantic_facts::OccurrenceFact> =
             eval_sub_triples.iter().map(|(_, _, occ)| occ.clone()).collect();
+        #[cfg(test)]
+        let generated_member_start = Instant::now();
         let generated_member_facts =
             crate::semantic::generated_member_extractor::extract_generated_member_facts(
                 ast, file_id,
             );
+        #[cfg(test)]
+        reindex_metrics::record_generated_member(generated_member_start.elapsed());
 
         // Build synthetic entity/anchor slices from eval-sub triples.
         // IMPORTANT: The triple is (entity, anchor, occurrence).  Only idx 0
@@ -2588,6 +3007,84 @@ impl WorkspaceIndex {
         // `entities_hash` and `anchors_hash` cover the COMPLETE set.
         // Import specs (for `use`, `require`, `ClassName->import()`) and
         // use-lib facts are populated separately via ImportExportIndex — not passed here.
+        crate::semantic::facts::build_canonical_fact_shard(
+            uri,
+            content_hash,
+            &decl_facts,
+            &ref_facts,
+            &[],
+            &dynamic_boundaries,
+            &all_synthetic_entities,
+            &all_synthetic_anchors,
+        )
+    }
+
+    /// **Production canonical builder for the unified reference traversal
+    /// (perl-lsp-swarm#1711-B cutover).** Identical to
+    /// [`Self::build_canonical_fact_shard_for_ast`] except it takes an
+    /// ALREADY-COMPUTED `refs: &[SymbolRef]` instead of calling
+    /// `extract_symbol_refs(ast)` itself -- this is what lets
+    /// `FileExtractionBundle::build_unified` feed it the `Vec<SymbolRef>`
+    /// produced by `IndexVisitor::visit_unified`'s single traversal, instead
+    /// of running a second, independent `extract_symbol_refs` walk. Every
+    /// other extractor call (`extract_symbol_decls` for declarations,
+    /// eval-sub, generated-member) is UNCHANGED and unaffected -- only the
+    /// reference walk is unified (see the #1711 feasibility comment for why
+    /// declarations are a separable follow-up). Called by
+    /// `index_file_with_generation` via `FileExtractionBundle::build_unified`;
+    /// `build_canonical_fact_shard_for_ast` above remains live only for the
+    /// `extraction_bundle_shadow_compare` parity harness's `build_direct`
+    /// reference path, not for production.
+    fn build_canonical_fact_shard_from_symbol_refs(
+        uri: &str,
+        content_hash: u64,
+        ast: &Node,
+        refs: &[perl_symbol::surface::r#ref::SymbolRef],
+    ) -> FileFactShard {
+        let file_id = Self::hash_uri_to_file_id(uri);
+
+        #[cfg(test)]
+        let decl_start = Instant::now();
+        let decls = extract_symbol_decls(ast, None);
+        #[cfg(test)]
+        reindex_metrics::record_decl_extract(decl_start.elapsed());
+        let decl_facts = symbol_decls_to_semantic_facts(&decls, file_id);
+
+        let entity_ids_by_name: std::collections::BTreeMap<String, EntityId> =
+            decl_facts.entities.iter().map(|e| (e.canonical_name.clone(), e.id)).collect();
+        let ref_facts = symbol_refs_to_semantic_facts(refs, file_id, &entity_ids_by_name);
+
+        #[cfg(test)]
+        let eval_sub_start = Instant::now();
+        let eval_sub_triples =
+            crate::semantic::eval_sub_extractor::extract_eval_sub_boundaries(ast, file_id);
+        #[cfg(test)]
+        reindex_metrics::record_eval_sub(eval_sub_start.elapsed());
+        let dynamic_boundaries: Vec<perl_semantic_facts::OccurrenceFact> =
+            eval_sub_triples.iter().map(|(_, _, occ)| occ.clone()).collect();
+        #[cfg(test)]
+        let generated_member_start = Instant::now();
+        let generated_member_facts =
+            crate::semantic::generated_member_extractor::extract_generated_member_facts(
+                ast, file_id,
+            );
+        #[cfg(test)]
+        reindex_metrics::record_generated_member(generated_member_start.elapsed());
+
+        let synthetic_entities_from_eval: Vec<perl_semantic_facts::EntityFact> =
+            eval_sub_triples.iter().map(|(entity, _, _)| entity.clone()).collect();
+        let synthetic_anchors_from_eval: Vec<perl_semantic_facts::AnchorFact> =
+            eval_sub_triples.iter().map(|(_, anchor, _)| anchor.clone()).collect();
+        let synthetic_entities_from_generated: Vec<perl_semantic_facts::EntityFact> =
+            generated_member_facts.iter().map(|f| f.entity.clone()).collect();
+        let synthetic_anchors_from_generated: Vec<perl_semantic_facts::AnchorFact> =
+            generated_member_facts.iter().map(|f| f.anchor.clone()).collect();
+
+        let mut all_synthetic_entities = synthetic_entities_from_eval;
+        all_synthetic_entities.extend(synthetic_entities_from_generated);
+        let mut all_synthetic_anchors = synthetic_anchors_from_eval;
+        all_synthetic_anchors.extend(synthetic_anchors_from_generated);
+
         crate::semantic::facts::build_canonical_fact_shard(
             uri,
             content_hash,
@@ -2951,7 +3448,7 @@ impl WorkspaceIndex {
     /// let _results = index.search_symbols("example");
     /// ```
     pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
-        self.search_source_symbols(query)
+        self.search_source_symbols(query, None)
     }
 
     /// Search only source-backed syntax symbols from the workspace index.
@@ -2959,21 +3456,31 @@ impl WorkspaceIndex {
     /// Generated/framework members are excluded. Use this when a caller needs
     /// to preserve the historical source-backed live slice for trust receipts
     /// or fallback paths.
-    pub fn search_source_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+    ///
+    /// Uses the `search_index` (keyed by lowercase bare/qualified names) to
+    /// iterate unique name keys rather than all (file, symbol) pairs, turning
+    /// the outer loop from O(total_symbols) to O(unique_lowercase_names).
+    /// A symbol that is stored under both its bare name key and its qualified
+    /// name key is deduplicated by `(uri, start_byte)` so each `WorkspaceSymbol`
+    /// appears at most once in the result.
+    pub fn search_source_symbols(&self, query: &str, cap: Option<usize>) -> Vec<WorkspaceSymbol> {
         let query = query.trim();
         let query_lower = query.to_lowercase();
-        let files = self.files.read();
+        let search_idx = self.search_index.read();
+        let mut seen: HashSet<(String, usize)> = HashSet::new();
         let mut results = Vec::new();
-        for file_index in files.values() {
-            for symbol in &file_index.symbols {
-                if symbol.name.to_lowercase().contains(&query_lower)
-                    || symbol
-                        .qualified_name
-                        .as_ref()
-                        .map(|qn| qn.to_lowercase().contains(&query_lower))
-                        .unwrap_or(false)
-                {
-                    results.push(symbol.clone());
+        'outer: for (name_key, symbols) in search_idx.iter() {
+            if name_key.contains(&query_lower) {
+                for sym in symbols {
+                    // Dedup: a symbol may appear under both its bare-name key
+                    // and its qualified-name key; keep only the first occurrence.
+                    let dedup_key = (sym.uri.clone(), sym.range.start.byte);
+                    if seen.insert(dedup_key) {
+                        results.push(sym.clone());
+                        if cap.is_some_and(|c| results.len() >= c) {
+                            break 'outer;
+                        }
+                    }
                 }
             }
         }
@@ -2985,7 +3492,11 @@ impl WorkspaceIndex {
     /// This is a narrow workspace-symbol pilot: returned symbols are explicitly
     /// labeled as generated/framework members and point at the source declaration
     /// that produced the member, not at an exact generated method body.
-    pub fn search_generated_workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+    pub fn search_generated_workspace_symbols(
+        &self,
+        query: &str,
+        cap: Option<usize>,
+    ) -> Vec<WorkspaceSymbol> {
         let query = query.trim();
         if query.is_empty() {
             return Vec::new();
@@ -2996,7 +3507,7 @@ impl WorkspaceIndex {
         let shards = self.fact_shards.read();
         let mut results = Vec::new();
 
-        for shard in shards.values() {
+        'outer: for shard in shards.values() {
             for entity in &shard.entities {
                 if entity.kind != EntityKind::GeneratedMember {
                     continue;
@@ -3037,7 +3548,11 @@ impl WorkspaceIndex {
                     container_name: Some(format!("{container_name} [generated/framework]")),
                     has_body: false,
                     workspace_folder_uri: self.determine_folder_uri(&shard.source_uri),
+                    is_lexical: false,
                 });
+                if cap.is_some_and(|c| results.len() >= c) {
+                    break 'outer;
+                }
             }
         }
 
@@ -3364,6 +3879,16 @@ impl WorkspaceIndex {
         // Collect all defined symbols
         for (_uri_key, file_index) in files.iter() {
             for symbol in &file_index.symbols {
+                // Lexically-scoped variables (my/state) require scope-range analysis to
+                // determine whether a reference in the same file refers to *this* declaration
+                // or a same-named variable in a different block.  The bare-name lookup below
+                // cannot make that distinction, so lexical variables are excluded from this
+                // check entirely.  Proper unused-lexical detection is handled by the
+                // scope-aware ScopeAnalyzer.  See issue #1805.
+                if symbol.is_lexical {
+                    continue;
+                }
+
                 // Check if this symbol has any references beyond its definition
                 let has_usage = files.values().any(|fi| {
                     if let Some(refs) = fi.references.get(&symbol.name) {
@@ -3613,6 +4138,163 @@ impl WorkspaceIndex {
     }
 }
 
+/// **`build_unified` is the production extraction path (perl-lsp-swarm#1711-B
+/// cutover); `build` below remains a shadow/parity-harness-only twin.**
+/// `build()` runs the OLD, pre-cutover MULTIPLE separate AST walks (one
+/// `IndexVisitor::visit`, one `build_canonical_fact_shard_for_ast` -- which
+/// itself internally calls
+/// `extract_symbol_decls`/`extract_symbol_refs`/eval-sub/generated-member --
+/// plus one `extract_import_specs` and one `extract_use_lib_facts`), and just
+/// packages their outputs into one struct; it is kept ONLY as the
+/// `extraction_bundle_shadow_compare` test module's `build_direct`-equivalent
+/// reference point, not called by `index_file_with_generation` anymore.
+/// `build_unified()` is what production actually calls: it runs ONE reference
+/// walk (`IndexVisitor::visit_unified`) that produces both projections,
+/// eliminating the duplicate `extract_symbol_refs` walk `build()`/pre-cutover
+/// production used to run.
+///
+/// # Parity contract
+///
+/// | Output | Legacy (`IndexVisitor` / [`FileIndex`]) | Canonical ([`FileFactShard`]) |
+/// |---|---|---|
+/// | Declarations | [`WorkspaceSymbol`] (name, kind, range, qualified_name, container_name, is_lexical) built by `IndexVisitor::project_symbol_declarations`, which calls `extract_symbol_decls(ast, Some("main"))` | [`EntityFact`] + [`AnchorFact`] via `extract_symbol_decls(ast, None)` -> `symbol_decls_to_semantic_facts` |
+/// | References | [`SymbolReference`] with `ReferenceKind::{Read,Write,Usage,Import,Definition}`, produced by the hand-rolled `IndexVisitor::visit_node`/`visit_unified` walk (dual bare+qualified indexing for calls, dependency tracking for `use`/`extends`/`with`/`require`, interpolated-string variable scanning) | `OccurrenceFact` + `EdgeFact` via `symbol_refs_to_semantic_facts` (`Call`/`MethodCall`/`StaticMethodCall`/`CoderefReference`/`TypeglobReference`/`Read` only -- no `Write`, no dependency tracking, no interpolated strings) |
+/// | Dynamic / generated facts | not modeled in `FileIndex` | `extract_eval_sub_boundaries` + `extract_generated_member_facts`, merged into `FileFactShard.{entities,anchors,occurrences}` |
+/// | Imports | `ReferenceKind::Import` entries in `FileIndex.references`, plus `FileIndex.dependencies: HashSet<String>` | `extract_import_specs` / `extract_use_lib_facts`, written to `ImportExportIndex` -- **not** part of `FileFactShard` (see `build_canonical_fact_shard_for_ast`'s always-empty `imports: &[]` argument) |
+/// | Identity / ordering | `WorkspaceSymbol`/`SymbolReference` carry no stable ID; `FileIndex.references` is a `HashMap` (unordered by name, but each name's `Vec` preserves visit order) | `AnchorId`/`EntityId`/`OccurrenceId`/`EdgeId` are content-derived stable hashes (`stable_id`); `Vec` fields preserve extraction order |
+///
+/// Declaration extraction is intentionally still NOT unified (`extract_symbol_decls`
+/// is called once per projection, in both `build()` and `build_unified()`) --
+/// a separable follow-up tracked on #1711 (see the feasibility comment, item
+/// 3). Only the reference walk is unified by this cutover.
+pub(crate) struct FileExtractionBundle {
+    /// The legacy `IndexVisitor` projection, produced by one `visit()` call.
+    pub(crate) legacy_index: FileIndex,
+    /// The canonical fact shard, produced by one
+    /// `build_canonical_fact_shard_for_ast` call.
+    pub(crate) canonical_shard: FileFactShard,
+    /// Import specifications from one `extract_import_specs` call. Not part
+    /// of `canonical_shard` (see the parity contract table above).
+    pub(crate) import_specs: Vec<perl_semantic_facts::ImportSpec>,
+    /// `use lib`/`no lib` facts from one `extract_use_lib_facts` call. Not
+    /// part of `canonical_shard` (see the parity contract table above).
+    pub(crate) use_lib_facts: Vec<perl_semantic_facts::UseLibFact>,
+}
+
+impl FileExtractionBundle {
+    /// **Shadow/parity-harness-only twin of [`Self::build_unified`] (kept for
+    /// the `extraction_bundle_shadow_compare` regression harness).** Runs the
+    /// OLD, pre-1711-B-cutover MULTIPLE separate extractor calls (still
+    /// several distinct AST walks -- see the struct-level doc comment) and
+    /// packages every result into a single bundle. Does not reduce the
+    /// traversal count; not called by `index_file_with_generation`.
+    // Shadow scaffold (see the struct-level justification above); the
+    // function itself is equally unused by the live path outside tests --
+    // reachable only from `#[cfg(test)]` code (`extraction_bundle_shadow_compare`),
+    // so it is gated accordingly rather than `#[allow(dead_code)]`.
+    #[cfg(test)]
+    pub(crate) fn build(
+        ast: &Node,
+        uri_str: &str,
+        content_hash: u64,
+        doc: &mut Document,
+        folder_uri: Option<String>,
+    ) -> Self {
+        let mut file_index = FileIndex {
+            source_uri: uri_str.to_string(),
+            content_hash,
+            folder_uri: folder_uri.clone(),
+            ..Default::default()
+        };
+        let mut visitor = IndexVisitor::new(doc, uri_str.to_string(), folder_uri);
+        visitor.visit(ast, &mut file_index);
+
+        let canonical_shard =
+            WorkspaceIndex::build_canonical_fact_shard_for_ast(uri_str, content_hash, ast);
+
+        let file_id = WorkspaceIndex::hash_uri_to_file_id(uri_str);
+        let import_specs =
+            crate::semantic::workspace_import_extractor::extract_import_specs(ast, file_id);
+        let use_lib_facts =
+            crate::semantic::workspace_import_extractor::extract_use_lib_facts(ast, file_id);
+
+        Self { legacy_index: file_index, canonical_shard, import_specs, use_lib_facts }
+    }
+
+    /// **Production extraction path (perl-lsp-swarm#1711-B cutover).** The
+    /// REAL unified traversal: runs ONE reference walk
+    /// (`IndexVisitor::visit_unified`) that produces BOTH the legacy
+    /// [`FileIndex`] reference/dependency projection AND the canonical
+    /// `Vec<SymbolRef>` projection, then feeds that single `Vec<SymbolRef>`
+    /// into `WorkspaceIndex::build_canonical_fact_shard_from_symbol_refs`
+    /// instead of calling `extract_symbol_refs(ast)` a second time. This is
+    /// what eliminates one of the two full-AST reference walks
+    /// `index_file_with_generation` used to run.
+    ///
+    /// Declaration extraction is UNCHANGED: `extract_symbol_decls` is still
+    /// called twice (once per projection, with the existing
+    /// `Some("main")`/`None` package-context seeds) -- unifying declarations
+    /// is a separable follow-up (see the #1711 feasibility comment, item 3).
+    /// Import/use-lib extraction is also unchanged.
+    ///
+    /// Uses [`Node::for_each_child`] as the unified walk's recursion
+    /// fallback (see `IndexVisitor::walk_unified`'s doc comment), which
+    /// closes several PRE-EXISTING legacy `FileIndex` coverage gaps not
+    /// introduced by this change -- see
+    /// `docs/reference/1711-B-coverage-delta.md` for the full,
+    /// fixture-backed list; this is the intentional, monotonic legacy
+    /// `FileIndex` coverage improvement this cutover ships. Called by
+    /// `WorkspaceIndex::index_file_with_generation` -- this IS the
+    /// production path now (was shadow-only prior to the 1711-B cutover;
+    /// `FileExtractionBundle::build` above remains the shadow/parity-only
+    /// non-unified twin, used only by the `extraction_bundle_shadow_compare`
+    /// harness).
+    pub(crate) fn build_unified(
+        ast: &Node,
+        uri_str: &str,
+        content_hash: u64,
+        doc: &mut Document,
+        folder_uri: Option<String>,
+    ) -> Self {
+        let mut file_index = FileIndex {
+            source_uri: uri_str.to_string(),
+            content_hash,
+            folder_uri: folder_uri.clone(),
+            ..Default::default()
+        };
+        let mut symbol_refs = Vec::new();
+        let mut visitor = IndexVisitor::new(doc, uri_str.to_string(), folder_uri);
+        #[cfg(test)]
+        let visit_start = Instant::now();
+        visitor.visit_unified(ast, &mut file_index, &mut symbol_refs);
+        #[cfg(test)]
+        reindex_metrics::record_visit(visit_start.elapsed());
+
+        let canonical_shard = WorkspaceIndex::build_canonical_fact_shard_from_symbol_refs(
+            uri_str,
+            content_hash,
+            ast,
+            &symbol_refs,
+        );
+
+        let file_id = WorkspaceIndex::hash_uri_to_file_id(uri_str);
+        #[cfg(test)]
+        let import_start = Instant::now();
+        let import_specs =
+            crate::semantic::workspace_import_extractor::extract_import_specs(ast, file_id);
+        #[cfg(test)]
+        reindex_metrics::record_import_extract(import_start.elapsed());
+        #[cfg(test)]
+        let use_lib_start = Instant::now();
+        let use_lib_facts =
+            crate::semantic::workspace_import_extractor::extract_use_lib_facts(ast, file_id);
+        #[cfg(test)]
+        reindex_metrics::record_use_lib_extract(use_lib_start.elapsed());
+
+        Self { legacy_index: file_index, canonical_shard, import_specs, use_lib_facts }
+    }
+}
+
 /// AST visitor for extracting symbols and references
 struct IndexVisitor {
     document: Document,
@@ -3707,6 +4389,11 @@ impl IndexVisitor {
                 _ => decl.container,
             };
 
+            // Lexical declarators (my/state) produce scope-local variables that cannot be
+            // correctly analysed by a bare-name unused-symbol check.  Flag them so that
+            // `find_unused_symbols` can skip the whole class.
+            let is_lexical = matches!(decl.declarator.as_deref(), Some("my") | Some("state"));
+
             file_index.symbols.push(WorkspaceSymbol {
                 name: symbol_name.clone(),
                 kind: decl.kind,
@@ -3717,6 +4404,7 @@ impl IndexVisitor {
                 container_name,
                 has_body: true,
                 workspace_folder_uri: self.workspace_folder_uri.clone(),
+                is_lexical,
             });
 
             file_index.references.entry(symbol_name).or_default().push(SymbolReference {
@@ -4204,6 +4892,719 @@ impl IndexVisitor {
             end: Position { byte: node.location.end, line: end_line, column: end_col },
         }
     }
+
+    /// **Production reference walk (perl-lsp-swarm#1711-B cutover).**
+    /// Unified reference walk: produces BOTH the legacy [`FileIndex`]
+    /// reference/dependency projection AND the canonical `Vec<SymbolRef>`
+    /// projection (the input `symbol_refs_to_semantic_facts` expects) from
+    /// ONE recursive descent -- replacing what production used to run as
+    /// TWO separate full-AST walks (`IndexVisitor::visit` +
+    /// `extract_symbol_refs`). Declaration
+    /// extraction is UNCHANGED and NOT unified here (`project_symbol_declarations`
+    /// still calls `extract_symbol_decls(ast, Some("main"))` exactly as
+    /// `visit()` does today) -- see the #1711 feasibility comment, item 3,
+    /// a separable follow-up.
+    ///
+    /// Uses [`Node::for_each_child`] as its recursion fallback (the
+    /// complete, compiler-exhaustive dispatcher) instead of
+    /// `IndexVisitor::visit_children`'s hand-maintained allowlist. This
+    /// closes several PRE-EXISTING legacy coverage gaps, empirically
+    /// verified against current `origin/main` and characterized in
+    /// `docs/reference/1711-B-coverage-delta.md`: block-form
+    /// `package Foo { ... }` / `class Foo { ... }` bodies are never walked
+    /// for references by `IndexVisitor::visit_node` today (only their
+    /// declarations are seen, via the separate `extract_symbol_decls` walk);
+    /// `Typeglob`, `Tie`, `Goto` coderef targets, regex-bind expressions
+    /// (`Match`/`Substitution`/`Transliteration`), `IndirectCall` arguments,
+    /// `Subroutine` signature default-value expressions, and non-`Variable`
+    /// assignment/increment targets are also unreached by legacy today (that
+    /// coverage gain is intentional and shipped by the 1711-B cutover -- see
+    /// `assert_unified_legacy_is_superset` in `extraction_bundle_shadow_compare`
+    /// below). Called by production via `FileExtractionBundle::build_unified`.
+    fn visit_unified(
+        &mut self,
+        node: &Node,
+        file_index: &mut FileIndex,
+        symbol_refs: &mut Vec<perl_symbol::surface::r#ref::SymbolRef>,
+    ) {
+        self.project_symbol_declarations(node, file_index);
+        self.walk_unified(node, file_index, symbol_refs);
+    }
+
+    /// Emit this node's own canonical [`SymbolRef`] (if any) without
+    /// recursing into its children -- the caller controls recursion order
+    /// (needed so `Assignment`/increment targets that legacy already
+    /// special-cases don't ALSO get a second, generic recursion pass that
+    /// would double-count the legacy side).
+    fn emit_canonical_ref(
+        node: &Node,
+        symbol_refs: &mut Vec<perl_symbol::surface::r#ref::SymbolRef>,
+    ) {
+        if let Some(symbol_ref) = canonical_ref_for_node(node) {
+            symbol_refs.push(symbol_ref);
+        }
+    }
+
+    fn walk_unified(
+        &mut self,
+        node: &Node,
+        file_index: &mut FileIndex,
+        symbol_refs: &mut Vec<perl_symbol::surface::r#ref::SymbolRef>,
+    ) {
+        match &node.kind {
+            NodeKind::Package { name, block, .. } => {
+                self.current_package = Some(name.clone());
+                // NEW COVERAGE: `IndexVisitor::visit_node` never recurses
+                // into `block` for references today (only
+                // `project_symbol_declarations`/`extract_symbol_decls` sees
+                // it, for declarations). Recursing here closes that gap --
+                // see `docs/reference/1711-B-coverage-delta.md` case 1.
+                if let Some(b) = block {
+                    self.walk_unified(b, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::Class { name, body, .. } => {
+                self.current_package = Some(name.clone());
+                // NEW COVERAGE: same gap as `Package` above, for Perl
+                // 5.38+ `class Foo { ... }` bodies -- see coverage-delta
+                // case 2.
+                self.walk_unified(body, file_index, symbol_refs);
+            }
+
+            NodeKind::Subroutine { body, prototype, signature, .. } => {
+                // NEW COVERAGE: legacy's `visit_node` only visits `body`,
+                // never `prototype`/`signature` -- a signature's
+                // default-value expressions (`sub greet($name =
+                // default_name())`) are invisible today. `Method` (below)
+                // already visits `signature` correctly; `Subroutine` did
+                // not -- see coverage-delta case 8.
+                if let Some(proto) = prototype {
+                    self.walk_unified(proto, file_index, symbol_refs);
+                }
+                if let Some(sig) = signature {
+                    self.walk_unified(sig, file_index, symbol_refs);
+                }
+                self.walk_unified(body, file_index, symbol_refs);
+            }
+
+            NodeKind::Method { body, signature, .. } => {
+                if let Some(sig) = signature {
+                    if let NodeKind::Signature { parameters } = &sig.kind {
+                        for param in parameters {
+                            self.walk_unified(param, file_index, symbol_refs);
+                        }
+                    }
+                }
+                self.walk_unified(body, file_index, symbol_refs);
+            }
+
+            // Signature parameter nodes bind a DECLARATION-site variable --
+            // must NOT be walked as a reference. Mirrors
+            // `extract_symbol_refs`'s explicit skip exactly (ref.rs: "the
+            // bound variable is a declaration, not a ref"). Without this
+            // arm, the generic `Node::for_each_child` fallback below would
+            // visit `variable` too (it has no such declaration/reference
+            // distinction), incorrectly emitting a plain `Read`/`SymbolRef`
+            // for e.g. a signature's `$name` binding.
+            //
+            // `NamedParameter` is grouped here (TOTAL skip, including its
+            // `default_value`) to mirror `ref.rs:80-84` EXACTLY --
+            // `extract_symbol_refs` groups `NamedParameter` with
+            // `MandatoryParameter`/`SlurpyParameter` as a Phase-1
+            // intentional exclusion (see `ref.rs`'s module doc, lines
+            // 15-17: "Optional parameter *default values* are still walked
+            // because they are expressions" -- explicitly NOT named-param
+            // defaults). Only `OptionalParameter` gets its default walked.
+            // An earlier draft of this arm walked `NamedParameter`'s
+            // `default_value` too, which made the unified traversal's
+            // CANONICAL projection produce an extra `SymbolRef` production
+            // `extract_symbol_refs` never produces for a named-param
+            // default (e.g. `method bar(:$beta = calc_default())`) --
+            // caught by an independent correctness review, since no
+            // corpus/real-project/edge-case fixture exercised
+            // `NamedParameter` at the time. See
+            // `docs/reference/1711-B-coverage-delta.md` and the
+            // `coverage_delta_named_parameter_default_is_not_a_new_case`
+            // test below, which locks in that this is NOT a
+            // coverage-delta case (legacy's pre-unification behavior for
+            // `NamedParameter` was ALSO a total skip -- `NamedParameter`
+            // was never in `visit_node`/`visit_children`'s coverage
+            // either -- so nothing changes for legacy here, and canonical
+            // must stay byte-identical).
+            NodeKind::MandatoryParameter { .. }
+            | NodeKind::SlurpyParameter { .. }
+            | NodeKind::NamedParameter { .. } => {
+                // Nothing to walk: the bound variable is a declaration,
+                // and (for `NamedParameter`) its default value is also
+                // intentionally excluded, matching canonical exactly.
+            }
+            NodeKind::OptionalParameter { default_value, .. } => {
+                // Only the default-value expression may reference other
+                // symbols (it's evaluated in the caller's scope) -- the
+                // bound variable itself is skipped, matching ref.rs.
+                self.walk_unified(default_value, file_index, symbol_refs);
+            }
+
+            NodeKind::VariableDeclaration { initializer, .. }
+            | NodeKind::VariableListDeclaration { initializer, .. } => {
+                if let Some(init) = initializer {
+                    self.walk_unified(init, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::Variable { sigil, name } => {
+                let var_name = format!("{sigil}{name}");
+                file_index.references.entry(var_name).or_default().push(SymbolReference {
+                    uri: self.uri.clone(),
+                    range: self.node_to_range(node),
+                    kind: ReferenceKind::Read,
+                });
+                Self::emit_canonical_ref(node, symbol_refs);
+            }
+
+            NodeKind::Typeglob { .. } => {
+                // NEW COVERAGE: legacy has no `Typeglob` arm at all today
+                // (`*foo`, `*alias = ...` aliasing references are silently
+                // dropped) -- see coverage-delta case 3. Canonical already
+                // handled this (dynamic `*{$expr}` forms are filtered by
+                // `canonical_ref_for_node`, matching `extract_symbol_refs`).
+                if let Some(symbol_ref) = canonical_ref_for_node(node) {
+                    // Project a legacy-shaped entry too, using the same
+                    // sigil+bare-name key convention as the `Variable` arm
+                    // above, so the unified traversal's two output shapes
+                    // stay internally consistent.
+                    let var_name = format!("*{}", symbol_ref.name);
+                    file_index.references.entry(var_name).or_default().push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(node),
+                        kind: ReferenceKind::Usage,
+                    });
+                    symbol_refs.push(symbol_ref);
+                }
+            }
+
+            NodeKind::FunctionCall { name, args, .. } => {
+                let func_name = name.clone();
+                let location = self.node_to_range(node);
+
+                let (pkg, bare_name) = if let Some(idx) = func_name.rfind("::") {
+                    (&func_name[..idx], &func_name[idx + 2..])
+                } else {
+                    (self.current_package.as_deref().unwrap_or("main"), func_name.as_str())
+                };
+                let qualified = format!("{pkg}::{bare_name}");
+
+                file_index.references.entry(bare_name.to_string()).or_default().push(
+                    SymbolReference {
+                        uri: self.uri.clone(),
+                        range: location,
+                        kind: ReferenceKind::Usage,
+                    },
+                );
+                file_index.references.entry(qualified).or_default().push(SymbolReference {
+                    uri: self.uri.clone(),
+                    range: location,
+                    kind: ReferenceKind::Usage,
+                });
+
+                if name == "extends" || name == "with" {
+                    for module_name in extract_module_names_from_call_args(args) {
+                        file_index
+                            .dependencies
+                            .insert(normalize_dependency_module_name(&module_name));
+                    }
+                } else if name == "require"
+                    && let Some(module_name) = extract_module_name_from_require_args(args)
+                {
+                    file_index.dependencies.insert(normalize_dependency_module_name(&module_name));
+                }
+
+                Self::emit_canonical_ref(node, symbol_refs);
+
+                for arg in args {
+                    self.walk_unified(arg, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::Use { module, args, .. } => {
+                let module_name = normalize_dependency_module_name(module);
+                file_index.dependencies.insert(module_name.clone());
+                if module == "parent" || module == "base" {
+                    for name in extract_module_names_from_use_args(args) {
+                        file_index.dependencies.insert(normalize_dependency_module_name(&name));
+                    }
+                }
+                file_index.references.entry(module_name).or_default().push(SymbolReference {
+                    uri: self.uri.clone(),
+                    range: self.node_to_range(node),
+                    kind: ReferenceKind::Import,
+                });
+                // No canonical equivalent and no recursion into `args` --
+                // matches BOTH legacy's current behavior and
+                // `Node::for_each_child`'s (`Use` is a declared leaf there).
+            }
+
+            NodeKind::Assignment { lhs, rhs, op } => {
+                let is_compound = op != "=";
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    let var_name = format!("{sigil}{name}");
+                    if is_compound {
+                        file_index.references.entry(var_name.clone()).or_default().push(
+                            SymbolReference {
+                                uri: self.uri.clone(),
+                                range: self.node_to_range(lhs),
+                                kind: ReferenceKind::Read,
+                            },
+                        );
+                    }
+                    file_index.references.entry(var_name).or_default().push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(lhs),
+                        kind: ReferenceKind::Write,
+                    });
+                    // Canonical (today, via generic recursion + the
+                    // `Variable` arm) classifies an assignment target as a
+                    // plain `Read` occurrence -- emit that directly here
+                    // instead of ALSO generically recursing into `lhs`
+                    // (which would double-count the legacy side above).
+                    Self::emit_canonical_ref(lhs, symbol_refs);
+                } else {
+                    // NEW COVERAGE: legacy's current `Assignment` arm does
+                    // NOTHING for a non-`Variable` lhs (e.g. `$h{compute_key()}
+                    // = 1`) -- no recursion, so nested references inside an
+                    // indexed/complex assignment target are invisible today.
+                    // Canonical already reaches this via generic recursion.
+                    // See coverage-delta case 9.
+                    self.walk_unified(lhs, file_index, symbol_refs);
+                }
+                self.walk_unified(rhs, file_index, symbol_refs);
+            }
+
+            NodeKind::Block { statements } => {
+                for stmt in statements {
+                    self.walk_unified(stmt, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
+                self.walk_unified(condition, file_index, symbol_refs);
+                self.walk_unified(then_branch, file_index, symbol_refs);
+                for (cond, branch) in elsif_branches {
+                    self.walk_unified(cond, file_index, symbol_refs);
+                    self.walk_unified(branch, file_index, symbol_refs);
+                }
+                if let Some(else_br) = else_branch {
+                    self.walk_unified(else_br, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::While { condition, body, continue_block, .. } => {
+                self.walk_unified(condition, file_index, symbol_refs);
+                self.walk_unified(body, file_index, symbol_refs);
+                if let Some(cont) = continue_block {
+                    self.walk_unified(cont, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::For { init, condition, update, body, continue_block } => {
+                if let Some(i) = init {
+                    self.walk_unified(i, file_index, symbol_refs);
+                }
+                if let Some(c) = condition {
+                    self.walk_unified(c, file_index, symbol_refs);
+                }
+                if let Some(u) = update {
+                    self.walk_unified(u, file_index, symbol_refs);
+                }
+                self.walk_unified(body, file_index, symbol_refs);
+                if let Some(cont) = continue_block {
+                    self.walk_unified(cont, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::Foreach { variable, list, body, continue_block } => {
+                if let Some(cb) = continue_block {
+                    self.walk_unified(cb, file_index, symbol_refs);
+                }
+                if let NodeKind::Variable { sigil, name } = &variable.kind {
+                    let var_name = format!("{sigil}{name}");
+                    file_index.references.entry(var_name).or_default().push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(variable),
+                        kind: ReferenceKind::Write,
+                    });
+                }
+                // Matches legacy's EXISTING (quirky but unchanged) behavior:
+                // `variable` is recursed into unconditionally after the
+                // write-classification above, so a `Variable` loop target
+                // gets BOTH a `Write` entry (from this arm) and a `Read`
+                // entry (from the generic `Variable` arm below) today --
+                // preserved here for parity, not introduced by unification.
+                self.walk_unified(variable, file_index, symbol_refs);
+                self.walk_unified(list, file_index, symbol_refs);
+                self.walk_unified(body, file_index, symbol_refs);
+            }
+
+            NodeKind::MethodCall { object, method, args } => {
+                let qualified_method = if let NodeKind::Identifier { name } = &object.kind {
+                    Some(format!("{name}::{method}"))
+                } else {
+                    None
+                };
+
+                // Emit the canonical ref BEFORE recursing into `object` --
+                // this position must NOT move. `perl_symbol::surface::ref::walk`'s
+                // own `MethodCall` arm also pushes its `SymbolRef` before
+                // recursing into `object` (own-ref-before-child DFS order),
+                // so keeping `emit_canonical_ref` here preserves the
+                // byte-for-byte canonical parity `assert_unified_canonical_parity`
+                // enforces -- for a chained `$x->foo()->foo()`, the OUTER
+                // call's `SymbolRef` precedes the INNER call's in
+                // `symbol_refs`, matching production exactly.
+                Self::emit_canonical_ref(node, symbol_refs);
+
+                // Recurse into `object` BEFORE recording this call's own
+                // LEGACY `FileIndex` reference below -- mirrors
+                // `IndexVisitor::visit_node`'s legacy `MethodCall` arm order
+                // exactly (child-before-own-ref; see that arm a few hundred
+                // lines above, which visits `object` first and only then
+                // pushes its own reference). Without this, a chained
+                // same-named call like `$x->foo()->foo()` would invert the
+                // intra-key `file_index.references["foo"]` Vec order
+                // relative to legacy (no reference lost -- counts still
+                // match -- but the order silently changed). See
+                // `parity_method_call_chained_same_name_reference_order`,
+                // which locks this order with an exact Vec equality
+                // assertion against legacy's own output.
+                self.walk_unified(object, file_index, symbol_refs);
+
+                let location = self.node_to_range(node);
+                if let Some(qualified_method) = qualified_method.as_ref() {
+                    file_index.references.entry(qualified_method.clone()).or_default().push(
+                        SymbolReference {
+                            uri: self.uri.clone(),
+                            range: location,
+                            kind: ReferenceKind::Usage,
+                        },
+                    );
+                }
+                file_index.references.entry(method.clone()).or_default().push(SymbolReference {
+                    uri: self.uri.clone(),
+                    range: location,
+                    kind: ReferenceKind::Usage,
+                });
+
+                if method == "import"
+                    && let NodeKind::Identifier { name: module_name } = &object.kind
+                {
+                    for symbol in extract_manual_import_symbols(args) {
+                        file_index.references.entry(symbol).or_default().push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(node),
+                            kind: ReferenceKind::Import,
+                        });
+                    }
+                    file_index.dependencies.insert(normalize_dependency_module_name(module_name));
+                }
+
+                for arg in args {
+                    self.walk_unified(arg, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::No { module, .. } => {
+                let module_name = normalize_dependency_module_name(module);
+                file_index.dependencies.insert(module_name);
+            }
+
+            NodeKind::String { value, interpolated } => {
+                if *interpolated {
+                    let range = self.node_to_range(node);
+                    self.record_interpolated_variable_references(value, range, file_index);
+                }
+            }
+
+            NodeKind::Heredoc { content, interpolated, .. } => {
+                if *interpolated {
+                    let range = self.node_to_range(node);
+                    self.record_interpolated_variable_references(content, range, file_index);
+                }
+            }
+
+            NodeKind::Unary { op, operand } if op == "++" || op == "--" => {
+                if let NodeKind::Variable { sigil, name } = &operand.kind {
+                    let var_name = format!("{sigil}{name}");
+                    file_index.references.entry(var_name.clone()).or_default().push(
+                        SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(operand),
+                            kind: ReferenceKind::Read,
+                        },
+                    );
+                    file_index.references.entry(var_name).or_default().push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(operand),
+                        kind: ReferenceKind::Write,
+                    });
+                    // Mirrors the `Assignment` arm above: canonical (today,
+                    // via generic recursion) classifies an increment target
+                    // as a plain `Read` -- emit directly, no double recurse.
+                    Self::emit_canonical_ref(operand, symbol_refs);
+                } else {
+                    // NEW COVERAGE: legacy's current `++`/`--` arm does
+                    // NOTHING for a non-`Variable` operand (e.g.
+                    // `$h{compute_key()}++`) -- see coverage-delta case 9
+                    // (same class as the `Assignment` gap above).
+                    self.walk_unified(operand, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::Goto { target, .. } => {
+                // NEW COVERAGE: legacy has no `Goto` arm at all today --
+                // `goto &handler` / `goto LABEL` coderef targets are
+                // invisible. See coverage-delta case 4.
+                if let Some(symbol_ref) =
+                    canonical_coderef_target_ref(target, (node.location.start, node.location.end))
+                {
+                    let var_name = format!("&{}", symbol_ref.name);
+                    file_index.references.entry(var_name).or_default().push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(node),
+                        kind: ReferenceKind::Usage,
+                    });
+                    symbol_refs.push(symbol_ref);
+                } else {
+                    self.walk_unified(target, file_index, symbol_refs);
+                }
+            }
+
+            NodeKind::Unary { op, operand } if op == "\\" => {
+                // Unlike `Goto` (which legacy never handles at all today),
+                // legacy's CURRENT `visit_node` already has default behavior
+                // here: general `Unary` falls through to `visit_children`'s
+                // arm, which ALWAYS recurses into `operand` unconditionally,
+                // regardless of shape. That must be preserved exactly even
+                // when `operand` is coderef-target-shaped for CANONICAL
+                // purposes (e.g. `\&attr` parses as a zero-arg synthetic
+                // `FunctionCall`, and legacy's generic recursion into it
+                // hits the ordinary `FunctionCall` arm -- dual
+                // bare+qualified `Usage` entries, the SAME thing legacy has
+                // always produced for it).
+                match canonical_coderef_target_ref(
+                    operand,
+                    (node.location.start, node.location.end),
+                ) {
+                    Some(symbol_ref) => {
+                        symbol_refs.push(symbol_ref);
+                        // `operand` is guaranteed (by
+                        // `canonical_coderef_target_ref`'s own match) to be
+                        // either a bare `&name` `Variable` or a zero-arg
+                        // synthetic `FunctionCall` -- both leaves, nothing
+                        // to recurse into. Replicate legacy's per-kind
+                        // classification directly (NOT a second canonical
+                        // emission via `walk_unified`, which would
+                        // double-count against the `symbol_ref` just
+                        // pushed above).
+                        match &operand.kind {
+                            NodeKind::Variable { sigil, name } => {
+                                let var_name = format!("{sigil}{name}");
+                                file_index.references.entry(var_name).or_default().push(
+                                    SymbolReference {
+                                        uri: self.uri.clone(),
+                                        range: self.node_to_range(operand),
+                                        kind: ReferenceKind::Read,
+                                    },
+                                );
+                            }
+                            NodeKind::FunctionCall { name, .. } => {
+                                let location = self.node_to_range(operand);
+                                let (pkg, bare_name) = if let Some(idx) = name.rfind("::") {
+                                    (&name[..idx], &name[idx + 2..])
+                                } else {
+                                    (
+                                        self.current_package.as_deref().unwrap_or("main"),
+                                        name.as_str(),
+                                    )
+                                };
+                                let qualified = format!("{pkg}::{bare_name}");
+                                file_index
+                                    .references
+                                    .entry(bare_name.to_string())
+                                    .or_default()
+                                    .push(SymbolReference {
+                                        uri: self.uri.clone(),
+                                        range: location,
+                                        kind: ReferenceKind::Usage,
+                                    });
+                                file_index.references.entry(qualified).or_default().push(
+                                    SymbolReference {
+                                        uri: self.uri.clone(),
+                                        range: location,
+                                        kind: ReferenceKind::Usage,
+                                    },
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                    None => {
+                        // Not coderef-target-shaped -- BOTH today's
+                        // canonical (`push_coderef_target` returned false,
+                        // so it recurses) and today's legacy (which always
+                        // recurses here) want ordinary full recursion.
+                        self.walk_unified(operand, file_index, symbol_refs);
+                    }
+                }
+            }
+
+            // Everything else: no legacy-specific classification, and
+            // recurse via `Node::for_each_child` -- the complete,
+            // compiler-exhaustive dispatcher (replaces
+            // `IndexVisitor::visit_children`'s hand-maintained allowlist).
+            // This is what closes the remaining coverage-delta cases
+            // (`Tie`/`Untie`, `Match`/`Substitution`/`Transliteration`
+            // regex-bind expressions, `IndirectCall`, and anything else
+            // legacy's allowlist silently stopped at) for free.
+            _ => {
+                node.for_each_child(|child| self.walk_unified(child, file_index, symbol_refs));
+            }
+        }
+    }
+}
+
+/// **Production (1711-B cutover).** Canonical [`SymbolRef`] classification for
+/// a single node, duplicated from `perl_symbol::surface::ref`'s private
+/// `walk` match arms for `Variable`/`Typeglob`/`FunctionCall`/`MethodCall`
+/// (the node kinds `IndexVisitor::walk_unified` also classifies for the
+/// legacy projection). Byte-for-byte parity with `extract_symbol_refs`'s
+/// own output is mechanically enforced by
+/// `extraction_bundle_shadow_compare`'s canonical-side parity tests -- any
+/// drift between this copy and `perl-symbol`'s private walker fails a test
+/// immediately, not silently. Returns `None` for node kinds this function
+/// does not classify, for a dynamic typeglob (`*{$expr}`), or for a parser
+/// sentinel `FunctionCall` name (`"->()"`, `"&{}"`, `"field"`).
+fn canonical_ref_for_node(node: &Node) -> Option<perl_symbol::surface::r#ref::SymbolRef> {
+    use perl_symbol::surface::r#ref::{SymbolRef, SymbolRefKind};
+
+    match &node.kind {
+        NodeKind::Variable { sigil, name } => {
+            let kind = match sigil.as_str() {
+                "&" => SymbolRefKind::CoderefReference,
+                "*" => SymbolRefKind::TypeglobReference,
+                "$" | "$#" => SymbolRefKind::Variable(VarKind::Scalar),
+                "@" => SymbolRefKind::Variable(VarKind::Array),
+                "%" => SymbolRefKind::Variable(VarKind::Hash),
+                _ => return None,
+            };
+            let (package_qualifier, bare_name, qualified_name) = split_qualified_name_dup(name);
+            Some(SymbolRef {
+                kind,
+                name: bare_name,
+                qualified_name,
+                sigil: Some(sigil.clone()),
+                package_qualifier,
+                full_span: (node.location.start, node.location.end),
+                anchor_span: Some((node.location.start, node.location.end)),
+            })
+        }
+        NodeKind::Typeglob { name } => {
+            if name.starts_with('{') {
+                return None;
+            }
+            let (package_qualifier, bare_name, qualified_name) = split_qualified_name_dup(name);
+            Some(SymbolRef {
+                kind: SymbolRefKind::TypeglobReference,
+                name: bare_name,
+                qualified_name,
+                sigil: Some("*".to_string()),
+                package_qualifier,
+                full_span: (node.location.start, node.location.end),
+                anchor_span: Some((node.location.start, node.location.end)),
+            })
+        }
+        NodeKind::FunctionCall { name, .. } => {
+            if matches!(name.as_str(), "->()" | "&{}" | "field") {
+                return None;
+            }
+            let (package_qualifier, bare_name, qualified_name) = split_qualified_name_dup(name);
+            Some(SymbolRef {
+                kind: SymbolRefKind::SubroutineCall,
+                name: bare_name,
+                qualified_name,
+                sigil: None,
+                package_qualifier,
+                full_span: (node.location.start, node.location.end),
+                anchor_span: Some((node.location.start, node.location.end)),
+            })
+        }
+        NodeKind::MethodCall { object, method, .. } => {
+            let (package_qualifier, qualified_name, kind) = if let NodeKind::Identifier { name } =
+                &object.kind
+            {
+                (Some(name.clone()), format!("{name}::{method}"), SymbolRefKind::StaticMethodCall)
+            } else {
+                (None, method.clone(), SymbolRefKind::MethodCall)
+            };
+            Some(SymbolRef {
+                kind,
+                name: method.clone(),
+                qualified_name,
+                sigil: None,
+                package_qualifier,
+                full_span: (node.location.start, node.location.end),
+                anchor_span: None,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// **Production (1711-B cutover).** Coderef-target classification for
+/// `Goto`/backslash-`Unary` nodes, duplicated from
+/// `perl_symbol::surface::ref`'s private `coderef_target_name`/
+/// `push_coderef_target`. See [`canonical_ref_for_node`]'s doc comment for
+/// the parity-enforcement rationale.
+fn canonical_coderef_target_ref(
+    node: &Node,
+    full_span: (usize, usize),
+) -> Option<perl_symbol::surface::r#ref::SymbolRef> {
+    use perl_symbol::surface::r#ref::{SymbolRef, SymbolRefKind};
+
+    let name = match &node.kind {
+        NodeKind::Variable { sigil, name } if sigil == "&" => name.as_str(),
+        NodeKind::FunctionCall { name, args }
+            if args.is_empty()
+                && node.location.end.saturating_sub(node.location.start) == name.len() + 1 =>
+        {
+            name.as_str()
+        }
+        _ => return None,
+    };
+    let (package_qualifier, bare_name, qualified_name) = split_qualified_name_dup(name);
+    Some(SymbolRef {
+        kind: SymbolRefKind::CoderefReference,
+        name: bare_name,
+        qualified_name,
+        sigil: Some("&".to_string()),
+        package_qualifier,
+        full_span,
+        anchor_span: Some((node.location.start, node.location.end)),
+    })
+}
+
+/// **Production (1711-B cutover).** Duplicated from
+/// `perl_symbol::surface::ref::split_qualified_name` (private to that
+/// crate). See [`canonical_ref_for_node`]'s doc comment for the
+/// parity-enforcement rationale.
+fn split_qualified_name_dup(name: &str) -> (Option<String>, String, String) {
+    if let Some((package, bare)) = name.rsplit_once("::")
+        && !package.is_empty()
+        && !bare.is_empty()
+    {
+        return (Some(package.to_owned()), bare.to_owned(), name.to_owned());
+    }
+    (None, name.to_owned(), name.to_owned())
 }
 
 fn symbol_decl_name(kind: &SymbolKind, name: &str) -> String {
@@ -4685,6 +6086,177 @@ pub mod lsp_adapter {
     }
 }
 
+/// Test-only instrumentation for measuring `didChange` re-extraction
+/// work-shape (perl-lsp-swarm#1711 / PR 1711-A).
+///
+/// Every function here is compiled ONLY under `#[cfg(test)]` -- there is no
+/// production build in which this module, or any call into it, exists. This
+/// is a **measurement receipt vehicle**, not a runtime feature: it changes
+/// no extraction/propagation behavior, only records how much work the
+/// EXISTING `index_file_with_generation` path already does, per call site,
+/// on the calling thread.
+///
+/// A thread-local (not a global static) is used because
+/// `index_file_with_generation` runs synchronously on the caller's thread
+/// whenever there is no Tokio runtime installed -- exactly how every
+/// measurement test in `reindex_workshape_measurement` (below) invokes it.
+/// `cargo test` runs tests in parallel on separate OS threads, so a
+/// thread-local avoids cross-test interference without needing a mutex or
+/// serial-test annotation.
+#[cfg(test)]
+pub(crate) mod reindex_metrics {
+    use std::cell::RefCell;
+    use std::time::Duration;
+
+    /// Work-shape counters/timers captured for a single
+    /// `index_file_with_generation` call.
+    #[derive(Debug, Default, Clone, Copy)]
+    pub(crate) struct ReindexWorkMetrics {
+        pub visit_calls: u32,
+        pub visit_time: Duration,
+        pub decl_extract_calls: u32,
+        pub decl_extract_time: Duration,
+        pub ref_extract_calls: u32,
+        pub ref_extract_time: Duration,
+        pub eval_sub_calls: u32,
+        pub eval_sub_time: Duration,
+        pub generated_member_calls: u32,
+        pub generated_member_time: Duration,
+        pub import_extract_calls: u32,
+        pub import_extract_time: Duration,
+        pub use_lib_extract_calls: u32,
+        pub use_lib_extract_time: Duration,
+        /// THIS URI's own `FileIndex::symbols` contribution -- the count of
+        /// entries passed through the legacy symbol-table removal routine
+        /// on this call. NOT necessarily the number of entries removed from
+        /// the global qualified/bare-name map (dual-indexing may write each
+        /// contributed symbol under up to two global keys), and NOT a
+        /// whole-workspace rebuild -- only this one file's contribution.
+        pub legacy_symbols_removed: usize,
+        /// Same file-scoped contribution, on the re-add side of this call.
+        pub legacy_symbols_added: usize,
+        /// THIS URI's contribution passed through the search-index removal
+        /// routine (same file-scoped caveat as `legacy_symbols_removed`).
+        pub legacy_search_removed: usize,
+        pub legacy_search_added: usize,
+        /// THIS URI's own global-reference-index contribution (not the
+        /// whole workspace-wide reference cache) passed through the
+        /// removal routine on this call.
+        pub global_refs_removed: usize,
+        pub global_refs_added: usize,
+        /// `true` when this call took the whole-file content-hash
+        /// short-circuit (cheapest possible outcome -- no re-extraction at
+        /// all).
+        pub content_hash_short_circuit: bool,
+        /// `true` when this call was rejected by the pre-parse high-water
+        /// monotonic-generation guard.
+        pub stale_generation_rejected_pre_parse: bool,
+        /// `true` when this call was rejected by the post-parse monotonic
+        /// generation guard.
+        pub stale_generation_rejected_post_parse: bool,
+        /// `true` when this call's generation was genuinely committed.
+        pub generation_accepted: bool,
+    }
+
+    thread_local! {
+        static CURRENT: RefCell<Option<ReindexWorkMetrics>> = const { RefCell::new(None) };
+    }
+
+    /// Begin recording on the calling thread. Any prior unread recording on
+    /// this thread is discarded.
+    pub(crate) fn start() {
+        CURRENT.with(|c| *c.borrow_mut() = Some(ReindexWorkMetrics::default()));
+    }
+
+    /// Stop recording and return whatever was captured since the last
+    /// `start()` on this thread (a zeroed value if `start()` was never
+    /// called).
+    pub(crate) fn take() -> ReindexWorkMetrics {
+        CURRENT.with(|c| c.borrow_mut().take().unwrap_or_default())
+    }
+
+    fn record(f: impl FnOnce(&mut ReindexWorkMetrics)) {
+        CURRENT.with(|c| {
+            if let Some(m) = c.borrow_mut().as_mut() {
+                f(m);
+            }
+        });
+    }
+
+    pub(crate) fn record_visit(d: Duration) {
+        record(|m| {
+            m.visit_calls += 1;
+            m.visit_time += d;
+        });
+    }
+    pub(crate) fn record_decl_extract(d: Duration) {
+        record(|m| {
+            m.decl_extract_calls += 1;
+            m.decl_extract_time += d;
+        });
+    }
+    pub(crate) fn record_ref_extract(d: Duration) {
+        record(|m| {
+            m.ref_extract_calls += 1;
+            m.ref_extract_time += d;
+        });
+    }
+    pub(crate) fn record_eval_sub(d: Duration) {
+        record(|m| {
+            m.eval_sub_calls += 1;
+            m.eval_sub_time += d;
+        });
+    }
+    pub(crate) fn record_generated_member(d: Duration) {
+        record(|m| {
+            m.generated_member_calls += 1;
+            m.generated_member_time += d;
+        });
+    }
+    pub(crate) fn record_import_extract(d: Duration) {
+        record(|m| {
+            m.import_extract_calls += 1;
+            m.import_extract_time += d;
+        });
+    }
+    pub(crate) fn record_use_lib_extract(d: Duration) {
+        record(|m| {
+            m.use_lib_extract_calls += 1;
+            m.use_lib_extract_time += d;
+        });
+    }
+    pub(crate) fn record_legacy_symbols_removed(n: usize) {
+        record(|m| m.legacy_symbols_removed += n);
+    }
+    pub(crate) fn record_legacy_search_removed(n: usize) {
+        record(|m| m.legacy_search_removed += n);
+    }
+    pub(crate) fn record_global_refs_removed(n: usize) {
+        record(|m| m.global_refs_removed += n);
+    }
+    pub(crate) fn record_legacy_symbols_added(n: usize) {
+        record(|m| m.legacy_symbols_added += n);
+    }
+    pub(crate) fn record_legacy_search_added(n: usize) {
+        record(|m| m.legacy_search_added += n);
+    }
+    pub(crate) fn record_global_refs_added(n: usize) {
+        record(|m| m.global_refs_added += n);
+    }
+    pub(crate) fn record_content_hash_short_circuit() {
+        record(|m| m.content_hash_short_circuit = true);
+    }
+    pub(crate) fn record_stale_rejected_pre_parse() {
+        record(|m| m.stale_generation_rejected_pre_parse = true);
+    }
+    pub(crate) fn record_stale_rejected_post_parse() {
+        record(|m| m.stale_generation_rejected_post_parse = true);
+    }
+    pub(crate) fn record_generation_accepted() {
+        record(|m| m.generation_accepted = true);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4752,24 +6324,24 @@ has display_name => (is => 'rw');
 "#;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
-        let source_symbols = index.search_source_symbols("display_name");
+        let source_symbols = index.search_source_symbols("display_name", None);
         assert!(
             source_symbols.is_empty(),
             "generated framework members must not enter the exact source-symbol slice"
         );
-        let trimmed_source_symbols = index.search_source_symbols("  display_name  ");
+        let trimmed_source_symbols = index.search_source_symbols("  display_name  ", None);
         assert!(
             trimmed_source_symbols.is_empty(),
             "trimmed generated framework member queries must not enter the exact source-symbol slice"
         );
 
-        let generated_symbols = index.search_generated_workspace_symbols("display_name");
+        let generated_symbols = index.search_generated_workspace_symbols("display_name", None);
         assert_eq!(generated_symbols.len(), 1);
         let trimmed_generated_symbols =
-            index.search_generated_workspace_symbols("  display_name  ");
+            index.search_generated_workspace_symbols("  display_name  ", None);
         assert_eq!(trimmed_generated_symbols.len(), 1);
         assert_eq!(trimmed_generated_symbols[0].name, "display_name [generated/framework]");
-        assert!(index.search_generated_workspace_symbols("   ").is_empty());
+        assert!(index.search_generated_workspace_symbols("   ", None).is_empty());
         let symbol = &generated_symbols[0];
         assert_eq!(symbol.name, "display_name [generated/framework]");
         assert_eq!(symbol.kind, SymbolKind::Method);
@@ -4801,7 +6373,7 @@ has display_name => (is => 'rw');
                 .ok_or("missing generated member entity")?;
             entity.provenance = Provenance::ExactAst;
         }
-        let non_framework_symbols = index.search_generated_workspace_symbols("display_name");
+        let non_framework_symbols = index.search_generated_workspace_symbols("display_name", None);
         assert!(
             non_framework_symbols.is_empty(),
             "generated workspace-symbol pilot must require framework-synthesis provenance"
@@ -4821,13 +6393,13 @@ has status => (is => 'rw', predicate => 1);
 "#;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
-        let source_symbols = index.search_source_symbols("has_status");
+        let source_symbols = index.search_source_symbols("has_status", None);
         assert!(
             source_symbols.is_empty(),
             "predicate generated members must not enter the exact source-symbol slice"
         );
 
-        let generated_symbols = index.search_generated_workspace_symbols("has_status");
+        let generated_symbols = index.search_generated_workspace_symbols("has_status", None);
         assert_eq!(generated_symbols.len(), 1);
         let symbol = &generated_symbols[0];
         assert_eq!(symbol.name, "has_status [generated/framework]");
@@ -5972,6 +7544,649 @@ sub hello {
             index.is_index_generation_stale(uri.as_str(), 3),
             "indexed_generation < expected_generation must be stale"
         );
+    }
+
+    /// #3618 review defect: two fire-and-forget background index tasks for
+    /// adjacent generations N and N+1 of the same URI can run on different
+    /// threads and complete OUT OF ORDER (the caller's own pre-spawn
+    /// freshness check is not atomic with this write -- see the monotonic
+    /// generation guard's doc comment on `index_file_with_generation`
+    /// above). This deterministically forces exactly that ordering with a
+    /// `std::sync::Barrier` (no sleeps): generation N+1's commit is fully
+    /// complete (its thread has returned from `index_file_with_generation`
+    /// and reached the barrier) BEFORE generation N's thread is released to
+    /// attempt its own (now late) write. The older generation must never
+    /// win, regardless of which thread's call happened to finish last.
+    #[test]
+    fn out_of_order_generation_commits_never_regress_the_stored_index()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let uri = must(url::Url::parse("file:///lib/OutOfOrder.pm"));
+
+        const GEN_N: u32 = 5;
+        const GEN_N_PLUS_1: u32 = 6;
+        let gen_n_text = "package OutOfOrder;\nsub gen_n_symbol { 1 }\n1;\n".to_string();
+        let gen_n_plus_1_text =
+            "package OutOfOrder;\nsub gen_n_plus_1_symbol { 1 }\n1;\n".to_string();
+        let gen_n_plus_1_text_for_assertion = gen_n_plus_1_text.clone();
+
+        // Released only once BOTH threads have reached it. Generation N+1's
+        // thread reaches the barrier AFTER its write has fully committed;
+        // generation N's thread reaches the barrier BEFORE attempting its
+        // write. So N cannot even start writing until N+1's write is
+        // already visible in the store -- the exact "N completes after
+        // N+1" ordering the real background-task race can produce.
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+
+        let index_n = Arc::clone(&index);
+        let uri_n = uri.clone();
+        let barrier_n = Arc::clone(&barrier);
+        let handle_n = std::thread::spawn(move || -> Result<(), String> {
+            barrier_n.wait();
+            index_n.index_file_with_generation(uri_n, gen_n_text, GEN_N)
+        });
+
+        let index_n1 = Arc::clone(&index);
+        let uri_n1 = uri.clone();
+        let barrier_n1 = Arc::clone(&barrier);
+        let handle_n1 = std::thread::spawn(move || -> Result<(), String> {
+            let result =
+                index_n1.index_file_with_generation(uri_n1, gen_n_plus_1_text, GEN_N_PLUS_1);
+            barrier_n1.wait();
+            result
+        });
+
+        handle_n1
+            .join()
+            .map_err(|_| "generation N+1 thread panicked")?
+            .map_err(|e| format!("generation N+1 write returned an error: {e}"))?;
+        handle_n
+            .join()
+            .map_err(|_| "generation N thread panicked")?
+            .map_err(|e| format!("generation N write returned an error: {e}"))?;
+
+        assert_eq!(
+            index.indexed_generation(uri.as_str()),
+            Some(GEN_N_PLUS_1),
+            "the stored generation must be N+1 even though N's write completed after it"
+        );
+
+        let symbols = index.file_symbols(uri.as_str());
+        assert!(
+            symbols.iter().any(|s| s.name == "gen_n_plus_1_symbol"),
+            "the newer generation's content must be the one stored, even though its writer \
+             finished first; got symbols: {:?}",
+            symbols.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+        assert!(
+            !symbols.iter().any(|s| s.name == "gen_n_symbol"),
+            "the older generation's write must never win, even though it committed AFTER the \
+             newer one; got symbols: {:?}",
+            symbols.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+
+        // #3618 review defect (cubic): `document_store` is a SEPARATE piece
+        // of state from `self.files`, written unconditionally earlier in
+        // `index_file_with_generation` -- before the monotonic generation
+        // guard runs. Proving the guard closes the race for `self.files`
+        // (above) does not prove `document_store` stayed consistent with
+        // it; a cross-file consumer (workspace rename, safe-delete preview,
+        // navigation, hover for symbols in other files -- all read
+        // `document_store()` directly) could still observe generation N's
+        // stale text even though the symbol index correctly holds N+1's
+        // facts.
+        let stored_doc = must_some(index.document_store().get(uri.as_str()));
+        assert_eq!(
+            stored_doc.text, gen_n_plus_1_text_for_assertion,
+            "document_store must hold the newer generation's text, matching self.files -- an \
+             older out-of-order write must not leave document_store and self.files disagreeing \
+             about which generation is current"
+        );
+
+        Ok(())
+    }
+
+    /// #3618 review defect (factory-droid P1, cubic P1): the test above
+    /// forces generation N+1 to FULLY COMMIT (parse finished, late guard
+    /// run, `self.files` updated) before generation N's thread even starts
+    /// -- so N is correctly rejected by the early guard reading an
+    /// ALREADY-CURRENT `self.files[key].generation`. That does not exercise
+    /// the actual reported race: `self.files[key].generation` is only
+    /// otherwise updated by the LATE guard, which runs AFTER
+    /// `Parser::new(&text).parse()` completes -- so a task for generation N
+    /// whose early guard check runs WHILE a concurrent task for generation
+    /// N+1 has only reserved its slot but is STILL PARSING (not yet at the
+    /// late guard) would, without the early reservation this test proves,
+    /// see a stale (pre-N+1) generation and incorrectly proceed to
+    /// overwrite `document_store` with N's older text.
+    ///
+    /// Constructs that window directly: releases both threads from the SAME
+    /// barrier (no full-completion ordering imposed), gives generation N+1
+    /// a LARGE document (many subs) so its parse takes measurably longer
+    /// than generation N's trivial one, and gives N a brief, bounded head
+    /// start (not a polling sleep -- a single fixed delay establishing
+    /// relative ordering, the same class of technique the barrier above
+    /// replaces sleep-based polling with, just biasing rather than forcing
+    /// the race here since there is no production pause hook to force it
+    /// exactly). Repeats several iterations, since a race that depends on
+    /// relative thread-scheduling timing is not guaranteed to manifest on
+    /// every single run even when present -- consistent reproduction across
+    /// iterations is the meaningful signal, not any single run.
+    #[test]
+    fn concurrent_still_parsing_newer_generation_still_wins_document_store()
+    -> Result<(), Box<dyn std::error::Error>> {
+        const GEN_N: u32 = 1;
+        const GEN_N_PLUS_1: u32 = 2;
+        let gen_n_text = "package StillParsing;\nsub gen_n_symbol { 1 }\n1;\n".to_string();
+        // Large enough that parsing takes measurably longer than the small
+        // generation-N document's parse + N's own early-guard check --
+        // widens the window generation N+1 spends between reserving its
+        // generation and reaching the late guard.
+        let mut gen_n_plus_1_text = String::from("package StillParsing;\n");
+        for i in 0..2000 {
+            gen_n_plus_1_text.push_str(&format!("sub gen_n_plus_1_symbol_{i} {{ {i} }}\n"));
+        }
+        gen_n_plus_1_text.push_str("1;\n");
+
+        for iteration in 0..10 {
+            let index = Arc::new(WorkspaceIndex::new());
+            let uri = must(url::Url::parse(&format!("file:///lib/StillParsing{iteration}.pm")));
+            // Baseline generation 0 so `self.files.get_mut(&key)` finds an
+            // existing entry for the early guard/reservation to act on --
+            // matches the real scenario (an already-tracked document being
+            // edited), not a brand-new never-before-seen URI.
+            index.index_file_with_generation(
+                uri.clone(),
+                "package StillParsing;\n1;\n".to_string(),
+                0,
+            )?;
+
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+
+            let index_n1 = Arc::clone(&index);
+            let uri_n1 = uri.clone();
+            let barrier_n1 = Arc::clone(&barrier);
+            let text_n1 = gen_n_plus_1_text.clone();
+            let handle_n1 = std::thread::spawn(move || -> Result<(), String> {
+                barrier_n1.wait();
+                index_n1.index_file_with_generation(uri_n1, text_n1, GEN_N_PLUS_1)
+            });
+
+            let index_n = Arc::clone(&index);
+            let uri_n = uri.clone();
+            let barrier_n = Arc::clone(&barrier);
+            let text_n = gen_n_text.clone();
+            let handle_n = std::thread::spawn(move || -> Result<(), String> {
+                barrier_n.wait();
+                // Brief, bounded head start for generation N+1 to reach and
+                // pass its early-guard reservation (a fast, un-parsed
+                // operation: hash + lock + compare + document_store write)
+                // before generation N's own early-guard check runs -- not a
+                // polling loop, a single fixed delay biasing which side of
+                // the reservation window this thread's check lands in. Kept
+                // well under generation N+1's own parse time (thousands of
+                // subs) so this thread's check reliably lands DURING that
+                // still-parsing window, not after it.
+                std::thread::sleep(std::time::Duration::from_millis(2));
+                index_n.index_file_with_generation(uri_n, text_n, GEN_N)
+            });
+
+            handle_n1
+                .join()
+                .map_err(|_| "generation N+1 thread panicked")?
+                .map_err(|e| format!("generation N+1 write returned an error: {e}"))?;
+            handle_n
+                .join()
+                .map_err(|_| "generation N thread panicked")?
+                .map_err(|e| format!("generation N write returned an error: {e}"))?;
+
+            let stored_doc = must_some(index.document_store().get(uri.as_str()));
+            assert!(
+                !stored_doc.text.contains("gen_n_symbol"),
+                "iteration {iteration}: document_store must never end up holding generation N's \
+                 (older) text once generation N+1 has been reserved, even while N+1 is still \
+                 parsing when N's early guard runs; got: {:?}",
+                stored_doc.text
+            );
+        }
+
+        Ok(())
+    }
+
+    /// #3618 review-3660 finding 3(a): the early-guard reservation added to
+    /// close the still-parsing race above must roll itself back when the
+    /// parse it was reserved for actually fails -- otherwise a single
+    /// unparseable edit permanently strands the tracked generation ahead of
+    /// what was ever genuinely indexed, silently disabling all FUTURE
+    /// generation guards for that URI (every later legitimate generation
+    /// would look "stale" against the phantom reservation forever).
+    ///
+    /// Needs a real, reliably-reachable parse failure, not a hand-wavy
+    /// "assume it can fail" -- uses 200 levels of `if ($a) { ... }` nesting
+    /// against `perl-parser-core`'s `MAX_RECURSION_DEPTH = 128`
+    /// (`crates/perl-parser-core/src/engine/parser/mod.rs`), which
+    /// `check_recursion()` (`engine/parser/helpers.rs`) turns into a
+    /// `ParseError::NestingTooDeep` that `parse_statement`'s callers
+    /// (`statements.rs`, `control_flow.rs`) explicitly propagate rather
+    /// than recover from -- confirmed here by asserting on `Err` directly
+    /// (not the softer "Err or recorded diagnostic" pattern the older
+    /// `test_deep_nesting_stack_overflow` parser test uses at only 100
+    /// levels, which is why that test doesn't already cover this).
+    #[test]
+    fn parse_error_rollback_restores_the_last_committed_generation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///lib/DeepNestFail.pm"));
+
+        // Commit a genuine baseline at generation 3 first.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package DeepNestFail;\nsub baseline { 1 }\n1;\n".to_string(),
+            3,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(3));
+
+        // 200 nested `if` blocks -- well past MAX_RECURSION_DEPTH (128) --
+        // deterministically triggers `ParseError::NestingTooDeep`.
+        let mut too_deep = String::from("package DeepNestFail;\n");
+        for _ in 0..200 {
+            too_deep.push_str("if ($a) { ");
+        }
+        too_deep.push_str("1;");
+        for _ in 0..200 {
+            too_deep.push('}');
+        }
+        too_deep.push('\n');
+
+        let result = index.index_file_with_generation(uri.clone(), too_deep, 4);
+        assert!(
+            result.is_err(),
+            "200 levels of nesting must exceed MAX_RECURSION_DEPTH=128 and return Err, not \
+             recover -- got {result:?}"
+        );
+
+        // The reservation for generation 4 must have rolled back: the
+        // publicly-read generation stays at the last genuinely committed
+        // value (3), never advances to the failed attempt's 4.
+        assert_eq!(
+            index.indexed_generation(uri.as_str()),
+            Some(3),
+            "a failed parse must not leave the tracked generation claiming content that was \
+             never actually indexed"
+        );
+
+        // And the rollback must not have wedged the guard: a legitimate
+        // follow-up at generation 4 with valid text still succeeds.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package DeepNestFail;\nsub recovered { 1 }\n1;\n".to_string(),
+            4,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(4));
+        let symbols = index.file_symbols(uri.as_str());
+        assert!(symbols.iter().any(|s| s.name == "recovered"));
+
+        Ok(())
+    }
+
+    /// #3618 review-3660 finding 3(b): a rollback that restores the tracked
+    /// generation to "whatever THIS task saw before it reserved" (rather
+    /// than to the last genuinely committed generation) is unsound under
+    /// CHAINED failures. Walkthrough of the bug this guards against (fixed
+    /// by tracking `FileIndex::generation` -- committed -- and
+    /// `FileIndex::pending_generation` -- reserved/in-flight -- as two
+    /// separate fields, with rollback always restoring toward `generation`
+    /// rather than a per-task snapshot):
+    ///
+    /// - Baseline committed generation is 4.
+    /// - Task A reserves generation 5 (pending_generation: 4 -> 5), then
+    ///   fails to parse.
+    /// - Task B reserves generation 6 (pending_generation: 5 -> 6) BEFORE
+    ///   A's rollback runs, then ALSO fails to parse.
+    /// - A's rollback correctly no-ops: `pending_generation` (6) no longer
+    ///   equals what A reserved (5) -- something newer has claimed the
+    ///   slot since.
+    /// - B's rollback must restore toward the COMMITTED value (4), not
+    ///   toward "5" (A's now-stale pre-reservation value, and NOT what B
+    ///   itself observed either) -- otherwise `pending_generation` would
+    ///   land on an intermediate value nothing ever committed, and (in the
+    ///   OLD single-field design where the reservation and the committed
+    ///   value were the same field) `indexed_generation()` would incorrectly
+    ///   report 5 even though nothing at generation 5 or 6 was ever
+    ///   genuinely indexed.
+    ///
+    /// This test drives that exact interleaving directly (single-threaded,
+    /// deterministic -- no timing dependency, since the guard's rollback
+    /// logic doesn't depend on wall-clock timing, only on call order) and
+    /// asserts `indexed_generation()` is still exactly the baseline (4)
+    /// after BOTH failures, then proves the guard isn't left wedged: a
+    /// legitimate retry at generation 6 with valid text still succeeds.
+    #[test]
+    fn chained_reservation_failures_never_strand_generation_above_committed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///lib/ChainedFail.pm"));
+
+        index.index_file_with_generation(
+            uri.clone(),
+            "package ChainedFail;\nsub baseline { 1 }\n1;\n".to_string(),
+            4,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(4));
+
+        let mut too_deep_a = String::from("package ChainedFail;\n");
+        for _ in 0..200 {
+            too_deep_a.push_str("if ($a) { ");
+        }
+        too_deep_a.push_str("1;");
+        for _ in 0..200 {
+            too_deep_a.push('}');
+        }
+        too_deep_a.push('\n');
+        let too_deep_b = too_deep_a.clone();
+
+        // Task A: reserves generation 5, fails.
+        let result_a = index.index_file_with_generation(uri.clone(), too_deep_a, 5);
+        assert!(result_a.is_err(), "generation 5's over-nested text must fail to parse");
+
+        // Task B: reserves generation 6 -- in the real concurrent scenario
+        // this races in WHILE A is still parsing, before A's rollback runs;
+        // driving it strictly after A's `Err` here still exercises the
+        // same rollback-ordering logic (B's own rollback must restore
+        // toward `generation`, not toward whatever A's reservation left
+        // behind) since A's failed reservation is never read as a
+        // "committed" value by B's high-water check either way.
+        let result_b = index.index_file_with_generation(uri.clone(), too_deep_b, 6);
+        assert!(result_b.is_err(), "generation 6's over-nested text must fail to parse");
+
+        assert_eq!(
+            index.indexed_generation(uri.as_str()),
+            Some(4),
+            "two chained reservation failures (gen 5 then gen 6) must never strand the tracked \
+             generation on an intermediate, never-committed value -- it must still read the last \
+             genuinely committed generation"
+        );
+
+        // The guard must not be wedged: a legitimate retry at generation 6
+        // with valid text still succeeds and correctly advances the index.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package ChainedFail;\nsub recovered { 1 }\n1;\n".to_string(),
+            6,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(6));
+        let symbols = index.file_symbols(uri.as_str());
+        assert!(symbols.iter().any(|s| s.name == "recovered"));
+
+        Ok(())
+    }
+
+    /// #3618 review-3660 finding 3(c): the early-guard reservation must
+    /// roll back on EVERY early return between it and the late guard's
+    /// commit -- not just a parse error. `self.document_store.get(&uri_str)
+    /// .ok_or("Document not found")?` is a second, real, reachable
+    /// early-return site: an ordinary "rapid tab-close after edit" (a
+    /// `didClose` racing an in-flight background index task for the same
+    /// URI, wired via `DocumentStore::close` in `runtime/text_sync.rs`) can
+    /// close the document between the early guard's reservation and this
+    /// read. Before this fix, that path had NO rollback at all, silently
+    /// leaking the reservation.
+    ///
+    /// Drives the actual race with real threads and a large document (many
+    /// subs) so generation 5's parse takes measurably longer than the
+    /// close call, widening the window a concurrent `document_store.close`
+    /// has to land inside it -- same class of timing technique as
+    /// `concurrent_still_parsing_newer_generation_still_wins_document_store`
+    /// above. Repeats several iterations since the race is timing-dependent.
+    #[test]
+    fn document_closed_during_late_parse_rolls_back_reservation_and_permits_legitimate_retry()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut gen_5_text = String::from("package CloseRace;\n");
+        for i in 0..3000 {
+            gen_5_text.push_str(&format!("sub gen_5_symbol_{i} {{ {i} }}\n"));
+        }
+        gen_5_text.push_str("1;\n");
+
+        for iteration in 0..10 {
+            let index = Arc::new(WorkspaceIndex::new());
+            let uri = must(url::Url::parse(&format!("file:///lib/CloseRace{iteration}.pm")));
+
+            index.index_file_with_generation(
+                uri.clone(),
+                "package CloseRace;\nsub baseline { 1 }\n1;\n".to_string(),
+                3,
+            )?;
+            assert_eq!(index.indexed_generation(uri.as_str()), Some(3));
+
+            let index_parse = Arc::clone(&index);
+            let uri_parse = uri.clone();
+            let text_parse = gen_5_text.clone();
+            let parse_handle = std::thread::spawn(move || {
+                index_parse.index_file_with_generation(uri_parse, text_parse, 5)
+            });
+
+            // Brief, bounded head start so the parse thread's early guard
+            // has reserved generation 5 and opened the document before this
+            // thread closes it -- widens the window the close needs to land
+            // in (the large document's parse), rather than requiring it hit
+            // the few-line gap between parse success and the `.get()` call
+            // exactly.
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            index.document_store().close(uri.as_str());
+
+            let parse_result =
+                parse_handle.join().map_err(|_| "generation 5 parse thread panicked")?;
+
+            // Whichever way the race landed (close hit the parse window and
+            // caused a "Document not found" Err, or the parse finished
+            // first and generation 5 committed normally before the close),
+            // the tracked generation must never claim generation 5 while
+            // simultaneously having failed to commit it.
+            if parse_result.is_err() {
+                assert_eq!(
+                    index.indexed_generation(uri.as_str()),
+                    Some(3),
+                    "iteration {iteration}: a document-closed early return must roll the \
+                     reservation back to the last committed generation, not strand it at 5"
+                );
+            }
+
+            // Regardless of outcome, the guard must not be wedged: reopen
+            // and re-index at generation 5 must succeed (proves no
+            // permanently-leaked reservation from either this race or a
+            // prior iteration's URI).
+            index.index_file_with_generation(
+                uri.clone(),
+                "package CloseRace;\nsub recovered { 1 }\n1;\n".to_string(),
+                5,
+            )?;
+            assert_eq!(
+                index.indexed_generation(uri.as_str()),
+                Some(5),
+                "iteration {iteration}: a legitimate retry after the close race must still \
+                 succeed and advance the tracked generation"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// #3618 review-3660: the three tests above (3a/3b/3c) prove a failed
+    /// reservation doesn't leave `indexed_generation()` claiming an
+    /// un-indexed generation, and that a SAME-generation retry still
+    /// succeeds -- but `indexed_generation()` only ever reads
+    /// `FileIndex::generation`, which `ReservationGuard::drop` never
+    /// touches (only `pending_generation` is rolled back), and a
+    /// same-generation retry sails through the early guard's strict `>`
+    /// high-water comparison whether or not the rollback ran. review-3660
+    /// proved this empirically: no-op'ing `ReservationGuard::drop` left
+    /// all three tests passing unchanged. None of them actually exercise
+    /// `pending_generation`.
+    ///
+    /// This test does. It reproduces review-3660's exact discriminating
+    /// scenario: a HIGHER generation (10) reserves then fails to parse,
+    /// leaking `pending_generation = 10` if the rollback doesn't run. A
+    /// LEGITIMATE, LOWER, still-uncommitted generation (7) then arrives
+    /// with valid content -- modeling an out-of-order background index
+    /// task (`LspServer::run_post_parse_side_effects`'s `spawn_blocking`)
+    /// completing after a later generation was merely attempted, not
+    /// after it committed. Without rollback, the early guard's high-water
+    /// check (`existing.generation.max(existing.pending_generation) = 10
+    /// > 7`) rejects generation 7 outright -- `index_file_with_generation`
+    /// returns `Ok(())` but SILENTLY skips indexing it, permanently
+    /// stranding the index at generation 3 even though generation 7's
+    /// content was never anything but valid. With the rollback (this PR's
+    /// fix), generation 10's parse failure clears the leaked reservation
+    /// back to the committed floor (3), so generation 7 correctly passes
+    /// the high-water check and gets indexed.
+    ///
+    /// Mutation-proved: with `ReservationGuard::drop` temporarily no-op'd,
+    /// this test fails (`indexed_generation()` reports `Some(3)`, symbols
+    /// lack `gen_7_symbol`); restored, it passes. See the PR comment for
+    /// both outputs.
+    #[test]
+    fn failed_higher_generation_reservation_does_not_silently_drop_a_legitimate_lower_generation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///lib/LeakedReservation.pm"));
+
+        // Baseline committed generation 3.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package LeakedReservation;\nsub baseline { 1 }\n1;\n".to_string(),
+            3,
+        )?;
+        assert_eq!(index.indexed_generation(uri.as_str()), Some(3));
+
+        // Generation 10 reserves (pending_generation: 3 -> 10 if the
+        // reservation is taken), then fails to parse -- 200 levels of
+        // nesting deterministically exceeds MAX_RECURSION_DEPTH (128).
+        let mut too_deep = String::from("package LeakedReservation;\n");
+        for _ in 0..200 {
+            too_deep.push_str("if ($a) { ");
+        }
+        too_deep.push_str("1;");
+        for _ in 0..200 {
+            too_deep.push('}');
+        }
+        too_deep.push('\n');
+        let result_10 = index.index_file_with_generation(uri.clone(), too_deep, 10);
+        assert!(result_10.is_err(), "generation 10's over-nested text must fail to parse");
+
+        // Generation 7 -- lower than the failed generation 10, but higher
+        // than (and still uncommitted relative to) the baseline of 3 --
+        // arrives with genuinely valid content. This is the discriminating
+        // assertion: it only passes if generation 10's leaked reservation
+        // was actually rolled back.
+        index.index_file_with_generation(
+            uri.clone(),
+            "package LeakedReservation;\nsub gen_7_symbol { 1 }\n1;\n".to_string(),
+            7,
+        )?;
+
+        assert_eq!(
+            index.indexed_generation(uri.as_str()),
+            Some(7),
+            "a legitimate generation (7) must not be silently dropped by a higher generation's \
+             (10) leaked-and-failed reservation -- without the rollback, the high-water check \
+             (10 > 7) rejects it and the index stays permanently stuck at the baseline (3)"
+        );
+        let symbols = index.file_symbols(uri.as_str());
+        assert!(
+            symbols.iter().any(|s| s.name == "gen_7_symbol"),
+            "generation 7's content must actually be indexed, not silently skipped; got \
+             symbols: {:?}",
+            symbols.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+        assert!(
+            !symbols.iter().any(|s| s.name == "baseline"),
+            "generation 7's content must have REPLACED the baseline (3) index, not merely left \
+             it in place; got symbols: {:?}",
+            symbols.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+
+        Ok(())
+    }
+
+    /// #3618 review thread (factory-droid, PRRT_kwDOSid81M6QBZ1u): before the
+    /// `generation`/`pending_generation` split added in this PR's fix-3
+    /// round, the early guard's reservation wrote directly onto
+    /// `FileIndex::generation` (`existing_index.generation = generation`) --
+    /// the SAME field `indexed_generation()` reads. For the entire window
+    /// between that reservation and the late guard's insert, a reader
+    /// (including `LspServer::workspace_index_stale_for_document`, which
+    /// gates hover/navigation/references/completion's local-provider
+    /// fallback on `indexed_generation() == DocumentState::current_generation()`)
+    /// would see the NEW generation number while `file_symbols()` (and
+    /// everything else keyed off the same `FileIndex`) still returned the
+    /// OLD generation's facts -- a window where the index looks caught up
+    /// but isn't.
+    ///
+    /// The `generation`/`pending_generation` split closes this as a side
+    /// effect: the early guard now only ever advances `pending_generation`;
+    /// `generation` -- the only field `indexed_generation()` reads -- is
+    /// written exclusively by the late guard's successful insert, AFTER
+    /// parsing and symbol extraction have already completed. There is no
+    /// longer a reservation write on the path `indexed_generation()` reads
+    /// at all, so this test asserts the window is actually closed: while a
+    /// large document is still parsing in another thread, `indexed_generation()`
+    /// must keep reporting the PREVIOUS generation, never the in-flight one.
+    #[test]
+    fn indexed_generation_never_advances_speculatively_during_a_still_parsing_task()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut gen_5_text = String::from("package StaleWindow;\n");
+        for i in 0..3000 {
+            gen_5_text.push_str(&format!("sub gen_5_symbol_{i} {{ {i} }}\n"));
+        }
+        gen_5_text.push_str("1;\n");
+
+        for iteration in 0..10 {
+            let index = Arc::new(WorkspaceIndex::new());
+            let uri = must(url::Url::parse(&format!("file:///lib/StaleWindow{iteration}.pm")));
+
+            index.index_file_with_generation(
+                uri.clone(),
+                "package StaleWindow;\nsub baseline { 1 }\n1;\n".to_string(),
+                3,
+            )?;
+            assert_eq!(index.indexed_generation(uri.as_str()), Some(3));
+
+            let index_parse = Arc::clone(&index);
+            let uri_parse = uri.clone();
+            let text_parse = gen_5_text.clone();
+            let parse_handle = std::thread::spawn(move || {
+                index_parse.index_file_with_generation(uri_parse, text_parse, 5)
+            });
+
+            // Brief, bounded head start so the parse thread's early guard has
+            // reserved generation 5 (bumped `pending_generation`) before this
+            // thread reads `indexed_generation()` -- the exact reservation
+            // window the pre-fix code would have leaked into `generation`.
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            let generation_while_still_parsing = index.indexed_generation(uri.as_str());
+
+            parse_handle
+                .join()
+                .map_err(|_| "generation 5 parse thread panicked")?
+                .map_err(|e| format!("generation 5 write returned an error: {e}"))?;
+
+            assert_eq!(
+                generation_while_still_parsing,
+                Some(3),
+                "iteration {iteration}: indexed_generation() must never report a generation \
+                 whose symbols haven't actually been committed yet -- observed {:?} while \
+                 generation 5 was still mid-parse (baseline was 3)",
+                generation_while_still_parsing
+            );
+            assert_eq!(
+                index.indexed_generation(uri.as_str()),
+                Some(5),
+                "iteration {iteration}: after the parse genuinely completes, indexed_generation() \
+                 must reflect it"
+            );
+        }
+
+        Ok(())
     }
 
     #[test]
@@ -7994,6 +10209,221 @@ mod entity_id_file_scoped_tests {
         )
         .into())
     }
+
+    // ── search_index correctness: issue #2994 ──
+
+    /// Verify that `search_source_symbols` via the indexed path returns the same
+    /// symbol set as iterating all files would, across multiple files, for both
+    /// bare-name and qualified-name queries.
+    ///
+    /// This is the primary correctness guard for the O(n) → O(unique_names) fix:
+    /// if the search_index gets out of sync (stale entry, missing add, duplicate),
+    /// these assertions catch it.
+    #[test]
+    fn search_source_symbols_indexed_matches_full_scan_result_set() {
+        let index = WorkspaceIndex::new();
+
+        let uri_a = "file:///lib/Utils.pm";
+        let uri_b = "file:///lib/App.pm";
+
+        must(index.index_file(
+            must(url::Url::parse(uri_a)),
+            "package Utils;\nsub process { 1 }\nsub helper { 2 }\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse(uri_b)),
+            "package App;\nuse Utils;\nsub run { 3 }\n1;\n".to_string(),
+        ));
+
+        // Bare-name substring match: "proc" matches Utils::process
+        let results = index.search_source_symbols("proc", None);
+        let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            names.contains(&"process"),
+            "bare-name substring 'proc' must match 'process'; got: {:?}",
+            names
+        );
+        assert!(!names.contains(&"helper"), "'helper' must not match 'proc'; got: {:?}", names);
+
+        // Qualified-name substring match: "Utils::proc" must match via qualified name
+        let qresults = index.search_source_symbols("Utils::proc", None);
+        assert!(
+            qresults.iter().any(|s| s.name == "process"),
+            "'Utils::proc' must match process via qualified name; got: {:?}",
+            qresults.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+
+        // Cross-file: "run" lives only in App.pm
+        let run_results = index.search_source_symbols("run", None);
+        assert!(
+            run_results.iter().any(|s| s.name == "run" && s.uri == uri_b),
+            "'run' must be found in App.pm; got: {:?}",
+            run_results.iter().map(|s| (&s.name, &s.uri)).collect::<Vec<_>>()
+        );
+
+        // No duplicates: a symbol appearing under both bare and qualified name keys
+        // must appear exactly once in results.
+        let all = index.search_source_symbols("process", None);
+        let process_count = all.iter().filter(|s| s.name == "process").count();
+        assert_eq!(
+            process_count, 1,
+            "'process' must appear exactly once (no dup from dual-key indexing); got: {process_count}"
+        );
+    }
+
+    #[test]
+    fn search_source_symbols_keeps_same_name_from_multiple_workspace_folders() {
+        let index = WorkspaceIndex::new();
+        index.set_workspace_folders(vec![
+            "file:///repo/svc-a".to_string(),
+            "file:///repo/svc-b".to_string(),
+        ]);
+
+        must(index.index_file(
+            must(url::Url::parse("file:///repo/svc-a/lib/ServiceA.pm")),
+            "package ServiceA;\nsub shared_action_4481 { 1 }\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse("file:///repo/svc-b/lib/ServiceB.pm")),
+            "package ServiceB;\nsub shared_action_4481 { 2 }\n1;\n".to_string(),
+        ));
+
+        let mut results = index.search_source_symbols("shared_action_4481", None);
+        results.sort_by(|left, right| left.uri.cmp(&right.uri));
+
+        let folders: Vec<Option<&str>> =
+            results.iter().map(|symbol| symbol.workspace_folder_uri.as_deref()).collect();
+        assert_eq!(
+            folders,
+            vec![Some("file:///repo/svc-a"), Some("file:///repo/svc-b")],
+            "same-name workspace symbols must preserve both workspace folder owners"
+        );
+    }
+
+    /// Verify that `search_source_symbols` via the indexed path is correct after
+    /// a file is updated (incremental remove + add) and after `remove_file`.
+    #[test]
+    fn search_source_symbols_indexed_correct_after_update_and_remove() {
+        let index = WorkspaceIndex::new();
+
+        let uri = "file:///lib/Foo.pm";
+
+        // Index v1: has `old_func`
+        must(index.index_file(
+            must(url::Url::parse(uri)),
+            "package Foo;\nsub old_func { 1 }\n1;\n".to_string(),
+        ));
+        assert!(
+            index.search_source_symbols("old_func", None).iter().any(|s| s.name == "old_func"),
+            "old_func must be found after initial index"
+        );
+
+        // Re-index (update) v2: `old_func` gone, `new_func` added
+        must(index.index_file(
+            must(url::Url::parse(uri)),
+            "package Foo;\nsub new_func { 2 }\n1;\n".to_string(),
+        ));
+        assert!(
+            index.search_source_symbols("new_func", None).iter().any(|s| s.name == "new_func"),
+            "new_func must appear after update"
+        );
+        assert!(
+            index.search_source_symbols("old_func", None).iter().all(|s| s.name != "old_func"),
+            "old_func must be gone after update; stale entry in search_index"
+        );
+
+        // Remove the file entirely
+        index.remove_file(uri);
+        assert!(
+            index.search_source_symbols("new_func", None).is_empty(),
+            "new_func must be gone after remove_file"
+        );
+    }
+
+    /// Verify that `search_source_symbols` returns the same set (sorted by name+uri)
+    /// whether a batch index or incremental index is used.  This exercises
+    /// `rebuild_search_index` (batch path) vs `incremental_add_search` (single path).
+    #[test]
+    fn search_source_symbols_batch_vs_incremental_same_result_set() {
+        let uri_a = "file:///lib/Alpha.pm";
+        let uri_b = "file:///lib/Beta.pm";
+        let code_a = "package Alpha;\nsub alpha_fn { 1 }\n1;\n";
+        let code_b = "package Beta;\nsub beta_fn { 2 }\n1;\n";
+
+        // Incremental path
+        let idx_inc = WorkspaceIndex::new();
+        must(idx_inc.index_file(must(url::Url::parse(uri_a)), code_a.to_string()));
+        must(idx_inc.index_file(must(url::Url::parse(uri_b)), code_b.to_string()));
+
+        // Batch path
+        let idx_batch = WorkspaceIndex::new();
+        let errors = idx_batch.index_files_batch(vec![
+            (must(url::Url::parse(uri_a)), code_a.to_string()),
+            (must(url::Url::parse(uri_b)), code_b.to_string()),
+        ]);
+        assert!(errors.is_empty(), "batch index must have no errors: {:?}", errors);
+
+        // Both should find "alpha_fn" and "beta_fn"
+        for query in &["alpha_fn", "beta_fn", "fn"] {
+            let mut inc = idx_inc.search_source_symbols(query, None);
+            let mut bat = idx_batch.search_source_symbols(query, None);
+            inc.sort_by(|a, b| a.name.cmp(&b.name).then(a.uri.cmp(&b.uri)));
+            bat.sort_by(|a, b| a.name.cmp(&b.name).then(a.uri.cmp(&b.uri)));
+            let inc_names: Vec<&str> = inc.iter().map(|s| s.name.as_str()).collect();
+            let bat_names: Vec<&str> = bat.iter().map(|s| s.name.as_str()).collect();
+            assert_eq!(
+                inc_names, bat_names,
+                "query '{query}': incremental and batch must return same symbol names"
+            );
+        }
+    }
+}
+
+// ── search_source_symbols / search_generated_workspace_symbols cap (#1668) ──
+
+#[cfg(test)]
+mod search_cap_tests {
+    use super::*;
+    use perl_tdd_support::must;
+
+    fn make_index_with_subs(uri: &str, subs: &[&str]) -> WorkspaceIndex {
+        let index = WorkspaceIndex::new();
+        let source = subs.iter().map(|s| format!("sub {s} {{}}")).collect::<Vec<_>>().join(" ");
+        must(index.index_file(must(url::Url::parse(uri)), source));
+        index
+    }
+
+    #[test]
+    fn search_source_symbols_cap_limits_results() {
+        let index = make_index_with_subs(
+            "file:///lib/Cap.pm",
+            &["alpha", "beta", "gamma", "delta", "epsilon"],
+        );
+
+        let uncapped = index.search_source_symbols("", None);
+        assert!(uncapped.len() >= 5, "uncapped must return all 5 symbols");
+
+        let capped = index.search_source_symbols("", Some(2));
+        assert!(capped.len() <= 2, "cap=2 must return at most 2 symbols; got {}", capped.len());
+    }
+
+    #[test]
+    fn search_source_symbols_cap_none_returns_all() {
+        let index = make_index_with_subs("file:///lib/All.pm", &["foo", "bar"]);
+
+        let uncapped = index.search_source_symbols("", None);
+        let capped_large = index.search_source_symbols("", Some(usize::MAX));
+        // Cap large enough to never trigger early exit — both paths return the same count.
+        assert_eq!(uncapped.len(), capped_large.len());
+    }
+
+    #[test]
+    fn search_source_symbols_cap_one_returns_exactly_one() {
+        let index = make_index_with_subs("file:///lib/One.pm", &["qux", "quux", "quuz", "corge"]);
+
+        let capped = index.search_source_symbols("", Some(1));
+        assert_eq!(capped.len(), 1, "cap=1 must return exactly 1 symbol; got {:?}", capped);
+    }
 }
 
 // ── FileFactShard serde round-trip (Campaign 31 PR 5, perl-lsp-swarm#2592) ──
@@ -8001,6 +10431,7 @@ mod entity_id_file_scoped_tests {
 #[cfg(test)]
 mod file_fact_shard_serde_tests {
     use super::*;
+    use perl_tdd_support::must;
 
     #[test]
     fn file_fact_shard_serializes_and_deserializes_round_trip() {
@@ -8050,5 +10481,1574 @@ mod file_fact_shard_serde_tests {
         let json = serde_json::to_string(&shard).expect("must serialize with facts");
         assert!(json.contains("\"source_uri\":\"file:///t/app.t\""));
         assert!(json.contains("\"content_hash\":999"));
+    }
+
+    // ── find_unused_symbols: lexical exclusion tests (#1805) ──────────────────
+
+    /// A genuinely-unused `my` variable must NOT appear in `find_unused_symbols`
+    /// after the fix, because scope-local lexicals are excluded from the bare-name
+    /// unused check entirely (bare-name lookup cannot determine scope correctly).
+    /// Pre-fix: the variable IS reported (no usage refs → `has_usage = false`).
+    /// Post-fix: excluded from check → not reported.
+    #[test]
+    fn test_find_unused_symbols_excludes_genuinely_unused_my_variable() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///unused-lexical.pl";
+        let code = "sub foo {\n    my $isolated = 42;\n    return 1;\n}\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !unused_names.contains(&"$isolated"),
+            "my variable must be excluded from bare-name unused check; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// A used `my $x` (referenced within same scope) must also NOT appear in
+    /// find_unused_symbols — the exclusion is class-wide, not use-sensitive.
+    #[test]
+    fn test_find_unused_symbols_excludes_used_my_variable() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///used-lexical.pl";
+        let code = "sub foo {\n    my $x = 1;\n    return $x;\n}\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !unused_names.contains(&"$x"),
+            "used my $x must not appear in find_unused_symbols; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// `state` variables are lexically scoped just like `my` — excluded from
+    /// the bare-name unused check.
+    #[test]
+    fn test_find_unused_symbols_excludes_state_variable() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///state-var.pl";
+        let code =
+            "use feature 'state';\nsub counter {\n    state $count = 0;\n    return $count;\n}\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !unused_names.contains(&"$count"),
+            "state variable must be excluded from bare-name unused check; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// Positive control: an unused package-level subroutine IS still reported
+    /// by find_unused_symbols — only lexical my/state vars are excluded.
+    #[test]
+    fn test_find_unused_symbols_still_reports_unused_subroutine() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///unused-sub.pl";
+        let code = "package Foo;\nsub bar { return 1; }\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            unused_names.contains(&"bar"),
+            "unused package-level sub must still be reported by find_unused_symbols; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// Positive control: an unused `our` (package-level) variable IS still
+    /// reported — only lexical my/state vars are excluded, not our/local.
+    #[test]
+    fn test_find_unused_symbols_still_reports_unused_our_variable() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///our-var.pl";
+        let code = "package Foo;\nour $VERSION = '1.0';\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            unused_names.contains(&"$VERSION"),
+            "unused our variable must still be reported by find_unused_symbols; got: {:?}",
+            unused_names
+        );
+    }
+
+    /// Cross-scope collision: two subs each declare `my $shared_name`. The one
+    /// without a usage should NOT appear in find_unused_symbols (the whole
+    /// class is excluded). Pre-fix it would appear due to bare-name false-negative
+    /// hiding — but post-fix both are excluded from the check entirely.
+    #[test]
+    fn test_find_unused_symbols_cross_scope_name_collision_excluded() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///cross-scope.pl";
+        // foo declares $shared but doesn't use it; bar declares and uses $shared.
+        // Pre-fix: bar's usage ref makes foo's $shared appear "used" (false neg).
+        // Post-fix: both are excluded because they're my vars.
+        let code = "sub foo {\n    my $shared = 1;\n    return 1;\n}\nsub bar {\n    my $shared = 2;\n    return $shared;\n}\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let unused = index.find_unused_symbols();
+        let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !unused_names.contains(&"$shared"),
+            "cross-scope my variable must not appear in find_unused_symbols; got: {:?}",
+            unused_names
+        );
+    }
+}
+
+/// # PR 1711-A -- didChange re-extraction work-shape measurement.
+///
+/// Measures how much re-extraction work `index_file_with_generation` (the
+/// production `didChange` -> shard-update path) does per edit, on a large
+/// file (500+ LOC / 80+ symbols), across the six edit classes called for by
+/// perl-lsp-swarm#1711:
+///
+/// 1. comment/whitespace-only (categories unchanged) -- the key waste case;
+/// 2. reference-only (occurrence changes, decl/entity reusable);
+/// 3. declaration/entity-changing (entity + anchor change);
+/// 4. generated/dynamic-fact (`eval "sub NAME {...}"` synthetic category);
+/// 5. revert-to-original (determinism -- no drift);
+/// 6. superseded generation (no stale publication).
+///
+/// This module is a MEASUREMENT RECEIPT, not a behavior change: every
+/// assertion below observes either (a) existing public API
+/// (`file_fact_shard`'s per-category hashes) or (b) the `reindex_metrics`
+/// counters/timers added above, which are themselves compiled only under
+/// `#[cfg(test)]` and never run in a production build. See
+/// `docs/reference/1711-A-reextraction-workshape-receipt.md` for the
+/// human-readable summary and the bounded-vs-material disposition.
+///
+/// The structural evidence (category-hash-changed flags, call counts,
+/// per-file cache-contribution counts) is MECHANICALLY BOUND via
+/// `reextraction_workshape_receipt_snapshot`'s checked-in `insta` snapshot --
+/// so those numbers cannot silently drift from what the Markdown receipt
+/// claims without `cargo insta review`/`INSTA_UPDATE=no` failing. Timing
+/// stays informational-only (`eprintln!`, no assertion, excluded from the
+/// snapshot) -- it is not deterministic on shared/debug hardware.
+#[cfg(test)]
+mod reindex_workshape_measurement {
+    // Measurement receipts are only useful if a human can read them: `cargo
+    // test -- --nocapture` is the whole point of this module. Scoped to this
+    // test-only module (same pattern as `xtask/src/main.rs`), never touches
+    // production code.
+    #![allow(clippy::print_stderr, clippy::print_stdout)]
+
+    use super::*;
+    use perl_tdd_support::{must, must_some};
+
+    /// Number of `sub` declarations in the large-file fixture. 80 subs (plus
+    /// the enclosing package) comfortably clears the spec's "500+ LOC / 50+
+    /// symbols" bar -- see the LOC assertion in `fixture_is_large_enough`.
+    const SUB_COUNT: usize = 80;
+
+    /// `origin/main` commit this measurement's baseline sits on
+    /// (`git merge-base HEAD origin/main` at PR-1711-A creation time). A
+    /// fixed label, not introspected via `git` at test run time -- git
+    /// introspection would be fragile under shallow clones, tarball
+    /// checkouts, and CI sandboxes with no `.git` directory, and would make
+    /// the snapshot's determinism depend on the runner's checkout depth
+    /// rather than on the code being measured. Update by hand only if
+    /// `index_file_with_generation`'s extraction logic is materially
+    /// re-baselined.
+    const BASE_SHA: &str = "393f167d006fcd79bf6009a93aefe872b3807e67";
+
+    /// Commit that introduced this measurement instrumentation
+    /// (perl-lsp-swarm PR #4013, "1711-A"). Same update policy as
+    /// `BASE_SHA` -- a traceability label, not a live git lookup.
+    const MEASUREMENT_INTRODUCED_AT_SHA: &str = "6ebbc1fd4be43ed46872b960a836c7586dc0aefe";
+
+    /// Builds the shared fixture body (package header + `SUB_COUNT` subs),
+    /// WITHOUT the trailing `1;\n`. Every edit class appends its own content
+    /// immediately before a `1;\n` it supplies itself, so callers control
+    /// exactly what comes last.
+    fn fixture_prefix(sub_count: usize) -> String {
+        let mut src = String::new();
+        src.push_str("package Big::Reextraction::Fixture;\n");
+        src.push_str("use strict;\n");
+        src.push_str("use warnings;\n\n");
+        for i in 0..sub_count {
+            src.push_str(&format!(
+                "sub sub_{i} {{\n    my ($x, $y) = @_;\n    my $sum = $x + $y + {i};\n    # sub_{i} body comment for LOC padding\n    return $sum;\n}}\n\n"
+            ));
+        }
+        src
+    }
+
+    /// A block of pure comment lines, safe to append strictly after all
+    /// other content (so no existing anchor's byte span shifts).
+    fn trailing_comment_block(lines: usize) -> String {
+        let mut block = String::new();
+        for i in 0..lines {
+            block.push_str(&format!(
+                "# trailing commentary line {i} -- pure whitespace/comment edit\n"
+            ));
+        }
+        block
+    }
+
+    // `SUB_COUNT + 1 >= 50` (subs + the enclosing package) is a compile-time
+    // property of the constant, not a runtime check -- enforced here instead
+    // of via a trivially-true `assert!` in the test body below.
+    const _: () = assert!(SUB_COUNT + 1 >= 50, "fixture must have 50+ symbols (subs + package)");
+
+    #[test]
+    fn fixture_is_large_enough() {
+        let prefix = fixture_prefix(SUB_COUNT);
+        let full = format!("{prefix}1;\n");
+        let loc = full.lines().count();
+        assert!(loc >= 500, "fixture must be 500+ LOC per the #1711-A spec; got {loc}");
+    }
+
+    /// Runs `index_file_with_generation` once, recording `reindex_metrics`
+    /// on the calling thread for the duration of the call (safe under
+    /// parallel `cargo test` execution -- see the module doc comment on
+    /// `reindex_metrics`).
+    fn index_and_measure(
+        index: &WorkspaceIndex,
+        uri: &str,
+        text: String,
+        generation: u32,
+    ) -> (Result<(), String>, reindex_metrics::ReindexWorkMetrics) {
+        let url = must(url::Url::parse(uri));
+        reindex_metrics::start();
+        let result = index.index_file_with_generation(url, text, generation);
+        let metrics = reindex_metrics::take();
+        (result, metrics)
+    }
+
+    type CategoryHashes = (u64, Option<u64>, Option<u64>, Option<u64>, Option<u64>);
+
+    /// Fetches `(content_hash, anchors_hash, entities_hash, occurrences_hash,
+    /// edges_hash)` for a URI via the existing public `file_fact_shard` API
+    /// -- no new instrumentation needed for shard-category comparison.
+    fn category_hashes(index: &WorkspaceIndex, uri: &str) -> Option<CategoryHashes> {
+        index.file_fact_shard(uri).map(|s| {
+            (s.content_hash, s.anchors_hash, s.entities_hash, s.occurrences_hash, s.edges_hash)
+        })
+    }
+
+    /// Sum of instrumented extraction timers for one call -- INFORMATIONAL
+    /// only (see the measurement-discipline note on the module doc comment:
+    /// no hard-millisecond threshold is asserted anywhere in this file).
+    fn total_extraction_time(m: &reindex_metrics::ReindexWorkMetrics) -> std::time::Duration {
+        m.visit_time
+            + m.decl_extract_time
+            + m.ref_extract_time
+            + m.eval_sub_time
+            + m.generated_member_time
+            + m.import_extract_time
+            + m.use_lib_extract_time
+    }
+
+    /// Whether an `index_file_with_generation` call was rejected by either
+    /// monotonic generation guard (as opposed to accepted, or short-circuited
+    /// by an unchanged content hash).
+    fn was_stale_rejected(m: &reindex_metrics::ReindexWorkMetrics) -> bool {
+        m.stale_generation_rejected_pre_parse || m.stale_generation_rejected_post_parse
+    }
+
+    /// One evidence bucket for a per-category shard-hash comparison. Kept as
+    /// an explicit three-state enum (not `bool`) because "rejected, so shard
+    /// replacement never ran at all" is a materially different fact from
+    /// "ran, and this category happened to be unchanged" -- collapsing them
+    /// into `false` would hide that a superseded generation never reaches
+    /// shard replacement in the first place.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum CategoryDelta {
+        Changed,
+        Unchanged,
+        /// The call was rejected before any shard replacement occurred (a
+        /// stale/superseded generation) -- "changed vs unchanged" does not
+        /// apply.
+        NotApplicableRejected,
+    }
+
+    /// Deterministic, checked-in STRUCTURAL receipt for one edit class.
+    /// Every field is a compile-time constant, a call count, a per-file
+    /// cache-contribution count, or a category-hash-changed flag -- nothing
+    /// timing-based. This is the type `reextraction_workshape_receipt_snapshot`
+    /// snapshots; the Markdown receipt
+    /// (`docs/reference/1711-A-reextraction-workshape-receipt.md`) treats
+    /// this snapshot as the source of truth for counts, not hand-transcribed
+    /// numbers.
+    #[derive(Debug, Clone)]
+    // snapshot record: fields are read collectively by derive(Debug) into the
+    // insta snapshot, which the dead_code lint does not count as per-field use
+    #[allow(dead_code)]
+    struct EditClassReceipt {
+        base_sha: &'static str,
+        measurement_introduced_at_sha: &'static str,
+        edit_class: &'static str,
+        anchors_hash: CategoryDelta,
+        entities_hash: CategoryDelta,
+        occurrences_hash: CategoryDelta,
+        edges_hash: CategoryDelta,
+        /// `IndexVisitor::visit` call count (legacy symbol/reference walk).
+        visitor_visit_calls: u32,
+        /// Canonical declaration extractor (`extract_symbol_decls`) call count.
+        canonical_decl_extract_calls: u32,
+        /// Canonical reference extractor (`extract_symbol_refs`) call count.
+        canonical_ref_extract_calls: u32,
+        /// Dynamic-boundary extractor (`extract_eval_sub_boundaries`, e.g.
+        /// `eval "sub NAME {...}"`) call count.
+        dynamic_boundary_extract_calls: u32,
+        /// Generated-member extractor (`extract_generated_member_facts`,
+        /// e.g. Moo/Moose `has`) call count.
+        generated_member_extract_calls: u32,
+        import_extract_calls: u32,
+        use_lib_extract_calls: u32,
+        /// This file's own symbol-table CONTRIBUTION -- i.e. the number of
+        /// entries in `FileIndex::symbols` for THIS URI that were passed
+        /// through the legacy-cache removal routine on this call. This is
+        /// NOT necessarily the number of entries removed from the global
+        /// qualified/bare-name map: the dual-indexing pattern
+        /// (`perl-workspace/CLAUDE.md`, PR #122) may write each contributed
+        /// symbol under up to two global keys, and it is not a
+        /// whole-workspace rebuild -- only this one file's contribution is
+        /// touched.
+        file_symbol_contribution_removed: usize,
+        /// Same file-scoped contribution, on the re-add side of the same call.
+        file_symbol_contribution_added: usize,
+        /// This file's contribution passed through the search-index
+        /// removal routine (same caveat as `file_symbol_contribution_removed`).
+        file_search_contribution_removed: usize,
+        file_search_contribution_added: usize,
+        /// This file's own global-reference-index CONTRIBUTION (only this
+        /// URI's entries, not the whole workspace-wide reference cache)
+        /// passed through the removal routine.
+        file_global_ref_contribution_removed: usize,
+        file_global_ref_contribution_added: usize,
+        /// `"accepted"` | `"content_hash_short_circuit"` |
+        /// `"stale_rejected_pre_parse"` | `"stale_rejected_post_parse"`.
+        generation_outcome: &'static str,
+    }
+
+    /// Builds one `EditClassReceipt` from a before/after category-hash pair
+    /// and the metrics recorded for the (second, edited) call.
+    fn build_receipt(
+        edit_class: &'static str,
+        before: CategoryHashes,
+        after: CategoryHashes,
+        m: &reindex_metrics::ReindexWorkMetrics,
+    ) -> EditClassReceipt {
+        let rejected = was_stale_rejected(m);
+        let delta = |b: Option<u64>, a: Option<u64>| {
+            if rejected {
+                CategoryDelta::NotApplicableRejected
+            } else if b == a {
+                CategoryDelta::Unchanged
+            } else {
+                CategoryDelta::Changed
+            }
+        };
+        let generation_outcome = if m.generation_accepted {
+            "accepted"
+        } else if m.content_hash_short_circuit {
+            "content_hash_short_circuit"
+        } else if m.stale_generation_rejected_pre_parse {
+            "stale_rejected_pre_parse"
+        } else if m.stale_generation_rejected_post_parse {
+            "stale_rejected_post_parse"
+        } else {
+            "unknown"
+        };
+        EditClassReceipt {
+            base_sha: BASE_SHA,
+            measurement_introduced_at_sha: MEASUREMENT_INTRODUCED_AT_SHA,
+            edit_class,
+            anchors_hash: delta(before.1, after.1),
+            entities_hash: delta(before.2, after.2),
+            occurrences_hash: delta(before.3, after.3),
+            edges_hash: delta(before.4, after.4),
+            visitor_visit_calls: m.visit_calls,
+            canonical_decl_extract_calls: m.decl_extract_calls,
+            canonical_ref_extract_calls: m.ref_extract_calls,
+            dynamic_boundary_extract_calls: m.eval_sub_calls,
+            generated_member_extract_calls: m.generated_member_calls,
+            import_extract_calls: m.import_extract_calls,
+            use_lib_extract_calls: m.use_lib_extract_calls,
+            file_symbol_contribution_removed: m.legacy_symbols_removed,
+            file_symbol_contribution_added: m.legacy_symbols_added,
+            file_search_contribution_removed: m.legacy_search_removed,
+            file_search_contribution_added: m.legacy_search_added,
+            file_global_ref_contribution_removed: m.global_refs_removed,
+            file_global_ref_contribution_added: m.global_refs_added,
+            generation_outcome,
+        }
+    }
+
+    /// **Edit class 1 -- comment/whitespace-only edit. The key waste case.**
+    ///
+    /// The trailing comment block is appended strictly after the existing
+    /// `1;\n`, so no anchor/entity/occurrence/edge byte span moves. All four
+    /// category hashes must therefore be bit-identical before/after, while
+    /// the whole-file `content_hash` must differ (real bytes were added).
+    ///
+    /// Returns `(before, after, metrics-of-the-comment-edit)` so both the
+    /// correctness assertions below and the snapshot test can share one
+    /// code path.
+    fn run_class_1_comment_only()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/comment_only.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let comment_only = format!("{baseline}{}", trailing_comment_block(30));
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline, 1);
+        r0?;
+        let before = must_some(category_hashes(&index, uri));
+        let (r1, m1) = index_and_measure(&index, uri, comment_only, 2);
+        r1?;
+        let after = must_some(category_hashes(&index, uri));
+        Ok((before, after, m1))
+    }
+
+    #[test]
+    fn edit_class_1_comment_only_reextracts_unconditionally_despite_unchanged_categories()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m1) = run_class_1_comment_only()?;
+
+        assert_ne!(before.0, after.0, "content_hash must change -- real bytes were added");
+        assert_eq!(
+            before.1, after.1,
+            "anchors_hash must be unchanged by a trailing comment-only edit"
+        );
+        assert_eq!(
+            before.2, after.2,
+            "entities_hash must be unchanged by a trailing comment-only edit"
+        );
+        assert_eq!(
+            before.3, after.3,
+            "occurrences_hash must be unchanged by a trailing comment-only edit"
+        );
+        assert_eq!(
+            before.4, after.4,
+            "edges_hash must be unchanged by a trailing comment-only edit"
+        );
+
+        // THE KEY MEASUREMENT: despite zero category change, every canonical
+        // extractor still runs exactly once -- this is the avoidable work
+        // #1711 asks about.
+        //
+        // **1711-B cutover remeasurement**: `ref_extract_calls` is now 0, not
+        // 1. Pre-cutover, this edit class ran TWO full-AST reference walks
+        // (`IndexVisitor::visit` -- counted by `visit_calls` -- plus a
+        // second, independent `extract_symbol_refs(ast)` walk -- counted by
+        // `ref_extract_calls`). Post-cutover, `visit_calls` still counts 1
+        // (now `IndexVisitor::visit_unified`, which derives BOTH the legacy
+        // and canonical reference projections from that single walk), and
+        // `ref_extract_calls` drops to 0 because `extract_symbol_refs` is no
+        // longer called on this path at all -- see
+        // `docs/reference/1711-A-reextraction-workshape-receipt.md`'s
+        // 1711-B remeasurement addendum for the full before/after tally.
+        assert_eq!(m1.visit_calls, 1);
+        assert_eq!(m1.decl_extract_calls, 1);
+        assert_eq!(
+            m1.ref_extract_calls, 0,
+            "1711-B cutover: extract_symbol_refs must no longer run as a separate walk -- \
+             visit_unified already produced the canonical Vec<SymbolRef>"
+        );
+        assert_eq!(m1.eval_sub_calls, 1);
+        assert_eq!(m1.generated_member_calls, 1);
+        assert_eq!(m1.import_extract_calls, 1);
+        assert_eq!(m1.use_lib_extract_calls, 1);
+        assert!(
+            m1.generation_accepted,
+            "comment-only edit must be accepted as a new generation, not rejected"
+        );
+        assert!(
+            !m1.content_hash_short_circuit,
+            "the comment-only edit changes real bytes, so it must not take the \
+             unchanged-content short-circuit path"
+        );
+
+        // Legacy cache CONTRIBUTION churn: this file's own symbol-table
+        // contribution is torn down and rebuilt in full even though the
+        // symbol SET is byte-for-byte identical. This is THIS FILE's
+        // contribution passing through the removal/re-add routine, not a
+        // whole-workspace cache rebuild -- see `EditClassReceipt`'s field
+        // docs for the exact caveat (dual-indexing may write each
+        // contributed symbol under up to two global keys).
+        assert_eq!(m1.legacy_symbols_removed, m1.legacy_symbols_added);
+        assert!(
+            m1.legacy_symbols_removed >= SUB_COUNT,
+            "expected this file's full symbol-contribution churn on a comment-only edit; got {}",
+            m1.legacy_symbols_removed
+        );
+
+        eprintln!(
+            "[1711-A receipt] comment-only edit: extraction_total={:?} \
+             file_symbol_contribution_churned={} file_global_ref_contribution_churned={}",
+            total_extraction_time(&m1),
+            m1.legacy_symbols_removed,
+            m1.global_refs_removed
+        );
+        Ok(())
+    }
+
+    /// **Edit class 1, repeated -- timing distribution (informational).**
+    ///
+    /// A single sample is noisy (scheduler jitter, cache warmth). This runs
+    /// 15 successive trailing-comment-only edits on the SAME large fixture
+    /// (each edit still strictly appends after all prior content, so
+    /// category hashes never change across any of the 15 steps -- verified
+    /// on every iteration, not just the first) and reports min/median/max
+    /// extraction-vs-parse time. Per the measurement-discipline directive,
+    /// this is INFORMATIONAL ONLY -- no assertion anywhere in this file
+    /// gates on an absolute millisecond value; the decision rests on the
+    /// WORK counts asserted in the sibling test above (and mechanically
+    /// bound in `reextraction_workshape_receipt_snapshot`).
+    #[test]
+    fn edit_class_1_repeated_comment_only_edits_timing_distribution()
+    -> Result<(), Box<dyn std::error::Error>> {
+        const ITERATIONS: usize = 15;
+        let uri = "file:///big/comment_only_repeated.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline.clone(), 1);
+        r0?;
+        let original = must_some(category_hashes(&index, uri));
+
+        let mut extraction_samples = Vec::with_capacity(ITERATIONS);
+        let mut parse_samples = Vec::with_capacity(ITERATIONS);
+        let mut text = baseline;
+        for step in 0..ITERATIONS {
+            text.push_str(&format!("# repeated trailing comment step {step}\n"));
+
+            let parse_start = std::time::Instant::now();
+            let _ = Parser::new(&text).parse();
+            parse_samples.push(parse_start.elapsed());
+
+            let (r, m) = index_and_measure(
+                &index,
+                uri,
+                text.clone(),
+                u32::try_from(step + 2).map_err(|e| format!("generation overflow: {e}"))?,
+            );
+            r?;
+
+            let after = must_some(category_hashes(&index, uri));
+            assert_eq!(
+                original.1, after.1,
+                "anchors_hash must stay unchanged across every repeated comment-only step"
+            );
+            assert_eq!(
+                original.2, after.2,
+                "entities_hash must stay unchanged across every repeated comment-only step"
+            );
+            assert_eq!(
+                original.3, after.3,
+                "occurrences_hash must stay unchanged across every repeated comment-only step"
+            );
+            assert_eq!(
+                original.4, after.4,
+                "edges_hash must stay unchanged across every repeated comment-only step"
+            );
+            assert_eq!(
+                m.decl_extract_calls, 1,
+                "extraction still runs every step despite no category change"
+            );
+
+            extraction_samples.push(total_extraction_time(&m));
+        }
+
+        extraction_samples.sort();
+        parse_samples.sort();
+        let mid = ITERATIONS / 2;
+        eprintln!(
+            "[1711-A receipt] comment-only x{ITERATIONS} -- extraction(min/median/max)={:?}/{:?}/{:?} \
+             parse(min/median/max)={:?}/{:?}/{:?}",
+            extraction_samples[0],
+            extraction_samples[mid],
+            extraction_samples[ITERATIONS - 1],
+            parse_samples[0],
+            parse_samples[mid],
+            parse_samples[ITERATIONS - 1],
+        );
+        Ok(())
+    }
+
+    /// **Edit class 2 -- reference-only edit.**
+    ///
+    /// Appends a single call to an EXISTING sub as the last statement before
+    /// `1;\n`. No new declaration is added, so `entities_hash` must be
+    /// unaffected. `occurrences_hash` must change (a new call-site
+    /// occurrence exists).
+    ///
+    /// `anchors_hash` ALSO changes here -- an initially counter-intuitive
+    /// finding worth recording: `symbol_refs_to_semantic_facts`
+    /// (`crates/perl-symbol/src/surface/facts.rs`) emits one `AnchorFact`
+    /// per REFERENCE, not just per declaration (`SymbolRefSemanticFacts`
+    /// doc: "Source-span anchors, one per reference"). So the `anchors`
+    /// category conflates declaration-anchors and reference-anchors; any
+    /// edit that adds/removes a reference touches `anchors_updated` too,
+    /// not just `occurrences_updated`. This matters for the bounded/material
+    /// disposition: a hypothetical category-hash-gated skip would still
+    /// have to treat "anchors changed" as common (any new reference trips
+    /// it), not just "rare" -- it does NOT undermine the comment-only
+    /// case (class 1), where no reference is added either.
+    fn run_class_2_reference_only()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/reference_only.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let reference_only = format!("{prefix}sub_0(1, 2);\n1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline, 1);
+        r0?;
+        let before = must_some(category_hashes(&index, uri));
+        let (r1, m1) = index_and_measure(&index, uri, reference_only, 2);
+        r1?;
+        let after = must_some(category_hashes(&index, uri));
+        Ok((before, after, m1))
+    }
+
+    #[test]
+    fn edit_class_2_reference_only_edit_changes_occurrences_and_reference_anchors()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m1) = run_class_2_reference_only()?;
+
+        assert_ne!(before.0, after.0, "content_hash must change");
+        assert_ne!(
+            before.1, after.1,
+            "anchors_hash changes too -- reference anchors share the anchors category with decl anchors"
+        );
+        assert_eq!(before.2, after.2, "entities_hash must be unaffected -- no new declaration");
+        assert_ne!(
+            before.3, after.3,
+            "occurrences_hash must change -- a new call-site reference was added"
+        );
+        assert_eq!(m1.decl_extract_calls, 1);
+        // 1711-B cutover: see the remeasurement note on edit class 1 above --
+        // `extract_symbol_refs` no longer runs as an independent second walk.
+        assert_eq!(m1.ref_extract_calls, 0);
+
+        eprintln!(
+            "[1711-A receipt] reference-only edit: extraction_total={:?}",
+            total_extraction_time(&m1)
+        );
+        Ok(())
+    }
+
+    /// **Edit class 3 -- declaration/entity-changing edit.**
+    ///
+    /// Appends a brand-new `sub` before `1;\n`. Both `anchors_hash` and
+    /// `entities_hash` must change; this is the case category-scoped
+    /// propagation is already designed to detect.
+    fn run_class_3_declaration_changing()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/decl_edit.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let decl_changed = format!("{prefix}sub sub_new_extra {{\n    return 999;\n}}\n\n1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline, 1);
+        r0?;
+        let before = must_some(category_hashes(&index, uri));
+        let (r1, m1) = index_and_measure(&index, uri, decl_changed, 2);
+        r1?;
+        let after = must_some(category_hashes(&index, uri));
+        Ok((before, after, m1))
+    }
+
+    #[test]
+    fn edit_class_3_declaration_edit_changes_entities_and_anchors()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m1) = run_class_3_declaration_changing()?;
+
+        assert_ne!(
+            before.1, after.1,
+            "anchors_hash must change -- a new declaration anchor was added"
+        );
+        assert_ne!(before.2, after.2, "entities_hash must change -- a new sub entity was added");
+        assert_eq!(m1.decl_extract_calls, 1);
+
+        eprintln!(
+            "[1711-A receipt] declaration-changing edit: extraction_total={:?}",
+            total_extraction_time(&m1)
+        );
+        Ok(())
+    }
+
+    /// **Edit class 4 -- generated/dynamic-fact edit.**
+    ///
+    /// Appends `eval "sub NAME { ... }"` before `1;\n`, exercising the
+    /// dynamic-boundary extractor's synthetic entity/anchor/occurrence path.
+    /// Synthetic facts must stay honestly classified (they flow through the
+    /// SAME anchors/entities categories, not a hidden fifth category).
+    fn run_class_4_dynamic_fact()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/dynamic_fact.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let dynamic_fact =
+            format!("{prefix}eval \"sub dynamic_generated_1 {{ return 123; }}\";\n\n1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline, 1);
+        r0?;
+        let before = must_some(category_hashes(&index, uri));
+        let (r1, m1) = index_and_measure(&index, uri, dynamic_fact, 2);
+        r1?;
+        let after = must_some(category_hashes(&index, uri));
+        Ok((before, after, m1))
+    }
+
+    #[test]
+    fn edit_class_4_dynamic_eval_sub_edit_changes_synthetic_categories()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m1) = run_class_4_dynamic_fact()?;
+
+        assert_ne!(
+            before.1, after.1,
+            "anchors_hash must change -- synthetic anchor from eval-sub boundary"
+        );
+        assert_ne!(
+            before.2, after.2,
+            "entities_hash must change -- synthetic entity from eval-sub boundary"
+        );
+        assert_eq!(m1.eval_sub_calls, 1, "eval-sub extractor must run on the dynamic edit");
+
+        eprintln!(
+            "[1711-A receipt] dynamic-fact edit: extraction_total={:?}",
+            total_extraction_time(&m1)
+        );
+        Ok(())
+    }
+
+    /// **Edit class 5 -- revert-to-original.**
+    ///
+    /// baseline -> edited -> baseline again. The final call's recomputed
+    /// category hashes must be bit-identical to the FIRST call's -- proving
+    /// extraction is a deterministic pure function of content, with no
+    /// accumulated drift across generations. Returns
+    /// `(original, reverted, metrics-of-the-revert-call)`.
+    fn run_class_5_revert_to_original()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/revert.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let baseline = format!("{prefix}1;\n");
+        let edited = format!("{prefix}sub sub_new_extra {{\n    return 999;\n}}\n\n1;\n");
+
+        let index = WorkspaceIndex::new();
+        let (r0, _m0) = index_and_measure(&index, uri, baseline.clone(), 1);
+        r0?;
+        let original = must_some(category_hashes(&index, uri));
+
+        let (r1, _m1) = index_and_measure(&index, uri, edited, 2);
+        r1?;
+
+        let (r2, m2) = index_and_measure(&index, uri, baseline, 3);
+        r2?;
+        let reverted = must_some(category_hashes(&index, uri));
+        Ok((original, reverted, m2))
+    }
+
+    #[test]
+    fn edit_class_5_revert_to_original_is_deterministic() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let (original, reverted, m2) = run_class_5_revert_to_original()?;
+
+        assert_eq!(
+            original, reverted,
+            "reverting to byte-identical original text must reproduce bit-identical category hashes"
+        );
+        assert!(
+            m2.generation_accepted,
+            "the revert-to-original call must be accepted as a new generation, not rejected"
+        );
+        Ok(())
+    }
+
+    /// **Edit class 6 -- superseded generation.**
+    ///
+    /// A newer generation commits first; an older, out-of-order generation
+    /// then arrives late and must be rejected without publishing its stale
+    /// content (the monotonic generation guard already covers this --
+    /// asserting it here documents that correctness is not at risk, only
+    /// cost/overlap, matching the issue's own framing). Returns
+    /// `(after_new, after_old_attempt, metrics-of-the-rejected-old-call)`.
+    fn run_class_6_superseded_generation()
+    -> Result<(CategoryHashes, CategoryHashes, reindex_metrics::ReindexWorkMetrics), String> {
+        let uri = "file:///big/superseded.pm";
+        let prefix = fixture_prefix(SUB_COUNT);
+        let gen1_text = format!("{prefix}1;\n");
+        let gen2_text = format!("{prefix}sub sub_new_extra {{\n    return 999;\n}}\n\n1;\n");
+
+        let index = WorkspaceIndex::new();
+
+        // Newer generation (2) commits first.
+        let (r_new, m_new) = index_and_measure(&index, uri, gen2_text, 2);
+        r_new?;
+        if !m_new.generation_accepted {
+            return Err(format!(
+                "expected the newer generation to commit before the superseded one arrives; got {m_new:?}"
+            ));
+        }
+        let after_new = must_some(category_hashes(&index, uri));
+
+        // An OLDER, out-of-order generation (1) arrives late.
+        let (r_old, m_old) = index_and_measure(&index, uri, gen1_text, 1);
+        r_old?;
+        let after_old_attempt = must_some(category_hashes(&index, uri));
+        Ok((after_new, after_old_attempt, m_old))
+    }
+
+    #[test]
+    fn edit_class_6_superseded_generation_never_publishes_stale_content()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (after_new, after_old_attempt, m_old) = run_class_6_superseded_generation()?;
+
+        assert!(
+            was_stale_rejected(&m_old),
+            "an out-of-order older generation must be rejected, not published; got {:?}",
+            m_old
+        );
+        assert!(
+            !m_old.generation_accepted,
+            "stale/older generation must be rejected, so it must never reach the accepted outcome"
+        );
+        assert_eq!(
+            after_new, after_old_attempt,
+            "the stale older generation must never overwrite the newer, already-committed shard"
+        );
+        Ok(())
+    }
+
+    /// **Mechanically-bound structural receipt (item 1 of the maintainer
+    /// review on PR #4013).** Re-runs all six edit classes (via the SAME
+    /// `run_class_*` helpers the correctness tests above use -- not a
+    /// parallel reimplementation) and snapshots the resulting
+    /// `Vec<EditClassReceipt>`. `insta` fails this test (and `INSTA_UPDATE=no`
+    /// CI runs) if any structural count or category-hash-changed flag drifts
+    /// from the checked-in `.snap` file -- so the Markdown receipt's claims
+    /// are traceable back to a mechanically-enforced source of truth, not a
+    /// hand-typed transcription that could silently go stale.
+    ///
+    /// Timing is deliberately absent from `EditClassReceipt` and therefore
+    /// from this snapshot -- see the module doc comment's measurement-
+    /// discipline note.
+    #[test]
+    fn reextraction_workshape_receipt_snapshot() -> Result<(), Box<dyn std::error::Error>> {
+        let (before, after, m) = run_class_1_comment_only()?;
+        let comment_only = build_receipt("comment_only", before, after, &m);
+
+        let (before, after, m) = run_class_2_reference_only()?;
+        let reference_only = build_receipt("reference_only", before, after, &m);
+
+        let (before, after, m) = run_class_3_declaration_changing()?;
+        let declaration_changing = build_receipt("declaration_changing", before, after, &m);
+
+        let (before, after, m) = run_class_4_dynamic_fact()?;
+        let dynamic_fact = build_receipt("dynamic_fact", before, after, &m);
+
+        let (before, after, m) = run_class_5_revert_to_original()?;
+        let revert_to_original = build_receipt("revert_to_original", before, after, &m);
+
+        let (before, after, m) = run_class_6_superseded_generation()?;
+        let superseded_generation = build_receipt("superseded_generation", before, after, &m);
+
+        let receipts = vec![
+            comment_only,
+            reference_only,
+            declaration_changing,
+            dynamic_fact,
+            revert_to_original,
+            superseded_generation,
+        ];
+
+        insta::assert_debug_snapshot!("reindex_workshape_receipt", receipts);
+        Ok(())
+    }
+}
+
+/// **SHADOW-ONLY (1711-B, tracked on #1711).** Proves that
+/// `FileExtractionBundle::build` -- which still runs the SAME MULTIPLE
+/// separate extractor calls production runs today, just packaged into one
+/// struct -- produces byte-for-byte identical output to calling those same
+/// extractors directly (`build_direct`), across the Perl corpus fixtures
+/// (`test_corpus/gold`), the mojolicious/dancer2/catalyst real-project
+/// skeletons (`test_corpus/real_projects`), and targeted edge cases
+/// (comment-only, reference-only, declaration, generated/dynamic, imports,
+/// heredocs/POD/interpolated-strings). See the parity contract on
+/// `FileExtractionBundle` for what each field maps to.
+///
+/// **This "clean parity, zero deltas" result is expected and does NOT prove
+/// consolidation.** `FileExtractionBundle::build` calls the identical
+/// functions `build_direct` calls, just through one struct instead of two
+/// call sites -- a real discrepancy here would mean a bug in the packaging,
+/// not evidence that the underlying duplicate walks have been reduced to
+/// one. These tests are the useful, durable part of this PR: once a REAL
+/// single-traversal unification is designed (see the feasibility
+/// investigation posted to #1711), this same harness becomes the
+/// byte-for-byte regression gate for that change. This module proves parity
+/// only -- it does not change production behavior, and `FileExtractionBundle`
+/// is not called from `index_file_with_generation` (see its doc comment).
+#[cfg(test)]
+mod extraction_bundle_shadow_compare {
+    // A skipped-fixture diagnostic is only useful if a human can see it
+    // (`cargo test -- --nocapture`), same rationale/pattern as
+    // `reindex_workshape_measurement` above.
+    #![allow(clippy::print_stderr)]
+
+    use super::*;
+    use perl_tdd_support::{must, must_some};
+    use std::path::{Path, PathBuf};
+    use walkdir::WalkDir;
+
+    /// Both projections for one fixture, built the way production does
+    /// today: independent extraction call sites instead of one bundle.
+    struct DirectProjections {
+        file_index: FileIndex,
+        shard: FileFactShard,
+        import_specs: Vec<perl_semantic_facts::ImportSpec>,
+        use_lib_facts: Vec<perl_semantic_facts::UseLibFact>,
+    }
+
+    fn content_hash_of(text: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn build_direct(uri: &str, text: &str, ast: &Node) -> DirectProjections {
+        let content_hash = content_hash_of(text);
+        let mut doc = Document::new(uri.to_string(), 1, text.to_string());
+        let mut file_index =
+            FileIndex { source_uri: uri.to_string(), content_hash, ..Default::default() };
+        let mut visitor = IndexVisitor::new(&mut doc, uri.to_string(), None);
+        visitor.visit(ast, &mut file_index);
+
+        let shard = WorkspaceIndex::build_canonical_fact_shard_for_ast(uri, content_hash, ast);
+
+        let file_id = WorkspaceIndex::hash_uri_to_file_id(uri);
+        let import_specs =
+            crate::semantic::workspace_import_extractor::extract_import_specs(ast, file_id);
+        let use_lib_facts =
+            crate::semantic::workspace_import_extractor::extract_use_lib_facts(ast, file_id);
+
+        DirectProjections { file_index, shard, import_specs, use_lib_facts }
+    }
+
+    fn build_bundle(uri: &str, text: &str, ast: &Node) -> FileExtractionBundle {
+        let content_hash = content_hash_of(text);
+        let mut doc = Document::new(uri.to_string(), 1, text.to_string());
+        FileExtractionBundle::build(ast, uri, content_hash, &mut doc, None)
+    }
+
+    /// The REAL unified traversal (1711-B phase 2): one reference walk
+    /// feeding both projections. See `FileExtractionBundle::build_unified`'s
+    /// doc comment.
+    fn build_bundle_unified(uri: &str, text: &str, ast: &Node) -> FileExtractionBundle {
+        let content_hash = content_hash_of(text);
+        let mut doc = Document::new(uri.to_string(), 1, text.to_string());
+        FileExtractionBundle::build_unified(ast, uri, content_hash, &mut doc, None)
+    }
+
+    /// Assert full structural parity between the two independently-computed
+    /// projections and the bundle-derived ones, for one fixture. There must
+    /// be NO delta -- `FileExtractionBundle::build` runs the identical
+    /// extractor calls production does today -- so any assertion failure
+    /// here is a genuine bug in the bundle wiring, not an expected/documented
+    /// difference.
+    fn assert_parity(label: &str, uri: &str, text: &str) {
+        let mut parser = Parser::new(text);
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => {
+                // Some corpus/real-project fixtures may be partial snippets
+                // (gold/ fixtures in particular are sometimes deliberately
+                // minimal) rather than full compilation units. Parity is
+                // meaningless without a successful parse -- skip rather than
+                // fail, same discipline as
+                // `semantic_real_workspace_baseline`'s corpus sweep.
+                eprintln!("skip {label} ({uri}): parse error: {e}");
+                return;
+            }
+        };
+
+        let direct = build_direct(uri, text, &ast);
+        let bundle = build_bundle(uri, text, &ast);
+
+        assert_eq!(
+            direct.file_index.symbols, bundle.legacy_index.symbols,
+            "{label}: legacy WorkspaceSymbol list diverged between direct and bundle-derived extraction"
+        );
+        assert_eq!(
+            direct.file_index.references, bundle.legacy_index.references,
+            "{label}: legacy references map diverged between direct and bundle-derived extraction"
+        );
+        assert_eq!(
+            direct.file_index.dependencies, bundle.legacy_index.dependencies,
+            "{label}: legacy dependencies set diverged between direct and bundle-derived extraction"
+        );
+        assert_eq!(
+            direct.shard, bundle.canonical_shard,
+            "{label}: canonical FileFactShard diverged between direct and bundle-derived extraction"
+        );
+        assert_eq!(
+            direct.import_specs, bundle.import_specs,
+            "{label}: import specs diverged between direct and bundle-derived extraction"
+        );
+        assert_eq!(
+            direct.use_lib_facts, bundle.use_lib_facts,
+            "{label}: use-lib facts diverged between direct and bundle-derived extraction"
+        );
+    }
+
+    /// **1711-B phase 2: canonical-side parity for the REAL unified
+    /// traversal.** Asserts the unified walk's canonical `FileFactShard`
+    /// (built from `IndexVisitor::visit_unified`'s `Vec<SymbolRef>`, via
+    /// `build_canonical_fact_shard_from_symbol_refs`) is BYTE-FOR-BYTE
+    /// IDENTICAL to production's own canonical output
+    /// (`build_canonical_fact_shard_for_ast`, via `extract_symbol_refs`).
+    ///
+    /// This MUST hold with zero deltas everywhere, including fixtures that
+    /// exercise the coverage-delta constructs (block-form packages/classes,
+    /// Typeglob, Goto, regex-binds, etc.) -- canonical's `extract_symbol_refs`
+    /// already reaches all of those today via its own complete
+    /// `Node::for_each_child`-based fallback (verified empirically; see
+    /// `docs/reference/1711-B-coverage-delta.md`). Only the LEGACY
+    /// `FileIndex` projection gains new coverage under unification (see
+    /// `assert_unified_legacy_is_superset` below) -- canonical does not
+    /// change at all.
+    fn assert_unified_canonical_parity(label: &str, uri: &str, text: &str) {
+        let mut parser = Parser::new(text);
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => {
+                eprintln!("skip {label} ({uri}): parse error: {e}");
+                return;
+            }
+        };
+
+        let direct = build_direct(uri, text, &ast);
+        let unified = build_bundle_unified(uri, text, &ast);
+
+        assert_eq!(
+            direct.shard, unified.canonical_shard,
+            "{label}: canonical FileFactShard diverged between production's dual-walk output \
+             and the unified traversal -- canonical coverage must NOT change under unification"
+        );
+    }
+
+    /// **1711-B phase 2: legacy-side monotonic-superset check.** Unlike
+    /// canonical (which must be byte-identical), the legacy `FileIndex`
+    /// projection is EXPECTED to gain entries under the unified traversal
+    /// (see `docs/reference/1711-B-coverage-delta.md`) -- so this asserts
+    /// every reference-map key present under the OLD dual walk is STILL
+    /// present, with AT LEAST as many entries, under the unified walk
+    /// (never a loss), and reports the per-fixture growth for visibility.
+    /// It does not assert exact equality, and does not fail merely because
+    /// new keys appear.
+    fn assert_unified_legacy_is_superset(label: &str, uri: &str, text: &str) {
+        let mut parser = Parser::new(text);
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => {
+                eprintln!("skip {label} ({uri}): parse error: {e}");
+                return;
+            }
+        };
+
+        let direct = build_direct(uri, text, &ast);
+        let unified = build_bundle_unified(uri, text, &ast);
+
+        for (name, old_refs) in &direct.file_index.references {
+            let new_count = unified.legacy_index.references.get(name).map_or(0, Vec::len);
+            assert!(
+                new_count >= old_refs.len(),
+                "{label}: unified legacy walk LOST references for `{name}` -- \
+                 had {}, now {new_count}. Unification must never be a regression.",
+                old_refs.len()
+            );
+        }
+
+        let old_total: usize = direct.file_index.references.values().map(Vec::len).sum();
+        let new_total: usize = unified.legacy_index.references.values().map(Vec::len).sum();
+        assert!(
+            new_total >= old_total,
+            "{label}: unified legacy walk's total reference count dropped ({old_total} -> {new_total})"
+        );
+        if new_total > old_total {
+            eprintln!(
+                "{label}: legacy reference count grew under unification: {old_total} -> {new_total} \
+                 (+{})",
+                new_total - old_total
+            );
+        }
+    }
+
+    // ── Targeted edge cases ──────────────────────────────────────────────
+
+    #[test]
+    fn parity_comment_only() {
+        let text = "package Foo;\nsub bar { return 1; }\n# just a comment, nothing else\n";
+        let uri = "file:///edge/comment_only.pl";
+        assert_parity("comment_only", uri, text);
+        assert_unified_canonical_parity("comment_only", uri, text);
+        assert_unified_legacy_is_superset("comment_only", uri, text);
+    }
+
+    #[test]
+    fn parity_reference_only() {
+        let text = "package Foo;\nsub bar { return 1; }\nsub baz { return bar() + Foo::bar(); }\n";
+        let uri = "file:///edge/reference_only.pl";
+        assert_parity("reference_only", uri, text);
+        assert_unified_canonical_parity("reference_only", uri, text);
+        assert_unified_legacy_is_superset("reference_only", uri, text);
+    }
+
+    #[test]
+    fn parity_declaration() {
+        let text = "package Foo;\nour $count = 0;\nmy $local = 1;\nsub bar { my ($x, $y) = @_; return $x + $y; }\n";
+        let uri = "file:///edge/declaration.pl";
+        assert_parity("declaration", uri, text);
+        assert_unified_canonical_parity("declaration", uri, text);
+        assert_unified_legacy_is_superset("declaration", uri, text);
+    }
+
+    #[test]
+    fn parity_generated_dynamic() {
+        let text = r#"
+package Foo;
+use Moo;
+has 'name' => (is => 'rw');
+eval "sub greet { return 'hi'; }";
+"#;
+        let uri = "file:///edge/generated_dynamic.pl";
+        assert_parity("generated_dynamic", uri, text);
+        assert_unified_canonical_parity("generated_dynamic", uri, text);
+        assert_unified_legacy_is_superset("generated_dynamic", uri, text);
+    }
+
+    #[test]
+    fn parity_imports() {
+        let text = r#"
+package Foo;
+use strict;
+use warnings;
+use lib '../lib';
+use List::Util qw(first sum);
+require Carp;
+"#;
+        let uri = "file:///edge/imports.pl";
+        assert_parity("imports", uri, text);
+        assert_unified_canonical_parity("imports", uri, text);
+        assert_unified_legacy_is_superset("imports", uri, text);
+    }
+
+    #[test]
+    fn parity_heredoc_pod_and_interpolated_strings() {
+        let text = r#"
+package Foo;
+
+=pod
+
+=head1 NAME
+
+Foo - an example module
+
+=cut
+
+my $name = "world";
+my $greeting = "Hello, $name!";
+my $block = <<"END";
+Greetings, $name.
+END
+
+sub bar { return $greeting; }
+"#;
+        let uri = "file:///edge/heredoc_pod.pl";
+        assert_parity("heredoc_pod_strings", uri, text);
+        assert_unified_canonical_parity("heredoc_pod_strings", uri, text);
+        assert_unified_legacy_is_superset("heredoc_pod_strings", uri, text);
+    }
+
+    /// **Closes a harness gap found by independent correctness review.**
+    /// `NamedParameter` default-value expressions (`:$beta = calc_default()`)
+    /// were ZERO-covered across all 6 targeted edge cases + all 37
+    /// gold-corpus fixtures + all 29 real-project files -- which is exactly
+    /// how an earlier draft's `NamedParameter` arm (incorrectly walking
+    /// `default_value`, unlike `OptionalParameter`) slipped past
+    /// `assert_unified_canonical_parity` undetected. This fixture makes the
+    /// harness enforce it going forward: canonical must stay byte-identical
+    /// (production `extract_symbol_refs` groups `NamedParameter` with
+    /// `MandatoryParameter`/`SlurpyParameter` as a total-skip Phase-1
+    /// exclusion -- see `ref.rs:80-84` and its module doc -- so
+    /// `calc_default()` inside a named-param default must NOT produce a
+    /// `SymbolRef`, unlike the same construct on an `OptionalParameter`).
+    ///
+    /// This is intentionally run through the SAME general-purpose
+    /// assertions as the other edge cases (not `assert_coverage_delta_case`,
+    /// which asserts old=0/new>=1) -- `NamedParameter` defaults are NOT a
+    /// coverage-delta case: legacy's pre-unification behavior was ALSO a
+    /// total skip (`NamedParameter` was never in
+    /// `visit_node`/`visit_children`'s coverage either), so nothing should
+    /// change for legacy OR canonical here.
+    #[test]
+    fn parity_named_parameter_default_is_not_a_coverage_delta() {
+        let text = "use feature 'class';\nclass Foo { method bar(:$beta = calc_default()) { return $beta; } }\n";
+        let uri = "file:///edge/named_parameter_default.pl";
+        assert_parity("named_parameter_default", uri, text);
+        assert_unified_canonical_parity("named_parameter_default", uri, text);
+        assert_unified_legacy_is_superset("named_parameter_default", uri, text);
+
+        // Explicit, mechanically-enforced statement of the invariant this
+        // fixture exists to protect: `calc_default()` must NOT appear as a
+        // canonical occurrence (production `extract_symbol_refs` skips
+        // `NamedParameter` defaults entirely), even though the structurally
+        // similar `OptionalParameter` case (`sub greet($name =
+        // default_name())`, see `coverage_delta_subroutine_signature_default`)
+        // correctly DOES walk its default.
+        let mut parser = Parser::new(text);
+        let ast = must(parser.parse());
+        let direct = build_direct(uri, text, &ast);
+        let unified = build_bundle_unified(uri, text, &ast);
+        assert_eq!(
+            direct.shard.occurrences.len(),
+            unified.canonical_shard.occurrences.len(),
+            "named_parameter_default: occurrence count must match production exactly -- a \
+             named-param default must never contribute a canonical occurrence"
+        );
+    }
+
+    /// **Guards the `MethodCall` reference-order seam surfaced by
+    /// independent correctness review during 1711-B cutover hardening.**
+    ///
+    /// For a chained same-named call like `$x->foo()->foo()`,
+    /// `walk_unified`'s `MethodCall` arm now recurses into `object` BEFORE
+    /// recording this call's own legacy `FileIndex` reference -- exactly
+    /// mirroring `IndexVisitor::visit_node`'s legacy `MethodCall` arm order
+    /// (child-before-own-ref). Before this fix, the unified traversal
+    /// recorded its own reference BEFORE recursing into `object`, which
+    /// inverted the intra-key `file_index.references["foo"]` Vec order
+    /// relative to legacy for chained calls. No reference was ever lost --
+    /// `assert_unified_legacy_is_superset` passes on COUNTS either way --
+    /// but the exact order silently changed, which could ripple into
+    /// anything ordering-sensitive over `find_references("foo")` (e.g. a
+    /// "go to next reference" navigation feature).
+    ///
+    /// Canonical stays byte-identical regardless: `emit_canonical_ref` is
+    /// deliberately left in its ORIGINAL relative position (still called
+    /// before recursing into `object`), because
+    /// `perl_symbol::surface::ref::walk`'s own `MethodCall` arm ALSO pushes
+    /// its `SymbolRef` before recursing into `object` -- reordering that
+    /// too would have flipped canonical's `Vec<SymbolRef>` order for
+    /// chained calls and broken `assert_unified_canonical_parity`.
+    #[test]
+    fn parity_method_call_chained_same_name_reference_order() {
+        let text = "package Foo;\nsub bar { my $x = Foo->new; $x->foo()->foo(); }\n";
+        let uri = "file:///edge/method_call_chained_same_name.pl";
+        assert_parity("method_call_chained_same_name", uri, text);
+        assert_unified_canonical_parity("method_call_chained_same_name", uri, text);
+        assert_unified_legacy_is_superset("method_call_chained_same_name", uri, text);
+
+        // Explicit, mechanically-enforced order lock: unified's
+        // `file_index.references["foo"]` Vec must be in the SAME order as
+        // legacy's own (`IndexVisitor::visit_node`-derived) output for this
+        // exact chained-call shape, not merely the same COUNT.
+        let mut parser = Parser::new(text);
+        let ast = must(parser.parse());
+        let direct = build_direct(uri, text, &ast);
+        let unified = build_bundle_unified(uri, text, &ast);
+
+        let direct_foo_refs = must_some(direct.file_index.references.get("foo"));
+        let unified_foo_refs = must_some(unified.legacy_index.references.get("foo"));
+        assert_eq!(
+            direct_foo_refs.len(),
+            unified_foo_refs.len(),
+            "method_call_chained_same_name: reference count for `foo` must match legacy exactly"
+        );
+        assert_eq!(
+            direct_foo_refs, unified_foo_refs,
+            "method_call_chained_same_name: unified `foo` reference order diverged from legacy \
+             for a chained `$x->foo()->foo()` call -- MethodCall must recurse into `object` \
+             BEFORE recording its own legacy reference, matching IndexVisitor::visit_node exactly"
+        );
+    }
+
+    // ── Perl corpus + real-project fixtures ───────────────────────────────
+
+    /// Resolves a path relative to the repo root. `perl-workspace`'s manifest
+    /// dir is `crates/perl-workspace`, so `../..` reaches the repo root where
+    /// `test_corpus/` lives.
+    fn corpus_root(rel: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel)
+    }
+
+    fn perl_files(root: &Path) -> Vec<PathBuf> {
+        if !root.is_dir() {
+            return Vec::new();
+        }
+        let mut files: Vec<_> = WalkDir::new(root)
+            .into_iter()
+            .filter_map(std::result::Result::ok)
+            .filter(|entry| entry.file_type().is_file())
+            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "pl" || ext == "pm"))
+            .map(|entry| entry.into_path())
+            .collect();
+        files.sort();
+        files
+    }
+
+    fn assert_parity_over_corpus(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let files = perl_files(root);
+        assert!(
+            !files.is_empty(),
+            "expected at least one .pl/.pm fixture under {}; corpus layout may have moved",
+            root.display()
+        );
+        for path in &files {
+            let text = std::fs::read_to_string(path)?;
+            let uri =
+                must(url::Url::from_file_path(path).map_err(|()| {
+                    format!("fixture path cannot become file URI: {}", path.display())
+                }));
+            let label = path.display().to_string();
+            assert_parity(&label, uri.as_str(), &text);
+            // 1711-B phase 2: canonical must stay byte-identical under the
+            // real unified traversal, and legacy must never LOSE coverage,
+            // across the full corpus sweep -- not just the targeted edge
+            // cases above.
+            assert_unified_canonical_parity(&label, uri.as_str(), &text);
+            assert_unified_legacy_is_superset(&label, uri.as_str(), &text);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn parity_over_gold_corpus_fixtures() -> Result<(), Box<dyn std::error::Error>> {
+        assert_parity_over_corpus(&corpus_root("test_corpus/gold"))
+    }
+
+    #[test]
+    fn parity_over_real_project_skeletons() -> Result<(), Box<dyn std::error::Error>> {
+        assert_parity_over_corpus(&corpus_root("test_corpus/real_projects"))
+    }
+
+    /// Sanity check that the real-project sweep actually covers all three
+    /// named skeletons (mojolicious/dancer2/catalyst), not just whichever
+    /// happened to exist -- guards against a silent corpus-layout drift
+    /// quietly shrinking coverage to zero for one framework.
+    #[test]
+    fn real_project_skeletons_cover_all_three_frameworks() {
+        let root = corpus_root("test_corpus/real_projects");
+        for expected in ["mojolicious_skeleton", "dancer2_skeleton", "catalyst_skeleton"] {
+            let dir = root.join(expected);
+            assert!(
+                dir.is_dir(),
+                "expected real-project skeleton directory {expected} under {}",
+                root.display()
+            );
+            assert!(
+                !perl_files(&dir).is_empty(),
+                "expected at least one .pm/.pl file under {}",
+                dir.display()
+            );
+        }
+    }
+
+    // ── Coverage-delta characterization (1711-B phase 2) ──────────────────
+    //
+    // Each case below is a MINIMAL, checked-in, fixture-backed reproduction
+    // of one construct where `IndexVisitor::visit_node` (production, today)
+    // silently drops recursion -- verified empirically against current
+    // `origin/main` before this traversal was written -- while
+    // `extract_symbol_refs` (production's canonical path, also today)
+    // ALREADY reaches it via its own complete `Node::for_each_child`-based
+    // fallback. The unified traversal (`visit_unified`) closes each gap by
+    // adopting that same complete fallback for the legacy projection too.
+    // See `docs/reference/1711-B-coverage-delta.md` for the durable,
+    // narrative version of this same list (this test module is the
+    // mechanically-enforced source of truth; that doc must not drift from
+    // it).
+    //
+    // Each case asserts, for the SAME source text:
+    //   1. OLD (today's production dual-walk, `build_direct`): legacy has
+    //      ZERO entries for the key under test (the pre-existing gap).
+    //   2. NEW (`build_bundle_unified`): legacy GAINS at least one entry for
+    //      that key (the fix).
+    //   3. Canonical stays BYTE-IDENTICAL between old and new (canonical
+    //      already had this coverage -- unification must not also change
+    //      canonical's output).
+
+    /// Asserts case (1)-(3) above for one coverage-delta fixture.
+    fn assert_coverage_delta_case(label: &str, uri: &str, text: &str, new_reference_key: &str) {
+        let mut parser = Parser::new(text);
+        let ast = must(parser.parse());
+
+        let direct = build_direct(uri, text, &ast);
+        let unified = build_bundle_unified(uri, text, &ast);
+
+        let old_count = direct.file_index.references.get(new_reference_key).map_or(0, Vec::len);
+        let new_count = unified.legacy_index.references.get(new_reference_key).map_or(0, Vec::len);
+
+        assert_eq!(
+            old_count, 0,
+            "{label}: expected today's production dual walk to have ZERO `{new_reference_key}` \
+             legacy entries (the documented pre-existing gap) -- got {old_count}. Has this gap \
+             already been fixed elsewhere? If so, this characterization is stale and should be \
+             updated/removed, not silently left failing."
+        );
+        assert!(
+            new_count >= 1,
+            "{label}: expected the unified traversal to gain at least one `{new_reference_key}` \
+             legacy entry -- got {new_count}. The coverage-delta fix did not take effect for \
+             this construct."
+        );
+        assert_eq!(
+            direct.shard, unified.canonical_shard,
+            "{label}: canonical FileFactShard must stay IDENTICAL -- canonical already had this \
+             coverage before unification; only the legacy projection should gain anything here"
+        );
+    }
+
+    /// Case 1: block-form `package Foo { ... }` bodies are never walked for
+    /// REFERENCES by `IndexVisitor::visit_node` today (only their
+    /// declarations are seen, via the separate `extract_symbol_decls` walk
+    /// inside `project_symbol_declarations`) -- `baz()` inside the block is
+    /// invisible to `find_references("baz")` on current `origin/main`.
+    #[test]
+    fn coverage_delta_package_block_form() {
+        let text = "package Foo { sub bar { baz(); } }\n";
+        assert_coverage_delta_case(
+            "package_block_form",
+            "file:///edge/coverage_delta_package_block.pl",
+            text,
+            "baz",
+        );
+    }
+
+    /// Case 2: same gap as case 1, for Perl 5.38+ `class Foo { ... }`
+    /// bodies (`NodeKind::Class`'s `body` is never recursed into either).
+    #[test]
+    fn coverage_delta_class_body_form() {
+        let text = "use feature 'class';\nclass Foo { method bar { baz(); } }\n";
+        assert_coverage_delta_case(
+            "class_body_form",
+            "file:///edge/coverage_delta_class_body.pl",
+            text,
+            "baz",
+        );
+    }
+
+    /// Case 3: `NodeKind::Typeglob` has no arm in `visit_node`/`visit_children`
+    /// at all -- typeglob aliasing (`*alias = \&original;`) is completely
+    /// invisible to the legacy `FileIndex` today, for any Perl file that
+    /// uses it.
+    #[test]
+    fn coverage_delta_typeglob_alias() {
+        let text = "package Foo;\nsub original { 1 }\n*alias = \\&original;\n";
+        assert_coverage_delta_case(
+            "typeglob_alias",
+            "file:///edge/coverage_delta_typeglob.pl",
+            text,
+            "*alias",
+        );
+    }
+
+    /// Case 4: `NodeKind::Goto` has no arm in `visit_node`/`visit_children`
+    /// at all -- a `goto &handler` coderef target is invisible to the
+    /// legacy `FileIndex` today.
+    #[test]
+    fn coverage_delta_goto_coderef_target() {
+        let text = "package Foo;\nsub dispatch { goto &handler; }\n";
+        assert_coverage_delta_case(
+            "goto_coderef_target",
+            "file:///edge/coverage_delta_goto.pl",
+            text,
+            "&handler",
+        );
+    }
+
+    /// Case 5: regex-bind expressions (`Match`/`Substitution`/
+    /// `Transliteration`) are not in `visit_node`/`visit_children`'s
+    /// coverage at all -- a function call inside the bind target
+    /// (`compute() =~ /x/`) is invisible to the legacy `FileIndex` today,
+    /// despite being an extremely common Perl idiom.
+    #[test]
+    fn coverage_delta_regex_bind_nested_call() {
+        let text = "package Foo;\nsub bar { return compute() =~ /x/; }\n";
+        assert_coverage_delta_case(
+            "regex_bind_nested_call",
+            "file:///edge/coverage_delta_regex_bind.pl",
+            text,
+            "compute",
+        );
+    }
+
+    /// Case 6: `NodeKind::Tie` has no arm in `visit_node`/`visit_children`
+    /// at all -- a call in `tie`'s argument list (`tie my %h, 'Helper',
+    /// extra_arg();`) is invisible to the legacy `FileIndex` today.
+    #[test]
+    fn coverage_delta_tie_args() {
+        let text = "package Foo;\nsub bar { tie my %h, 'Helper', extra_arg(); }\n";
+        assert_coverage_delta_case(
+            "tie_args",
+            "file:///edge/coverage_delta_tie.pl",
+            text,
+            "extra_arg",
+        );
+    }
+
+    /// Case 7: `NodeKind::IndirectCall` (indirect-object syntax, `new Class
+    /// @args`) has no arm in `visit_node`/`visit_children` at all -- a call
+    /// nested in its argument list (`new Foo(make_arg())`) is invisible to
+    /// the legacy `FileIndex` today.
+    #[test]
+    fn coverage_delta_indirect_call_args() {
+        let text = "package Foo;\nsub bar { my $obj = new Foo(make_arg()); }\n";
+        assert_coverage_delta_case(
+            "indirect_call_args",
+            "file:///edge/coverage_delta_indirect_call.pl",
+            text,
+            "make_arg",
+        );
+    }
+
+    /// Case 8: `IndexVisitor::visit_node`'s `Subroutine` arm only visits
+    /// `body`, never `prototype`/`signature` -- a default-value expression
+    /// in a `sub`'s signature (`sub greet($name = default_name())`) is
+    /// invisible to the legacy `FileIndex` today. (`Method`'s arm already
+    /// visits `signature` correctly -- this gap is `Subroutine`-specific.)
+    #[test]
+    fn coverage_delta_subroutine_signature_default() {
+        let text = "package Foo;\nsub greet($name = default_name()) { return $name; }\n";
+        assert_coverage_delta_case(
+            "subroutine_signature_default",
+            "file:///edge/coverage_delta_sig_default.pl",
+            text,
+            "default_name",
+        );
+    }
+
+    /// Case 9: `IndexVisitor::visit_node`'s `Assignment` arm does NOTHING
+    /// for a non-`Variable` lhs (e.g. an indexed/complex assignment target
+    /// like `$h{compute_key()} = 1`) -- no recursion at all, so a nested
+    /// call inside the index expression is invisible to the legacy
+    /// `FileIndex` today. (The same class of gap applies to `++`/`--` on a
+    /// non-`Variable` operand.)
+    #[test]
+    fn coverage_delta_assignment_indexed_target() {
+        let text = "package Foo;\nsub bar { my %h; $h{compute_key()} = 1; }\n";
+        assert_coverage_delta_case(
+            "assignment_indexed_target",
+            "file:///edge/coverage_delta_indexed_assignment.pl",
+            text,
+            "compute_key",
+        );
     }
 }

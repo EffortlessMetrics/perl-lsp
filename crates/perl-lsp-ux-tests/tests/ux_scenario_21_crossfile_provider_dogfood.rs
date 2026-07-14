@@ -27,7 +27,7 @@
 //! ```
 
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::{ScenarioConfig, UxHarness, document_symbol_names};
 use serde_json::json;
 use std::time::Duration;
 
@@ -124,6 +124,33 @@ fn is_lsp_location_shape(entry: &serde_json::Value) -> bool {
 
 fn entry_uri(entry: &serde_json::Value) -> Option<&str> {
     entry.get("uri").or_else(|| entry.get("targetUri")).and_then(serde_json::Value::as_str)
+}
+
+fn symbol_is_shared_from_base(symbol: &serde_json::Value) -> bool {
+    let is_shared = symbol.get("name").and_then(serde_json::Value::as_str) == Some("shared");
+    let from_base = symbol
+        .get("location")
+        .and_then(|location| location.get("uri"))
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|uri| uri.ends_with("Base.pm"));
+
+    is_shared && from_base
+}
+
+fn wait_for_shared_workspace_symbol(harness: &UxHarness) -> anyhow::Result<()> {
+    let symbols = harness.wait_for_workspace_symbols(
+        "shared",
+        Duration::from_secs(5),
+        Duration::from_millis(200),
+        |symbols| symbols.iter().any(symbol_is_shared_from_base),
+    )?;
+
+    anyhow::ensure!(
+        symbols.iter().any(symbol_is_shared_from_base),
+        "workspace index did not surface Base.pm::shared before rename: {symbols:?}"
+    );
+
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -239,6 +266,7 @@ fn scenario_21_rename_shared_in_base_pm() -> anyhow::Result<()> {
     let harness = create_harness()?;
     harness.open_file("lib/RealBaseline/Base.pm", BASE_PM)?;
     harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
+    wait_for_shared_workspace_symbol(&harness)?;
 
     // Line 4 of Base.pm: `sub shared {`  cursor at col 4 inside `shared`.
     let uri = harness.workspace.uri("lib/RealBaseline/Base.pm");
@@ -312,6 +340,7 @@ fn scenario_21_rename_shared_in_base_pm_hard_assert() -> anyhow::Result<()> {
     let harness = create_harness()?;
     harness.open_file("lib/RealBaseline/Base.pm", BASE_PM)?;
     harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
+    wait_for_shared_workspace_symbol(&harness)?;
 
     let uri = harness.workspace.uri("lib/RealBaseline/Base.pm");
     let resp = harness.client.request(
@@ -429,6 +458,61 @@ fn scenario_21_signature_help_for_helper_call_in_app_pm() -> anyhow::Result<()> 
     Ok(())
 }
 
+/// Hard assert — signature help for `helper(` call in App.pm must return a
+/// non-empty signatures array whose first label mentions `helper`.
+#[test]
+fn scenario_21_signature_help_for_helper_call_in_app_pm_hard_assert() -> anyhow::Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_21: perl-lsp binary not found");
+        return Ok(());
+    }
+
+    let harness = create_harness()?;
+    harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
+    harness.open_file("lib/RealBaseline/Util.pm", UTIL_PM)?;
+
+    let uri = harness.workspace.uri("lib/RealBaseline/App.pm");
+    let resp = harness.client.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 13, "character": 11 }
+        }),
+        Duration::from_secs(5),
+    )?;
+
+    assert!(
+        resp.get("error").is_none(),
+        "signatureHelp for `helper(` call in App.pm must not return a JSON-RPC error. \
+         Got: {:?}",
+        resp.get("error")
+    );
+
+    assert!(
+        !resp["result"].is_null(),
+        "signatureHelp must return a SignatureHelp result, got null"
+    );
+
+    let signatures =
+        resp["result"].get("signatures").and_then(|s| s.as_array()).ok_or_else(|| {
+            anyhow::anyhow!("signatureHelp result has no `signatures` array: {:?}", resp["result"])
+        })?;
+
+    assert!(
+        !signatures.is_empty(),
+        "signatureHelp for `helper(` call in App.pm must return at least one signature. Got: []"
+    );
+
+    let label = signatures[0].get("label").and_then(|l| l.as_str()).unwrap_or("");
+    assert!(
+        label.contains("helper"),
+        "signatureHelp first signature label must contain 'helper'. Got: {label:?}"
+    );
+
+    harness.assert_no_crash();
+    Ok(())
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  PROVIDER 4: textDocument/documentSymbol
 // ═══════════════════════════════════════════════════════════════════════════
@@ -463,8 +547,7 @@ fn scenario_21_document_symbols_in_app_pm() -> anyhow::Result<()> {
         assert!(has_location, "document symbol must have `range` or `location` field: {sym:?}");
     }
 
-    let sym_names: Vec<&str> =
-        syms.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    let sym_names = document_symbol_names(&syms);
 
     let has_new = sym_names.iter().any(|n| *n == "new");
     let has_run = sym_names.iter().any(|n| *n == "run");
@@ -506,8 +589,7 @@ fn scenario_21_document_symbols_in_app_pm_hard_assert() -> anyhow::Result<()> {
     harness.open_file("lib/RealBaseline/App.pm", APP_PM)?;
 
     let syms = harness.document_symbols("lib/RealBaseline/App.pm")?;
-    let sym_names: Vec<&str> =
-        syms.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    let sym_names = document_symbol_names(&syms);
 
     assert!(
         sym_names.iter().any(|n| *n == "new"),

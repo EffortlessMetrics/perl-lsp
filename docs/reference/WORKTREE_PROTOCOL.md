@@ -116,21 +116,29 @@ git worktree add .claude/worktrees/agent-<id> impl/<issue#>-<slug>
 
 This checks out the named branch into a fresh worktree without creating a new branch.
 
-### Set CARGO_TARGET_DIR immediately after creation
+### Target-dir isolation is automatic — do not export CARGO_TARGET_DIR
 
-```bash
-export CARGO_TARGET_DIR="/tmp/agent-$(git -C .claude/worktrees/agent-<id> \
-    branch --show-current | tr '/' '-')-target"
-```
+Cargo's default (unconfigured) `target-dir` resolves to
+`<workspace-root>/target`. For a `git worktree` checkout, the workspace root
+*is* the worktree's own directory, so every worktree already builds into its
+own isolated `<worktree>/target` — no setup step required.
 
-Or from inside the worktree:
+**Precedence trap (issue #3854):** the `CARGO_TARGET_DIR` environment variable
+overrides cargo's per-worktree default (env > config > default). If a shell
+profile (`~/.bashrc`, `~/.zshrc`) carries a stale `export CARGO_TARGET_DIR=...`
+left over from a prior session — or a different worktree/branch — every new
+shell in *every* worktree inherits that stale value regardless of which
+worktree it's actually in, silently defeating the per-worktree isolation and
+causing agents to build against, and read, another agent's stale binaries
+(the "stale-binary trap"). This is exactly what a previous version of this
+protocol recommended (manually exporting `CARGO_TARGET_DIR` into a
+`/tmp/agent-<branch>-target` path) — that convention is retired. Never
+`export CARGO_TARGET_DIR` in a persistent shell profile. If you inherit one
+from an old profile line, remove it; don't add a new one.
 
-```bash
-export CARGO_TARGET_DIR="/tmp/agent-$(git branch --show-current | tr '/' '-')-target"
-```
-
-The preflight script (`scripts/agent-preflight.sh`) computes and prints the
-recommended path. Agents must set it before running any `cargo` command.
+`scripts/agent-preflight.sh` reports whether `CARGO_TARGET_DIR` is already set
+in your shell — if it is, that's a red flag to investigate (likely a stale
+profile export), not something to leave in place.
 
 ---
 
@@ -194,8 +202,8 @@ git worktree add -b impl/7042-rename-provider \
 # Enter the worktree
 cd .claude/worktrees/agent-abc123
 
-# Set isolated build artifacts
-export CARGO_TARGET_DIR="/tmp/agent-impl-7042-rename-provider-target"
+# Build artifacts are isolated automatically (cargo's default target-dir is
+# per-worktree) — do NOT export CARGO_TARGET_DIR.
 
 # Verify isolation before any edit
 bash scripts/agent-preflight.sh
@@ -412,7 +420,7 @@ git -C /path/to/perl-lsp branch -D <stale-feature-branch>
 Before starting work:
 
 - [ ] `bash scripts/agent-preflight.sh` passes all 6 checks
-- [ ] `export CARGO_TARGET_DIR` set to the recommended isolated path
+- [ ] `CARGO_TARGET_DIR` is NOT exported in your shell (isolation is automatic per-worktree; a leftover export from an old profile line defeats it)
 - [ ] Worktree path is short enough for Windows (under 230 characters total)
 - [ ] Slot recorded in worktree-manager if multi-box session is active
 

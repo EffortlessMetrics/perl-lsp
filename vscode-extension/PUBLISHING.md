@@ -2,14 +2,10 @@
 
 ## Prerequisites
 
-1. **Node.js and npm** installed
+1. **Node.js 26.x (CI pins 26.5.0) and npm 11.18.0** installed
 2. **Visual Studio Code** installed
-3. **vsce** (Visual Studio Code Extension manager) and **ovsx** (Open VSX CLI) installed:
-   ```bash
-   npm install -g @vscode/vsce ovsx
-   ```
-4. **Publisher account** on Visual Studio Marketplace
-5. **Open VSX access token** for `EffortlessMetrics` publisher
+3. **Publisher account** on Visual Studio Marketplace
+4. **Open VSX access token** for `EffortlessMetrics` publisher
 
 ## Build Process
 
@@ -27,7 +23,8 @@ cargo build -p perllsp --release
 
 ```bash
 # From vscode-extension/
-npm install
+npm run doctor
+npm ci
 npm run verify:marketplace
 ```
 
@@ -75,9 +72,10 @@ code test/sample.pl
 ```
 
 Test these features:
+
 - [ ] Syntax highlighting works
 - [ ] Diagnostics appear for syntax errors
-- [ ] Format document (Shift+Alt+F) works (if perltidy installed)
+- [ ] Format document (Shift+Alt+F) works (native formatter; no perltidy required)
 - [ ] Go to definition (F12) works
 - [ ] Hover shows information
 - [ ] Auto-completion triggers
@@ -101,6 +99,7 @@ cargo build --target x86_64-pc-windows-msvc --release
 ```
 
 Place binaries in appropriate directories:
+
 - `bin/linux-x64/perllsp`
 - `bin/darwin-x64/perllsp`
 - `bin/darwin-arm64/perllsp`
@@ -117,7 +116,7 @@ If you haven't already:
 ### 6. Login to vsce
 
 ```bash
-vsce login <publisher-id>
+npm exec -- @vscode/vsce login <publisher-id>
 # Enter your Personal Access Token when prompted
 ```
 
@@ -131,9 +130,9 @@ npm run publish -- --pat "$VSCE_PAT"
 npm run publish:openvsx -- perl-lsp-rs-*.vsix --pat "$OVSX_PAT"
 
 # Or publish with version bump on Marketplace
-vsce publish minor  # 0.5.0 -> 0.6.0
-vsce publish major  # 0.5.0 -> 0.9.x
-vsce publish 0.5.1  # Specific version
+npm exec -- @vscode/vsce publish minor  # 0.5.0 -> 0.6.0
+npm exec -- @vscode/vsce publish major  # 0.5.0 -> 0.9.x
+npm exec -- @vscode/vsce publish 0.5.1  # Specific version
 ```
 
 ## Post-Publishing
@@ -176,16 +175,21 @@ vsce publish 0.5.1  # Specific version
 ## Troubleshooting
 
 ### "Missing publisher name"
+
 Update `package.json` with your publisher ID.
 
 ### "Personal Access Token expired"
+
 Create a new token and login again with `vsce login`.
 
 ### Binary not found
+
 Ensure `bundle-lsp.js` correctly detects platform and copies binaries.
 
 ### Large package size
+
 Check `.vscodeignore` is excluding unnecessary files.
+
 ## Marketplace Launch Checklist
 
 Before first public launch:

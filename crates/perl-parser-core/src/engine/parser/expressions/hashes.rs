@@ -46,8 +46,12 @@ impl<'a> Parser<'a> {
         // Peek ahead to determine if it's a hash or block
         // For empty {}, decide based on context
         if self.peek_kind() == Some(TokenKind::RightBrace) {
-            self.tokens.next()?; // consume }
-            let end = self.previous_position();
+            // Use the closing brace token's own end position to avoid returning a
+            // stale `previous_position()` that predates the `{` (reversed span bug).
+            // `self.tokens.next()` does NOT update `last_end_position`, so we must
+            // read the token's `.end` field directly.  See #3357.
+            let close_brace = self.tokens.next()?; // consume }
+            let end = close_brace.end;
 
             // For empty braces, default to hash (correct for most functions)
             // Functions like sort/map/grep have special handling that creates blocks
@@ -85,8 +89,19 @@ impl<'a> Parser<'a> {
                     self.expect_closing_delimiter(TokenKind::RightBrace)?;
                     let end = self.previous_position();
                     self.exit_recursion();
+                    // Emit a recovery marker so the AST reflects the incomplete brace
+                    // content instead of a silently-empty block. Without this, an
+                    // incomplete construct like `{ host => "localhost", port =>` parsed
+                    // to `(block )` with no marker, hiding the error from AST consumers
+                    // (the diagnostic itself is recorded by expect_closing_delimiter
+                    // above). We intentionally do NOT enter the block-statement loop —
+                    // that would swallow trailing `sub`/`my` declarations (#1352).
+                    let marker = Node::new(
+                        NodeKind::MissingExpression,
+                        SourceLocation { start, end },
+                    );
                     return Ok(Node::new(
-                        NodeKind::Block { statements: Vec::new() },
+                        NodeKind::Block { statements: vec![marker] },
                         SourceLocation { start, end },
                     ));
                 }
@@ -109,8 +124,11 @@ impl<'a> Parser<'a> {
 
         // Check if we should close the brace now
         if self.peek_kind() == Some(TokenKind::RightBrace) {
-            self.tokens.next()?; // consume }
-            let end = self.previous_position();
+            // Capture close brace token directly so the span includes `}`.
+            // Using `previous_position()` here would give the end of the last
+            // *inner* token (before `}`), making the node span exclude the brace.
+            let close_brace = self.tokens.next()?; // consume }
+            let end = close_brace.end;
 
             // Destructure first_expr to consume its kind by move, avoiding clones
             let Node { kind: first_kind, location: first_loc } = first_expr;

@@ -257,9 +257,15 @@ def compare_benchmarks(baseline_file: Path, current_file: Path,
         print(f"  Missing:      {YELLOW}{missing}{NC}")
     print()
 
-    # Final status
+    # Final status. A baseline-expected benchmark that is MISSING from the
+    # current run is itself an integrity problem -- under fail-closed
+    # comparison (--fail-on-regression) it must not silently pass just
+    # because nothing that *did* run also regressed (#3979).
     if regressions > 0:
         print(f"{RED}STATUS: REGRESSION DETECTED{NC}")
+        return 1 if fail_on_regression else 0
+    elif missing > 0:
+        print(f"{YELLOW}STATUS: INCOMPLETE ({missing} expected benchmark(s) missing){NC}")
         return 1 if fail_on_regression else 0
     else:
         print(f"{GREEN}STATUS: PASS{NC}")

@@ -1,3 +1,8 @@
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use serde_json::{Value, json};
 use std::time::Duration;
 
@@ -8,8 +13,8 @@ use common::{
     start_lsp_server,
 };
 
-/// Test suite for error recovery scenarios
-/// Ensures the LSP server can recover from various error states
+// Test suite for error recovery scenarios
+// Ensures the LSP server can recover from various error states
 
 fn hover_text(result: &Value) -> Option<String> {
     let contents = result.get("contents")?;

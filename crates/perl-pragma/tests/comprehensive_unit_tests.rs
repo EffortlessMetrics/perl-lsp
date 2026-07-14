@@ -93,6 +93,14 @@ fn default_state_is_all_false() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn all_strict_enables_strict_but_not_warnings() -> Result<(), Box<dyn std::error::Error>> {
     let state = PragmaState::all_strict();
+    let expected = PragmaState {
+        strict_vars: true,
+        strict_subs: true,
+        strict_refs: true,
+        ..PragmaState::default()
+    };
+
+    assert_eq!(state, expected);
     assert!(state.strict_vars);
     assert!(state.strict_subs);
     assert!(state.strict_refs);
@@ -1849,19 +1857,33 @@ fn no_if_strict_with_single_quoted_whitespace_list_disables_selected_flags()
 }
 
 #[test]
-fn no_version_declaration_has_no_features() -> Result<(), Box<dyn std::error::Error>> {
+fn no_version_declaration_has_no_version_features() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("strict", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
+    // `use strict` does not imply any version-bundle feature like 'say'...
     assert!(!state.has_feature("say"), "strict pragma should not imply 'say'");
+    assert!(!state.has_feature("signatures"), "strict pragma should not imply 'signatures'");
+    // ...but the always-on `:default` features remain enabled at file scope.
+    assert!(state.has_feature("multidimensional"), "strict pragma keeps the :default bundle");
     Ok(())
 }
 
 #[test]
-fn state_default_has_no_features() -> Result<(), Box<dyn std::error::Error>> {
+fn state_default_carries_the_default_feature_bundle() -> Result<(), Box<dyn std::error::Error>> {
     let state = PragmaState::default();
-    assert!(!state.has_feature("say"), "default state has no features");
-    assert!(!state.has_feature("state"), "default state has no features");
+    // The Perl `:default` bundle is enabled before any `use feature`/`use vX.Y`.
+    assert!(state.has_feature("indirect"), "default state has :default 'indirect'");
+    assert!(state.has_feature("multidimensional"), "default state has :default 'multidimensional'");
+    assert!(state.has_feature("bareword_filehandles"), "default state has :default bareword fh");
+    assert!(
+        state.has_feature("apostrophe_as_package_separator"),
+        "default state has :default apos"
+    );
+    assert!(state.has_feature("smartmatch"), "default state has :default 'smartmatch'");
+    // Version-bundle features are NOT in the :default set.
+    assert!(!state.has_feature("say"), "default state has no version feature 'say'");
+    assert!(!state.has_feature("state"), "default state has no version feature 'state'");
     Ok(())
 }
 

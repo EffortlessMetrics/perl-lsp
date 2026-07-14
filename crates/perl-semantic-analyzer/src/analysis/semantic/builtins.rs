@@ -12,11 +12,12 @@ pub struct BuiltinDoc {
 
 /// Normalize a built-in name for lookup.
 ///
-/// Perl allows calling built-ins with a `CORE::` prefix (for example
-/// `CORE::length`). The semantic analyzer stores the function call text as-is,
+/// Perl allows calling built-ins with a `CORE::` prefix (e.g. `CORE::length`)
+/// and Perl 5.36+ `use builtin` functions with a `builtin::` prefix
+/// (e.g. `builtin::true`). The semantic analyzer stores the call text as-is,
 /// so normalize here to keep builtin classification and hover docs consistent.
 fn normalized_builtin_name(name: &str) -> &str {
-    name.strip_prefix("CORE::").unwrap_or(name)
+    name.strip_prefix("CORE::").or_else(|| name.strip_prefix("builtin::")).unwrap_or(name)
 }
 
 /// Check if a function name is a Perl control-flow keyword.
@@ -30,7 +31,9 @@ pub(super) fn is_control_keyword(name: &str) -> bool {
 /// Check if a function name is a Perl built-in.
 ///
 /// Returns `true` if the name matches a known Perl built-in function.
-pub(super) fn is_builtin_function(name: &str) -> bool {
+/// Handles both bare names (`true`) and the `builtin::` qualified form
+/// (`builtin::true`) introduced by `use builtin` in Perl 5.36+.
+pub fn is_builtin_function(name: &str) -> bool {
     let name = normalized_builtin_name(name);
     matches!(
         name,
@@ -76,6 +79,24 @@ pub(super) fn is_builtin_function(name: &str) -> bool {
             | "last"
             | "redo"
             | "goto" // ... many more
+            // Perl 5.36+ `use builtin` functions
+            | "true"
+            | "false"
+            | "is_bool"
+            | "weaken"
+            | "unweaken"
+            | "is_weak"
+            | "is_tainted"
+            | "refaddr"
+            | "reftype"
+            | "ceil"
+            | "floor"
+            | "inf"
+            | "nan"
+            | "trim"
+            | "indexed"
+            | "load_module"
+            | "export_lexically"
     )
 }
 
@@ -450,8 +471,11 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             description: "Associates the referent of REF with package CLASSNAME (or current package). Returns the reference.",
         }),
         "blessed" => Some(BuiltinDoc {
-            signature: "blessed EXPR",
-            description: "Returns the name of the package EXPR is blessed into, or undef if EXPR is not a blessed reference. From Scalar::Util.",
+            signature: "blessed(EXPR)",
+            description: "Returns the name of the package EXPR is blessed into, or undef if \
+                          EXPR is not a blessed reference. Available since Perl 5.36 via \
+                          `use builtin 'blessed'`; also available as `Scalar::Util::blessed`.\n\n\
+                          ```perl\nuse builtin 'blessed';\nmy $obj = bless {}, 'Dog';\nblessed($obj); # 'Dog'\nblessed({});   # undef\n```",
         }),
         "tie" => Some(BuiltinDoc {
             signature: "tie VARIABLE, CLASSNAME, LIST",
@@ -878,6 +902,146 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             description: "Returns the native platform code point corresponding to the Unicode \
                           code point `CODEPOINT`.  On ASCII platforms (virtually all modern \
                           systems) this is a no-op.  The inverse of `utf8::native_to_unicode`.",
+        }),
+
+        // ── Perl 5.36+ `use builtin` functions ───────────────────────────────
+        // Available via: use builtin 'funcname'; or as builtin::funcname()
+        // Reference: https://perldoc.perl.org/builtin
+        "true" => Some(BuiltinDoc {
+            signature: "true()",
+            description: "Returns the boolean true value. Unlike the number `1`, this value \
+                          carries a boolean flag that `is_bool` can detect. Available since \
+                          Perl 5.36 via `use builtin 'true'` (experimental) or `use v5.36`.\n\n\
+                          ```perl\nuse builtin 'true';\nmy $t = true;\nprint is_bool($t) ? \"bool\" : \"not bool\"; # bool\n```",
+        }),
+        "false" => Some(BuiltinDoc {
+            signature: "false()",
+            description: "Returns the boolean false value. Unlike the empty string `''`, this \
+                          value carries a boolean flag that `is_bool` can detect. Available since \
+                          Perl 5.36 via `use builtin 'false'` (experimental) or `use v5.36`.\n\n\
+                          ```perl\nuse builtin 'false';\nmy $f = false;\nif (!$f) { print \"falsy\" }\n```",
+        }),
+        "is_bool" => Some(BuiltinDoc {
+            signature: "is_bool(VALUE)",
+            description: "Returns true if VALUE carries the boolean flag — i.e., it was returned \
+                          by `true`, `false`, a comparison operator, or another boolean operation. \
+                          Returns false for ordinary `1`, `0`, or `''`. Available since Perl 5.36 \
+                          via `use builtin 'is_bool'`.\n\n\
+                          ```perl\nuse builtin 'true', 'false', 'is_bool';\nis_bool(true);  # 1\nis_bool(1);     # '' (not a boolean)\nis_bool(1 == 1); # 1 (comparison result)\n```",
+        }),
+        "weaken" => Some(BuiltinDoc {
+            signature: "weaken(REF)",
+            description: "Marks REF as a weak reference. A weak reference does not prevent the \
+                          garbage collector from freeing the referenced value when it has no other \
+                          strong references. The ref becomes undef once the referent is freed. \
+                          Available as a core builtin since Perl 5.36 via `use builtin 'weaken'`; \
+                          also available as `Scalar::Util::weaken`.\n\n\
+                          ```perl\nuse builtin 'weaken';\nmy $strong = { name => 'Alice' };\nmy $weak = $strong;\nweaken($weak);\n# $weak becomes undef when $strong goes out of scope\n```",
+        }),
+        "unweaken" => Some(BuiltinDoc {
+            signature: "unweaken(REF)",
+            description: "Strengthens a previously weakened reference, restoring it to a normal \
+                          strong reference so the garbage collector will keep the referent alive. \
+                          Available since Perl 5.36 via `use builtin 'unweaken'`; also available \
+                          as `Scalar::Util::unweaken`.\n\n\
+                          ```perl\nuse builtin 'weaken', 'unweaken';\nmy $obj = {};\nmy $ref = $obj;\nweaken($ref);\nunweaken($ref); # $ref is strong again\n```",
+        }),
+        "is_weak" => Some(BuiltinDoc {
+            signature: "is_weak(REF)",
+            description: "Returns true if REF is currently a weak reference (was weakened with \
+                          `weaken` and has not been strengthened). Returns false for ordinary strong \
+                          references or undef. Available since Perl 5.36 via `use builtin 'is_weak'`; \
+                          also available as `Scalar::Util::isweak`.\n\n\
+                          ```perl\nuse builtin 'weaken', 'is_weak';\nmy $x = {}; my $r = $x;\nweaken($r);\nis_weak($r); # 1\nis_weak($x); # ''\n```",
+        }),
+        "refaddr" => Some(BuiltinDoc {
+            signature: "refaddr(REF)",
+            description: "Returns the memory address of the reference REF as an integer, or \
+                          undef if REF is not a reference. The address is unique to the referent \
+                          during its lifetime but may be reused after it is freed. Useful as a \
+                          stable identity key. Available since Perl 5.36 via `use builtin 'refaddr'`; \
+                          also available as `Scalar::Util::refaddr`.\n\n\
+                          ```perl\nuse builtin 'refaddr';\nmy $h = {};\nprintf \"%d\\n\", refaddr($h); # e.g. 140234567890\n```",
+        }),
+        "reftype" => Some(BuiltinDoc {
+            signature: "reftype(REF)",
+            description: "Returns the underlying reference type of REF as a string (SCALAR, \
+                          ARRAY, HASH, CODE, REF, GLOB, FORMAT, IO, VSTRING, Regexp), or undef if \
+                          REF is not a reference. Unlike `ref`, this is not affected by blessing — \
+                          it returns the raw type even for objects. Available since Perl 5.36 via \
+                          `use builtin 'reftype'`; also available as `Scalar::Util::reftype`.\n\n\
+                          ```perl\nuse builtin 'reftype';\nmy $obj = bless {}, 'Dog';\nref($obj);     # 'Dog'\nreftype($obj); # 'HASH'\n```",
+        }),
+        "ceil" => Some(BuiltinDoc {
+            signature: "ceil(EXPR)",
+            description: "Returns the smallest integer greater than or equal to EXPR (ceiling \
+                          function). For example, `ceil(4.1)` returns 5 and `ceil(-3.7)` returns \
+                          -3. Available since Perl 5.36 via `use builtin 'ceil'`; also available \
+                          as `POSIX::ceil`.\n\n\
+                          ```perl\nuse builtin 'ceil';\nceil(4.1);  # 5\nceil(-3.7); # -3\nceil(5.0);  # 5\n```",
+        }),
+        "floor" => Some(BuiltinDoc {
+            signature: "floor(EXPR)",
+            description: "Returns the largest integer less than or equal to EXPR (floor function). \
+                          For example, `floor(4.9)` returns 4 and `floor(-3.1)` returns -4. \
+                          Available since Perl 5.36 via `use builtin 'floor'`; also available as \
+                          `POSIX::floor`.\n\n\
+                          ```perl\nuse builtin 'floor';\nfloor(4.9);  # 4\nfloor(-3.1); # -4\nfloor(5.0);  # 5\n```",
+        }),
+        "inf" => Some(BuiltinDoc {
+            signature: "inf()",
+            description: "Returns a floating-point positive infinity value. Can be used in \
+                          arithmetic: `inf() + 1` is still `inf`, `inf() * -1` is `-inf`. \
+                          Available since Perl 5.40 via `use builtin 'inf'`.\n\n\
+                          ```perl\nuse builtin 'inf';\nmy $i = inf();\nprint $i > 1e308 ? \"huge\" : \"no\"; # huge\n```",
+        }),
+        "nan" => Some(BuiltinDoc {
+            signature: "nan()",
+            description: "Returns a floating-point Not-a-Number (NaN) value. Any arithmetic with \
+                          NaN produces NaN, and NaN compares unequal to everything including itself. \
+                          Available since Perl 5.40 via `use builtin 'nan'`.\n\n\
+                          ```perl\nuse builtin 'nan';\nmy $n = nan();\nprint $n == $n ? \"equal\" : \"NaN\"; # NaN\n```",
+        }),
+        "trim" => Some(BuiltinDoc {
+            signature: "trim(STRING)",
+            description: "Returns STRING with leading and trailing ASCII whitespace (spaces, tabs, \
+                          newlines, carriage returns, form feeds, vertical tabs) removed. Does not \
+                          modify the original string. Available since Perl 5.36 via \
+                          `use builtin 'trim'`.\n\n\
+                          ```perl\nuse builtin 'trim';\ntrim(\"  hello  \");  # \"hello\"\ntrim(\"\\t foo\\n\"); # \"foo\"\n```",
+        }),
+        "indexed" => Some(BuiltinDoc {
+            signature: "indexed(LIST)",
+            description: "Returns a flat list of (index, value) pairs for each element in LIST, \
+                          starting at index 0. Useful for iterating a list with an explicit index \
+                          without needing to track a counter variable. Available since Perl 5.36 \
+                          via `use builtin 'indexed'`.\n\n\
+                          ```perl\nuse builtin 'indexed';\nmy @fruits = ('apple', 'banana', 'cherry');\nfor my ($i, $v) (indexed @fruits) {\n    print \"$i: $v\\n\";\n}\n```",
+        }),
+        "load_module" => Some(BuiltinDoc {
+            signature: "load_module(MODULE)",
+            description: "Loads the named MODULE at runtime by its string name. Similar to \
+                          `require MODULE` but accepts a plain string (not a bareword or file \
+                          path). Available since Perl 5.40 via `use builtin 'load_module'`.\n\n\
+                          ```perl\nuse builtin 'load_module';\nload_module('Scalar::Util');\n```",
+        }),
+        "export_lexically" => Some(BuiltinDoc {
+            signature: "export_lexically(NAME, REF, ...)",
+            description: "Installs NAME into the current lexical scope, bound to REF. Unlike \
+                          regular imports, the binding is visible only in the calling scope, not \
+                          the entire package. Designed for use inside import methods that want \
+                          to create truly lexical aliases. Available since Perl 5.38 via \
+                          `use builtin 'export_lexically'`.\n\n\
+                          ```perl\nuse builtin 'export_lexically';\nexport_lexically('my_fn', \\&some_sub);\n```",
+        }),
+        "is_tainted" => Some(BuiltinDoc {
+            signature: "is_tainted(EXPR)",
+            description: "Returns true if EXPR is tainted — that is, derived from external \
+                          input (environment, command line, user input, files) when taint mode \
+                          is active (`perl -T` or `perl -t`). Returns false for untainted values \
+                          or when taint mode is off. Available since Perl 5.38 via \
+                          `use builtin 'is_tainted'`.\n\n\
+                          ```perl\nuse builtin 'is_tainted';\nmy $input = $ENV{HOME};\nif (is_tainted($input)) { die \"tainted!\" }\n```",
         }),
 
         _ => None,

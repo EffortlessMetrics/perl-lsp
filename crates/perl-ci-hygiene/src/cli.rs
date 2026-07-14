@@ -40,7 +40,11 @@ pub(crate) enum CliCommand {
     CheckV2BundleSync,
     /// Compare benchmark outputs with the Python benchmark comparator.
     CompareBenchmarks {
-        #[arg(trailing_var_arg = true)]
+        // `allow_hyphen_values` is required alongside `trailing_var_arg` so
+        // flags like `--fail-on-regression` forward straight through to the
+        // Python comparator instead of clap rejecting them as unexpected
+        // arguments (#3979).
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
     /// Compare modern, C legacy, and parser outputs across sample snippets.

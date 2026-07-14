@@ -3,6 +3,11 @@
 //! Provides `initialize_lsp`, `await_index_ready`, and `shutdown_and_exit` which
 //! encapsulate the full LSP lifecycle for integration tests.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stderr doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stderr)]
+
 use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::time::Duration;

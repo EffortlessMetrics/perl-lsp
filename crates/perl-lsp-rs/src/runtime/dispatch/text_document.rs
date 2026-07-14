@@ -281,6 +281,13 @@ impl LspServer {
         self.handle_semantic_tokens_range(params)
     }
 
+    pub(super) fn handle_semantic_tokens_delta_dispatch(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_semantic_tokens_delta(params)
+    }
+
     // Inlay hints
     pub(super) fn handle_inlay_hints_dispatch(
         &self,

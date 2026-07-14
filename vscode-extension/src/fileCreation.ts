@@ -7,13 +7,13 @@
 import * as path from 'path';
 
 export const enum FileKind {
-    Module = 'module',
-    Test = 'test',
+  Module = 'module',
+  Test = 'test',
 }
 
 export interface BoilerplateResult {
-    kind: FileKind;
-    content: string;
+  kind: FileKind;
+  content: string;
 }
 
 /**
@@ -23,26 +23,26 @@ export interface BoilerplateResult {
  * Returns `null` for non-`.pm` paths.
  */
 export function inferPackageName(filePath: string): string | null {
-    // Normalise Windows backslashes
-    const normalised = filePath.replace(/\\/g, '/');
-    const ext = path.extname(normalised);
+  // Normalise Windows backslashes
+  const normalised = filePath.replace(/\\/g, '/');
+  const ext = path.extname(normalised);
 
-    if (ext !== '.pm') {
-        return null;
-    }
+  if (ext !== '.pm') {
+    return null;
+  }
 
-    const parts = normalised.split('/');
-    const libIdx = parts.lastIndexOf('lib');
+  const parts = normalised.split('/');
+  const libIdx = parts.lastIndexOf('lib');
 
-    if (libIdx !== -1 && libIdx < parts.length - 1) {
-        const relative = parts.slice(libIdx + 1);
-        const last = relative[relative.length - 1].replace(/\.pm$/, '');
-        relative[relative.length - 1] = last;
-        return relative.join('::');
-    }
+  if (libIdx !== -1 && libIdx < parts.length - 1) {
+    const relative = parts.slice(libIdx + 1);
+    const last = relative[relative.length - 1].replace(/\.pm$/, '');
+    relative[relative.length - 1] = last;
+    return relative.join('::');
+  }
 
-    // Fallback: bare basename without extension
-    return path.basename(normalised, '.pm');
+  // Fallback: bare basename without extension
+  return path.basename(normalised, '.pm');
 }
 
 /**
@@ -51,19 +51,19 @@ export function inferPackageName(filePath: string): string | null {
  * Returns `null` for file types that do not get boilerplate (.pl, .pod, etc.).
  */
 export function generateBoilerplate(filePath: string): BoilerplateResult | null {
-    const normalised = filePath.replace(/\\/g, '/');
-    const ext = path.extname(normalised);
+  const normalised = filePath.replace(/\\/g, '/');
+  const ext = path.extname(normalised);
 
-    if (ext === '.pm') {
-        const pkg = inferPackageName(filePath) ?? path.basename(normalised, '.pm');
-        const content = `package ${pkg};\nuse strict;\nuse warnings;\n\n\n\n1;\n`;
-        return { kind: FileKind.Module, content };
-    }
+  if (ext === '.pm') {
+    const pkg = inferPackageName(filePath) ?? path.basename(normalised, '.pm');
+    const content = `package ${pkg};\nuse strict;\nuse warnings;\n\n\n\n1;\n`;
+    return { kind: FileKind.Module, content };
+  }
 
-    if (ext === '.t') {
-        const content = `use strict;\nuse warnings;\nuse Test::More;\n\n\n\ndone_testing;\n`;
-        return { kind: FileKind.Test, content };
-    }
+  if (ext === '.t') {
+    const content = `use strict;\nuse warnings;\nuse Test::More;\n\n\n\ndone_testing;\n`;
+    return { kind: FileKind.Test, content };
+  }
 
-    return null;
+  return null;
 }

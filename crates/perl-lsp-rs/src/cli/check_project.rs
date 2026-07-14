@@ -60,7 +60,7 @@ fn is_supported_perl_file(path: &Path) -> bool {
 }
 
 fn process_file(path: &Path, path_str: String, results: &mut ProjectCheckResults) {
-    let source = match std::fs::read_to_string(path) {
+    let source = match crate::util::read_text_file_with_encoding(path) {
         Ok(s) => s,
         Err(e) => {
             record_file_error(path_str, format!("read error: {e}"), results);

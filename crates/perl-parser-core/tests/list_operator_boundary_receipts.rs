@@ -160,3 +160,8 @@ fn map_expression_keeps_split_source_inside_map() -> Result<(), String> {
 
     Ok(())
 }
+
+#[test]
+fn parenthesized_bare_call_accepts_numeric_arg_expression() {
+    assert_clean_parse(r#"print "not " unless (unilist 0 || 5) == 6;"#);
+}

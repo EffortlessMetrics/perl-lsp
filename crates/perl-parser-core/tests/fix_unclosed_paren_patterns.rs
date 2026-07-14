@@ -13,6 +13,20 @@
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
+use perl_parser_core::Parser;
+use perl_tdd_support::must;
+
+fn assert_no_parser_diagnostics(source: &str) {
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+    assert!(
+        parser.get_errors().is_empty(),
+        "expected no parser diagnostics for source:\n{}\n\nsexp:\n{}\n\ndiagnostics:\n{:?}",
+        source,
+        ast.to_sexp(),
+        parser.get_errors()
+    );
+}
 
 // -- Sub-pattern 1: fused `x<digits>` operator --
 
@@ -108,6 +122,11 @@ fn test_heredoc_as_string_in_list() {
 fn test_heredoc_multiline_call() {
     // Heredoc used as value in a function call
     assert_clean_parse("print(<<END);\nhello world\nEND\n");
+}
+
+#[test]
+fn test_single_quoted_punctuation_heredoc_in_call() {
+    assert_no_parser_diagnostics("write_file('bleah.pm', <<'**BLEAH**'\nbody\n**BLEAH**\n);\n");
 }
 
 // -- Sub-pattern 4: method chain `->` inside paren argument list --

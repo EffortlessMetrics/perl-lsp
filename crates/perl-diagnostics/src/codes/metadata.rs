@@ -32,6 +32,23 @@ fn is_phrase_word_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
+/// Returns `true` if `haystack` contains `.pm` as a whole file extension —
+/// i.e., the `.pm` is not immediately followed by an alphanumeric character,
+/// an underscore, or another dot.
+///
+/// This prevents false positives from Perl error messages that mention
+/// filenames with `.pm` as a non-boundary substring such as `.pml`, `.pmx`,
+/// `.pm2`, or `.pm.bak`.
+fn has_pm_file_extension(haystack: &str) -> bool {
+    haystack.match_indices(".pm").any(|(start, matched)| {
+        let end = start + matched.len();
+        !haystack
+            .as_bytes()
+            .get(end)
+            .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'.')
+    })
+}
+
 impl DiagnosticCode {
     /// Get the string representation of this code.
     pub fn as_str(&self) -> &'static str {
@@ -543,7 +560,7 @@ impl DiagnosticCode {
             Some(Self::UninitializedVariable)
         // Real Perl: "Can't locate Foo/Bar.pm in @INC (...) at file.pl line N."
         } else if contains_diagnostic_phrase(&msg_lower, "can't locate")
-            && msg_lower.contains(".pm")
+            && has_pm_file_extension(&msg_lower)
         {
             Some(Self::ModuleNotFound)
         // Real Perl: `Bareword "foo" not allowed while 'strict subs' in use at file.pl line N.`
@@ -631,5 +648,75 @@ impl DiagnosticCode {
             "PC005" => Some(Self::CriticSeverity5),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DiagnosticCode, has_pm_file_extension};
+
+    // --- has_pm_file_extension boundary tests ---
+
+    #[test]
+    fn pm_extension_matches_real_perl_can_t_locate() {
+        // Real Perl: "Can't locate Foo/Bar.pm in @INC ..."  — .pm followed by space
+        assert!(has_pm_file_extension("can't locate foo/bar.pm in @inc"));
+        assert!(has_pm_file_extension("can't locate scalar/util.pm in @inc"));
+        // .pm at end of string (hypothetical but must not panic)
+        assert!(has_pm_file_extension("foo/bar.pm"));
+        // .pm followed by ) or " (e.g. inside @INC listing)
+        assert!(has_pm_file_extension("foo/bar.pm)"));
+    }
+
+    #[test]
+    fn pm_extension_rejects_pml_false_positive() {
+        // Issue #2212: .pml must not be treated as .pm
+        assert!(!has_pm_file_extension("can't locate foo/bar.pml in @inc"));
+    }
+
+    #[test]
+    fn pm_extension_rejects_pmx_false_positive() {
+        assert!(!has_pm_file_extension("can't locate foo/bar.pmx in @inc"));
+    }
+
+    #[test]
+    fn pm_extension_rejects_pm_digit_false_positive() {
+        // foo.pm2 must not be treated as a .pm file
+        assert!(!has_pm_file_extension("can't locate foo/bar.pm2 in @inc"));
+    }
+
+    #[test]
+    fn pm_extension_rejects_pm_bak_false_positive() {
+        // .pm.bak — the dot after .pm must prevent a match
+        assert!(!has_pm_file_extension("can't locate foo/bar.pm.bak in @inc"));
+    }
+
+    #[test]
+    fn pm_extension_empty_string_returns_false() {
+        assert!(!has_pm_file_extension(""));
+        assert!(!has_pm_file_extension("can't locate something"));
+    }
+
+    // --- DiagnosticCode::from_message integration (lib-level) ---
+
+    #[test]
+    fn from_message_module_not_found_positive_control() {
+        assert_eq!(
+            DiagnosticCode::from_message("Can't locate Foo/Bar.pm in @INC"),
+            Some(DiagnosticCode::ModuleNotFound),
+        );
+        assert_eq!(
+            DiagnosticCode::from_message("can't locate My/Module.pm in @inc"),
+            Some(DiagnosticCode::ModuleNotFound),
+        );
+    }
+
+    #[test]
+    fn from_message_module_not_found_no_false_positive_on_pml() {
+        // Regression guard for issue #2212
+        assert_eq!(DiagnosticCode::from_message("Can't locate Foo/Bar.pml in @INC"), None,);
+        assert_eq!(DiagnosticCode::from_message("Can't locate Foo/Bar.pmx in @INC"), None,);
+        assert_eq!(DiagnosticCode::from_message("Can't locate Foo/Bar.pm2 in @INC"), None,);
+        assert_eq!(DiagnosticCode::from_message("Can't locate Foo/Bar.pm.bak in @INC"), None,);
     }
 }

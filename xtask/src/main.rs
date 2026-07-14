@@ -22,6 +22,7 @@ use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gate_policy::GatePolicyProfile;
 use tasks::gates::{GateTier, OutputFormat as GatesOutputFormat};
+use tasks::issue_plan::IssuePlanOutputFormat;
 use tasks::methodology_gate::MethodologyOutputFormat;
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
@@ -59,6 +60,11 @@ enum Commands {
     /// Run format and clippy checks only (no tests)
     CheckOnly,
 
+    /// Verify every workspace member has package-local agent context
+    /// (CLAUDE.md), an exemption, or a tracked context-debt entry
+    /// (`.ci/policies/agent-context-policy.toml`).
+    CheckAgentContext,
+
     /// Verify the governed Clippy lint policy ledger and workspace inheritance.
     CheckLintPolicy,
 
@@ -72,6 +78,16 @@ enum Commands {
 
     /// Verify DevEx docs match the toolchain and command surface.
     CheckDevexDocs,
+
+    /// Verify first-mile product surfaces stay native-only (no legacy bridge /
+    /// external-tool-required framing).
+    CheckNativeProductSurface {
+        /// Also fail on bare external-tool names (`perltidy`, `perlcritic`,
+        /// `Perl::LanguageServer`, ...) that appear on a first-mile `.md`
+        /// surface without a native-first qualifier on the same line.
+        #[arg(long)]
+        strict: bool,
+    },
 
     /// Validate Real Perl Editor Trust provider/support claim tables.
     CheckProviderConfidenceMatrix,
@@ -117,10 +133,51 @@ enum Commands {
     /// Validate workspace-symbol class promotion registry.
     CheckWorkspaceSymbolClasses,
 
+    /// Deterministic, program-aware work selector (#3624, M3 of the
+    /// enablement train #3612). READ-ONLY: selects the next eligible
+    /// slice of work from live evidence, never creates branches/worktrees/PRs.
+    Goals {
+        #[command(subcommand)]
+        command: GoalsCommand,
+    },
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
         command: QueueCommand,
+    },
+
+    /// Emit a machine-produced session-start receipt capturing checkout
+    /// identity (repo/branch/SHA relative to `origin/main`) and an advisory
+    /// staleness liveness check (M5 phase 4, #3777). READ-ONLY except for
+    /// `git fetch origin main` and writing the receipt JSON to `--out`;
+    /// never mutates a branch, worktree, PR, or ledger. Always exits 0 --
+    /// staleness is a WARNING, not a build gate (build-lease enforcement is
+    /// M5 phase 3, a separate deliverable).
+    #[command(name = "session-receipt")]
+    SessionReceipt {
+        /// Emit machine-readable JSON to stdout (also always written to `--out`).
+        #[arg(long)]
+        json: bool,
+
+        /// Stamp an explicit program id into the receipt. Portfolio state does
+        /// not auto-select a repository-global program.
+        #[arg(long)]
+        program: Option<String>,
+
+        /// Optional lane label to stamp into the receipt. No auto-detection --
+        /// lane is a runtime work-item selection, not inherent checkout state.
+        #[arg(long)]
+        lane: Option<String>,
+
+        /// Output path for the receipt JSON (default: `target/receipts/session-start.json`).
+        #[arg(long)]
+        out: Option<PathBuf>,
+
+        /// Commits-behind-`origin/main` threshold that triggers the advisory
+        /// staleness WARNING.
+        #[arg(long, default_value_t = session_receipt::DEFAULT_WARN_THRESHOLD)]
+        warn_threshold: u32,
     },
 
     /// PR-related local tooling (title check, etc.)
@@ -158,6 +215,64 @@ enum Commands {
     PrLedger {
         #[command(subcommand)]
         command: PrLedgerCommand,
+    },
+
+    /// Issue Research / Plan Review Desk tooling (report-only audit, etc.).
+    #[command(name = "issue-plan")]
+    IssuePlan {
+        #[command(subcommand)]
+        command: IssuePlanSubcommand,
+    },
+
+    /// Writer admission — read-only pre-admission diagnostic (#3957 W1).
+    /// Reports a PASS/BLOCK/NOT_PROVEN verdict with per-check reasons.
+    /// Never mutates git state, the filesystem, or GitHub.
+    #[command(name = "writer-admission")]
+    WriterAdmission {
+        /// Target branch being admitted (defaults to the current branch).
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Canonical base ref (e.g. origin/main).
+        #[arg(long, default_value = "origin/main")]
+        base: String,
+
+        /// Worktree/checkout path to inspect (defaults to the CWD).
+        #[arg(long)]
+        worktree: Option<PathBuf>,
+
+        /// Expected SHA for the canonical base. Omit to skip the
+        /// base-ref-mismatch comparison.
+        #[arg(long)]
+        expected_base_sha: Option<String>,
+
+        /// GitHub repo (owner/name) for the writer-collision PR-ownership
+        /// check.
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// JSON fixture (offline / deterministic tests) instead of live
+        /// git/gh.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Emit JSON instead of human-readable text.
+        #[arg(long)]
+        json: bool,
+
+        /// Disk-floor GB threshold (matches clean-worktrees.sh FLOOR_GB).
+        #[arg(long, default_value_t = 200.0)]
+        floor_gb: f64,
+
+        /// Disk-floor percentage threshold (matches clean-worktrees.sh
+        /// FLOOR_PCT).
+        #[arg(long, default_value_t = 5.0)]
+        floor_pct: f64,
+
+        /// Large-staged-change-set threshold (synthetic mass-staged
+        /// additions guard).
+        #[arg(long, default_value_t = 1000)]
+        large_staged_threshold: u32,
     },
 
     /// Build project with various configurations
@@ -766,6 +881,66 @@ enum Commands {
         format: String,
     },
 
+    /// Resolve a change set (base/head SHAs + changed paths) via the single
+    /// #3985 `change_set::resolve_change_set` base-resolver + diff — the
+    /// runtime-neutral interface `hooks/pre-push` consumes (#3985 Slice 3A)
+    /// so the hook never needs its own shell base-resolution algorithm.
+    ///
+    /// `--base auto` (the default) walks the main-first candidate chain
+    /// (`origin/main`, `main`, `HEAD~1`) and never falls back to
+    /// `origin/master` (issue #3985: that ref does not exist on this
+    /// remote). An explicit `--base` must resolve on its own — an
+    /// unresolvable explicit base is a loud, non-zero-exit error, never a
+    /// silent substitution or an empty-changed-paths "success".
+    ///
+    /// `--format json` (default) emits the bounded contract
+    /// `{base_sha, head_sha, changed_paths}`. `--format paths` emits one
+    /// changed path per line and nothing else — the lean, `jq`-free shape
+    /// `hooks/pre-push` parses.
+    ///
+    /// Example: `cargo xtask change-set --base auto --head HEAD --format paths`
+    ChangeSet {
+        /// Base git ref to diff against. `"auto"` (default) triggers
+        /// main-first candidate resolution; any other value is treated as
+        /// an explicit base that must resolve on its own.
+        #[arg(long, default_value = "auto")]
+        base: String,
+
+        /// Head git ref/SHA to diff to.
+        #[arg(long, default_value = "HEAD")]
+        head: String,
+
+        /// Output format: `json` (default, bounded contract) or `paths`
+        /// (one changed path per line, no SHAs). Any other value is a
+        /// loud error, never a silent fallback to `json`.
+        #[arg(long, default_value = "json")]
+        format: String,
+
+        /// Repository root to resolve the change set against. Defaults to
+        /// the perl-lsp workspace root. Override for testing against a
+        /// fixture repository.
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+
+    /// Shadow-parity measurement: compare the pre-push shell selector's
+    /// doc-only/single-crate taxonomy against `ci_scope::classify_files`'s
+    /// Rust taxonomy across a fixed corpus of 11 representative
+    /// changed-path scenarios (#3985 Slice 3B).
+    ///
+    /// MEASUREMENT ONLY — selects, skips, and routes nothing. `hooks/pre-push`
+    /// and `ci_scope.rs` are untouched; this command only reports where the
+    /// two selectors agree or differ, and in which direction, to feed the
+    /// maintainer's pending coverage decision (see #3985 comments).
+    ///
+    /// Example: `cargo xtask change-set-parity --format markdown`
+    ChangeSetParity {
+        /// Output format: `text` (default, human-readable), `markdown` (the
+        /// committed-report table shape), or `json`.
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+
     /// Emit a markdown PR gate summary (dry-run: stdout only, no GitHub posting).
     ///
     /// Computes what CI would run for the current branch diff against `--base`,
@@ -855,6 +1030,13 @@ enum Commands {
     NativeTooling {
         #[command(subcommand)]
         command: NativeToolingCommand,
+    },
+
+    /// Evaluate Perl distribution Kwalitee indicators (measurable
+    /// distribution quality) and emit a scored receipt.
+    PerlKwalitee {
+        #[command(subcommand)]
+        command: PerlKwaliteeCommand,
     },
 
     /// Run production security hardening checks.
@@ -1278,6 +1460,31 @@ enum Commands {
         /// Write receipt JSON to target/receipts/corpus-sweep.json
         #[arg(long)]
         receipt: bool,
+
+        /// Prefix for the generated receipt file target/receipts/<profile>-corpus-sweep.json
+        /// (must be a relative slug — no `/`, `\`, `..`, or other path
+        /// characters; see `profile_slug_parser`).
+        #[arg(long, value_parser = profile_slug_parser)]
+        profile: Option<String>,
+    },
+
+    /// Run deterministic fresh-vs-token-replay proof and write a machine-readable receipt.
+    #[command(name = "tree-sitter-incremental-proof")]
+    TreeSitterIncrementalProof {
+        /// Measurement profile controlling fixture breadth and iteration count.
+        #[arg(long, value_enum, default_value_t = incremental_proof::Profile::Pr)]
+        profile: incremental_proof::Profile,
+
+        /// Receipt JSON path. Defaults to target/receipts/tree-sitter-incremental-proof-<profile>.json.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Run upstream Perl core test harness against perl-lsp compiler modes.
+    #[command(name = "perl-core-harness")]
+    PerlCoreHarness {
+        #[command(subcommand)]
+        command: PerlCoreHarnessCommand,
     },
 
     /// Emit parser-ratchet scaffold receipts.
@@ -1624,12 +1831,59 @@ enum Commands {
         /// Verbose output (include quarantined gates)
         #[arg(long, short)]
         verbose: bool,
+
+        /// Explicit opt-in that this run inspects the staged tree (`git
+        /// write-tree`), never the working tree. Required for `--tier
+        /// commit` (issue #3786).
+        #[arg(long)]
+        staged: bool,
+    },
+
+    /// Ergonomic alias for `gates --tier commit --staged` (issue #3786).
+    ///
+    /// Commit-tier checks always inspect the staged tree — this subcommand
+    /// exists so the feedback-ladder command an agent types before `git
+    /// commit` is short and self-explanatory. There is no `--staged` flag
+    /// here (unlike `gates`): "precommit" already means staged by
+    /// definition, and a presence-only clap bool flag can't express "the
+    /// user explicitly opted out" anyway. Calls the exact same
+    /// implementation as `gates --tier commit --staged`; there is one
+    /// policy authority.
+    Precommit {
+        /// Output format (default: human)
+        #[arg(long, short, value_enum, default_value = "human")]
+        format: GatesOutputFormat,
+
+        /// Emit receipt JSON (also writes to target/receipts/receipt.json)
+        #[arg(long, short)]
+        receipt: bool,
     },
 
     /// Inspect and validate effective gate policy profiles.
     GatePolicy {
         #[command(subcommand)]
         command: GatePolicyCommand,
+    },
+
+    /// Advisory Changie release-note ledger checks (issue #3768).
+    ///
+    /// FOUNDATION / ADVISORY: prints findings and always exits 0; never blocks
+    /// a PR. Changes no release execution.
+    Changelog {
+        #[command(subcommand)]
+        command: ChangelogCommand,
+    },
+
+    /// Workflow Contracts checks — actionlint + zizmor + native contract
+    /// checks (issue #3788, parent #3785).
+    ///
+    /// FOUNDATION / ADVISORY-UNARMED: prints findings and always exits 0 in
+    /// this PR (the advisory boundary itself is not yet armed); never blocks
+    /// a PR. Does not prove repo-specific merge semantics — see
+    /// `xtask/src/tasks/workflows.rs` module docs for the boundary.
+    Workflows {
+        #[command(subcommand)]
+        command: WorkflowsCommand,
     },
 
     /// Detect contradictory PR label states and emit a methodology receipt.
@@ -1694,12 +1948,40 @@ enum Commands {
         crate_dir: String,
     },
 
-    /// Remove stale `.claude/worktrees` entries and prune Git metadata.
-    WorktreeCleanup,
+    /// Report (and, with `--force`, remove) stale `.claude/worktrees` entries.
+    ///
+    /// Defaults to a dry-run report: every agent worktree is classified
+    /// KEEP or REMOVE with a reason, but nothing is deleted. A worktree is
+    /// always classified KEEP — never force-removed — when it is dirty
+    /// (uncommitted changes), locked, on a branch with an open PR (or PR
+    /// status could not be determined), or is the root checkout. Pass
+    /// `--force` to actually remove the REMOVE-classified worktrees. See
+    /// issue #4097.
+    WorktreeCleanup {
+        /// Repository root whose `.claude/worktrees/` entries should be
+        /// evaluated. Defaults to the perl-lsp workspace root. Override for
+        /// testing against a fixture repository.
+        #[arg(long)]
+        root: Option<PathBuf>,
+
+        /// Actually remove worktrees classified REMOVE. Default is a
+        /// dry-run report only — nothing is deleted without this flag.
+        #[arg(long)]
+        force: bool,
+    },
 
     /// Validate the committed Claude swarm agent roster contract.
     ValidateSwarmAgentRoster {
         /// Repository root containing `.claude/agents/agent-roster.json`.
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+
+    /// Enforce the M4b capability boundary: review/audit agents are
+    /// mechanically read-only (no Edit/Write/NotebookEdit/Agent in their
+    /// tools: allowlist). See issue #3763.
+    CheckAgentCapabilities {
+        /// Repository root containing `.claude/agents`.
         #[arg(long)]
         root: Option<PathBuf>,
     },
@@ -2075,6 +2357,146 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum PerlCoreHarnessCommand {
+    /// Prepare a disposable upstream Perl test tree (future slice).
+    Prepare {
+        /// Upstream Perl tag or commit to prepare.
+        #[arg(long = "ref")]
+        perl_ref: String,
+
+        /// Output directory for source clone and prepared tree.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+    },
+
+    /// Discover upstream Perl core tests through t/TEST or t/harness --dumptests.
+    Discover {
+        /// Prepared upstream Perl source/build tree.
+        #[arg(long)]
+        perl_tree: PathBuf,
+
+        /// Host Perl used to run upstream t/TEST or t/harness.
+        #[arg(long, default_value = "perl")]
+        host_perl: PathBuf,
+
+        /// Upstream scheduler to query.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessRunner::Test)]
+        runner: perl_core_harness::HarnessRunner,
+
+        /// Staged upstream Perl core profile.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
+        profile: perl_core_harness::HarnessProfile,
+
+        /// Discovery JSON output path.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Run discovered tests in parse, compile, or execute mode (future slice).
+    Run {
+        /// Harness mode to run.
+        #[arg(long, value_enum)]
+        mode: perl_core_harness::HarnessMode,
+
+        /// Prepared upstream Perl source/build tree.
+        #[arg(long)]
+        perl_tree: PathBuf,
+
+        /// Host Perl used to run upstream t/TEST or t/harness.
+        #[arg(long, default_value = "perl")]
+        host_perl: PathBuf,
+
+        /// Upstream scheduler to run.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessRunner::Test)]
+        runner: perl_core_harness::HarnessRunner,
+
+        /// Staged upstream Perl core profile.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
+        profile: perl_core_harness::HarnessProfile,
+
+        /// Explicit Perl core test path to run. Execute mode currently requires selected base tests.
+        #[arg(long = "test")]
+        tests: Vec<String>,
+
+        /// Run report JSON output path.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Prebuilt perl-core-test-runner binary. Defaults to target/agent/perl-core-test-runner.
+        #[arg(long)]
+        runner_binary: Option<PathBuf>,
+    },
+
+    /// Render the latest Perl core harness report (future slice).
+    Report,
+
+    /// Manage checked-in Perl core harness baselines (future slice).
+    Baseline {
+        /// Harness mode covered by the baseline.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessMode::Compile)]
+        mode: perl_core_harness::HarnessMode,
+
+        /// Staged upstream Perl core profile covered by the baseline.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
+        profile: perl_core_harness::HarnessProfile,
+
+        /// Run report JSON to check or accept.
+        #[arg(long)]
+        report: Option<PathBuf>,
+
+        /// Checked-in baseline JSON to read or update.
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+
+        /// Check the report against the baseline. This is the default when --accept is absent.
+        #[arg(long, alias = "enforce")]
+        check: bool,
+
+        /// Accept the latest report as the baseline.
+        #[arg(long, conflicts_with = "check")]
+        accept: bool,
+    },
+
+    /// Run manual/advisory real-tree discovery + parse/compile smoke receipts.
+    Smoke {
+        /// Prepared upstream Perl source/build tree.
+        #[arg(long)]
+        perl_tree: PathBuf,
+
+        /// Host Perl used to run upstream t/TEST or t/harness.
+        #[arg(long, default_value = "perl")]
+        host_perl: PathBuf,
+
+        /// Upstream scheduler to run.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessRunner::Test)]
+        runner: perl_core_harness::HarnessRunner,
+
+        /// Staged upstream Perl core profile.
+        #[arg(long, value_enum, default_value_t = perl_core_harness::HarnessProfile::Base)]
+        profile: perl_core_harness::HarnessProfile,
+
+        /// Smoke modes to run, comma-separated. Defaults to parse,compile.
+        #[arg(long, value_enum, value_delimiter = ',', default_values_t = [
+            perl_core_harness::HarnessMode::Parse,
+            perl_core_harness::HarnessMode::Compile,
+        ])]
+        modes: Vec<perl_core_harness::HarnessMode>,
+
+        /// Directory for discovery, parse, compile, and smoke JSON receipts.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+
+        /// Prebuilt perl-core-test-runner binary. Defaults to target/agent/perl-core-test-runner.
+        #[arg(long)]
+        runner_binary: Option<PathBuf>,
+
+        /// Requested upstream Perl ref recorded in the smoke receipt.
+        #[arg(long = "perl-ref")]
+        perl_ref: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
 enum ParserRatchetCommand {
     /// Produce an initial parser-ratchet scaffold receipt.
     Run {
@@ -2135,6 +2557,64 @@ enum GatePolicyCommand {
         /// Profile to evaluate (pr/nightly/release).
         #[arg(long, value_enum, default_value = "pr")]
         profile: GatePolicyProfile,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ChangelogCommand {
+    /// Advisory check that a PR carries a changelog disposition (fragment or
+    /// exemption) and that any added fragment is schema-valid and renders.
+    Check {
+        /// Base ref to diff `HEAD` against (default: `origin/main`).
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Read the changed-file list from this file (one path per line)
+        /// instead of running `git diff`. CI passes the PR's changed files.
+        #[arg(long)]
+        changed_files: Option<PathBuf>,
+
+        /// Path to a file containing the PR body (for exemption-marker
+        /// detection). Falls back to the `CHANGELOG_PR_BODY` env var.
+        #[arg(long)]
+        pr_body_file: Option<PathBuf>,
+
+        /// Validate and render the sample fragments (`.changes/samples/`)
+        /// instead of checking a PR's changed files.
+        #[arg(long)]
+        self_test: bool,
+
+        /// Override the repository root. Testing seam; unused in CI.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkflowsCommand {
+    /// Advisory check of `.github/workflows/*.yml` against the Workflow
+    /// Contracts policy: actionlint + zizmor + native local-ref/permissions/
+    /// pinning checks.
+    Check {
+        /// Base ref to resolve the policy boundary against (default:
+        /// `origin/main`).
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Skip actionlint/zizmor if not installed locally (degrades to an
+        /// INFO skip instead of an instrument failure); still runs all
+        /// native checks against the real tree. For local dev; CI always
+        /// installs both tools first and omits this flag.
+        #[arg(long)]
+        self_test: bool,
+
+        /// Write a JSON findings receipt to this path.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Override the repository root. Testing seam; unused in CI.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
     },
 }
 
@@ -2264,6 +2744,52 @@ enum ReleaseCommand {
         /// Permit a dist that does not cover every contract target triple.
         #[arg(long)]
         allow_partial: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum PerlKwaliteeCommand {
+    /// Evaluate the indicators and fail on a non-clean verdict.
+    Check {
+        /// Evaluation profile.
+        #[arg(long, value_enum, default_value = "pr")]
+        profile: perl_kwalitee::PerlKwaliteeProfile,
+        /// Release `dist` directory (required to satisfy release indicators).
+        #[arg(long)]
+        dist: Option<PathBuf>,
+        /// Treat unverified mandatory indicators as failures.
+        #[arg(long)]
+        strict: bool,
+        /// Evaluate this distribution tree instead of the live workspace. In
+        /// this mode the crate reads only native + receipt-backed indicators
+        /// under the given root and does not run the live-repo gates
+        /// (`update-status`); use it to evaluate an arbitrary tree.
+        #[arg(long)]
+        repo_root: Option<PathBuf>,
+    },
+    /// Evaluate the indicators and write JSON + Markdown receipts.
+    Report {
+        /// Evaluation profile.
+        #[arg(long, value_enum, default_value = "pr")]
+        profile: perl_kwalitee::PerlKwaliteeProfile,
+        /// Release `dist` directory (required to satisfy release indicators).
+        #[arg(long)]
+        dist: Option<PathBuf>,
+        /// JSON receipt output path.
+        #[arg(long)]
+        json: Option<PathBuf>,
+        /// Markdown receipt output path.
+        #[arg(long)]
+        markdown: Option<PathBuf>,
+        /// Evaluate this distribution tree instead of the live workspace
+        /// (see `check --repo-root`).
+        #[arg(long)]
+        repo_root: Option<PathBuf>,
+    },
+    /// Explain a single indicator by id.
+    Explain {
+        /// The indicator id, e.g. `release.no_external_tooling`.
+        indicator: String,
     },
 }
 
@@ -2641,6 +3167,24 @@ enum CiSubcommand {
         #[arg(long = "changed-file")]
         changed_file: Vec<String>,
     },
+
+    /// Explain the blocking CI check failure with a local reproduction path.
+    ///
+    /// Reads gate receipts under `target/receipts/` and emits a compact summary:
+    /// blocking check name, failure class, source file:line, and the exact
+    /// reproduce command.
+    ///
+    /// Degrades gracefully when no receipts exist — prints an inconclusive message
+    /// and hints to run `cargo xtask gates` first.
+    ///
+    /// Remote run artifact download (`--run-id`) is tracked in #2652.
+    /// Base-branch comparison (`--base`) is tracked in #2653.
+    #[command(name = "explain")]
+    Explain {
+        /// Receipt JSON path to parse (default: target/receipts/receipt.json).
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2689,6 +3233,37 @@ enum PrLedgerCommand {
 }
 
 #[derive(Subcommand)]
+enum IssuePlanSubcommand {
+    /// Report-only audit of issue-plan quality (builder-ready completeness,
+    /// label drift, `#0000` placeholder references). Always exits 0.
+    Audit {
+        /// JSON fixture: an array of issues (offline / testing).
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Repository (owner/name) for live `gh issue list`.
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// Scope the live query to a label (repeatable).
+        #[arg(long = "label")]
+        labels: Vec<String>,
+
+        /// Receipt JSON output path.
+        #[arg(long, default_value = "target/receipts/issue-plan-audit.json")]
+        receipt: PathBuf,
+
+        /// Do not write the receipt to disk.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value = "human")]
+        format: IssuePlanOutputFormat,
+    },
+}
+
+#[derive(Subcommand)]
 enum DevexCommand {
     /// Plan the cheapest correct local proof commands for the current diff.
     Plan {
@@ -2732,6 +3307,50 @@ enum DevexCommand {
 }
 
 #[derive(Subcommand)]
+enum GoalsCommand {
+    /// Select the next eligible slice of work from live evidence
+    /// (main, live open GitHub PRs, the M2 manifest chain, and — for
+    /// milestone-ledger programs — the `[[milestone]]` ledger).
+    /// READ-ONLY: never creates a branch, worktree, or PR.
+    Next {
+        /// Explicitly select a program by id (`.perl-lsp/goals/programs/<id>.toml`).
+        /// No implicit repository-global program is selected; pass `--program`
+        /// to inspect one program explicitly.
+        #[arg(long)]
+        program: Option<String>,
+
+        /// Optional fixture JSON to parse instead of live `gh pr list` data.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Emit machine-readable JSON instead of human-readable text.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Diagnose milestones whose self-reported ledger status may have
+    /// drifted from live GitHub reality (e.g. `in_progress` with a merged,
+    /// not open, PR) or that lack the identity `next`'s selector needs.
+    /// READ-ONLY, advisory (#3696 item B): never mutates a ledger or PR.
+    /// Exits non-zero when findings exist.
+    Reconcile {
+        /// Explicitly select a program by id (`.perl-lsp/goals/programs/<id>.toml`).
+        /// No implicit repository-global program is selected; pass `--program`
+        /// to reconcile one program explicitly.
+        #[arg(long)]
+        program: Option<String>,
+
+        /// Optional fixture JSON to parse instead of live `gh pr list` data.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Emit machine-readable JSON instead of human-readable text.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum QueueCommand {
     /// Capture the open PR queue into a stable JSON snapshot document.
     Snapshot {
@@ -2753,29 +3372,6 @@ enum QueueCommand {
         /// Fixture JSON input for deterministic health classification.
         #[arg(long)]
         fixture: Option<PathBuf>,
-    },
-
-    /// Project UI labels from canonical PR state receipts.
-    ProjectLabels {
-        /// Path to canonical queue state JSON.
-        #[arg(long, default_value = "target/receipts/queue-state.json")]
-        state: PathBuf,
-
-        /// Plan label changes without applying them (default).
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Apply projected label changes against GitHub. Requires GH_TOKEN.
-        #[arg(long)]
-        apply: bool,
-
-        /// Optional output path for the label-projection receipt JSON.
-        #[arg(long)]
-        receipt: Option<PathBuf>,
-
-        /// Path to projection rules TOML.
-        #[arg(long, default_value = ".ci/state/label-projection.toml")]
-        config: PathBuf,
     },
 }
 
@@ -2873,9 +3469,10 @@ enum UxScorecardOutputFormat {
 
 fn main() -> Result<()> {
     color_eyre::install()?;
+    run_cli(Cli::parse())
+}
 
-    let cli = Cli::parse();
-
+fn run_cli(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::List => {
             print_top_level_commands();
@@ -2893,11 +3490,14 @@ fn main() -> Result<()> {
                     changed_files: changed_file,
                 })
             }
+            Some(CiSubcommand::Explain { receipt }) => ci_explain::run(receipt),
         },
         Commands::CheckOnly => ci::check_only(),
+        Commands::CheckAgentContext => check_agent_context::run(),
         Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::CheckDevexDocs => devex_docs::run(),
+        Commands::CheckNativeProductSurface { strict } => native_product_surface::run_with(strict),
         Commands::CheckProviderConfidenceMatrix => provider_confidence_matrix::run(),
         Commands::CheckSupportClaims => provider_confidence_matrix::run_support_claims(),
         Commands::CheckActiveGoalManifest => active_goal_manifest::run(),
@@ -2909,19 +3509,28 @@ fn main() -> Result<()> {
         Commands::CheckLsp318Claims => lsp_318_claims::run(),
         Commands::GenerateLsp318Matrix { check } => lsp_318_matrix::run(check),
         Commands::CheckWorkspaceSymbolClasses => workspace_symbol_classes::run(),
+        Commands::Goals { command } => match command {
+            GoalsCommand::Next { program, fixture, json } => goals::next(program, fixture, json),
+            GoalsCommand::Reconcile { program, fixture, json } => {
+                let finding_count = goals::reconcile(program, fixture, json)?;
+                if finding_count > 0 {
+                    // Exit 1: findings exist. Distinct from a hard parse/gh
+                    // error (which already propagates via `?` above) --
+                    // mirrors the `pr-close-proof` non-zero-exit-lives-in-
+                    // main.rs pattern (#3696 item B); the `goals` module
+                    // itself never calls `process::exit`.
+                    std::process::exit(1);
+                }
+                Ok(())
+            }
+        },
+        Commands::SessionReceipt { json, program, lane, out, warn_threshold } => {
+            session_receipt::run(json, program, lane, out, warn_threshold)
+        }
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {
                 queue_health::run(queue_health::QueueHealthArgs { receipt, fixture })
-            }
-            QueueCommand::ProjectLabels { state, dry_run, apply, receipt, config } => {
-                label_projector::run_project_labels(label_projector::LabelProjectorArgs {
-                    state,
-                    dry_run,
-                    apply,
-                    receipt,
-                    config,
-                })
             }
         },
         Commands::Pr { command } => match command {
@@ -3211,6 +3820,12 @@ fn main() -> Result<()> {
         Commands::CiScope { base, format } => {
             ci_scope::run(ci_scope::CiScopeConfig { base, format })
         }
+        Commands::ChangeSet { base, head, format, root } => {
+            change_set::run(change_set::ChangeSetConfig { base, head, format, root })
+        }
+        Commands::ChangeSetParity { format } => {
+            shadow_parity::run(shadow_parity::ShadowParityConfig { format })
+        }
         Commands::CiPrSummary { base, dry_run } => {
             ci_pr_summary::run(ci_pr_summary::CiPrSummaryConfig { base, dry_run })
         }
@@ -3328,6 +3943,24 @@ fn main() -> Result<()> {
                 })
             }
         },
+        Commands::PerlKwalitee { command } => match command {
+            PerlKwaliteeCommand::Check { profile, dist, strict, repo_root } => {
+                perl_kwalitee::check(profile, dist, strict, repo_root)
+            }
+            PerlKwaliteeCommand::Report { profile, dist, json, markdown, repo_root } => {
+                // Default receipt paths anchor to the tree being evaluated:
+                // the override root when given, else the live workspace root.
+                let anchor = match &repo_root {
+                    Some(r) => r.clone(),
+                    None => utils::project_root()?,
+                };
+                let json = json.unwrap_or_else(|| perl_kwalitee::default_json_path(&anchor));
+                let markdown =
+                    markdown.unwrap_or_else(|| perl_kwalitee::default_markdown_path(&anchor));
+                perl_kwalitee::report(profile, dist, json, markdown, repo_root)
+            }
+            PerlKwaliteeCommand::Explain { indicator } => perl_kwalitee::explain(&indicator),
+        },
         Commands::SecurityHardening => hardening::security_hardening(),
         Commands::PerformanceHardening => hardening::performance_hardening(),
         Commands::ProductionGatesValidation => hardening::production_gates_validation(),
@@ -3383,22 +4016,83 @@ fn main() -> Result<()> {
             enforce,
             verbose,
             receipt,
-        } => {
-            let base_roots = roots.unwrap_or_else(parser_corpus_sweep::default_base_roots);
-            let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
-            parser_corpus_sweep::run(parser_corpus_sweep::SweepConfig {
-                corpus_profile: None,
-                base_roots,
-                corpus_roots,
-                manifest_path: manifest,
-                manifest_perl5lib: Vec::new(),
-                output_path: output,
-                baseline_path: baseline,
-                enforce,
-                verbose,
-                receipt,
-            })
+            profile,
+        } => parser_corpus_sweep::run(build_parser_corpus_sweep_config(
+            roots, manifest, output, baseline, enforce, verbose, receipt, profile,
+        )),
+        Commands::TreeSitterIncrementalProof { profile, output } => {
+            incremental_proof::run(profile, output)
         }
+        Commands::PerlCoreHarness { command } => match command {
+            PerlCoreHarnessCommand::Prepare { perl_ref, output_dir } => {
+                perl_core_harness::prepare(perl_core_harness::PrepareConfig {
+                    perl_ref,
+                    output_dir,
+                })
+            }
+            PerlCoreHarnessCommand::Discover { perl_tree, host_perl, runner, profile, output } => {
+                perl_core_harness::discover(perl_core_harness::DiscoverConfig {
+                    perl_tree,
+                    host_perl,
+                    runner,
+                    profile,
+                    output,
+                })
+            }
+            PerlCoreHarnessCommand::Run {
+                mode,
+                perl_tree,
+                host_perl,
+                runner,
+                profile,
+                tests,
+                output,
+                runner_binary,
+            } => perl_core_harness::run_mode(perl_core_harness::RunConfig {
+                perl_tree,
+                host_perl,
+                runner,
+                mode,
+                profile,
+                tests,
+                output,
+                runner_binary,
+            }),
+            PerlCoreHarnessCommand::Report => perl_core_harness::report(),
+            PerlCoreHarnessCommand::Baseline {
+                mode,
+                profile,
+                report,
+                baseline,
+                check: _,
+                accept,
+            } => perl_core_harness::baseline(perl_core_harness::BaselineConfig {
+                mode,
+                profile,
+                report,
+                baseline,
+                accept,
+            }),
+            PerlCoreHarnessCommand::Smoke {
+                perl_tree,
+                host_perl,
+                runner,
+                profile,
+                modes,
+                output_dir,
+                runner_binary,
+                perl_ref,
+            } => perl_core_harness::smoke(perl_core_harness::SmokeConfig {
+                perl_tree,
+                host_perl,
+                runner,
+                profile,
+                modes,
+                output_dir,
+                runner_binary,
+                perl_ref,
+            }),
+        },
         Commands::ParserRatchet { command } => match command {
             ParserRatchetCommand::Run { profile, base, head, receipt, force_selected } => {
                 parser_ratchet::run(parser_ratchet::ParserRatchetRunConfig {
@@ -3660,6 +4354,7 @@ fn main() -> Result<()> {
             fail_fast,
             parallel,
             verbose,
+            staged,
         } => gates::run(gates::GateRunnerConfig {
             tier,
             gate_filter: gate,
@@ -3672,10 +4367,67 @@ fn main() -> Result<()> {
             fail_fast,
             parallel,
             verbose,
+            staged,
+        }),
+        Commands::Precommit { format, receipt } => gates::run(gates::GateRunnerConfig {
+            tier: GateTier::Commit,
+            output_format: format,
+            emit_receipt: receipt,
+            staged: true,
+            ..gates::GateRunnerConfig::default()
         }),
         Commands::GatePolicy { command } => match command {
             GatePolicyCommand::Check => tasks::gate_policy::check(),
             GatePolicyCommand::Effective { profile } => tasks::gate_policy::effective(profile),
+        },
+        Commands::Changelog { command } => match command {
+            ChangelogCommand::Check { base, changed_files, pr_body_file, self_test, root } => {
+                // Three-outcome contract (see xtask/src/tasks/changelog.rs docs):
+                //   Ok(PolicySatisfied | AdvisoryFinding) => exit 0.
+                //   Ok(BlockingViolation)                 => exit 1 (only reachable
+                //     once policy/changelog.toml's `blocking_enforced_from` is set
+                //     and reached).
+                //   Err(instrument/config failure)         => exit 2, distinct from
+                //     both — never a silent pass, never a policy verdict.
+                match tasks::changelog::check(base, changed_files, pr_body_file, self_test, root) {
+                    Ok(
+                        tasks::changelog::CheckOutcome::PolicySatisfied
+                        | tasks::changelog::CheckOutcome::AdvisoryFinding,
+                    ) => Ok(()),
+                    Ok(tasks::changelog::CheckOutcome::BlockingViolation) => {
+                        eprintln!("changelog check: blocking policy violation");
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("changelog check: instrument failure: {e}");
+                        std::process::exit(2);
+                    }
+                }
+            }
+        },
+        Commands::Workflows { command } => match command {
+            WorkflowsCommand::Check { base, self_test, receipt, root } => {
+                // Same three-outcome contract as `Commands::Changelog` above
+                // (see xtask/src/tasks/workflows.rs docs):
+                //   Ok(PolicySatisfied | AdvisoryFinding) => exit 0.
+                //   Ok(BlockingViolation)                 => exit 1 (unreachable
+                //     until policy/workflow-contracts.toml's clocks are armed).
+                //   Err(instrument/config failure)         => exit 2.
+                match tasks::workflows::check(base, self_test, receipt, root) {
+                    Ok(
+                        tasks::workflows::CheckOutcome::PolicySatisfied
+                        | tasks::workflows::CheckOutcome::AdvisoryFinding,
+                    ) => Ok(()),
+                    Ok(tasks::workflows::CheckOutcome::BlockingViolation) => {
+                        eprintln!("workflows check: blocking policy violation");
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("workflows check: instrument failure: {e}");
+                        std::process::exit(2);
+                    }
+                }
+            }
         },
         Commands::GateReceipts { command } => match command {
             GateReceiptsCommand::List { format } => {
@@ -3701,6 +4453,41 @@ fn main() -> Result<()> {
                 format,
             })
         }
+        Commands::IssuePlan { command } => match command {
+            IssuePlanSubcommand::Audit { fixture, repo, labels, receipt, dry_run, format } => {
+                issue_plan::audit(issue_plan::AuditConfig {
+                    fixture,
+                    repo,
+                    labels,
+                    receipt,
+                    dry_run,
+                    format,
+                })
+            }
+        },
+        Commands::WriterAdmission {
+            branch,
+            base,
+            worktree,
+            expected_base_sha,
+            repo,
+            fixture,
+            json,
+            floor_gb,
+            floor_pct,
+            large_staged_threshold,
+        } => writer_admission::run(writer_admission::AdmissionConfig {
+            branch,
+            base,
+            worktree,
+            expected_base_sha,
+            repo,
+            fixture,
+            json,
+            floor_gb,
+            floor_pct,
+            large_staged_threshold,
+        }),
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::ResolvePackageName { crate_dir } => {
             // Use the current working directory as workspace root so this subcommand
@@ -3711,8 +4498,9 @@ fn main() -> Result<()> {
             println!("{name}");
             Ok(())
         }
-        Commands::WorktreeCleanup => worktrees::cleanup(),
+        Commands::WorktreeCleanup { root, force } => worktrees::cleanup(root, force),
         Commands::ValidateSwarmAgentRoster { root } => swarm_agent_roster::run(root),
+        Commands::CheckAgentCapabilities { root } => agent_capability_policy::run(root),
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
@@ -3856,6 +4644,65 @@ fn print_top_level_commands() {
     }
 }
 
+/// Validates a `--profile` value before it flows into
+/// `parser_corpus_sweep::receipt_path_for_profile`, which interpolates the
+/// value verbatim into `target/receipts/<profile>-corpus-sweep.json`
+/// (xtask/src/tasks/parser_corpus_sweep.rs). Without this guard, a value
+/// containing `..` or a path separator (`--profile "../foo"`,
+/// `--profile "foo/bar"`) would let the receipt escape `target/receipts/`
+/// or create an unexpected subdirectory (#3929 review finding). Real
+/// profile names are short slugs (`"system"`, `"cpan"`, `"cpan-common"` —
+/// see `default_corpus_profile` and the existing receipt-path tests below),
+/// so an ASCII alphanumeric/`-`/`_` allowlist covers every legitimate case
+/// with no breaking change.
+fn profile_slug_parser(value: &str) -> Result<String, String> {
+    let is_valid_slug = !value.is_empty()
+        && value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if is_valid_slug {
+        Ok(value.to_string())
+    } else {
+        Err(format!(
+            "invalid --profile value {value:?}: must be a non-empty slug of ASCII letters, \
+             digits, `-`, or `_` (no `/`, `\\`, `..`, or other path characters)"
+        ))
+    }
+}
+
+/// Build the `SweepConfig` for the `parser-corpus-sweep` command, resolving
+/// `roots` to concrete corpus directories and threading `profile` through to
+/// `SweepConfig.corpus_profile` (used for report/receipt naming).
+//
+// Each parameter mirrors a ParserCorpusSweep CLI field one-to-one, so
+// reshaping into a struct would just re-create the same argument list at
+// the call site without clarifying anything; the lint is suppressed rather
+// than fixed for that reason (AGENTS.md code-quality bar).
+#[allow(clippy::too_many_arguments)]
+fn build_parser_corpus_sweep_config(
+    roots: Option<Vec<PathBuf>>,
+    manifest: Option<PathBuf>,
+    output: Option<PathBuf>,
+    baseline: Option<PathBuf>,
+    enforce: bool,
+    verbose: bool,
+    receipt: bool,
+    profile: Option<String>,
+) -> parser_corpus_sweep::SweepConfig {
+    let base_roots = roots.unwrap_or_else(parser_corpus_sweep::default_base_roots);
+    let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
+    parser_corpus_sweep::SweepConfig {
+        corpus_profile: profile,
+        base_roots,
+        corpus_roots,
+        manifest_path: manifest,
+        manifest_perl5lib: Vec::new(),
+        output_path: output,
+        baseline_path: baseline,
+        enforce,
+        verbose,
+        receipt,
+    }
+}
+
 fn convert_gate_receipts_format(format: GateReceiptsFormat) -> gate_receipts::OutputFormat {
     match format {
         GateReceiptsFormat::Human => gate_receipts::OutputFormat::Human,
@@ -3904,6 +4751,150 @@ mod tests {
             DevexCommand::Plan { base } => assert_eq!(base, "HEAD~1"),
             _ => return Err(std::io::Error::other("expected devex plan command").into()),
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parser_corpus_sweep_accepts_profile_flag() -> TestResult {
+        match Cli::try_parse_from(["xtask", "parser-corpus-sweep", "--profile", "cpan"])?.command {
+            Commands::ParserCorpusSweep { profile, .. } => {
+                assert_eq!(profile.as_deref(), Some("cpan"));
+            }
+            _ => return Err(std::io::Error::other("expected parser-corpus-sweep command").into()),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parser_corpus_sweep_profile_defaults_to_none() -> TestResult {
+        match Cli::try_parse_from(["xtask", "parser-corpus-sweep"])?.command {
+            Commands::ParserCorpusSweep { profile, .. } => {
+                assert_eq!(profile, None);
+            }
+            _ => return Err(std::io::Error::other("expected parser-corpus-sweep command").into()),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parser_corpus_sweep_profile_rejects_path_traversal_and_separators() -> TestResult {
+        // #3929 review finding: --profile flows verbatim into
+        // target/receipts/<profile>-corpus-sweep.json, so a value containing
+        // `..` or a path separator must be rejected before it ever reaches
+        // that interpolation, not just documented as trusted input.
+        for bad_profile in ["../foo", "foo/bar", "foo\\bar", "..", ""] {
+            let result =
+                Cli::try_parse_from(["xtask", "parser-corpus-sweep", "--profile", bad_profile]);
+            assert!(
+                result.is_err(),
+                "--profile {bad_profile:?} must be rejected by profile_slug_parser"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parser_corpus_sweep_profile_accepts_known_slugs() -> TestResult {
+        // Real callers use short slugs (see default_corpus_profile and
+        // receipt_path_for_profile's own tests in parser_corpus_sweep.rs);
+        // confirm the allowlist doesn't regress any of them.
+        for good_profile in ["system", "cpan", "cpan-common", "profile_1"] {
+            match Cli::try_parse_from(["xtask", "parser-corpus-sweep", "--profile", good_profile])?
+                .command
+            {
+                Commands::ParserCorpusSweep { profile, .. } => {
+                    assert_eq!(profile.as_deref(), Some(good_profile));
+                }
+                _ => {
+                    return Err(
+                        std::io::Error::other("expected parser-corpus-sweep command").into()
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parser_corpus_sweep_threads_profile_into_sweep_config() -> TestResult {
+        let config = build_parser_corpus_sweep_config(
+            Some(Vec::new()),
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            Some("cpan".to_string()),
+        );
+
+        assert_eq!(
+            config.corpus_profile.as_deref(),
+            Some("cpan"),
+            "--profile should flow through to SweepConfig.corpus_profile"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn perl_core_harness_dispatch_fails_closed_for_future_subcommands() -> TestResult {
+        let cases = [
+            (
+                PerlCoreHarnessCommand::Run {
+                    mode: perl_core_harness::HarnessMode::Execute,
+                    perl_tree: PathBuf::from("unused"),
+                    host_perl: PathBuf::from("perl"),
+                    runner: perl_core_harness::HarnessRunner::Test,
+                    profile: perl_core_harness::HarnessProfile::Base,
+                    tests: Vec::new(),
+                    output: None,
+                    runner_binary: None,
+                },
+                "requires one or more explicit --test",
+            ),
+            (PerlCoreHarnessCommand::Report, "report is not implemented"),
+        ];
+
+        for (command, expected) in cases {
+            let err = run_cli(Cli { command: Commands::PerlCoreHarness { command } })
+                .err()
+                .ok_or_else(|| std::io::Error::other("perl-core-harness command should fail"))?;
+
+            assert!(err.to_string().contains(expected), "expected {expected:?}, got {err:?}");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn perl_core_harness_dispatch_reports_missing_discovery_tree() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let missing_tree = temp.path().join("missing-perl-tree");
+
+        let err = run_cli(Cli {
+            command: Commands::PerlCoreHarness {
+                command: PerlCoreHarnessCommand::Discover {
+                    perl_tree: missing_tree,
+                    host_perl: PathBuf::from("perl"),
+                    runner: perl_core_harness::HarnessRunner::Test,
+                    profile: perl_core_harness::HarnessProfile::Base,
+                    output: None,
+                },
+            },
+        })
+        .err()
+        .ok_or_else(|| std::io::Error::other("discover should fail for a missing tree"))?;
+
+        assert!(
+            err.to_string().contains("prepared Perl tree does not exist or is not a directory"),
+            "missing-tree error should be explicit, got {err:?}"
+        );
 
         Ok(())
     }

@@ -223,6 +223,31 @@ class TokenGreeter {
 1;
 "#;
 
+/// Named-function-call fixture used for a scoped compiler-token receipt.
+/// The whole-call span (`run_pipeline()`, not just the callee name) must match
+/// an existing live parser/HIR `function` token and remain output-neutral. The
+/// callee is intentionally undefined so the only `function` token at the call
+/// site is the call itself — no `sub` declaration token competes for the span.
+const NAMED_FUNCTION_CALL_MODULE: &str = r#"use strict;
+use warnings;
+
+run_pipeline();
+
+1;
+"#;
+
+/// Edited counterpart of [`NAMED_FUNCTION_CALL_MODULE`] used to prove the
+/// named-function-call live pilot refreshes after `didChange`. The callee is
+/// renamed to a non-overlapping identifier of a different length, so the live
+/// token stream (whose `function` token spans the whole call) also changes.
+const UPDATED_NAMED_FUNCTION_CALL_MODULE: &str = r#"use strict;
+use warnings;
+
+dispatch();
+
+1;
+"#;
+
 /// Lexical-variable fixture used for a scoped compiler-token declaration receipt.
 /// The candidate must match an existing live parser/HIR `variable` token and
 /// remain output-neutral.
@@ -563,6 +588,45 @@ fn method_call_name_span(
     let marker_start = source.find(&marker).ok_or("expected method call in fixture")?;
     let name_start = marker_start + "->".len();
     let name_end = name_start + method.len();
+
+    let prefix = &source[..name_start];
+    let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())?;
+    let line_start = prefix.rfind('\n').map_or(0, |offset| offset + 1);
+    let start = u32::try_from(source[line_start..name_start].encode_utf16().count())?;
+    let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
+
+    Ok((name_start, name_end, line, start, length))
+}
+
+/// Compute the source-backed whole-call span for a bareword function call
+/// `name(...)`, mirroring [`semantic_token_named_function_call_candidate`]: the
+/// span runs from the callee name through the matching close paren on the same
+/// line (the live `function` token covers the entire call expression).
+fn named_function_call_span(
+    source: &str,
+    name: &str,
+) -> Result<(usize, usize, u32, u32, u32), Box<dyn Error>> {
+    let marker = format!("{name}(");
+    let name_start = source.find(&marker).ok_or("expected function call in fixture")?;
+    let paren_open = name_start + name.len();
+
+    let mut depth = 0usize;
+    let mut call_end = None;
+    for (offset, ch) in source[paren_open..].char_indices() {
+        match ch {
+            '\n' => return Err("function call span must be single-line in fixture".into()),
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.checked_sub(1).ok_or("unbalanced function call parens in fixture")?;
+                if depth == 0 {
+                    call_end = Some(paren_open + offset + ch.len_utf8());
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let name_end = call_end.ok_or("unterminated function call parens in fixture")?;
 
     let prefix = &source[..name_start];
     let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())?;
@@ -1219,6 +1283,183 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_call_comp
             .filter_map(Value::as_str)
             .any(|identity| identity == "token:method_call:stash:compiler"),
         "class-specific receipt must authorize only the method-call identity; got: {identities:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_named_function_call_compiler_token_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let call_uri = "file:///workspace/lib/TokenNamedCall.pm";
+    open_document(&server, call_uri, NAMED_FUNCTION_CALL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": call_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "class-specific proof must compare against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "named-function-call class receipt must not change live semantic-token behavior"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "named-function-call class receipt must not emit additional semantic tokens"
+    );
+
+    let (call_start, call_end, expected_line, expected_start, expected_length) =
+        named_function_call_span(NAMED_FUNCTION_CALL_MODULE, "run_pipeline")?;
+    let call_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        NAMED_FUNCTION_CALL_MODULE,
+        call_start,
+        call_end,
+    )
+    .ok_or("expected source-backed named-function-call compiler span")?;
+    assert_eq!(call_span.range.start.line, expected_line);
+    assert_eq!(call_span.range.start.character, expected_start);
+    assert_eq!(call_span.single_line_lsp_length(), Some(expected_length));
+
+    let call_receipt = class_specific_receipt(&receipt, "named_function_call")?;
+    assert_eq!(call_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(call_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(call_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(call_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        call_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "named function calls are the scoped class under cutover proof"
+    );
+    assert_eq!(
+        call_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "named-function-call receipt may join the scoped compiler-token live pilot only with parity proof"
+    );
+    assert_eq!(
+        call_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed named-function-call whole-call span must match existing live function token output"
+    );
+    assert_eq!(
+        call_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_function_token")
+    );
+    assert_eq!(call_receipt.get("live_token_type").and_then(Value::as_str), Some("function"));
+    assert_eq!(call_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(call_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        call_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "named-function-call candidate must be source-backed"
+    );
+    assert_eq!(call_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(call_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        call_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let function_token_type =
+        *crate::semantic_tokens::legend().map.get("function").ok_or("missing function token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == function_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed named-function-call span must match exactly one existing live function token"
+    );
+
+    let claim_boundary = must_some(call_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("no new token output is emitted"),
+        "named-function-call receipt must preserve the output-neutral boundary; got: {claim_boundary}"
+    );
+
+    let shadow_receipt = must_some(call_receipt.get("shadow_receipt").and_then(Value::as_object));
+    let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
+    assert_eq!(
+        new_result.get("match_count").and_then(Value::as_u64),
+        Some(1),
+        "source-backed named-function-call compiler candidates may count only through the scoped class identity"
+    );
+    let identities = must_some(new_result.get("identities").and_then(Value::as_array));
+    assert!(
+        identities
+            .iter()
+            .filter_map(Value::as_str)
+            .any(|identity| identity == "token:named_function_call:run_pipeline:compiler"),
+        "class-specific receipt must authorize only the named-function-call identity; got: {identities:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_named_function_call_span_covers_arguments_among_multiple_calls()
+-> Result<(), Box<dyn Error>> {
+    // ExternalTruth coverage: a file with MORE THAN ONE live `function` token,
+    // where the callee has arguments. Proves (1) the live parser/HIR collector
+    // emits the `function` token spanning the entire `configure(1, 2)` call
+    // INCLUDING its arguments, and (2) exactly one of the several live function
+    // tokens matches the detector's whole-call span — the "live-token count > 1"
+    // case the single-call fixtures do not exercise.
+    let server = create_server();
+    let uri = "file:///workspace/lib/TokenMultiCall.pm";
+    let src = "use strict;\nuse warnings;\n\nconfigure(1, 2);\nfinalize();\n\n1;\n";
+    open_document(&server, uri, src);
+
+    let params = json!({ "textDocument": {"uri": uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    // The detector reports the FIRST call, whole-call span including arguments.
+    let (_call_start, _call_end, line, col, len) = named_function_call_span(src, "configure")?;
+    assert_eq!(len, 15, "`configure(1, 2)` is 15 UTF-16 units including its arguments");
+
+    let function_token_type =
+        *crate::semantic_tokens::legend().map.get("function").ok_or("missing function token")?;
+    let function_tokens: Vec<_> = decode_semantic_tokens(&live_result)?
+        .into_iter()
+        .filter(|token| token.token_type == function_token_type)
+        .collect();
+    assert!(
+        function_tokens.len() >= 2,
+        "fixture must emit multiple live function tokens (configure + finalize); got {}",
+        function_tokens.len()
+    );
+    let whole_call_matches = function_tokens
+        .iter()
+        .filter(|token| token.line == line && token.start == col && token.length == len)
+        .count();
+    assert_eq!(
+        whole_call_matches, 1,
+        "exactly one live function token must span the whole `configure(1, 2)` call including its arguments"
+    );
+
+    // The scoped class reaches live-pilot parity on that whole-call span.
+    let call_receipt = class_specific_receipt(&receipt, "named_function_call")?;
+    assert_eq!(call_receipt.get("live_pilot").and_then(Value::as_bool), Some(true));
+    assert_eq!(call_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        first_shadow_identity(call_receipt)?,
+        "token:named_function_call:configure:compiler"
     );
 
     Ok(())
@@ -3535,6 +3776,70 @@ fn semantic_tokens_runtime_quality_receipt_refreshes_method_call_live_pilot_afte
     );
     assert_eq!(
         updated_method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_named_function_call_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let call_uri = "file:///workspace/lib/TokenNamedCall.pm";
+    open_document(&server, call_uri, NAMED_FUNCTION_CALL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": call_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_call_receipt = class_specific_receipt(&initial_receipt, "named_function_call")?;
+    let initial_identity = first_shadow_identity(initial_call_receipt)?;
+    assert!(
+        initial_identity.contains("run_pipeline"),
+        "initial named-function-call compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_call_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial named function call should be the scoped class live pilot"
+    );
+
+    change_document(&server, call_uri, 2, UPDATED_NAMED_FUNCTION_CALL_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_call_receipt = class_specific_receipt(&updated_receipt, "named_function_call")?;
+    let updated_identity = first_shadow_identity(updated_call_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the named-function-call edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "named-function-call compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("dispatch"),
+        "updated named-function-call compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_call_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit named function call should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_call_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed named function call must still match the live token stream"
+    );
+    assert_eq!(
+        updated_call_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
         Some(true),
         "edit-freshness proof must remain output-neutral"
     );

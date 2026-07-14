@@ -1,0 +1,88 @@
+name: VS Code Current-Source Linux Smoke
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'vscode-extension/**'
+      - 'crates/perl-lsp*/**'
+      - 'crates/perllsp/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/vscode-current-source-linux-smoke.yml'
+
+concurrency:
+  group: vscode-current-source-linux-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  current-source-linux-smoke:
+    name: Current-source Linux smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    defaults:
+      run:
+        working-directory: vscode-extension
+
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
+        with:
+          toolchain: 1.95.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '26.5.0'
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Select npm authority
+        run: npm install --global npm@11.18.0
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: vscode-current-source-smoke-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install extension dependencies
+        run: npm ci
+
+      - name: Build current Rust server
+        working-directory: .
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/perl-lsp-current-source-target
+        run: cargo build -p perllsp --release --locked
+
+      - name: Run exact current-source smoke under Xvfb
+        env:
+          PERL_LSP_FIRST_HOUR_SERVER_PATH: ${{ runner.temp }}/perl-lsp-current-source-target/release/perllsp
+          PERL_LSP_SERVER_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          PERL_LSP_SMOKE_SOURCE_LABEL: hosted-linux-current-source
+        run: xvfb-run -a npm run test:published:local
+
+      - name: Upload current-source smoke receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vscode-current-source-linux-smoke-${{ github.sha }}
+          path: target/receipts/vscode-smoke/**
+          if-no-files-found: warn
+          retention-days: 14

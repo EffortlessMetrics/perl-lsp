@@ -1,0 +1,40 @@
+[package]
+name = "perl-ripr-facts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Batch exporter for the ripr-perl-facts-v1 packet — deterministic test/oracle/relation/boundary facts over a Perl workspace"
+readme = "README.md"
+repository.workspace = true
+documentation = "https://docs.rs/perl-ripr-facts"
+homepage.workspace = true
+keywords = ["perl", "ripr", "facts", "test-oracle", "static-analysis"]
+categories = ["development-tools", "development-tools::testing"]
+include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
+
+[lib]
+name = "perl_ripr_facts"
+path = "src/lib.rs"
+
+[[bin]]
+name = "perl-ripr-facts"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+sha2.workspace = true
+# Parser-backed fact extraction (#3293 PR 3). Both are leaf crates with no
+# forbidden deps — perl-parser-core parses source and converts byte spans to
+# line/column (LineIndex); perl-symbol projects the AST into declaration facts.
+# perl-workspace is deliberately NOT used here (it transitively pulls lsp-types).
+perl-parser-core.workspace = true
+perl-symbol.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

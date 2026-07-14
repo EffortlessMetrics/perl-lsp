@@ -84,6 +84,18 @@ impl LspServer {
         self.handle_did_change(Some(params))
     }
 
+    /// Convenience helper: apply a `didClose` for a document.
+    ///
+    /// Used by same-document TOCTOU regression tests (#3613) to simulate a
+    /// racing close between a navigation handler's up-front capture and its
+    /// later `documents_text_snapshot()` re-read.
+    pub fn test_apply_did_close(&self, uri: &str) -> Result<(), JsonRpcError> {
+        let params = serde_json::json!({
+            "textDocument": { "uri": uri },
+        });
+        self.handle_did_close(Some(params))
+    }
+
     /// Test-only helper that updates an open document snapshot without touching
     /// the workspace index.
     ///
@@ -104,34 +116,120 @@ impl LspServer {
         };
         let errors = parser.errors().to_vec();
 
-        let mut parent_map = perl_parser::declaration::ParentMap::default();
-        if let Some(ref ast) = ast {
-            crate::declaration::DeclarationProvider::build_parent_map(ast, &mut parent_map, None);
-        }
-
         let rope = ropey::Rope::from_str(text);
-        let line_starts = perl_parser::position::LineStartsCache::new_rope(&rope);
-        let degradation_tier = crate::state::DegradationTier::from_parse_result(&ast, &errors);
 
         let mut documents = self.documents.lock();
         let doc = documents
             .get_mut(&normalized_uri)
             .ok_or_else(|| format!("document not open: {uri}"))?;
-        doc.rope = rope;
-        doc.text = text.to_string();
-        doc.version = version;
-        doc.ast = ast;
-        doc.parse_errors = errors;
-        doc.parent_map = parent_map;
-        doc.line_starts = line_starts;
         doc.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        doc.degradation_tier = degradation_tier;
+        let new_generation = doc.current_generation();
+        *doc = crate::state::DocumentState::from_parts(
+            rope,
+            text.to_string(),
+            version,
+            doc.generation.clone(),
+        );
+        // Publish the parse result as a single ParsedSnapshot -- see
+        // `state::ParsedSnapshot`. Mirrors the real didChange publication
+        // sequence in `runtime/text_sync.rs`. `from_parse_result` derives
+        // content_hash/parent_map/degradation_tier internally.
+        let snapshot = std::sync::Arc::new(crate::state::ParsedSnapshot::from_parse_result(
+            new_generation,
+            text,
+            ast,
+            errors,
+        ));
+        doc.publish_parsed_if_current(new_generation, snapshot);
         #[cfg(feature = "incremental")]
         {
             doc.incremental_doc = None;
             doc.incremental_state = None;
         }
 
+        Ok(())
+    }
+
+    /// Test-only helper that forces the pending-parse generation gap (#3396 PR4).
+    ///
+    /// Updates a document's rope/text/version and bumps its generation counter
+    /// -- exactly like a real `didChange` -- but deliberately does **not**
+    /// re-parse or publish a new [`crate::state::ParsedSnapshot`]. Immediately
+    /// after this call, [`crate::state::DocumentState::current_parsed`] returns
+    /// `None` (the last published snapshot's generation now trails the text
+    /// generation) while [`crate::state::DocumentState::latest_parsed`] still
+    /// returns the *previous* generation's snapshot.
+    ///
+    /// This simulates the seam a future async parse worker will introduce:
+    /// text updates land on the fast path, but the AST/parse-errors/parent-map
+    /// snapshot for that generation is not ready yet. Production parsing is
+    /// fully synchronous today, so this state is otherwise unreachable outside
+    /// tests -- this method exists purely to prove providers behave correctly
+    /// on that future gap without adding a real async worker.
+    ///
+    /// Pair with [`Self::test_publish_parse_for_current_generation`] to close
+    /// the gap once pending-parse assertions are done; otherwise the document
+    /// is left permanently un-parsed for any further requests in the same test.
+    pub fn test_apply_text_change_without_reparse(
+        &self,
+        uri: &str,
+        new_text: &str,
+        version: i32,
+    ) -> Result<(), String> {
+        let normalized_uri = self.normalize_uri_key(uri);
+        let rope = ropey::Rope::from_str(new_text);
+        let line_starts = perl_parser::position::LineStartsCache::new(new_text);
+
+        let mut documents = self.documents.lock();
+        let doc = documents
+            .get_mut(&normalized_uri)
+            .ok_or_else(|| format!("document not open: {uri}"))?;
+        doc.rope = rope;
+        doc.text = new_text.to_string();
+        doc.version = version;
+        doc.line_starts = line_starts;
+        doc.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        // Deliberately do NOT call `publish_parsed_if_current` here: the whole
+        // point of this helper is to leave the previously published snapshot
+        // stale relative to the bumped generation, forcing `current_parsed()`
+        // to return `None` until a caller explicitly republishes via
+        // `test_publish_parse_for_current_generation`.
+        #[cfg(feature = "incremental")]
+        {
+            doc.incremental_doc = None;
+            doc.incremental_state = None;
+        }
+        Ok(())
+    }
+
+    /// Test-only helper that closes a pending-parse gap opened by
+    /// [`Self::test_apply_text_change_without_reparse`].
+    ///
+    /// Parses the document's *current* text and publishes the result as a
+    /// [`crate::state::ParsedSnapshot`] for the document's *current*
+    /// generation -- mirroring what a future async parse worker would do on
+    /// completion. After this call, `current_parsed()` is `Some` again and its
+    /// generation equals the document's text generation.
+    pub fn test_publish_parse_for_current_generation(&self, uri: &str) -> Result<(), String> {
+        let normalized_uri = self.normalize_uri_key(uri);
+        let mut documents = self.documents.lock();
+        let doc = documents
+            .get_mut(&normalized_uri)
+            .ok_or_else(|| format!("document not open: {uri}"))?;
+
+        let mut parser = perl_parser::Parser::new(&doc.text);
+        let ast = match parser.parse() {
+            Ok(ast) => Some(std::sync::Arc::new(ast)),
+            Err(err) => return Err(format!("Parse error: {err}")),
+        };
+        let errors = parser.errors().to_vec();
+        let generation = doc.current_generation();
+        // `ParsedSnapshot::from_parse_result` derives content_hash/parent_map/
+        // degradation_tier internally -- see `state::ParsedSnapshot`.
+        let snapshot = std::sync::Arc::new(crate::state::ParsedSnapshot::from_parse_result(
+            generation, &doc.text, ast, errors,
+        ));
+        doc.publish_parsed_if_current(generation, snapshot);
         Ok(())
     }
 
@@ -294,6 +392,48 @@ impl LspServer {
     /// Returns [`JsonRpcError`] if params are invalid or document not found.
     pub fn test_handle_hover(&self, params: Option<Value>) -> Result<Option<Value>, JsonRpcError> {
         self.handle_hover(params)
+    }
+
+    /// Test-only entrypoint for LSP `textDocument/signatureHelp`.
+    ///
+    /// Exercises signature-help functionality in tests. Returns parameter
+    /// hints for the function call at the given position.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri` and `position`.
+    ///
+    /// # Returns
+    /// - `Ok(Some(signature_help))`: Signature information found.
+    /// - `Ok(None)`: No signature help available at position.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or document not found.
+    pub fn test_handle_signature_help(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_signature_help(params)
+    }
+
+    /// Test-only entrypoint for LSP `textDocument/codeAction`.
+    ///
+    /// Exercises quick-fix and refactor code-action generation in tests,
+    /// including the critic-engine-gated quick fixes.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri`, `range`, `context`.
+    ///
+    /// # Returns
+    /// - `Ok(Some(actions))`: The code actions array.
+    /// - `Ok(None)`: No actions applicable.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or document not found.
+    pub fn test_handle_code_action(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_code_action(params)
     }
 
     /// Test-only entrypoint for LSP `textDocument/documentSymbol`.
@@ -605,6 +745,25 @@ impl LspServer {
         self.handle_semantic_tokens(params)
     }
 
+    /// Test-only entrypoint for LSP `textDocument/semanticTokens/range`.
+    ///
+    /// Exercises range-scoped semantic token generation in tests.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri` and `range`.
+    ///
+    /// # Returns
+    /// - `Ok(Some({"data": [...]}))`: Semantic token data for the range.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid.
+    pub fn test_handle_semantic_tokens_range(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_semantic_tokens_range(params)
+    }
+
     /// Test-only receipt for semantic tokens runtime quality proof.
     ///
     /// Calls the live `textDocument/semanticTokens/full` handler and captures the
@@ -716,7 +875,7 @@ impl LspServer {
     #[cfg(feature = "workspace")]
     pub fn test_notify_index_ready_wait_entered(&self, sender: std::sync::mpsc::Sender<()>) {
         let _ = self;
-        super::workspace::set_index_ready_wait_entered_observer(sender);
+        super::readiness::set_index_ready_wait_entered_observer(sender);
     }
 
     /// Enable `callHierarchy` in the server's advertised features.
@@ -727,5 +886,245 @@ impl LspServer {
     /// is set, so the wait line is unreachable without enabling it.
     pub fn test_enable_call_hierarchy(&self) {
         self.advertised_features.lock().call_hierarchy = true;
+    }
+
+    /// Test-only entrypoint for LSP `textDocument/prepareCallHierarchy`.
+    ///
+    /// Pair with [`Self::test_enable_call_hierarchy`] -- the handler gates on
+    /// the `callHierarchy` advertised feature and returns method-not-advertised
+    /// otherwise.
+    pub fn test_handle_prepare_call_hierarchy(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_prepare_call_hierarchy(params)
+    }
+
+    /// Test-only: begin capturing `PERL_LSP_TIMING` spans into an in-process
+    /// buffer.
+    ///
+    /// This is independent of the `PERL_LSP_TIMING` environment sink, so it does
+    /// not race on process-global env state. Any previously buffered spans are
+    /// cleared. Pair with [`Self::test_timing_capture_drain`].
+    pub fn test_timing_capture_start(&self) {
+        let _ = self;
+        crate::runtime::timing::capture::start();
+    }
+
+    /// Test-only: stop capturing and return the buffered timing spans as
+    /// `(span_name, milliseconds, detail)` tuples in emission order.
+    pub fn test_timing_capture_drain(&self) -> Vec<(String, f64, Option<String>)> {
+        let _ = self;
+        crate::runtime::timing::capture::drain()
+            .into_iter()
+            .map(|span| (span.span.to_string(), span.ms, span.detail))
+            .collect()
+    }
+
+    /// Install the production off-lock async parse worker (#3396 Phase 3)
+    /// on this server.
+    ///
+    /// Test-only convenience that exercises the exact same installation
+    /// path `Scheduler::new` uses in production. Requires `Arc<Self>` --
+    /// construct the server as `Arc::new(LspServer::new())` (or any other
+    /// constructor) before calling. Without this call, `handle_did_change`
+    /// stays on the synchronous fallback path (today's behavior), which is
+    /// what the vast majority of existing unit tests implicitly rely on.
+    pub fn test_install_parse_worker(self: &std::sync::Arc<Self>) {
+        self.install_default_parse_worker();
+    }
+
+    /// Whether the off-lock parse worker is installed on this server (i.e.
+    /// whether `handle_did_change` is on the async path or the synchronous
+    /// fallback).
+    pub fn test_parse_worker_installed(&self) -> bool {
+        self.parse_worker().is_some()
+    }
+
+    /// Snapshot of the installed parse worker's counters, or `None` if no
+    /// worker is installed.
+    pub fn test_parse_worker_metrics(&self) -> Option<ParseWorkerMetricsSnapshot> {
+        self.parse_worker().map(|worker| {
+            let s = worker.metrics();
+            ParseWorkerMetricsSnapshot {
+                jobs_enqueued: s.jobs_enqueued,
+                jobs_started: s.jobs_started,
+                jobs_coalesced: s.jobs_coalesced,
+                jobs_cancelled: s.jobs_cancelled,
+                jobs_rejected_stale: s.jobs_rejected_stale,
+                jobs_published: s.jobs_published,
+                failures_published: s.failures_published,
+                queue_depth_max: s.queue_depth_max,
+                jobs_panicked: s.jobs_panicked,
+            }
+        })
+    }
+
+    /// Block (condvar-based, never a sleep loop) until the parse worker has
+    /// no pending or in-flight job for `uri`, or `timeout` elapses. Returns
+    /// whether it settled in time; `false` (immediately) if no worker is
+    /// installed.
+    ///
+    /// Convenience for non-correctness-critical callers (e.g. a receipt
+    /// test waiting for a burst of edits to settle before querying
+    /// providers). Callers that need to control the exact moment a
+    /// specific generation is about to publish should use the pause/release
+    /// barrier below instead of polling "is everything quiet now".
+    pub fn test_wait_for_parse_worker_settled(
+        &self,
+        uri: &str,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let Some(worker) = self.parse_worker() else {
+            return false;
+        };
+        let normalized_uri = self.normalize_uri_key(uri);
+        worker.wait_until_settled(&normalized_uri, timeout)
+    }
+
+    /// Arm the installed parse worker's test barrier: the worker will pause
+    /// immediately before publishing a snapshot for `(uri, generation)`.
+    /// A no-op if no worker is installed.
+    ///
+    /// Pair with [`Self::test_parse_worker_wait_until_paused`] and
+    /// [`Self::test_parse_worker_release_barrier`] to deterministically
+    /// exercise the real off-lock async gap (as opposed to the #3589
+    /// forced test-only gap via `test_apply_text_change_without_reparse`) --
+    /// e.g. the real-worker variant of the `sub_foo_to_bar` cross-provider
+    /// freshness canary.
+    pub fn test_parse_worker_arm_barrier(&self, uri: &str, generation: u32) {
+        let normalized_uri = self.normalize_uri_key(uri);
+        if let Some(worker) = self.parse_worker() {
+            worker.test_barrier().arm(&normalized_uri, generation);
+        }
+    }
+
+    /// Block until the parse worker reports it has paused at a previously
+    /// armed barrier. A no-op (returns immediately) if no worker is
+    /// installed.
+    pub fn test_parse_worker_wait_until_paused(&self) {
+        if let Some(worker) = self.parse_worker() {
+            worker.test_barrier().wait_until_paused();
+        }
+    }
+
+    /// Release a paused parse worker. A no-op if no worker is installed.
+    pub fn test_parse_worker_release_barrier(&self) {
+        if let Some(worker) = self.parse_worker() {
+            worker.test_barrier().release();
+        }
+    }
+
+    /// Arm the installed parse worker's SIDE-EFFECT barrier: the worker
+    /// will pause immediately after a successful publish for `(uri,
+    /// generation)`, but before invoking the post-publish side-effect
+    /// callback. A no-op if no worker is installed.
+    ///
+    /// This is a distinct pause point from
+    /// [`Self::test_parse_worker_arm_barrier`] (which pauses BEFORE
+    /// publish) -- it exists to prove that "publication succeeded" and
+    /// "the deferred side effects are still current" are separate
+    /// invariants: a test can pause here, let a real newer edit commit for
+    /// real, then release and assert the paused generation's side effects
+    /// never fired (see
+    /// `LspServer::run_post_parse_side_effects`'s own freshness re-check).
+    pub fn test_parse_worker_arm_side_effect_barrier(&self, uri: &str, generation: u32) {
+        let normalized_uri = self.normalize_uri_key(uri);
+        if let Some(worker) = self.parse_worker() {
+            worker.side_effect_barrier().arm(&normalized_uri, generation);
+        }
+    }
+
+    /// Block until the parse worker reports it has paused at a previously
+    /// armed side-effect barrier. A no-op if no worker is installed.
+    pub fn test_parse_worker_wait_until_side_effects_paused(&self) {
+        if let Some(worker) = self.parse_worker() {
+            worker.side_effect_barrier().wait_until_paused();
+        }
+    }
+
+    /// Release a parse worker paused at the side-effect barrier. A no-op if
+    /// no worker is installed.
+    pub fn test_parse_worker_release_side_effect_barrier(&self) {
+        if let Some(worker) = self.parse_worker() {
+            worker.side_effect_barrier().release();
+        }
+    }
+
+    /// Arm the installed parse worker to panic (instead of parsing) the
+    /// next time it processes `(uri, generation)`. A no-op if no worker is
+    /// installed. Test-only: proves the worker's panic-recovery path
+    /// releases the URI and keeps the worker pool alive.
+    pub fn test_parse_worker_arm_panic(&self, uri: &str, generation: u32) {
+        let normalized_uri = self.normalize_uri_key(uri);
+        if let Some(worker) = self.parse_worker() {
+            worker.panic_injector().arm(&normalized_uri, generation);
+        }
+    }
+}
+
+/// Public snapshot of the installed parse worker's counters (test-only).
+///
+/// Mirrors `crate::runtime::parse_worker::ParseWorkerMetricsSnapshot`
+/// (crate-private) with a public type so external integration tests under
+/// `tests/` -- which only see the crate's public API -- can read it.
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ParseWorkerMetricsSnapshot {
+    /// Total `enqueue` calls, regardless of coalescing outcome.
+    pub jobs_enqueued: u64,
+    /// Jobs actually dequeued and parsed.
+    pub jobs_started: u64,
+    /// Jobs replaced in the pending slot before a worker ever started them.
+    pub jobs_coalesced: u64,
+    /// Reserved: jobs cooperatively cancelled mid-parse. Always 0 today.
+    pub jobs_cancelled: u64,
+    /// Jobs dequeued, parsed, but rejected at publish time (superseded
+    /// generation or a document-instance mismatch).
+    pub jobs_rejected_stale: u64,
+    /// Jobs whose publish succeeded.
+    pub jobs_published: u64,
+    /// Subset of `jobs_published` where the published snapshot carried
+    /// `ast: None`.
+    pub failures_published: u64,
+    /// High-water mark of the pending-job queue depth.
+    pub queue_depth_max: u64,
+    /// Jobs whose processing panicked and was recovered.
+    pub jobs_panicked: u64,
+}
+
+#[cfg(all(test, feature = "workspace"))]
+mod tests {
+    use super::LspServer;
+    use crate::runtime::readiness::{IndexReadinessOutcome, IndexReadinessPolicy};
+    use anyhow::Result;
+    use std::time::Duration;
+
+    #[test]
+    fn test_notify_index_ready_wait_entered_forwards_to_readiness_observer() -> Result<()> {
+        let server = LspServer::new();
+        let coordinator = server
+            .index_coordinator
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("workspace coordinator missing"))?;
+        coordinator.transition_to_building(1);
+        server.test_simulate_indexing_start();
+
+        let (wait_entered_tx, wait_entered_rx) = std::sync::mpsc::channel();
+        server.test_notify_index_ready_wait_entered(wait_entered_tx);
+        let worker_coordinator = coordinator;
+        let worker = std::thread::spawn(move || -> Result<()> {
+            wait_entered_rx.recv_timeout(Duration::from_secs(1))?;
+            worker_coordinator.transition_to_ready(0, 0);
+            Ok(())
+        });
+
+        let outcome = server.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
+
+        worker.join().map_err(|_| anyhow::anyhow!("readiness observer thread panicked"))??;
+        assert!(matches!(outcome, IndexReadinessOutcome::Ready));
+        assert!(outcome.is_ready());
+        Ok(())
     }
 }

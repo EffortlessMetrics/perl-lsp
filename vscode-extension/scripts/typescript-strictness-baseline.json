@@ -1,0 +1,1200 @@
+{
+  "schema_version": 1,
+  "option": "noUncheckedIndexedAccess",
+  "total": 144,
+  "by_config": {
+    "tsconfig.json": 57,
+    "tsconfig.test.json": 79,
+    "tsconfig.published-smoke.json": 8
+  },
+  "by_code": {
+    "TS2532": 49,
+    "TS2345": 34,
+    "TS2322": 13,
+    "TS18048": 44,
+    "TS2538": 3,
+    "TS2769": 1
+  },
+  "by_file": {
+    "tsconfig.json:src/debugAdapter.ts": 2,
+    "tsconfig.json:src/downloader.ts": 6,
+    "tsconfig.json:src/extension.ts": 14,
+    "tsconfig.json:src/extensionWorkspaceGuidance.ts": 1,
+    "tsconfig.json:src/fileCreation.ts": 1,
+    "tsconfig.json:src/gherkinProviders.ts": 9,
+    "tsconfig.json:src/gherkinStepDefinitions.ts": 2,
+    "tsconfig.json:src/podPreview.ts": 15,
+    "tsconfig.json:src/startupDiagnosis.ts": 1,
+    "tsconfig.json:src/testAdapter.ts": 6,
+    "tsconfig.test.json:src/debugAdapter.ts": 2,
+    "tsconfig.test.json:src/downloader.ts": 6,
+    "tsconfig.test.json:src/extension.ts": 14,
+    "tsconfig.test.json:src/extensionWorkspaceGuidance.ts": 1,
+    "tsconfig.test.json:src/fileCreation.ts": 1,
+    "tsconfig.test.json:src/gherkinProviders.ts": 9,
+    "tsconfig.test.json:src/gherkinStepDefinitions.ts": 2,
+    "tsconfig.test.json:src/podPreview.ts": 15,
+    "tsconfig.test.json:src/startupDiagnosis.ts": 1,
+    "tsconfig.test.json:src/test/gherkinProviders.test.ts": 9,
+    "tsconfig.test.json:src/test/languageClientLifecycle.test.ts": 4,
+    "tsconfig.test.json:src/test/languageClientStartupMetrics.test.ts": 2,
+    "tsconfig.test.json:src/test/packagedSemanticTokensSmoke.test.ts": 7,
+    "tsconfig.test.json:src/testAdapter.ts": 6,
+    "tsconfig.published-smoke.json:src/test/published/managedBinaryPublishedSmoke.test.ts": 7,
+    "tsconfig.published-smoke.json:src/test/published/runPublishedSmoke.ts": 1
+  },
+  "diagnostics": [
+    {
+      "config": "tsconfig.json",
+      "file": "src/debugAdapter.ts",
+      "line": 124,
+      "column": 21,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/debugAdapter.ts",
+      "line": 264,
+      "column": 25,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/downloader.ts",
+      "line": 85,
+      "column": 19,
+      "code": "TS2345",
+      "message": "Argument of type 'number | undefined' is not assignable to parameter of type 'number'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/downloader.ts",
+      "line": 151,
+      "column": 21,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/downloader.ts",
+      "line": 153,
+      "column": 18,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string | null'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/downloader.ts",
+      "line": 295,
+      "column": 43,
+      "code": "TS18048",
+      "message": "'platformStr' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/downloader.ts",
+      "line": 444,
+      "column": 36,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/downloader.ts",
+      "line": 616,
+      "column": 27,
+      "code": "TS2345",
+      "message": "Argument of type 'Release | undefined' is not assignable to parameter of type 'PromiseLike<Release> | Release'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 1551,
+      "column": 11,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 1553,
+      "column": 11,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 1558,
+      "column": 18,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 1559,
+      "column": 21,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 1614,
+      "column": 11,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 1616,
+      "column": 11,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 1621,
+      "column": 18,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 1622,
+      "column": 21,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 2391,
+      "column": 7,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 2391,
+      "column": 35,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 2395,
+      "column": 42,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 2396,
+      "column": 40,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 2396,
+      "column": 71,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extension.ts",
+      "line": 2715,
+      "column": 15,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/extensionWorkspaceGuidance.ts",
+      "line": 77,
+      "column": 42,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/fileCreation.ts",
+      "line": 39,
+      "column": 18,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 192,
+      "column": 25,
+      "code": "TS18048",
+      "message": "'line' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 193,
+      "column": 23,
+      "code": "TS18048",
+      "message": "'line' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 197,
+      "column": 31,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 197,
+      "column": 65,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 199,
+      "column": 29,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 199,
+      "column": 61,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 206,
+      "column": 32,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 211,
+      "column": 7,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 281,
+      "column": 21,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinStepDefinitions.ts",
+      "line": 76,
+      "column": 16,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/gherkinStepDefinitions.ts",
+      "line": 110,
+      "column": 35,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 87,
+      "column": 27,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 88,
+      "column": 17,
+      "code": "TS18048",
+      "message": "'line' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 90,
+      "column": 24,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 91,
+      "column": 38,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 97,
+      "column": 23,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 99,
+      "column": 46,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 107,
+      "column": 48,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 111,
+      "column": 24,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 125,
+      "column": 9,
+      "code": "TS18048",
+      "message": "'line' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 134,
+      "column": 7,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 135,
+      "column": 26,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 136,
+      "column": 22,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 138,
+      "column": 22,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 351,
+      "column": 5,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/podPreview.ts",
+      "line": 395,
+      "column": 24,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/startupDiagnosis.ts",
+      "line": 54,
+      "column": 69,
+      "code": "TS18048",
+      "message": "'lib' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/testAdapter.ts",
+      "line": 104,
+      "column": 27,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/testAdapter.ts",
+      "line": 303,
+      "column": 9,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string | null'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/testAdapter.ts",
+      "line": 307,
+      "column": 44,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/testAdapter.ts",
+      "line": 344,
+      "column": 26,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/testAdapter.ts",
+      "line": 360,
+      "column": 24,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.json",
+      "file": "src/testAdapter.ts",
+      "line": 368,
+      "column": 34,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/debugAdapter.ts",
+      "line": 124,
+      "column": 21,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/debugAdapter.ts",
+      "line": 264,
+      "column": 25,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/downloader.ts",
+      "line": 85,
+      "column": 19,
+      "code": "TS2345",
+      "message": "Argument of type 'number | undefined' is not assignable to parameter of type 'number'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/downloader.ts",
+      "line": 151,
+      "column": 21,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/downloader.ts",
+      "line": 153,
+      "column": 18,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string | null'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/downloader.ts",
+      "line": 295,
+      "column": 43,
+      "code": "TS18048",
+      "message": "'platformStr' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/downloader.ts",
+      "line": 444,
+      "column": 36,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/downloader.ts",
+      "line": 616,
+      "column": 27,
+      "code": "TS2345",
+      "message": "Argument of type 'Release | undefined' is not assignable to parameter of type 'PromiseLike<Release> | Release'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 1551,
+      "column": 11,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 1553,
+      "column": 11,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 1558,
+      "column": 18,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 1559,
+      "column": 21,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 1614,
+      "column": 11,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 1616,
+      "column": 11,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 1621,
+      "column": 18,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 1622,
+      "column": 21,
+      "code": "TS18048",
+      "message": "'action' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 2391,
+      "column": 7,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 2391,
+      "column": 35,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 2395,
+      "column": 42,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 2396,
+      "column": 40,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 2396,
+      "column": 71,
+      "code": "TS18048",
+      "message": "'change' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extension.ts",
+      "line": 2715,
+      "column": 15,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/extensionWorkspaceGuidance.ts",
+      "line": 77,
+      "column": 42,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/fileCreation.ts",
+      "line": 39,
+      "column": 18,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 192,
+      "column": 25,
+      "code": "TS18048",
+      "message": "'line' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 193,
+      "column": 23,
+      "code": "TS18048",
+      "message": "'line' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 197,
+      "column": 31,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 197,
+      "column": 65,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 199,
+      "column": 29,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 199,
+      "column": 61,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 206,
+      "column": 32,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 211,
+      "column": 7,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinProviders.ts",
+      "line": 281,
+      "column": 21,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinStepDefinitions.ts",
+      "line": 76,
+      "column": 16,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/gherkinStepDefinitions.ts",
+      "line": 110,
+      "column": 35,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 87,
+      "column": 27,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 88,
+      "column": 17,
+      "code": "TS18048",
+      "message": "'line' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 90,
+      "column": 24,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 91,
+      "column": 38,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 97,
+      "column": 23,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 99,
+      "column": 46,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 107,
+      "column": 48,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 111,
+      "column": 24,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 125,
+      "column": 9,
+      "code": "TS18048",
+      "message": "'line' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 134,
+      "column": 7,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 135,
+      "column": 26,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 136,
+      "column": 22,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 138,
+      "column": 22,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 351,
+      "column": 5,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/podPreview.ts",
+      "line": 395,
+      "column": 24,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/startupDiagnosis.ts",
+      "line": 54,
+      "column": 69,
+      "code": "TS18048",
+      "message": "'lib' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/gherkinProviders.test.ts",
+      "line": 41,
+      "column": 12,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/gherkinProviders.test.ts",
+      "line": 42,
+      "column": 12,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/gherkinProviders.test.ts",
+      "line": 47,
+      "column": 24,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/gherkinProviders.test.ts",
+      "line": 48,
+      "column": 12,
+      "code": "TS18048",
+      "message": "'background' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/gherkinProviders.test.ts",
+      "line": 50,
+      "column": 21,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/gherkinProviders.test.ts",
+      "line": 51,
+      "column": 12,
+      "code": "TS18048",
+      "message": "'outline' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/gherkinProviders.test.ts",
+      "line": 103,
+      "column": 12,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/gherkinProviders.test.ts",
+      "line": 104,
+      "column": 12,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/gherkinProviders.test.ts",
+      "line": 258,
+      "column": 12,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/languageClientLifecycle.test.ts",
+      "line": 254,
+      "column": 12,
+      "code": "TS18048",
+      "message": "'oldClient' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/languageClientLifecycle.test.ts",
+      "line": 275,
+      "column": 12,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/languageClientLifecycle.test.ts",
+      "line": 315,
+      "column": 12,
+      "code": "TS18048",
+      "message": "'client' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/languageClientLifecycle.test.ts",
+      "line": 334,
+      "column": 12,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/languageClientStartupMetrics.test.ts",
+      "line": 49,
+      "column": 21,
+      "code": "TS2538",
+      "message": "Type 'undefined' cannot be used as an index type."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/languageClientStartupMetrics.test.ts",
+      "line": 49,
+      "column": 59,
+      "code": "TS2538",
+      "message": "Type 'undefined' cannot be used as an index type."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/packagedSemanticTokensSmoke.test.ts",
+      "line": 133,
+      "column": 38,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/packagedSemanticTokensSmoke.test.ts",
+      "line": 229,
+      "column": 13,
+      "code": "TS18048",
+      "message": "'deltaLine' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/packagedSemanticTokensSmoke.test.ts",
+      "line": 230,
+      "column": 5,
+      "code": "TS2322",
+      "message": "Type 'number | undefined' is not assignable to type 'number'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/packagedSemanticTokensSmoke.test.ts",
+      "line": 230,
+      "column": 37,
+      "code": "TS18048",
+      "message": "'deltaStart' is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/packagedSemanticTokensSmoke.test.ts",
+      "line": 235,
+      "column": 7,
+      "code": "TS2322",
+      "message": "Type 'number | undefined' is not assignable to type 'number'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/packagedSemanticTokensSmoke.test.ts",
+      "line": 236,
+      "column": 31,
+      "code": "TS2538",
+      "message": "Type 'undefined' cannot be used as an index type."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/test/packagedSemanticTokensSmoke.test.ts",
+      "line": 237,
+      "column": 7,
+      "code": "TS2322",
+      "message": "Type 'number | undefined' is not assignable to type 'number'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/testAdapter.ts",
+      "line": 104,
+      "column": 27,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/testAdapter.ts",
+      "line": 303,
+      "column": 9,
+      "code": "TS2322",
+      "message": "Type 'string | undefined' is not assignable to type 'string | null'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/testAdapter.ts",
+      "line": 307,
+      "column": 44,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/testAdapter.ts",
+      "line": 344,
+      "column": 26,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/testAdapter.ts",
+      "line": 360,
+      "column": 24,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.test.json",
+      "file": "src/testAdapter.ts",
+      "line": 368,
+      "column": 34,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.published-smoke.json",
+      "file": "src/test/published/managedBinaryPublishedSmoke.test.ts",
+      "line": 78,
+      "column": 21,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.published-smoke.json",
+      "file": "src/test/published/managedBinaryPublishedSmoke.test.ts",
+      "line": 79,
+      "column": 21,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.published-smoke.json",
+      "file": "src/test/published/managedBinaryPublishedSmoke.test.ts",
+      "line": 80,
+      "column": 21,
+      "code": "TS2345",
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+    },
+    {
+      "config": "tsconfig.published-smoke.json",
+      "file": "src/test/published/managedBinaryPublishedSmoke.test.ts",
+      "line": 89,
+      "column": 9,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.published-smoke.json",
+      "file": "src/test/published/managedBinaryPublishedSmoke.test.ts",
+      "line": 89,
+      "column": 30,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.published-smoke.json",
+      "file": "src/test/published/managedBinaryPublishedSmoke.test.ts",
+      "line": 92,
+      "column": 9,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.published-smoke.json",
+      "file": "src/test/published/managedBinaryPublishedSmoke.test.ts",
+      "line": 92,
+      "column": 30,
+      "code": "TS2532",
+      "message": "Object is possibly 'undefined'."
+    },
+    {
+      "config": "tsconfig.published-smoke.json",
+      "file": "src/test/published/runPublishedSmoke.ts",
+      "line": 168,
+      "column": 30,
+      "code": "TS2769",
+      "message": "No overload matches this call."
+    }
+  ]
+}

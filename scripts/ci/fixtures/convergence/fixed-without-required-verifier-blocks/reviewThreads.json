@@ -1,0 +1,24 @@
+[
+  {
+    "id": "PRRT_fixed_noverify_6",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/handlers/def.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        },
+        {
+          "author": {
+            "login": "replier"
+          },
+          "body": "Fixed.\n\n<!-- disposition:v1 {\"v\":1,\"class\":\"fixed\",\"thread_id\":\"PRRT_fixed_noverify_6\",\"by\":\"alice\",\"head\":\"6666666666666666666666666666666666666666\",\"evidence\":{\"commit\":\"6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f\"}} -->"
+        }
+      ]
+    }
+  }
+]

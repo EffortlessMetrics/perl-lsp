@@ -1,0 +1,8 @@
+[
+  {
+    "author": {
+      "login": "charlie"
+    },
+    "body": "Verified independently.\n\n<!-- verification:v1 {\"v\":1,\"head\":\"8888888888888888888888888888888888888888\",\"verifier\":\"charlie\",\"findings\":0,\"result\":\"pass\"} -->"
+  }
+]

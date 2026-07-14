@@ -1,7 +1,6 @@
 # perl-dap
 
-Use this crate when you need a native Debug Adapter Protocol server for Perl,
-not just debugger helper components.
+Use this crate when you need the native Debug Adapter Protocol server for Perl.
 
 `perl-dap` is the runtime layer of the debugger stack. It speaks DAP over stdio
 or TCP, dispatches requests, validates breakpoints, and renders values for
@@ -20,49 +19,34 @@ DAP-capable editors and tools.
 
 - `DapServer`, `DapConfig`, and `DapMode` wire the server and its launch mode.
 - `DebugAdapter` handles request routing and protocol state.
-- `BridgeAdapter` supports migration from `Perl::LanguageServer`.
-- `TcpAttachConfig` and `BreakpointStore` support socket attach and breakpoint tracking.
+- `TcpAttachConfig` and `BreakpointStore` support socket attach and breakpoint
+  tracking.
 
 ## Run modes
 
-- **Native launch (stdio DAP server):**
+### Native launch
 
 ```bash
 perl-dap --stdio
 ```
 
-- **TCP attach endpoint (native DAP over socket):**
+### TCP attach
 
 ```bash
 perl-dap --socket --port 13603
 ```
 
-- **Legacy bridge mode (proxy to Perl::LanguageServer):**
-
-```bash
-perl-dap --bridge
-```
-
 ## External dependencies
 
-Native launch and TCP attach use the built-in Rust runtime plus a local Perl installation.
-The Rust parser-backed runtime (`perl-parser`, `perl-parser-core`, `perl-lexer`, and the
-`perl-dap-*` support crates) is compiled into the shipped `perl-dap` binary; users do not
-install `perl-parser` or any other internal crate separately.
+Native launch and TCP attach use the built-in Rust runtime plus a local Perl
+installation. The Rust parser-backed runtime and the `perl-dap-*` support crates
+are compiled into the shipped `perl-dap` binary; users do not install workspace
+crates separately.
 
-`--bridge` mode additionally requires the CPAN module `Perl::LanguageServer`.
-Install it with either:
+## Legacy compatibility
 
-```bash
-cpan Perl::LanguageServer
-cpanm Perl::LanguageServer
-```
-
-You can verify availability with:
-
-```bash
-perl -e "use Perl::LanguageServer::DebuggerInterface; print qq{OK\n};"
-```
+Historical bridge compatibility is documented separately and is not required for
+native `perl-dap`.
 
 ## Benchmarks
 

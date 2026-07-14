@@ -164,7 +164,7 @@ fn test_hover_method_with_sig_attr_content_characterization() -> TestResult {
         )
         .unwrap_or(json!(null));
 
-    if let Some(val) = result.is_null().then(|| None).unwrap_or_else(|| hover_value(&result)) {
+    if let Some(val) = if result.is_null() { None } else { hover_value(&result) } {
         // If the provider returned content, characterize what it shows.
         // Either the method keyword or the parameter signals a working hover.
         let has_method_keyword = val.contains("method");

@@ -272,7 +272,7 @@ fn position_of_reports_utf16_character_offsets() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-fn compiler_receipt<'a>(receipt: &'a Value) -> Result<&'a Value, Box<dyn std::error::Error>> {
+fn compiler_receipt(receipt: &Value) -> Result<&Value, Box<dyn std::error::Error>> {
     let value = receipt.get("compiler_receipt").ok_or("missing compiler_receipt")?;
     if value.is_null() {
         return Err(format!("expected compiler receipt, got runtime receipt: {receipt}").into());
@@ -339,7 +339,7 @@ fn assert_json_array_contains(
     Ok(())
 }
 
-fn request_receipt<'a>(explanation: &'a Value) -> Result<&'a Value, Box<dyn std::error::Error>> {
+fn request_receipt(explanation: &Value) -> Result<&Value, Box<dyn std::error::Error>> {
     explanation.get("request_receipt").ok_or_else(|| "missing persisted request_receipt".into())
 }
 
@@ -1690,7 +1690,7 @@ my $bar = Bar::process_data();
     let main_texts = workspace_edit_texts_for_uri(&rename_result, main_uri).unwrap_or_default();
     let bar_texts = workspace_edit_texts_for_uri(&rename_result, bar_uri).unwrap_or_default();
     assert!(
-        foo_texts.iter().any(|text| *text == "process_records"),
+        foo_texts.contains(&"process_records"),
         "Foo declaration edit should carry the new name: {rename_result}"
     );
     assert!(
@@ -1988,7 +1988,7 @@ fn refactor_runtime_blocker_ux_inherited_arrow_method_rename_uses_workspace_guar
     let base_texts = workspace_edit_texts_for_uri(&rename_result, REAL_BASELINE_BASE_URI)?;
     let app_texts = workspace_edit_texts_for_uri(&rename_result, REAL_BASELINE_APP_URI)?;
     assert!(
-        base_texts.iter().any(|text| *text == "renamed_shared"),
+        base_texts.contains(&"renamed_shared"),
         "Base.pm declaration edit should carry the new name: {rename_result}"
     );
     assert!(

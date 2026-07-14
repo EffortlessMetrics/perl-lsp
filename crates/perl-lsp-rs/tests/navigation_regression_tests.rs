@@ -341,6 +341,10 @@ fn test_def_after_multibyte_prefix_does_not_error() -> TestResult {
 ///
 /// Package-qualified calls are a Perl-specific navigation pattern. If the server
 /// supports it, the result must land on the sub declaration, not the call site.
+///
+/// Line 8: `my $r = Foo::bar();`
+/// Character map: F=8 o=9 o=10 :=11 :=12 b=13 a=14 r=15
+/// Cursor at character 13 is on `b` (start of `bar`), the final component.
 #[test]
 fn test_def_package_qualified_call() -> TestResult {
     let doc = concat!(
@@ -359,13 +363,13 @@ fn test_def_package_qualified_call() -> TestResult {
     harness.initialize(None)?;
     harness.open_document("file:///pkg_qual.pl", doc)?;
 
-    // Position on `bar` inside `Foo::bar()` on line 8.
+    // Position on `bar` (character 13) inside `Foo::bar()` on line 8.
     let result = harness
         .request(
             "textDocument/definition",
             json!({
                 "textDocument": {"uri": "file:///pkg_qual.pl"},
-                "position": {"line": 8, "character": 9}
+                "position": {"line": 8, "character": 13}
             }),
         )
         .unwrap_or(json!(null));
@@ -374,6 +378,187 @@ fn test_def_package_qualified_call() -> TestResult {
         assert_eq!(
             def_line, 2,
             "Definition of `Foo::bar()` must point to `sub bar` on line 2, got line {def_line}"
+        );
+    }
+
+    Ok(())
+}
+
+/// Cursor on the package-prefix component of a qualified name must not navigate to
+/// the sub defined in that package — that would be the wrong target.
+///
+/// Before the fix, clicking anywhere in `Foo::bar` (including on `Foo`) incorrectly
+/// resolved to `sub bar` because the server always used `parts.last()` regardless of
+/// cursor position.
+///
+/// Line 8: `my $r = Foo::bar();`
+/// Character map: F=8 o=9 o=10 :=11 :=12 b=13 a=14 r=15
+/// Cursor at character 8 (F) and 9 (o) are both on the prefix component `Foo`.
+#[test]
+fn test_def_package_qualified_prefix_returns_no_sub() -> TestResult {
+    let doc = concat!(
+        "package Foo;\n",        // 0
+        "\n",                    // 1
+        "sub bar {\n",           // 2
+        "    return 'baz';\n",   // 3
+        "}\n",                   // 4
+        "\n",                    // 5
+        "package main;\n",       // 6
+        "\n",                    // 7
+        "my $r = Foo::bar();\n", // 8
+    );
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///pkg_qual_prefix.pl", doc)?;
+
+    // Cursor on `F` (character 8) — the start of the `Foo` prefix component.
+    let result_on_f = harness
+        .request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": "file:///pkg_qual_prefix.pl"},
+                "position": {"line": 8, "character": 8}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    // Must NOT navigate to `sub bar` (line 2). Either null or a package declaration is fine.
+    if let Some(def_line) = first_location_line(&result_on_f) {
+        assert_ne!(
+            def_line, 2,
+            "Cursor on `Foo` in `Foo::bar()` must not navigate to `sub bar` on line 2; \
+             got line {def_line}. The server used to resolve to the wrong target (the final \
+             component) regardless of cursor position."
+        );
+    }
+
+    // Cursor on `o` (character 9) — also within the `Foo` prefix component.
+    let result_on_o = harness
+        .request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": "file:///pkg_qual_prefix.pl"},
+                "position": {"line": 8, "character": 9}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    if let Some(def_line) = first_location_line(&result_on_o) {
+        assert_ne!(
+            def_line, 2,
+            "Cursor on second `o` of `Foo` in `Foo::bar()` must not navigate to `sub bar` \
+             on line 2; got line {def_line}."
+        );
+    }
+
+    Ok(())
+}
+
+/// Cursor on the `::` separator itself must not resolve to the sub.
+///
+/// Line 8: `my $r = Foo::bar();`
+/// Character map: F=8 o=9 o=10 :=11 :=12 b=13
+/// Characters 11 and 12 are the `::` separating `Foo` from `bar`.
+#[test]
+fn test_def_package_qualified_separator_returns_no_sub() -> TestResult {
+    let doc = concat!(
+        "package Foo;\n",        // 0
+        "\n",                    // 1
+        "sub bar {\n",           // 2
+        "    return 'baz';\n",   // 3
+        "}\n",                   // 4
+        "\n",                    // 5
+        "package main;\n",       // 6
+        "\n",                    // 7
+        "my $r = Foo::bar();\n", // 8
+    );
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///pkg_qual_sep.pl", doc)?;
+
+    // Cursor on the first `:` of `::` (character 11).
+    let result = harness
+        .request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": "file:///pkg_qual_sep.pl"},
+                "position": {"line": 8, "character": 11}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    if let Some(def_line) = first_location_line(&result) {
+        assert_ne!(
+            def_line, 2,
+            "Cursor on `::` separator in `Foo::bar()` must not navigate to `sub bar` \
+             on line 2; got line {def_line}."
+        );
+    }
+
+    Ok(())
+}
+
+/// Three-component name: cursor on a middle component must not navigate to the sub.
+///
+/// `My::Utils::process` — cursor on `Utils` must not resolve to `sub process`.
+#[test]
+fn test_def_three_component_qualified_middle_prefix() -> TestResult {
+    let doc = concat!(
+        "package My::Utils;\n",    // 0
+        "\n",                      // 1
+        "sub process {\n",         // 2
+        "    return 'done';\n",    // 3
+        "}\n",                     // 4
+        "\n",                      // 5
+        "package main;\n",         // 6
+        "\n",                      // 7
+        "My::Utils::process();\n", // 8
+    );
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///three_component.pl", doc)?;
+
+    // Line 8: `My::Utils::process();`
+    // M=0 y=1 :=2 :=3 U=4 t=5 i=6 l=7 s=8 :=9 :=10 p=11 r=12 o=13 c=14 e=15 s=16 s=17
+    // Cursor on `U` (character 4) — the `Utils` middle component.
+    let result = harness
+        .request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": "file:///three_component.pl"},
+                "position": {"line": 8, "character": 4}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    if let Some(def_line) = first_location_line(&result) {
+        assert_ne!(
+            def_line, 2,
+            "Cursor on `Utils` in `My::Utils::process()` must not navigate to `sub process` \
+             on line 2; got line {def_line}. The middle component is not the sub name."
+        );
+    }
+
+    // Cursor on `p` (character 11) — the `process` final component.
+    // This is a regression guard: the final component must still resolve correctly.
+    let result_final = harness
+        .request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": "file:///three_component.pl"},
+                "position": {"line": 8, "character": 11}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    if let Some(def_line) = first_location_line(&result_final) {
+        assert_eq!(
+            def_line, 2,
+            "Cursor on `process` in `My::Utils::process()` must navigate to `sub process` \
+             on line 2, got line {def_line}"
         );
     }
 

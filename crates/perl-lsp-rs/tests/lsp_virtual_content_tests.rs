@@ -3,6 +3,11 @@
 //! Tests for workspace/textDocumentContent LSP 3.18 feature
 //! for serving virtual documents like perldoc:// URIs.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use parking_lot::Mutex;
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
@@ -16,7 +21,7 @@ fn send_request(
 ) -> Result<serde_json::Value, String> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: method.to_string(),
         params: Some(params),
     };

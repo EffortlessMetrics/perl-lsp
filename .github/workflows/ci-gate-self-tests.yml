@@ -20,6 +20,15 @@ on:
       - 'scripts/publish-topo.py'
       - 'scripts/tests/test-install-target-selection.sh'
       - 'scripts/tests/test-publish-dry-run-gate.sh'
+      - 'scripts/ci/check-pr-review-convergence'
+      - 'scripts/ci/fixtures/convergence/**'
+      - 'scripts/tests/test-check-pr-review-convergence.sh'
+      - 'scripts/reviews/**'
+      - 'scripts/tests/test-review-lease.sh'
+      - 'scripts/worktree-manager.py'
+      - 'scripts/tests/test-worktree-manager.sh'
+      - '.cargo/config.toml'
+      - 'scripts/tests/test-target-isolation.sh'
       - '.github/workflows/publish-dry-run.yml'
       - '.github/workflows/ci-gate-self-tests.yml'
   workflow_dispatch: {}
@@ -42,7 +51,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: stable
 
@@ -95,4 +104,109 @@ jobs:
             echo "## Installer target-selection self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "The installer target-selection contract regressed. Check the step output above for the failed case." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  check-pr-review-convergence-self-test:
+    name: Review-convergence gate self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run review-convergence gate self-test
+        run: bash scripts/tests/test-check-pr-review-convergence.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Review-convergence gate self-test passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "check-pr-review-convergence correctly BLOCKs on both active and outdated unresolved review threads (issue #3679), stays ADVISORY-only on stale bot reviews, converges when all threads are resolved, and (issue #3693 R1) reports the review-protocol axes advisory-by-default while BLOCKing them under REVIEW_PROTOCOL_ENFORCE=1." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Review-convergence gate self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The review-convergence gate contract regressed. Check the step output above for the failed case." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  review-lease-self-test:
+    name: Review-lease self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run review-lease self-test
+        run: bash scripts/tests/test-review-lease.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Review-lease self-test passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "scripts/reviews/lease (issue #3693 R1) correctly acquires/verifies/releases a per-branch lease, refuses a different owner while unexpired, and surfaces expired leases as takeover-candidates on audit (the relocated fixture 11)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Review-lease self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The review-lease contract regressed. Check the step output above for the failed case." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  worktree-manager-self-test:
+    name: Worktree-manager allocate self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run worktree-manager allocate self-test
+        run: bash scripts/tests/test-worktree-manager.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Worktree-manager allocate self-test passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "scripts/worktree-manager.py \`allocate\` (issue #3749) correctly checks out an already-pushed origin branch's real content on slot re-allocation, and cuts genuinely-new branches from a freshly-fetched origin/main instead of a stale local tracking ref." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Worktree-manager allocate self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The worktree-manager allocate contract regressed. Check the step output above for the failed case." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  target-isolation-self-test:
+    name: Per-worktree cargo target-dir isolation self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
+        with:
+          toolchain: stable
+
+      - name: Run target-dir isolation self-test
+        run: bash scripts/tests/test-target-isolation.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Target-dir isolation self-test passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Two independently created worktrees (issue #3854) resolve \`cargo metadata\`'s \`target_directory\` to their own \`<worktree>/target\`, differing from each other, with \`CARGO_TARGET_DIR\` unset — confirming cargo's default per-worktree isolation, including from a subdirectory." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Target-dir isolation self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The per-worktree target-dir isolation contract regressed. Check the step output above for the failed case." >> "$GITHUB_STEP_SUMMARY"
           fi

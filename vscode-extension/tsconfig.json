@@ -6,12 +6,11 @@
     "outDir": "./out",
     "rootDir": "./src",
     "strict": true,
+    "noImplicitOverride": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "moduleResolution": "node16",
-    "ignoreDeprecations": "6.0",
     "allowSyntheticDefaultImports": true,
     "sourceMap": true
   },

@@ -69,7 +69,9 @@ pub(crate) fn find_nested_quantifier(pattern: &str, start_pos: usize) -> Option<
                     if !quantifier.is_possessive {
                         if let LastAtom::Group { has_backtracking_quantifier: true, .. } = last_atom
                         {
-                            return Some(start_pos + i);
+                            if quantifier.can_repeat {
+                                return Some(start_pos + i);
+                            }
                         }
 
                         if let Some(parent) = group_stack.last_mut() {
@@ -97,6 +99,7 @@ pub(crate) fn find_nested_quantifier(pattern: &str, start_pos: usize) -> Option<
 struct Quantifier {
     len: usize,
     is_possessive: bool,
+    can_repeat: bool,
 }
 
 fn quantifier_at(bytes: &[u8], i: usize) -> Option<Quantifier> {
@@ -106,7 +109,8 @@ fn quantifier_at(bytes: &[u8], i: usize) -> Option<Quantifier> {
         _ => return None,
     };
     let is_possessive = bytes.get(i + quantifier_len) == Some(&b'+');
-    Some(Quantifier { len: quantifier_len + usize::from(is_possessive), is_possessive })
+    let can_repeat = bytes.get(i) != Some(&b'?');
+    Some(Quantifier { len: quantifier_len + usize::from(is_possessive), is_possessive, can_repeat })
 }
 
 fn brace_quantifier_len(bytes: &[u8], start: usize) -> Option<usize> {
@@ -125,6 +129,39 @@ fn brace_quantifier_len(bytes: &[u8], start: usize) -> Option<usize> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Quantifier, quantifier_at};
+
+    #[test]
+    fn question_quantifier_is_not_repeatable() {
+        assert_eq!(
+            quantifier_at(b"?", 0),
+            Some(Quantifier { len: 1, is_possessive: false, can_repeat: false })
+        );
+        assert_eq!(
+            quantifier_at(b"?+", 0),
+            Some(Quantifier { len: 2, is_possessive: true, can_repeat: false })
+        );
+    }
+
+    #[test]
+    fn repeating_quantifiers_are_repeatable() {
+        assert_eq!(
+            quantifier_at(b"+", 0),
+            Some(Quantifier { len: 1, is_possessive: false, can_repeat: true })
+        );
+        assert_eq!(
+            quantifier_at(b"*", 0),
+            Some(Quantifier { len: 1, is_possessive: false, can_repeat: true })
+        );
+        assert_eq!(
+            quantifier_at(b"{2,5}", 0),
+            Some(Quantifier { len: 5, is_possessive: false, can_repeat: true })
+        );
+    }
 }
 
 fn skip_group_prefix(bytes: &[u8], start: usize) -> (usize, bool) {

@@ -102,6 +102,11 @@ your-project/
 |-----|------|---------|-------------|
 | `engine` | `"legacy"`, `"perlcritic"`, `"external"`, or `"native"` | `"native"` | Selects the critic engine. `native` uses the Rust-native rule registry; `legacy`, `perlcritic`, and `external` use the Perl::Critic-compatible shell-out path. |
 
+For the native engine, see the [Native Critic Rule Matrix](NATIVE_CRITIC_RULE_MATRIX.md)
+for every shipped rule (ID, category, severity, and which of the `recommended` /
+`strict` profiles enables it), plus the `profile` / `severity` / `include` /
+`exclude` knobs.
+
 #### `[features]` — LSP Feature Toggles
 
 | Key | Type | Default | Description |
@@ -750,7 +755,7 @@ decrease them for resource-constrained environments.
 ## CLI Flags
 
 Flags passed when launching the `perllsp` executable. Source:
-`crates/perl-lsp-launcher/src/lib.rs`.
+`crates/perl-lsp-rs-core/src/runtime/launcher/mod.rs`.
 
 ### Server mode
 
@@ -846,7 +851,7 @@ coc.nvim uses Vim/Neovim filetypes, so Perl buffers must have `filetype=perl`.
 ## Environment Variables
 
 Environment variables read at startup by the `perllsp` executable. Source:
-`crates/perl-lsp-launcher/src/lib.rs`.
+`crates/perl-lsp-rs-core/src/runtime/launcher/mod.rs`.
 
 ### `PERL_LSP_LOG`
 
@@ -958,7 +963,7 @@ launch `perllsp --stdio`.
 ## DAP Debug Configuration
 
 Debug Adapter Protocol configuration used in `launch.json`. Source:
-`crates/perl-dap-config/src/lib.rs` and `vscode-extension/package.json`.
+`crates/perl-dap/src/config/mod.rs` and `vscode-extension/package.json`.
 
 For a full walkthrough, see the [DAP User Guide](../tutorials/DAP_USER_GUIDE.md).
 

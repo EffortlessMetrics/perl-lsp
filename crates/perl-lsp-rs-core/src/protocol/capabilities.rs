@@ -122,6 +122,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.runSubtest".to_string(),
         "perl.debugFile".to_string(),
         "perl.debugTest".to_string(),
+        "perl.debugTestFile".to_string(),
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
         "perl.explainProviderDecision".to_string(),

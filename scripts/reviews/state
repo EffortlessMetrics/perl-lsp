@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# scripts/reviews/state — review lifecycle state for a PR (#3693 R1, FILE 2)
+#
+# A READ-ONLY wrapper over check-pr-review-convergence: it runs the canonical
+# closeout, then projects its JSON fields onto the review lifecycle state
+# machine. It NEVER re-derives any GraphQL query (the closeout is the single
+# authority) and it is NOT a gate — `state` is DATA, always exit 0 (exit 2
+# only if the underlying closeout hit a fetch error).
+#
+# States (in progression order):
+#   REVIEW_IN_FLIGHT   — a review is running (review-run receipt status=running,
+#                        or the needs-deep-review label is set). No verdict yet.
+#   FINDINGS_CLASSIFIED— findings exist; dispositions are being recorded but the
+#                        fix is not yet proven reachable at head.
+#   FIXED_HEAD         — dispositions present and fix commits reachable at head,
+#                        but no independent verification receipt at head yet.
+#   VERIFIED_HEAD      — an independent verification receipt exists at head, but
+#                        the PR is not yet fully converged.
+#   CONVERGED          — the closeout reports converged:true.
+#   MERGEABLE          — reserved: CONVERGED plus green CI (CI is a separate
+#                        gate this script does not consult; never emitted here).
+#
+# The forbidden transition FINDINGS_CLASSIFIED → CONVERGED (skipping
+# FIXED_HEAD/VERIFIED_HEAD) is structurally impossible: the closeout only
+# reports converged:true once verification_receipt_head_match holds for every
+# substantive disposition, which requires a disposition:v1 marker, which only
+# scripts/reviews/disposition can post. State merely SURFACES that ladder; the
+# closeout ENFORCES it.
+#
+# ── Usage ────────────────────────────────────────────────────────────────────
+#   scripts/reviews/state <pr> [owner/repo]
+#
+# Honors CONVERGENCE_TEST_FIXTURE_DIR (delegated straight to the closeout's
+# own fixture seam), so it is testable offline against the same fixtures.
+#
+# ── Output ───────────────────────────────────────────────────────────────────
+#   stdout: {"pr":N,"head":"...","state":"..."}
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+    echo "usage: $0 <pr-number> [owner/repo]" >&2
+    exit 2
+fi
+PR="$1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLOSEOUT="$SCRIPT_DIR/../ci/check-pr-review-convergence"
+
+command -v jq >/dev/null 2>&1 || { echo "ERROR: jq not found on PATH" >&2; exit 2; }
+[[ -x "$CLOSEOUT" || -f "$CLOSEOUT" ]] || { echo "ERROR: closeout not found at $CLOSEOUT" >&2; exit 2; }
+
+# Run the closeout in ENFORCE mode, capturing stdout regardless of its verdict
+# exit (0 or 1). `state` reports the FULL protocol position, so it must see the
+# R1 axes as blocking even during the advisory rollout — otherwise a PR with an
+# un-marked disposition would mis-report CONVERGED (its advisory verdict) rather
+# than FINDINGS_CLASSIFIED (its true protocol position). `state` is DATA, never
+# a merge gate, so enabling enforce internally blocks nothing — it only makes
+# the derived state faithful. Only a genuine fetch/usage error (exit 2) is fatal.
+CLOSE_EXIT=0
+CLOSE_OUT="$(REVIEW_PROTOCOL_ENFORCE=1 bash "$CLOSEOUT" "$@" 2>/dev/null)" || CLOSE_EXIT=$?
+if [[ "$CLOSE_EXIT" -eq 2 ]]; then
+    echo "ERROR: closeout fetch/usage error for PR #$PR" >&2
+    exit 2
+fi
+
+# Extract the trailing JSON object.
+JSON="$(printf '%s' "$CLOSE_OUT" | sed -n '/^{/,$p')"
+if [[ -z "$JSON" ]]; then
+    echo "ERROR: closeout produced no JSON verdict for PR #$PR" >&2
+    exit 2
+fi
+
+# Robust getter: a MISSING field (jq prints "null") falls back to $2, but a
+# real `false`/0 value is preserved. Do NOT use jq's `//` operator for this —
+# `false // default` returns default, silently corrupting a legitimate false.
+getf() {
+    local v
+    v="$(printf '%s' "$JSON" | jq -r "$1")"
+    if [[ "$v" == "null" ]]; then printf '%s' "$2"; else printf '%s' "$v"; fi
+}
+
+HEAD="$(getf '.headRefOid' '')"
+CONVERGED="$(getf '.converged' 'false')"
+REVIEW_RUNS_IN_FLIGHT="$(getf '.review_runs_in_flight' '0')"
+INDEPENDENT_PENDING="$(getf '.independent_review_pending' 'false')"
+RESOLVED_THREADS="$(getf '.resolved_threads' '0')"
+DISPOSITIONS_MISSING="$(getf '.dispositions_missing_marker' '0')"
+VERIFICATION_HEAD_MATCH="$(getf '.verification_receipt_head_match' 'true')"
+DEEP_HEAD_MATCH="$(getf '.deep_review_receipt_head_match' 'true')"
+UNREACHABLE_FIX="$(getf '.unreachable_fix_commits' '0')"
+
+DISPOSITIONS_PRESENT=$(( RESOLVED_THREADS - DISPOSITIONS_MISSING ))
+
+if [[ "$CONVERGED" == "true" ]]; then
+    STATE="CONVERGED"
+elif [[ "$REVIEW_RUNS_IN_FLIGHT" -gt 0 || "$INDEPENDENT_PENDING" == "true" || "$DEEP_HEAD_MATCH" != "true" ]]; then
+    # A deep receipt bound to an older head (deep_review_receipt_head_match=false)
+    # means the deep review must re-run at head — still in flight.
+    STATE="REVIEW_IN_FLIGHT"
+elif [[ "$DISPOSITIONS_PRESENT" -gt 0 ]]; then
+    if [[ "$UNREACHABLE_FIX" -gt 0 ]]; then
+        # Classified, but the cited fix has not landed at head — not FIXED_HEAD.
+        STATE="FINDINGS_CLASSIFIED"
+    elif [[ "$VERIFICATION_HEAD_MATCH" == "true" ]]; then
+        STATE="VERIFIED_HEAD"
+    else
+        STATE="FIXED_HEAD"
+    fi
+else
+    STATE="FINDINGS_CLASSIFIED"
+fi
+
+jq -n --argjson pr "$PR" --arg head "$HEAD" --arg state "$STATE" \
+    '{pr:$pr, head:$head, state:$state}'
+exit 0

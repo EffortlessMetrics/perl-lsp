@@ -159,15 +159,32 @@ jobs:
           echo "idle_cx53=${idle_cx53:-0}"
           echo "idle_cx43=${idle_cx43:-0}"
 
-          # Prefer CX53 (301 GB volume, ~140 GB free) over CX43 (150 GB volume,
-          # fills faster from orphaned run artifacts).
+          # TEMPORARY: CX43 is demoted from routing. The CX43 host has lost its
+          # preloaded em-ci-rust:1.95 Docker image (a local-only image, not in any
+          # registry), so every CX43 job fails preflight in ~11-14s with
+          # "Unable to find image 'em-ci-rust:1.95' locally / pull access denied".
+          # The GitHub-hosted disk-full fallback then rescues the required aggregate,
+          # but this (a) shows a misleading red "Perl LSP Rust Small on CX43" check on
+          # every PR and (b) wastes a doomed CX43 start plus a full GH-hosted re-run.
+          # Evidence: PR #3321 job 85060598571 — "repository does not exist or may
+          # require 'docker login'". Routing straight to CX53 (or GH-hosted when CX53
+          # is busy) is both cleaner and cheaper until ops restores the CX43 image.
+          # Revert: delete this block's CX43 skip and restore the `elif ... emit cx43`
+          # branch (preserved below) once `docker image inspect em-ci-rust:1.95`
+          # passes on the CX43 host.
+          #
+          # Prefer CX53 (301 GB volume, ~140 GB free); fall back to GitHub-hosted
+          # when CX53 is busy. CX43 intentionally skipped (see above).
           if [ "${idle_cx53:-0}" -gt 0 ]; then
             emit "cx53" "cx53_idle" "false" "false"
-          elif [ "${idle_cx43:-0}" -gt 0 ]; then
-            emit "cx43" "cx43_idle" "false" "false"
           else
             emit "github" "no_idle_runner" "false" "true"
           fi
+
+          # --- BEGIN temporarily dead code (restore to re-enable CX43) ---
+          # elif [ "${idle_cx43:-0}" -gt 0 ]; then
+          #   emit "cx43" "cx43_idle" "false" "false"
+          # --- END temporarily dead code ---
 
   rust-small-cx53:
     name: Perl LSP Rust Small on CX53
@@ -310,6 +327,9 @@ jobs:
               cargo check --workspace --locked
               cargo test --locked -p perl-parser --test semantic_smoke_tests -- --nocapture
               cargo test --locked -p perl-lsp-rs --test lsp_smoke -- --test-threads=1 --nocapture
+              scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | awk "/: test\$/{count++} END {print count+0}")
+              test "$scorecard_tests" -gt 0
+              INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
               sccache --show-stats || true
             '
 
@@ -464,6 +484,9 @@ jobs:
               cargo check --workspace --locked
               cargo test --locked -p perl-parser --test semantic_smoke_tests -- --nocapture
               cargo test --locked -p perl-lsp-rs --test lsp_smoke -- --test-threads=1 --nocapture
+              scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | awk "/: test\$/{count++} END {print count+0}")
+              test "$scorecard_tests" -gt 0
+              INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
               sccache --show-stats || true
             '
 
@@ -498,7 +521,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt, clippy
@@ -514,16 +537,20 @@ jobs:
           set -euo pipefail
           cargo fetch --locked
           cargo check --workspace --locked
+          scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | grep -c -F ": test" || true)
+          test "$scorecard_tests" -gt 0
+          INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
           git diff --check
 
   # ── Disk-full failover ──────────────────────────────────────────────────────
   # Defense-in-depth: if the primary self-hosted runner's preflight disk-guard
   # still fails AFTER aggressive cleanup (orphan reap + sccache cap + docker
   # prune), fall back to GitHub-hosted so the PR is not blocked by a disk-full
-  # runner.  This job is intentionally narrow — it only runs cargo check, not
-  # the full Docker-based test suite — because the failing runner needs ops
-  # attention (the ::warning annotation in this job's summary is the signal).
-  # The aggregate Result job below accepts this success the same as the primary.
+  # runner. This job remains intentionally narrow: it runs cargo check plus
+  # the references scorecard guard, not the full Docker-based test suite,
+  # because the failing runner needs ops attention (the ::warning annotation
+  # in this job's summary is the signal).
+  # The aggregate Result job below accepts this narrow success the same as the primary.
   rust-small-fallback:
     name: Perl LSP Rust Small (Disk-Full Fallback)
     needs:
@@ -532,7 +559,7 @@ jobs:
       - rust-small-cx43
     # Trigger ONLY when the primary self-hosted job failed AND the preflight step
     # explicitly recorded preflight_ok=false (written to GITHUB_OUTPUT before exit 1).
-    # This prevents a real test failure from masking under a GH-hosted cargo-check-only run.
+    # This prevents a real test failure from masking under a GH-hosted narrow run.
     # If preflight_ok is empty (job OOM-killed before the step could write output), we
     # do NOT trigger the fallback — that case needs ops investigation, not a workaround.
     if: >-
@@ -566,7 +593,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt, clippy
@@ -582,6 +609,9 @@ jobs:
           set -euo pipefail
           cargo fetch --locked
           cargo check --workspace --locked
+          scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | grep -c -F ": test" || true)
+          test "$scorecard_tests" -gt 0
+          INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
           git diff --check
 
   rust-small-result:

@@ -236,7 +236,60 @@ pub fn bump(repo_root: &Path, new_version: &str) -> Result<BumpReport> {
         report.touched_files.push(PathBuf::from("RELEASE_HISTORY.md"));
     }
 
+    // Create the per-release notes scaffold so the RELEASE_HISTORY ledger link
+    // resolves immediately after the bump PR merges.
+    if ensure_release_notes_scaffold(repo_root, new_version)? {
+        report.files_updated += 1;
+        report.touched_files.push(PathBuf::from(format!("docs/releases/v{new_version}.md")));
+    }
+
     Ok(report)
+}
+
+/// Create a `docs/releases/vX.Y.Z.md` scaffold if it does not yet exist.
+///
+/// Returns `Ok(true)` when a new file was written. Returns `Ok(false)` when
+/// the file already exists (idempotent) or when the `docs/releases/` directory
+/// is absent (some forks may not maintain per-release notes files).
+///
+/// The scaffold frontmatter mirrors the shape of existing release note files
+/// (see `docs/releases/v0.15.1.md` for a canonical example). Fields not yet
+/// known at bump time (e.g. `channels.*`) are left as `pending`; the
+/// release-orchestration workflow backfills them.
+fn ensure_release_notes_scaffold(repo_root: &Path, new_version: &str) -> Result<bool> {
+    let releases_dir = repo_root.join("docs").join("releases");
+    if !releases_dir.is_dir() {
+        return Ok(false); // forks without release notes: no-op
+    }
+    let scaffold_path = releases_dir.join(format!("v{new_version}.md"));
+    if scaffold_path.exists() {
+        return Ok(false); // idempotent: file already present
+    }
+    let today = today_iso_date();
+    let content = format!(
+        "---\n\
+         version: \"{new_version}\"\n\
+         tag: \"v{new_version}\"\n\
+         release_date_utc: \"{today}\"\n\
+         notes_status: draft\n\
+         release_track: public-alpha\n\
+         release_kind: minor\n\
+         channels:\n\
+         \x20 github_release: pending\n\
+         \x20 crates_io: pending\n\
+         \x20 vscode_marketplace: pending\n\
+         \x20 open_vsx: pending\n\
+         \x20 docker: pending\n\
+         ---\n\n\
+         # v{new_version}\n\n\
+         ## Summary\n\n\
+         <!-- TODO: fill in release summary before publishing -->\n\n\
+         ## Highlights\n\n\
+         <!-- TODO: fill in highlights -->\n",
+    );
+    fs::write(&scaffold_path, content)
+        .map_err(|e| eyre!("writing {}: {e}", scaffold_path.display()))?;
+    Ok(true)
 }
 
 /// Append a row + 4 link refs to `RELEASE_HISTORY.md` for `new_version`.
@@ -475,6 +528,12 @@ static README_RELEASE_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(&format!(r"\*\*Current release:\s*v({VERSION_FRAGMENT})\*\*")));
 static CLAUDE_RELEASE_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(&format!(r"\*\*Latest Release\*\*:\s*({VERSION_FRAGMENT})")));
+/// Matches `**Latest Release**: v<version>` where the `v` prefix is literal.
+/// Used for `book/src/introduction.md` which uses the `v`-prefixed form.
+/// The `v` is outside the capture group so `rewrite_version_in_line` replaces
+/// only the numeric semver and leaves the `v` in place.
+static BOOK_RELEASE_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(&format!(r"\*\*Latest Release\*\*:\s*v({VERSION_FRAGMENT})")));
 static ROADMAP_WORKSPACE_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(&format!(r"Workspace version line:\s*`v({VERSION_FRAGMENT})`")));
 static ROADMAP_PUBLISHED_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -790,6 +849,27 @@ fn collect_doc_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Result<(
         "flake.nix",
         "flake.nix perl-lsp package version",
         &FLAKE_NIX_VERSION_RE,
+        sites,
+    )?;
+
+    // .github/copilot-instructions.md: "**Latest Release**: <version>"
+    // Same badge pattern as CLAUDE.md (no `v` prefix on the version).
+    collect_single_line_doc_site(
+        repo_root,
+        ".github/copilot-instructions.md",
+        "copilot-instructions.md latest release line",
+        &CLAUDE_RELEASE_RE,
+        sites,
+    )?;
+
+    // book/src/introduction.md: "**Latest Release**: v<version>" (v-prefixed form).
+    // BOOK_RELEASE_RE captures the numeric part only so rewrite_version_in_line
+    // leaves the `v` in place.
+    collect_single_line_doc_site(
+        repo_root,
+        "book/src/introduction.md",
+        "book/src/introduction.md latest release line",
+        &BOOK_RELEASE_RE,
         sites,
     )?;
 
@@ -1340,6 +1420,172 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
             "missing flake.nix must be silently skipped (some forks may not use Nix)"
         );
 
+        fs::remove_dir_all(&repo_root).ok();
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // copilot-instructions.md and book/src/introduction.md version tracking
+    // (issue #3155: version-doc badge sites missing from bump-version)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn book_release_re_matches_v_prefixed_version() {
+        let line = "**Latest Release**: v0.17.0";
+        let caps = BOOK_RELEASE_RE.captures(line);
+        assert!(caps.is_some(), "BOOK_RELEASE_RE must match the v-prefixed form");
+        assert_eq!(&caps.unwrap()[1], "0.17.0", "capture group must exclude the v prefix");
+    }
+
+    #[test]
+    fn book_release_re_matches_pre_release_version() {
+        let line = "**Latest Release**: v0.17.0-rc1";
+        let caps = BOOK_RELEASE_RE.captures(line);
+        assert!(caps.is_some(), "BOOK_RELEASE_RE must match pre-release versions with v prefix");
+        assert_eq!(&caps.unwrap()[1], "0.17.0-rc1");
+    }
+
+    #[test]
+    fn book_release_re_does_not_match_no_v_prefix() {
+        // copilot-instructions.md uses no `v` prefix — CLAUDE_RELEASE_RE handles those.
+        let line = "**Latest Release**: 0.17.0";
+        assert!(
+            BOOK_RELEASE_RE.captures(line).is_none(),
+            "BOOK_RELEASE_RE must not match the non-v-prefixed form (CLAUDE_RELEASE_RE handles that)"
+        );
+    }
+
+    #[test]
+    fn collect_doc_sites_discovers_copilot_instructions_version() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("copilot-collect")?;
+        let github_dir = repo_root.join(".github");
+        fs::create_dir_all(&github_dir).map_err(|e| eyre!("creating .github dir: {e}"))?;
+        fs::write(
+            github_dir.join("copilot-instructions.md"),
+            "# Copilot Instructions\n\n**Latest Release**: 0.42.0\n",
+        )
+        .map_err(|e| eyre!("writing copilot-instructions.md: {e}"))?;
+
+        let mut sites = Vec::new();
+        collect_doc_sites(&repo_root, &mut sites)?;
+
+        let site = sites
+            .iter()
+            .find(|s| s.description.contains("copilot-instructions.md"))
+            .ok_or_else(|| eyre!("copilot-instructions.md version site should be collected"))?;
+        assert_eq!(site.found, "0.42.0");
+        assert!(!site.channel_split, "copilot-instructions.md is not channel-split");
+
+        fs::remove_dir_all(&repo_root).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn collect_doc_sites_skips_missing_copilot_instructions() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("copilot-missing")?;
+        let mut sites = Vec::new();
+        collect_doc_sites(&repo_root, &mut sites)?;
+        assert!(
+            !sites.iter().any(|s| s.description.contains("copilot-instructions.md")),
+            "missing copilot-instructions.md must be silently skipped"
+        );
+        fs::remove_dir_all(&repo_root).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn collect_doc_sites_discovers_book_introduction_version() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("book-collect")?;
+        let book_src = repo_root.join("book").join("src");
+        fs::create_dir_all(&book_src).map_err(|e| eyre!("creating book/src dir: {e}"))?;
+        fs::write(
+            book_src.join("introduction.md"),
+            "# Introduction\n\n## Project Status\n\n**Latest Release**: v0.42.0\n",
+        )
+        .map_err(|e| eyre!("writing book/src/introduction.md: {e}"))?;
+
+        let mut sites = Vec::new();
+        collect_doc_sites(&repo_root, &mut sites)?;
+
+        let site = sites
+            .iter()
+            .find(|s| s.description.contains("book/src/introduction.md"))
+            .ok_or_else(|| eyre!("book/src/introduction.md version site should be collected"))?;
+        assert_eq!(site.found, "0.42.0", "captured version must exclude the v prefix");
+        assert!(!site.channel_split, "book/src/introduction.md is not channel-split");
+
+        fs::remove_dir_all(&repo_root).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn collect_doc_sites_skips_missing_book_introduction() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("book-missing")?;
+        let mut sites = Vec::new();
+        collect_doc_sites(&repo_root, &mut sites)?;
+        assert!(
+            !sites.iter().any(|s| s.description.contains("book/src/introduction.md")),
+            "missing book/src/introduction.md must be silently skipped"
+        );
+        fs::remove_dir_all(&repo_root).ok();
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // ensure_release_notes_scaffold tests (issue #3155)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ensure_release_notes_scaffold_creates_file_when_absent() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("scaffold-create")?;
+        let releases_dir = repo_root.join("docs").join("releases");
+        fs::create_dir_all(&releases_dir).map_err(|e| eyre!("creating releases dir: {e}"))?;
+
+        let created = ensure_release_notes_scaffold(&repo_root, "0.42.0")?;
+        assert!(created, "scaffold should be created when file is absent");
+
+        let scaffold_path = releases_dir.join("v0.42.0.md");
+        assert!(scaffold_path.exists(), "scaffold file must exist after creation");
+
+        let content =
+            fs::read_to_string(&scaffold_path).map_err(|e| eyre!("reading scaffold: {e}"))?;
+        assert!(content.contains("version: \"0.42.0\""), "frontmatter must contain version");
+        assert!(content.contains("tag: \"v0.42.0\""), "frontmatter must contain tag");
+        assert!(content.contains("notes_status: draft"), "frontmatter must have draft status");
+        assert!(content.contains("# v0.42.0"), "scaffold must have version heading");
+
+        fs::remove_dir_all(&repo_root).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn ensure_release_notes_scaffold_is_idempotent() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("scaffold-idempotent")?;
+        let releases_dir = repo_root.join("docs").join("releases");
+        fs::create_dir_all(&releases_dir).map_err(|e| eyre!("creating releases dir: {e}"))?;
+
+        let first = ensure_release_notes_scaffold(&repo_root, "0.42.0")?;
+        assert!(first, "first call should create the file");
+        let content_first = fs::read_to_string(releases_dir.join("v0.42.0.md"))?;
+
+        let second = ensure_release_notes_scaffold(&repo_root, "0.42.0")?;
+        assert!(!second, "second call must return false (file already exists)");
+        let content_second = fs::read_to_string(releases_dir.join("v0.42.0.md"))?;
+        assert_eq!(
+            content_first, content_second,
+            "scaffold content must be byte-identical after idempotent call"
+        );
+
+        fs::remove_dir_all(&repo_root).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn ensure_release_notes_scaffold_no_op_when_releases_dir_absent() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("scaffold-no-dir")?;
+        // Do not create docs/releases — forks without release notes should get no-op.
+        let created = ensure_release_notes_scaffold(&repo_root, "0.42.0")?;
+        assert!(!created, "absent docs/releases dir must be a no-op");
         fs::remove_dir_all(&repo_root).ok();
         Ok(())
     }

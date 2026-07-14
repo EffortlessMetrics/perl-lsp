@@ -178,9 +178,6 @@ labels:
   # Full LSP test suite
   ci:lsp: 'Full LSP integration tests'
 
-  # Code coverage generation
-  ci:coverage: 'Generate branch-aware coverage reports'
-
   # Performance benchmarks
   ci:bench: 'Run benchmarks'
 

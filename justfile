@@ -36,6 +36,11 @@ agent-nextest:
 agent-pr-fast:
     {{cargo_safe}} xtask gates --tier pr-fast --receipt
 
+# M4b (#3763): assert review/audit agents are mechanically read-only
+# (no Edit/Write/NotebookEdit/Agent in their tools: allowlist).
+check-agent-capabilities:
+    {{cargo_safe}} xtask check-agent-capabilities
+
 # ============================================================================
 # Tiered CI Execution (works locally via Nix and in GitHub Actions)
 # ============================================================================
@@ -1143,6 +1148,17 @@ ci-v2-parity:
     cargo run --locked -p xtask --features legacy -- corpus --scanner v2-parity
     @echo "✅ V2 parity corpus check passed"
 
+# Generate a Devel::ptkdb `.ptkdbrc` bootstrap for PROGRAM (prints to stdout).
+# Redirect into `.ptkdbrc` next to your script, then run `perl -d:ptkdb PROGRAM`.
+# See docs/how-to/EXTERNAL_DEBUGGER_PEER_QUICKSTART.md
+ptkdb-rc program:
+    @cargo run -q -p perl-dap -- --ptkdb-bootstrap-rc {{program}}
+
+# Print the `perl-lsp-debug-session-v1` JSON session plan for PROGRAM
+# (breakable lines, subroutines, include paths). Useful for scripting/inspection.
+dap-session-plan program:
+    @cargo run -q -p perl-dap -- --debug-session-plan {{program}}
+
 # Targeted parser/DAP verification (low-memory, for heredoc/breakpoint changes)
 # Key fixes: unset RUSTC_WRAPPER (not empty), --no-deps on clippy, targeted tests
 ci-test-parser-dap:
@@ -1187,6 +1203,7 @@ ux-tests:
         cargo build -p perl-lsp-rs --bin perl-lsp
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         PERL_LSP_BIN={{justfile_directory()}}/target/debug/perl-lsp \
+        PERL_LSP_UX_REQUIRE_BINARY=1 \
         cargo test -p perl-lsp-ux-tests -- --test-threads=1
     @echo "UX tests passed"
 
@@ -1199,6 +1216,7 @@ ux-tests-full:
         cargo build -p perl-lsp-rs --bin perl-lsp
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         PERL_LSP_BIN={{justfile_directory()}}/target/debug/perl-lsp \
+        PERL_LSP_UX_REQUIRE_BINARY=1 \
         cargo test -p perl-lsp-ux-tests --features integration-test -- --test-threads=1
     @echo "UX tests (full) passed"
 
@@ -1868,7 +1886,7 @@ coverage:
         "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch --html --output-dir target/coverage \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     @echo "✅ Coverage report: target/coverage/index.html"
     @echo "📈 Opening report in browser..."
     @command -v xdg-open >/dev/null 2>&1 && xdg-open target/coverage/index.html || \
@@ -1883,7 +1901,7 @@ coverage-lcov:
         "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch --lcov --output-path lcov.info \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     @echo "✅ Coverage: lcov.info"
 
 # Show coverage summary (terminal)
@@ -1895,7 +1913,7 @@ coverage-summary:
         "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
 
 
 # Generate parser library branch coverage in LCOV format (CI-safe when cargo-llvm-cov is unavailable)
@@ -1909,7 +1927,7 @@ coverage-parser:
     fi
     @mkdir -p target/coverage
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser -p perl-parser-core --lib --locked --branch --lcov --output-path target/coverage/parser.lcov \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     @echo "✅ Parser coverage: target/coverage/parser.lcov"
 # Generate branch coverage and fail if it regresses against the baseline policy
 coverage-branch-gate:
@@ -1919,7 +1937,7 @@ coverage-branch-gate:
         "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch --lcov --output-path lcov.info \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     @bash ./scripts/check-coverage-baseline.sh lcov.info .ci/coverage-baseline.txt
 
 # Generate workspace library coverage plus focused xtask proof-lane coverage,
@@ -1974,7 +1992,7 @@ coverage-proof base='origin/main':
         --test semantic_inline_next_edit_cli \
         --test ripr_new_gap_gate_workflow
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --lcov --output-path target/lcov.info \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     cargo xtask coverage-baseline \
         --lcov target/lcov.info \
         --receipt target/receipts/quality/coverage-baseline.json \
@@ -2051,7 +2069,7 @@ coverage-proof-routed base='origin/main' head='HEAD':
     python3 scripts/ci/generate-coverage-pack-commands.py
     bash target/receipts/quality/coverage-pack-commands.sh
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --profile agent --lcov --output-path target/lcov.info \
-        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/|(^|/)crates/perl-dap/src/main\.rs$'
     cargo xtask coverage-baseline \
         --lcov target/lcov.info \
         --receipt target/receipts/quality/coverage-baseline.json \
@@ -2847,6 +2865,130 @@ cpan-corpus-install:
 cpan-corpus-sweep:
     cargo run -p xtask -- cpan-corpus sweep
 
+# Discover upstream Perl core base tests from a prepared Perl tree.
+perl-core-prepare REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
+    cargo run -p xtask -- perl-core-harness prepare \
+          --ref {{REF}} \
+          --output-dir target/perl-core/upstream/{{REF}}
+
+perl-core-discover-base PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness discover \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile base
+
+perl-core-parse-base PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness run \
+          --mode parse \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile base
+
+perl-core-compile-base PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness run \
+          --mode compile \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile base
+
+perl-core-compile-base-ratchet PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness run \
+          --mode compile \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile base
+    cargo run -p xtask -- perl-core-harness baseline \
+          --mode compile \
+          --profile base \
+          --report target/perl-core/reports/base-compile.json \
+          --baseline .ci/perl-core-harness/base-compile-baseline.json \
+          --check
+
+perl-core-real-base-smoke PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile base \
+          --modes parse,compile
+
+perl-core-real-comp-smoke PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile comp \
+          --modes parse,compile
+
+perl-core-real-run-smoke PERL_TREE HOST_PERL="perl":
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree {{PERL_TREE}} \
+          --host-perl {{HOST_PERL}} \
+          --profile run \
+          --modes parse,compile
+
+perl-core-integrated-base REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
+    cargo run -p xtask -- perl-core-harness prepare \
+          --ref {{REF}} \
+          --output-dir target/perl-core/upstream/{{REF}}
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree target/perl-core/upstream/{{REF}}/perl5 \
+          --host-perl perl \
+          --profile base \
+          --modes parse,compile \
+          --perl-ref {{REF}} \
+          --output-dir target/perl-core/smoke/base
+
+perl-core-integrated-comp REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
+    cargo run -p xtask -- perl-core-harness prepare \
+          --ref {{REF}} \
+          --output-dir target/perl-core/upstream/{{REF}}
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree target/perl-core/upstream/{{REF}}/perl5 \
+          --host-perl perl \
+          --profile comp \
+          --modes parse,compile \
+          --perl-ref {{REF}} \
+          --output-dir target/perl-core/smoke/comp
+
+perl-core-integrated-run REF="b62845c7186b0b6a8e4e83419e6b5ef64ceef3ed":
+    cargo run -p xtask -- perl-core-harness prepare \
+          --ref {{REF}} \
+          --output-dir target/perl-core/upstream/{{REF}}
+    cargo run -p xtask -- perl-core-harness smoke \
+          --perl-tree target/perl-core/upstream/{{REF}}/perl5 \
+          --host-perl perl \
+          --profile run \
+          --modes parse,compile \
+          --perl-ref {{REF}} \
+          --output-dir target/perl-core/smoke/run
+
+perl-core-upstream-compile-ratchet:
+    cargo run -p xtask -- perl-core-harness baseline \
+          --mode compile \
+          --profile base \
+          --report target/perl-core/smoke/base/compile.json \
+          --baseline .ci/perl-core-harness/upstream-base-compile-baseline.json \
+          --check
+    cargo run -p xtask -- perl-core-harness baseline \
+          --mode compile \
+          --profile comp \
+          --report target/perl-core/smoke/comp/compile.json \
+          --baseline .ci/perl-core-harness/upstream-comp-compile-baseline.json \
+          --check
+    cargo run -p xtask -- perl-core-harness baseline \
+          --mode compile \
+          --profile run \
+          --report target/perl-core/smoke/run/compile.json \
+          --baseline .ci/perl-core-harness/upstream-run-compile-baseline.json \
+          --check
+
+perl-core-execute-base-ratchet:
+    cargo run -p xtask -- perl-core-harness baseline \
+          --mode execute \
+          --profile base \
+          --report target/perl-core/reports/base-execute.json \
+          --baseline .ci/perl-core-harness/base-execute-baseline.json \
+          --check
+
 # Bootstrap/update the committed CPAN corpus baseline
 cpan-corpus-baseline-update:
     cargo run -p xtask -- cpan-corpus sweep --output .ci/cpan-corpus-baseline.json
@@ -2901,46 +3043,17 @@ lsp-tier-c:
 # Worktree Cleanup
 # ============================================================================
 
-# Clean up stale agent worktrees (safe — only removes worktrees with no uncommitted changes and no open PR)
+# Clean up stale agent worktrees (safe — location-agnostic via `git worktree
+# list --porcelain`; keeps the root worktree, locked worktrees, worktrees
+# with an open PR, and worktrees active within the last GRACE_HOURS; salvages
+# a recovery packet for dirty worktrees before force-removing them).
 # Also reaps orphaned /tmp build-target directories to reclaim disk space.
-clean-worktrees:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    repo_name=$(basename "$PWD")
-    managed_root="$(dirname "$PWD")/${repo_name}-worktrees"
-    echo "Reaping orphaned /tmp agent build targets (dry-run — pass APPLY=1 to prune)..."
-    bash "$(git rev-parse --show-toplevel)/scripts/clean-tmp-targets.sh" || true
-    echo ""
-    echo "Pruning unreferenced worktrees..."
-    git worktree prune
-    echo "Checking ${managed_root}/ for stale entries..."
-    removed=0
-    kept=0
-    for wt in "${managed_root}"/*/; do
-        [ -d "$wt" ] || continue
-        name=$(basename "$wt")
-        # Check for uncommitted changes
-        if [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
-            echo "  KEEP $name (has uncommitted changes)"
-            kept=$((kept + 1))
-            continue
-        fi
-        # Check for open PR
-        branch=$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-        if [ -n "$branch" ] && [ "$branch" != "HEAD" ]; then
-            pr_count=$(gh pr list --head "$branch" --state open --json number --jq length 2>/dev/null || echo "0")
-            if [ "$pr_count" -gt 0 ]; then
-                echo "  KEEP $name (has open PR on $branch)"
-                kept=$((kept + 1))
-                continue
-            fi
-        fi
-        echo "  REMOVE $name"
-        git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
-        removed=$((removed + 1))
-    done
-    git worktree prune
-    echo "Done: removed $removed, kept $kept"
+# Dry-run by default — pass APPLY=1 (or --apply) to actually salvage+remove.
+# See scripts/clean-worktrees.sh for full behavior and issue #3573 for the
+# path bug this replaced (globbed a fixed `../<repo>-worktrees/` path that
+# agents never actually use — real worktrees live under `.claude/worktrees/`).
+clean-worktrees *ARGS:
+    bash scripts/clean-worktrees.sh {{ARGS}}
 
 # Query, allocate, release, or clean up reusable worktree slots
 worktree-manager *ARGS:

@@ -1,6 +1,8 @@
 //! Signature help handlers and signature extraction helpers.
 
 use super::*;
+#[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
 
 /// Build an actionable INVALID_PARAMS error for malformed signatureHelp requests.
 ///
@@ -64,7 +66,8 @@ impl LspServer {
                     self.find_function_context(&doc.text, offset)
                 {
                     // Try to get signature from user-defined functions first (if AST exists)
-                    if let Some(ref ast) = doc.ast {
+                    let parsed = doc.current_parsed();
+                    if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                         if let Some(signature) =
                             self.get_user_function_signature(ast, &function_name)
                         {
@@ -98,7 +101,7 @@ impl LspServer {
                     // resolve_method_in_workspace returns None — empty signatures on fresh open.
                     // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
                     #[cfg(feature = "workspace")]
-                    self.wait_for_index_ready_if_building();
+                    let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
                     #[cfg(feature = "workspace")]
                     if Self::is_method_call_context(&doc.text, offset) {
                         if let Some(signature) = self.resolve_method_in_workspace(&function_name) {
@@ -477,25 +480,73 @@ impl LspServer {
         }
     }
 
-    /// Extract parameter names from a params node (for signature help).
+    /// Extract parameter labels from a params node (for signature help).
     ///
-    /// Handles both bare `NodeKind::Variable` and the wrapper kinds produced by
-    /// `parse_signature`: `MandatoryParameter`, `OptionalParameter`, `NamedParameter`,
-    /// and `SlurpyParameter`, all of which contain an inner `variable` node.
+    /// Renders each parameter by its `NodeKind` variant so the signature-help
+    /// label distinguishes the Perl signature parameter kinds instead of
+    /// flattening them all to a bare `sigil+name`:
+    ///
+    /// - `MandatoryParameter` → `$name`
+    /// - `OptionalParameter`  → `$name = <default>` (default rendered when it is a
+    ///   simple literal, else `$name = ...`)
+    /// - `SlurpyParameter`    → `@rest` / `%opts`
+    /// - `NamedParameter`     → `:$name` (leading colon — named params are supplied
+    ///   by name, not by position)
+    ///
+    /// A bare `NodeKind::Variable` (not wrapped in a parameter kind) renders as
+    /// `sigil+name`.
     pub(super) fn extract_signature_params(&self, params_node: &Node, params: &mut Vec<String>) {
         match &params_node.kind {
             NodeKind::Variable { sigil, name } => {
                 params.push(format!("{}{}", sigil, name));
             }
-            NodeKind::MandatoryParameter { variable }
-            | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => {
-                self.extract_signature_params(variable, params);
+            NodeKind::MandatoryParameter { variable } | NodeKind::SlurpyParameter { variable } => {
+                if let Some(name) = Self::format_param_variable(variable) {
+                    params.push(name);
+                }
             }
-            NodeKind::OptionalParameter { variable, .. } => {
-                self.extract_signature_params(variable, params);
+            NodeKind::NamedParameter { variable, .. } => {
+                if let Some(name) = Self::format_param_variable(variable) {
+                    params.push(format!(":{}", name));
+                }
+            }
+            NodeKind::OptionalParameter { variable, default_value } => {
+                if let Some(name) = Self::format_param_variable(variable) {
+                    params.push(format!(
+                        "{} = {}",
+                        name,
+                        Self::render_default_value(default_value)
+                    ));
+                }
             }
             _ => {}
+        }
+    }
+
+    /// Render a signature parameter's bound variable as `sigil+name`
+    /// (e.g. `$x`, `@rest`, `%opts`). Returns `None` when the node is not a
+    /// `Variable`.
+    fn format_param_variable(variable: &Node) -> Option<String> {
+        match &variable.kind {
+            NodeKind::Variable { sigil, name } => Some(format!("{}{}", sigil, name)),
+            _ => None,
+        }
+    }
+
+    /// Render an optional-parameter default expression for display.
+    ///
+    /// Simple literals (numbers and non-interpolated strings) are shown
+    /// verbatim; anything more complex renders as `...` to keep the label
+    /// truthful without re-serializing arbitrary expressions.
+    ///
+    /// `NodeKind::String { value }` already retains its source quote
+    /// delimiters (e.g. `'world'`, `q(hi)`), so it is emitted as-is — wrapping
+    /// it in extra double quotes would produce an untruthful `"'world'"`.
+    fn render_default_value(default_value: &Node) -> String {
+        match &default_value.kind {
+            NodeKind::Number { value } => value.clone(),
+            NodeKind::String { value, interpolated: false } => value.clone(),
+            _ => "...".to_string(),
         }
     }
 
@@ -895,7 +946,7 @@ impl LspServer {
         // Search the workspace index for callables matching the bare method name.
         // `search_source_symbols` performs a case-insensitive substring match; we
         // post-filter to exact bare-name matches of callable kinds only.
-        let candidates = workspace_index.search_source_symbols(method_name);
+        let candidates = workspace_index.search_source_symbols(method_name, None);
         let symbol =
             candidates.into_iter().find(|sym| sym.name == method_name && sym.kind.is_callable())?;
 

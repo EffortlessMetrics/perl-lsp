@@ -1,0 +1,116 @@
+name: Workflow Contracts (Advisory)
+
+# ADVISORY / NON-REQUIRED / UNARMED (tracking issue #3788 — the actionlint +
+# zizmor workflow-contracts layer; parent #3785). Runs `cargo xtask workflows
+# check`, which validates `.github/workflows/*.yml` against actionlint
+# (syntax/expression/shellcheck), zizmor (security audit), and native
+# local-ref/permissions/action-pinning checks. It is intentionally NOT listed
+# in `.ci/policies/required-checks.toml`, so it can never block a merge
+# today — and unlike the Changie gate at its own PR1, the advisory boundary
+# itself (`advisory_expected_from` in policy/workflow-contracts.toml) is not
+# yet armed, so `cargo xtask workflows check` always returns exit 0 in this
+# PR regardless of findings (see the module docs in
+# xtask/src/tasks/workflows.rs for the full three-clock model). A follow-up
+# PR arms the boundary once the pre-existing pinning baseline (~9 unpinned
+# third-party refs measured at recon time) has been enumerated and either
+# fixed or allowlisted.
+#
+# This checker validates workflow-FILE contracts. It does NOT prove
+# repo-specific merge semantics (final-head/non-draft/required-path/
+# executed-not-skipped) — that stays with `xtask/src/tasks/merge_ready.rs`.
+#
+# Ubuntu-only (no Windows job — see CI runner economics).
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "xtask/src/tasks/workflows.rs"
+      - "xtask/src/tasks/workflow_policy_lint.rs"
+      - "policy/workflow-contracts.toml"
+      - ".ci/receipts/schemas/workflow-contracts.schema.json"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "xtask/src/tasks/workflows.rs"
+      - "policy/workflow-contracts.toml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-contracts-advisory-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
+
+env:
+  # Pinned + independently verified. actionlint ships its own
+  # `<version>_checksums.txt` alongside release assets; zizmor does not, so
+  # its checksum here was computed directly from the downloaded release
+  # asset (still catches any future tampering of that exact asset, even
+  # without a second independently-published source).
+  ACTIONLINT_VERSION: "1.7.12"
+  ACTIONLINT_LINUX_AMD64_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+  ZIZMOR_VERSION: "1.26.1"
+  ZIZMOR_LINUX_AMD64_SHA256: "8556289a64e7aaf2400cd516f61a471aa91c5902cc56ad96a82fd12f90c2ef73"
+
+jobs:
+  workflow-contracts:
+    name: Workflow Contracts (advisory)
+    # Self-hosted Ubuntu runner only — never add a Windows/non-Ubuntu job
+    # here (see CI runner economics: any non-Ubuntu job falls back to billed
+    # GitHub-hosted minutes).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
+        with:
+          toolchain: 1.95.0
+
+      - name: Install actionlint (pinned + checksum-verified)
+        run: |
+          set -euo pipefail
+          asset="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${asset}"
+          curl -fsSL "$url" -o "/tmp/${asset}"
+
+          echo "${ACTIONLINT_LINUX_AMD64_SHA256}  /tmp/${asset}" | sha256sum -c -
+
+          mkdir -p /tmp/workflow-tools-bin
+          tar -xzf "/tmp/${asset}" -C /tmp/workflow-tools-bin actionlint
+          echo "/tmp/workflow-tools-bin" >> "$GITHUB_PATH"
+          "/tmp/workflow-tools-bin/actionlint" -version | tee /tmp/actionlint-version.txt
+          grep -q "${ACTIONLINT_VERSION}" /tmp/actionlint-version.txt
+
+      - name: Install zizmor (pinned + checksum-verified)
+        run: |
+          set -euo pipefail
+          asset="zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          url="https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/${asset}"
+          curl -fsSL "$url" -o "/tmp/${asset}"
+
+          echo "${ZIZMOR_LINUX_AMD64_SHA256}  /tmp/${asset}" | sha256sum -c -
+
+          mkdir -p /tmp/workflow-tools-bin
+          tar -xzf "/tmp/${asset}" -C /tmp/workflow-tools-bin zizmor
+          echo "/tmp/workflow-tools-bin" >> "$GITHUB_PATH"
+          "/tmp/workflow-tools-bin/zizmor" --version | tee /tmp/zizmor-version.txt
+          grep -q "${ZIZMOR_VERSION}" /tmp/zizmor-version.txt
+
+      - name: Workflow contracts check (advisory)
+        run: |
+          mkdir -p target/receipts
+          cargo xtask workflows check --receipt target/receipts/workflow-contracts.json
+
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: workflow-contracts-receipt
+          path: target/receipts/workflow-contracts.json
+          if-no-files-found: ignore

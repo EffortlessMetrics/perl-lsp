@@ -1,0 +1,12 @@
+{
+  "type": "request",
+  "seq": 20,
+  "command": "debugger/setBreakpoints",
+  "arguments": {
+    "source": { "path": "/work/script.pl" },
+    "breakpoints": [
+      { "line": 42, "condition": "$x > 10" },
+      { "line": 7 }
+    ]
+  }
+}

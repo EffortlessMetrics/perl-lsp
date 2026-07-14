@@ -6,12 +6,12 @@
 //! The extractor is used by PR2 (#2634) for shadow comparison and later by providers for
 //! navigation and reference detection. PR1 defines the core API only; no provider changes.
 
-use crate::hir::{BodyOwnerKind, HirBodyId, HirFile};
+use crate::hir::{BodyOwnerKind, HirBodyId, HirFile, HirKind};
 use crate::pir::lower::lower_single_body;
 use crate::pir::model::{LexicalName, PirOperation, PirSourceAnchor};
 
 /// Current schema version for lexical extractor receipts.
-pub const LEXICAL_EXTRACTOR_RECEIPT_VERSION: u32 = 1;
+pub const LEXICAL_EXTRACTOR_RECEIPT_VERSION: u32 = 2;
 
 /// A single lexical variable binding fact extracted from PIR.
 ///
@@ -66,7 +66,7 @@ pub struct BodyExtractionResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct LexicalExtractorReceipt {
-    /// Schema version (currently 1).
+    /// Schema version (currently 2).
     pub schema_version: u32,
     /// Per-body extraction results, in order.
     pub bodies: Vec<BodyExtractionResult>,
@@ -76,6 +76,8 @@ pub struct LexicalExtractorReceipt {
     pub total_write_count: usize,
     /// Count of operations skipped (Modify, StashModify).
     pub skipped_node_count: usize,
+    /// Count of dynamic boundaries observed while lowering lexical facts.
+    pub dynamic_boundary_count: usize,
     /// Whether provider behavior changed (always false for PR1).
     pub provider_behavior_changed: bool,
 }
@@ -98,6 +100,7 @@ pub struct LexicalExtractorReceipt {
 /// - All emitted facts have `source_anchor.is_anchored() == true`
 /// - `Modify`/`StashModify` operations are skipped (not counted as facts, but tracked in `skipped_node_count`)
 /// - `StashRead`/`StashWrite` are ignored (not extracted in PR1)
+/// - `DynamicBoundary` operations are tracked so promotion can refuse exactness honestly
 /// - `provider_behavior_changed` is always `false`
 /// - `total_read_count + total_write_count == sum(bodies[].facts.len())`
 #[must_use]
@@ -106,6 +109,8 @@ pub fn extract_lexical_facts(file: &HirFile) -> LexicalExtractorReceipt {
     let mut total_read_count = 0usize;
     let mut total_write_count = 0usize;
     let mut skipped_node_count = 0usize;
+    let dynamic_boundary_count =
+        file.items.iter().filter(|item| matches!(&item.kind, HirKind::DynamicBoundary(_))).count();
 
     for (body_idx, body) in file.bodies.iter().enumerate() {
         let owner = body.owner.clone();
@@ -152,7 +157,7 @@ pub fn extract_lexical_facts(file: &HirFile) -> LexicalExtractorReceipt {
                     // Track them so the receipt surface is honest about what was filtered.
                     skipped_node_count += 1;
                 }
-                // StashRead, StashWrite, Call, MethodCall, Assign, DynamicBoundary, etc.
+                // StashRead, StashWrite, Call, MethodCall, Assign, etc.
                 // are outside PR1 scope — silently ignored (not facts, not skipped).
                 _ => {}
             }
@@ -173,6 +178,7 @@ pub fn extract_lexical_facts(file: &HirFile) -> LexicalExtractorReceipt {
         total_read_count,
         total_write_count,
         skipped_node_count,
+        dynamic_boundary_count,
         provider_behavior_changed: false,
     }
 }
