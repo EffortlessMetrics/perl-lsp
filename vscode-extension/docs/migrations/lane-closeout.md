@@ -15,6 +15,7 @@ this repository into `perl-lsp`.
 | #4054 | Extension lifecycle integration                      | Merged |
 | #4060 | Configuration routing and synchronization            | Merged |
 | #4065 | Node, npm, and TypeScript authority                  | Merged |
+| #4121 | Node 26/npm 11 toolchain authority                   | Merged |
 | #4068 | Oxlint warning inventory and ratchet                 | Merged |
 | #4071 | Workspace guidance ownership                         | Merged |
 | #4072 | Language-server health boundary                      | Merged |
@@ -32,6 +33,7 @@ this repository into `perl-lsp`.
 | #4070 | Routed Rust shell quoting repair                     | Merged |
 | #4142 | Exact-source editor-host lifecycle contract          | Merged |
 | #4144 | VSIX package inventory baseline refresh              | Merged |
+| #4232 | Toolchain and extension-host receipt metadata        | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -44,16 +46,17 @@ The rescue checkpoint was not merged wholesale.
 - Configuration changes are classified as live, reconstruct, restart, or
   unrelated. Include paths and critic settings use canonical LSP payloads;
   deprecated critic settings remain compatibility inputs only.
-- npm and `package-lock.json` are the package authority. The supported Node
-  floor, npm version, all TypeScript authority configurations, and the doctor
-  check are explicit.
+- npm and `package-lock.json` are the package authority. Node 26.x and npm
+  11.18.0 are the supported toolchain; CI pins Node 26.5.0. All TypeScript
+  authority configurations and the doctor check are explicit.
 - Oxlint warning debt is recorded by rule, surface, rule-by-surface, and file;
   new errors or warning growth are rejected rather than silently baselined.
 - Workspace guidance and the `perllsp --health` process boundary have separate
   owners and focused tests.
 - The exact-source VSIX/current-server harness is reused by hosted Linux smoke.
   Startup, initialization, provider, restart, and shutdown receipts include
-  source identity and monotonic milestones.
+  source identity, monotonic milestones, and separate toolchain versus
+  extension-host runtime metadata.
 - The package inventory and size ratchet protect the published artifact.
 - Jest remains the test runner. Optional feature loading remains deferred until
   repeated receipts attribute measurable cold-path cost to a specific feature.
@@ -90,14 +93,8 @@ was kept as a separate workflow PR.
 ## Remaining work and sync boundary
 
 The modernization lane is complete and ready for a history-preserving sync.
-The following open work is intentionally outside this lane and was not closed
-or modified:
-
-- PR #4121: separate Node 26 toolchain policy proposal.
-- PR #4080: Rust startup-readiness receipts.
-- PR #4073: Dependabot `tar` update.
-
-No publish, tag, release, or `perl-lsp` synchronization has been performed.
-The target `perl-lsp` checkout is not present in this workspace, so the next
-authorized operation is to obtain the target checkout and merge this logical
-PR/commit history into it without replacing the trail with an opaque snapshot.
+Issue #4120 was closed by merged PR #4121. No publish, tag, release, or
+`perl-lsp` synchronization has been performed. The target checkout is
+available locally, and the next authorized operation is to pin and verify a
+swarm cut before merging this logical PR/commit history into it without
+replacing the trail with an opaque snapshot.

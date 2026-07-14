@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "total_files": 28,
-  "total_bytes": 1461174,
+  "total_bytes": 1461354,
   "files": {
     "README.md": 21701,
     "package.json": 53618,
@@ -9,7 +9,7 @@
     "language-configuration.json": 1010,
     "icon.png": 8358,
     "gherkin-language-configuration.json": 510,
-    "CHANGELOG.md": 15990,
+    "CHANGELOG.md": 16170,
     ".oxlintrc.json": 559,
     ".oxfmtrc.json": 203,
     "syntaxes/perl.tmLanguage.json": 11634,

@@ -6,6 +6,9 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ### Changed
 
+- **Moved the extension toolchain authority to Node 26.x and npm 11.18.0; CI
+  pins Node 26.5.0.** The shipped-extension compatibility boundary remains
+  `engines.vscode`. (#4121)
 - **Migrated the extension toolchain to TypeScript 7, type-aware Oxlint,
   Oxfmt, and Rolldown.** TypeScript remains the type-check authority;
   Rolldown now produces the CommonJS extension bundle. (#3645, #3690,

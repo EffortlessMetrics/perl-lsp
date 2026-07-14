@@ -23,7 +23,8 @@ bounded sync handoff, see [`lane-closeout.md`](lane-closeout.md).
 The active development contract is maintained in
 [`../../DEVELOPMENT.md`](../../DEVELOPMENT.md). It now includes:
 
-- npm `10.8.2` and the supported Node floor as enforceable doctor checks;
+- Node 26.x, npm `11.18.0`, and the CI pin Node `26.5.0` as enforceable doctor
+  and workflow authority;
 - source, test, integration, published-smoke, and script TypeScript checks;
 - non-growing `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
   baselines, with `noImplicitOverride` blocking and clean;
