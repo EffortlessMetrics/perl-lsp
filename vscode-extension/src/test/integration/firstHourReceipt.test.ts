@@ -365,6 +365,9 @@ suite('First-hour VS Code receipt', function () {
       environment: {
         platform: process.platform,
         arch: process.arch,
+        toolchain_node_version: process.env.PERL_LSP_TOOLCHAIN_NODE_VERSION ?? null,
+        toolchain_npm_version: process.env.PERL_LSP_TOOLCHAIN_NPM_VERSION ?? null,
+        extension_host_node_version: process.version,
         node_version: process.version,
         vscode_version: vscode.version,
         extension_id: 'EffortlessMetrics.perl-lsp-rs',

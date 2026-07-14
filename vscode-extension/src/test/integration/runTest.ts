@@ -1,7 +1,17 @@
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { runTests } from '@vscode/test-electron';
+
+function toolchainNpmVersion(): string {
+  const npmUserAgent = process.env.npm_config_user_agent ?? '';
+  const configuredVersion = /(?:^|\s)npm\/([^\s]+)/.exec(npmUserAgent)?.[1];
+  if (configuredVersion) {
+    return configuredVersion;
+  }
+  return execSync('npm --version', { encoding: 'utf8', windowsHide: true }).trim();
+}
 
 function getGrepArg(args: string[]): string | undefined {
   const grepIndex = args.findIndex((arg) => arg === '--grep' || arg === '-g');
@@ -25,6 +35,8 @@ async function main(): Promise<void> {
   const extensionDevelopmentPath = path.resolve(__dirname, '../../..');
   const repoRoot = path.resolve(extensionDevelopmentPath, '..');
   const extensionTestsPath = path.resolve(__dirname, './suite');
+  const toolchainNodeVersion = process.version;
+  const toolchainNpmVersionValue = toolchainNpmVersion();
   const configuredWorkspace = process.env.PERL_LSP_SMOKE_WORKSPACE;
   const workspacePath = configuredWorkspace
     ? path.resolve(configuredWorkspace)
@@ -70,6 +82,8 @@ async function main(): Promise<void> {
       PERL_LSP_EXTENSION_TEST_SKIP_STARTUP: process.env.PERL_LSP_EXTENSION_TEST_SKIP_STARTUP ?? '1',
       PERL_LSP_SMOKE_RECEIPTS_DIR: receiptsRoot,
       PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || 'integration',
+      PERL_LSP_TOOLCHAIN_NODE_VERSION: toolchainNodeVersion,
+      PERL_LSP_TOOLCHAIN_NPM_VERSION: toolchainNpmVersionValue,
       VSCODE_TEST_GREP: grep ?? '',
     },
     launchArgs: [
