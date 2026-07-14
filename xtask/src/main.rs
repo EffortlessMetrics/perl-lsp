@@ -881,6 +881,48 @@ enum Commands {
         format: String,
     },
 
+    /// Resolve a change set (base/head SHAs + changed paths) via the single
+    /// #3985 `change_set::resolve_change_set` base-resolver + diff — the
+    /// runtime-neutral interface `hooks/pre-push` consumes (#3985 Slice 3A)
+    /// so the hook never needs its own shell base-resolution algorithm.
+    ///
+    /// `--base auto` (the default) walks the main-first candidate chain
+    /// (`origin/main`, `main`, `HEAD~1`) and never falls back to
+    /// `origin/master` (issue #3985: that ref does not exist on this
+    /// remote). An explicit `--base` must resolve on its own — an
+    /// unresolvable explicit base is a loud, non-zero-exit error, never a
+    /// silent substitution or an empty-changed-paths "success".
+    ///
+    /// `--format json` (default) emits the bounded contract
+    /// `{base_sha, head_sha, changed_paths}`. `--format paths` emits one
+    /// changed path per line and nothing else — the lean, `jq`-free shape
+    /// `hooks/pre-push` parses.
+    ///
+    /// Example: `cargo xtask change-set --base auto --head HEAD --format paths`
+    ChangeSet {
+        /// Base git ref to diff against. `"auto"` (default) triggers
+        /// main-first candidate resolution; any other value is treated as
+        /// an explicit base that must resolve on its own.
+        #[arg(long, default_value = "auto")]
+        base: String,
+
+        /// Head git ref/SHA to diff to.
+        #[arg(long, default_value = "HEAD")]
+        head: String,
+
+        /// Output format: `json` (default, bounded contract) or `paths`
+        /// (one changed path per line, no SHAs). Any other value is a
+        /// loud error, never a silent fallback to `json`.
+        #[arg(long, default_value = "json")]
+        format: String,
+
+        /// Repository root to resolve the change set against. Defaults to
+        /// the perl-lsp workspace root. Override for testing against a
+        /// fixture repository.
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+
     /// Emit a markdown PR gate summary (dry-run: stdout only, no GitHub posting).
     ///
     /// Computes what CI would run for the current branch diff against `--base`,
@@ -3759,6 +3801,9 @@ fn run_cli(cli: Cli) -> Result<()> {
         }
         Commands::CiScope { base, format } => {
             ci_scope::run(ci_scope::CiScopeConfig { base, format })
+        }
+        Commands::ChangeSet { base, head, format, root } => {
+            change_set::run(change_set::ChangeSetConfig { base, head, format, root })
         }
         Commands::CiPrSummary { base, dry_run } => {
             ci_pr_summary::run(ci_pr_summary::CiPrSummaryConfig { base, dry_run })

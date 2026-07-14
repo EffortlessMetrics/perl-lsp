@@ -6,8 +6,18 @@
 //! [`resolve_change_set`] — see the falsifiable parity corpus in this
 //! module's test suite, `tests::test_parity_*` (doc-only, single-crate,
 //! multi-crate, mixed, ci-config, a deletion, a rename), which pins that
-//! the repoint is zero-behavior-change on real diff fixtures). The
-//! pre-push hook migration is a later slice.
+//! the repoint is zero-behavior-change on real diff fixtures).
+//!
+//! #3985 Slice 3A exposes this resolver to `hooks/pre-push` through the
+//! `cargo xtask change-set` CLI ([`run`] below, registered in
+//! `xtask/src/main.rs`'s `Commands::ChangeSet`) so the hook consumes the
+//! shared resolver for its new-branch base resolution instead of carrying
+//! its own `git merge-base "$local_sha" origin/master || echo "$local_sha"`
+//! shell algorithm — which silently produced an empty self-diff for every
+//! new-branch push, since `origin/master` never resolves on this remote
+//! and the fallback compared `$local_sha` against itself. See
+//! `xtask/tests/change_set_cli.rs` for the regression proof (old shell
+//! algorithm vs the new resolver, against a real bare-remote fixture).
 //!
 //! # Why not `origin/master`
 //!
@@ -93,8 +103,11 @@ pub struct ChangeSet {
 /// Resolve an [`ArtifactIdentity`] into a [`ChangeSet`]: the single base
 /// resolver (for `CommitRange`) plus the single `git diff` (both arms).
 ///
-/// This function has no consumers as of this slice (#3985 Slice 1) — it is
-/// dead-but-compiled library code, proven correct by the unit tests below.
+/// Consumers: `ci_scope::run`, `gates::compute_scope_output`, and
+/// `targeted_checks::run` (#3985 Slice 2), plus the `cargo xtask
+/// change-set` CLI ([`run`] below) that `hooks/pre-push` consumes (#3985
+/// Slice 3A). Proven correct by the unit tests below, including the
+/// falsifiable parity corpus (`tests::test_parity_*`).
 pub fn resolve_change_set(identity: ArtifactIdentity, root: &Path) -> Result<ChangeSet> {
     match identity {
         ArtifactIdentity::CommitRange { base, head } => {
@@ -255,6 +268,80 @@ fn diff_paths(base: &str, head: &str, root: &Path) -> Result<Vec<String>> {
     let stdout =
         String::from_utf8(output2.stdout).context("git diff output was not valid UTF-8")?;
     Ok(stdout.lines().map(str::to_string).collect())
+}
+
+// ---------------------------------------------------------------------------
+// CLI: `cargo xtask change-set` — the runtime-neutral interface #3985
+// Slice 3A exposes to `hooks/pre-push` (and any other shell/non-Rust
+// consumer) so they never need their own base-resolution algorithm.
+// ---------------------------------------------------------------------------
+
+/// Configuration for the `change-set` subcommand.
+pub struct ChangeSetConfig {
+    /// Base git ref to diff against. `"auto"` triggers main-first candidate
+    /// resolution (see [`resolve_base_ref`]); any other value is an
+    /// explicit base that must resolve on its own.
+    pub base: String,
+    /// Head git ref/SHA to diff to.
+    pub head: String,
+    /// Output format: `"json"` (the bounded `{base_sha, head_sha,
+    /// changed_paths}` contract) or `"paths"` (one changed path per line,
+    /// nothing else — no `jq` dependency for shell consumers).
+    pub format: String,
+    /// Repository root to resolve against. Defaults to the perl-lsp
+    /// workspace root (`crate::utils::project_root`) when `None`. Overridable
+    /// so integration tests can point this at a fixture repository —
+    /// `crate::utils::project_root` resolves from `CARGO_MANIFEST_DIR`
+    /// baked in at compile time, not from the process's current directory,
+    /// so a fixture repo is otherwise unreachable from the compiled test
+    /// binary.
+    pub root: Option<std::path::PathBuf>,
+}
+
+/// Entry point called from `xtask` main for `cargo xtask change-set`.
+///
+/// Resolves a [`ChangeSet`] via [`resolve_change_set`] and prints it in the
+/// requested format. Returns `Err` (non-zero exit, message on stderr via
+/// `color_eyre`) when resolution fails — callers (notably `hooks/pre-push`)
+/// must treat a non-zero exit as "could not prove the change set" and stop,
+/// never fall back to an empty changed-paths set as if the proof passed
+/// (issue #3985 Slice 3A). An unrecognized `--format` value is the same
+/// class of failure: a loud `Err`, never a silent fallback to `"json"` —
+/// a shell consumer expecting `paths` that typos the flag must see a clear
+/// error, not misparse a JSON blob as a newline-separated path list.
+pub fn run(config: ChangeSetConfig) -> Result<()> {
+    let root = match config.root {
+        Some(root) => root,
+        None => crate::utils::project_root()?,
+    };
+    let identity = ArtifactIdentity::CommitRange { base: config.base, head: config.head };
+    let resolved = resolve_change_set(identity, &root)?;
+
+    match config.format.as_str() {
+        "paths" => {
+            for path in &resolved.changed_paths {
+                println!("{path}");
+            }
+        }
+        "json" => {
+            let json = serde_json::json!({
+                "base_sha": resolved.base_sha,
+                "head_sha": resolved.head_sha,
+                "changed_paths": resolved.changed_paths,
+            });
+            let pretty = serde_json::to_string_pretty(&json)
+                .context("Failed to serialize change set to JSON")?;
+            println!("{pretty}");
+        }
+        other => {
+            return Err(eyre!(
+                "Unknown --format '{other}'; expected 'json' or 'paths'. Refusing to silently \
+                 fall back to JSON for an unrecognized format value."
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
