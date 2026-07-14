@@ -189,11 +189,29 @@ Look for: an open PR referencing the issue, a local or remote branch matching
 `impl/<issue#>-*`, a live worktree on such a branch, or a worktree-manager
 slot already owned by another agent for this issue.
 
-**If any of these exist: STOP.** Report what was found and its state (e.g.
+**An open PR referencing the issue, or a worktree-manager slot already owned
+by another agent: STOP.** Report what was found and its state (e.g.
 "PR #NNN is open and in-build — continue there via `/builder-read-pr`, do not
 open a second worktree"). This mirrors `lead-build.md`'s existing duplicate-PR
 and active-builder guards; `/start-work` just runs the same check earlier,
 before mutation instead of before spawning a second builder.
+
+**A branch and/or worktree matching `impl/<issue#>-*` exists, but carries no
+open PR and no worktree-manager owner: this is NOT a stop.** The protected
+object here is the branch/worktree/local repo state, not a per-agent lease
+(#3957's explicit non-goal) — an existing, unowned branch is resumable work,
+not another writer's claim, and a blanket STOP here is exactly the
+"recreated from local main instead of resuming its actual remote head" class
+of defect #3957 exists to close. Record what was found (branch name, whether
+a worktree already maps to it) and carry it into Step 6c below, which makes
+the actual RESUME/REUSE/ADMIT call using Step 6b's writer-admission
+`guidance` fields — Step 6c is the single place this decision gets made,
+after writer-admission's own `writer-collision` check has also had a chance
+to weigh in (it can catch a PR this issue-reference search missed, e.g. one
+that owns the exact branch without mentioning the issue anywhere in its
+title/body — see Step 6b's existing note on why both checks run). Do not
+create a second worktree here, and do not fabricate a stop where the correct
+outcome is RESUME or REUSE.
 
 Under the mechanical fast path with no issue number, there is no `#<issue#>`
 or `impl/<issue#>-*` to search for — but the searches must stay just as
@@ -238,6 +256,15 @@ to cross-check — a hit here means some open PR's head literally is this
 branch. `git worktree list` / `worktree-manager.py query` give the same
 precise, non-fuzzy signal Step 5 relies on for an existing writer on that
 branch.
+
+**Under `--mechanical`, any of these existing — open PR, branch, or
+worktree — is still an unconditional STOP,** unlike the issue-based path's
+softened branch/worktree case above. The RESUME/REUSE softening above exists
+because Step 6c resolves it using writer-admission's `guidance` fields; the
+mechanical fast path skips Step 6c entirely (see "What still runs" below),
+so there is no later step left to turn a found branch/worktree into a safe
+RESUME/REUSE here — treat any hit as a stop, same as this doc's behavior
+before #3957 W2.
 
 ## Step 6: Fetch fresh `origin/main`
 
@@ -364,27 +391,155 @@ still runs" below), but not a dedicated disk-capacity check; that gap is
 acceptable for mechanical work's narrow scope and is not addressed by this
 PR.
 
+## Step 6c: Resolve to RESUME / REUSE / STOP / BLOCKED / ADMIT (#3957 W2)
+
+Skipped under `--mechanical`, alongside Step 6b (see "What still runs" in
+the Mechanical fast path section below) — there is no `impl/<issue#>-<slug>`
+branch identity for this decision to resolve against.
+
+This is the single place `/start-work` turns Step 5's collision findings and
+Step 6b's writer-admission verdict into one of the five primary outcomes
+(STOP / BLOCKED / REUSE / RESUME / ADMIT), plus one narrower `NOT PROVEN`
+outcome (§5 below) for the specific case where the remote-branch-existence
+lookup itself failed. The protected object stays the **branch / worktree /
+local repo state** — never a per-agent lease or session identity, per
+#3957's explicit non-goal. Every input below is objective git/GitHub state
+gathered by `writer-admission` itself, nothing self-reported by whichever
+agent happens to be running this
+command.
+
+`writer_admission.rs`'s JSON output carries an informational `guidance`
+object alongside `checks[]` (added in #3957 W2, composed from signals the
+existing checks already gather plus one new read-only
+`refs/remotes/origin/<branch>` lookup — it is not itself a check and never
+changes `verdict`):
+
+```json
+"guidance": {
+  "existing_worktree_path": "<path, or null>",
+  "remote_branch_sha": "<sha, or null>",
+  "remote_branch_lookup_error": "<error text, or null>"
+}
+```
+
+`remote_branch_lookup_error` is set only on a genuine `git` instrument
+failure resolving `refs/remotes/origin/<branch>` (not a git repository, `git`
+unspawnable, etc.) — never for a legitimate "branch doesn't exist yet"
+absence, which leaves both `remote_branch_sha` and this field `null`. Do not
+conflate the two: a `null` `remote_branch_sha` alone does not mean "safe to
+ADMIT a fresh branch" if this field is non-null.
+
+Decide in this order — stop at the first outcome that applies:
+
+1. **`writer-collision` check is `BLOCK`, or Step 5 found an open PR** →
+   **STOP.** One accountable writer per branch — the same STOP already
+   documented in Step 6b above and Step 5's revised note. Do not proceed to
+   any outcome below.
+2. **`disk-capacity` check is `BLOCK`** → **BLOCKED.** Do not create a
+   writer worktree. Surface concrete reclaim candidates, not just the raw
+   disk number:
+   ```bash
+   cargo xtask worktree-cleanup
+   ```
+   (dry-run by default, per #4097/#4104 — every `.claude/worktrees/` entry
+   is classified `KEEP`/`REMOVE` with a reason; nothing is deleted by this
+   command on its own). Report the `disk-capacity` check's own reason
+   alongside the `REMOVE`-classified entries it lists as reclaim candidates
+   (`just clean-worktrees` or `cargo xtask worktree-cleanup --force` to act
+   on them — not this command's job to run that itself). If
+   `worktree-cleanup` fails to run, that's `NOT PROVEN` for the
+   reclaim-candidate list specifically — the `BLOCKED` verdict itself still
+   stands on the `disk-capacity` check's own evidence — fall back to `git
+   worktree list` plus that check's reason text as the next best signal.
+3. **`guidance.existing_worktree_path` is non-null** → **REUSE.** A
+   worktree is already checked out on this branch — hand off by `cd`-ing
+   into that path directly (Step 7's REUSE bullet), never a second `git
+   worktree add`/`allocate` for the same branch. This takes priority over
+   RESUME below: when a worktree already holds the branch, there is nothing
+   left to separately create/check out. Do **not** assume that local
+   checkout is already current, though — a different worktree or session
+   can have pushed to `origin/<branch>` since this worktree last fetched.
+   `git -C <path> fetch origin <branch>` and compare against `git -C <path>
+   rev-parse HEAD` before resuming work; if the local tip is behind, fast-
+   forward it (`git -C <path> merge --ff-only origin/<branch>`) — if it has
+   diverged (local commits the remote doesn't have, or a genuine conflict),
+   surface that explicitly rather than silently picking a side.
+4. **`guidance.remote_branch_sha` is non-null** (and no existing worktree
+   matched above) → **RESUME.** The target branch already exists on the
+   remote with no local worktree on it yet — hand off using the "Checkout
+   existing branch" pattern from
+   [WORKTREE_PROTOCOL.md](../../docs/reference/WORKTREE_PROTOCOL.md#checkout-existing-branch)
+   (fetch, then check out that actual remote head into a new worktree), not
+   a fresh `-b <branch> ... origin/main` creation. Never silently start a
+   second, diverging history for a branch that already has commits — that
+   is exactly the "recreated from local main instead of resuming its actual
+   remote head" defect #3957 exists to close.
+5. **`guidance.remote_branch_lookup_error` is non-null** (and neither REUSE
+   nor RESUME matched above) → **NOT PROVEN** for the resume decision
+   specifically — the remote-branch existence check itself failed (a
+   genuine `git` instrument failure), so there is no reliable signal for
+   "this is a brand-new branch, safe to ADMIT." Surface the error text and
+   do not silently fall through to ADMIT; a human call is needed (retry the
+   lookup, or explicitly confirm the branch is new via another route, e.g.
+   `gh api` or the GitHub UI) before creating a writer worktree. This is the
+   same instrument-failure-must-never-be-silently-clean rule every
+   `writer-admission` check already applies, extended to `guidance`.
+6. **None of the above** → **ADMIT.** Independent branch, no collision, no
+   capacity hazard, nothing to resume or reuse, and the remote-branch
+   lookup itself succeeded (found nothing) — proceed to Step 7 exactly as
+   documented today (fresh branch off the freshly-fetched `origin/main`
+   from Step 6).
+
+A `NOT_PROVEN` status on a check this decision depends on — most importantly
+`writer-collision` or `disk-capacity` — must be surfaced as its own note
+(per Step 6b's existing `NOT_PROVEN` handling) rather than silently treated
+as if it had passed and falling through to ADMIT. Resolving git state
+failing outright is `NOT PROVEN`, never a silent "admit anyway" — the same
+rule Step 6b already applies per-check applies here to the aggregate
+decision, and to `guidance.remote_branch_lookup_error` specifically (§5
+above).
+
 ## Step 7: Hand off — delegate, don't fork
 
 All conditions (issue open, `builder-ready`, matching BUILD verdict, no
-collision, fresh `origin/main`, and Step 6b's writer-admission verdict — STOP
-on `disk-capacity`/`writer-collision`, advisory otherwise) are the settled
-packet. `/start-work` does not create the branch, worktree, or `.spec/`
-files itself — it hands off to the existing entry point:
+collision, fresh `origin/main`, Step 6b's writer-admission verdict, and Step
+6c's RESUME/REUSE/ADMIT resolution — STOP/BLOCKED already ended the run
+above) are the settled packet. `/start-work` does not create the branch,
+worktree, or `.spec/` files itself — it hands off to the existing entry
+point, adjusted for Step 6c's outcome:
+
+- **ADMIT** (the common case — independent branch, nothing to resume or
+  reuse): hand off exactly as the two bullets below describe, creating
+  fresh.
+- **RESUME** (Step 6c found `guidance.remote_branch_sha`): whichever entry
+  point below is used, it must fetch and check out the branch's actual
+  existing remote head — never recreate it fresh off `origin/main`. Losing
+  the branch's existing commits by rebuilding it from the base is the exact
+  defect #3957 exists to close.
+- **REUSE** (Step 6c found `guidance.existing_worktree_path`): do not create
+  any new worktree at all. `cd` directly into the path Step 6c found,
+  confirm its branch matches the target, and sync it against the remote per
+  Step 6c's fetch/fast-forward note (never assume it's already current)
+  before resuming work there — skip both entry points below entirely.
 
 - **Pipeline work** (going through the standard build gate): spawn the
-  `spec-planner` agent on the issue. It reads the `builder-ready` issue,
-  creates `impl/<issue#>-<slug>` off `origin/main`, and writes
-  `.spec/<issue#>-<slug>/{checklist,acceptance,context}.md` per its own todo
-  list.
-- **Direct/non-pipeline work** (no spec-builder workflow needed): use the
-  `worktree-manager` skill's `allocate` command. **`allocate` already creates
-  the git worktree itself** — it runs `git worktree add -B <branch> <path>
-  <base>` for a new slot, or `git -C <path> checkout -B <branch> <base>` when
-  reusing an idle slot (verified in `scripts/worktree-manager.py`). Do
-  **not** follow it with a separate `git worktree add` — that would try to
-  create a second worktree for the same branch at a different path and
-  fail, or silently diverge from the one `allocate` already set up:
+  `spec-planner` agent on the issue. Under ADMIT, it reads the
+  `builder-ready` issue, creates `impl/<issue#>-<slug>` off `origin/main`,
+  and writes `.spec/<issue#>-<slug>/{checklist,acceptance,context}.md` per
+  its own todo list. Under RESUME, tell it explicitly that
+  `impl/<issue#>-<slug>` already exists remotely at Step 6c's resolved SHA
+  and must be resumed (fetched and checked out), not recreated — the branch
+  may already carry `.spec/` files from an earlier session worth reading
+  before writing new ones.
+- **Direct/non-pipeline work** (no spec-builder workflow needed): under
+  ADMIT, use the `worktree-manager` skill's `allocate` command. **`allocate`
+  already creates the git worktree itself** — it runs `git worktree add -B
+  <branch> <path> <base>` for a new slot, or `git -C <path> checkout -B
+  <branch> <base>` when reusing an idle slot (verified in
+  `scripts/worktree-manager.py`). Do **not** follow it with a separate `git
+  worktree add` — that would try to create a second worktree for the same
+  branch at a different path and fail, or silently diverge from the one
+  `allocate` already set up:
   ```bash
   python3 scripts/worktree-manager.py allocate --slot issue-<issue#> --branch impl/<issue#>-<slug> --owner <agent-id>
   ```
@@ -394,7 +549,16 @@ files itself — it hands off to the existing entry point:
   documents the equivalent raw-`git worktree add` form for when the
   worktree-manager isn't in use; don't run both forms for the same slot.
 
-Report which path was used and the resulting branch/worktree location.
+  Under RESUME, do not use `allocate`'s fresh-branch `-B <branch> <base>`
+  form at all — `-B` resets the branch tip to `<base>`, so pointing it at
+  `origin/main` would silently discard the branch's existing commits. Use
+  the ["Checkout existing branch"](../../docs/reference/WORKTREE_PROTOCOL.md#checkout-existing-branch)
+  pattern instead: `git fetch origin <branch>` then `git worktree add
+  <path> <branch>` (no `-b`/`-B`), which checks out the branch's actual
+  fetched head into a new worktree without rewriting its tip.
+
+Report which path was used (ADMIT/RESUME/REUSE) and the resulting
+branch/worktree location.
 
 ## Mechanical fast path (`--mechanical`)
 
@@ -462,6 +626,11 @@ mechanical work:
   tool itself is scoped as one composable unit alongside the
   planning-readiness checks it's introduced next to, not split per-check
   based on severity.
+- **Step 6c** (RESUME/REUSE/STOP/BLOCKED/ADMIT resolution, #3957 W2) —
+  skipped alongside Step 6b, since it has no `guidance` output to resolve
+  without Step 6b having run. Per the mechanical-path note in Step 5 above,
+  any branch/worktree/PR this path's own collision search finds is still an
+  unconditional STOP here, not a candidate for RESUME/REUSE.
 
 Before proceeding, record and print all five fields — do not create the
 worktree until every field is filled in:
@@ -490,18 +659,23 @@ Then hand off exactly as in Step 7.
 
 ## Output
 
-A Step 6b `disk-capacity`/`writer-collision` `BLOCK` is a STOP like any other
-— it ends the run with exactly one next action, same as Steps 3-5. It is
-not part of the "success" packet below.
+A Step 6c `STOP` or `BLOCKED` resolution ends the run with exactly one next
+action, same as Steps 3-5. It is not part of the "success" packet below. A
+`BLOCKED` resolution must include the reclaim-candidate list (or its
+`NOT PROVEN` fallback note) alongside the `disk-capacity` check's own
+reason, not just the bare disk numbers.
 
 On success, print the settled packet — for the full path: issue #, plan
-revision, BUILD verdict comment link, collision check result, base SHA, and
-the Step 6b writer-admission verdict (with any advisory-class `BLOCK`/
+revision, BUILD verdict comment link, collision check result, base SHA, the
+Step 6b writer-admission verdict (with any advisory-class `BLOCK`/
 `NOT_PROVEN` reasons noted — STOP-class `BLOCK`s already halted the run
-above); for the mechanical path: the five recorded fields, collision check
-result, base SHA, and issue # if one was given — and the branch/worktree
-handed off to. On stop, print exactly one next action — never both a stop
-and a partial handoff.
+above), and Step 6c's resolution (`RESUME`/`REUSE`/`ADMIT`, naming the
+resumed SHA or reused path when applicable); for the mechanical path: the
+five recorded fields, collision check result, base SHA, and issue # if one
+was given — and the branch/worktree handed off to (the mechanical path never
+reaches Step 6c, so it has no RESUME/REUSE/ADMIT outcome to report — see
+"What still runs" in the Mechanical fast path section). On stop, print
+exactly one next action — never both a stop and a partial handoff.
 
 ## Bootstrap note
 
