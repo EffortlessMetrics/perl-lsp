@@ -537,7 +537,7 @@ jobs:
           set -euo pipefail
           cargo fetch --locked
           cargo check --workspace --locked
-          scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | awk '/: test$/{count++} END {print count+0}')
+          scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | grep -c -F ": test" || true)
           test "$scorecard_tests" -gt 0
           INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
           git diff --check
@@ -609,7 +609,7 @@ jobs:
           set -euo pipefail
           cargo fetch --locked
           cargo check --workspace --locked
-          scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | awk '/: test$/{count++} END {print count+0}')
+          scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | grep -c -F ": test" || true)
           test "$scorecard_tests" -gt 0
           INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
           git diff --check

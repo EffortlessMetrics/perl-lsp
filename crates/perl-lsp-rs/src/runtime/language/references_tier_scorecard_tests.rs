@@ -1483,6 +1483,12 @@ use warnings;
         character: u32,
         answering_tier: String,
         source_backed: bool,
+        source_backed_attempted: bool,
+        source_backed_outcome: String,
+        source_backed_decline_stage: Option<String>,
+        source_backed_symbol_at_found: bool,
+        source_backed_exact_candidate_count: usize,
+        source_backed_cutover_result: Option<String>,
         result_count: usize,
         index_result_count: usize,
         text_result_count: usize,
@@ -1704,6 +1710,7 @@ use warnings;
             "source_backed_state",
             "answering_tier",
             "index_state",
+            "source_backed_outcome",
         ];
         for field in REQUIRED_STRING_FIELDS {
             let is_present_and_non_empty =
@@ -1715,6 +1722,45 @@ use warnings;
         if receipt.get("latency_us").and_then(Value::as_u64).is_none() {
             return Err("receipt missing required numeric field `latency_us`".to_string());
         }
+        if receipt.get("source_backed_attempted").and_then(Value::as_bool).is_none() {
+            return Err(
+                "receipt missing required boolean field `source_backed_attempted`".to_string()
+            );
+        }
+        if receipt.get("source_backed_symbol_at_found").and_then(Value::as_bool).is_none() {
+            return Err("receipt missing required boolean field `source_backed_symbol_at_found`"
+                .to_string());
+        }
+        if receipt.get("source_backed_exact_candidate_count").and_then(Value::as_u64).is_none() {
+            return Err(
+                "receipt missing required numeric field `source_backed_exact_candidate_count`"
+                    .to_string(),
+            );
+        }
+        let attempted =
+            receipt.get("source_backed_attempted").and_then(Value::as_bool).unwrap_or(false);
+        let outcome = receipt.get("source_backed_outcome").and_then(Value::as_str).unwrap_or("");
+        match (attempted, outcome) {
+            (false, "not_attempted") => {}
+            (true, "exact") => {}
+            (true, "declined") => {
+                if receipt
+                    .get("source_backed_decline_stage")
+                    .and_then(Value::as_str)
+                    .is_none_or(str::is_empty)
+                {
+                    return Err(
+                        "declined source-backed attempt must name `source_backed_decline_stage`"
+                            .to_string(),
+                    );
+                }
+            }
+            _ => {
+                return Err(format!(
+                    "invalid source-backed attempt state: attempted={attempted}, outcome={outcome:?}"
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -1724,6 +1770,12 @@ use warnings;
     struct LiveReceiptEvidence {
         answering_tier: String,
         source_backed: bool,
+        source_backed_attempted: bool,
+        source_backed_outcome: String,
+        source_backed_decline_stage: Option<String>,
+        source_backed_symbol_at_found: bool,
+        source_backed_exact_candidate_count: usize,
+        source_backed_cutover_result: Option<String>,
         index_result_count: usize,
         text_result_count: usize,
         latency_us: u64,
@@ -1747,6 +1799,30 @@ use warnings;
         Ok(LiveReceiptEvidence {
             answering_tier: str_field("answering_tier"),
             source_backed: receipt.get("source_backed").and_then(Value::as_bool).unwrap_or(false),
+            source_backed_attempted: receipt
+                .get("source_backed_attempted")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            source_backed_outcome: str_field("source_backed_outcome"),
+            source_backed_decline_stage: receipt
+                .get("source_backed_decline_stage")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            source_backed_symbol_at_found: receipt
+                .get("source_backed_symbol_at_found")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            source_backed_exact_candidate_count: usize::try_from(
+                receipt
+                    .get("source_backed_exact_candidate_count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+            )
+            .unwrap_or(usize::MAX),
+            source_backed_cutover_result: receipt
+                .get("source_backed_cutover_result")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             index_result_count: usize::try_from(
                 receipt.get("index_result_count").and_then(Value::as_u64).unwrap_or(0),
             )
@@ -2053,6 +2129,12 @@ use warnings;
             character,
             answering_tier: evidence.answering_tier,
             source_backed: evidence.source_backed,
+            source_backed_attempted: evidence.source_backed_attempted,
+            source_backed_outcome: evidence.source_backed_outcome,
+            source_backed_decline_stage: evidence.source_backed_decline_stage,
+            source_backed_symbol_at_found: evidence.source_backed_symbol_at_found,
+            source_backed_exact_candidate_count: evidence.source_backed_exact_candidate_count,
+            source_backed_cutover_result: evidence.source_backed_cutover_result,
             result_count,
             index_result_count: evidence.index_result_count,
             text_result_count: evidence.text_result_count,
@@ -2129,6 +2211,12 @@ use warnings;
             character: 0,
             answering_tier: evidence.answering_tier,
             source_backed: evidence.source_backed,
+            source_backed_attempted: evidence.source_backed_attempted,
+            source_backed_outcome: evidence.source_backed_outcome,
+            source_backed_decline_stage: evidence.source_backed_decline_stage,
+            source_backed_symbol_at_found: evidence.source_backed_symbol_at_found,
+            source_backed_exact_candidate_count: evidence.source_backed_exact_candidate_count,
+            source_backed_cutover_result: evidence.source_backed_cutover_result,
             result_count,
             index_result_count: evidence.index_result_count,
             text_result_count: evidence.text_result_count,
@@ -2162,6 +2250,12 @@ use warnings;
             "character": row.character,
             "answering_tier": row.answering_tier,
             "source_backed": row.source_backed,
+            "source_backed_attempted": row.source_backed_attempted,
+            "source_backed_outcome": row.source_backed_outcome,
+            "source_backed_decline_stage": row.source_backed_decline_stage,
+            "source_backed_symbol_at_found": row.source_backed_symbol_at_found,
+            "source_backed_exact_candidate_count": row.source_backed_exact_candidate_count,
+            "source_backed_cutover_result": row.source_backed_cutover_result,
             "result_count": row.result_count,
             "index_result_count": row.index_result_count,
             "text_result_count": row.text_result_count,
@@ -2197,6 +2291,12 @@ use warnings;
             "character": row.character,
             "answering_tier": row.answering_tier,
             "source_backed": row.source_backed,
+            "source_backed_attempted": row.source_backed_attempted,
+            "source_backed_outcome": row.source_backed_outcome,
+            "source_backed_decline_stage": row.source_backed_decline_stage,
+            "source_backed_symbol_at_found": row.source_backed_symbol_at_found,
+            "source_backed_exact_candidate_count": row.source_backed_exact_candidate_count,
+            "source_backed_cutover_result": row.source_backed_cutover_result,
             "result_count": row.result_count,
             "index_result_count": row.index_result_count,
             "text_result_count": row.text_result_count,
@@ -2567,6 +2667,48 @@ use warnings;
             "replay must cover every declared fact-class bucket"
         );
 
+        // The six initialized-lexical rows are the eligible live slice for
+        // #4002-A. Their source-backed attempt must now be observable as
+        // either an exact answer or a named first-failure decline; a generic
+        // `None`/missing receipt cannot silently erase the semantic seam.
+        let eligible_lexical_rows: Vec<&ReplayRow> = rows
+            .iter()
+            .filter(|row| {
+                row.fact_class == FactClass::LocalLexical
+                    && row.declaration_shape == DeclarationShape::SimpleInit
+                    && !row.include_declaration
+            })
+            .collect();
+        assert_eq!(
+            eligible_lexical_rows.len(),
+            6,
+            "replay must retain exactly six eligible initialized-lexical rows"
+        );
+        for row in eligible_lexical_rows {
+            assert!(
+                row.source_backed_attempted,
+                "eligible lexical row must record a source-backed attempt: {}/{} needle={:?}",
+                row.project, row.file, row.needle
+            );
+            if row.source_backed_outcome == "declined" {
+                assert!(
+                    row.source_backed_decline_stage
+                        .as_deref()
+                        .is_some_and(|stage| !stage.is_empty()),
+                    "declined lexical row must expose its first-failure stage: {}/{} needle={:?}",
+                    row.project,
+                    row.file,
+                    row.needle
+                );
+            } else {
+                assert_eq!(
+                    row.source_backed_outcome, "exact",
+                    "eligible lexical row must report exact or declined, not {:?}: {}/{} needle={:?}",
+                    row.source_backed_outcome, row.project, row.file, row.needle
+                );
+            }
+        }
+
         // Hard assertion #4: every empty success is proven correct (`empty`
         // tier) or carries a live, non-empty receipt reason/fallback_state
         // (already enforced per-row by `validate_receipt_has_required_fields`
@@ -2828,6 +2970,12 @@ use warnings;
             "source_backed_state": "semantic_source_backed_ast_index",
             "answering_tier": "semantic_source_backed",
             "index_state": "full",
+            "source_backed_attempted": true,
+            "source_backed_outcome": "exact",
+            "source_backed_decline_stage": null,
+            "source_backed_symbol_at_found": true,
+            "source_backed_exact_candidate_count": 1,
+            "source_backed_cutover_result": "exact",
             "latency_us": 42,
         });
         let object = receipt.as_object().ok_or("receipt must be an object literal")?;
@@ -2849,12 +2997,47 @@ use warnings;
             "source_backed_state": "semantic_source_backed_ast_index",
             "answering_tier": "semantic_source_backed",
             "index_state": "full",
+            "source_backed_attempted": true,
+            "source_backed_outcome": "exact",
+            "source_backed_decline_stage": null,
+            "source_backed_symbol_at_found": true,
+            "source_backed_exact_candidate_count": 1,
+            "source_backed_cutover_result": "exact",
             "latency_us": 42,
         });
         let object = receipt.as_object().ok_or("receipt must be an object literal")?;
         let result = validate_receipt_has_required_fields(object);
         if result.is_ok() {
             return Err("a receipt missing `reason` must be rejected".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn validate_receipt_has_required_fields_rejects_generic_source_backed_none()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let receipt = json!({
+            "decision": "fallback",
+            "reason": "legacy_fallback",
+            "fallback_state": "legacy_provider",
+            "confidence": "low",
+            "freshness": "fresh",
+            "fact_source": "fallback",
+            "source_backed_state": "not_source_backed",
+            "answering_tier": "workspace_mixed",
+            "index_state": "full",
+            "source_backed_attempted": true,
+            "source_backed_outcome": "None",
+            "source_backed_decline_stage": null,
+            "source_backed_symbol_at_found": false,
+            "source_backed_exact_candidate_count": 0,
+            "source_backed_cutover_result": null,
+            "latency_us": 42,
+        });
+        let object = receipt.as_object().ok_or("receipt must be an object literal")?;
+        let result = validate_receipt_has_required_fields(object);
+        if result.is_ok() {
+            return Err("a generic `None` outcome must be rejected".into());
         }
         Ok(())
     }
