@@ -153,6 +153,10 @@ impl<'a> Parser<'a> {
     fn parse_statement_inner(&mut self) -> ParseResult<Node> {
         // Every new statement begins here
         self.at_stmt_start = true;
+        // A surrounding compound statement can queue a heredoc while it parses
+        // its condition, then recursively parse this statement as a block body.
+        // Remember its queue length so this statement drains only declarations it adds.
+        let pending_heredoc_start = self.pending_heredocs.len();
 
         // A `/` at statement start is always a regex delimiter, never division.
         // The lexer may be in ExpectOperator mode after a preceding block's `}`,
@@ -193,7 +197,7 @@ impl<'a> Parser<'a> {
                     self.byte_cursor = semi_token.end;
                 }
             }
-            self.drain_pending_heredocs(&mut stmt);
+            self.drain_pending_heredocs_from(pending_heredoc_start, &mut stmt);
             return Ok(stmt);
         }
 
@@ -519,7 +523,7 @@ impl<'a> Parser<'a> {
         }
 
         // Drain pending heredocs after statement completion (attach content to AST)
-        self.drain_pending_heredocs(&mut stmt);
+        self.drain_pending_heredocs_from(pending_heredoc_start, &mut stmt);
 
         Ok(stmt)
     }

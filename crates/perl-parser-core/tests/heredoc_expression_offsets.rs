@@ -114,3 +114,42 @@ fn punctuation_delimiter_heredoc_keeps_perl_like_body_out_of_the_outer_call()
         &["BEGIN { $^P = 0x22; }\nsub DB { return if $__++; }"],
     )
 }
+
+#[test]
+fn heredoc_inside_negated_conditional_call_retains_its_body()
+-> Result<(), Box<dyn std::error::Error>> {
+    assert_heredoc_bodies(
+        r#"if (! fresh_perl_is(<<"EOF", "$difference", { eval $switches },
+    print "$difference\n";
+EOF
+"nested call"))
+{
+    note "fallback";
+}
+"#,
+        &["    print \"$difference\\n\";"],
+    )
+}
+
+#[test]
+fn conditional_heredoc_does_not_accumulate_later_block_heredocs()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut source =
+        String::from("if (! fresh_perl_is(<<'OUTER',\nouter body\nOUTER\n    'outer body')) {\n");
+    for index in 0..=100 {
+        source
+            .push_str(&format!("    check(<<'INNER{index}');\ninner body {index}\nINNER{index}\n"));
+    }
+    source.push_str("}\n");
+
+    assert_clean_parse(&source);
+    let mut parser = Parser::new(&source);
+    let ast = must(parser.parse());
+
+    let mut contents = Vec::new();
+    collect_heredoc_contents(&ast, &mut contents);
+    assert_eq!(contents.len(), 102);
+    assert_eq!(contents.first(), Some(&"outer body".to_string()));
+    assert_eq!(contents.last(), Some(&"inner body 100".to_string()));
+    Ok(())
+}
