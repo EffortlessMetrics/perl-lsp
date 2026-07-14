@@ -160,8 +160,8 @@ enum Commands {
         #[arg(long)]
         json: bool,
 
-        /// Override the auto-detected default program (falls back to
-        /// `.perl-lsp/goals/active.toml`'s `default_program`/`active_program`).
+        /// Stamp an explicit program id into the receipt. Portfolio state does
+        /// not auto-select a repository-global program.
         #[arg(long)]
         program: Option<String>,
 
@@ -3314,8 +3314,8 @@ enum GoalsCommand {
     /// READ-ONLY: never creates a branch, worktree, or PR.
     Next {
         /// Explicitly select a program by id (`.perl-lsp/goals/programs/<id>.toml`).
-        /// Defaults to `active.toml`'s governed `default_program`
-        /// (falling back to `active_program`).
+        /// No implicit repository-global program is selected; pass `--program`
+        /// to inspect one program explicitly.
         #[arg(long)]
         program: Option<String>,
 
@@ -3335,8 +3335,8 @@ enum GoalsCommand {
     /// Exits non-zero when findings exist.
     Reconcile {
         /// Explicitly select a program by id (`.perl-lsp/goals/programs/<id>.toml`).
-        /// Defaults to `active.toml`'s governed `default_program`
-        /// (falling back to `active_program`).
+        /// No implicit repository-global program is selected; pass `--program`
+        /// to reconcile one program explicitly.
         #[arg(long)]
         program: Option<String>,
 

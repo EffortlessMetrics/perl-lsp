@@ -81,16 +81,12 @@ pub struct SessionReceipt {
     /// succeeded. `dirty` is only meaningful when this is `true`.
     pub dirty_check_ok: bool,
     pub toolchain_version: String,
-    /// Resolved program id, validated via
-    /// `goals::manifest::validate_program_id` (bare id, no path
-    /// separators/`..`, and a manifest that actually exists) -- an
-    /// invalid/garbage `default_program` in `active.toml` never passes
-    /// through unfiltered. `None` when unresolved or invalid; see
-    /// `program_note` for why.
+    /// Explicit program id supplied for this session. Portfolio state never
+    /// auto-selects a repository-global program.
     pub program: Option<String>,
     pub lane: Option<String>,
-    /// Populated when `program` is `None` because the candidate id
-    /// failed validation (as opposed to simply being absent).
+    /// Reserved for compatibility with older receipt consumers. Portfolio
+    /// selection no longer populates this field.
     pub program_note: Option<String>,
     /// The threshold that was in effect when `stale_warning` was computed
     /// (provenance for the advisory decision).
@@ -170,10 +166,6 @@ fn render_human(receipt: &SessionReceipt) -> String {
         format!("lane:             {}", receipt.lane.as_deref().unwrap_or("(none)")),
     ];
 
-    if let Some(note) = &receipt.program_note {
-        lines.push(format!("program_note:     {note}"));
-    }
-
     if receipt.fetch_ok {
         lines.push(format!(
             "origin/main:      {} (behind={}, ahead={})",
@@ -215,10 +207,7 @@ fn build_receipt(
 
     let toolchain_version = rustc_version().unwrap_or_else(|| "unknown".to_owned());
 
-    let (program, program_note) = match program_arg {
-        Some(explicit) => (Some(explicit), None),
-        None => resolve_default_program(root),
-    };
+    let program = program_arg;
     let lane = lane_arg;
 
     // Distinguishes a session-start receipt captured under a CI runner
@@ -248,7 +237,7 @@ fn build_receipt(
         toolchain_version,
         program,
         lane,
-        program_note,
+        program_note: None,
         warn_threshold,
         stale_warning,
     })
@@ -279,38 +268,6 @@ fn dirty_from_status(status_output: Option<&str>) -> (Option<bool>, bool) {
     match status_output {
         Some(text) => (Some(!text.trim().is_empty()), true),
         None => (None, false),
-    }
-}
-
-/// Resolves the receipt's `program` the same way `goals::snapshot`'s
-/// `resolve_program` does: `.perl-lsp/goals/active.toml`'s
-/// `default_program` (falling back to `active_program` when unset), but
-/// ALWAYS run through `goals::manifest::validate_program_id` -- a bare id
-/// with no path separators/`..` whose manifest actually exists under
-/// `.perl-lsp/goals/programs/`. An invalid/garbage `default_program`
-/// (or a missing/unparseable pointer file) fails CLOSED to `(None,
-/// Some(reason))`/`(None, None)` rather than ever passing through
-/// unvalidated (deep-review finding on PR #3866: this previously matched
-/// `goals::snapshot::build_snapshot_at`'s OLD unvalidated read, not its
-/// current validated `resolve_program`).
-fn resolve_default_program(root: &Path) -> (Option<String>, Option<String>) {
-    let Ok(pointer) = crate::tasks::goals::manifest::load_active_pointer(root) else {
-        return (None, None);
-    };
-    let candidate = pointer
-        .default_program
-        .clone()
-        .or_else(|| (!pointer.active_program.is_empty()).then(|| pointer.active_program.clone()));
-
-    let Some(candidate) = candidate else {
-        return (None, None);
-    };
-
-    match crate::tasks::goals::manifest::validate_program_id(root, &candidate) {
-        Ok(()) => (Some(candidate), None),
-        Err(reason) => {
-            (None, Some(format!("default_program {candidate:?} failed validation: {reason}")))
-        }
     }
 }
 
@@ -541,46 +498,6 @@ mod tests {
     fn parse_repo_from_remote_url_fails_closed_on_garbage_input() {
         assert_eq!(parse_repo_from_remote_url("not a url"), None);
         assert_eq!(parse_repo_from_remote_url(""), None);
-    }
-
-    #[test]
-    fn resolve_default_program_fails_closed_when_pointer_missing() -> Result<()> {
-        let temp = tempfile::tempdir()?;
-        let (program, note) = resolve_default_program(temp.path());
-        assert_eq!(program, None);
-        assert_eq!(note, None);
-        Ok(())
-    }
-
-    #[test]
-    fn resolve_default_program_fails_closed_on_invalid_program_id() -> Result<()> {
-        let temp = tempfile::tempdir()?;
-        let goals_dir = temp.path().join(".perl-lsp/goals");
-        fs::create_dir_all(&goals_dir)?;
-        fs::write(
-            goals_dir.join("active.toml"),
-            "active_program = \"\"\ndefault_program = \"../escape\"\n",
-        )?;
-        let (program, note) = resolve_default_program(temp.path());
-        assert_eq!(program, None, "an invalid program id must never pass through unfiltered");
-        assert!(note.is_some(), "an invalid candidate must leave a note explaining why");
-        Ok(())
-    }
-
-    #[test]
-    fn resolve_default_program_accepts_a_validated_manifest() -> Result<()> {
-        let temp = tempfile::tempdir()?;
-        let programs_dir = temp.path().join(".perl-lsp/goals/programs");
-        fs::create_dir_all(&programs_dir)?;
-        fs::write(programs_dir.join("demo_program.toml"), "")?;
-        fs::write(
-            temp.path().join(".perl-lsp/goals/active.toml"),
-            "active_program = \"\"\ndefault_program = \"demo_program\"\n",
-        )?;
-        let (program, note) = resolve_default_program(temp.path());
-        assert_eq!(program, Some("demo_program".to_owned()));
-        assert_eq!(note, None);
-        Ok(())
     }
 
     #[test]

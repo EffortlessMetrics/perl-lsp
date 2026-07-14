@@ -480,7 +480,7 @@ pub fn select_next(snapshot: &SelectionSnapshot) -> SelectionDecision {
     }])
 }
 
-fn ambiguity_detail(snapshot: &SelectionSnapshot) -> String {
+pub(crate) fn ambiguity_detail(snapshot: &SelectionSnapshot) -> String {
     format!(
         "requested={:?} default={:?} known={:?}",
         snapshot.requested_program,

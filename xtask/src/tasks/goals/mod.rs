@@ -18,7 +18,7 @@
 //! Three layers, so the selection algorithm stays pure and independently
 //! testable:
 //! - [`manifest`] — shared typed loader for `active.toml`'s
-//!   `default_program` pointer and milestone ledgers, used by both this
+//!   portfolio program entries and milestone ledgers, used by both this
 //!   module and `active_goal_manifest::run()` (validator + selector must
 //!   not drift on what a valid ledger looks like).
 //! - [`select`] — `select_next`, a pure function: `SelectionSnapshot` in,

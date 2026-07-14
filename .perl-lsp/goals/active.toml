@@ -1,24 +1,26 @@
-schema = 2
-active_program = "real_perl_editor_trust"
-active_lane = "real_perl_editor_trust_v1"
-
-# Governed default for `cargo xtask goals next` (M3, #3624): the repo can
-# have several active programs at once (see .perl-lsp/goals/programs/ and
-# the sibling lsp-freshness.toml / compiler-program.toml files), selected
-# generally via `--program <id>`. `default_program` names which one the
-# selector consults when no `--program` flag is given. It is deliberately
-# independent from `active_program` above (which continues to govern the
-# lane-routing trust/substrate/reliability chain validated below): while
-# the enablement train (#3612) is in flight, the swarm's own current
-# priority is that train, so `goals next` without a flag surfaces its
-# milestone ledger. Flip this back to "real_perl_editor_trust" once the
-# train's autonomous-loop bar (M2-M7 machine-enforced) is cleared.
-default_program = "agent_loop_enablement"
-
-[program]
-manifest = ".perl-lsp/goals/programs/real_perl_editor_trust.toml"
-board = "docs/project/status/real_perl_editor_trust_v1.md"
+schema = 3
+mode = "portfolio"
 
 [authority]
 work_items = "github"
+specs = "allow"
 receipts = "machine"
+
+[selection]
+strategy = "eligible_portfolio"
+require_explicit_claim = true
+respect_lane_caps = true
+respect_dependencies = true
+respect_conflict_surfaces = true
+
+[[program]]
+id = "real_perl_editor_trust"
+manifest = ".perl-lsp/goals/programs/real_perl_editor_trust.toml"
+kind = "lane_routing"
+enabled = true
+
+[[program]]
+id = "agent_loop_enablement"
+manifest = ".perl-lsp/goals/programs/agent_loop_enablement.toml"
+kind = "milestone_ledger"
+enabled = true

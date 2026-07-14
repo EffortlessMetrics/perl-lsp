@@ -18,11 +18,12 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use toml::Value;
 
 use super::manifest;
 use super::select::{
     LiveOpenPr, MilestoneCandidate, MilestoneStatus, ProgramCandidate, ReconciliationFinding,
-    SelectionSnapshot, parse_status, reconcile_in_progress,
+    SelectionSnapshot, ambiguity_detail, parse_status, reconcile_in_progress,
 };
 
 #[derive(Debug, Default, Deserialize)]
@@ -55,11 +56,11 @@ fn build_snapshot_at(
     program_arg: Option<String>,
     fixture: Option<PathBuf>,
 ) -> Result<SelectionSnapshot> {
-    let pointer = manifest::load_active_pointer(root)?;
-    let default_program = pointer
-        .default_program
-        .clone()
-        .or_else(|| (!pointer.active_program.is_empty()).then(|| pointer.active_program.clone()));
+    // Schema 3 is a portfolio, not a repository-global routing pointer.
+    // Legacy fields remain parseable for compatibility but are deliberately
+    // ignored here; only an explicit `--program` may select one program until
+    // the portfolio candidate compiler is introduced.
+    let default_program = None;
 
     let known_programs = discover_known_programs(root)?;
 
@@ -71,18 +72,22 @@ fn build_snapshot_at(
     // instead of `goals next --json` exiting with a non-JSON error —
     // `--json` callers must always get parseable output.
     //
-    // The `default_program` arm used to assign it straight from
-    // `active.toml` with no validation at all (#3647 follow-up finding,
-    // #3696/#3697): an unknown, malformed, or path-traversal-shaped
-    // `default_program` reached `resolved_program` unchecked whenever no
-    // explicit `--program` was given — fail-OPEN on a control-plane
-    // work-routing authority (this was also #3692 defect 5). This
-    // `resolve_program` now runs BOTH sources through the same
+    // Legacy default_program selection was removed by the portfolio schema;
+    // No legacy pointer is consulted by this portfolio path.
+    // Explicit `--program` still runs through the same
     // `manifest::validate_program_id` check the static
-    // `active_goal_manifest::validate_default_program` validator uses, so
+    // program-id validation used by the compatibility validator, so
     // the two can never drift or fail open again.
     let resolved_program =
         resolve_program(root, program_arg.as_deref(), default_program.as_deref());
+    let resolved_program = match (program_arg.as_deref(), resolved_program) {
+        (Some(_), Some(program_id))
+            if portfolio_program_enabled(root, &program_id)?.is_some_and(|enabled| !enabled) =>
+        {
+            None
+        }
+        (_, resolved_program) => resolved_program,
+    };
 
     let (repository, live_open_prs, live_prs_available) = load_live_prs(root, fixture)?;
     let current_git_ref = current_git_ref(root);
@@ -111,10 +116,10 @@ fn build_snapshot_at(
     Ok(snapshot)
 }
 
-/// Resolves which program `goals next` selects against: an explicit
+/// Resolves an explicitly requested program for `goals next`:
 /// `--program` wins when given (even if invalid — it never falls back to
-/// `default_program`, matching the pre-existing `--program` contract),
-/// otherwise `active.toml`'s `default_program`. Either source must pass
+/// the portfolio, matching the explicit `--program` contract),
+/// portfolio state is never an implicit fallback. The explicit id must pass
 /// `manifest::validate_program_id` (bare id, no path separators/`..`, and
 /// an existing manifest under `.perl-lsp/goals/programs/`) or resolution
 /// fails closed to `None` — `select_next` turns that into
@@ -128,6 +133,35 @@ fn resolve_program(
 ) -> Option<String> {
     let candidate = program_arg.or(default_program)?;
     manifest::validate_program_id(root, candidate).ok().map(|()| candidate.to_owned())
+}
+
+/// Returns the schema-3 portfolio enablement for an explicitly requested
+/// program. Legacy manifests have no portfolio enablement authority and keep
+/// their existing explicit-selection behavior.
+fn portfolio_program_enabled(root: &Path, program_id: &str) -> Result<Option<bool>> {
+    let path = root.join(".perl-lsp/goals/active.toml");
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {}", path.display()));
+        }
+    };
+    let value: Value =
+        toml::from_str(&text).with_context(|| format!("failed to parse {}", path.display()))?;
+    if value.get("schema").and_then(Value::as_integer) != Some(3) {
+        return Ok(None);
+    }
+
+    let Some(programs) = value.get("program").and_then(Value::as_array) else {
+        bail!("schema-3 portfolio in {} must contain a [[program]] array", path.display());
+    };
+    let enabled = programs.iter().find_map(|program| {
+        let table = program.as_table()?;
+        (table.get("id").and_then(Value::as_str) == Some(program_id))
+            .then(|| table.get("enabled").and_then(Value::as_bool).unwrap_or(false))
+    });
+    Ok(Some(enabled.unwrap_or(false)))
 }
 
 /// Measures the actual local git ref this snapshot's evidence was read
@@ -377,6 +411,19 @@ fn build_reconciliation_report_at(
     fixture: Option<PathBuf>,
 ) -> Result<Vec<ReconciliationFinding>> {
     let snapshot = build_snapshot_at(root, program, fixture.clone())?;
+    let Some(_resolved_program) = snapshot.resolved_program.as_deref() else {
+        return Ok(vec![ReconciliationFinding {
+            milestone_id: "<program>".to_owned(),
+            issue: None,
+            kind: "ambiguous_program_authority".to_owned(),
+            detail: format!(
+                "no program resolved; reconciliation cannot inspect candidates ({})",
+                ambiguity_detail(&snapshot)
+            ),
+            pr_number: None,
+            pr_url: None,
+        }]);
+    };
     let merged_prs =
         load_merged_prs_for_candidates(root, &snapshot.candidates, fixture.as_deref())?;
     Ok(reconcile_in_progress(
@@ -605,7 +652,7 @@ commands = ["rtk cargo test"]
         }
     }
 
-    // #3692 defect 5 ("stale default_program -> non-JSON error") is now
+    // Legacy default-program regressions remain covered by explicit-id tests:
     // covered by #3697's `resolve_program_rejects_an_unvalidated_default_program`
     // and `unvalidated_default_program_blocks_selection_with_ambiguous_program_authority`
     // tests below (landed on main in a7eccc885 before this branch was
@@ -632,6 +679,68 @@ commands = ["rtk cargo test"]
         );
         assert_eq!(snapshot.resolved_program, None);
         assert!(snapshot.candidates.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn disabled_portfolio_program_cannot_be_selected_explicitly() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let goals = temp.path().join(".perl-lsp/goals/programs");
+        fs::create_dir_all(&goals)?;
+        fs::write(goals.join("disabled.toml"), "id = \"disabled\"\n")?;
+        fs::write(
+            temp.path().join(".perl-lsp/goals/active.toml"),
+            "schema = 3\n\n[[program]]\nid = \"disabled\"\nenabled = false\nmanifest = \".perl-lsp/goals/programs/disabled.toml\"\nkind = \"milestone_ledger\"\n",
+        )?;
+        let fixture_path = temp.path().join("prs.json");
+        fs::write(&fixture_path, r#"{"repository":"r","prs":[]}"#)?;
+
+        let snapshot =
+            build_snapshot_at(temp.path(), Some("disabled".to_owned()), Some(fixture_path))?;
+
+        assert_eq!(snapshot.requested_program.as_deref(), Some("disabled"));
+        assert_eq!(snapshot.resolved_program, None);
+        assert!(snapshot.candidates.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_portfolio_program_shape_is_an_error() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let goals = temp.path().join(".perl-lsp/goals/programs");
+        fs::create_dir_all(&goals)?;
+        fs::write(goals.join("p.toml"), "id = \"p\"\n")?;
+        fs::write(
+            temp.path().join(".perl-lsp/goals/active.toml"),
+            "schema = 3\nprogram = \"not-an-array\"\n",
+        )?;
+        let fixture_path = temp.path().join("prs.json");
+        fs::write(&fixture_path, r#"{"repository":"r","prs":[]}"#)?;
+
+        let error = build_snapshot_at(temp.path(), Some("p".to_owned()), Some(fixture_path))
+            .expect_err("malformed schema-3 program structure must not look disabled");
+        assert!(error.to_string().contains("must contain a [[program]] array"));
+        Ok(())
+    }
+
+    #[test]
+    fn portfolio_does_not_use_legacy_default_program_as_selection_authority() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let goals = temp.path().join(".perl-lsp/goals/programs");
+        fs::create_dir_all(&goals)?;
+        fs::write(goals.join("known.toml"), "id = \"known\"\n")?;
+        fs::write(
+            temp.path().join(".perl-lsp/goals/active.toml"),
+            "schema = 2\nactive_program = \"known\"\ndefault_program = \"known\"\n",
+        )?;
+        let fixture_path = temp.path().join("prs.json");
+        fs::write(&fixture_path, r#"{"repository":"r","prs":[]}"#)?;
+
+        let snapshot = build_snapshot_at(temp.path(), None, Some(fixture_path))?;
+
+        assert_eq!(snapshot.default_program, None);
+        assert_eq!(snapshot.resolved_program, None);
+        assert_eq!(snapshot.requested_program, None);
         Ok(())
     }
 
@@ -792,6 +901,28 @@ exit_criteria = "y"
             findings.iter().any(|f| f.milestone_id == "M4" && f.kind == "pending_without_identity"),
             "expected a soft pending_without_identity finding for M4, got {findings:?}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn reconcile_reports_unresolved_program_instead_of_no_findings() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let programs_dir = temp.path().join(".perl-lsp/goals/programs");
+        fs::create_dir_all(&programs_dir)?;
+        fs::write(
+            temp.path().join(".perl-lsp/goals/active.toml"),
+            "schema = 3\nmode = \"portfolio\"\n\n[[program]]\nid = \"p\"\nenabled = false\n",
+        )?;
+        fs::write(programs_dir.join("p.toml"), "id = \"p\"\ntitle = \"t\"\n")?;
+
+        let fixture_path = temp.path().join("prs.json");
+        fs::write(&fixture_path, r#"{"repository":"r","prs":[]}"#)?;
+
+        let findings = build_reconciliation_report_at(temp.path(), None, Some(fixture_path))?;
+
+        assert_eq!(findings.len(), 1, "expected an authority finding, got {findings:?}");
+        assert_eq!(findings[0].kind, "ambiguous_program_authority");
+        assert!(findings[0].detail.contains("no program resolved"));
         Ok(())
     }
 }

@@ -1,12 +1,12 @@
 //! Shared typed loader for the goal-selection schema surface introduced by
-//! M3 (#3624): `active.toml`'s `default_program` pointer and milestone
+//! Portfolio schema 3's milestone
 //! ledgers (`.perl-lsp/goals/programs/<id>.toml` files shaped as
 //! `[[milestone]]` entries rather than the lane-routing `[[work_item]]`
 //! shape).
 //!
 //! This is the ONE typed parser for milestone-ledger schema, used by both
 //! `active_goal_manifest::run()` (structural validation, extended for M3)
-//! and `super::snapshot::build_snapshot` (live selection). Sharing it here
+//! and `super::snapshot::build_snapshot` (explicit selection). Sharing it here
 //! is what keeps the validator and the selector from drifting apart on
 //! what a valid ledger looks like (the same failure class M2's
 //! `active_goal_manifest.rs` guards against for the pointer/program/lane
@@ -18,39 +18,15 @@
 //! here: `active_goal_manifest.rs` already owns that surface with its own
 //! extensive, already-passing test suite, and duplicating it would be the
 //! exact "two sources of truth" drift #3612 exists to eliminate. Only the
-//! genuinely new M3 surface (`default_program`, milestone ledgers) lives
-//! in this module.
+//! compatibility validation for that chain remains in
+//! `active_goal_manifest.rs`; this module owns milestone-ledger parsing and
+//! explicit program-id validation.
 
 use color_eyre::eyre::{Context, Result};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
-
-pub const ACTIVE_GOAL_PATH: &str = ".perl-lsp/goals/active.toml";
-
-/// Minimal typed view of `active.toml` sufficient to resolve the governed
-/// default program. Fields already validated structurally by
-/// `active_goal_manifest::validate_pointer` are re-read here (not
-/// re-validated) so `goals next` doesn't need to shell out to the
-/// validator to learn `active_program`/`default_program`.
-#[derive(Debug, Clone, Deserialize)]
-pub struct ActivePointerFile {
-    #[serde(default)]
-    pub active_program: String,
-    /// Governed default program for `cargo xtask goals next` when no
-    /// `--program` flag is given. Optional so schema-2 `active.toml` files
-    /// written before M3 still parse; when absent, callers fall back to
-    /// `active_program`.
-    #[serde(default)]
-    pub default_program: Option<String>,
-}
-
-pub fn load_active_pointer(root: &Path) -> Result<ActivePointerFile> {
-    let text = fs::read_to_string(root.join(ACTIVE_GOAL_PATH))
-        .with_context(|| format!("failed to read {ACTIVE_GOAL_PATH}"))?;
-    toml::from_str(&text).with_context(|| format!("failed to parse {ACTIVE_GOAL_PATH}"))
-}
 
 /// Repo-relative manifest path for a program id, by the same convention
 /// `active.toml`'s `[program].manifest` already uses for
@@ -59,11 +35,10 @@ pub fn program_manifest_path(id: &str) -> String {
     format!(".perl-lsp/goals/programs/{id}.toml")
 }
 
-/// The ONE program-id validator shared by `active_goal_manifest::run()`'s
-/// static `validate_default_program` check and
-/// `super::snapshot::build_snapshot`'s live resolution of `default_program`
+/// The program-id validator shared by the compatibility validator and
+/// `super::snapshot::build_snapshot`'s explicit `--program` resolution.
 /// (#3647 follow-up: the two had drifted, and the live selector path was
-/// fail-open — a `default_program` value could reach `resolved_program`
+/// without validation — an explicit id must never reach `resolved_program`
 /// unvalidated whenever no explicit `--program` was given).
 ///
 /// Rejects any id containing a path separator (`/`, `\\`, `:`) or

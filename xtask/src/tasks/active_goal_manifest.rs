@@ -1,6 +1,7 @@
 //! Validate the active swarm goal manifest.
 //!
-//! Schema 2 (the "goal-state split", #3612): `active.toml` is a small
+//! Schema 2 (the "goal-state split", #3612) remains a compatibility shape:
+//! `active.toml` was a small
 //! pointer that names the active program and lane, and points at a durable
 //! program manifest (`.perl-lsp/goals/programs/<program>.toml`) plus a
 //! board file. The program manifest owns the durable outcome, claim
@@ -11,22 +12,16 @@
 //! `.perl-lsp/goals/archive/` and are relocated only, never re-validated
 //! against the active-lane contract.
 //!
-//! M3 (#3624) additively extends this validator with one more field on the
-//! same `active.toml` pointer: an optional `default_program`, naming the
-//! governed default program for `cargo xtask goals next`. When
-//! `default_program` names a program other than `active_program` (e.g. a
-//! milestone-ledger program like `agent_loop_enablement`, which does not
-//! share the lane-routing `[[work_item]]` shape validated above), its
-//! manifest is validated separately via the shared typed loader in
-//! `tasks::goals::manifest` so this validator and the `goals next`
-//! selector can never drift on what a valid ledger looks like.
+//! Schema 3 makes the repository-global surface a portfolio of enabled
+//! programs. It deliberately has no active/default program authority; a
+//! session claims one issue and worktree separately.
 
 use crate::tasks::goals::manifest as goals_manifest;
 use crate::utils::project_root;
 use color_eyre::eyre::{Context, Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 use toml::{Table, Value};
 
 const ACTIVE_GOAL_PATH: &str = ".perl-lsp/goals/active.toml";
@@ -39,6 +34,8 @@ const PROGRAM_REQUIRED_PATH_FIELDS: &[&str] =
     &["proposal", "plan", "status_pointer", "operating_model"];
 const PROGRAM_REQUIRED_TEXT_ARRAYS: &[&str] = &["end_state", "claim_boundaries"];
 const PROGRAM_REQUIRED_PATH_ARRAYS: &[&str] = &["status_docs", "specs"];
+const PORTFOLIO_PROGRAM_KINDS: [&str; 2] = ["lane_routing", "milestone_ledger"];
+const EXPECTED_REPOSITORY: &str = "perl-lsp-swarm";
 
 const LANE_REQUIRED_TOP_LEVEL_STRINGS: &[&str] = &["id", "program", "proof_policy"];
 const LANE_REQUIRED_TEXT_ARRAYS: &[&str] = &["may_change", "next_items"];
@@ -54,6 +51,9 @@ struct ManifestStats {
     repo: String,
     lane: String,
     program: String,
+    programs: usize,
+    enabled_programs: usize,
+    warnings: Vec<String>,
 }
 
 pub fn run() -> Result<()> {
@@ -61,10 +61,12 @@ pub fn run() -> Result<()> {
     let stats = validate(&root)?;
 
     println!(
-        "active goal manifest check passed: repo={}, lane={}, program={}, {} lanes, {} work items ({} active, {} completed), {} path references, {} proof commands",
+        "active goal manifest check passed: repo={}, lane={}, program={}, {} programs ({} enabled), {} lanes, {} work items ({} active, {} completed), {} path references, {} proof commands",
         stats.repo,
         stats.lane,
         stats.program,
+        stats.programs,
+        stats.enabled_programs,
         stats.lanes,
         stats.work_items,
         stats.active_work_items,
@@ -72,6 +74,9 @@ pub fn run() -> Result<()> {
         stats.path_references,
         stats.proof_commands,
     );
+    for warning in &stats.warnings {
+        eprintln!("active goal manifest warning: {warning}");
+    }
 
     Ok(())
 }
@@ -87,6 +92,18 @@ fn validate(root: &Path) -> Result<ManifestStats> {
 
     let mut stats = ManifestStats::default();
     let mut violations = Vec::new();
+
+    if pointer_table.get("schema").and_then(Value::as_integer) == Some(3) {
+        validate_portfolio(root, pointer_table, &mut stats, &mut violations);
+        if !violations.is_empty() {
+            eprintln!("active goal manifest violations:");
+            for violation in &violations {
+                eprintln!("  - {violation}");
+            }
+            bail!("active goal manifest check failed with {} violation(s)", violations.len());
+        }
+        return Ok(stats);
+    }
 
     // Captured from the pointer before validate_pointer/validate_program_manifest
     // run, so the program-manifest and lane-manifest cross-checks below can fail
@@ -144,6 +161,197 @@ fn validate(root: &Path) -> Result<ManifestStats> {
     }
 
     Ok(stats)
+}
+
+fn validate_portfolio(
+    root: &Path,
+    table: &Table,
+    stats: &mut ManifestStats,
+    violations: &mut Vec<String>,
+) {
+    if table.get("mode").and_then(Value::as_str) != Some("portfolio") {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: schema 3 requires mode = \"portfolio\""));
+    }
+
+    let Some(authority) = table.get("authority").and_then(Value::as_table) else {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: [authority] table is required"));
+        return;
+    };
+    for (field, expected) in [("work_items", "github"), ("specs", "allow"), ("receipts", "machine")]
+    {
+        match authority.get(field).and_then(Value::as_str) {
+            Some(value) if value == expected => {}
+            Some(value) => violations.push(format!(
+                "{ACTIVE_GOAL_PATH}: [authority].{field} must be {expected:?}, got {value:?}"
+            )),
+            None => {
+                violations.push(format!("{ACTIVE_GOAL_PATH}: [authority].{field} must be a string"))
+            }
+        }
+    }
+
+    let Some(selection) = table.get("selection").and_then(Value::as_table) else {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: [selection] table is required"));
+        return;
+    };
+    if selection.get("strategy").and_then(Value::as_str) != Some("eligible_portfolio") {
+        violations.push(format!(
+            "{ACTIVE_GOAL_PATH}: [selection].strategy must be \"eligible_portfolio\""
+        ));
+    }
+    for field in [
+        "require_explicit_claim",
+        "respect_lane_caps",
+        "respect_dependencies",
+        "respect_conflict_surfaces",
+    ] {
+        if selection.get(field).and_then(Value::as_bool) != Some(true) {
+            violations.push(format!("{ACTIVE_GOAL_PATH}: [selection].{field} must be true"));
+        }
+    }
+
+    for field in ["active_program", "active_lane", "default_program"] {
+        if table.contains_key(field) {
+            stats.warnings.push(format!(
+                "{ACTIVE_GOAL_PATH}: legacy {field} is ignored in schema 3 portfolio selection"
+            ));
+        }
+    }
+
+    let Some(program_value) = table.get("program") else {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: [[program]] entries are required"));
+        return;
+    };
+    let Some(programs) = program_value.as_array() else {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: program must be an array of tables"));
+        return;
+    };
+    if programs.is_empty() {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: at least one [[program]] entry is required"));
+        return;
+    }
+
+    let mut ids = BTreeSet::new();
+    for (index, value) in programs.iter().enumerate() {
+        let doc = format!("{ACTIVE_GOAL_PATH}: program[{index}]");
+        let Some(program) = value.as_table() else {
+            violations.push(format!("{doc} must be a table"));
+            continue;
+        };
+        let Some(id) = string_field(program, "id") else {
+            violations.push(format!("{doc}.id must be a string"));
+            continue;
+        };
+        if !is_bare_program_id(id) || id.trim().is_empty() {
+            violations.push(format!("{doc}.id must be a non-empty bare program id, got {id:?}"));
+        }
+        if !ids.insert(id.to_owned()) {
+            violations.push(format!("{doc}.id duplicates program {id:?}"));
+        }
+        let Some(manifest) = string_field(program, "manifest") else {
+            violations.push(format!("{doc}.manifest must be a string path"));
+            continue;
+        };
+        let expected_manifest = goals_manifest::program_manifest_path(id);
+        if manifest != expected_manifest {
+            violations
+                .push(format!("{doc}.manifest must be {expected_manifest:?}, got {manifest:?}"));
+        }
+        if !validate_relative_existing_path(root, &doc, "manifest", manifest, stats, violations) {
+            continue;
+        }
+        let enabled = match program.get("enabled").and_then(Value::as_bool) {
+            Some(value) => value,
+            None => {
+                violations.push(format!("{doc}.enabled must be a boolean"));
+                false
+            }
+        };
+        stats.programs += 1;
+        if enabled {
+            stats.enabled_programs += 1;
+        }
+
+        let Some(kind) = string_field(program, "kind") else {
+            violations.push(format!("{doc}.kind must be one of {PORTFOLIO_PROGRAM_KINDS:?}"));
+            continue;
+        };
+        if !PORTFOLIO_PROGRAM_KINDS.contains(&kind) {
+            violations.push(format!(
+                "{doc}.kind must be one of {PORTFOLIO_PROGRAM_KINDS:?}, got {kind:?}"
+            ));
+            continue;
+        }
+
+        let text = match fs::read_to_string(root.join(manifest)) {
+            Ok(text) => text,
+            Err(err) => {
+                violations.push(format!("{doc}.manifest failed to load {manifest}: {err}"));
+                continue;
+            }
+        };
+        let Ok(program_table) = load_table(root, manifest) else {
+            violations.push(format!("{doc}.manifest failed to parse {manifest}"));
+            continue;
+        };
+        let actual_kind = if goals_manifest::is_milestone_ledger(&text) {
+            "milestone_ledger"
+        } else {
+            "lane_routing"
+        };
+        if actual_kind != kind {
+            violations
+                .push(format!("{doc}.kind {kind:?} does not match manifest shape {actual_kind:?}"));
+            continue;
+        }
+
+        match kind {
+            "milestone_ledger" => match goals_manifest::load_milestone_ledger(root, manifest) {
+                Ok(ledger) => {
+                    if ledger.id != id {
+                        violations
+                            .push(format!("{doc}.manifest id must be {id:?}, got {:?}", ledger.id));
+                    }
+                    if enabled {
+                        violations.extend(goals_manifest::validate_milestone_ledger(&ledger));
+                    }
+                }
+                Err(err) => violations.push(format!("{doc}.manifest milestone ledger: {err}")),
+            },
+            "lane_routing" => {
+                if enabled {
+                    let ownership =
+                        validate_program_manifest(root, &program_table, "", stats, violations);
+                    stats.lanes += ownership.len();
+                    for owned in ownership {
+                        match load_table(root, &owned.manifest) {
+                            Ok(lane_table) => validate_lane_manifest(
+                                root,
+                                &lane_table,
+                                &owned,
+                                id,
+                                stats,
+                                violations,
+                            ),
+                            Err(err) => violations.push(format!(
+                                "{doc}.manifest lane_ownership[{}]: failed to load {}: {err}",
+                                owned.lane, owned.manifest
+                            )),
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    stats.program = "portfolio".to_owned();
+    stats.lane = "portfolio".to_owned();
+    if stats.enabled_programs == 0 {
+        violations.push(format!("{ACTIVE_GOAL_PATH}: portfolio must enable at least one program"));
+    }
+    if stats.programs > 0 {
+        stats.repo = EXPECTED_REPOSITORY.to_owned();
+    }
 }
 
 fn load_table(root: &Path, relative_path: &str) -> Result<Table> {
@@ -372,7 +580,7 @@ fn validate_program_manifest(
     for field in PROGRAM_REQUIRED_PATH_FIELDS {
         match string_field(table, field) {
             Some(path) => {
-                validate_relative_existing_path(root, doc, field, path, stats, violations)
+                validate_relative_existing_path(root, doc, field, path, stats, violations);
             }
             None => violations.push(format!("{doc}: {field} must be a string path")),
         }
@@ -411,8 +619,8 @@ fn validate_current(
 
     if let Some(repo) = string_field(current, "repo") {
         stats.repo = repo.to_owned();
-        if repo != "perl-lsp-swarm" {
-            violations.push(format!("{doc}: [current].repo must be \"perl-lsp-swarm\""));
+        if repo != EXPECTED_REPOSITORY {
+            violations.push(format!("{doc}: [current].repo must be \"{EXPECTED_REPOSITORY}\""));
         }
     }
 
@@ -655,6 +863,7 @@ fn validate_work_items(
     };
 
     let mut ids = BTreeSet::new();
+    let mut program_active_work_items = 0;
     for (index, item) in items.iter().enumerate() {
         let item_doc = format!("{doc}: work_item[{index}]");
         let Some(item_table) = item.as_table() else {
@@ -679,6 +888,7 @@ fn validate_work_items(
             }
             if status == "active" {
                 stats.active_work_items += 1;
+                program_active_work_items += 1;
             }
             if status == "completed" {
                 stats.completed_work_items += 1;
@@ -700,7 +910,7 @@ fn validate_work_items(
         validate_optional_command_array(&item_doc, item_table, "commands", stats, violations);
     }
 
-    if !allow_completed && stats.active_work_items == 0 {
+    if !allow_completed && program_active_work_items == 0 {
         violations.push(format!("{doc}: at least one work_item must be active"));
     }
 }
@@ -806,20 +1016,25 @@ fn validate_relative_existing_path(
     path: &str,
     stats: &mut ManifestStats,
     violations: &mut Vec<String>,
-) {
+) -> bool {
     if path.trim().is_empty() {
         violations.push(format!("{doc}: {field} must not be empty"));
-        return;
+        return false;
     }
-    if Path::new(path).is_absolute() || path.contains(':') || path.contains('\\') {
+    if Path::new(path).is_absolute()
+        || path.contains(':')
+        || path.contains('\\')
+        || Path::new(path).components().any(|component| component == Component::ParentDir)
+    {
         violations.push(format!("{doc}: {field} must be a repo-relative slash path: {path}"));
-        return;
+        return false;
     }
     if !root.join(path).exists() {
         violations.push(format!("{doc}: {field} points to missing path {path}"));
-        return;
+        return false;
     }
     stats.path_references += 1;
+    true
 }
 
 fn validate_non_empty_string_array(
@@ -883,17 +1098,231 @@ mod tests {
         Ok(temp)
     }
 
+    fn portfolio_table(programs: Vec<Value>) -> Table {
+        let mut table = Table::new();
+        table.insert("schema".to_owned(), Value::Integer(3));
+        table.insert("mode".to_owned(), Value::String("portfolio".to_owned()));
+
+        let mut authority = Table::new();
+        authority.insert("work_items".to_owned(), Value::String("github".to_owned()));
+        authority.insert("specs".to_owned(), Value::String("allow".to_owned()));
+        authority.insert("receipts".to_owned(), Value::String("machine".to_owned()));
+        table.insert("authority".to_owned(), Value::Table(authority));
+
+        let mut selection = Table::new();
+        selection.insert("strategy".to_owned(), Value::String("eligible_portfolio".to_owned()));
+        for field in [
+            "require_explicit_claim",
+            "respect_lane_caps",
+            "respect_dependencies",
+            "respect_conflict_surfaces",
+        ] {
+            selection.insert(field.to_owned(), Value::Boolean(true));
+        }
+        table.insert("selection".to_owned(), Value::Table(selection));
+        table.insert("program".to_owned(), Value::Array(programs));
+        table
+    }
+
+    fn portfolio_program(id: &str, kind: &str, enabled: bool) -> Value {
+        let mut program = Table::new();
+        program.insert("id".to_owned(), Value::String(id.to_owned()));
+        program.insert(
+            "manifest".to_owned(),
+            Value::String(goals_manifest::program_manifest_path(id)),
+        );
+        program.insert("kind".to_owned(), Value::String(kind.to_owned()));
+        program.insert("enabled".to_owned(), Value::Boolean(enabled));
+        Value::Table(program)
+    }
+
     #[test]
     fn active_goal_manifest_accepts_current_contract() -> Result<()> {
         let stats = validate(&project_root()?)?;
 
-        assert_eq!(stats.repo, "perl-lsp-swarm");
-        assert_eq!(stats.lane, "real_perl_editor_trust_v1");
-        assert_eq!(stats.program, "real_perl_editor_trust");
+        assert_eq!(stats.repo, EXPECTED_REPOSITORY);
+        assert_eq!(stats.lane, "portfolio");
+        assert_eq!(stats.program, "portfolio");
+        assert_eq!(stats.programs, 2);
+        assert_eq!(stats.enabled_programs, 2);
         assert_eq!(stats.lanes, 3);
         assert_eq!(stats.active_work_items, 1);
         assert_eq!(stats.completed_work_items, 0);
 
+        Ok(())
+    }
+
+    #[test]
+    fn portfolio_warns_when_legacy_selection_fields_are_present() -> Result<()> {
+        let root = fixture_root(&[".perl-lsp/goals/programs/p.toml"])?;
+        fs::write(
+            root.path().join(".perl-lsp/goals/programs/p.toml"),
+            "id = \"p\"\n\n[[milestone]]\nid = \"M1\"\ntitle = \"one\"\nstatus = \"completed\"\nexit_criteria = \"done\"\n",
+        )?;
+        let mut table = Table::new();
+        table.insert("schema".to_owned(), Value::Integer(3));
+        table.insert("mode".to_owned(), Value::String("portfolio".to_owned()));
+        table.insert("active_program".to_owned(), Value::String("p".to_owned()));
+        table.insert("active_lane".to_owned(), Value::String("legacy".to_owned()));
+        table.insert("default_program".to_owned(), Value::String("p".to_owned()));
+        let mut authority = Table::new();
+        authority.insert("work_items".to_owned(), Value::String("github".to_owned()));
+        authority.insert("specs".to_owned(), Value::String("allow".to_owned()));
+        authority.insert("receipts".to_owned(), Value::String("machine".to_owned()));
+        table.insert("authority".to_owned(), Value::Table(authority));
+        let mut selection = Table::new();
+        selection.insert("strategy".to_owned(), Value::String("eligible_portfolio".to_owned()));
+        for field in [
+            "require_explicit_claim",
+            "respect_lane_caps",
+            "respect_dependencies",
+            "respect_conflict_surfaces",
+        ] {
+            selection.insert(field.to_owned(), Value::Boolean(true));
+        }
+        table.insert("selection".to_owned(), Value::Table(selection));
+        let mut program = Table::new();
+        program.insert("id".to_owned(), Value::String("p".to_owned()));
+        program.insert(
+            "manifest".to_owned(),
+            Value::String(".perl-lsp/goals/programs/p.toml".to_owned()),
+        );
+        program.insert("kind".to_owned(), Value::String("milestone_ledger".to_owned()));
+        program.insert("enabled".to_owned(), Value::Boolean(true));
+        table.insert("program".to_owned(), Value::Array(vec![Value::Table(program)]));
+
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+        validate_portfolio(root.path(), &table, &mut stats, &mut violations);
+
+        assert!(violations.is_empty(), "legacy fields should warn, not fail: {violations:?}");
+        assert_eq!(stats.warnings.len(), 3);
+        assert!(stats.warnings.iter().all(|warning| warning.contains("ignored")));
+        Ok(())
+    }
+
+    #[test]
+    fn portfolio_requires_unique_ids_and_known_program_kinds() -> Result<()> {
+        let root = fixture_root(&[".perl-lsp/goals/programs/p.toml"])?;
+        fs::write(
+            root.path().join(".perl-lsp/goals/programs/p.toml"),
+            "id = \"p\"\n\n[[milestone]]\nid = \"M1\"\ntitle = \"one\"\nstatus = \"completed\"\nexit_criteria = \"done\"\n",
+        )?;
+        let table = portfolio_table(vec![
+            portfolio_program("p", "milestone_ledger", true),
+            portfolio_program("p", "unknown", true),
+        ]);
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_portfolio(root.path(), &table, &mut stats, &mut violations);
+
+        assert!(
+            violations.iter().any(|violation| violation.contains("duplicates program")),
+            "expected duplicate id violation, got {violations:?}"
+        );
+        assert!(
+            violations.iter().any(|violation| violation.contains("kind must be one of")),
+            "expected unknown kind violation, got {violations:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn portfolio_rejects_a_kind_that_does_not_match_manifest_shape() -> Result<()> {
+        let root = fixture_root(&[".perl-lsp/goals/programs/p.toml"])?;
+        fs::write(
+            root.path().join(".perl-lsp/goals/programs/p.toml"),
+            "id = \"p\"\n\n[[milestone]]\nid = \"M1\"\ntitle = \"one\"\nstatus = \"completed\"\nexit_criteria = \"done\"\n",
+        )?;
+        let table = portfolio_table(vec![portfolio_program("p", "lane_routing", true)]);
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_portfolio(root.path(), &table, &mut stats, &mut violations);
+
+        assert!(
+            violations.iter().any(|violation| violation.contains("does not match manifest shape")),
+            "expected kind mismatch violation, got {violations:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn disabled_programs_do_not_contribute_active_totals() -> Result<()> {
+        let root = fixture_root(&[".perl-lsp/goals/programs/p.toml"])?;
+        fs::write(root.path().join(".perl-lsp/goals/programs/p.toml"), "id = \"p\"\n")?;
+        let table = portfolio_table(vec![portfolio_program("p", "lane_routing", false)]);
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_portfolio(root.path(), &table, &mut stats, &mut violations);
+
+        assert_eq!(stats.programs, 1);
+        assert_eq!(stats.enabled_programs, 0);
+        assert_eq!(stats.lanes, 0);
+        assert_eq!(stats.work_items, 0);
+        assert_eq!(stats.active_work_items, 0);
+        assert_eq!(stats.completed_work_items, 0);
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.contains("must enable at least one program")),
+            "expected zero-enabled violation, got {violations:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn empty_portfolio_reports_one_missing_program_violation() -> Result<()> {
+        let root = fixture_root(&[])?;
+        let table = portfolio_table(Vec::new());
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_portfolio(root.path(), &table, &mut stats, &mut violations);
+
+        let missing_program_count = violations
+            .iter()
+            .filter(|violation| violation.contains("at least one [[program]] entry is required"))
+            .count();
+        assert_eq!(
+            missing_program_count, 1,
+            "expected one missing-program violation, got {violations:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn portfolio_manifest_parent_path_is_rejected_before_opening() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().join("root");
+        fs::create_dir_all(root.join(".perl-lsp/goals/programs"))?;
+        fs::write(temp.path().join("outside.toml"), "not = [")?;
+
+        let mut table = portfolio_table(vec![portfolio_program("p", "milestone_ledger", true)]);
+        let program = table
+            .get_mut("program")
+            .and_then(Value::as_array_mut)
+            .and_then(|programs| programs.first_mut())
+            .and_then(Value::as_table_mut)
+            .ok_or_else(|| color_eyre::eyre::eyre!("portfolio fixture missing program"))?;
+        program.insert("manifest".to_owned(), Value::String("../outside.toml".to_owned()));
+
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+        validate_portfolio(&root, &table, &mut stats, &mut violations);
+
+        assert!(
+            violations.iter().any(|violation| violation.contains("repo-relative slash path")),
+            "expected parent path rejection, got {violations:?}"
+        );
+        assert!(
+            !violations
+                .iter()
+                .any(|violation| violation.contains("failed to parse ../outside.toml")),
+            "parent path must not be opened, got {violations:?}"
+        );
         Ok(())
     }
 
@@ -1055,7 +1484,7 @@ mod tests {
         let mut table = Table::new();
         let mut current = Table::new();
         current.insert("lane".to_owned(), Value::String("stale-lane".to_owned()));
-        current.insert("repo".to_owned(), Value::String("perl-lsp-swarm".to_owned()));
+        current.insert("repo".to_owned(), Value::String(EXPECTED_REPOSITORY.to_owned()));
         current.insert("release_lineage_repo".to_owned(), Value::String("perl-lsp".to_owned()));
         current.insert("status".to_owned(), Value::String("active".to_owned()));
         table.insert("current".to_owned(), Value::Table(current));
@@ -1565,6 +1994,59 @@ mod tests {
             );
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn active_work_requirement_is_checked_per_program() -> Result<()> {
+        let root = project_root()?;
+        let lanes = BTreeSet::from(["trust".to_owned()]);
+
+        let mut active_item = Table::new();
+        active_item.insert("id".to_owned(), Value::String("active".to_owned()));
+        active_item.insert("status".to_owned(), Value::String("active".to_owned()));
+        active_item.insert("lane".to_owned(), Value::String("trust".to_owned()));
+        active_item.insert("claim_boundary".to_owned(), Value::String("fixture".to_owned()));
+        let mut active_program = Table::new();
+        active_program
+            .insert("work_item".to_owned(), Value::Array(vec![Value::Table(active_item)]));
+
+        let mut ready_item = Table::new();
+        ready_item.insert("id".to_owned(), Value::String("ready".to_owned()));
+        ready_item.insert("status".to_owned(), Value::String("ready".to_owned()));
+        ready_item.insert("lane".to_owned(), Value::String("trust".to_owned()));
+        ready_item.insert("claim_boundary".to_owned(), Value::String("fixture".to_owned()));
+        let mut ready_program = Table::new();
+        ready_program.insert("work_item".to_owned(), Value::Array(vec![Value::Table(ready_item)]));
+
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+        validate_work_items(
+            &root,
+            "program A",
+            &active_program,
+            &lanes,
+            &mut stats,
+            &mut violations,
+            false,
+        );
+        validate_work_items(
+            &root,
+            "program B",
+            &ready_program,
+            &lanes,
+            &mut stats,
+            &mut violations,
+            false,
+        );
+
+        assert_eq!(stats.active_work_items, 1);
+        assert!(
+            violations.iter().any(|v| { v == "program B: at least one work_item must be active" })
+        );
+        assert!(
+            !violations.iter().any(|v| v == "program A: at least one work_item must be active")
+        );
         Ok(())
     }
 
