@@ -404,6 +404,7 @@ impl PirOperation {
         "Assign",
         "Branch",
         "Call",
+        "Deref",
         "DynamicBoundary",
         "LexicalRead",
         "LexicalWrite",
