@@ -34,7 +34,7 @@ this repository into `perl-lsp`.
 | #4142 | Exact-source editor-host lifecycle contract          | Merged |
 | #4144 | VSIX package inventory baseline refresh              | Merged |
 | #4232 | Toolchain and extension-host receipt metadata        | Merged |
-| #4247 | Published-smoke runtime metadata propagation        | Merged |
+| #4247 | Published-smoke runtime metadata propagation         | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
