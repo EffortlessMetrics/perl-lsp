@@ -1,13 +1,15 @@
 # Pipeline Gates — Gate Model Reference
 
-**Status**: Active doctrine (introduced 2026-04-27)
-**Related**: [CLAUDE.md](../../CLAUDE.md) | [SKILL_AND_AGENT_DESIGN.md](./SKILL_AND_AGENT_DESIGN.md) | [ISSUE_PLAN_DOCTRINE.md](./ISSUE_PLAN_DOCTRINE.md)
+**Status**: Active doctrine (introduced 2026-04-27; authority model reconciled 2026-07-13 for the #4005 subtraction)
+**Related**: [CLAUDE.md](../../CLAUDE.md) | [LIVE_SIGNALS_VS_LABELS.md](LIVE_SIGNALS_VS_LABELS.md) | [SKILL_AND_AGENT_DESIGN.md](./SKILL_AND_AGENT_DESIGN.md) | [ISSUE_PLAN_DOCTRINE.md](./ISSUE_PLAN_DOCTRINE.md)
 
 ---
 
 ## Overview
 
-The perl-lsp pipeline is organized into **7 gates** (coarse stages) with **multiple agents working within each gate**. This gate framing is the actual state machine; the labels and sign-off receipts tracked in CLAUDE.md are bookkeeping for what happened within each gate.
+The perl-lsp pipeline is organized into **7 lifecycle moments** (coarse stages, called "gates" throughout this document as organizational shorthand) with **multiple agents working within each**. Each is a boundary that blocks work at the earliest reliable point: unsettled context before mutation (Gates 1-2), structural defects before commit (Gates 3-4), missing proof before publication (Gate 5), stale review/integration defects before merge (Gate 6).
+
+Authority for these boundaries is **live evidence and the branch ruleset** — durable verdict comments and, where one exists, a SHA-bound review receipt (Gates 1-4); live CI (`statusCheckRollup`) on the current HEAD SHA plus the two required checks and 0 unresolved conversation threads (Gates 5-6) — not runtime role/label machinery. That machinery (the SubagentStop plan-reviewer label gate, the mechanical needs-label-gate, the M4b role gate) was retired in the #4005 subtraction. Labels remain useful **navigation**: they record which agents have already run their pass, but confer no authority on their own. See [Labels as Navigation, Not Authority](#labels-as-navigation-not-authority) below.
 
 The key shift from a linear sequence to a gate model:
 
@@ -77,7 +79,7 @@ Agents produce learning artifacts as they work:
 
 **Purpose**: Produce an accurate, scoped, project-aligned proposed approach. Make the build decision (BUILD/DEFER/CLOSE).
 
-**Exit condition**: Issue has `plan-reviewed` label. Optionally: impl branch with `.spec/` files if spec-planner ran.
+**Exit condition**: The issue's latest plan revision carries a durable BUILD verdict comment from plan-reviewer. The `plan-reviewed` label records that this happened but is not itself authoritative — the SubagentStop label gate that once mechanically enforced it was retired (#4005). Optionally: impl branch with `.spec/` files if spec-planner ran.
 
 **Agents within Gate 2**:
 
@@ -90,7 +92,7 @@ Agents produce learning artifacts as they work:
 | **maintainer-issue** | haiku | Project vision check — aligns with perl-lsp goals, roadmap, user base |
 | **spec-planner** | haiku | Create impl branch, write `.spec/` checklist and acceptance files |
 
-**Within-gate ordering**: The verification agents (oppositional, diaboli, architecture, maintainer-issue) read the accuracy-corrected issue from Gate 1 and each other's comments. Each builds on the previous. Plan-reviewer synthesizes all prior verdicts. Spec-planner runs after plan-reviewer, creating the impl branch. See CLAUDE.md Label-based routing for the full ordering.
+**Within-gate ordering**: The verification agents (oppositional, diaboli, architecture, maintainer-issue) read the accuracy-corrected issue from Gate 1 and each other's comments. Each builds on the previous. Plan-reviewer synthesizes all prior verdicts. Spec-planner runs after plan-reviewer, creating the impl branch. See [Within-Gate Ordering](#within-gate-ordering) below for the full ordering.
 
 **When to skip Gate 2 entirely**: Skip for trivially-mechanical PRs (fmt cascade fixes, version bumps) where the scope is definitionally unambiguous. The "plan" is "apply the formatter."
 
@@ -173,7 +175,7 @@ Gate 4 triangulates three axes. A PR that clears only one axis does not pass Gat
 
 **Purpose**: Verify live CI is actually green on the current HEAD SHA. Not a label from an earlier push — the real thing.
 
-**Exit condition**: `ci-green` label is present and the HEAD SHA it was applied to matches the current PR head.
+**Exit condition**: Live CI (`statusCheckRollup`) is green on the current HEAD SHA for both required checks. The `ci-green` label records that green-ci confirmed this, but the live signal is authoritative, not the label — see [LIVE_SIGNALS_VS_LABELS.md](LIVE_SIGNALS_VS_LABELS.md).
 
 **Agents within Gate 5**:
 
@@ -202,7 +204,7 @@ Gate 4 triangulates three axes. A PR that clears only one axis does not pass Gat
 
 **Skip criteria**: Never skip Gate 6. The merge is the point.
 
-**Ops protocol**: See CLAUDE.md Merge Queue Protocol. Key: batch of 3, wait for green between batches, `just cpan-corpus-ratchet` after parser fix merges.
+**Ops protocol**: See CLAUDE.md § Merge and CI. Key: batch of 3, wait for green between batches, `just cpan-corpus-ratchet` after parser fix merges.
 
 ---
 
@@ -265,22 +267,22 @@ When to strictly sequence agents within a gate versus running them in parallel:
 
 ---
 
-## Labels as Bookkeeping, Not State Machine
+## Labels as Navigation, Not Authority
 
-Labels track what happened within each gate. They are sign-off receipts, not the state machine itself.
+Labels record what happened within each lifecycle moment. They are navigation aids for humans and agents — never the authority that decides whether a PR may proceed or merge.
 
-**The state machine is the gate model**: "what gate is this PR in? what within that gate is needed for this PR's nature?"
+**Authority is live evidence and the branch's merge rules**: for Gates 1-4, the durable verdict *comment* (and, where one exists, a SHA-bound review receipt — see [LIVE_SIGNALS_VS_LABELS.md](LIVE_SIGNALS_VS_LABELS.md)) is the record of what actually happened; for Gates 5-6, live CI (`statusCheckRollup` on the current HEAD SHA) plus the two required checks green and 0 unresolved conversation threads (this repo's conversation-resolution convention — enforced by the `main` branch ruleset's `required_review_thread_resolution` rule) decide whether GitHub will allow a merge. No GitHub-enforced merge check depends on `needs-*`/`merge-ready` label state — the SubagentStop plan-reviewer label gate and the mechanical needs-label-gate that once blocked a GitHub merge on label presence were retired (#4005: #4095, #4096). That doesn't make `needs-*` inert: the `queue_reconciler` cron still strips the `merge-ready` navigation label when a non-CI `needs-*` label is present or live CI is red (`xtask/src/tasks/queue_reconciler.rs`), and the ops merge checklist still treats an active `needs-*` label as a hard stop — an unaddressed bounce label still blocks a PR from merging in practice, as navigation-label reconciliation and operator process, not as a branch-ruleset gate.
 
-**Labels answer the question**: "which agents within this gate have already completed their pass?"
+**Labels answer a narrower, useful question**: "which agents within this stage have already completed their pass?" — routing and status bookkeeping, not a gate.
 
 This means:
-- Presence of a label = that agent ran and signed off
+- Presence of a label = that agent ran and signed off (a claim to verify against evidence, not to trust blindly)
 - Absence of a label = that agent hasn't run yet (or was intentionally skipped)
-- The orchestrator may intentionally skip a label if the gate check is trivially satisfied for this PR
+- The orchestrator may intentionally skip a label if the exit condition is trivially satisfied for this PR
 
-Labels are not ordered steps that must all be collected before proceeding. The orchestrator checks: "is the exit condition for this gate met, given this PR's nature?" — not "have all possible labels been set?"
+Labels are not ordered steps that must all be collected before proceeding, and no `needs-*` label is a GitHub-enforced merge blocker (though the reconciler and ops merge checklist still treat an active one as an operational stop — see the Overview above). The orchestrator checks: "is the exit condition for this stage met, given this PR's nature and the live evidence?" — not "have all possible labels been set or cleared?"
 
-For the full label taxonomy, see CLAUDE.md Pipeline State Labels.
+For the full label taxonomy and which labels have live ground truth, see [LIVE_SIGNALS_VS_LABELS.md](LIVE_SIGNALS_VS_LABELS.md).
 
 ---
 
@@ -388,9 +390,9 @@ These memory entries become inputs to future Gate 2 specs for similar parser fix
 
 ## Relation to Existing CLAUDE.md Routing
 
-The label-based routing in CLAUDE.md (Pre-plan-review, Pre-build, Post-build) is the **default sequence** within and across gates. That sequence is correct for full-gate PRs. The gate model is the **meta-frame** that explains when to follow the default and when to skip.
+The gate/agent sequence above is the **default sequence** within and across gates for a full-scope PR. CLAUDE.md's [Session start and work discipline](../../CLAUDE.md) section states the authority model this document implements: labels are navigation only; routing and priority read live GitHub + issue/spec state, never label state. The gate model here is the **meta-frame** that explains when to follow the default sequence and when to skip.
 
-Use CLAUDE.md's label-based routing as the default. Consult this document when the PR's nature suggests a gate or agent within a gate is not relevant.
+Use the sequence above as the default. Consult this document when the PR's nature suggests a gate or agent within a gate is not relevant.
 
 **Future work** (not in scope for this PR):
 - Update each agent definition (`.claude/agents/*.md`) to reference its gate

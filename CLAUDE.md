@@ -11,9 +11,13 @@ Why this file stays thin (it hit 2521 lines once and had to be pruned):
 
 ## Orchestration model
 
-perl-lsp is **orchestrator-driven**: a long-lived orchestrator routes work through a
-[7-gate pipeline](docs/reference/PIPELINE_GATES.md) (Identify → Spec → Build →
-Review → CI green → Merge → Learn) to consolidated, long-running warm agents (roster:
+perl-lsp is **orchestrator-driven**: a long-lived orchestrator routes work through
+[7 lifecycle moments](docs/reference/PIPELINE_GATES.md) (Identify → Spec → Build →
+Review → CI green → Merge → Learn) — boundaries that block work at the earliest
+reliable point (unsettled context before mutation, structural defects before commit,
+missing proof before publication, stale review/integration defects before merge),
+enforced by evidence and rulesets rather than role/label machinery — to
+consolidated, long-running warm agents (roster:
 [.claude/agents/AGENT_CATALOG.md](.claude/agents/AGENT_CATALOG.md)). It routes and
 writes code directly only by exception, always followed by an independent adversarial
 pass. **The CI/merge control plane (ripr, Codecov-patch, the fmt/clippy meta-gate,
@@ -34,12 +38,14 @@ higher one. CI-specific instance of this rule:
 
 ## Session start and work discipline
 
-Run `just doctor` and `just clean-worktrees` before spawning agents; route via labels
-per [PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md). One accountable writer per
-PR. Production writes happen in a **worktree**, never the main checkout. Finish or
-disposition same-lane active work before starting another branch. One change, one
-proof, one PR. **Never weaken a test or ratchet for green** — a red gate is signal,
-not an obstacle to route around.
+Run `just doctor` and `just clean-worktrees` before spawning agents; labels are
+navigation only — routing and priority read live GitHub + issue/spec state, per
+[PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) and
+[LIVE_SIGNALS_VS_LABELS.md](docs/reference/LIVE_SIGNALS_VS_LABELS.md). One accountable
+writer per PR. Production writes happen in a **worktree**, never the main checkout.
+Finish or disposition same-lane active work before starting another branch. One
+change, one proof, one PR. **Never weaken a test or ratchet for green** — a red gate
+is signal, not an obstacle to route around.
 
 ## Issue-first implementation
 
@@ -79,8 +85,19 @@ Reachable/Promoted/Consolidated is **inventory, not product**. Background:
 OR bounce back (`needs-*`) — never both in the same pass. Per the 2026-04-26 #6780
 incident, applying both confused the merge gate and let unfixed bugs ride to main.
 
-**No `needs-*` label on a PR may merge**, even with `merge-ready` present — the label
-means unaddressed work exists. **Main must stay green; merge requires green**
+**No GitHub-enforced merge check depends on label state**: the two required checks
+(`Perl LSP Rust Small Result`, `ripr+ New Gap Gate` — classic branch-protection status
+checks) green on the exact head, plus 0 unresolved conversation threads (this repo's
+conversation-resolution convention — enforced by the `main` branch ruleset's
+`required_review_thread_resolution` rule; classic branch protection's own
+`required_conversation_resolution` setting is off) is what gates a merge
+attempt — not `needs-*`/`merge-ready`. The mechanical `needs-label-gate` that once
+blocked a GitHub merge on `needs-*` presence was retired (#4005). That doesn't make
+`needs-*` inert: the `queue_reconciler` cron strips the `merge-ready` navigation
+label when a non-CI `needs-*` label is present or live CI is red, and the ops merge
+checklist still treats an active `needs-*` label as a hard stop — an unaddressed
+bounce label still blocks a PR from merging in practice, as reconciliation/process
+discipline, not a ruleset gate. **Main must stay green; merge requires green**
 (2026-04-26 directive) — verify workspace-wide CI, not just per-crate, before merging.
 
 ## Publication and proof
