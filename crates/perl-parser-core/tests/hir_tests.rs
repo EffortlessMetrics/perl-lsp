@@ -1291,6 +1291,54 @@ fn hir_compile_environment_records_directives_without_provider_cutover()
 }
 
 #[test]
+fn hir_check_phase_block_defers_compile_time_execution_like_init_and_end()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Oracle: perlmod (https://perldoc.perl.org/perlmod) -- compile/run phase
+    // order is BEGIN (immediate, at parse time) -> UNITCHECK -> CHECK -> INIT
+    // -> END. CHECK runs at the end of compilation (LIFO) and INIT runs just
+    // before the main runtime (FIFO); both are deferred relative to BEGIN,
+    // which executes as soon as it is parsed. UNITCHECK runs immediately
+    // after its compilation unit finishes compiling, which is also deferred
+    // relative to BEGIN's immediate-at-parse-time execution.
+    let file = lower_source(
+        "package Phase::Demo;\n\
+         BEGIN { require Runtime::Begin; }\n\
+         UNITCHECK { require Runtime::UnitCheck; }\n\
+         CHECK { require Runtime::Check; }\n\
+         INIT { require Runtime::Init; }\n\
+         END { require Runtime::End; }\n",
+    );
+
+    assert_eq!(
+        render_compile_environment(&file.compile_environment),
+        "[directives]\n\
+         Require Runtime::Begin Module args= scope=3 pkg=Phase::Demo ExactAst High\n\
+         Require Runtime::UnitCheck Module args= scope=5 pkg=Phase::Demo ExactAst High\n\
+         Require Runtime::Check Module args= scope=7 pkg=Phase::Demo ExactAst High\n\
+         Require Runtime::Init Module args= scope=9 pkg=Phase::Demo ExactAst High\n\
+         Require Runtime::End Module args= scope=11 pkg=Phase::Demo ExactAst High\n\
+         [pragmas]\n\
+         [inc]\n\
+         [modules]\n\
+         Runtime::Begin Require Deferred pkg=Phase::Demo ExactAst High\n\
+         Runtime::UnitCheck Require Deferred pkg=Phase::Demo ExactAst High\n\
+         Runtime::Check Require Deferred pkg=Phase::Demo ExactAst High\n\
+         Runtime::Init Require Deferred pkg=Phase::Demo ExactAst High\n\
+         Runtime::End Require Deferred pkg=Phase::Demo ExactAst High\n\
+         [phase-blocks]\n\
+         Begin pkg=Phase::Demo ExactAst High\n\
+         UnitCheck pkg=Phase::Demo ExactAst High\n\
+         Check pkg=Phase::Demo ExactAst High\n\
+         Init pkg=Phase::Demo ExactAst High\n\
+         End pkg=Phase::Demo ExactAst High\n\
+         [boundaries]\n\
+         PhaseBlockExecution pkg=Phase::Demo DynamicBoundary Low reason=phase block compile-time execution is recorded but not evaluated"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn hir_compile_effect_log_links_source_mutations_facts_and_boundaries()
 -> Result<(), Box<dyn std::error::Error>> {
     let source = "package Effect::Demo;\n\

@@ -1541,11 +1541,19 @@ impl Lowerer {
         range: SourceLocation,
     ) {
         let phase = compile_phase(phase);
-        // INIT and END bodies are compiled with the surrounding program but execute
-        // later in Perl's lifecycle. Preserve their phase facts without treating
-        // ordinary compile analysis as an attempt to execute those bodies.
-        if matches!(phase, CompilePhase::Init | CompilePhase::End)
-            || !phase_block_requires_compile_execution(block)
+        // Only BEGIN executes immediately, at parse time. Per perlmod
+        // (https://perldoc.perl.org/perlmod), the compile/run phase order is
+        // BEGIN -> UNITCHECK -> CHECK -> INIT -> END: UNITCHECK, CHECK, INIT,
+        // and END bodies are all compiled with the surrounding program but
+        // execute later in Perl's lifecycle (UNITCHECK right after their
+        // compilation unit finishes compiling, CHECK at the end of
+        // compilation, INIT just before the main runtime, END at the end).
+        // Preserve their phase facts without treating ordinary compile
+        // analysis as an attempt to execute those bodies.
+        if matches!(
+            phase,
+            CompilePhase::UnitCheck | CompilePhase::Check | CompilePhase::Init | CompilePhase::End
+        ) || !phase_block_requires_compile_execution(block)
         {
             return;
         }
