@@ -34,6 +34,7 @@ this repository into `perl-lsp`.
 | #4142 | Exact-source editor-host lifecycle contract          | Merged |
 | #4144 | VSIX package inventory baseline refresh              | Merged |
 | #4232 | Toolchain and extension-host receipt metadata        | Merged |
+| #4247 | Published-smoke runtime metadata propagation        | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -56,7 +57,8 @@ The rescue checkpoint was not merged wholesale.
 - The exact-source VSIX/current-server harness is reused by hosted Linux smoke.
   Startup, initialization, provider, restart, and shutdown receipts include
   source identity, monotonic milestones, and separate toolchain versus
-  extension-host runtime metadata.
+  extension-host runtime metadata. The published-smoke path now supplies the
+  same toolchain metadata when it bypasses the integration runner.
 - The package inventory and size ratchet protect the published artifact.
 - Jest remains the test runner. Optional feature loading remains deferred until
   repeated receipts attribute measurable cold-path cost to a specific feature.
