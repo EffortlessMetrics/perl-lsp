@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as https from 'https';
 import * as os from 'os';
 import * as path from 'path';
-import { spawnSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import {
   downloadAndUnzipVSCode,
   resolveCliArgsFromVSCodeExecutablePath,
@@ -15,6 +15,22 @@ type ExtensionSource = 'marketplace' | 'open-vsx' | 'vsix';
 
 function envValue(name: string): string {
   return process.env[name]?.trim() ?? '';
+}
+
+function toolchainNpmVersion(): string {
+  const npmUserAgent = process.env.npm_config_user_agent ?? '';
+  const configuredVersion = /(?:^|\s)npm\/([^\s]+)/.exec(npmUserAgent)?.[1];
+  if (configuredVersion) {
+    return configuredVersion;
+  }
+  try {
+    return execSync('npm --version', {
+      encoding: 'utf8',
+      windowsHide: true,
+    }).trim();
+  } catch {
+    return 'unknown';
+  }
 }
 
 function publishedSource(): ExtensionSource {
@@ -222,6 +238,8 @@ function configureCurrentSourceSmoke(userDataDir: string, extensionsDir: string)
 
 async function main(): Promise<void> {
   const source = publishedSource();
+  const toolchainNodeVersion = process.version;
+  const toolchainNpmVersionValue = toolchainNpmVersion();
   const workspacePath = fs.mkdtempSync(
     path.join(os.tmpdir(), 'perl-lsp-published-smoke-workspace-'),
   );
@@ -261,6 +279,8 @@ async function main(): Promise<void> {
         PERL_LSP_PUBLISHED_EXTENSION_SOURCE: source,
         PERL_LSP_SMOKE_RECEIPTS_DIR: receiptsRoot,
         PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || source,
+        PERL_LSP_TOOLCHAIN_NODE_VERSION: toolchainNodeVersion,
+        PERL_LSP_TOOLCHAIN_NPM_VERSION: toolchainNpmVersionValue,
       },
       launchArgs: [
         workspacePath,
