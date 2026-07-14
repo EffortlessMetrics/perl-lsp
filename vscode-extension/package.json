@@ -7,11 +7,11 @@
   "preview": true,
   "markdown": "github",
   "engines": {
-    "node": ">=20.19.0",
-    "npm": "10.8.2",
+    "node": ">=26.0.0 <27",
+    "npm": "11.18.0",
     "vscode": "^1.125.0"
   },
-  "packageManager": "npm@10.8.2",
+  "packageManager": "npm@11.18.0",
   "categories": [
     "Programming Languages",
     "Linters",

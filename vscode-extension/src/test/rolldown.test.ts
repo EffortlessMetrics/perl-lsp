@@ -83,6 +83,17 @@ describe('Rolldown bundle configuration', () => {
     expect(pkg.devDependencies).toHaveProperty('rolldown');
     expect(pkg.devDependencies.rolldown).toMatch(/^\d+\.\d+\.\d+$/);
   });
+
+  test('package and lockfile declare the Node 26 toolchain authority', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'));
+    const lock = JSON.parse(fs.readFileSync(path.join(EXT_ROOT, 'package-lock.json'), 'utf8'));
+
+    expect(pkg.engines.node).toBe('>=26.0.0 <27');
+    expect(pkg.engines.npm).toBe('11.18.0');
+    expect(pkg.packageManager).toBe('npm@11.18.0');
+    expect(pkg.devDependencies['@types/node']).toMatch(/^\^26(?:\.|$)/);
+    expect(lock.packages[''].engines).toEqual(pkg.engines);
+  });
 });
 
 describe('VSIX packaging ships a single bundled artifact and no raw node_modules', () => {

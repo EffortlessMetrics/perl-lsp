@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-1. **Node.js 20.19.0 or newer and npm 10.8.2** installed
+1. **Node.js 26.x (CI pins 26.5.0) and npm 11.18.0** installed
 2. **Visual Studio Code** installed
 3. **Publisher account** on Visual Studio Marketplace
 4. **Open VSX access token** for `EffortlessMetrics` publisher

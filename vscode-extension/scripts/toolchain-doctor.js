@@ -110,8 +110,12 @@ function main() {
     return;
   }
   const nodeVersion = parseVersion(process.versions.node);
-  if (compareVersions(nodeVersion, nodeFloor) < 0) {
-    fail(`Node ${process.versions.node} is below the declared floor ${packageJson.engines.node}`);
+  // The repository policy is an exact Node major, derived from engines.node.
+  // Changing that declared target changes the doctor acceptance major in lockstep.
+  if (compareVersions(nodeVersion, nodeFloor) < 0 || nodeVersion[0] !== nodeFloor[0]) {
+    fail(
+      `Node ${process.versions.node} does not satisfy the declared target ${packageJson.engines.node}`,
+    );
     return;
   }
 

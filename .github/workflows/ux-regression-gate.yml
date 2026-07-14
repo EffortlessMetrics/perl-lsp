@@ -400,11 +400,14 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: '20.19.0'
+          node-version: '26.5.0'
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Select npm authority
+        run: npm install --global npm@11.18.0
 
       - name: Install dependencies (npm ci)
         working-directory: vscode-extension
