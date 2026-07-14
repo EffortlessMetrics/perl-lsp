@@ -2752,6 +2752,8 @@ pub enum HirKind {
     BarewordExpr(BarewordExpr),
     /// Literal expression shell.
     LiteralExpr(LiteralExpr),
+    /// Aggregate, scalar, code, or glob dereference expression shell.
+    DerefExpr(DerefExpr),
     /// Block expression shell without scope construction.
     BlockShell(BlockShell),
     /// Conditional branch shell (`if`/`unless` block form, ternary).
@@ -2777,6 +2779,7 @@ impl HirKind {
         "BranchShell",
         "CallExpr",
         "ControlTransfer",
+        "DerefExpr",
         "DynamicBoundary",
         "IndirectCallExpr",
         "LiteralExpr",
@@ -2950,6 +2953,44 @@ pub struct LiteralExpr {
     pub element_count: Option<usize>,
     /// Pair count for hash literals.
     pub pair_count: Option<usize>,
+}
+
+/// Dereference expression shell.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DerefExpr {
+    /// Aggregate or slot selected by the dereference.
+    pub aggregate_kind: DerefAggregateKind,
+    /// Syntactic shape of the runtime operand.
+    pub operand_kind: DerefOperandKind,
+}
+
+/// Aggregate or slot selected by a dereference expression.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum DerefAggregateKind {
+    /// Scalar dereference such as `${ $ref }`.
+    Scalar,
+    /// Array dereference such as `@{ $ref }`.
+    Array,
+    /// Hash dereference such as `%{ $ref }`.
+    Hash,
+    /// Code dereference such as `&{ $ref }`.
+    Code,
+    /// Glob dereference such as `*{ $ref }`.
+    Glob,
+}
+
+/// Syntactic form supplying a dereference target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum DerefOperandKind {
+    /// A scalar variable supplies a reference or a runtime symbolic name.
+    Variable,
+    /// A string literal supplies an explicit symbolic name.
+    StringLiteral,
+    /// A computed expression supplies the target at runtime.
+    Expression,
 }
 
 /// Literal category.

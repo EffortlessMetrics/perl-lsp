@@ -417,6 +417,7 @@ fn hir_kind_name(kind: &HirKind) -> &'static str {
         HirKind::IndirectCallExpr(_) => "IndirectCallExpr",
         HirKind::BarewordExpr(_) => "BarewordExpr",
         HirKind::LiteralExpr(_) => "LiteralExpr",
+        HirKind::DerefExpr(_) => "DerefExpr",
         HirKind::BlockShell(_) => "BlockShell",
         // Control-flow variants: BranchShell lowered by #8196 (Branch op),
         // LoopShell lowered by #8196 (Loop op), ControlTransfer::Return lowered
@@ -1120,9 +1121,15 @@ mod tests {
     }
 
     #[test]
-    fn symbolic_reference_creates_boundary() {
-        let graph = lower("no strict 'refs'; my $v = ${$name};");
+    fn symbolic_string_reference_creates_boundary() {
+        let graph = lower("no strict 'refs'; my $v = ${\"name\"};");
         assert_eq!(graph.receipt.dynamic_boundary_counts.get("SymbolicReference"), Some(&1));
+    }
+
+    #[test]
+    fn ordinary_runtime_reference_does_not_create_boundary() {
+        let graph = lower("no strict 'refs'; my $v = ${$name};");
+        assert!(graph.receipt.dynamic_boundary_counts.get("SymbolicReference").is_none());
     }
 
     #[test]

@@ -12,28 +12,29 @@ fn lower_source(source: &str) -> perl_parser_core::hir::HirFile {
 }
 
 #[test]
-fn variable_dereferences_without_strict_refs_are_potentially_symbolic() {
+fn variable_dereferences_without_strict_refs_remain_runtime_expressions() {
     // This source has no `use strict`, so `strict_refs` is off by default (the
-    // same default Perl itself uses). Per perlref, hard-vs-symbolic
-    // dereference is decided by the operand's *runtime value*, not its AST
-    // shape: `keys %$hash`, `scalar @$array`, and `my ($name) = @$_` are all
-    // idiomatic "unpack a reference" calls in practice, but nothing at parse
-    // time proves `$hash`/`$array`/`$_` hold hard references rather than
-    // strings — under `no strict 'refs'` (or its absence) they are
-    // potentially symbolic and must stay a fail-closed compile boundary.
-    // Known-safe corpus idioms (`$$_` in comp/fold.t, `@$tuple` in
-    // comp/require.t) are quieted narrowly by perl-core-test-runner's
-    // per-file allowlist instead of by excluding this AST shape generally.
+    // same default Perl itself uses). Variable operands remain ordinary
+    // runtime expressions: their values may be hard references, and the HIR
+    // does not claim a symbolic-reference compile boundary without a
+    // proven string-valued operand.
     let file = lower_source(
         "sub inspect { my ($hash, $array, $row) = @_; keys %$hash; scalar @$array; my ($name) = @$_; }",
     );
 
+    assert_eq!(
+        file.items
+            .iter()
+            .filter(|item| matches!(&item.kind, perl_parser_core::hir::HirKind::DerefExpr(_)))
+            .count(),
+        3,
+        "variable dereferences must remain represented as runtime HIR expressions"
+    );
     assert!(
-        file.compile_effects().iter().any(|effect| {
+        !file.compile_effects().iter().any(|effect| {
             effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
         }),
-        "variable-operand dereferences without strict refs must stay a fail-closed \
-         SymbolicReferenceDeref compile boundary, per perlref"
+        "variable-operand dereferences without strict refs remain runtime expressions"
     );
 }
 

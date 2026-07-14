@@ -7,7 +7,10 @@
 
 use anyhow::{Context, Result, bail};
 use perl_core_harness_types::{RUNNER_RECORD_SCHEMA_VERSION, RunnerRecord, RunnerStatus};
-use perl_parser_core::hir::{CompileEffect, CompileEffectKind, CompileEffectSourceKind, lower_ast};
+use perl_parser_core::hir::{
+    CompileEffect, CompileEffectKind, CompileEffectSourceKind, CompilePhase, HirFile, HirScopeId,
+    ScopeKind, lower_ast,
+};
 use perl_parser_core::{Parser, RecoverySalvageClass, RecoverySalvageProfile};
 use std::env;
 use std::ffi::OsString;
@@ -280,8 +283,9 @@ fn run_compile(invocation: &Invocation) -> Result<ModeRunResult> {
 
     let hir = lower_ast(&output.ast);
     let effects = hir.compile_effects();
-    if let Some(effect) =
-        effects.iter().find(|effect| is_unsupported_compile_boundary(effect, invocation, &source))
+    if let Some(effect) = effects
+        .iter()
+        .find(|effect| is_unsupported_compile_boundary(effect, invocation, &source, &hir))
     {
         let first_diagnostic = effect
             .dynamic_reason
@@ -298,27 +302,28 @@ fn is_unsupported_compile_boundary(
     effect: &CompileEffect,
     invocation: &Invocation,
     source: &str,
+    hir: &HirFile,
 ) -> bool {
     if effect.kind != CompileEffectKind::EmitDynamicBoundary {
+        return false;
+    }
+    if effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
+        && !is_compile_phase_symbolic_reference(effect, hir)
+    {
         return false;
     }
     !is_static_perl_core_test_bootstrap_boundary(effect, invocation, source)
         && !is_run_dtrace_platform_probe_boundary(effect, invocation, source)
         && !is_run_switchc_platform_probe_boundary(effect, invocation, source)
         && !is_base_term_cwd_setup_boundary(effect, invocation, source)
-        && !is_base_lex_symbolic_reference_boundary(effect, invocation)
         && !is_base_lex_map_begin_boundary(effect, invocation, source)
         && !is_base_rs_filehandle_alias_boundary(effect, invocation, source)
         && !is_comp_our_tieall_autoload_boundary(effect, invocation, source)
         && !is_comp_line_debug_inc_setup_boundary(effect, invocation, source)
-        && !is_comp_line_debug_line_table_symbolic_ref_boundary(effect, invocation, source)
-        && !is_comp_retainedlines_line_table_symbolic_ref_boundary(effect, invocation, source)
         && !is_comp_filter_exception_test_pl_setup_boundary(effect, invocation, source)
         && !is_comp_filter_exception_inc_filter_boundary(effect, invocation, source)
         && !is_comp_redef_warning_setup_boundary(effect, invocation, source)
         && !is_comp_redef_suppressed_warning_eval_boundary(effect, invocation, source)
-        && !is_comp_fold_readonly_constant_ref_boundary(effect, invocation, source)
-        && !is_comp_fold_nested_constant_ref_boundary(effect, invocation, source)
         && !is_comp_parser_run_test_pl_setup_boundary(effect, invocation, source)
         && !is_comp_proto_inc_setup_boundary(effect, invocation, source)
         && !is_comp_proto_typeglob_sub_assignment_boundary(effect, invocation, source)
@@ -327,12 +332,8 @@ fn is_unsupported_compile_boundary(
         && !is_comp_use_inc_feature_setup_boundary(effect, invocation, source)
         && !is_comp_parser_inc_setup_boundary(effect, invocation, source)
         && !is_comp_parser_line_table_self_write_boundary(effect, invocation, source)
-        && !is_comp_parser_line_table_symbolic_ref_boundary(effect, invocation, source)
-        && !is_comp_parser_multideref_literal_boundary(effect, invocation, source)
-        && !is_comp_parser_heredoc_interpolation_boundary(effect, invocation, source)
         && !is_comp_require_setup_boundary(effect, invocation, source)
         && !is_comp_require_module_true_setup_boundary(effect, invocation, source)
-        && !is_comp_require_module_true_tuple_deref_boundary(effect, invocation, source)
         && !is_comp_require_runtime_dynamic_require_boundary(effect, invocation, source)
         && !is_comp_hints_phase_boundary(effect, invocation, source)
         && !is_run_cloexec_config_setup_boundary(effect, invocation, source)
@@ -346,6 +347,37 @@ fn is_unsupported_compile_boundary(
         && !is_run_switchdx_miniperl_setup_boundary(effect, invocation, source)
         && !is_run_data_argv_setup_boundary(effect, invocation, source)
         && !is_run_switchp_data_setup_boundary(effect, invocation, source)
+}
+
+fn is_compile_phase_symbolic_reference(effect: &CompileEffect, hir: &HirFile) -> bool {
+    let in_compile_phase = hir.compile_environment.phase_blocks.iter().any(|phase_block| {
+        matches!(
+            phase_block.phase,
+            CompilePhase::Begin | CompilePhase::UnitCheck | CompilePhase::Check
+        ) && effect.range.start >= phase_block.range.start
+            && effect.range.end <= phase_block.range.end
+    });
+    in_compile_phase && !is_runtime_callable_scope(effect.scope_id, hir)
+}
+
+fn is_runtime_callable_scope(scope_id: Option<HirScopeId>, hir: &HirFile) -> bool {
+    let mut current = scope_id;
+    while let Some(scope_id) = current {
+        let Some(scope) = hir.scope_graph.scopes.get(scope_id.index() as usize) else {
+            return false;
+        };
+        // The nearest execution frame wins.  A BEGIN nested inside a
+        // subroutine executes during compilation, while a subroutine body
+        // declared inside BEGIN remains runtime-callable.
+        if matches!(scope.kind, ScopeKind::PhaseBlock) {
+            return false;
+        }
+        if matches!(scope.kind, ScopeKind::Subroutine | ScopeKind::Method) {
+            return true;
+        }
+        current = scope.parent;
+    }
+    false
 }
 
 /// Govern the fixed bootstrap boundaries used by the pinned receipt sources.
@@ -486,16 +518,6 @@ fn is_base_term_cwd_setup_boundary(
     normalized == "BEGIN {\n    chdir 't' if -d 't';\n}"
 }
 
-fn is_base_lex_symbolic_reference_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-) -> bool {
-    normalize_display_path(&invocation.display_path) == "base/lex.t"
-        && effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
-        && effect.dynamic_reason.as_deref()
-            == Some("symbolic reference dereference is not statically known")
-}
-
 fn is_base_lex_map_begin_boundary(
     effect: &CompileEffect,
     invocation: &Invocation,
@@ -576,49 +598,6 @@ fn is_comp_line_debug_inc_setup_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "BEGIN { unshift @INC, '.' }"
-}
-
-fn is_comp_line_debug_line_table_symbolic_ref_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/line_debug.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized.contains("\"_<comp/line_debug_0.aux\"")
-}
-
-fn is_comp_retainedlines_line_table_symbolic_ref_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/retainedlines.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized.contains("$::{$keys[0]}")
-        || normalized.contains("$::{\"_<hash-line-eval\"}")
-        || normalized.contains("$::{\"_<doggo\"}")
-        || normalized.contains("$::{\"_<copfilesv-modified\"}")
 }
 
 fn is_comp_filter_exception_test_pl_setup_boundary(
@@ -706,57 +685,6 @@ fn is_comp_redef_suppressed_warning_eval_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "BEGIN {\n    local $^W = 0;\n    eval qq(sub sub10 () {1} sub sub10 {1});\n}"
-}
-
-fn is_comp_fold_readonly_constant_ref_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/fold.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized == r#"${\"hello\n"}"#
-}
-
-/// `comp/fold.t` dereferences `\(1+3)` (a reference to a constant-folded
-/// scalar) through `$$_` inside a loop. The operand is a `Variable` node, so
-/// the restored value-sensitive symbolic-ref classifier (see
-/// `is_symbolic_reference_deref_op` in `perl-parser-core::hir::lower`) flags
-/// it as *potentially* symbolic under `no strict 'refs'` — but `$_` here is
-/// always bound to a hard reference produced by `\(1+3)` a few tokens
-/// earlier in the same loop, never a variable holding a symbol-table name.
-/// This is a narrow, exact-match suppression for that one known-safe corpus
-/// idiom, not a general exclusion.
-fn is_comp_fold_nested_constant_ref_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/fold.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized_slice = slice.replace("\r\n", "\n");
-    let normalized_source = source.replace("\r\n", "\n");
-    normalized_slice == "$$_"
-        && normalized_source.contains("for (1,2) { for (\\(1+3)) { push @values, $$_; $$_++ } }")
 }
 
 fn is_comp_parser_run_test_pl_setup_boundary(
@@ -932,8 +860,19 @@ fn is_comp_parser_line_table_self_write_boundary(
     invocation: &Invocation,
     source: &str,
 ) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/parser.t"
-        || effect.source_kind != CompileEffectSourceKind::PhaseBlock
+    if normalize_display_path(&invocation.display_path) != "comp/parser.t" {
+        return false;
+    }
+
+    if effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref {
+        return source.replace("\r\n", "\n")
+            == r#"#!./perl
+$file = __FILE__;
+BEGIN{ ${"_<".__FILE__} = \1 }
+"#;
+    }
+
+    if effect.source_kind != CompileEffectSourceKind::PhaseBlock
         || effect.dynamic_reason.as_deref()
             != Some("phase block compile-time execution is recorded but not evaluated")
     {
@@ -945,67 +884,6 @@ fn is_comp_parser_line_table_self_write_boundary(
     };
     let normalized = slice.replace("\r\n", "\n");
     normalized == "BEGIN{ ${\"_<\".__FILE__} = \\1 }"
-}
-
-fn is_comp_parser_line_table_symbolic_ref_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/parser.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized == "${\"_<\".__FILE__}"
-        && source.replace("\r\n", "\n").contains("BEGIN{ ${\"_<\".__FILE__} = \\1 }")
-}
-
-fn is_comp_parser_multideref_literal_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/parser.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized == "${[{a=>214}]}"
-}
-
-fn is_comp_parser_heredoc_interpolation_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/parser.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized = slice.replace("\r\n", "\n");
-    normalized == "${\n\nENE\n\"bar\"}"
 }
 
 fn is_comp_require_setup_boundary(
@@ -1110,37 +988,6 @@ fn is_comp_require_module_true_setup_boundary(
         && normalized.contains("foreach my $debugger_state (0,0xA)")
         && normalized.contains("push @module_true_tests,")
         && normalized.contains("$module_true_test_count += 12;")
-}
-
-/// `comp/require.t` unpacks each `@module_true_tests` entry via
-/// `my (...) = @$tuple;`. `$tuple` is a `Variable` operand, so the restored
-/// value-sensitive symbolic-ref classifier flags it as *potentially* symbolic
-/// under `no strict 'refs'` — but `$tuple` is always bound to an array
-/// reference produced by the `push @module_true_tests, [...]` a few lines
-/// earlier, never a variable holding a symbol-table name. This is a narrow,
-/// exact-match suppression for that one known-safe corpus idiom, not a
-/// general exclusion.
-fn is_comp_require_module_true_tuple_deref_boundary(
-    effect: &CompileEffect,
-    invocation: &Invocation,
-    source: &str,
-) -> bool {
-    if normalize_display_path(&invocation.display_path) != "comp/require.t"
-        || effect.source_kind != CompileEffectSourceKind::SymbolicReferenceDeref
-        || effect.dynamic_reason.as_deref()
-            != Some("symbolic reference dereference is not statically known")
-    {
-        return false;
-    }
-
-    let Some(slice) = source.get(effect.range.start..effect.range.end) else {
-        return false;
-    };
-    let normalized_source = source.replace("\r\n", "\n");
-    slice.trim() == "@$tuple"
-        && normalized_source.contains("foreach my $tuple (@module_true_tests)")
-        && normalized_source
-            .contains("my ($pack_name, $param_str, $this_code, $mod_code, $eval_code)= @$tuple;")
 }
 
 fn is_comp_hints_phase_boundary(
@@ -2469,6 +2316,175 @@ mod tests {
     }
 
     #[test]
+    fn compile_runtime_dereferences_do_not_emit_compile_effects() -> TestResult {
+        let source = "no strict 'refs';\nsub inspect {\n    my ($hash, $array, $row) = @_;\n    keys %$hash;\n    scalar @$array;\n    my ($name) = @$_;\n}\n";
+        let mut parser = Parser::new(source);
+        let output = parser.parse_with_recovery();
+        let hir = lower_ast(&output.ast);
+        let effects = hir.compile_effects();
+        assert!(
+            !effects.iter().any(|effect| {
+                effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
+            }),
+            "ordinary runtime dereferences must not appear in compile effects"
+        );
+
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.to_string()),
+            display_path: "-e".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_explicit_symbolic_dereference_is_deferred_runtime() -> TestResult {
+        let source = "no strict 'refs';\n${\"Runtime::Symbol\"} = 1;\n";
+        let mut parser = Parser::new(source);
+        let output = parser.parse_with_recovery();
+        let hir = lower_ast(&output.ast);
+        let effects = hir.compile_effects();
+        assert!(effects.iter().any(|effect| {
+            effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
+        }));
+
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.to_string()),
+            display_path: "-e".to_string(),
+        };
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_phase_symbolic_dereference_remains_a_compile_effect_boundary() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "no strict 'refs';\nBEGIN { ${\"Foo::bar\"} = 1; }\n".to_string(),
+            ),
+            display_path: "-e".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert!(result.first_diagnostic.as_deref().is_some_and(|diagnostic| {
+            diagnostic.contains("symbolic reference dereference is deferred to runtime")
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_symbolic_dereference_inside_nested_subroutine_stays_deferred() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "no strict 'refs';\nBEGIN { sub inspect { ${\"Foo::bar\"} = 1; } }\n".to_string(),
+            ),
+            display_path: "-e".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_symbolic_dereference_inside_begin_nested_in_subroutine_is_compile_effect()
+    -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "no strict 'refs';\nsub inspect { BEGIN { ${\"Foo::bar\"} = 1; } }\n".to_string(),
+            ),
+            display_path: "-e".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_runtime_symbolic_dereference_after_begin_is_deferred() -> TestResult {
+        let invocation = Invocation {
+            source: SourceInput::Inline(
+                "BEGIN { $setup = 1; }\nno strict 'refs';\nsub inspect { keys %$hash; }\n"
+                    .to_string(),
+            ),
+            display_path: "-e".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn compile_subroutine_body_inside_begin_is_not_a_dereference_effect() -> TestResult {
+        let source =
+            "no strict 'refs';\nBEGIN {\n    sub inspect {\n        keys %$hash;\n    }\n}\n";
+        let mut parser = Parser::new(source);
+        let output = parser.parse_with_recovery();
+        let hir = lower_ast(&output.ast);
+        let effects = hir.compile_effects();
+        assert!(
+            !effects.iter().any(|effect| {
+                effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
+            }),
+            "a later-executing subroutine body must not create a dereference effect"
+        );
+
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.to_string()),
+            display_path: "-e".to_string(),
+        };
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
+    fn compile_phase_block_stays_bucketed_without_dereference_effects() -> TestResult {
+        let source = "no strict 'refs';\nBEGIN {\n    keys %$hash;\n}\n";
+        let mut parser = Parser::new(source);
+        let output = parser.parse_with_recovery();
+        let hir = lower_ast(&output.ast);
+        let effects = hir.compile_effects();
+        assert!(
+            !effects.iter().any(|effect| {
+                effect.source_kind == CompileEffectSourceKind::SymbolicReferenceDeref
+            }),
+            "the direct dereference is a runtime expression, not a compile effect"
+        );
+
+        let invocation = Invocation {
+            source: SourceInput::Inline(source.to_string()),
+            display_path: "-e".to_string(),
+        };
+
+        let result = run_compile(&invocation)?;
+
+        assert_eq!(result.status, RunnerStatus::Fail);
+        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        Ok(())
+    }
+
+    #[test]
     fn compile_base_term_cwd_setup_phase_block_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_term_cwd_setup_source()),
@@ -2668,7 +2684,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_line_debug_symbolic_line_table_boundary_passes() -> TestResult {
+    fn compile_comp_line_debug_runtime_dereference_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_line_debug_symbolic_line_table_source()),
             display_path: "comp/line_debug.t".to_string(),
@@ -2682,7 +2698,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_line_debug_symbolic_line_table_other_file_stays_bucketed() -> TestResult {
+    fn compile_comp_line_debug_runtime_dereference_passes_in_any_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_line_debug_symbolic_line_table_source()),
             display_path: "comp/retainedlines.t".to_string(),
@@ -2690,13 +2706,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_line_debug_other_symbolic_ref_stays_bucketed() -> TestResult {
+    fn compile_comp_line_debug_runtime_string_dereference_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(r#"print ${"_<other_file"}[0];"#.to_string()),
             display_path: "comp/line_debug.t".to_string(),
@@ -2704,13 +2720,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_retainedlines_symbolic_line_table_boundary_passes() -> TestResult {
+    fn compile_comp_retainedlines_runtime_dereference_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_retainedlines_symbolic_line_table_source()),
             display_path: "comp/retainedlines.t".to_string(),
@@ -2724,7 +2740,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_retainedlines_symbolic_line_table_other_file_stays_bucketed() -> TestResult {
+    fn compile_comp_retainedlines_runtime_dereference_passes_in_any_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_retainedlines_symbolic_line_table_source()),
             display_path: "comp/hints.t".to_string(),
@@ -2732,13 +2748,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_retainedlines_other_symbolic_ref_stays_bucketed() -> TestResult {
+    fn compile_comp_retainedlines_runtime_dereference_passes_for_other_shape() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_line_debug_symbolic_line_table_source()),
             display_path: "comp/retainedlines.t".to_string(),
@@ -2746,8 +2762,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3036,7 +3052,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_fold_readonly_constant_ref_other_file_stays_bucketed() -> TestResult {
+    fn compile_comp_fold_readonly_runtime_dereference_passes_in_any_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_fold_readonly_constant_ref_source()),
             display_path: "comp/retainedlines.t".to_string(),
@@ -3044,13 +3060,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_fold_other_symbolic_ref_stays_bucketed() -> TestResult {
+    fn compile_comp_fold_runtime_string_dereference_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline("#!./perl -w\n${\\\"changed\\n\"}++;\n".to_string()),
             display_path: "comp/fold.t".to_string(),
@@ -3058,8 +3074,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3078,7 +3094,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_fold_nested_constant_ref_other_file_stays_bucketed() -> TestResult {
+    fn compile_comp_fold_runtime_dereference_passes_in_any_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_fold_nested_constant_ref_source()),
             display_path: "comp/retainedlines.t".to_string(),
@@ -3086,13 +3102,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_fold_changed_nested_constant_ref_stays_bucketed() -> TestResult {
+    fn compile_comp_fold_changed_runtime_dereference_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 "#!./perl -w\nfor (1,2) { for (\\(1+4)) { $$_++ } }\n".to_string(),
@@ -3102,8 +3118,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3629,7 +3645,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_require_module_true_tuple_deref_boundary_passes() -> TestResult {
+    fn compile_comp_require_module_true_tuple_dereference_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_require_module_true_tuple_deref_source()),
             display_path: "comp/require.t".to_string(),
@@ -3643,7 +3659,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_require_module_true_tuple_deref_other_file_stays_bucketed() -> TestResult {
+    fn compile_comp_require_tuple_dereference_passes_in_any_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_require_module_true_tuple_deref_source()),
             display_path: "comp/hints.t".to_string(),
@@ -3651,13 +3667,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_require_module_true_tuple_deref_changed_slice_stays_bucketed() -> TestResult {
+    fn compile_comp_require_changed_tuple_dereference_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 comp_require_module_true_tuple_deref_source().replace("@$tuple", "@$other"),
@@ -3667,8 +3683,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3936,7 +3952,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_parser_line_table_symbolic_ref_without_probe_stays_bucketed() -> TestResult {
+    fn compile_comp_parser_runtime_string_dereference_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline("#!./perl\nmy $x = ${\"_<\".__FILE__};\n".to_string()),
             display_path: "comp/parser.t".to_string(),
@@ -3944,8 +3960,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -3964,7 +3980,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_parser_multideref_literal_other_file_stays_bucketed() -> TestResult {
+    fn compile_comp_parser_multideref_literal_passes_in_any_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_parser_multideref_literal_source()),
             display_path: "comp/hints.t".to_string(),
@@ -3972,13 +3988,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_parser_multideref_literal_changed_expr_stays_bucketed() -> TestResult {
+    fn compile_comp_parser_changed_multideref_literal_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(
                 "#!./perl\nis +(${[{a=>215}]}[0])->{a}, 215;\n".to_string(),
@@ -3988,8 +4004,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -4008,7 +4024,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_comp_parser_heredoc_interpolation_other_file_stays_bucketed() -> TestResult {
+    fn compile_comp_parser_heredoc_runtime_dereference_passes_in_any_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(comp_parser_heredoc_interpolation_source()),
             display_path: "comp/hints.t".to_string(),
@@ -4016,13 +4032,13 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
     #[test]
-    fn compile_comp_parser_heredoc_interpolation_changed_body_stays_bucketed() -> TestResult {
+    fn compile_comp_parser_changed_heredoc_runtime_dereference_passes() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline("#!./perl\n<<ENE . ${\n\nENE\n\"baz\"};\n".to_string()),
             display_path: "comp/parser.t".to_string(),
@@ -4030,8 +4046,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -4777,7 +4793,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_base_lex_symbolic_reference_boundaries_pass() -> TestResult {
+    fn compile_base_lex_runtime_dereferences_pass() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_lex_symbolic_reference_source()),
             display_path: "base/lex.t".to_string(),
@@ -4791,7 +4807,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_base_lex_symbolic_reference_other_file_stays_bucketed() -> TestResult {
+    fn compile_base_lex_runtime_dereference_passes_in_any_file() -> TestResult {
         let invocation = Invocation {
             source: SourceInput::Inline(base_lex_symbolic_reference_source()),
             display_path: "base/other.t".to_string(),
@@ -4799,8 +4815,8 @@ mod tests {
 
         let result = run_compile(&invocation)?;
 
-        assert_eq!(result.status, RunnerStatus::Fail);
-        assert_eq!(result.bucket.as_deref(), Some("compile_effect"));
+        assert_eq!(result.status, RunnerStatus::Pass);
+        assert!(result.bucket.is_none());
         Ok(())
     }
 
@@ -5506,7 +5522,7 @@ my $result = runperl(
         for effect in hir
             .compile_effects()
             .iter()
-            .filter(|effect| is_unsupported_compile_boundary(effect, &invocation, source))
+            .filter(|effect| is_unsupported_compile_boundary(effect, &invocation, source, &hir))
         {
             let slice = source.get(effect.range.start..effect.range.end).unwrap_or("<invalid>");
             use std::fmt::Write as _;

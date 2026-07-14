@@ -222,37 +222,39 @@ fn hir_intentionally_skipped_kinds_allow_child_hir_emission() {
     );
 }
 
-/// Verify `Unary` (symbolic-ref deref) correctly emits `DynamicBoundary` and
-/// is classified as `DynamicBoundary` in the registry — not `NotYetModeled`.
+/// Verify `Unary` dereferences emit their typed HIR item and, when applicable,
+/// an explicit `DynamicBoundary` for runtime symbolic references.
 ///
 /// This was the key disagreement between the old `hir_coverage.rs` (which had
 /// `Unary` as `not_yet_modeled`) and the actual lowerer behavior (which emits
-/// `DynamicBoundary` for symbolic dereference under no-strict-refs).
+/// `DerefExpr`, plus `DynamicBoundary` for symbolic dereference under
+/// no-strict-refs).
 #[test]
-fn hir_unary_is_dynamic_boundary_not_not_yet_modeled() {
+fn hir_unary_emits_typed_deref_and_runtime_boundary() {
     use perl_parser_core::Parser;
     use perl_parser_core::hir::lower_ast;
     use perl_parser_core::hir::{DynamicBoundaryKind, HirKind};
 
-    // Verify Unary is classified as DynamicBoundary in the registry.
+    // Verify Unary is classified as lowered in the registry because it emits
+    // DerefExpr, while retaining the independent boundary flag.
     let unary_disp =
         disposition::disposition_for("Unary").expect("Unary must have a disposition entry");
     assert_eq!(
         unary_disp.legacy_category(),
-        disposition::LegacyCategory::DynamicBoundary,
-        "Unary should be DynamicBoundary (not NotYetModeled): it emits DynamicBoundary \
-         for symbolic-ref deref when strict refs is disabled. \
-         This was a disagreement in the old hir_coverage.rs that is now reconciled."
+        disposition::LegacyCategory::Lowered,
+        "Unary should be Lowered: it emits DerefExpr for aggregate dereferences."
     );
+    assert!(unary_disp.emits_items, "Unary must have emits_items=true for DerefExpr");
     assert!(
         unary_disp.may_emit_boundary,
         "Unary must have may_emit_boundary=true: the lowerer emits DynamicBoundary \
          for ${{varname}} / @{{varname}} / etc. when strict refs is off."
     );
 
-    // Symbolic dereference without strict refs should emit DynamicBoundary.
-    // Note: lower_ast processes a file without `use strict`, so strict_refs is off.
-    let source = "my $name = 'foo'; my @arr = @{$name};";
+    // A statically string-valued dereference without strict refs should emit
+    // DynamicBoundary. Variable operands remain ordinary runtime dereferences
+    // because their values may be hard references.
+    let source = "my @arr = @{\"foo\"};";
     let mut parser = Parser::new(source);
     let output = parser.parse_with_recovery();
     let file = lower_ast(&output.ast);
@@ -263,9 +265,11 @@ fn hir_unary_is_dynamic_boundary_not_not_yet_modeled() {
             HirKind::DynamicBoundary(b) if b.kind == DynamicBoundaryKind::SymbolicReferenceDeref
         )
     });
+    let has_deref_expr = file.items.iter().any(|item| matches!(&item.kind, HirKind::DerefExpr(_)));
+    assert!(has_deref_expr, "Unary aggregate deref must emit a typed DerefExpr");
     assert!(
         has_symref_boundary,
-        "Unary symbolic-ref deref `@{{$name}}` must emit DynamicBoundary::SymbolicReferenceDeref \
+        "Unary symbolic-ref deref `@{{\"foo\"}}` must emit DynamicBoundary::SymbolicReferenceDeref \
          when strict refs is disabled.\n\
          HIR item count: {}\n\
          HIR kinds: {:?}",

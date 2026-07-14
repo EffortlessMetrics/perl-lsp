@@ -174,7 +174,7 @@ pub fn hir_kinds_for(ast_kind: &str) -> &'static [&'static str] {
         "LoopControl" => &["ControlTransfer"],
         "Goto" => &["ControlTransfer"],
         "StatementModifier" => &["StatementModifierShell"],
-        "Unary" => &["DynamicBoundary"],
+        "Unary" => &["DerefExpr", "DynamicBoundary"],
         _ => &[],
     }
 }
@@ -410,15 +410,16 @@ pub fn disposition_for(ast_kind: &str) -> Option<LoweringDisposition> {
             true,
             "Non-block `do` forms emit `DynamicBoundary`; block bodies traverse."
         ),
-        // Unary: symbolic-ref deref emits DynamicBoundary when strict refs is off;
+        // Unary: aggregate dereferences emit DerefExpr; symbolic-reference
+        // dereferences additionally emit DynamicBoundary when strict refs is off;
         // all paths visit the operand child.
         "Unary" => disp!(
-            false,
             true,
             true,
-            false,
             true,
-            "Symbolic reference dereference under no-strict-refs emits `DynamicBoundary`; operand always traversed."
+            true,
+            true,
+            "Aggregate dereferences emit `DerefExpr`; proven-symbolic dereferences (string-literal, `.`-concatenation, or interpolated-string operands) under no-strict-refs additionally emit `DynamicBoundary`; operand always traversed."
         ),
 
         // ── Intentionally skipped: traversal-only, metadata, or recovery ─────
@@ -759,7 +760,7 @@ mod tests {
             ("Assignment", LegacyCategory::DynamicBoundary),
             ("Eval", LegacyCategory::DynamicBoundary),
             ("Do", LegacyCategory::DynamicBoundary),
-            ("Unary", LegacyCategory::DynamicBoundary),
+            ("Unary", LegacyCategory::Lowered),
             ("Program", LegacyCategory::IntentionallySkipped),
             ("Variable", LegacyCategory::IntentionallySkipped),
             ("Error", LegacyCategory::IntentionallySkipped),
@@ -819,6 +820,7 @@ mod tests {
         // Spot-check a few documented mappings.
         assert_eq!(hir_kinds_for("Package"), &["PackageDecl"]);
         assert_eq!(hir_kinds_for("Eval"), &["DynamicBoundary"]);
+        assert!(hir_kinds_for("Unary").contains(&"DerefExpr"));
         assert!(hir_kinds_for("Unary").contains(&"DynamicBoundary"));
         // Unknown kinds report no HIR inventory.
         assert!(hir_kinds_for("ThisKindDoesNotExist").is_empty());
@@ -905,12 +907,16 @@ mod tests {
         assert!(!eval.records_side_facts, "Eval does not record side-facts");
         assert!(eval.is_intentional, "Eval classification must be intentional");
 
-        // `Unary` (symbolic-ref deref path): no items, may emit boundary, traverses operand.
+        // `Unary`: aggregate dereferences emit an item; symbolic-ref dereferences
+        // may additionally emit a boundary, and all paths traverse the operand.
         let unary = disposition_for("Unary").expect("Unary must have a disposition");
-        assert!(!unary.emits_items, "Unary must NOT emit a standalone HIR item");
+        assert!(unary.emits_items, "Unary must emit DerefExpr for aggregate dereferences");
         assert!(unary.may_emit_boundary, "Unary must be able to emit DynamicBoundary");
         assert!(unary.traverses_children, "Unary must traverse the operand child");
-        assert!(!unary.records_side_facts, "Unary does not record side-facts");
+        assert!(
+            unary.records_side_facts,
+            "Unary records compile-environment side-facts for symbolic-reference dereferences"
+        );
 
         // `Do`: non-block form emits boundary; both forms traverse.
         let do_ = disposition_for("Do").expect("Do must have a disposition");
