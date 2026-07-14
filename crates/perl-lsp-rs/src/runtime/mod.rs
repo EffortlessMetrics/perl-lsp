@@ -116,6 +116,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+use std::sync::atomic::AtomicU64;
 use std::sync::{
     Arc, Weak,
     atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
@@ -233,6 +235,9 @@ pub struct LspServer {
     /// the `initialized` gate fired, without needing to set up a real
     /// workspace on disk.
     pub(crate) workspace_indexing_invocation_count: Arc<std::sync::atomic::AtomicUsize>,
+    /// Test-only routing key for the workspace readiness receipt observer.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) readiness_receipt_observer_id: AtomicU64,
     /// Cache of extracted POD documentation keyed by resolved file path.
     pod_cache: Arc<Mutex<HashMap<PathBuf, PodCacheEntry>>>,
     /// Last provider-local decision receipt by provider name.
