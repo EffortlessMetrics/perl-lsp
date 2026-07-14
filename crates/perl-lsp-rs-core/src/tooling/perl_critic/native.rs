@@ -2755,7 +2755,7 @@ mod tests {
         assert!(!recommended_ids.contains(&"native.variables.unused_lexical"));
         assert!(!recommended_ids.contains(&"native.syntax.unquoted_bareword"));
         assert!(recommended_ids.len() < strict_ids.len());
-        assert_eq!(strict_ids.len(), NativeCriticRegistry::recommended().len());
+        assert_eq!(recommended_ids.len(), NativeCriticRegistry::recommended().len());
     }
 
     #[test]
@@ -4341,7 +4341,7 @@ mod tests {
         let ast = parse_source(source);
         let config = CriticConfig::default();
         let ctx = CriticContext::new(source, &ast, &config);
-        let registry = NativeCriticRegistry::recommended();
+        let registry = NativeCriticRegistry::for_profile(NativeCriticProfile::Recommended);
 
         let findings = registry.check(&ctx);
 
@@ -4363,19 +4363,7 @@ mod tests {
                 "native.security.qx_readpipe",
                 "native.security.backtick_exec",
                 "native.security.string_eval",
-                "native.security.system_exec",
-                "native.variables.unused_lexical",
-                "native.variables.unused_parameter",
-                "native.variables.duplicate_parameter",
-                "native.variables.parameter_shadows_global",
-                "native.variables.duplicate_lexical",
-                "native.variables.shadowed_lexical",
-                "native.regex.capture_without_match",
-                "native.variables.undeclared",
-                "native.variables.uninitialized",
-                "native.syntax.unquoted_bareword",
-                "native.documentation.require_pod_sections",
-                "native.syntax.prohibit_leading_zeros"
+                "native.security.system_exec"
             ]
         );
         assert_eq!(findings.len(), 2);
