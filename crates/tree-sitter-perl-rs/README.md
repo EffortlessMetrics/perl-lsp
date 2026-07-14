@@ -97,6 +97,23 @@ captures, multiple top-level patterns, and byte-range restriction. Query predica
 other unsupported tree-sitter query syntax return a typed `QueryError`; they are not
 silently ignored.
 
+### Incremental proof
+
+The repository-native proof command measures the one-edit token-replay contract against
+fresh parsing and writes a machine-readable receipt:
+
+```text
+cargo xtask tree-sitter-incremental-proof --profile pr
+cargo xtask tree-sitter-incremental-proof --profile nightly
+```
+
+The receipt records exact checkout/toolchain/input identity, fresh and replay p50/p95
+latency, bytes and tokens processed, fallback classification, and facade equivalence.
+The command compares S-expressions, node kinds, fields, spans, points, source text,
+diagnostics, and error status. The lower-tier `perl-parser-core` suite is the proof of
+complete replayed token-stream equivalence. These measurements do not claim AST subtree
+reuse or guarantee a replay speedup for every document size or edit class.
+
 ## Error tolerance
 
 The v3 parser is highly error-tolerant. `Parser::parse()` returns `Option<Tree>`:

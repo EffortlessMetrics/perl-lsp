@@ -3976,6 +3976,7 @@ dependencies = [
  "perl-parser",
  "perl-parser-core",
  "perl-parser-pest",
+ "perl-position-tracking",
  "perl-semantic-analyzer",
  "perl-semantic-facts",
  "perl-tdd-support",
@@ -3992,6 +3993,7 @@ dependencies = [
  "toml",
  "tree-sitter",
  "tree-sitter-perl-c",
+ "tree-sitter-perl-rs",
  "walkdir",
 ]
 

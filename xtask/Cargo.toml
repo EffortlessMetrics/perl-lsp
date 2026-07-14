@@ -36,11 +36,13 @@ console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
 perl-parser = { workspace = true, features = ["incremental"] }
 perl-parser-core = { workspace = true }
+perl-position-tracking = { workspace = true }
 perl-corpus = { workspace = true }
 perl-lsp-ux-tests = { workspace = true }
 perl-parser-pest = { workspace = true, optional = true }
 tree-sitter = { workspace = true }
 tree-sitter-perl-c = { path = "../crates/tree-sitter-perl-c", optional = true }
+tree-sitter-perl-rs = { workspace = true }
 regex.workspace = true
 serde_yaml_ng = "0.10.0"
 toml = "1.1.2"

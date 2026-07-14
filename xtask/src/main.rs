@@ -1408,6 +1408,18 @@ enum Commands {
         profile: Option<String>,
     },
 
+    /// Run deterministic fresh-vs-token-replay proof and write a machine-readable receipt.
+    #[command(name = "tree-sitter-incremental-proof")]
+    TreeSitterIncrementalProof {
+        /// Measurement profile controlling fixture breadth and iteration count.
+        #[arg(long, value_enum, default_value_t = incremental_proof::Profile::Pr)]
+        profile: incremental_proof::Profile,
+
+        /// Receipt JSON path. Defaults to target/receipts/tree-sitter-incremental-proof-<profile>.json.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
     /// Run upstream Perl core test harness against perl-lsp compiler modes.
     #[command(name = "perl-core-harness")]
     PerlCoreHarness {
@@ -3942,6 +3954,9 @@ fn run_cli(cli: Cli) -> Result<()> {
         } => parser_corpus_sweep::run(build_parser_corpus_sweep_config(
             roots, manifest, output, baseline, enforce, verbose, receipt, profile,
         )),
+        Commands::TreeSitterIncrementalProof { profile, output } => {
+            incremental_proof::run(profile, output)
+        }
         Commands::PerlCoreHarness { command } => match command {
             PerlCoreHarnessCommand::Prepare { perl_ref, output_dir } => {
                 perl_core_harness::prepare(perl_core_harness::PrepareConfig {
