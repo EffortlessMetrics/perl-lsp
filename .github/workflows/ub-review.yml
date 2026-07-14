@@ -22,7 +22,7 @@
 # can be warmed by Swatinem/rust-cache if needed (PR 2 scope).
 #
 # Action pin:
-#   EffortlessMetrics/ub-review@f70be0eae480456bad208a1a565e483bdadf4e3c
+#   EffortlessMetrics/ub-review@7abfb093a32bad67019f94b8d33bf04ec2b0621d
 #   README-documented known-good SHA; verified by EffortlessSteven/bun#49
 #   (successful evidence packet, terminal state `sufficient`, verifier pass).
 #   Update only after ub-review's own verifier passes on a downstream consumer.
@@ -265,7 +265,7 @@ jobs:
           fi
       - name: Build UB review packet
         id: ub-review
-        uses: EffortlessMetrics/ub-review@f70be0eae480456bad208a1a565e483bdadf4e3c
+        uses: EffortlessMetrics/ub-review@7abfb093a32bad67019f94b8d33bf04ec2b0621d
         with:
           config: policy/ub-review.toml
           profile: gh-runner
@@ -367,7 +367,7 @@ jobs:
           fi
       - name: Build UB review packet
         id: ub-review
-        uses: EffortlessMetrics/ub-review@f70be0eae480456bad208a1a565e483bdadf4e3c
+        uses: EffortlessMetrics/ub-review@7abfb093a32bad67019f94b8d33bf04ec2b0621d
         with:
           config: policy/ub-review.toml
           profile: gh-runner
@@ -454,7 +454,7 @@ jobs:
           fi
       - name: Build UB review packet
         id: ub-review
-        uses: EffortlessMetrics/ub-review@f70be0eae480456bad208a1a565e483bdadf4e3c
+        uses: EffortlessMetrics/ub-review@7abfb093a32bad67019f94b8d33bf04ec2b0621d
         with:
           config: policy/ub-review.toml
           profile: gh-runner
