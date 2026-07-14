@@ -134,6 +134,7 @@ pub mod semantic_scorecard;
 pub mod semantic_shadow_compare;
 pub mod semantic_token_classes;
 pub mod session_receipt;
+pub mod shadow_parity;
 pub mod srp_microcrates;
 pub mod staged;
 pub mod supported_editor_inline_smoke;

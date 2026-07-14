@@ -923,6 +923,24 @@ enum Commands {
         root: Option<PathBuf>,
     },
 
+    /// Shadow-parity measurement: compare the pre-push shell selector's
+    /// doc-only/single-crate taxonomy against `ci_scope::classify_files`'s
+    /// Rust taxonomy across a fixed corpus of 11 representative
+    /// changed-path scenarios (#3985 Slice 3B).
+    ///
+    /// MEASUREMENT ONLY — selects, skips, and routes nothing. `hooks/pre-push`
+    /// and `ci_scope.rs` are untouched; this command only reports where the
+    /// two selectors agree or differ, and in which direction, to feed the
+    /// maintainer's pending coverage decision (see #3985 comments).
+    ///
+    /// Example: `cargo xtask change-set-parity --format markdown`
+    ChangeSetParity {
+        /// Output format: `text` (default, human-readable), `markdown` (the
+        /// committed-report table shape), or `json`.
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+
     /// Emit a markdown PR gate summary (dry-run: stdout only, no GitHub posting).
     ///
     /// Computes what CI would run for the current branch diff against `--base`,
@@ -3804,6 +3822,9 @@ fn run_cli(cli: Cli) -> Result<()> {
         }
         Commands::ChangeSet { base, head, format, root } => {
             change_set::run(change_set::ChangeSetConfig { base, head, format, root })
+        }
+        Commands::ChangeSetParity { format } => {
+            shadow_parity::run(shadow_parity::ShadowParityConfig { format })
         }
         Commands::CiPrSummary { base, dry_run } => {
             ci_pr_summary::run(ci_pr_summary::CiPrSummaryConfig { base, dry_run })
