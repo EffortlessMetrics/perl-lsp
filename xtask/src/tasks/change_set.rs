@@ -1,46 +1,43 @@
 //! Change-set resolver — a pure library seam for issue #3985.
 //!
-//! This module is the SINGLE base-resolver + SINGLE `git diff` that later
-//! slices of #3985 will repoint `ci_scope`/`targeted_checks`/the pre-push
-//! hook at. **This slice has zero consumers** — `resolve_change_set` is not
-//! called from any production path (no CLI subcommand, no wiring into
-//! `gates.rs` or `ci_scope.rs`). It exists here, fully tested in isolation,
-//! so a later slice can repoint existing call sites with a falsifiable
-//! parity test instead of introducing a new classifier and a new resolver
-//! in the same change.
+//! This module is the SINGLE base-resolver + SINGLE `git diff` shared by
+//! `ci_scope::run`, `gates::compute_scope_output`/`select_scope_base`, and
+//! `targeted_checks::run` (#3985 Slice 2 repointed all three onto
+//! [`resolve_change_set`] — see the falsifiable parity corpus in this
+//! module's test suite, `tests::test_parity_*` (doc-only, single-crate,
+//! multi-crate, mixed, ci-config, a deletion, a rename), which pins that
+//! the repoint is zero-behavior-change on real diff fixtures). The
+//! pre-push hook migration is a later slice.
 //!
 //! # Why not `origin/master`
 //!
 //! `origin/master` does not exist on this remote (verified via `git
 //! ls-remote --heads origin master`; `refs/remotes/origin/HEAD` points at
 //! `origin/main`). [`resolve_base_ref`] therefore never includes
-//! `origin/master` in its candidate chain — unlike `ci_scope::resolve_base_ref`
-//! (`xtask/src/tasks/ci_scope.rs`), which still carries it as a historical
-//! fallback. Per #3985: prefer the canonical `origin/main` and fail loudly
-//! when no canonical base resolves, rather than silently resolving a stray
+//! `origin/master` in its candidate chain. **Historical note:** prior to
+//! #3985 Slice 2, `ci_scope::resolve_base_ref` and
+//! `targeted_checks::resolve_base_ref` — private per-consumer copies of
+//! this same resolver, both deleted by this PR now that `ci_scope::run`
+//! and `targeted_checks::run` call [`resolve_change_set`] instead — still
+//! carried `origin/master` as a fallback candidate; this module never did.
+//! Per #3985: prefer the canonical `origin/main` and fail loudly when no
+//! canonical base resolves, rather than silently resolving a stray
 //! `origin/master`-shaped ref if one is ever recreated on the remote.
 //!
 //! # Composition, not duplication
 //!
-//! - The base-ref candidate chain and three-dot `git diff` mirror
-//!   `ci_scope::resolve_base_ref` / `ci_scope::get_changed_files`
-//!   (`xtask/src/tasks/ci_scope.rs:812-890`), reordered to drop
+//! - The base-ref candidate chain and three-dot `git diff` mirror what
+//!   `ci_scope::resolve_base_ref` / `ci_scope::get_changed_files` and
+//!   `targeted_checks::resolve_base_ref` / `targeted_checks::changed_files`
+//!   used to do before #3985 Slice 2 deleted all four (now dead code —
+//!   `ci_scope::run`/`targeted_checks::run` call [`resolve_change_set`]
+//!   directly); this module's shape was reordered from theirs to drop
 //!   `origin/master` from the candidates.
 //! - The `StagedTree` arm composes `staged::staged_diff_paths` and
 //!   `staged::diff_base` (`xtask/src/tasks/staged.rs`) rather than
 //!   reimplementing staged-tree diffing.
 //! - `ci_scope::classify_files` / `ScopeOutput` are untouched — this module
 //!   is only the input seam (identity → changed paths), not a classifier.
-//!
-//! # `dead_code` for this slice only
-//!
-//! Every public item here is unreachable from any production call path by
-//! design (see the module-level intent above). The crate-wide `dead_code`
-//! lint would otherwise flag the whole module on a non-test build. Slice 2
-//! of #3985 repoints `ci_scope`/`targeted_checks`/`gates` at this module,
-//! at which point this allow should be removed — leaving it in place would
-//! silently mask a genuinely-unused item again.
-#![allow(dead_code)]
 
 use std::path::Path;
 
@@ -55,11 +52,20 @@ use crate::tasks::staged;
 pub enum ArtifactIdentity {
     /// A base/head commit-ish pair. `base == "auto"` triggers the
     /// main-first candidate chain in [`resolve_base_ref`]; any other value
-    /// is tried first, then the chain is used as a fallback (mirroring
-    /// `ci_scope::resolve_base_ref`'s behavior).
+    /// is treated as an **explicit** base and must resolve on its own —
+    /// see [`resolve_base_ref`]'s doc comment for why an unresolvable
+    /// explicit base is a loud [`Err`], never a silent substitution.
     CommitRange { base: String, head: String },
     /// A staged-tree OID as produced by `git write-tree` /
     /// `staged::staged_tree_oid` — the commit-tier identity (#3786).
+    ///
+    /// `#[allow(dead_code)]`: no production call site constructs this
+    /// variant yet — #3985 Slice 2 repoints only the `CommitRange`
+    /// (base/HEAD diff) consumers (`ci_scope`, `gates`, `targeted_checks`).
+    /// Wiring `StagedTree` into the commit-tier gate path (#3786) is a
+    /// later slice; this variant is exercised today only by this module's
+    /// own unit tests (`test_resolve_change_set_staged_tree_*`).
+    #[allow(dead_code)]
     StagedTree { oid: String },
 }
 
@@ -132,27 +138,58 @@ pub fn resolve_change_set(identity: ArtifactIdentity, root: &Path) -> Result<Cha
 /// -less-history fallback).
 const BASE_CANDIDATES: [&str; 3] = ["origin/main", "main", "HEAD~1"];
 
-/// Resolve a base ref: an explicit non-`"auto"` `base` is tried first (and
-/// used if it exists), then [`BASE_CANDIDATES`] in order. Returns a loud
-/// [`Err`] — never a silent `origin/master` — when nothing resolves.
+/// Resolve a base ref.
+///
+/// `base == "auto"` walks [`BASE_CANDIDATES`] in order and returns the
+/// first that exists.
+///
+/// An **explicit** (non-`"auto"`) `base` must resolve **on its own** —
+/// it is never silently substituted with a [`BASE_CANDIDATES`] entry.
+/// This is a deliberate safety contract, not an oversight: callers that
+/// pass an explicit base (a `--base` CLI flag, `$CI_SCOPE_BASE`, an
+/// unvalidated `config.base_ref` threaded through
+/// `gates::plan_gates`/`plan_pr_fast_gates`) rely on a loud [`Err`] here
+/// to trigger their own safety net — e.g. `plan_pr_fast_gates` catches
+/// this error and falls back to the broad `rust_fallback` gate plan
+/// rather than silently running PR-fast against a narrower, unintended
+/// scope. #3985 Slice 2 review (PR #4153) caught a version of this
+/// function that fell through to [`BASE_CANDIDATES`] on an unresolvable
+/// explicit base — reproducible as
+/// `resolve_base_ref("origin/definitely-not-fetched", repo)` silently
+/// returning `Ok("origin/main")` — which defeated that safety net for
+/// any caller supplying an unfetched/typo'd explicit base. Never
+/// silently falls back to `origin/master` either way (issue #3985: that
+/// ref does not exist on this remote).
 fn resolve_base_ref(base: &str, root: &Path) -> Result<String> {
-    let mut candidates = Vec::new();
     if base != "auto" {
-        candidates.push(base.to_string());
+        if git_ref_exists(base, root)? {
+            return Ok(base.to_string());
+        }
+        eprintln!(
+            "Warning: explicit base ref '{base}' does not exist; refusing to substitute a \
+             different base (a caller-supplied base must resolve on its own — see #3985 \
+             Slice 2 review, PR #4153)."
+        );
+        return Err(eyre!(
+            "Explicit base ref '{base}' does not exist. Refusing to silently fall back to \
+             {BASE_CANDIDATES:?} for an explicitly-requested base — an explicit base must \
+             resolve on its own, so callers with their own safety net (e.g. \
+             `plan_pr_fast_gates`'s `rust_fallback` broad-plan fallback) see this error \
+             rather than a silently-narrowed scope."
+        ));
     }
-    candidates.extend(BASE_CANDIDATES.iter().map(|s| (*s).to_string()));
 
-    for candidate in candidates {
-        if git_ref_exists(&candidate, root)? {
-            return Ok(candidate);
+    for candidate in BASE_CANDIDATES {
+        if git_ref_exists(candidate, root)? {
+            return Ok(candidate.to_string());
         }
     }
 
     Err(eyre!(
-        "Could not resolve a canonical base ref from '{base}', origin/main, main, or HEAD~1. \
-         Refusing to fall back to origin/master (issue #3985: that ref does not exist on this \
-         remote, and must never be a silent fallback). Ensure the repository has origin/main \
-         reachable, a local main branch, or at least two commits of history."
+        "Could not resolve a canonical base ref from auto-resolution: origin/main, main, or \
+         HEAD~1. Refusing to fall back to origin/master (issue #3985: that ref does not exist \
+         on this remote, and must never be a silent fallback). Ensure the repository has \
+         origin/main reachable, a local main branch, or at least two commits of history."
     ))
 }
 
@@ -189,8 +226,9 @@ fn resolve_sha(reference: &str, root: &Path) -> Result<String> {
 
 /// Changed paths between `base` and `head`: three-dot (`base...head`,
 /// merge-base relative) first, falling back to two-dot (`base..head`,
-/// direct) when the three-dot form fails — mirrors
-/// `ci_scope::get_changed_files`.
+/// direct) when the three-dot form fails — the same shape the deleted
+/// `ci_scope::get_changed_files` / `targeted_checks::changed_files` used
+/// before #3985 Slice 2 repointed both onto this function.
 fn diff_paths(base: &str, head: &str, root: &Path) -> Result<Vec<String>> {
     let three_dot = format!("{base}...{head}");
     let output = cmd("git", &["diff", "--name-only", &three_dot])
@@ -252,7 +290,11 @@ mod tests {
     }
 
     fn commit_file(dir: &Path, name: &str, contents: &str, message: &str) -> Result<()> {
-        fs::write(dir.join(name), contents).context("failed to write fixture file")?;
+        let path = dir.join(name);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).context("failed to create fixture file parent dir")?;
+        }
+        fs::write(&path, contents).context("failed to write fixture file")?;
         run_git(dir, &["add", name])?;
         run_git(dir, &["commit", "-q", "-m", message])?;
         Ok(())
@@ -450,7 +492,8 @@ mod tests {
     /// `main`) git fails it outright (`fatal: ... no merge base`), which is
     /// exactly the failure `diff_paths` is documented to fall back from.
     /// Without this test the two-dot fallback branch — the one place this
-    /// module deliberately mirrors `ci_scope::get_changed_files`'s fallback
+    /// module deliberately mirrors the shape the deleted
+    /// `ci_scope::get_changed_files` used to fall back on
     /// — had zero coverage; a change that silently dropped the fallback
     /// (or swapped which paths it reports) would still pass every other
     /// test in this file.
@@ -474,5 +517,263 @@ mod tests {
         let expected = vec!["orphan.txt".to_string()];
         ensure!(paths == expected, "expected {expected:?}, got {paths:?}");
         Ok(())
+    }
+
+    // -----------------------------------------------------------------
+    // #3985 Slice 2 — falsifiable parity: repointed resolver vs the
+    // pre-repoint per-consumer logic it replaces
+    // -----------------------------------------------------------------
+    //
+    // Before Slice 2, `ci_scope::run`, `gates::compute_scope_output` /
+    // `select_scope_base`, and `targeted_checks::run` each carried a
+    // private base-candidate chain + `git diff --name-only` call instead
+    // of calling `resolve_change_set`. This corpus proves the shared
+    // resolver produces the IDENTICAL resolved base ref, base SHA, and
+    // changed-path set as those frozen pre-repoint chains, across real
+    // diff shapes (doc-only, single-crate, multi-crate, mixed, ci-config,
+    // a deletion, a rename) — falsifying "the repoint is zero-behavior-
+    // change" rather than assuming it.
+    //
+    // Mutation-checked (verified red, then reverted, before landing):
+    // - Reordering `BASE_CANDIDATES` to try `"main"` before `"origin/main"`
+    //   makes `test_parity_single_crate_change` fail: `init_repo_with_origin_main`
+    //   creates both a local `main` branch and an `origin/main`
+    //   remote-tracking ref pointing at the same commit, so the pre-repoint
+    //   chains (which try `origin/main` first) resolve to the ref string
+    //   `"origin/main"`, while the reordered resolver would resolve to
+    //   `"main"` — same commit, different ref string, caught by the
+    //   `resolved_base == ci_scope_style_base` assertion below.
+    // - Adding `--diff-filter=ACMR` to `diff_paths`'s `git diff` invocation
+    //   makes `test_parity_deletion_is_visible` fail: that fixture's diff
+    //   contains only a deleted file, so `ACMR` (which excludes `D`) reports
+    //   zero changed paths against the pre-repoint chain's non-empty result
+    //   — this is the exact RIPR `ACMR`-vs-`ACDMRT` regression class
+    //   #3985's diff-filter audit comment flags; this slice deliberately
+    //   does not touch `ripr_evidence.rs`, and this test is the guard that
+    //   `diff_paths` itself never silently grows a filter.
+
+    /// Frozen copy of `ci_scope::resolve_base_ref` /
+    /// `targeted_checks::resolve_base_ref`'s pre-repoint candidate chain —
+    /// the two were byte-identical (main-first, but still carrying
+    /// `origin/master`/`master`). Independent of [`BASE_CANDIDATES`] above
+    /// by construction: this does not call `resolve_base_ref` or any other
+    /// production resolver, it re-derives the chain from the pre-repoint
+    /// source (see #3985's architecture-review comment for the citation:
+    /// `ci_scope.rs:812-841` / `targeted_checks.rs:28-63` before this PR).
+    fn pre_repoint_ci_scope_style_base(base: &str, root: &Path) -> Result<String> {
+        let mut candidates = Vec::new();
+        if base != "auto" {
+            candidates.push(base.to_string());
+        }
+        candidates.extend(
+            ["origin/main", "origin/master", "main", "master", "HEAD~1"]
+                .into_iter()
+                .map(str::to_string),
+        );
+        for candidate in candidates {
+            if git_ref_exists(&candidate, root)? {
+                return Ok(candidate);
+            }
+        }
+        Err(eyre!("pre-repoint ci_scope-style resolution found no candidate"))
+    }
+
+    /// Frozen copy of `gates::select_scope_base`'s pre-repoint static
+    /// fallback chain (env-var candidates — `CI_SCOPE_BASE`,
+    /// `GITHUB_BASE_REF` — omitted: they are unset in this test process,
+    /// and remain gates-local post-repoint too; see
+    /// `gates::select_scope_base`'s doc comment). This chain was
+    /// **master-first** (`fn select_scope_base` at
+    /// `git show 465ceceab~1:xtask/src/tasks/gates.rs:1780`, candidate
+    /// array at line 1788 of that same pre-repoint blob — verified by
+    /// SHA-anchored `git show`, not a plain line number against the
+    /// current tree, since those drift; the architecture-review comment's
+    /// original `gates.rs:1499` citation had already drifted onto an
+    /// unrelated `Receipt` struct field by the time this PR was built) —
+    /// the exact ordering #3985's architecture-review
+    /// comment flagged as a latent conflict with `ci_scope`'s main-first
+    /// chain, resolved here by proving both chains agree on the live
+    /// repository (`origin/master`
+    /// absent) before asserting parity against the shared resolver.
+    fn pre_repoint_gates_style_base(root: &Path) -> Result<String> {
+        let candidates =
+            ["origin/master", "origin/main", "origin/HEAD", "master", "main", "HEAD~1"];
+        for candidate in candidates {
+            if git_ref_exists(candidate, root)? {
+                return Ok(candidate.to_string());
+            }
+        }
+        Err(eyre!("pre-repoint gates-style resolution found no candidate"))
+    }
+
+    /// Frozen, **independent** copy of the pre-repoint three-dot/two-dot
+    /// diff shape shared by `ci_scope::get_changed_files` and
+    /// `targeted_checks::changed_files` (byte-identical to each other, and
+    /// to `diff_paths` above — the diff-filter audit on #3985 confirmed
+    /// neither carried a `--diff-filter`). Deliberately does **not** call
+    /// [`diff_paths`]: if it did, mutating `diff_paths`'s `git diff`
+    /// invocation (e.g. adding `--diff-filter=ACMR`) would silently
+    /// mutate both sides of the parity assertion below and the corpus
+    /// would never catch it. This function is what makes
+    /// `test_parity_deletion_is_visible` a real regression guard against
+    /// that class of change rather than a tautology.
+    fn pre_repoint_diff(base: &str, head: &str, root: &Path) -> Result<Vec<String>> {
+        let three_dot = format!("{base}...{head}");
+        let output = cmd("git", &["diff", "--name-only", &three_dot])
+            .dir(root)
+            .stdout_capture()
+            .stderr_capture()
+            .unchecked()
+            .run()
+            .context("Failed to run git diff (pre-repoint style)")?;
+
+        if output.status.success() {
+            let stdout =
+                String::from_utf8(output.stdout).context("git diff output was not valid UTF-8")?;
+            return Ok(stdout.lines().map(str::to_string).collect());
+        }
+
+        let two_dot = format!("{base}..{head}");
+        let output2 = cmd("git", &["diff", "--name-only", &two_dot])
+            .dir(root)
+            .stdout_capture()
+            .stderr_capture()
+            .run()
+            .context("Failed to run git diff (pre-repoint style, two-dot fallback)")?;
+        let stdout =
+            String::from_utf8(output2.stdout).context("git diff output was not valid UTF-8")?;
+        Ok(stdout.lines().map(str::to_string).collect())
+    }
+
+    /// Assert that, for the current state of `repo`, the shared
+    /// `resolve_change_set("auto", "HEAD")` result is IDENTICAL — same
+    /// resolved base ref, same base SHA, same changed-path set — to both
+    /// pre-repoint candidate chains' output (base resolution) and the
+    /// independent [`pre_repoint_diff`] reimplementation (changed paths).
+    /// `ci_scope::classify_files` output is a pure function of
+    /// `(changed_files, metadata, workspace_root)`, so identical
+    /// `changed_paths` here implies identical `ScopeOutput` without
+    /// needing a separate classify_files fixture per scenario.
+    fn assert_parity_with_pre_repoint_logic(scenario: &str, repo: &Path) -> Result<()> {
+        let ci_scope_style_base = pre_repoint_ci_scope_style_base("auto", repo)?;
+        let gates_style_base = pre_repoint_gates_style_base(repo)?;
+        ensure!(
+            ci_scope_style_base == gates_style_base,
+            "[{scenario}] pre-repoint chains disagree on base ref \
+             (ci_scope-style: {ci_scope_style_base}, gates-style: {gates_style_base}) — \
+             this fixture cannot prove parity against a single shared resolver"
+        );
+
+        let mut pre_repoint_paths = pre_repoint_diff(&ci_scope_style_base, "HEAD", repo)?;
+        pre_repoint_paths.sort();
+        let expected_base_sha = resolve_sha(&ci_scope_style_base, repo)?;
+
+        let identity =
+            ArtifactIdentity::CommitRange { base: "auto".to_string(), head: "HEAD".to_string() };
+        let resolved = resolve_change_set(identity, repo)?;
+        let resolved_base = match &resolved.identity {
+            ArtifactIdentity::CommitRange { base, .. } => base.clone(),
+            other => {
+                return Err(eyre!("[{scenario}] expected CommitRange identity, got {other:?}"));
+            }
+        };
+        let mut new_paths = resolved.changed_paths.clone();
+        new_paths.sort();
+
+        ensure!(
+            resolved_base == ci_scope_style_base,
+            "[{scenario}] resolved base diverged: pre-repoint '{ci_scope_style_base}' vs repointed '{resolved_base}'"
+        );
+        ensure!(
+            resolved.base_sha.as_deref() == Some(expected_base_sha.as_str()),
+            "[{scenario}] base_sha diverged: expected {expected_base_sha:?}, got {:?}",
+            resolved.base_sha
+        );
+        ensure!(
+            new_paths == pre_repoint_paths,
+            "[{scenario}] changed-path sets diverged: pre-repoint {pre_repoint_paths:?} vs repointed {new_paths:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parity_doc_only_change() -> Result<()> {
+        let tmp = tempfile::tempdir().context("failed to create tempdir")?;
+        let repo = init_repo_with_origin_main(tmp.path())?;
+        run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
+        commit_file(&repo, "docs/CHANGES.md", "release notes\n", "docs: update changelog")?;
+        assert_parity_with_pre_repoint_logic("doc_only", &repo)
+    }
+
+    #[test]
+    fn test_parity_single_crate_change() -> Result<()> {
+        let tmp = tempfile::tempdir().context("failed to create tempdir")?;
+        let repo = init_repo_with_origin_main(tmp.path())?;
+        run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
+        commit_file(&repo, "crates/perl-parser/src/lib.rs", "pub fn parse() {}\n", "feat: parse")?;
+        assert_parity_with_pre_repoint_logic("single_crate", &repo)
+    }
+
+    #[test]
+    fn test_parity_multi_crate_change() -> Result<()> {
+        let tmp = tempfile::tempdir().context("failed to create tempdir")?;
+        let repo = init_repo_with_origin_main(tmp.path())?;
+        run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
+        commit_file(&repo, "crates/perl-parser/src/lib.rs", "pub fn parse() {}\n", "feat: parse")?;
+        commit_file(&repo, "crates/perl-lsp/src/lib.rs", "pub fn serve() {}\n", "feat: serve")?;
+        assert_parity_with_pre_repoint_logic("multi_crate", &repo)
+    }
+
+    #[test]
+    fn test_parity_mixed_change() -> Result<()> {
+        let tmp = tempfile::tempdir().context("failed to create tempdir")?;
+        let repo = init_repo_with_origin_main(tmp.path())?;
+        run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
+        commit_file(&repo, "crates/perl-parser/src/lib.rs", "pub fn parse() {}\n", "feat: parse")?;
+        commit_file(&repo, "docs/reference/STABILITY.md", "stability notes\n", "docs: stability")?;
+        commit_file(&repo, ".github/workflows/ci.yml", "name: CI\n", "ci: workflow tweak")?;
+        assert_parity_with_pre_repoint_logic("mixed", &repo)
+    }
+
+    #[test]
+    fn test_parity_ci_config_only_change() -> Result<()> {
+        let tmp = tempfile::tempdir().context("failed to create tempdir")?;
+        let repo = init_repo_with_origin_main(tmp.path())?;
+        run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
+        commit_file(&repo, ".github/workflows/ci.yml", "name: CI\n", "ci: workflow tweak")?;
+        commit_file(&repo, "justfile", "default:\n\techo hi\n", "ci: justfile tweak")?;
+        assert_parity_with_pre_repoint_logic("ci_config", &repo)
+    }
+
+    #[test]
+    fn test_parity_deletion_is_visible() -> Result<()> {
+        let tmp = tempfile::tempdir().context("failed to create tempdir")?;
+        let repo = init_repo_with_origin_main(tmp.path())?;
+        commit_file(&repo, "crates/perl-parser/src/legacy.rs", "pub fn old() {}\n", "add legacy")?;
+        run_git(&repo, &["push", "-q", "origin", "main"])?;
+        run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
+        run_git(&repo, &["rm", "-q", "crates/perl-parser/src/legacy.rs"])?;
+        run_git(&repo, &["commit", "-q", "-m", "remove legacy module"])?;
+        assert_parity_with_pre_repoint_logic("deletion", &repo)
+    }
+
+    #[test]
+    fn test_parity_rename_is_visible() -> Result<()> {
+        let tmp = tempfile::tempdir().context("failed to create tempdir")?;
+        let repo = init_repo_with_origin_main(tmp.path())?;
+        commit_file(
+            &repo,
+            "crates/perl-parser/src/old_name.rs",
+            "pub fn f() { /* padding to help rename detection match content */ }\n",
+            "add old_name",
+        )?;
+        run_git(&repo, &["push", "-q", "origin", "main"])?;
+        run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
+        run_git(
+            &repo,
+            &["mv", "crates/perl-parser/src/old_name.rs", "crates/perl-parser/src/new_name.rs"],
+        )?;
+        run_git(&repo, &["commit", "-q", "-m", "rename module"])?;
+        assert_parity_with_pre_repoint_logic("rename", &repo)
     }
 }

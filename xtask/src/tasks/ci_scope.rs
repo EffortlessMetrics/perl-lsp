@@ -17,6 +17,8 @@ use color_eyre::eyre::{Context, Result, eyre};
 use duct::cmd;
 use serde::{Deserialize, Serialize};
 
+use crate::tasks::change_set::{self, ArtifactIdentity};
+
 // ---------------------------------------------------------------------------
 // Public output types (schema_version 2)
 // ---------------------------------------------------------------------------
@@ -778,11 +780,29 @@ pub struct CiScopeConfig {
 }
 
 /// Entry point called from xtask main.
+///
+/// Base resolution and the changed-path diff are delegated to the shared
+/// `change_set::resolve_change_set` resolver (#3985 Slice 2) rather than a
+/// private copy of the main-first candidate chain + three-dot/two-dot diff.
+/// `classify_files`/`ScopeOutput` below remain the untouched classification
+/// brain — this function only supplies their `changed_files` input.
 pub fn run(config: CiScopeConfig) -> Result<()> {
     let root = crate::utils::project_root()?;
-    let base_ref = resolve_base_ref(&config.base, &root)?;
-    let head_sha = get_head_sha(&root)?;
-    let changed_files = get_changed_files(&base_ref, &root)?;
+    let identity =
+        ArtifactIdentity::CommitRange { base: config.base.clone(), head: "HEAD".to_string() };
+    let resolved = change_set::resolve_change_set(identity, &root)?;
+    let base_ref = match resolved.identity {
+        ArtifactIdentity::CommitRange { base, .. } => base,
+        ArtifactIdentity::StagedTree { .. } => {
+            return Err(eyre!(
+                "resolve_change_set returned a StagedTree identity for a CommitRange input"
+            ));
+        }
+    };
+    let head_sha = resolved
+        .head_sha
+        .ok_or_else(|| eyre!("resolve_change_set did not resolve a head SHA for CommitRange"))?;
+    let changed_files = resolved.changed_paths;
     let metadata = load_metadata(&root)?;
     let workspace_root = root.to_string_lossy().replace('\\', "/");
 
@@ -806,88 +826,16 @@ pub fn run(config: CiScopeConfig) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Git + cargo helpers for the live CLI path
+// Cargo helpers for the live CLI path
 // ---------------------------------------------------------------------------
-
-fn resolve_base_ref(base: &str, root: &Path) -> Result<String> {
-    let mut candidates = Vec::new();
-    if base != "auto" {
-        candidates.push(base.to_string());
-    }
-    // NOTE: HEAD is intentionally excluded from the fallback chain.
-    // Using HEAD as a base ref causes `git diff HEAD...HEAD` to return an
-    // empty file list, which silently reports zero changed files and causes
-    // all CI lanes to be skipped — a false-negative worse than an error.
-    candidates.extend(
-        ["origin/main", "origin/master", "main", "master", "HEAD~1"]
-            .into_iter()
-            .map(str::to_string),
-    );
-
-    for candidate in candidates {
-        if git_ref_exists(&candidate, root)? {
-            if base != "auto" && candidate != base {
-                eprintln!("Warning: base ref '{}' not found; using fallback '{}'", base, candidate);
-            }
-            return Ok(candidate);
-        }
-    }
-
-    Err(color_eyre::eyre::eyre!(
-        "Could not resolve a valid base ref from '{}', origin/main, origin/master, main, master, or HEAD~1. \
-         Ensure the repository has at least one commit and the remote is reachable.",
-        base
-    ))
-}
-
-fn git_ref_exists(candidate: &str, root: &Path) -> Result<bool> {
-    let verify = cmd("git", &["rev-parse", "--verify", candidate])
-        .dir(root)
-        .stdout_null()
-        .stderr_null()
-        .unchecked()
-        .run()
-        .context("Failed to run git rev-parse")?;
-    Ok(verify.status.success())
-}
-
-fn get_head_sha(root: &Path) -> Result<String> {
-    let output = cmd("git", &["rev-parse", "HEAD"])
-        .dir(root)
-        .stdout_capture()
-        .stderr_null()
-        .run()
-        .context("Failed to get HEAD SHA")?;
-    Ok(String::from_utf8(output.stdout).context("HEAD SHA was not valid UTF-8")?.trim().to_string())
-}
-
-fn get_changed_files(base_ref: &str, root: &Path) -> Result<Vec<String>> {
-    let diff_spec = format!("{base_ref}...HEAD");
-    let output = cmd("git", &["diff", "--name-only", &diff_spec])
-        .dir(root)
-        .stdout_capture()
-        .stderr_capture()
-        .unchecked()
-        .run()
-        .context("Failed to run git diff")?;
-
-    if !output.status.success() {
-        // Two-dot fallback
-        let diff_spec_two = format!("{base_ref}..HEAD");
-        let output2 = cmd("git", &["diff", "--name-only", &diff_spec_two])
-            .dir(root)
-            .stdout_capture()
-            .stderr_capture()
-            .run()
-            .context("Failed to run git diff (two-dot fallback)")?;
-        let stdout =
-            String::from_utf8(output2.stdout).context("git diff output was not valid UTF-8")?;
-        return Ok(stdout.lines().map(|l| l.to_string()).collect());
-    }
-
-    let stdout = String::from_utf8(output.stdout).context("git diff output was not valid UTF-8")?;
-    Ok(stdout.lines().map(|l| l.to_string()).collect())
-}
+//
+// Base-ref resolution and the changed-path diff used to be duplicated here
+// (`resolve_base_ref`/`git_ref_exists`/`get_head_sha`/`get_changed_files`).
+// #3985 Slice 2 repointed `run()` above onto the shared
+// `change_set::resolve_change_set` resolver and removed the duplicates —
+// see `xtask/src/tasks/change_set.rs` for the single base-resolver +
+// single `git diff` they now share with `gates::compute_scope_output` and
+// `targeted_checks::run`.
 
 fn load_metadata(root: &Path) -> Result<serde_json::Value> {
     let output = cmd("cargo", &["metadata", "--format-version", "1"])

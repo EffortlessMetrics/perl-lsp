@@ -18,7 +18,7 @@
 //! ```
 
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::{Context, Result, bail};
+use color_eyre::eyre::{Context, Result, bail, eyre};
 use console::{Style, Term};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -32,6 +32,7 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::tasks::change_set::{self, ArtifactIdentity};
 use crate::tasks::ci_scope::{self, ScopeOutput};
 use crate::tasks::git_context::git_stdout_with_worktree_fallback;
 use crate::utils::project_root;
@@ -1752,15 +1753,26 @@ fn is_latest_commit(root: &Path) -> bool {
     }
 }
 
+/// Compute the receipt scope for an already-resolved `base` ref.
+///
+/// The changed-path diff is delegated to `change_set::resolve_change_set`
+/// (#3985 Slice 2) instead of a private `git diff --name-only {base}...HEAD`
+/// call — `base` here is always a concrete, already-existing ref (resolved
+/// by [`select_scope_base`]), so `resolve_change_set`'s `base != "auto"`
+/// arm tries it first and returns it unchanged; the shared resolver's
+/// two-dot fallback is a strict safety-net addition (unreachable for any
+/// ancestor-related base, which every `select_scope_base` candidate is).
+/// `ci_scope::classify_files`/`ScopeOutput` remain the untouched
+/// classification brain.
 fn compute_scope_output(root: &Path, base: &str) -> Result<ScopeOutput> {
-    let changed_files = cmd("git", ["diff", "--name-only", &format!("{base}...HEAD")])
-        .dir(root)
-        .read()
-        .with_context(|| format!("Failed to read changed files for base '{base}'"))?
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(std::string::ToString::to_string)
-        .collect::<Vec<_>>();
+    let identity =
+        ArtifactIdentity::CommitRange { base: base.to_string(), head: "HEAD".to_string() };
+    let resolved = change_set::resolve_change_set(identity, root)
+        .with_context(|| format!("Failed to read changed files for base '{base}'"))?;
+    let changed_files = resolved.changed_paths;
+    let head_sha = resolved
+        .head_sha
+        .ok_or_else(|| eyre!("resolve_change_set did not resolve a head SHA for CommitRange"))?;
 
     let metadata_raw = cmd("cargo", ["metadata", "--format-version=1", "--no-deps"])
         .dir(root)
@@ -1772,24 +1784,33 @@ fn compute_scope_output(root: &Path, base: &str) -> Result<ScopeOutput> {
     let workspace_root = root.to_string_lossy().replace('\\', "/");
     let mut scope = ci_scope::classify_files(&changed_files, &metadata, &workspace_root)?;
     scope.base = base.to_string();
-    scope.head_sha = cmd("git", ["rev-parse", "HEAD"]).dir(root).read()?.trim().to_string();
+    scope.head_sha = head_sha;
     scope.changed_files = changed_files;
     Ok(scope)
 }
 
+/// Resolve the base ref used for PR-fast scope computation.
+///
+/// The CI-context-specific candidates (`CI_SCOPE_BASE`, `GITHUB_BASE_REF`)
+/// stay local to this function — they are not part of the generic
+/// mechanical chain `change_set::resolve_change_set` owns. Once those are
+/// exhausted, the generic main-first fallback chain (previously a private
+/// `["origin/master", "origin/main", "origin/HEAD", "master", "main",
+/// "HEAD~1"]` copy here) is delegated to the shared resolver (#3985 Slice
+/// 2) via `base: "auto"`, dropping the stale `origin/master`/`master`
+/// candidates the shared resolver deliberately never tries. `origin/master`
+/// does not exist on this remote (verified in `change_set.rs`'s module
+/// docs), so on the live repository this candidate list already resolved
+/// to `origin/main` before this change and still does — see the parity
+/// test in `change_set.rs`. Falls back to `"HEAD"` (not an error) when
+/// nothing resolves, matching the prior behavior of this function.
 fn select_scope_base(root: &Path) -> String {
     let env_candidates = [
         std::env::var("CI_SCOPE_BASE").ok(),
         std::env::var("GITHUB_BASE_REF").ok().map(|name| format!("origin/{name}")),
         std::env::var("GITHUB_BASE_REF").ok(),
     ];
-    let mut candidates: Vec<String> = env_candidates.into_iter().flatten().collect();
-    candidates.extend(
-        ["origin/master", "origin/main", "origin/HEAD", "master", "main", "HEAD~1"]
-            .into_iter()
-            .map(str::to_string),
-    );
-    for candidate in candidates {
+    for candidate in env_candidates.into_iter().flatten() {
         // Suppress stderr: in shallow clones "HEAD~1" does not exist and git prints
         // "fatal: Needed a single revision" to stderr, polluting CI output.
         let exists =
@@ -1798,7 +1819,16 @@ fn select_scope_base(root: &Path) -> String {
             return candidate;
         }
     }
-    "HEAD".to_string()
+
+    let identity =
+        ArtifactIdentity::CommitRange { base: "auto".to_string(), head: "HEAD".to_string() };
+    match change_set::resolve_change_set(identity, root) {
+        Ok(resolved) => match resolved.identity {
+            ArtifactIdentity::CommitRange { base, .. } => base,
+            ArtifactIdentity::StagedTree { .. } => "HEAD".to_string(),
+        },
+        Err(_) => "HEAD".to_string(),
+    }
 }
 
 /// Run a single gate and capture its result
@@ -3304,6 +3334,74 @@ mod tests {
         assert!(
             names.iter().any(|name| name == "staged_tree_identity"),
             "GateTier::All must select every gate, including commit-tier ones: {names:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn plan_pr_fast_gates_falls_back_broadly_when_explicit_base_does_not_resolve()
+    -> color_eyre::eyre::Result<()> {
+        // #3985 Slice 2 review (PR #4153): before the strict-base fix in
+        // `change_set::resolve_base_ref`, an unresolvable EXPLICIT
+        // `--base`/`$CI_SCOPE_BASE` (threaded through here as
+        // `GateRunnerConfig.base_ref`, which bypasses `select_scope_base`
+        // entirely — see `plan_gates`) silently substituted one of
+        // `change_set::BASE_CANDIDATES` (typically `origin/main`) instead
+        // of surfacing an `Err` that `plan_pr_fast_gates` catches to
+        // trigger its `rust_fallback` safety net. That meant PR-fast
+        // silently narrowed its scope to whatever the substituted base
+        // happened to diff, instead of falling back to the safe broad
+        // plan. This test proves the fix: an explicit base that cannot
+        // resolve must produce the broad `rust_fallback` plan — not a
+        // silently-narrowed scope computed against a substituted base.
+        //
+        // Mutation-checked: reverting the `resolve_base_ref` strict-base
+        // fix (letting an explicit base fall through to
+        // `BASE_CANDIDATES`) turns this test red — `clippy_scoped` gets
+        // selected (a real, narrowed scope against the substituted base)
+        // instead of skipped, and `scope_ok`/`fallback_used` flip to
+        // `true`/`false`.
+        let policy = policy_with_gates(vec![
+            pr_gate(
+                "clippy_scoped",
+                GatePlanningRole::RustScoped,
+                "cargo clippy -p {package_args}",
+            ),
+            pr_gate("clippy_fallback", GatePlanningRole::RustFallback, "cargo clippy --workspace"),
+        ]);
+        let config = GateRunnerConfig {
+            tier: GateTier::PrFast,
+            base_ref: Some("origin/definitely-not-a-real-ref-3985-slice2-parity".to_string()),
+            ..GateRunnerConfig::default()
+        };
+        let root = crate::utils::project_root()?;
+
+        let plan = plan_gates(&root, &policy, &config)?;
+
+        assert!(!plan.scope_ok, "an unresolvable explicit base must NOT produce a valid scope");
+        assert!(
+            plan.fallback_used,
+            "an unresolvable explicit base must trigger the broad rust_fallback plan"
+        );
+        let reason = plan
+            .fallback_reason
+            .as_deref()
+            .ok_or_else(|| color_eyre::eyre::eyre!("expected a fallback reason"))?;
+        assert!(
+            reason.contains("ci-scope failed"),
+            "fallback reason should explain the ci-scope failure, got: {reason}"
+        );
+
+        let selected_names = selected_gate_names(&plan);
+        assert!(
+            selected_names.iter().any(|name| name == "clippy_fallback"),
+            "the broad rust_fallback gate must be selected: {selected_names:?}"
+        );
+        assert!(
+            !selected_names.iter().any(|name| name == "clippy_scoped"),
+            "the narrow rust_scoped gate must NOT be selected on an unresolvable explicit \
+             base (that would mean the scope was silently narrowed instead of the safety \
+             net firing): {selected_names:?}"
         );
         Ok(())
     }
