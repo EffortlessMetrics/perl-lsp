@@ -713,11 +713,7 @@ pub fn compute_guidance(snapshot: &WriterAdmissionSnapshot) -> AdmissionGuidance
         None
     } else {
         let matches = worktrees_matching_target_branch(snapshot);
-        if matches.len() == 1 {
-            Some(matches[0].to_string())
-        } else {
-            None
-        }
+        if matches.len() == 1 { Some(matches[0].to_string()) } else { None }
     };
     AdmissionGuidance {
         existing_worktree_path,
