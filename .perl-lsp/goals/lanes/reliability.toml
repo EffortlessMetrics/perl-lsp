@@ -1,0 +1,34 @@
+id = "reliability"
+program = "real_perl_editor_trust"
+program_manifest = ".perl-lsp/goals/programs/real_perl_editor_trust.toml"
+pr_cap = 4
+
+# Board pointer (status board for the active lane).
+board = "docs/project/status/real_perl_editor_trust_v1.md"
+
+# Eligible work classes this lane may change (unchanged from the prior
+# [[lanes]] "owns" list in active.toml).
+may_change = [
+  "fuzzing",
+  "e2e_diagnostics",
+  "devex",
+  "docs",
+  "srp_refactors",
+  "coverage",
+  "policy_cleanup",
+  "published_api_hygiene",
+]
+
+# Proof policy (unchanged from the prior [[lanes]] "rule").
+proof_policy = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treating them as cleanup."
+
+# Work that falls outside may_change routes elsewhere: any trust-adjacent
+# surface (provider behavior, promotion ledger, semantic tokens, rename,
+# safe-delete, diagnostics) routes to the trust lane instead of being
+# merged as reliability cleanup; substrate groundwork routes to the
+# substrate lane.
+must_route_elsewhere = "Trust-adjacent provider-behavior surfaces owned by the trust lane; substrate groundwork owned by the substrate lane."
+
+next_items = [
+  "provider-proof-assignment-gate-after-constant-provider-proof",
+]

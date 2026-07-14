@@ -1,0 +1,11 @@
+project: product
+component: Developer experience
+kind: Added
+body: >-
+  Add `cargo xtask workflows check` — an advisory actionlint + zizmor
+  "Workflow Contracts" scaffold for `.github/workflows/*.yml` (local
+  action/reusable-workflow ref integrity, explicit permissions, and
+  action-pinning policy checks). Advisory-unarmed; cannot block a PR.
+custom:
+  PR: "3885"
+  Breaking: "no"

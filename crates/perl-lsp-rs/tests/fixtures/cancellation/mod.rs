@@ -59,6 +59,11 @@
 //! All fixture loading is thread-safe with lazy initialization patterns,
 //! supporting concurrent test execution and CI/CD environments.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 pub mod fixture_loader;
 
 // Re-export primary fixtures interface

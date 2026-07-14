@@ -25,7 +25,11 @@ interface HealthCheckCommandResult {
   }>;
 }
 
-async function withTimeout<T>(label: string, operation: PromiseLike<T>, timeoutMs: number): Promise<T> {
+async function withTimeout<T>(
+  label: string,
+  operation: PromiseLike<T>,
+  timeoutMs: number,
+): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
@@ -43,7 +47,7 @@ async function withTimeout<T>(label: string, operation: PromiseLike<T>, timeoutM
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
@@ -103,17 +107,22 @@ function releaseTag(version: string): string {
 
 function platformLabel(): string {
   switch (process.platform) {
-    case 'win32': return 'windows';
-    case 'darwin': return 'macos';
-    case 'linux': return 'linux';
-    default: return process.platform;
+    case 'win32':
+      return 'windows';
+    case 'darwin':
+      return 'macos';
+    case 'linux':
+      return 'linux';
+    default:
+      return process.platform;
   }
 }
 
 function smokeReceiptsDir(sourceLabel: string): string {
   // __dirname after compile is <repo>/vscode-extension/out/test/published → 4x .. reaches repo root.
-  const root = process.env.PERL_LSP_SMOKE_RECEIPTS_DIR
-    ?? path.resolve(__dirname, '..', '..', '..', '..', 'target', 'receipts', 'vscode-smoke');
+  const root =
+    process.env.PERL_LSP_SMOKE_RECEIPTS_DIR ??
+    path.resolve(__dirname, '..', '..', '..', '..', 'target', 'receipts', 'vscode-smoke');
   const dir = path.join(root, sourceLabel, platformLabel());
   fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -169,9 +178,10 @@ suite('Published extension managed binary smoke', function () {
   test('Published extension installs and runs managed binary commands when supported', async function () {
     this.timeout(240_000);
 
-    const sourceLabel = process.env.PERL_LSP_SMOKE_SOURCE_LABEL
-      ?? process.env.PERL_LSP_PUBLISHED_EXTENSION_SOURCE
-      ?? 'marketplace';
+    const sourceLabel =
+      process.env.PERL_LSP_SMOKE_SOURCE_LABEL ??
+      process.env.PERL_LSP_PUBLISHED_EXTENSION_SOURCE ??
+      'marketplace';
     const receiptsDir = smokeReceiptsDir(sourceLabel);
     const artifacts: SmokeArtifacts = {
       log: [],
@@ -194,7 +204,8 @@ suite('Published extension managed binary smoke', function () {
     let lockingProcess: ChildProcessWithoutNullStreams | undefined;
 
     try {
-      const extensionId = process.env.PERL_LSP_PUBLISHED_EXTENSION_ID ?? 'EffortlessMetrics.perl-lsp-rs';
+      const extensionId =
+        process.env.PERL_LSP_PUBLISHED_EXTENSION_ID ?? 'EffortlessMetrics.perl-lsp-rs';
       const expectedVersion = process.env.PERL_LSP_PUBLISHED_EXTENSION_VERSION ?? '';
       const requireStructuredCommands = envFlag('PERL_LSP_REQUIRE_STRUCTURED_COMMANDS');
       const extension = vscode.extensions.getExtension(extensionId);
@@ -230,12 +241,17 @@ suite('Published extension managed binary smoke', function () {
 
       appendLog(artifacts, 'configuring perl-lsp settings for managed-download mode');
       const config = vscode.workspace.getConfiguration('perl-lsp');
-      const binaryVersion = process.env.PERL_LSP_PUBLISHED_BINARY_VERSION || expectedVersion || packageVersion;
+      const binaryVersion =
+        process.env.PERL_LSP_PUBLISHED_BINARY_VERSION || expectedVersion || packageVersion;
       artifacts.state.binaryVersion = binaryVersion;
       await config.update('autoDownload', false, vscode.ConfigurationTarget.Global);
       await config.update('serverPath', '', vscode.ConfigurationTarget.Global);
       await config.update('channel', 'tag', vscode.ConfigurationTarget.Global);
-      await config.update('versionTag', releaseTag(binaryVersion), vscode.ConfigurationTarget.Global);
+      await config.update(
+        'versionTag',
+        releaseTag(binaryVersion),
+        vscode.ConfigurationTarget.Global,
+      );
       await config.update('downloadBaseUrl', '', vscode.ConfigurationTarget.Global);
       await config.update('updateCheckInterval', 0, vscode.ConfigurationTarget.Global);
       await config.update('perlcritic.enabled', false, vscode.ConfigurationTarget.Global);
@@ -266,17 +282,19 @@ suite('Published extension managed binary smoke', function () {
       results.reinstall1 = reinstall1;
       assert.ok(reinstall1, 'first reinstall command should return a structured result');
       assert.equal(reinstall1.ok, true, JSON.stringify(reinstall1, null, 2));
-      assert.ok(reinstall1.serverPath, 'first reinstall result should include the managed binary path');
+      assert.ok(
+        reinstall1.serverPath,
+        'first reinstall result should include the managed binary path',
+      );
       assert.ok(
         fs.existsSync(reinstall1.serverPath),
         `managed binary should exist after first reinstall: ${reinstall1.serverPath}`,
       );
-      assert.ok(reinstall1.target, 'first reinstall result should include the release target triple');
-      assert.equal(
-        reinstall1.checksumVerified,
-        true,
-        'first reinstall should verify SHA256SUMS',
+      assert.ok(
+        reinstall1.target,
+        'first reinstall result should include the release target triple',
       );
+      assert.equal(reinstall1.checksumVerified, true, 'first reinstall should verify SHA256SUMS');
 
       if (process.platform === 'linux') {
         assert.match(reinstall1.target, /-unknown-linux-gnu$/);
@@ -304,7 +322,7 @@ suite('Published extension managed binary smoke', function () {
       assert.ok(health1, 'first health check should return a structured result');
       assert.equal(health1.ok, true, JSON.stringify(health1.checks, null, 2));
       assert.ok(
-        health1.checks.some(check => check.label === 'LSP binary' && check.status === 'ok'),
+        health1.checks.some((check) => check.label === 'LSP binary' && check.status === 'ok'),
         JSON.stringify(health1.checks, null, 2),
       );
       artifacts.state.firstHealthOk = true;
@@ -325,9 +343,13 @@ suite('Published extension managed binary smoke', function () {
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
       });
-      lockingProcess.stdout.on('data', () => { /* drain */ });
-      lockingProcess.stderr.on('data', () => { /* drain */ });
-      lockingProcess.on('error', err => {
+      lockingProcess.stdout.on('data', () => {
+        /* drain */
+      });
+      lockingProcess.stderr.on('data', () => {
+        /* drain */
+      });
+      lockingProcess.on('error', (err) => {
         appendLog(artifacts, `locking process error: ${err.message}`);
       });
       await delay(750);
@@ -355,11 +377,7 @@ suite('Published extension managed binary smoke', function () {
         fs.existsSync(reinstall2.serverPath),
         `managed binary should exist after second reinstall: ${reinstall2.serverPath}`,
       );
-      assert.equal(
-        reinstall2.checksumVerified,
-        true,
-        'second reinstall should verify SHA256SUMS',
-      );
+      assert.equal(reinstall2.checksumVerified, true, 'second reinstall should verify SHA256SUMS');
 
       const mtimeAfter = fs.statSync(reinstall2.serverPath).mtimeMs;
       artifacts.state.binaryMtimeAfter = mtimeAfter;
@@ -379,7 +397,7 @@ suite('Published extension managed binary smoke', function () {
       assert.ok(health2, 'second health check should return a structured result');
       assert.equal(health2.ok, true, JSON.stringify(health2.checks, null, 2));
       assert.ok(
-        health2.checks.some(check => check.label === 'LSP binary' && check.status === 'ok'),
+        health2.checks.some((check) => check.label === 'LSP binary' && check.status === 'ok'),
         JSON.stringify(health2.checks, null, 2),
       );
       artifacts.state.secondHealthOk = true;

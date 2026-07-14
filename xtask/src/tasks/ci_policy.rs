@@ -8,9 +8,14 @@ use walkdir::WalkDir;
 
 use crate::utils::project_root;
 
-const FROM_RAW_PATTERN: &str = r"\b([A-Za-z_][A-Za-z0-9_:]*::)?ExitStatus::from_raw\(";
-const ALLOWED_FROM_RAW_PATTERN: &str = r"::from_raw\(\s*raw[_ ]?exit\s*\(";
-const SEARCH_ROOTS: &[&str] = &["crates", "xtask", "examples", "tests"];
+// `pub(crate)`: the working-tree `from_raw` check below (`collect_candidate_lines`,
+// `WalkDir`-based) and the staged-tree commit-tier variant
+// (`commit_checks::from_raw_staged`, issue #3786) share exactly one pattern
+// and one "is this line a real violation" predicate — never two copies that
+// can drift.
+pub(crate) const FROM_RAW_PATTERN: &str = r"\b([A-Za-z_][A-Za-z0-9_:]*::)?ExitStatus::from_raw\(";
+pub(crate) const ALLOWED_FROM_RAW_PATTERN: &str = r"::from_raw\(\s*raw[_ ]?exit\s*\(";
+pub(crate) const SEARCH_ROOTS: &[&str] = &["crates", "xtask", "examples", "tests"];
 const RETAINED_STATE_INVENTORY: &str = "docs/large-workspaces/RETAINED_STATE_INVENTORY.md";
 const RETAINED_OWNER_PATTERN_LABELS: &[(&str, &str)] = &[
     ("Arc<Mutex<", "shared mutex state"),
@@ -97,7 +102,11 @@ fn match_inside_double_quotes(fragment: &str, match_start: usize) -> bool {
     in_string
 }
 
-fn is_disallowed_from_raw_line(line: &str, disallow_re: &Regex, allowed_re: &Regex) -> bool {
+pub(crate) fn is_disallowed_from_raw_line(
+    line: &str,
+    disallow_re: &Regex,
+    allowed_re: &Regex,
+) -> bool {
     let fragment = source_fragment(line);
     if is_comment_line(fragment) || allowed_re.is_match(fragment) {
         return false;

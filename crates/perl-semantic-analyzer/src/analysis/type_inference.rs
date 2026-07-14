@@ -412,6 +412,9 @@ impl TypeInferenceEngine {
 
             NodeKind::String { .. } => Ok(Scalar(String)),
 
+            // V-strings (e.g. v1.2.3, v5.10) are string-typed values in Perl.
+            NodeKind::VString { .. } => Ok(Scalar(String)),
+
             NodeKind::Undef => Ok(Scalar(Undef)),
 
             NodeKind::Variable { sigil, name } => {
@@ -726,6 +729,10 @@ impl TypeInferenceEngine {
                 fact_with_evidence(ty, Confidence::High, TypeEvidence::Literal)
             }
             NodeKind::String { .. } => {
+                fact_with_evidence(Scalar(String), Confidence::High, TypeEvidence::Literal)
+            }
+            // V-strings (e.g. v1.2.3, v5.10) carry string semantics.
+            NodeKind::VString { .. } => {
                 fact_with_evidence(Scalar(String), Confidence::High, TypeEvidence::Literal)
             }
             NodeKind::Undef => {

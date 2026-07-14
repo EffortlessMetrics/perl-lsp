@@ -46,13 +46,6 @@ description = "Agent sign-off receipt with material observations and negative ch
 required_fields = ["material_observations", "negative_checks", "verdict"]
 
 [[receipt]]
-check = "label-projection"
-schema = ".ci/receipts/schemas/label-projection.schema.json"
-description = "Projects label changes from canonical PR state for queue management."
-producer = "cargo xtask queue project-labels"
-required_fields = ["dry_run", "verdict", "projections"]
-
-[[receipt]]
 check = "queue-health"
 schema = ".ci/receipts/schemas/queue-health.schema.json"
 description = "Classifies master queue health into GREEN/PENDING/RED modes for orchestrator merge safety."

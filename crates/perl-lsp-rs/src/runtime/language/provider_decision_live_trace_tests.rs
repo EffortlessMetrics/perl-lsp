@@ -273,6 +273,20 @@ $count++;
 1;
 "#;
 
+const NAMED_FUNCTION_CALL_SEMANTIC_TOKEN_URI: &str =
+    "file:///workspace/lib/Trace/NamedFunctionCallTokens.pm";
+// A single bareword call with an undefined callee: no `sub`/`my`/`method`/etc.
+// ahead of it, so the named-function-call detector is the first reviewed
+// compiler-token candidate to match and the live request exposes its whole-call
+// `function` trace as the acted decision.
+const NAMED_FUNCTION_CALL_SEMANTIC_TOKEN_DOC: &str = r#"use strict;
+use warnings;
+
+run_pipeline();
+
+1;
+"#;
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -537,6 +551,20 @@ fn open_no_sub_semantic_token_document(
         "textDocument": {
             "uri": NO_SUB_SEMANTIC_TOKEN_URI,
             "text": NO_SUB_SEMANTIC_TOKEN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_named_function_call_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": NAMED_FUNCTION_CALL_SEMANTIC_TOKEN_URI,
+            "text": NAMED_FUNCTION_CALL_SEMANTIC_TOKEN_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -1981,6 +2009,68 @@ fn live_semantic_tokens_request_exposes_reviewed_method_call_trace()
             .and_then(Value::as_str)
             .is_some_and(|message| message.contains("compiler method-call live trace")),
         "explanation must surface the reviewed method-call trace: {explanation}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_exposes_reviewed_named_function_call_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_named_function_call_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {"uri": NAMED_FUNCTION_CALL_SEMANTIC_TOKEN_URI, "version": 1}
+            })),
+        )),
+        "semantic tokens named function call",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_compiler_token_live_slice")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_named_function_call_live_token_match")
+    );
+    assert_eq!(
+        receipt.get("compiler_token_class").and_then(Value::as_str),
+        Some("named_function_call")
+    );
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("function"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("broader function classes")
+            && boundary.contains("generated/no-source")
+            && boundary.contains("dynamic-boundary"),
+        "named-function-call trace must preserve scoped blockers: {boundary}"
+    );
+    assert!(
+        explanation
+            .get("user_message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| message.contains("compiler named-function-call live trace")),
+        "explanation must surface the reviewed named-function-call trace: {explanation}"
     );
     Ok(())
 }

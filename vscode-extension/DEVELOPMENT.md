@@ -4,7 +4,7 @@ This guide covers building, testing, and iterating on the extension locally with
 
 ## Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 26.x (CI pins 26.5.0) and npm 11.18.0
 - VS Code
 - A built `perllsp` binary (see [Building the server](#building-the-server))
 
@@ -12,8 +12,14 @@ This guide covers building, testing, and iterating on the extension locally with
 
 ```bash
 cd vscode-extension
-npm install
+npm run doctor
+npm ci
 ```
+
+The extension uses npm and `package-lock.json` as its only package authority.
+`npm run doctor` enforces the Node floor and the exact `packageManager` value
+declared in `package.json`; run it before installing dependencies so an
+unsupported environment fails before native packages are installed.
 
 ## Building the server
 
@@ -36,9 +42,32 @@ This bypasses the auto-download and uses your local build.
 ## Compile the extension
 
 ```bash
-npm run compile     # Single build
-npm run watch       # Rebuild on every file change (use during active development)
+npm run typecheck   # Type-check only (tsc --noEmit) — TypeScript 7 is the sole type-check authority
+npm run typecheck:all # Check source, unit tests, integration, published smoke, and scripts
+npm run typecheck:strictness # Advisory indexed-access and exact-optional baselines; rejects debt growth
+npm run compile     # Single build (Rolldown bundles out/extension.js — does NOT type-check)
+npm run sample:published:local # Repeat exact-source VSIX smoke and write p50/p95 receipt summary
+npm run watch       # Rebuild out/extension.js on every file change (use during active development)
+npm run watch:types # Optional companion: live tsc --noEmit type-check loop in a separate terminal
 ```
+
+The strictness command runs all TypeScript authority configurations with
+`noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` enabled while the
+existing debt is being burned down. Each committed baseline is countable by
+configuration, diagnostic code, and file; refreshes require the explicit
+option-specific `node scripts/check-typescript-strictness.js --update-baseline`
+command and must not silently absorb growth.
+
+The shared TypeScript configuration also enables `noImplicitOverride` as a
+blocking check. All source, test, integration, published-smoke, and script
+authority configurations are clean under this policy, so it does not need a
+debt baseline.
+
+`npm run sample:published:local` runs the exact-source local VSIX smoke three
+times by default, stores each receipt in a separate sample directory, and
+writes the combined p50/p95 summary. Set `PERL_LSP_VSCODE_SAMPLE_RUNS` or pass
+`--runs N` for a different sample count; the command still requires the same
+current-source server variables as `npm run test:published:local`.
 
 ## Run and test in VS Code
 
@@ -96,26 +125,27 @@ The `.vsix` file can be installed directly in VS Code via **Extensions → Insta
 
 ## Common tasks
 
-| Task | Command |
-|------|---------|
-| Compile TypeScript | `npm run compile` |
-| Watch mode | `npm run watch` |
-| Run unit tests | `npm test` |
-| Lint | `npm run lint` |
-| Build `.vsix` package | `npm run package` |
-| Full marketplace verification | `npm run verify:marketplace` |
+| Task                          | Command                           |
+| ----------------------------- | --------------------------------- |
+| Compile TypeScript            | `npm run compile`                 |
+| Watch mode                    | `npm run watch`                   |
+| Run unit tests                | `npm test`                        |
+| Lint                          | `npm run lint`                    |
+| Build `.vsix` package         | `npm run package`                 |
+| Check VSIX inventory baseline | `npm run check:package-inventory` |
+| Full marketplace verification | `npm run verify:marketplace`      |
 
 ## Extension entry point
 
 The main extension code lives in `src/extension.ts`. Key files:
 
-| File | Purpose |
-|------|---------|
-| `src/extension.ts` | Activation, server lifecycle |
-| `src/downloader.ts` | Auto-download logic for the `perllsp` binary |
-| `src/healthWidget.ts` | Status bar health indicator |
-| `src/onboarding.ts` | First-run setup flow |
-| `src/debugAdapter.ts` | DAP debug adapter |
+| File                  | Purpose                                      |
+| --------------------- | -------------------------------------------- |
+| `src/extension.ts`    | Activation, server lifecycle                 |
+| `src/downloader.ts`   | Auto-download logic for the `perllsp` binary |
+| `src/healthWidget.ts` | Status bar health indicator                  |
+| `src/onboarding.ts`   | First-run setup flow                         |
+| `src/debugAdapter.ts` | DAP debug adapter                            |
 
 ## Pointing the extension at a different server version
 

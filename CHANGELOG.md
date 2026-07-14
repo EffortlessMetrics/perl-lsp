@@ -7,6 +7,262 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- changelog coverage: retrospective_covered_through = da86c123a (this PR's
+     base commit, conservative floor for the audited range). Post-audit
+     user-facing PRs merged after this PR was authored are NOT covered here
+     and are bridge-backfill candidates for the Changie ledger (#3784). -->
+
+### Changed
+
+- **VS Code extension toolchain modernized to TypeScript 7 / Oxc / Rolldown**,
+  shrinking the packaged VSIX by ~77% (1.25 MB to 291 KB). See
+  [vscode-extension/CHANGELOG.md](vscode-extension/CHANGELOG.md) for detail.
+  (#3645, #3690, #3721, #3736, #3755)
+
+### Added
+
+- **Test2 framework awareness (reader/integration, not a Test2 runtime).**
+  `perl-lsp` now reads Test2 source and Test2 runner output and drives the
+  project's real runner, without replacing `yath`/`prove`/`perl` or executing
+  `subtest` blocks in isolation:
+  - **Imports** — `use Test2::V0;` (and common `Test2::Tools::*`) are understood
+    so assertions like `ok`/`is`/`subtest`/`done_testing` are in scope, with
+    exclusion (`!ok`), rename (`ok => {-as => 'my_ok'}`), and
+    `-no_strict`/`-no_warnings`/`-no_pragmas` handled. Export lists are verified
+    against the canonical Test2-Suite source.
+  - **Critic** — `use Test2::V0;` satisfies the native `require_use_strict` /
+    `require_use_warnings` rules (unless disabled via an import option).
+  - **Subtest structure** — nested subtests are discovered as a tree and appear
+    in the document-symbol outline and code lenses; dynamic names are reported
+    as dynamic rather than guessed.
+  - **TAP output** — runner output is parsed into structured failures mapped to
+    source (`file`/`line`/`got`/`expected`); TODO/SKIP are not hard failures;
+    raw output/exit code/runner are preserved.
+  - **Run/Debug** — "Run Subtest" runs the whole file and focuses output on the
+    named subtest; `perl.debugTestFile` returns a real `perl-dap` launch
+    configuration for `.t` files (replacing the previous placeholder). Test2
+    editor snippets (`usetest2`, `dies`, `lives`)
+    are shipped. See [docs/reference/TEST2_INTEGRATION.md](docs/reference/TEST2_INTEGRATION.md).
+- **Hover docs and completion for Perl 5.36–5.40 `use builtin` functions.**
+  All 16 functions introduced by the `builtin` pragma (`true`/`false`/
+  `is_bool`, `weaken`/`unweaken`/`is_weak`, `refaddr`/`reftype`,
+  `ceil`/`floor`, `inf`/`nan`, `trim`, `indexed`, `load_module`,
+  `export_lexically`) now have typed signatures, versioned descriptions, and
+  resolve identically whether called bare or as `builtin::name(...)`.
+  (#3118) `blessed` (5.36) and `is_tainted` (5.38) were added to the same
+  catalog. (#3275)
+- **`textDocument/semanticTokens/full/delta` support.** The server previously
+  advertised `semanticTokensProvider.full` with no working delta handler and no
+  `resultId`, so delta-capable clients had nothing to request against. Full
+  requests now mint a tracked `resultId`, and the new delta handler returns the
+  minimal edit set between a client's cached prior result and the current
+  tokens (falling back to a full response when the prior result is unknown).
+  (#1917)
+- **Named-function-call semantic token class.** Bareword calls (`name(...)`)
+  now participate in the same live-verified semantic-token cutover as
+  sub/package/method/variable names, continuing the token-accuracy series.
+  (#2609)
+- **Native class fields (Perl 5.38+) extracted into symbols.** Fields declared
+  with the native `field` keyword are now indexed and appear in document/
+  workspace symbols and hover, alongside existing Moo/Moose `has` attributes.
+  (#3218)
+- **Perl 5.44 named-parameter signature help.** Signature help now models
+  Perl 5.44 named/optional/slurpy subroutine parameters and the `//=`/`||=`
+  named-parameter default operators, instead of treating them as positional.
+  (#3331, #3352, #3354)
+- **Completions route indirect-object calls through method completion.**
+  `new Foo::Bar->` -style indirect-object call sites now offer the same method
+  completions as `Foo::Bar->new->`. (#1914)
+- **Declared-but-unindexed CPAN dependencies surface as advisory hover/
+  completion text.** The server now statically extracts declared dependency
+  facts from `cpanfile`, `Makefile.PL`, `Build.PL`, `dist.ini`, `META.json`,
+  and `META.yml`, and when a module is declared but not indexed (not yet
+  installed/vendored), hover and completion mention it instead of treating it
+  as fully unknown. Per-folder config reload now also clears stale
+  metadata-derived state instead of leaking it across reloads. (#3137, #3170,
+  #3171)
+- **`perl-dap` external debugger peer seam (ptkdb-ready).** A backend-neutral
+  debug model plus a small Content-Length-framed peer protocol let `perl-dap`
+  host an external Perl debugger frontend/backend (`Devel::ptkdb` is the first
+  partner), reachable via `perl-dap --external-peer HOST:PORT` or a VS Code
+  launch config's `externalPeer`. The native `DebugAdapter`/`DapServer` path is
+  unchanged; this first cut wires a live, drivable **mirror-mode** listen
+  session (proven with fake-peer tests), with real end-to-end `ptkdb` sessions
+  deferred. (#3321, #3404)
+- **Native analyzer/formatter/debugger stack is now the only shipped default.**
+  `perl.runCritic` defaults to the native critic analyzer even when
+  `perlcritic` happens to be on `PATH` (external only when explicitly
+  configured); native-engine critic code actions carry native diagnostic
+  identity (`perl-lsp-critic` / `native.*` codes) instead of the external
+  tool's brand; the shipped `perl-dap` CLI no longer exposes `--bridge`
+  (`Perl::LanguageServer`/`Devel::TSPerlDAP` bridging remains a library-only
+  conformance reference, never a shipped path); and release archives now fail
+  validation if they bundle external Perl tooling or legacy bridge payloads.
+  (#3277, #3279, #3282, #3348)
+
+### Fixed
+
+#### LSP integration
+
+- **"Find All References" no longer silently degrades for its default request
+  shape.** VS Code's default `includeDeclaration: true` request bailed out of
+  the high-fidelity source-backed references tier entirely, falling through to
+  the lower-fidelity workspace-index tier on every "Find All References" call.
+  (#3050)
+- **Stale post-edit index answers are guarded against.** Providers now wait on
+  index readiness instead of racing a just-applied edit. (#3149)
+- **Package rename fails closed on a partial index** instead of silently
+  applying an incomplete rename. (#3176)
+- **`callHierarchy/incomingCalls` returns top-level and script callers**
+  instead of omitting call sites outside a named sub. (#3191)
+- **Cross-construct sub resolution** now covers anonymous subs, typeglobs, and
+  `use constant`-declared subs. (#3199)
+- **Dynamic typeglob dereferences (`*{...}`) emit a `DynamicBoundary` fact**
+  instead of being reported as a literal symbol. (#3209)
+- **Completion keeps resolved imports when an export tag is unresolvable**
+  instead of dropping the whole import. (#3213)
+- **Same-package `our` redeclaration is flagged.** (#3217)
+- **`ModuleNotFound` diagnostics use a boundary-aware `.pm` match** instead of
+  a substring match that could misclassify unrelated paths. (#3221)
+- **The outbound notification queue is bounded**, closing a DoS vector where
+  an unbounded queue could grow without limit. (#3223)
+- **`documentSymbol` `selectionRange` covers just the name**, not the whole
+  declaration. (#3226)
+- **Lexical `my`/`state` declarations are excluded from the bare-name unused
+  check**, removing false-positive "unused" warnings. (#3227)
+- **Malformed pull-diagnostic requests return `InvalidParams`** instead of a
+  generic error. (#3229)
+- **Completion adds regex-match array special variables** (`@-`/`@+` family)
+  to the special-variable set. (#3255)
+- **`eval`-scoped sub suppression for PL109 is now order-aware**, closing a
+  false-negative where sub order affected suppression. (#3286)
+- **Bare-block package context is scoped to the block** instead of leaking
+  into sibling scopes. (#3353)
+- **Clicking the package-prefix of a qualified name no longer navigates to the
+  sub** — only the sub-name segment does. (#3360)
+- **`typeHierarchy` operations support cancellation.** (#3455)
+- **References refuse exact-tier promotion across dynamic boundaries**,
+  avoiding a false-precision result where the reference set can't actually be
+  proven exact. (#3461)
+- **Hover and references guards restored** after a regression reintroduced the
+  gap they closed. (#3466)
+- **The PIR-A lexical references slice is promoted**, raising fidelity for
+  lexical-variable "Find All References". (#3478)
+- **`textDocument/typeDefinition` and `/implementation` fallback is pinned to
+  the document generation captured at request time**, preventing a
+  stale-vs-fresh mismatch mid-edit. (#3622)
+- **Completion emits its analyze span on cancellation** instead of dropping
+  timing data for cancelled requests. (#3623)
+- **Hover documents `@+`, `@-`, `@EXPORT`, `@EXPORT_OK`, `%!`, and
+  `%EXPORT_TAGS`** special variables, which previously returned no
+  documentation. (#1866)
+- **`DESTROY`/`AUTOLOAD` are recognized as special method hooks**, not
+  ordinary `UNIVERSAL` methods, in hover and navigation. (#1836)
+- **`positionEncoding` negotiation honors the client's preference list**
+  instead of ignoring it. (#1856)
+- **Document symbols nested under an offset-0 package are deduplicated.**
+  (#1583)
+- **Folding ranges are deduplicated**, and a region-start-line assertion
+  corrected. (#3168)
+- **Rename ignores non-code package text during scope lookup.** (#3112)
+- **Rename validates keywords by context** — `$if`/`@while` are allowed as
+  variable names, while `sub if` is still rejected. (#3109)
+- **The workspace reference index no longer silently drops references inside
+  block-form `package Foo { ... }`/`class Foo { ... }` bodies, typeglob
+  aliasing, `goto &coderef`, regex-bind expressions (`=~`), `tie` argument
+  lists, indirect-object call arguments, subroutine signature default
+  values, and non-variable assignment/increment targets** — "Find All
+  References", rename, and `workspace/symbol` now see these previously
+  unindexed reference sites. Consolidating the workspace indexer's two
+  independent reference walks into one traversal closed these
+  pre-existing coverage gaps as a side effect. (#1711)
+
+#### Debugger (DAP)
+
+- **Breakpoint line-adjustment messages are preserved when the breakpoint
+  condition is invalid**, instead of being dropped. (#3216)
+- **Breakpoint file matching requires a path boundary**, preventing an
+  unrelated file with a matching suffix from being treated as the same file.
+  (#3225)
+- **Process/thread ID casts saturate instead of silently truncating.** (#3233)
+- **Launch remediation guidance points at the configured `perlPath`.** (#3245)
+- **`DebugAdapter` implements `Drop`**, ensuring session cleanup runs even on
+  an unclean shutdown path. (#3247)
+- **Stale `Child` `variablesReference`s are short-circuited on a cache miss
+  after resume**, instead of serving a reference from before the resume.
+  (#3369)
+
+#### Diagnostics
+
+- **PL401 (two-argument `open` security check) fires for the parenthesized
+  2-arg form** (`open(FH, ">file")`), which previously slipped through because
+  the parser wraps parenthesized call args in a single `ArrayLiteral` node.
+  (#3674)
+- **PL404 no longer false-positives on sub-local lexicals**, and ties between
+  same-offset scopes are now broken deterministically (innermost scope wins)
+  instead of depending on hash-iteration order. (#3659, #3705)
+- **PL100/PL101's implicit-strict module list corrected** against real Perl
+  module behavior — several modules on the "implies `use strict`/`use
+  warnings`" allowlist did not actually do so. (#3729)
+- **Regexes with nested quantifiers no longer downgrade a document to partial
+  semantics.** They're now recorded as an advisory diagnostic (still a warning
+  in the editor) rather than a blocking parse error. (#3682, #3698)
+
+#### Parser correctness
+
+- **`goto &sub` frame replacement is distinguished from `goto LABEL` and `goto
+  EXPR`.** (#1923)
+- **`NodeKind::VString` added** for v-string literals, distinguishing them
+  from other string forms. (#1871)
+- **Incomplete-brace recovery marks the error explicitly** instead of masking
+  it. (#1906)
+- **A reversed `HashLiteral` span is fixed** by capturing the closing `}`
+  token directly. (#3364)
+- **Parenthesized `try` calls are disambiguated** from the `try`/`catch`
+  statement form. (#3572)
+- **`${name}` parses as a scalar variable**, not a symbolic dereference.
+  (#3590)
+- **Unparenthesized declaration lists are supported** (e.g. `my $a, $b`
+  parses as a declaration list). (#3627)
+- **Heredoc body offsets are tracked**, fixing downstream position mapping for
+  heredoc content. (#3650)
+- **Unparenthesized `my`/`our`/`state` declares only the first variable**,
+  matching real Perl semantics instead of treating the remaining
+  comma-separated names as part of the declaration. (#3738)
+- **Encoding-aware file reading is consolidated**, fixing a crash on Latin-1
+  and UTF-16 Perl source files. (#3054)
+- **`line_index` overflow/panic sites hardened** against out-of-range offsets.
+  (#3042)
+- **Mid-surrogate UTF-16 columns are clamped** in `position_to_offset` instead
+  of panicking. (#3040)
+- **AST traversal recursion depth is bounded**, preventing a stack overflow on
+  deeply nested or adversarial input. (#3207)
+
+### Performance
+
+- **Editor responsiveness: `didChange` returns before parsing completes.**
+  Moved full parsing and parent-map construction out of the
+  `textDocument/didChange` critical path and onto a bounded, latest-only
+  background worker. Stale parses and parse-derived effects remain
+  generation-gated. In the 78 KB, 20-edit Neovim receipt, maximum
+  `didChange` handler time fell from about 269 ms to 1.6 ms. (#3618, Fresh
+  Facts Fast program #3396)
+- **Type inference is cached per document.** Hover and completion previously
+  rebuilt the type-inference engine on every request for an unchanged
+  document; it's now cached by URI and content hash and invalidated on
+  `didChange`/`didClose`. (#3254)
+- **`workspace/symbol` lookup is indexed** instead of an O(n) scan over every
+  file's symbols on every query. (#3211)
+- **Workspace-symbol search exits early once the result cap is reached**,
+  instead of collecting and cloning every match before truncating. (#3228)
+
+### Security
+
+- **`anyhow` updated** to resolve RUSTSEC-2026-0190. (#3195)
+- **Heredoc anti-pattern detector regexes bounded to a single line**, closing
+  a ReDoS vector where an unclosed heredoc delimiter in a large document could
+  trigger catastrophic backtracking. (#3568)
+
 ## [0.17.0] - 2026-06-28
 
 ### Added

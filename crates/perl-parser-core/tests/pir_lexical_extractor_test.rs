@@ -6,7 +6,11 @@
 /// - Skips Modify operations
 /// - Handles empty bodies without panic
 /// - Maintains receipt invariants
-use perl_parser_core::{Parser, hir::lower_ast, pir::extract_lexical_facts};
+use perl_parser_core::{
+    Parser,
+    hir::lower_ast,
+    pir::{LEXICAL_EXTRACTOR_RECEIPT_VERSION, extract_lexical_facts},
+};
 
 /// Helper to extract lexical facts from a Perl source string.
 fn extract(source: &str) -> perl_parser_core::pir::LexicalExtractorReceipt {
@@ -39,7 +43,10 @@ say $x;
     let receipt = extract(source);
 
     // Schema version must be correct
-    assert_eq!(receipt.schema_version, 1, "schema version must be 1");
+    assert_eq!(
+        receipt.schema_version, LEXICAL_EXTRACTOR_RECEIPT_VERSION,
+        "schema version must match LEXICAL_EXTRACTOR_RECEIPT_VERSION"
+    );
 
     // Provider behavior must not change
     assert!(!receipt.provider_behavior_changed, "PR1 must not change provider behavior");
@@ -124,7 +131,10 @@ sub counter { state $n = 0; return $n; }
     let receipt = extract(source);
 
     // Schema version
-    assert_eq!(receipt.schema_version, 1, "schema version must be 1");
+    assert_eq!(
+        receipt.schema_version, LEXICAL_EXTRACTOR_RECEIPT_VERSION,
+        "schema version must match LEXICAL_EXTRACTOR_RECEIPT_VERSION"
+    );
 
     // Provider behavior
     assert!(!receipt.provider_behavior_changed, "PR1 must not change provider behavior");
@@ -171,7 +181,10 @@ fn fixture_3_modify_nodes_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let receipt = extract(source);
 
     // Schema version
-    assert_eq!(receipt.schema_version, 1, "schema version must be 1");
+    assert_eq!(
+        receipt.schema_version, LEXICAL_EXTRACTOR_RECEIPT_VERSION,
+        "schema version must match LEXICAL_EXTRACTOR_RECEIPT_VERSION"
+    );
 
     // Provider behavior
     assert!(!receipt.provider_behavior_changed, "PR1 must not change provider behavior");
@@ -213,7 +226,10 @@ fn fixture_4_empty_sub_body() -> Result<(), Box<dyn std::error::Error>> {
     let receipt = extract(source);
 
     // Schema version
-    assert_eq!(receipt.schema_version, 1, "schema version must be 1");
+    assert_eq!(
+        receipt.schema_version, LEXICAL_EXTRACTOR_RECEIPT_VERSION,
+        "schema version must match LEXICAL_EXTRACTOR_RECEIPT_VERSION"
+    );
 
     // Provider behavior
     assert!(!receipt.provider_behavior_changed, "PR1 must not change provider behavior");
@@ -250,11 +266,9 @@ sub foo { my $y = 2; return $y; }
     let receipt = extract(source);
 
     // schema_version invariant
-    assert_eq!(receipt.schema_version, 1, "schema_version must be 1");
     assert_eq!(
-        receipt.schema_version,
-        perl_parser_core::pir::LEXICAL_EXTRACTOR_RECEIPT_VERSION,
-        "schema_version must match LEXICAL_EXTRACTOR_RECEIPT_VERSION constant"
+        receipt.schema_version, LEXICAL_EXTRACTOR_RECEIPT_VERSION,
+        "schema_version must match LEXICAL_EXTRACTOR_RECEIPT_VERSION"
     );
 
     // provider_behavior_changed invariant: must always be false for PR1

@@ -1,0 +1,9 @@
+project: vscode
+component: Developer experience
+kind: Changed
+body: "npm test now runs Jest quietly by default; verbose per-test output is opt-in via `npm run test:ci` or the JEST_VERBOSE env var."
+time: 2026-07-11T21:29:00Z
+custom:
+  PR: "3676"
+  Slug: jest-verbose-opt-in
+  Breaking: "no"

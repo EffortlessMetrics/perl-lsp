@@ -5,11 +5,11 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const PLATFORMS = [
-    { platform: 'darwin', arch: 'x64', rustTarget: 'x86_64-apple-darwin' },
-    { platform: 'darwin', arch: 'arm64', rustTarget: 'aarch64-apple-darwin' },
-    { platform: 'linux', arch: 'x64', rustTarget: 'x86_64-unknown-linux-gnu' },
-    { platform: 'linux', arch: 'arm64', rustTarget: 'aarch64-unknown-linux-gnu' },
-    { platform: 'win32', arch: 'x64', rustTarget: 'x86_64-pc-windows-msvc' }
+  { platform: 'darwin', arch: 'x64', rustTarget: 'x86_64-apple-darwin' },
+  { platform: 'darwin', arch: 'arm64', rustTarget: 'aarch64-apple-darwin' },
+  { platform: 'linux', arch: 'x64', rustTarget: 'x86_64-unknown-linux-gnu' },
+  { platform: 'linux', arch: 'arm64', rustTarget: 'aarch64-unknown-linux-gnu' },
+  { platform: 'win32', arch: 'x64', rustTarget: 'x86_64-pc-windows-msvc' },
 ];
 
 const extensionRoot = path.join(__dirname, '..');
@@ -17,19 +17,19 @@ const projectRoot = path.join(extensionRoot, '..');
 const binDir = path.join(extensionRoot, 'bin');
 
 function cargoTargetDir() {
-    const configuredTargetDir = process.env.CARGO_TARGET_DIR;
-    if (configuredTargetDir && configuredTargetDir.trim() !== '') {
-        return path.isAbsolute(configuredTargetDir)
-            ? configuredTargetDir
-            : path.resolve(projectRoot, configuredTargetDir);
-    }
+  const configuredTargetDir = process.env.CARGO_TARGET_DIR;
+  if (configuredTargetDir && configuredTargetDir.trim() !== '') {
+    return path.isAbsolute(configuredTargetDir)
+      ? configuredTargetDir
+      : path.resolve(projectRoot, configuredTargetDir);
+  }
 
-    return path.join(projectRoot, 'target');
+  return path.join(projectRoot, 'target');
 }
 
 // Create bin directory
 if (!fs.existsSync(binDir)) {
-    fs.mkdirSync(binDir, { recursive: true });
+  fs.mkdirSync(binDir, { recursive: true });
 }
 
 // Get current platform
@@ -39,57 +39,56 @@ const currentArch = process.arch;
 console.log(`Building perllsp for ${currentPlatform}-${currentArch}...`);
 
 // For development, just build for current platform
-const platform = PLATFORMS.find(p => p.platform === currentPlatform && p.arch === currentArch);
+const platform = PLATFORMS.find((p) => p.platform === currentPlatform && p.arch === currentArch);
 
 if (!platform) {
-    console.error(`Unsupported platform: ${currentPlatform}-${currentArch}`);
-    process.exit(1);
+  console.error(`Unsupported platform: ${currentPlatform}-${currentArch}`);
+  process.exit(1);
 }
 
 try {
-    const targetDir = cargoTargetDir();
-    const releaseDir = path.join(targetDir, 'release');
+  const targetDir = cargoTargetDir();
+  const releaseDir = path.join(targetDir, 'release');
 
-    // Build the binary
-    console.log('Building perllsp binary...');
-    console.log(`Using Cargo target dir: ${targetDir}`);
-    const buildCmd = `cargo build -p perllsp --release`;
-    execSync(buildCmd, { 
-        cwd: projectRoot,
-        stdio: 'inherit'
-    });
-    
-    // Create platform directory
-    const platformDir = path.join(binDir, `${platform.platform}-${platform.arch}`);
-    if (!fs.existsSync(platformDir)) {
-        fs.mkdirSync(platformDir, { recursive: true });
-    }
-    
-    // Copy binary
-    const binaryNames = platform.platform === 'win32'
-        ? ['perllsp.exe', 'perl-lsp.exe']
-        : ['perllsp', 'perl-lsp'];
-    const sourcePath = binaryNames
-        .map(binaryName => ({ binaryName, sourcePath: path.join(releaseDir, binaryName) }))
-        .find(candidate => fs.existsSync(candidate.sourcePath));
+  // Build the binary
+  console.log('Building perllsp binary...');
+  console.log(`Using Cargo target dir: ${targetDir}`);
+  const buildCmd = `cargo build -p perllsp --release`;
+  execSync(buildCmd, {
+    cwd: projectRoot,
+    stdio: 'inherit',
+  });
 
-    if (!sourcePath) {
-        console.error(`Binary not found at ${releaseDir}`);
-        process.exit(1);
-    }
+  // Create platform directory
+  const platformDir = path.join(binDir, `${platform.platform}-${platform.arch}`);
+  if (!fs.existsSync(platformDir)) {
+    fs.mkdirSync(platformDir, { recursive: true });
+  }
 
-    const destPath = path.join(platformDir, sourcePath.binaryName);
-    fs.copyFileSync(sourcePath.sourcePath, destPath);
-    console.log(`Copied ${sourcePath.binaryName} to ${platformDir}`);
+  // Copy binary
+  const binaryNames =
+    platform.platform === 'win32' ? ['perllsp.exe', 'perl-lsp.exe'] : ['perllsp', 'perl-lsp'];
+  const sourcePath = binaryNames
+    .map((binaryName) => ({ binaryName, sourcePath: path.join(releaseDir, binaryName) }))
+    .find((candidate) => fs.existsSync(candidate.sourcePath));
 
-    if (platform.platform !== 'win32') {
-        fs.chmodSync(destPath, 0o755);
-    }
-    
-    console.log('Bundle complete!');
-} catch (error) {
-    console.error('Build failed:', error.message);
+  if (!sourcePath) {
+    console.error(`Binary not found at ${releaseDir}`);
     process.exit(1);
+  }
+
+  const destPath = path.join(platformDir, sourcePath.binaryName);
+  fs.copyFileSync(sourcePath.sourcePath, destPath);
+  console.log(`Copied ${sourcePath.binaryName} to ${platformDir}`);
+
+  if (platform.platform !== 'win32') {
+    fs.chmodSync(destPath, 0o755);
+  }
+
+  console.log('Bundle complete!');
+} catch (error) {
+  console.error('Build failed:', error.message);
+  process.exit(1);
 }
 
 // For production builds, you would loop through all platforms

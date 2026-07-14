@@ -27,11 +27,12 @@
 //! | F10 | scope_shadow_exact_range_set | outer `$x` + inner `my $x`: find-refs on outer returns only outer ranges, as exact set |
 //! | F11 | include_declaration_note | promotion returns all occurrences incl. declaration when opts.include_declaration=true |
 //! | F12 | cross_file_fallback | package-qualified target → LegacyFallback, not Exact |
+//! | F13 | dynamic_boundary_fallback | dynamic PIR boundary → LegacyFallback(DynamicBoundary), not Exact |
 //!
 //! Note: latency is tracked via benchmarks/receipts, not wall-clock unit tests.
 
 use perl_lsp_rs_core::providers::navigation::references_pir_shadow::{
-    PirShadowRefusalReason, PromotionMode, ReferenceOptions,
+    PirShadowRefusalReason, PromotionMode, ReferenceOptions, shadow_references_with_pir,
 };
 use perl_lsp_rs_core::providers::navigation::{
     DEFAULT_PROMOTION_MODE, ReferencesPirPromoteOutcome, find_references_single_file,
@@ -39,8 +40,16 @@ use perl_lsp_rs_core::providers::navigation::{
 };
 use perl_parser_core::{Parser, hir::lower_ast, pir::extract_lexical_facts};
 use perl_position_tracking::PositionMapper;
+use perl_semantic_facts::{
+    AnchorId, Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind,
+    ProviderFactTrace, ProviderFallbackState, ProviderSurface,
+};
+use perl_workspace::semantic_shadow_compare::{
+    SemanticShadowCompareReceipt, ShadowCompareVerdict, ShadowQueryInput, ShadowQueryName,
+    summarize_identities,
+};
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 /// Identity URI mapper: converts byte offsets to a trivial single-line `lsp_types::Range`.
 ///
@@ -88,9 +97,562 @@ fn opts_all() -> ReferenceOptions {
     ReferenceOptions { include_declaration: true }
 }
 
+fn nth_byte_range(source: &str, needle: &str, occurrence: usize) -> TestResult<(usize, usize)> {
+    source
+        .match_indices(needle)
+        .nth(occurrence)
+        .map(|(start, matched)| (start, start + matched.len()))
+        .ok_or_else(|| {
+            format!(
+                "needle `{needle}` occurrence {occurrence} not found in source with len {}",
+                source.len()
+            )
+            .into()
+        })
+}
+
+fn nth_lsp_range(
+    source: &str,
+    mapper: &PositionMapper,
+    needle: &str,
+    occurrence: usize,
+) -> TestResult<lsp_types::Range> {
+    let (start, end) = nth_byte_range(source, needle, occurrence)?;
+    Ok(lsp_range_from_bytes(mapper, start, end))
+}
+
+fn body_idx_for_occurrence(
+    receipt: &perl_parser_core::pir::LexicalExtractorReceipt,
+    source: &str,
+    needle: &str,
+    occurrence: usize,
+) -> TestResult<usize> {
+    let (expected_start, expected_end) = nth_byte_range(source, needle, occurrence)?;
+    for body in &receipt.bodies {
+        for fact in &body.facts {
+            if let Some(range) = fact.source_anchor.range.as_ref() {
+                if range.start == expected_start && range.end == expected_end {
+                    return Ok(fact.body_idx);
+                }
+            }
+        }
+    }
+
+    Err(format!(
+        "no PIR lexical fact anchored at byte range {expected_start}..{expected_end} \
+         for `{needle}` occurrence {occurrence}"
+    )
+    .into())
+}
+
+fn exact_ranges_for(
+    label: &str,
+    source: &str,
+    target_sigil: &str,
+    target_name: &str,
+    body_idx: usize,
+    include_declaration: bool,
+) -> TestResult<Vec<lsp_types::Range>> {
+    let receipt = receipt_for(source);
+    let mapper = PositionMapper::new(source);
+    let uri_mapper = |start: usize, end: usize| lsp_range_from_bytes(&mapper, start, end);
+
+    let outcome = references_pir_promote(
+        PromotionMode::PromoteExact,
+        target_sigil,
+        target_name,
+        &receipt,
+        &[],
+        body_idx,
+        &uri_mapper,
+        ReferenceOptions { include_declaration },
+    );
+
+    match outcome {
+        ReferencesPirPromoteOutcome::Exact(ranges) => Ok(sorted_ranges(ranges)),
+        other => Err(format!("{label}: expected Exact, got {other:?}").into()),
+    }
+}
+
+fn assert_curated_ranges(
+    label: &str,
+    actual: Vec<lsp_types::Range>,
+    expected: Vec<lsp_types::Range>,
+) -> TestResult {
+    let actual_ranges = sorted_ranges(actual);
+    let expected_ranges = sorted_ranges(expected);
+    let missing_ranges: Vec<_> =
+        expected_ranges.iter().filter(|range| !actual_ranges.contains(range)).copied().collect();
+    let extra_ranges: Vec<_> =
+        actual_ranges.iter().filter(|range| !expected_ranges.contains(range)).copied().collect();
+
+    if missing_ranges.is_empty() && extra_ranges.is_empty() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "{label}: curated PIR-A references range mismatch\
+         \nexpected_ranges: {expected_ranges:?}\
+         \nactual_ranges:   {actual_ranges:?}\
+         \nmissing_ranges:  {missing_ranges:?}\
+         \nextra_ranges:    {extra_ranges:?}"
+    )
+    .into())
+}
+
+fn range_identity(range: &lsp_types::Range) -> String {
+    format!(
+        "{}:{}-{}:{}",
+        range.start.line, range.start.character, range.end.line, range.end.character
+    )
+}
+
+fn range_identities(ranges: &[lsp_types::Range]) -> Vec<String> {
+    ranges.iter().map(range_identity).collect()
+}
+
+fn references_trace(
+    source: ProviderFactSourceKind,
+    provenance: Provenance,
+    fallback_state: ProviderFallbackState,
+    anchor_id: u64,
+) -> ProviderFactTrace {
+    ProviderFactTrace::new(
+        ProviderSurface::References,
+        source,
+        provenance,
+        Confidence::High,
+        ProviderFactFreshness::Fresh,
+        fallback_state,
+        Some("pira-curated-references-slice".to_string()),
+        Some(AnchorId(anchor_id)),
+        Some(1),
+    )
+}
+
+fn note_contains(receipt: &SemanticShadowCompareReceipt, needle: &str) -> bool {
+    receipt.notes.iter().any(|note| note.contains(needle))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P5: Curated expected LSP Range corpus for #2674
+//
+// This is the independent correctness corpus selected on the Phase 2 board. It
+// checks hand-computed LSP ranges for the narrow candidate only:
+// PIR-A initialized same-file lexical references. It is NOT a legacy-equality
+// check and it does not wire live provider behavior.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn p5_curated_expected_lsp_range_corpus_for_initialized_lexicals() -> TestResult {
+    // Single same-file scalar: declaration + read, with LSP line/character ranges.
+    let single = "my $a = 1;\nprint $a;\n";
+    let single_mapper = PositionMapper::new(single);
+    let single_expected = vec![
+        nth_lsp_range(single, &single_mapper, "$a", 0)?,
+        nth_lsp_range(single, &single_mapper, "$a", 1)?,
+    ];
+    let single_actual = exact_ranges_for("p5_single_scalar", single, "$", "a", 0, true)?;
+    assert_curated_ranges("p5_single_scalar", single_actual, single_expected)?;
+
+    // Declaration filtering: resolved binding with includeDeclaration=false keeps
+    // the read site only, distinct from NoExactFacts.
+    let no_decl_expected = vec![nth_lsp_range(single, &single_mapper, "$a", 1)?];
+    let no_decl_actual =
+        exact_ranges_for("p5_single_scalar_without_declaration", single, "$", "a", 0, false)?;
+    assert_curated_ranges(
+        "p5_single_scalar_without_declaration",
+        no_decl_actual,
+        no_decl_expected,
+    )?;
+
+    // Outer lexical shadowing: inner declaration/read are deliberately absent.
+    let shadow_mapper = PositionMapper::new(F1_SOURCE);
+    let shadow_expected = vec![
+        nth_lsp_range(F1_SOURCE, &shadow_mapper, "$x", 0)?,
+        nth_lsp_range(F1_SOURCE, &shadow_mapper, "$x", 3)?,
+    ];
+    let shadow_actual = exact_ranges_for("p5_outer_shadow", F1_SOURCE, "$", "x", 0, true)?;
+    assert_curated_ranges("p5_outer_shadow", shadow_actual, shadow_expected)?;
+
+    // Sigil identity: `$x` and `@x` share the same bare name but have disjoint
+    // expected ranges.
+    let sigils = "my $x = 1;\nmy @x = (1, 2);\nprint $x;\nprint @x;\n";
+    let sigil_mapper = PositionMapper::new(sigils);
+    let scalar_expected = vec![
+        nth_lsp_range(sigils, &sigil_mapper, "$x", 0)?,
+        nth_lsp_range(sigils, &sigil_mapper, "$x", 1)?,
+    ];
+    let array_expected = vec![
+        nth_lsp_range(sigils, &sigil_mapper, "@x", 0)?,
+        nth_lsp_range(sigils, &sigil_mapper, "@x", 1)?,
+    ];
+    let scalar_actual = exact_ranges_for("p5_sigil_scalar", sigils, "$", "x", 0, true)?;
+    let array_actual = exact_ranges_for("p5_sigil_array", sigils, "@", "x", 0, true)?;
+    assert_curated_ranges("p5_sigil_scalar", scalar_actual, scalar_expected.clone())?;
+    assert_curated_ranges("p5_sigil_array", array_actual, array_expected.clone())?;
+    for range in &scalar_expected {
+        assert!(
+            !array_expected.contains(range),
+            "$x expected range {range:?} must not appear in @x expected ranges"
+        );
+    }
+
+    // Same bare lexical name in separate sub bodies: query each body separately.
+    let separate_subs = "sub first { my $v = 1; print $v; }\nsub second { my $v = 2; print $v; }\n";
+    let separate_receipt = receipt_for(separate_subs);
+    let separate_mapper = PositionMapper::new(separate_subs);
+    let first_body = body_idx_for_occurrence(&separate_receipt, separate_subs, "$v", 0)?;
+    let second_body = body_idx_for_occurrence(&separate_receipt, separate_subs, "$v", 2)?;
+    let first_expected = vec![
+        nth_lsp_range(separate_subs, &separate_mapper, "$v", 0)?,
+        nth_lsp_range(separate_subs, &separate_mapper, "$v", 1)?,
+    ];
+    let second_expected = vec![
+        nth_lsp_range(separate_subs, &separate_mapper, "$v", 2)?,
+        nth_lsp_range(separate_subs, &separate_mapper, "$v", 3)?,
+    ];
+    let first_actual =
+        exact_ranges_for("p5_same_name_first_sub", separate_subs, "$", "v", first_body, true)?;
+    let second_actual =
+        exact_ranges_for("p5_same_name_second_sub", separate_subs, "$", "v", second_body, true)?;
+    assert_curated_ranges("p5_same_name_first_sub", first_actual, first_expected)?;
+    assert_curated_ranges("p5_same_name_second_sub", second_actual, second_expected)?;
+
+    // CRLF and Unicode/UTF-16 conversion are explicit corpus cases, not raw byte
+    // column checks.
+    let crlf_mapper = PositionMapper::new(F9_SOURCE_CRLF);
+    let crlf_expected = vec![
+        nth_lsp_range(F9_SOURCE_CRLF, &crlf_mapper, "$v", 0)?,
+        nth_lsp_range(F9_SOURCE_CRLF, &crlf_mapper, "$v", 1)?,
+    ];
+    let crlf_actual = exact_ranges_for("p5_crlf", F9_SOURCE_CRLF, "$", "v", 0, true)?;
+    assert_curated_ranges("p5_crlf", crlf_actual, crlf_expected)?;
+
+    let unicode_mapper = PositionMapper::new(F7_SOURCE);
+    let unicode_expected = vec![
+        nth_lsp_range(F7_SOURCE, &unicode_mapper, "$v", 0)?,
+        nth_lsp_range(F7_SOURCE, &unicode_mapper, "$v", 1)?,
+        nth_lsp_range(F7_SOURCE, &unicode_mapper, "$v", 2)?,
+    ];
+    let unicode_actual = exact_ranges_for("p5_utf16_astral", F7_SOURCE, "$", "v", 0, true)?;
+    assert_curated_ranges("p5_utf16_astral", unicode_actual, unicode_expected)?;
+
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P6: Provider shadow receipt for the selected references slice
+//
+// This is a no-live-behavior-change provider-shadow proof for the Phase 2 board.
+// It compares the PIR-A candidate against the P5 curated expected ranges and
+// records fallback mode, confidence, freshness, and dynamic-boundary blocking in
+// the shared semantic shadow receipt shape.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn p6_provider_shadow_receipt_for_curated_references_slice() -> TestResult {
+    let source = "my $a = 1;\nprint $a;\n";
+    let mapper = PositionMapper::new(source);
+    let expected = vec![nth_lsp_range(source, &mapper, "$a", 1)?];
+    let actual =
+        exact_ranges_for("p6_single_scalar_without_declaration", source, "$", "a", 0, false)?;
+    assert_curated_ranges(
+        "p6_single_scalar_without_declaration",
+        actual.clone(),
+        expected.clone(),
+    )?;
+
+    let receipt = receipt_for(source);
+    let (legacy_start, legacy_end) = nth_byte_range(source, "$a", 1)?;
+    let legacy = vec![(legacy_start, legacy_end)];
+    let pir_shadow_receipt = shadow_references_with_pir(&receipt, &legacy, "a", 0);
+    assert_eq!(pir_shadow_receipt.compiler_candidate_count, 2);
+    assert_eq!(pir_shadow_receipt.legacy_candidate_count, 1);
+    assert!(pir_shadow_receipt.missing_from_compiler.is_empty());
+    assert_eq!(pir_shadow_receipt.extra_in_compiler, vec![(3usize, 5usize)]);
+    assert!(pir_shadow_receipt.range_disagreements.is_empty());
+    assert_eq!(pir_shadow_receipt.refusal_reason, None);
+    assert!(
+        !pir_shadow_receipt.provider_behavior_changed,
+        "shadow receipt must preserve live provider behavior"
+    );
+    let pir_trace = pir_shadow_receipt
+        .fact_source_traces
+        .first()
+        .ok_or("PIR shadow receipt missing references fact-source trace")?;
+    assert_eq!(pir_trace.surface, ProviderSurface::References);
+    assert_eq!(pir_trace.source, ProviderFactSourceKind::CompilerFact);
+    assert_eq!(pir_trace.provenance, Provenance::ExactAst);
+    assert_eq!(pir_trace.confidence, Confidence::High);
+    assert_eq!(pir_trace.freshness, ProviderFactFreshness::Fresh);
+    assert_eq!(pir_trace.fallback_state, ProviderFallbackState::Shadow);
+
+    let shadow_outcome = references_pir_promote(
+        PromotionMode::Shadow,
+        "$",
+        "a",
+        &receipt,
+        &legacy,
+        0,
+        &|start, end| lsp_range_from_bytes(&mapper, start, end),
+        ReferenceOptions { include_declaration: false },
+    );
+    match shadow_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, legacy, "shadow mode must preserve live legacy output");
+            assert_eq!(
+                reason,
+                PirShadowRefusalReason::ShadowObserved,
+                "shadow mode must report observed fallback rather than changing live behavior"
+            );
+        }
+        other => return Err(format!("expected shadow LegacyFallback, got {other:?}").into()),
+    }
+
+    let shadow_receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
+        ShadowQueryName::FindReferences,
+        ShadowQueryInput { symbol: "PIR-A:$a:includeDeclaration=false".to_string() },
+        summarize_identities(Some(range_identities(&expected))),
+        summarize_identities(Some(range_identities(&actual))),
+        vec![
+            "candidate=textDocument/references:PIR-A initialized same-file lexical".to_string(),
+            "fallback=legacy_preserved:shadow_observed".to_string(),
+            "blockers=none".to_string(),
+            "confidence=high".to_string(),
+            "freshness=fresh".to_string(),
+            "dynamic_boundary_blockers=0".to_string(),
+            "live_behavior_change=false".to_string(),
+        ],
+        vec![references_trace(
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ExactAst,
+            ProviderFallbackState::Shadow,
+            1,
+        )],
+    );
+
+    assert_eq!(shadow_receipt.query, ShadowQueryName::FindReferences);
+    assert_eq!(shadow_receipt.verdict, ShadowCompareVerdict::Same);
+    assert!(note_contains(&shadow_receipt, "candidate=textDocument/references:PIR-A"));
+    assert!(note_contains(&shadow_receipt, "fallback=legacy_preserved"));
+    assert!(note_contains(&shadow_receipt, "blockers=none"));
+    assert!(note_contains(&shadow_receipt, "confidence=high"));
+    assert!(note_contains(&shadow_receipt, "freshness=fresh"));
+    assert!(note_contains(&shadow_receipt, "dynamic_boundary_blockers=0"));
+    assert!(note_contains(&shadow_receipt, "live_behavior_change=false"));
+    let trace = shadow_receipt
+        .fact_source_traces
+        .first()
+        .ok_or("shadow receipt missing references fact-source trace")?;
+    assert_eq!(trace.surface, ProviderSurface::References);
+    assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+    assert_eq!(trace.provenance, Provenance::ExactAst);
+    assert_eq!(trace.confidence, Confidence::High);
+    assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+    assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+
+    let dynamic_source = "my $x = 1;\nmy $code = 'print $x';\neval $code;\nprint $x;\n";
+    let dynamic_receipt = receipt_for(dynamic_source);
+    assert_eq!(
+        dynamic_receipt.dynamic_boundary_count, 1,
+        "fixture must expose one dynamic boundary"
+    );
+    let dynamic_legacy = vec![(3usize, 5usize), (26usize, 28usize), (51usize, 53usize)];
+    let pir_dynamic_receipt = shadow_references_with_pir(&dynamic_receipt, &dynamic_legacy, "x", 0);
+    assert_eq!(pir_dynamic_receipt.refusal_reason, Some(PirShadowRefusalReason::DynamicBoundary));
+    assert!(
+        !pir_dynamic_receipt.provider_behavior_changed,
+        "dynamic blocker receipt must preserve live provider behavior"
+    );
+    let pir_dynamic_trace = pir_dynamic_receipt
+        .fact_source_traces
+        .first()
+        .ok_or("PIR dynamic blocker receipt missing fact-source trace")?;
+    assert_eq!(pir_dynamic_trace.surface, ProviderSurface::References);
+    assert_eq!(pir_dynamic_trace.source, ProviderFactSourceKind::DynamicBoundary);
+    assert_eq!(pir_dynamic_trace.provenance, Provenance::DynamicBoundary);
+    assert_eq!(pir_dynamic_trace.confidence, Confidence::High);
+    assert_eq!(pir_dynamic_trace.freshness, ProviderFactFreshness::Fresh);
+    assert_eq!(pir_dynamic_trace.fallback_state, ProviderFallbackState::Blocked);
+
+    let dynamic_outcome = references_pir_promote(
+        PromotionMode::PromoteExact,
+        "$",
+        "x",
+        &dynamic_receipt,
+        &dynamic_legacy,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match dynamic_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, dynamic_legacy, "dynamic boundary must preserve legacy output");
+            assert_eq!(reason, PirShadowRefusalReason::DynamicBoundary);
+        }
+        other => return Err(format!("expected DynamicBoundary fallback, got {other:?}").into()),
+    }
+
+    let dynamic_blocker_receipt =
+        SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
+            ShadowQueryName::FindReferences,
+            ShadowQueryInput { symbol: "PIR-A:$x:dynamic-boundary".to_string() },
+            summarize_identities(Some(Vec::new())),
+            summarize_identities(Some(Vec::new())),
+            vec![
+                "candidate=textDocument/references:PIR-A initialized same-file lexical".to_string(),
+                "fallback=legacy_preserved:dynamic_boundary".to_string(),
+                "blockers=dynamic_boundary:1".to_string(),
+                "confidence=high".to_string(),
+                "freshness=fresh".to_string(),
+                "dynamic_boundary_blockers=1".to_string(),
+                "live_behavior_change=false".to_string(),
+            ],
+            vec![references_trace(
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                ProviderFallbackState::Blocked,
+                2,
+            )],
+        );
+
+    assert_eq!(dynamic_blocker_receipt.verdict, ShadowCompareVerdict::Same);
+    assert!(note_contains(&dynamic_blocker_receipt, "fallback=legacy_preserved"));
+    assert!(note_contains(&dynamic_blocker_receipt, "blockers=dynamic_boundary:1"));
+    assert!(note_contains(&dynamic_blocker_receipt, "dynamic_boundary_blockers=1"));
+    let dynamic_trace = dynamic_blocker_receipt
+        .fact_source_traces
+        .first()
+        .ok_or("dynamic blocker receipt missing fact-source trace")?;
+    assert_eq!(dynamic_trace.surface, ProviderSurface::References);
+    assert_eq!(dynamic_trace.source, ProviderFactSourceKind::DynamicBoundary);
+    assert_eq!(dynamic_trace.provenance, Provenance::DynamicBoundary);
+    assert_eq!(dynamic_trace.fallback_state, ProviderFallbackState::Blocked);
+
+    Ok(())
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Confirm the rollback anchor is off by default
 // ─────────────────────────────────────────────────────────────────────────────
+
+// P7: Promotion-prep no-output-change / rollback proof for #2674.
+//
+// This is the Phase 2 promotion-prep proof. It does not activate live provider
+// behavior. It proves:
+// - the default rollback anchor is still `Off`;
+// - `Off` returns the caller's legacy result unchanged;
+// - `Shadow` observes a real compiler candidate while preserving legacy output;
+// - dynamic-boundary promotion attempts fall back unchanged.
+#[test]
+fn p7_promotion_prep_preserves_feature_gate_and_no_output_change() -> TestResult {
+    assert_eq!(
+        DEFAULT_PROMOTION_MODE,
+        PromotionMode::Off,
+        "P7 rollback anchor must remain Off until a separate cutover PR"
+    );
+
+    let receipt = receipt_for(F1_SOURCE);
+    let legacy_scope_blind = (0..4)
+        .map(|occurrence| nth_byte_range(F1_SOURCE, "$x", occurrence))
+        .collect::<Result<Vec<_>, _>>()?;
+    let exact_expected = sorted_ranges(f1_expected_outer_x_ranges());
+
+    let exact_candidate = references_pir_promote(
+        PromotionMode::PromoteExact,
+        "$",
+        "x",
+        &receipt,
+        &legacy_scope_blind,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match exact_candidate {
+        ReferencesPirPromoteOutcome::Exact(ranges) => {
+            assert_eq!(
+                sorted_ranges(ranges),
+                exact_expected,
+                "P7 fixture must have a real scope-exact compiler candidate"
+            );
+        }
+        other => return Err(format!("expected P7 exact candidate, got {other:?}").into()),
+    }
+
+    let pir_shadow_receipt = shadow_references_with_pir(&receipt, &legacy_scope_blind, "x", 0);
+    assert_eq!(pir_shadow_receipt.compiler_candidate_count, exact_expected.len());
+    assert_eq!(pir_shadow_receipt.legacy_candidate_count, legacy_scope_blind.len());
+    assert!(
+        !pir_shadow_receipt.missing_from_compiler.is_empty(),
+        "P7 fixture must prove the compiler candidate is observed, not silently ignored"
+    );
+    assert!(
+        !pir_shadow_receipt.provider_behavior_changed,
+        "P7 shadow receipt must preserve live provider behavior"
+    );
+
+    let off_outcome = references_pir_promote(
+        DEFAULT_PROMOTION_MODE,
+        "$",
+        "x",
+        &receipt,
+        &legacy_scope_blind,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match off_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, legacy_scope_blind, "Off mode must preserve legacy output");
+            assert_eq!(reason, PirShadowRefusalReason::FeatureDisabled);
+        }
+        other => return Err(format!("expected Off legacy fallback, got {other:?}").into()),
+    }
+
+    let shadow_outcome = references_pir_promote(
+        PromotionMode::Shadow,
+        "$",
+        "x",
+        &receipt,
+        &legacy_scope_blind,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match shadow_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, legacy_scope_blind, "Shadow mode must preserve legacy output");
+            assert_eq!(reason, PirShadowRefusalReason::ShadowObserved);
+        }
+        other => return Err(format!("expected Shadow legacy fallback, got {other:?}").into()),
+    }
+
+    let dynamic_source = "my $x = 1;\nmy $code = 'print $x';\neval $code;\nprint $x;\n";
+    let dynamic_receipt = receipt_for(dynamic_source);
+    let dynamic_legacy = (0..3)
+        .map(|occurrence| nth_byte_range(dynamic_source, "$x", occurrence))
+        .collect::<Result<Vec<_>, _>>()?;
+    let dynamic_outcome = references_pir_promote(
+        PromotionMode::PromoteExact,
+        "$",
+        "x",
+        &dynamic_receipt,
+        &dynamic_legacy,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+    match dynamic_outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, dynamic_legacy, "dynamic blocker must preserve legacy output");
+            assert_eq!(reason, PirShadowRefusalReason::DynamicBoundary);
+        }
+        other => return Err(format!("expected dynamic-boundary fallback, got {other:?}").into()),
+    }
+
+    Ok(())
+}
 
 #[test]
 fn default_promotion_mode_is_off() -> TestResult {
@@ -679,6 +1241,57 @@ fn f12_cross_file_package_qualified_returns_legacy_fallback() -> TestResult {
             return Err(format!(
                 "F12: package-qualified name must NOT produce Exact result;\
                  \ngot Exact({r:?}) — the guard failed to refuse"
+            )
+            .into());
+        }
+    }
+
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F13: Dynamic PIR boundaries refuse exact promotion
+//
+// Dynamic constructs such as string eval mean the lexical-only PIR slice cannot
+// safely claim exactness. The receipt should preserve that source fact, and the
+// promotion contract should return the legacy result with a visible
+// DynamicBoundary reason instead of silently returning Exact.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn f13_dynamic_boundary_returns_explicit_fallback() -> TestResult {
+    let source = "my $x = 1;\nmy $code = 'print $x';\neval $code;\nprint $x;\n";
+    let receipt = receipt_for(source);
+
+    assert_eq!(
+        receipt.dynamic_boundary_count, 1,
+        "receipt must expose the compiler-observed eval boundary"
+    );
+
+    let legacy = vec![(3usize, 5usize), (26usize, 28usize), (51usize, 53usize)];
+    let outcome = references_pir_promote(
+        PromotionMode::PromoteExact,
+        "$",
+        "x",
+        &receipt,
+        &legacy,
+        0,
+        &byte_mapper,
+        opts_all(),
+    );
+
+    match outcome {
+        ReferencesPirPromoteOutcome::LegacyFallback { result, reason } => {
+            assert_eq!(result, legacy, "legacy result must be returned unmodified");
+            assert_eq!(
+                reason,
+                PirShadowRefusalReason::DynamicBoundary,
+                "dynamic source facts must refuse exact promotion"
+            );
+        }
+        ReferencesPirPromoteOutcome::Exact(ranges) => {
+            return Err(format!(
+                "F13: dynamic boundary must NOT produce Exact result; got Exact({ranges:?})"
             )
             .into());
         }

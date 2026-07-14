@@ -130,6 +130,7 @@ const SAFE_FOR_BREAKPOINT_FALSE: &[&str] = &[
     "Undef",
     "Number",
     "String",
+    "VString",
     "ArrayLiteral",
     "HashLiteral",
     "Typeglob",

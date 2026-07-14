@@ -307,21 +307,23 @@ fn test_unicode_property_complexity() {
 #[test]
 fn test_deep_nesting_stack_overflow() {
     // Issue #423: Deep nesting stack overflow
-    // Nested if statements
+    // Nested bare blocks exercise the structural block-depth guard directly.
     let mut code = String::new();
-    for _ in 0..100 {
-        code.push_str("if ($a) { ");
+    // The fixture exceeds the structural block limit without adding an `if`
+    // recursion frame for every level.
+    for _ in 0..600 {
+        code.push_str("{ ");
     }
     code.push_str("print 'hi';");
-    for _ in 0..100 {
+    for _ in 0..600 {
         code.push_str(" }");
     }
 
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    // It might fail with nesting limit, or pass if the limit is high enough (64 is default)
-    // 100 levels should trigger the limit
+    // It might fail with a nesting limit, or pass if the limit is raised in the future.
+    // 600 levels should trigger the current nesting guards.
     if let Err(e) = result {
         assert!(e.to_string().contains("Nesting depth limit exceeded"), "Error was: {}", e);
     } else {
@@ -557,6 +559,10 @@ fn test_valid_regex_patterns_no_false_positive() {
     let valid_patterns = vec![
         (r#"$x =~ /(?:pattern)+/;"#, "non-capturing group with literal"),
         (r#"$x =~ /(?:ab)+/;"#, "non-capturing group with two-char literal"),
+        (
+            r#"my $this_file = qr/parser\.t(?:\.[bl]eb?)?$/;"#,
+            "optional non-capturing group with inner optional atom",
+        ),
     ];
 
     for (code, desc) in valid_patterns {

@@ -22,7 +22,7 @@
 # can be warmed by Swatinem/rust-cache if needed (PR 2 scope).
 #
 # Action pin:
-#   EffortlessMetrics/ub-review@f11de20a462ffe01480257ac1146f7b5132f037d
+#   EffortlessMetrics/ub-review@f70be0eae480456bad208a1a565e483bdadf4e3c
 #   README-documented known-good SHA; verified by EffortlessSteven/bun#49
 #   (successful evidence packet, terminal state `sufficient`, verifier pass).
 #   Update only after ub-review's own verifier passes on a downstream consumer.
@@ -265,7 +265,7 @@ jobs:
           fi
       - name: Build UB review packet
         id: ub-review
-        uses: EffortlessMetrics/ub-review@f11de20a462ffe01480257ac1146f7b5132f037d
+        uses: EffortlessMetrics/ub-review@f70be0eae480456bad208a1a565e483bdadf4e3c
         with:
           config: policy/ub-review.toml
           profile: gh-runner
@@ -276,8 +276,8 @@ jobs:
           install-tools: 'true'
           tool-bundle: core
           posting: review
-          mode: review-byok
-          fail-on-gate: 'false'
+          mode: intelligent-ci
+          fail-on-gate: 'true'
           fail-on-post-error: 'false'
           allow-heavy: 'false'
           github-token: ${{ github.token }}
@@ -367,7 +367,7 @@ jobs:
           fi
       - name: Build UB review packet
         id: ub-review
-        uses: EffortlessMetrics/ub-review@f11de20a462ffe01480257ac1146f7b5132f037d
+        uses: EffortlessMetrics/ub-review@f70be0eae480456bad208a1a565e483bdadf4e3c
         with:
           config: policy/ub-review.toml
           profile: gh-runner
@@ -378,8 +378,8 @@ jobs:
           install-tools: 'true'
           tool-bundle: core
           posting: review
-          mode: review-byok
-          fail-on-gate: 'false'
+          mode: intelligent-ci
+          fail-on-gate: 'true'
           fail-on-post-error: 'false'
           allow-heavy: 'false'
           github-token: ${{ github.token }}
@@ -454,7 +454,7 @@ jobs:
           fi
       - name: Build UB review packet
         id: ub-review
-        uses: EffortlessMetrics/ub-review@f11de20a462ffe01480257ac1146f7b5132f037d
+        uses: EffortlessMetrics/ub-review@f70be0eae480456bad208a1a565e483bdadf4e3c
         with:
           config: policy/ub-review.toml
           profile: gh-runner
@@ -465,8 +465,8 @@ jobs:
           install-tools: 'true'
           tool-bundle: core
           posting: review
-          mode: review-byok
-          fail-on-gate: 'false'
+          mode: intelligent-ci
+          fail-on-gate: 'true'
           fail-on-post-error: 'false'
           allow-heavy: 'false'
           github-token: ${{ github.token }}

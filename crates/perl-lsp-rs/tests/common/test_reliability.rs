@@ -29,6 +29,10 @@
 //! ```
 
 #![allow(dead_code)]
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stderr doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stderr)]
 
 use std::time::{Duration, Instant};
 

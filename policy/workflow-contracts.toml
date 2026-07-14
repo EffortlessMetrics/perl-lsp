@@ -1,0 +1,85 @@
+# Workflow Contracts policy (tracking issue #3788; parent #3785).
+#
+# Consumed by `cargo xtask workflows check`. FOUNDATION / ADVISORY-UNARMED:
+# with `advisory_expected_from` AND `blocking_enforced_from` both empty, the
+# check NEVER escalates a finding past exit 0 — see the three-clock model
+# below (mirrors `policy/changelog.toml`, the proven precedent for this
+# rollout shape). This file declares the enforcement mode, the pinning
+# allowlist, and the runner-label allowlist; `xtask/src/tasks/workflows.rs`
+# deserializes this file rather than hand-duplicating any of it.
+#
+# xtask exit codes (advisory checker; see xtask/src/tasks/workflows.rs):
+#   0 = policy satisfied, OR an advisory finding was reported (soak period).
+#   1 = blocking policy violation (only reachable once `blocking_enforced_from`
+#       is set AND a PR's base is at/after it). Unreachable in this PR.
+#   2 = instrument/config failure (malformed this file or a workflow YAML,
+#       actionlint/zizmor missing or crashed) — never a policy verdict.
+#
+# BOUNDARY (from #3785 / #3788): this checker validates workflow-FILE
+# contracts (syntax, security, local-ref integrity, permissions, action
+# pinning) via actionlint + zizmor + native checks. It does NOT prove
+# repo-specific merge semantics (final-head / non-draft / required-path /
+# executed-not-skipped) — that authority stays with
+# `xtask/src/tasks/merge_ready.rs`. It also does NOT replace the existing
+# in-house workflow lints (`workflow_policy_lint.rs`,
+# `workflow_trigger_lint.rs`, `ci_audit_workflows.rs`) — those are
+# repo-specific policy shape checks; this is the external-tool contract
+# layer plus a stricter pinning/permissions/local-ref contract.
+
+schema_version = 1
+
+# "advisory" => a finding is reported but never fails a PR.
+# "blocking" => paired with a reached `blocking_enforced_from`, an
+#               unresolved finding returns a blocking exit code (1).
+enforcement = "advisory"
+
+# --- Three-clock cutoff model (mirrors policy/changelog.toml) ---------------
+#
+# 1. `advisory_expected_from` — the SHA of the PR that lands this scaffold
+#    (#3788 PR1). A finding is only EXPECTED — reported as an advisory
+#    finding when present — for PRs whose base is at/after this commit.
+#    Empty = this scaffold has not merged yet = the advisory boundary is not
+#    armed = findings are computed and printed but never change the exit
+#    outcome. Filled in by a follow-up PR (PR2: baseline clearance) once the
+#    ~160-finding pinning baseline has been enumerated and either fixed or
+#    allowlisted — arming this before that baseline exists would report
+#    hundreds of pre-existing findings as "new", which is not the intent.
+# 2. `blocking_enforced_from` — a FUTURE SHA, set only after the advisory
+#    period has soaked (PR3+, out of this issue's must-do). Empty = no
+#    blocking path is reachable, ever, regardless of `enforcement` above.
+advisory_expected_from = ""
+blocking_enforced_from = ""
+
+# `uses:` prefixes exempt from the SHA-pinning requirement (still checked for
+# well-formedness; just not required to be a 40-hex commit SHA). Measured
+# baseline (recon @ origin/main 9175f2cf3): ~154 first-party tag-pinned refs
+# vs. ~6 third-party tag-pinned refs. Starting the pinning contract with
+# first-party actions allowlisted avoids reporting that entire pre-existing
+# baseline as new debt on day one; a later PR can ratchet these to SHA pins
+# and shrink this list.
+first_party_pin_allowlist = [
+  "actions/",
+  "github/",
+]
+
+# `runs-on:` labels that are legitimately self-hosted (not a GitHub-hosted
+# runner actionlint's default runner-label check would otherwise flag as
+# unrecognized). Matches the `droid*` trio's label set.
+self_hosted_runner_labels = [
+  "self-hosted",
+  "linux",
+  "x64",
+  "em-ci",
+  "trusted-pr",
+  "review-nano",
+  "droid-review",
+]
+
+# Workflows that legitimately use `${{ matrix.os }}` for cross-platform
+# release/publish builds (not PR-CI economics) — excluded from any
+# Ubuntu-only runner-label expectation.
+matrix_os_allowlist = [
+  "release.yml",
+  "vscode-managed-binary-smoke.yml",
+  "vscode-published-extension-smoke.yml",
+]

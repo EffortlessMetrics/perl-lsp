@@ -39,7 +39,6 @@ describe('language client launch args', () => {
   });
 });
 
-
 describe('issue diagnostic formatting', () => {
   test('uses the provided editor name for non-VS Code hosts', () => {
     const info = formatIssueDiagnosticInfo({

@@ -47,6 +47,10 @@
 use std::collections::BTreeSet;
 
 use perl_parser_core::pir::LexicalExtractorReceipt;
+use perl_semantic_facts::{
+    Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFactTrace,
+    ProviderFallbackState, ProviderSurface,
+};
 
 /// Latency sample from one shadow-compare run.
 ///
@@ -101,6 +105,10 @@ pub enum PirShadowRefusalReason {
     /// This is distinct from `NoAnchoredFacts`: the receipt has bodies and the
     /// body index is in range, but no fact matched the requested `LexicalName`.
     NoExactFacts,
+    /// The compiler receipt observed a dynamic boundary (for example string
+    /// `eval`, symbolic references, or runtime stash mutation). The lexical
+    /// slice must not claim exactness across that source.
+    DynamicBoundary,
     /// [`PromotionMode::Shadow`] mode: the candidate was evaluated for scorecard
     /// observation but the live provider result is preserved unchanged.
     ///
@@ -140,6 +148,8 @@ pub struct PirShadowCompareReceipt {
     pub provider_behavior_changed: bool,
     /// Optional latency sample (`None` unless the caller supplies one).
     pub latency: Option<PirShadowLatency>,
+    /// Typed fact-source traces for provider cutover proof.
+    pub fact_source_traces: Vec<ProviderFactTrace>,
 }
 
 /// Maximum byte distance between two range starts for them to be treated as a
@@ -158,7 +168,41 @@ impl PirShadowCompareReceipt {
             refusal_reason: Some(reason),
             provider_behavior_changed: false,
             latency: None,
+            fact_source_traces: vec![trace_for_refusal(reason)],
         }
+    }
+}
+
+fn references_trace(
+    source: ProviderFactSourceKind,
+    provenance: Provenance,
+    fallback_state: ProviderFallbackState,
+) -> ProviderFactTrace {
+    ProviderFactTrace::new(
+        ProviderSurface::References,
+        source,
+        provenance,
+        Confidence::High,
+        ProviderFactFreshness::Fresh,
+        fallback_state,
+        None,
+        None,
+        Some(1),
+    )
+}
+
+fn trace_for_refusal(reason: PirShadowRefusalReason) -> ProviderFactTrace {
+    match reason {
+        PirShadowRefusalReason::DynamicBoundary => references_trace(
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            ProviderFallbackState::Blocked,
+        ),
+        _ => references_trace(
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            ProviderFallbackState::Fallback,
+        ),
     }
 }
 
@@ -175,6 +219,7 @@ impl PirShadowCompareReceipt {
 /// 2. `bodies_len == 0` → [`PirShadowRefusalReason::NoAnchoredFacts`]
 /// 3. `target_body_idx >= bodies_len` → [`PirShadowRefusalReason::NoAnchoredFacts`]
 /// 4. `provider_behavior_changed` → [`PirShadowRefusalReason::ProviderBehaviorChanged`]
+/// 5. `dynamic_boundary_count > 0` → [`PirShadowRefusalReason::DynamicBoundary`]
 ///
 /// The `target_name` argument is the bare variable name (no sigil), used only
 /// for the `::` qualification check.
@@ -183,6 +228,7 @@ fn evaluate_refusal(
     target_body_idx: usize,
     bodies_len: usize,
     provider_behavior_changed: bool,
+    dynamic_boundary_count: usize,
 ) -> Option<PirShadowRefusalReason> {
     if target_name.contains("::") {
         return Some(PirShadowRefusalReason::NotSameFileLexical);
@@ -195,6 +241,9 @@ fn evaluate_refusal(
     }
     if provider_behavior_changed {
         return Some(PirShadowRefusalReason::ProviderBehaviorChanged);
+    }
+    if dynamic_boundary_count > 0 {
+        return Some(PirShadowRefusalReason::DynamicBoundary);
     }
     None
 }
@@ -240,6 +289,7 @@ pub fn shadow_references_with_pir(
         target_body_idx,
         receipt.bodies.len(),
         receipt.provider_behavior_changed,
+        receipt.dynamic_boundary_count,
     ) {
         return PirShadowCompareReceipt::refused(reason);
     }
@@ -302,6 +352,11 @@ pub fn shadow_references_with_pir(
         refusal_reason: None,
         provider_behavior_changed: false,
         latency: None,
+        fact_source_traces: vec![references_trace(
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ExactAst,
+            ProviderFallbackState::Shadow,
+        )],
     }
 }
 
@@ -423,6 +478,7 @@ fn evaluate_pir_reference_candidate(
         target_body_idx,
         pir_receipt.bodies.len(),
         pir_receipt.provider_behavior_changed,
+        pir_receipt.dynamic_boundary_count,
     ) {
         return Err(reason);
     }
@@ -586,7 +642,6 @@ pub fn references_pir_promote(
 //   - `Stale` variant: needs a document-generation/freshness input the fn
 //     doesn't receive yet.
 //   - `Ambiguous` variant: needs detection logic + inputs that don't exist.
-//   - `DynamicBoundary` variant: needs detection logic + inputs that don't exist.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -1008,14 +1063,14 @@ mod promote_tests {
 mod tests {
     use super::{PirShadowRefusalReason, evaluate_refusal};
 
-    // The four refusal guards, exercised with literal arguments so the two
+    // The five refusal guards, exercised with literal arguments so the two
     // guards the real PR1 pipeline never reaches (empty bodies, behavior change)
     // are still observable.
 
     #[test]
     fn refusal_package_qualified_name() {
         assert_eq!(
-            evaluate_refusal("Foo::bar", 0, 3, false),
+            evaluate_refusal("Foo::bar", 0, 3, false, 0),
             Some(PirShadowRefusalReason::NotSameFileLexical),
         );
     }
@@ -1023,7 +1078,7 @@ mod tests {
     #[test]
     fn refusal_empty_bodies() {
         assert_eq!(
-            evaluate_refusal("x", 0, 0, false),
+            evaluate_refusal("x", 0, 0, false, 0),
             Some(PirShadowRefusalReason::NoAnchoredFacts),
         );
     }
@@ -1032,11 +1087,11 @@ mod tests {
     fn refusal_body_index_out_of_range() {
         // idx beyond len, and the boundary case idx == len, both refuse.
         assert_eq!(
-            evaluate_refusal("x", 5, 3, false),
+            evaluate_refusal("x", 5, 3, false, 0),
             Some(PirShadowRefusalReason::NoAnchoredFacts),
         );
         assert_eq!(
-            evaluate_refusal("x", 3, 3, false),
+            evaluate_refusal("x", 3, 3, false, 0),
             Some(PirShadowRefusalReason::NoAnchoredFacts),
         );
     }
@@ -1044,23 +1099,31 @@ mod tests {
     #[test]
     fn refusal_provider_behavior_changed() {
         assert_eq!(
-            evaluate_refusal("x", 0, 3, true),
+            evaluate_refusal("x", 0, 3, true, 0),
             Some(PirShadowRefusalReason::ProviderBehaviorChanged),
         );
     }
 
     #[test]
+    fn refusal_dynamic_boundary() {
+        assert_eq!(
+            evaluate_refusal("x", 0, 3, false, 1),
+            Some(PirShadowRefusalReason::DynamicBoundary),
+        );
+    }
+
+    #[test]
     fn proceed_when_request_is_valid() {
-        assert_eq!(evaluate_refusal("x", 0, 3, false), None);
+        assert_eq!(evaluate_refusal("x", 0, 3, false, 0), None);
         // last in-range index proceeds
-        assert_eq!(evaluate_refusal("x", 2, 3, false), None);
+        assert_eq!(evaluate_refusal("x", 2, 3, false, 0), None);
     }
 
     #[test]
     fn guard_order_package_qualified_wins() {
         // `::` is checked first, ahead of empty/oob/changed.
         assert_eq!(
-            evaluate_refusal("A::b", 99, 0, true),
+            evaluate_refusal("A::b", 99, 0, true, 1),
             Some(PirShadowRefusalReason::NotSameFileLexical),
         );
     }
@@ -1069,8 +1132,16 @@ mod tests {
     fn guard_order_empty_bodies_before_behavior_change() {
         // Guard 2 (empty) precedes guard 4 (changed).
         assert_eq!(
-            evaluate_refusal("x", 0, 0, true),
+            evaluate_refusal("x", 0, 0, true, 1),
             Some(PirShadowRefusalReason::NoAnchoredFacts),
+        );
+    }
+
+    #[test]
+    fn guard_order_behavior_change_before_dynamic_boundary() {
+        assert_eq!(
+            evaluate_refusal("x", 0, 3, true, 1),
+            Some(PirShadowRefusalReason::ProviderBehaviorChanged),
         );
     }
 }

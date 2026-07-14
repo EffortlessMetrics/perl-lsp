@@ -1,0 +1,41 @@
+name: Agent Capability Gate
+
+# M4b (#3763): review/audit agents must be mechanically read-only. This gate
+# parses `.claude/agents/*.md` and fails if any review/audit agent grants a
+# write/mutating tool (Edit/Write/NotebookEdit/MultiEdit/Agent/Task/Artifact)
+# or lacks an explicit read-only tools: allowlist.
+
+on:
+  pull_request:
+    paths:
+      - '.claude/agents/**'
+      - 'xtask/src/tasks/agent_capability_policy.rs'
+      - '.github/workflows/agent-capability-gate.yml'
+  merge_group:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  agent-capability-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable
+        with:
+          toolchain: stable
+
+      - name: Enforce review/audit read-only capability boundary
+        run: cargo xtask check-agent-capabilities

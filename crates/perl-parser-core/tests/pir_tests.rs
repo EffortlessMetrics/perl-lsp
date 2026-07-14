@@ -212,9 +212,15 @@ fn eval_string_is_a_dynamic_boundary() {
 }
 
 #[test]
-fn symbolic_reference_is_a_dynamic_boundary() {
-    let graph = lower("no strict 'refs'; my $v = ${$name};");
+fn symbolic_string_reference_is_a_dynamic_boundary() {
+    let graph = lower("no strict 'refs'; my $v = ${\"name\"};");
     assert_eq!(graph.receipt.dynamic_boundary_counts.get("SymbolicReference"), Some(&1));
+}
+
+#[test]
+fn ordinary_runtime_reference_is_not_a_dynamic_boundary() {
+    let graph = lower("no strict 'refs'; my $v = ${$name};");
+    assert!(graph.receipt.dynamic_boundary_counts.get("SymbolicReference").is_none());
 }
 
 #[test]
@@ -432,11 +438,15 @@ fn control_flow_loop_shell_lowers_to_loop_operation() {
 }
 
 #[test]
-fn control_flow_control_transfer_is_counted_not_dropped() {
-    // PIR v0 reserves but does not yet lower ControlTransfer (return/next/last/goto).
+fn control_flow_control_transfer_return_lowers_to_return_operation() {
+    // Since #8196, ControlTransferKind::Return lowers to PirOperation::Return.
+    // Other transfer verbs (next/last/redo/goto) remain unsupported in v0.
     let graph = lower("sub f { return 1; }");
-    assert_eq!(graph.receipt.unsupported_construct_counts.get("ControlTransfer"), Some(&1));
-    assert!(graph.is_empty());
+    // The return is now a Return operation, not an unsupported construct.
+    assert_eq!(graph.receipt.unsupported_construct_counts.get("ControlTransfer"), None);
+    assert_eq!(graph.receipt.operation_counts.get("Return"), Some(&1));
+    // The graph is no longer empty — a Return node was produced.
+    assert!(!graph.is_empty());
 }
 
 #[test]
@@ -455,12 +465,14 @@ fn all_four_control_flow_kinds_in_same_fixture() {
     // correctly reflects the current lowering state:
     // - BranchShell now lowers to PirOperation::Branch (#8196)
     // - LoopShell now lowers to PirOperation::Loop (#8196)
-    // - ControlTransfer, StatementModifierShell remain unsupported in v0
+    // - ControlTransferKind::Return now lowers to PirOperation::Return (#8196);
+    //   non-Return transfers (last/next/redo/goto) and StatementModifierShell
+    //   remain unsupported in v0
     let graph = lower(
         r#"
 if (1) { 1 }                    # BranchShell — now lowers to Branch
-while (1) { last; }             # LoopShell (now lowers to Loop) + ControlTransfer (in last)
-sub f { return 1; }             # ControlTransfer (in return)
+while (1) { last; }             # LoopShell (now lowers to Loop) + ControlTransfer (last — unsupported)
+sub f { return 1; }             # ControlTransfer (return — now lowers to Return)
 $x = 1 if $y;                   # StatementModifierShell
 "#,
     );
@@ -489,11 +501,14 @@ $x = 1 if $y;                   # StatementModifierShell
         "Loop operation count mismatch"
     );
 
-    // Two ControlTransfers: one from `return 1;` in sub f, one from `last;` in while.
+    // Two ControlTransfers in the fixture: `return 1;` in sub f (now a Return
+    // operation) and `last;` in the while loop (still unsupported). So Return
+    // op count is 1 and the unsupported ControlTransfer count drops to 1.
+    assert_eq!(graph.receipt.operation_counts.get("Return"), Some(&1), "Return op count mismatch");
     assert_eq!(
         graph.receipt.unsupported_construct_counts.get("ControlTransfer"),
-        Some(&2),
-        "ControlTransfer count mismatch"
+        Some(&1),
+        "ControlTransfer (non-Return) count mismatch"
     );
     assert_eq!(
         graph.receipt.unsupported_construct_counts.get("StatementModifierShell"),

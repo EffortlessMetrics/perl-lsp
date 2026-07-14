@@ -1,9 +1,13 @@
 //! Integration-style unit tests for execute-command provider behaviors.
 
+// Tests are permitted to use `.expect()`/`.expect_err()` on Result/Option per
+// the repo's coding standards (unlike production code, where they are banned).
+#![allow(clippy::expect_used)]
+
 use super::get_supported_commands;
 use super::provider::{ExecuteCommandProvider, TestRunner, select_test_runner};
 use super::test_support::mock_status;
-use perl_lsp_rs_core::config::WorkspaceConfig;
+use perl_lsp_rs_core::config::{CriticEngine, WorkspaceConfig};
 use serde_json::{Value, json};
 use std::fs;
 use std::path::PathBuf;
@@ -857,8 +861,10 @@ fn test_command_routing_perl_debug_tests() -> Result<(), Box<dyn std::error::Err
     assert!(result.is_ok(), "perl.debugTests should execute successfully");
     let result_value = result?;
     assert!(result_value.is_object(), "Should return a structured result");
-    assert_eq!(result_value["success"], false, "Debug should indicate not implemented");
-    assert!(result_value["output"].is_string(), "Should have output field");
+    // Debug now returns a real perl-dap launch configuration.
+    assert_eq!(result_value["success"], true, "Debug should return a launch config");
+    assert_eq!(result_value["action"], "startDebugging");
+    assert_eq!(result_value["configuration"]["type"], "perl");
     Ok(())
 }
 
@@ -994,6 +1000,55 @@ fn test_format_command_result_structure() {
 }
 
 #[test]
+fn test_format_test_command_result_parses_tap() {
+    let provider = ExecuteCommandProvider::new();
+
+    let tap = b"1..2\n\
+ok 1 - addition works\n\
+not ok 2 - email matches\n\
+#   at t/user.t line 12.\n\
+#          got: 'x'\n\
+#     expected: 'y'\n"
+        .to_vec();
+    let output = std::process::Output { status: mock_status(1), stdout: tap, stderr: b"".to_vec() };
+
+    let result = provider.format_test_command_result(output, "prove");
+
+    // Raw output and runner are preserved.
+    assert_eq!(result["runner"], "prove");
+    assert_eq!(result["command"], "prove");
+    assert_eq!(result["exitCode"], 1);
+    assert!(result["output"].as_str().unwrap_or("").contains("not ok 2"));
+
+    // Structured TAP facts are additive.
+    assert_eq!(result["tap"]["planned"], 2);
+    assert_eq!(result["tap"]["passed"], 1);
+    assert_eq!(result["tap"]["failed"], 1);
+
+    let failures = result["failures"].as_array().expect("failures array");
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0]["number"], 2);
+    assert_eq!(failures[0]["description"], "email matches");
+    assert_eq!(failures[0]["file"], "t/user.t");
+    assert_eq!(failures[0]["line"], 12);
+    assert_eq!(failures[0]["got"], "'x'");
+    assert_eq!(failures[0]["expected"], "'y'");
+}
+
+#[test]
+fn test_format_test_command_result_todo_skip_not_hard_failures() {
+    let provider = ExecuteCommandProvider::new();
+    let tap = b"1..2\nnot ok 1 - later # TODO wip\nok 2 - win # SKIP no db\n".to_vec();
+    let output = std::process::Output { status: mock_status(0), stdout: tap, stderr: b"".to_vec() };
+
+    let result = provider.format_test_command_result(output, "yath");
+    assert_eq!(result["tap"]["failed"], 0, "TODO/SKIP are not hard failures");
+    assert_eq!(result["tap"]["todo"], 1);
+    assert_eq!(result["tap"]["skipped"], 1);
+    assert_eq!(result["failures"].as_array().map(Vec::len), Some(0));
+}
+
+#[test]
 fn test_format_command_result_failure() {
     let provider = ExecuteCommandProvider::new();
 
@@ -1082,8 +1137,130 @@ fn test_run_builtin_critic_with_valid_file() -> Result<(), Box<dyn std::error::E
     let result_value = result?;
     assert_eq!(result_value["status"], "success");
     assert!(result_value["violations"].is_array());
-    assert_eq!(result_value["analyzerUsed"], "builtin");
+    assert_eq!(result_value["analyzerUsed"], "native");
     Ok(())
+}
+
+// ============= NATIVE-FIRST CRITIC ENGINE GATING =============
+// perl.runCritic must default to the native analyzer. Merely having
+// `perlcritic` on PATH must NOT change the default behavior — external
+// perlcritic runs only when the critic engine is explicitly set to
+// legacy/external/perlcritic.
+
+#[test]
+#[allow(deprecated)]
+fn run_critic_defaults_to_native_analyzer() -> Result<(), Box<dyn std::error::Error>> {
+    // A provider with no workspace config (the common case) must report the
+    // native analyzer, regardless of whether `perlcritic` is installed on the
+    // host running this test.
+    let provider = ExecuteCommandProvider::new();
+
+    let tmp = tempdir()?;
+    let file = tmp.path().join("native_default.pl");
+    fs::write(&file, "#!/usr/bin/perl\nmy $x = 1;\nprint $x;\n")?;
+
+    let result = provider.run_critic(file.to_str().ok_or("path is not utf-8")?)?;
+    assert_eq!(result["status"], "success");
+    assert_eq!(
+        result["analyzerUsed"], "native",
+        "default runCritic must use the native analyzer, not external perlcritic"
+    );
+    Ok(())
+}
+
+// #3299: default `perl.runCritic` (engine Native) must route through the
+// `NativeCriticRegistry` — the same engine the editor's on-type native pull
+// diagnostics use — so the command reports `native.*` rules (here
+// `native.security.string_eval`, in the default `recommended` profile) that the
+// legacy `BuiltInAnalyzer` does not emit. Before #3299 the command ran
+// `BuiltInAnalyzer` and diverged from native diagnostics on native.*-only rules.
+#[test]
+fn run_critic_native_matches_pull_diagnostics_registry() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::perl_critic::{
+        CriticConfig, CriticContext, NativeCriticProfile, NativeCriticRegistry,
+    };
+
+    // A string `eval` trips `native.security.string_eval`.
+    let source = "use strict;\nuse warnings;\nmy $c = '1';\neval $c;\n";
+    let tmp = tempdir()?;
+    let file = tmp.path().join("string_eval.pl");
+    fs::write(&file, source)?;
+
+    // Default provider = engine Native, `recommended` profile (the real default).
+    let provider = ExecuteCommandProvider::new();
+    let result = provider.run_native_critic(&file)?;
+    assert_eq!(result["analyzerUsed"], "native");
+    let command_policies: Vec<&str> = result["violations"]
+        .as_array()
+        .ok_or("violations is not an array")?
+        .iter()
+        .filter_map(|v| v["policy"].as_str())
+        .collect();
+    assert!(
+        command_policies.contains(&"native.security.string_eval"),
+        "runCritic must report the native registry rule the editor path reports: {command_policies:?}"
+    );
+
+    // Parity: the editor's on-type native pull path runs the same registry over
+    // the same source and must report the same rule.
+    let code = perl_parser::util::code_slice(source);
+    let mut parser = perl_parser::Parser::new(code);
+    let ast = parser.parse().map_err(|e| e.to_string())?;
+    let critic_config = CriticConfig::default();
+    let ctx = CriticContext::new(code, &ast, &critic_config);
+    let registry = NativeCriticRegistry::for_profile(
+        NativeCriticProfile::parse("recommended").ok_or("recommended profile must parse")?,
+    );
+    let pull_rule_ids: Vec<String> = registry.check(&ctx).into_iter().map(|f| f.rule_id).collect();
+    assert!(
+        pull_rule_ids.iter().any(|id| id == "native.security.string_eval"),
+        "native pull path must report the same rule: {pull_rule_ids:?}"
+    );
+
+    // Regression proof: the legacy `BuiltInAnalyzer` path omits native.* rules —
+    // exactly the divergence #3299 removes for the default engine.
+    let builtin = provider.run_builtin_critic(&file)?;
+    let builtin_policies: Vec<&str> = builtin["violations"]
+        .as_array()
+        .ok_or("violations is not an array")?
+        .iter()
+        .filter_map(|v| v["policy"].as_str())
+        .collect();
+    assert!(
+        !builtin_policies.contains(&"native.security.string_eval"),
+        "BuiltInAnalyzer must not emit native.* rules (the pre-#3299 gap): {builtin_policies:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn external_critic_not_requested_without_config() {
+    // The structural guarantee behind "perlcritic on PATH does not change the
+    // default": with no config the external branch is never reached, so the
+    // presence of `perlcritic` on PATH is irrelevant to the default analyzer.
+    let provider = ExecuteCommandProvider::new();
+    assert!(
+        !provider.external_critic_requested(),
+        "no config must default to the native critic engine"
+    );
+}
+
+#[test]
+fn external_critic_not_requested_for_native_engine() {
+    let provider = ExecuteCommandProvider::new().with_critic_engine(CriticEngine::Native);
+    assert!(
+        !provider.external_critic_requested(),
+        "native critic engine must not select external perlcritic"
+    );
+}
+
+#[test]
+fn external_critic_requested_for_legacy_engine() {
+    let provider = ExecuteCommandProvider::new().with_critic_engine(CriticEngine::Legacy);
+    assert!(
+        provider.external_critic_requested(),
+        "explicit legacy/external critic engine must select external perlcritic"
+    );
 }
 
 #[test]
@@ -1143,6 +1320,56 @@ fn test_all_command_routing_paths() {
     }
 }
 
+#[test]
+fn test_debug_tests_returns_perl_dap_launch_config() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let test_file = temp_dir.path().join("debug_me.t");
+    fs::write(&test_file, "use Test2::V0;\nok(1);\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.debugTestFile",
+        vec![Value::String(test_file.display().to_string())],
+    )?;
+
+    assert_eq!(result["success"], true, "debug should no longer be a 'coming soon' stub");
+    assert_eq!(result["action"], "startDebugging");
+    assert_eq!(result["adapter"], "perl-dap");
+    let config = &result["configuration"];
+    assert_eq!(config["type"], "perl", "launches through the native perl debug type");
+    assert_eq!(config["request"], "launch");
+    assert_eq!(config["stopOnEntry"], false);
+    assert!(config["program"].as_str().unwrap_or("").ends_with("debug_me.t"));
+    assert!(config["cwd"].is_string(), "cwd follows the runner policy (file dir)");
+    assert_eq!(config["env"]["PERL_TEST_HARNESS_DUMP_TAP"], "1");
+    Ok(())
+}
+
+#[test]
+fn test_run_subtest_reports_whole_file_focused_mode() -> Result<(), Box<dyn std::error::Error>> {
+    // The focused-run metadata (mode/requestedSubtest/note) is set regardless of
+    // whether `perl` is present, so this test is robust to the environment.
+    let temp_dir = tempdir()?;
+    let test_file = temp_dir.path().join("focus.t");
+    fs::write(&test_file, "use Test2::V0;\nsubtest 'alpha' => sub { ok(1); };\ndone_testing;\n")?;
+
+    let provider = provider_with_execute_perl(vec![temp_dir.path().to_path_buf()]);
+    let canonical = test_file.canonicalize()?;
+    let result = provider.run_subtest(&canonical, "alpha")?;
+
+    assert_eq!(result["requestedSubtest"], "alpha", "should echo the requested subtest name");
+    assert_eq!(
+        result["subtestMode"], "whole-file-focused",
+        "runs whole file; never executes the subtest block in isolation"
+    );
+    assert!(result["note"].as_str().unwrap_or("").contains("does not execute subtest blocks"));
+    assert!(result["subtestFocus"].is_object(), "should include a subtest focus object");
+    // Raw runner fields are preserved from the whole-file run.
+    assert!(result["output"].is_string(), "raw output preserved");
+    Ok(())
+}
+
 // ============= ADDITIONAL MUTATION KILLER TESTS =============
 // These tests specifically target remaining surviving mutants
 
@@ -1170,8 +1397,8 @@ fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::erro
         "Should have success field"
     );
     assert!(
-        result_value.as_object().ok_or("expected object")?.contains_key("output"),
-        "Should have output field"
+        result_value.as_object().ok_or("expected object")?.contains_key("configuration"),
+        "Should have a launch configuration field"
     );
 
     // The result should be meaningful, not just Default::default()
@@ -1666,7 +1893,9 @@ fn test_command_routing_perl_run_subtest() -> Result<(), Box<dyn std::error::Err
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
     assert!(value["success"].is_boolean(), "Should have success field");
-    assert!(value["subroutine"].is_string(), "Should have subroutine field");
+    // Whole-file-focused run (never executes the subtest block in isolation).
+    assert_eq!(value["subtestMode"], "whole-file-focused");
+    assert_eq!(value["requestedSubtest"], "my_subtest");
     Ok(())
 }
 
@@ -1684,8 +1913,10 @@ fn test_command_routing_perl_debug_file() -> Result<(), Box<dyn std::error::Erro
     assert!(result.is_ok(), "perl.debugFile should dispatch without Unknown command error");
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
-    assert_eq!(value["success"], false, "Debug should indicate not yet implemented");
-    assert!(value["output"].is_string(), "Should have output field");
+    // Debug now returns a real perl-dap launch configuration.
+    assert_eq!(value["success"], true, "Debug should return a launch config");
+    assert_eq!(value["action"], "startDebugging");
+    assert_eq!(value["configuration"]["type"], "perl");
     Ok(())
 }
 
@@ -1703,8 +1934,21 @@ fn test_command_routing_perl_debug_test() -> Result<(), Box<dyn std::error::Erro
     assert!(result.is_ok(), "perl.debugTest should dispatch without Unknown command error");
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
-    assert_eq!(value["success"], false, "Debug should indicate not yet implemented");
-    assert!(value["output"].is_string(), "Should have output field");
+    // Debug now returns a real perl-dap launch configuration.
+    assert_eq!(value["success"], true, "Debug should return a launch config");
+    assert_eq!(value["action"], "startDebugging");
+    assert_eq!(value["configuration"]["type"], "perl");
+    Ok(())
+}
+
+#[test]
+fn test_debug_tests_bare_filename_uses_dot_cwd() -> Result<(), Box<dyn std::error::Error>> {
+    // A single-component path has a Some("") parent; the launch cwd must fall
+    // back to "." rather than an empty string (which can fail to launch).
+    let provider = ExecuteCommandProvider::new();
+    let value = provider.debug_tests(std::path::Path::new("bare.t"))?;
+    assert_eq!(value["configuration"]["cwd"], ".");
+    assert_eq!(value["configuration"]["program"], "bare.t");
     Ok(())
 }
 
@@ -1719,11 +1963,11 @@ fn test_perl_run_subtest_missing_subroutine_arg() -> Result<(), Box<dyn std::err
     let result = provider
         .execute_command("perl.runSubtest", vec![Value::String(temp_file.display().to_string())]);
 
-    assert!(result.is_err(), "perl.runSubtest should fail without subroutine name");
+    assert!(result.is_err(), "perl.runSubtest should fail without a subtest name");
     let err = result.err().ok_or("expected error")?;
     assert!(
-        err.contains("Missing subroutine name"),
-        "Should report missing subroutine name, got: {}",
+        err.contains("Missing subtest name"),
+        "Should report missing subtest name, got: {}",
         err
     );
     Ok(())

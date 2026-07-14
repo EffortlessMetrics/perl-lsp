@@ -508,6 +508,14 @@ fn test_require_module_or() {
 }
 
 #[test]
+fn test_require_version_string_forms() {
+    assert_clean_parse("eval { require(v5.5.630); };");
+    assert_clean_parse("sub v5 { die }\neval { require v5; };");
+    assert_clean_parse("eval { require v5; };");
+    assert_clean_parse("eval { require 10.0.2; };");
+}
+
+#[test]
 fn test_die_unless_and() {
     // die is itself a function, and `unless` is a modifier
     assert_clean_parse(r#"die "error" unless $ok and $ready;"#);

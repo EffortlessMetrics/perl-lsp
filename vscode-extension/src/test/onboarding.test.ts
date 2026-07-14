@@ -33,9 +33,7 @@ function makeContext(opts?: { welcomed?: boolean; storagePath?: string }): any {
   if (opts?.welcomed) {
     store.set('perl-lsp.welcomed', true);
   }
-  const dir =
-    opts?.storagePath ??
-    fs.mkdtempSync(path.join(os.tmpdir(), 'onboarding-test-'));
+  const dir = opts?.storagePath ?? fs.mkdtempSync(path.join(os.tmpdir(), 'onboarding-test-'));
   return {
     globalStorageUri: { fsPath: dir },
     extensionPath: dir,
@@ -88,10 +86,7 @@ describe('OnboardingManager.markWelcomed', () => {
     const mgr = new OnboardingManager(ctx, makeOutputChannel());
     expect(mgr.shouldShowWelcome()).toBe(true);
     await mgr.markWelcomed();
-    expect(ctx.globalState.update).toHaveBeenCalledWith(
-      'perl-lsp.welcomed',
-      true,
-    );
+    expect(ctx.globalState.update).toHaveBeenCalledWith('perl-lsp.welcomed', true);
   });
 });
 
@@ -113,9 +108,7 @@ describe('OnboardingManager.checkPerlInstalled', () => {
 
   test('returns error status when perl is not found', async () => {
     const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn(() =>
-      Promise.reject(new Error('perl: command not found')),
-    );
+    mgr._execCheck = jest.fn(() => Promise.reject(new Error('perl: command not found')));
     const result = await mgr.checkPerlInstalled();
     expect(result.ok).toBe(false);
     expect(result.detail).toContain('strawberryperl.com');
@@ -142,9 +135,7 @@ describe('OnboardingManager.checkPerltidyInstalled', () => {
 
   test('returns warning (not error) when perltidy is absent', async () => {
     const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn(() =>
-      Promise.reject(new Error('perltidy: command not found')),
-    );
+    mgr._execCheck = jest.fn(() => Promise.reject(new Error('perltidy: command not found')));
     const result = await mgr.checkPerltidyInstalled();
     expect(result.ok).toBe(false);
     expect(result.status).toBe(HealthCheckStatus.Warning);
@@ -213,10 +204,7 @@ describe('selectWindowsCommandCandidate', () => {
 
 describe('toPosixShellCommand', () => {
   test('quotes command and arguments for safe shell execution', () => {
-    const command = toPosixShellCommand(
-      'perl',
-      ['-e', "print q{can't fail}"],
-    );
+    const command = toPosixShellCommand('perl', ['-e', "print q{can't fail}"]);
 
     expect(command).toBe("'perl' '-e' 'print q{can'\\''t fail}'");
   });
@@ -403,7 +391,7 @@ describe('OnboardingManager.runSetupHealthCheck', () => {
       Promise.resolve({ stdout: '5.036000', stderr: '' }),
     );
     const results: HealthCheckResult[] = await mgr.runSetupHealthCheck(null);
-    const binCheck = results.find(r => r.label === 'LSP binary');
+    const binCheck = results.find((r) => r.label === 'LSP binary');
     expect(binCheck).toBeDefined();
     expect(binCheck!.ok).toBe(false);
   });
@@ -420,7 +408,7 @@ describe('OnboardingManager.runSetupHealthCheck', () => {
       return Promise.reject(new Error('unknown'));
     });
     const results: HealthCheckResult[] = await mgr.runSetupHealthCheck(binPath);
-    const errors = results.filter(r => r.status === HealthCheckStatus.Error);
+    const errors = results.filter((r) => r.status === HealthCheckStatus.Error);
     expect(errors).toHaveLength(0);
   });
 });
@@ -443,17 +431,13 @@ describe('package.json health check command', () => {
   });
 
   test('health check command has Perl category', () => {
-    const cmd = pkg.contributes.commands.find(
-      (c: any) => c.command === 'perl-lsp.runHealthCheck',
-    );
+    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.runHealthCheck');
     expect(cmd).toBeDefined();
     expect(cmd.category).toBe('Perl');
   });
 
   test('health check command title is user-friendly', () => {
-    const cmd = pkg.contributes.commands.find(
-      (c: any) => c.command === 'perl-lsp.runHealthCheck',
-    );
+    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.runHealthCheck');
     expect(cmd.title).toBeTruthy();
     expect(cmd.title.toLowerCase()).toContain('health');
   });
@@ -549,9 +533,7 @@ describe('classifyStartupFailure', () => {
 describe('OnboardingManager.runStartupDiagnostics', () => {
   test('returns Perl-specific error when Perl is missing', async () => {
     const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn(() =>
-      Promise.reject(new Error('perl: command not found')),
-    );
+    mgr._execCheck = jest.fn(() => Promise.reject(new Error('perl: command not found')));
     const msg = await mgr.runStartupDiagnostics(null);
     expect(msg).toContain('Perl');
     expect(msg).toMatch(/install|Install/);
@@ -560,9 +542,7 @@ describe('OnboardingManager.runStartupDiagnostics', () => {
 
   test('returns binary-missing message when Perl is present but binary not found', async () => {
     const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn((_cmd: string) =>
-      Promise.resolve({ stdout: '5.036000', stderr: '' }),
-    );
+    mgr._execCheck = jest.fn((_cmd: string) => Promise.resolve({ stdout: '5.036000', stderr: '' }));
     // No binary path provided (null) — binary check will fail
     const msg = await mgr.runStartupDiagnostics(null);
     expect(msg).toMatch(/binary|perllsp/i);

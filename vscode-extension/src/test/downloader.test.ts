@@ -80,7 +80,9 @@ describe('BinaryDownloader.getPlatformTarget', () => {
     const vscode = require('vscode');
     vscode.workspace.getConfiguration.mockImplementationOnce(() => ({
       get: jest.fn((key: string, defaultValue?: unknown) => {
-        if (key in overrides) { return overrides[key]; }
+        if (key in overrides) {
+          return overrides[key];
+        }
         return defaultValue;
       }),
       update: jest.fn(),
@@ -206,9 +208,15 @@ describe('BinaryDownloader.getLocalDapPath', () => {
 // ---------------------------------------------------------------------------
 describe('BinaryDownloader managed file install', () => {
   test('classifies transient file-lock errors as retryable', () => {
-    expect(isTransientManagedInstallError(Object.assign(new Error('locked'), { code: 'EBUSY' }))).toBe(true);
-    expect(isTransientManagedInstallError(Object.assign(new Error('denied'), { code: 'EPERM' }))).toBe(true);
-    expect(isTransientManagedInstallError(Object.assign(new Error('missing'), { code: 'ENOENT' }))).toBe(false);
+    expect(
+      isTransientManagedInstallError(Object.assign(new Error('locked'), { code: 'EBUSY' })),
+    ).toBe(true);
+    expect(
+      isTransientManagedInstallError(Object.assign(new Error('denied'), { code: 'EPERM' })),
+    ).toBe(true);
+    expect(
+      isTransientManagedInstallError(Object.assign(new Error('missing'), { code: 'ENOENT' })),
+    ).toBe(false);
   });
 
   test('retries transient file-lock errors while installing managed binaries', async () => {
@@ -222,7 +230,14 @@ describe('BinaryDownloader managed file install', () => {
       }
     });
 
-    await copyManagedFileWithRetry('source', 'destination', 'perllsp', message => logs.push(message), [0], copyFile);
+    await copyManagedFileWithRetry(
+      'source',
+      'destination',
+      'perllsp',
+      (message) => logs.push(message),
+      [0],
+      copyFile,
+    );
 
     expect(attempts).toBe(2);
     expect(copyFile).toHaveBeenCalledTimes(2);
@@ -237,7 +252,14 @@ describe('BinaryDownloader managed file install', () => {
     });
 
     await expect(
-      copyManagedFileWithRetry('source', 'destination', 'perllsp', message => logs.push(message), [0], copyFile),
+      copyManagedFileWithRetry(
+        'source',
+        'destination',
+        'perllsp',
+        (message) => logs.push(message),
+        [0],
+        copyFile,
+      ),
     ).rejects.toThrow('missing');
 
     expect(copyFile).toHaveBeenCalledTimes(1);
@@ -262,7 +284,7 @@ describe('BinaryDownloader managed file install', () => {
       'src',
       'dst',
       'perllsp',
-      message => logs.push(message),
+      (message) => logs.push(message),
       [0, 0, 0, 0, 0, 0, 0, 0],
       copyFile,
     );
@@ -284,7 +306,7 @@ describe('BinaryDownloader managed file install', () => {
         'src',
         'dst',
         'perllsp',
-        message => logs.push(message),
+        (message) => logs.push(message),
         [0, 0, 0],
         copyFile,
       ),
@@ -309,7 +331,9 @@ describe('BinaryDownloader managed file install', () => {
         'src',
         'dst',
         'perllsp',
-        () => { /* drop */ },
+        () => {
+          /* drop */
+        },
         [0],
         copyFile,
       );
@@ -404,7 +428,9 @@ describe('Versioned managed install layout', () => {
     const a = downloader.buildVersionedInstallDirName('v0.13.3');
     // Spin until the OS clock advances at least 1ms so the ISO stamp differs.
     const start = Date.now();
-    while (Date.now() === start) { /* spin */ }
+    while (Date.now() === start) {
+      /* spin */
+    }
     const b = downloader.buildVersionedInstallDirName('v0.13.3');
 
     expect(a).not.toBe(b);
@@ -452,8 +478,8 @@ describe('Versioned managed install layout', () => {
 
     downloader.pruneOldVersionedInstalls(baseDir, 'v0.13.3-d');
 
-    expect(fs.existsSync(path.join(baseDir, 'v0.13.3-d'))).toBe(true);  // current
-    expect(fs.existsSync(path.join(baseDir, 'v0.13.2-c'))).toBe(true);  // most recent prior
+    expect(fs.existsSync(path.join(baseDir, 'v0.13.3-d'))).toBe(true); // current
+    expect(fs.existsSync(path.join(baseDir, 'v0.13.2-c'))).toBe(true); // most recent prior
     expect(fs.existsSync(path.join(baseDir, 'v0.13.1-b'))).toBe(false); // pruned
     expect(fs.existsSync(path.join(baseDir, 'v0.13.0-a'))).toBe(false); // pruned
   });
@@ -492,9 +518,7 @@ describe('Versioned managed install layout', () => {
     downloader.commitVersionedInstall(versionedName);
 
     // Post-migration, getLocalBinaryPath returns the versioned path.
-    expect(downloader.getLocalBinaryPath()).toBe(
-      path.join(baseDir, versionedName, lspBinaryName),
-    );
+    expect(downloader.getLocalBinaryPath()).toBe(path.join(baseDir, versionedName, lspBinaryName));
 
     // Legacy flat binary is preserved on disk (does not get auto-cleaned).
     expect(fs.existsSync(flatBin)).toBe(true);
@@ -516,21 +540,24 @@ describe('Singleflight managed install', () => {
 
   function makeDeferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
     let resolve!: (v: T) => void;
-    const promise = new Promise<T>(r => { resolve = r; });
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
     return { promise, resolve };
   }
 
   test('two concurrent ensure calls share one runEnsureBinary invocation', async () => {
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
     const deferred = makeDeferred<string | null>();
-    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+    const runSpy = jest
+      .spyOn(downloader as any, 'runEnsureBinary')
       .mockReturnValue(deferred.promise);
 
     const p1 = downloader.ensureBinary(false);
     const p2 = downloader.ensureBinary(false);
 
     // Yield once so the second call observes the active install set by the first.
-    await new Promise<void>(r => setImmediate(r));
+    await new Promise<void>((r) => setImmediate(r));
 
     deferred.resolve('/path/from/first');
     const [r1, r2] = await Promise.all([p1, p2]);
@@ -543,13 +570,14 @@ describe('Singleflight managed install', () => {
   test('two concurrent force calls share one runEnsureBinary invocation', async () => {
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
     const deferred = makeDeferred<string | null>();
-    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+    const runSpy = jest
+      .spyOn(downloader as any, 'runEnsureBinary')
       .mockReturnValue(deferred.promise);
 
     const p1 = downloader.ensureBinary(true);
     const p2 = downloader.ensureBinary(true);
 
-    await new Promise<void>(r => setImmediate(r));
+    await new Promise<void>((r) => setImmediate(r));
 
     deferred.resolve('/path/from/force');
     const [r1, r2] = await Promise.all([p1, p2]);
@@ -563,23 +591,24 @@ describe('Singleflight managed install', () => {
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
     const ensureDeferred = makeDeferred<string | null>();
     const forceDeferred = makeDeferred<string | null>();
-    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+    const runSpy = jest
+      .spyOn(downloader as any, 'runEnsureBinary')
       .mockReturnValueOnce(ensureDeferred.promise)
       .mockReturnValueOnce(forceDeferred.promise);
 
     const ensureCall = downloader.ensureBinary(false);
-    await new Promise<void>(r => setImmediate(r));
+    await new Promise<void>((r) => setImmediate(r));
     const forceCall = downloader.ensureBinary(true);
 
     // Force has not yet started a new install — it is waiting on the active ensure.
-    await new Promise<void>(r => setImmediate(r));
+    await new Promise<void>((r) => setImmediate(r));
     expect(runSpy).toHaveBeenCalledTimes(1);
 
     ensureDeferred.resolve('/path/from/ensure');
     expect(await ensureCall).toBe('/path/from/ensure');
 
     // Now the force call runs its own install.
-    await new Promise<void>(r => setImmediate(r));
+    await new Promise<void>((r) => setImmediate(r));
     expect(runSpy).toHaveBeenCalledTimes(2);
 
     forceDeferred.resolve('/path/from/force');
@@ -588,7 +617,8 @@ describe('Singleflight managed install', () => {
 
   test('singleflight state is cleared after each install settles', async () => {
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
-    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+    const runSpy = jest
+      .spyOn(downloader as any, 'runEnsureBinary')
       .mockResolvedValueOnce('/path/first')
       .mockResolvedValueOnce('/path/second');
 
@@ -600,7 +630,8 @@ describe('Singleflight managed install', () => {
 
   test('failure of an in-flight install does not poison subsequent calls', async () => {
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
-    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+    const runSpy = jest
+      .spyOn(downloader as any, 'runEnsureBinary')
       .mockRejectedValueOnce(new Error('install boom'))
       .mockResolvedValueOnce('/path/recovered');
 
@@ -612,7 +643,8 @@ describe('Singleflight managed install', () => {
 
   test('force after force settles cleanly with two separate installs', async () => {
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
-    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+    const runSpy = jest
+      .spyOn(downloader as any, 'runEnsureBinary')
       .mockResolvedValueOnce('/path/force-1')
       .mockResolvedValueOnce('/path/force-2');
 
@@ -749,12 +781,14 @@ describe('BinaryDownloader download URL security', () => {
       process.nextTick(() =>
         req.emit(
           'error',
-          Object.assign(new Error('connect ECONNREFUSED (stubbed)'), { code: 'ECONNREFUSED' })
-        )
+          Object.assign(new Error('connect ECONNREFUSED (stubbed)'), { code: 'ECONNREFUSED' }),
+        ),
       );
       return req;
     };
-    jest.spyOn(downloader as any, 'httpGet').mockImplementation((() => makeRefusedRequest()) as any);
+    jest
+      .spyOn(downloader as any, 'httpGet')
+      .mockImplementation((() => makeRefusedRequest()) as any);
   });
 
   afterEach(() => {
@@ -765,50 +799,50 @@ describe('BinaryDownloader download URL security', () => {
   const dest = () => path.join(tmpDir, 'test-download');
 
   test('rejects FTP protocol', async () => {
-    await expect(
-      downloader.downloadFile('ftp://example.com/file', dest(), 1000)
-    ).rejects.toThrow(/Unsupported protocol/);
+    await expect(downloader.downloadFile('ftp://example.com/file', dest(), 1000)).rejects.toThrow(
+      /Unsupported protocol/,
+    );
   });
 
   test('rejects file:// protocol', async () => {
-    await expect(
-      downloader.downloadFile('file:///etc/passwd', dest(), 1000)
-    ).rejects.toThrow(/Unsupported protocol/);
+    await expect(downloader.downloadFile('file:///etc/passwd', dest(), 1000)).rejects.toThrow(
+      /Unsupported protocol/,
+    );
   });
 
   test('rejects data: protocol', async () => {
-    await expect(
-      downloader.downloadFile('data:text/plain,hello', dest(), 1000)
-    ).rejects.toThrow(/Unsupported protocol/);
+    await expect(downloader.downloadFile('data:text/plain,hello', dest(), 1000)).rejects.toThrow(
+      /Unsupported protocol/,
+    );
   });
 
   test('rejects HTTP for remote hosts', async () => {
     await expect(
-      downloader.downloadFile('http://evil.example.com/malware', dest(), 1000)
+      downloader.downloadFile('http://evil.example.com/malware', dest(), 1000),
     ).rejects.toThrow(/Security violation.*Insecure HTTP/);
   });
 
   test('rejects HTTP for remote IP addresses', async () => {
-    await expect(
-      downloader.downloadFile('http://192.168.1.1/file', dest(), 1000)
-    ).rejects.toThrow(/Security violation.*Insecure HTTP/);
+    await expect(downloader.downloadFile('http://192.168.1.1/file', dest(), 1000)).rejects.toThrow(
+      /Security violation.*Insecure HTTP/,
+    );
   });
 
   test('allows HTTP for localhost (fails on connection, not security)', async () => {
     await expect(
-      downloader.downloadFile('http://localhost:9999/file', dest(), 500)
+      downloader.downloadFile('http://localhost:9999/file', dest(), 500),
     ).rejects.not.toThrow(/Security violation/);
   });
 
   test('allows HTTP for 127.0.0.1', async () => {
     await expect(
-      downloader.downloadFile('http://127.0.0.1:9999/file', dest(), 500)
+      downloader.downloadFile('http://127.0.0.1:9999/file', dest(), 500),
     ).rejects.not.toThrow(/Security violation/);
   });
 
   test('allows HTTP for 127.x.y.z loopback range', async () => {
     await expect(
-      downloader.downloadFile('http://127.0.0.2:9999/file', dest(), 500)
+      downloader.downloadFile('http://127.0.0.2:9999/file', dest(), 500),
     ).rejects.not.toThrow(/Security violation/);
   });
 
@@ -816,21 +850,168 @@ describe('BinaryDownloader download URL security', () => {
   // so the loopback check for '::1' does not match. This documents the
   // current behavior; fixing it is tracked separately.
   test('rejects HTTP for IPv6 loopback due to bracket mismatch (known limitation)', async () => {
-    await expect(
-      downloader.downloadFile('http://[::1]:9999/file', dest(), 500)
-    ).rejects.toThrow(/Security violation/);
+    await expect(downloader.downloadFile('http://[::1]:9999/file', dest(), 500)).rejects.toThrow(
+      /Security violation/,
+    );
   });
 
   test('allows HTTP for subdomain of localhost', async () => {
     await expect(
-      downloader.downloadFile('http://foo.localhost:9999/file', dest(), 500)
+      downloader.downloadFile('http://foo.localhost:9999/file', dest(), 500),
     ).rejects.not.toThrow(/Security violation/);
   });
 
   test('rejects invalid URL format', async () => {
-    await expect(
-      downloader.downloadFile('not-a-url', dest(), 1000)
-    ).rejects.toThrow(/Invalid URL/);
+    await expect(downloader.downloadFile('not-a-url', dest(), 1000)).rejects.toThrow(/Invalid URL/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Download stream lifecycle
+// ---------------------------------------------------------------------------
+describe('BinaryDownloader download stream lifecycle', () => {
+  type TestFile = EventEmitter & {
+    destroy: jest.Mock;
+    close: jest.Mock;
+  };
+  type TestRequest = EventEmitter & {
+    destroy: jest.Mock;
+  };
+  type TestResponse = EventEmitter & {
+    statusCode: number;
+    pipe: jest.Mock;
+  };
+  type DownloaderSeams = {
+    downloadFile: (url: string, dest: string, timeoutMs?: number) => Promise<void>;
+    createWriteStream: (dest: string) => TestFile;
+    removePartialFile: (dest: string) => void;
+    httpGet: (...args: unknown[]) => TestRequest;
+  };
+
+  let downloader: BinaryDownloader;
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dl-stream-'));
+    downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    jest.restoreAllMocks();
+  });
+
+  function observeUncaughtErrors(): { errors: unknown[]; dispose: () => void } {
+    const errors: unknown[] = [];
+    const handler = (error: unknown): void => {
+      errors.push(error);
+    };
+    process.once('uncaughtException', handler);
+    return {
+      errors,
+      dispose: () => process.removeListener('uncaughtException', handler),
+    };
+  }
+
+  test('observes stream errors before request failure and temporary-directory cleanup', async () => {
+    const destination = path.join(tmpDir, 'partial.bin');
+    const seams = downloader as unknown as DownloaderSeams;
+    const file = new EventEmitter() as TestFile;
+    file.destroy = jest.fn();
+    file.close = jest.fn();
+    const createWriteStream = jest.spyOn(seams, 'createWriteStream').mockReturnValue(file);
+    const removePartialFile = jest.spyOn(seams, 'removePartialFile');
+
+    const request = new EventEmitter() as TestRequest;
+    request.destroy = jest.fn();
+    const requestError = Object.assign(new Error('request failed'), { code: 'ECONNRESET' });
+    const streamError = Object.assign(new Error('destination disappeared'), { code: 'ENOENT' });
+    let listenerCountBeforeRequestActivity = 0;
+    jest.spyOn(seams, 'httpGet').mockImplementation(() => {
+      listenerCountBeforeRequestActivity = file.listenerCount('error');
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      process.nextTick(() => {
+        request.emit('error', requestError);
+        setImmediate(() => file.emit('error', streamError));
+      });
+      return request;
+    });
+
+    const uncaught = observeUncaughtErrors();
+    try {
+      await expect(seams.downloadFile('http://localhost/file', destination, 1000)).rejects.toBe(
+        requestError,
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(listenerCountBeforeRequestActivity).toBe(1);
+      expect(createWriteStream).toHaveBeenCalledWith(destination);
+      expect(removePartialFile).toHaveBeenCalledTimes(1);
+      expect(uncaught.errors).toEqual([]);
+    } finally {
+      uncaught.dispose();
+    }
+  });
+
+  test('cleans up exactly once when the download times out', async () => {
+    const destination = path.join(tmpDir, 'timed-out.bin');
+    const seams = downloader as unknown as DownloaderSeams;
+    const file = new EventEmitter() as TestFile;
+    file.close = jest.fn();
+    file.destroy = jest.fn(() => {
+      process.nextTick(() =>
+        file.emit('error', Object.assign(new Error('stream closed'), { code: 'ENOENT' })),
+      );
+    });
+    jest.spyOn(seams, 'createWriteStream').mockReturnValue(file);
+    const removePartialFile = jest.spyOn(seams, 'removePartialFile');
+    const request = new EventEmitter() as TestRequest;
+    request.destroy = jest.fn();
+    jest.spyOn(seams, 'httpGet').mockReturnValue(request);
+
+    const uncaught = observeUncaughtErrors();
+    try {
+      await expect(seams.downloadFile('http://localhost/file', destination, 10)).rejects.toThrow(
+        'Download timeout after 0.01 seconds',
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(file.destroy).toHaveBeenCalledTimes(1);
+      expect(removePartialFile).toHaveBeenCalledTimes(1);
+      expect(uncaught.errors).toEqual([]);
+    } finally {
+      uncaught.dispose();
+    }
+  });
+
+  test('removes a partial file once when the response stream errors', async () => {
+    const destination = path.join(tmpDir, 'partial-response.bin');
+    const seams = downloader as unknown as DownloaderSeams;
+    const file = new EventEmitter() as TestFile;
+    file.destroy = jest.fn();
+    file.close = jest.fn();
+    jest.spyOn(seams, 'createWriteStream').mockReturnValue(file);
+    const removePartialFile = jest.spyOn(seams, 'removePartialFile');
+
+    const response = new EventEmitter() as TestResponse;
+    response.statusCode = 200;
+    const streamError = Object.assign(new Error('partial response failed'), { code: 'EPIPE' });
+    response.pipe = jest.fn(() => {
+      file.emit('error', streamError);
+      return file;
+    });
+    const request = new EventEmitter() as TestRequest;
+    request.destroy = jest.fn();
+    jest.spyOn(seams, 'httpGet').mockImplementation((_https, _url, _options, callback) => {
+      (callback as (value: unknown) => void)(response);
+      return request;
+    });
+
+    await expect(seams.downloadFile('http://localhost/file', destination, 1000)).rejects.toBe(
+      streamError,
+    );
+    expect(response.pipe).toHaveBeenCalledTimes(1);
+    expect(removePartialFile).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -876,7 +1057,7 @@ describe('release asset candidate selection', () => {
       [{ name: assetName }, { name: 'SHA256SUMS' }],
       'v0.13.1',
       'x86_64-pc-windows-msvc',
-      '.zip'
+      '.zip',
     );
 
     expect(found).toBe(assetName);
@@ -888,18 +1069,14 @@ describe('release asset candidate selection', () => {
       [{ name: assetName }, { name: 'SHA256SUMS' }],
       'v0.13.1',
       'x86_64-unknown-linux-gnu',
-      '.tar.gz'
+      '.tar.gz',
     );
 
     expect(found).toBe(assetName);
   });
 
   test('prefers release workflow non-v asset before v-prefixed alias', () => {
-    const candidates = buildBinaryAssetCandidateNames(
-      'v0.13.1',
-      'x86_64-pc-windows-msvc',
-      '.zip'
-    );
+    const candidates = buildBinaryAssetCandidateNames('v0.13.1', 'x86_64-pc-windows-msvc', '.zip');
 
     expect(candidates[0]).toBe('perllsp-0.13.1-x86_64-pc-windows-msvc.zip');
     expect(candidates).toContain('perllsp-v0.13.1-x86_64-pc-windows-msvc.zip');
@@ -1018,7 +1195,7 @@ describe('checkForUpdateSilent', () => {
       subscriptions: [],
       globalState: {
         get: jest.fn((key: string, defaultValue?: unknown) =>
-          store.has(key) ? store.get(key) : defaultValue
+          store.has(key) ? store.get(key) : defaultValue,
         ),
         update: jest.fn((key: string, value: unknown) => {
           store.set(key, value);
@@ -1049,7 +1226,11 @@ describe('checkForUpdateSilent', () => {
     // Place a stub binary in the expected auto-download location so
     // fs.existsSync passes.
     const binaryName = process.platform === 'win32' ? 'perllsp.exe' : 'perllsp';
-    const binDir = path.join(ctx.globalStorageUri.fsPath, 'bin', `${process.platform}-${process.arch}`);
+    const binDir = path.join(
+      ctx.globalStorageUri.fsPath,
+      'bin',
+      `${process.platform}-${process.arch}`,
+    );
     fs.mkdirSync(binDir, { recursive: true });
     tmpBinary = path.join(binDir, binaryName);
     fs.writeFileSync(tmpBinary, '#!/bin/sh\necho "perllsp 0.12.0"');
@@ -1170,7 +1351,7 @@ describe('checkForUpdateSilent', () => {
       expect.stringContaining('0.13.0'),
       'Update',
       'Dismiss',
-      "Don't ask again"
+      "Don't ask again",
     );
   });
 
@@ -1190,7 +1371,7 @@ describe('checkForUpdateSilent', () => {
       expect.stringContaining('0.12.0'),
       expect.anything(),
       expect.anything(),
-      expect.anything()
+      expect.anything(),
     );
   });
 
@@ -1225,9 +1406,7 @@ describe('checkForUpdateSilent', () => {
   test('silent failure — logs error but shows no notification on network error', async () => {
     mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24 });
     jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
-    jest.spyOn(downloader as any, 'getLatestRelease').mockRejectedValue(
-      new Error('ETIMEDOUT')
-    );
+    jest.spyOn(downloader as any, 'getLatestRelease').mockRejectedValue(new Error('ETIMEDOUT'));
     const vscode = require('vscode');
     vscode.window.showInformationMessage.mockResolvedValue(undefined);
 
@@ -1235,7 +1414,7 @@ describe('checkForUpdateSilent', () => {
 
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     expect(outputChannel.appendLine).toHaveBeenCalledWith(
-      expect.stringContaining('[update-check]')
+      expect.stringContaining('[update-check]'),
     );
   });
 
@@ -1267,7 +1446,7 @@ describe('checkForUpdateSilent', () => {
 
     expect(ctx.globalState.update).toHaveBeenCalledWith(
       'perl-lsp.lastUpdateCheck',
-      expect.any(Number)
+      expect.any(Number),
     );
     const recorded = ctx.globalState._store.get('perl-lsp.lastUpdateCheck') as number;
     expect(recorded).toBeGreaterThanOrEqual(before);
@@ -1298,7 +1477,9 @@ describe('checkForUpdateSilent', () => {
       tag_name: 'v0.13.0',
       assets: [],
     });
-    const ensureSpy = jest.spyOn(downloader as any, 'ensureBinary').mockResolvedValue('/path/to/perllsp');
+    const ensureSpy = jest
+      .spyOn(downloader as any, 'ensureBinary')
+      .mockResolvedValue('/path/to/perllsp');
     const vscode = require('vscode');
 
     await downloader.checkForUpdateSilent();
@@ -1315,7 +1496,9 @@ describe('checkForUpdateSilent', () => {
       tag_name: 'v0.13.0',
       assets: [],
     });
-    const ensureSpy = jest.spyOn(downloader as any, 'ensureBinary').mockResolvedValue('/path/to/perllsp');
+    const ensureSpy = jest
+      .spyOn(downloader as any, 'ensureBinary')
+      .mockResolvedValue('/path/to/perllsp');
     const vscode = require('vscode');
     vscode.window.showInformationMessage.mockResolvedValue('Update');
 
@@ -1342,7 +1525,7 @@ describe('ensureBinary error classification', () => {
       subscriptions: [],
       globalState: {
         get: jest.fn((key: string, defaultValue?: unknown) =>
-          store.has(key) ? store.get(key) : defaultValue
+          store.has(key) ? store.get(key) : defaultValue,
         ),
         update: jest.fn(() => Promise.resolve()),
         _store: store,
@@ -1357,22 +1540,24 @@ describe('ensureBinary error classification', () => {
     downloader = new BinaryDownloader(ctx, outputChannel);
 
     // Prevent actual download attempts
-    jest.spyOn(downloader as any, 'downloadWithProgress').mockRejectedValue(
-      new Error('placeholder')
-    );
+    jest
+      .spyOn(downloader as any, 'downloadWithProgress')
+      .mockRejectedValue(new Error('placeholder'));
   });
 
   afterEach(() => {
     try {
       fs.rmSync(ctx.globalStorageUri.fsPath, { recursive: true, force: true });
-    } catch (_e) { /* ignore */ }
+    } catch (_e) {
+      /* ignore */
+    }
     jest.restoreAllMocks();
   });
 
   function setupDownloadError(errorMessage: string) {
-    jest.spyOn(downloader as any, 'downloadWithProgress').mockRejectedValue(
-      new Error(errorMessage)
-    );
+    jest
+      .spyOn(downloader as any, 'downloadWithProgress')
+      .mockRejectedValue(new Error(errorMessage));
   }
 
   test('network timeout shows message containing proxy/VPN guidance and manual install path', async () => {
@@ -1385,7 +1570,7 @@ describe('ensureBinary error classification', () => {
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       expect.stringMatching(/proxy|VPN|network/i),
       expect.anything(),
-      expect.anything()
+      expect.anything(),
     );
     // Must mention the manual install setting
     const call = vscode.window.showErrorMessage.mock.calls[0];
@@ -1416,7 +1601,9 @@ describe('ensureBinary error classification', () => {
   });
 
   test('arch mismatch shows message naming the attempted target', async () => {
-    setupDownloadError('No binary found for platform: arm64-unknown-linux-gnu. Available assets: perllsp-x86_64-unknown-linux-gnu.tar.gz');
+    setupDownloadError(
+      'No binary found for platform: arm64-unknown-linux-gnu. Available assets: perllsp-x86_64-unknown-linux-gnu.tar.gz',
+    );
     const vscode = require('vscode');
     vscode.window.showErrorMessage.mockResolvedValue(undefined);
 
@@ -1429,7 +1616,9 @@ describe('ensureBinary error classification', () => {
   });
 
   test('termux platform mismatch shows Termux-specific source-build guidance', async () => {
-    setupDownloadError('No binary found for platform: aarch64-linux-android. Available assets: perllsp-x86_64-unknown-linux-gnu.tar.gz');
+    setupDownloadError(
+      'No binary found for platform: aarch64-linux-android. Available assets: perllsp-x86_64-unknown-linux-gnu.tar.gz',
+    );
     jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(true);
     const vscode = require('vscode');
     vscode.window.showErrorMessage.mockResolvedValue(undefined);
@@ -1467,7 +1656,9 @@ describe('ensureBinary error classification', () => {
   });
 
   test('checksum failure shows corruption message and retry guidance', async () => {
-    setupDownloadError('Security check failed: Checksum verification failed (file may be corrupted or tampered with).');
+    setupDownloadError(
+      'Security check failed: Checksum verification failed (file may be corrupted or tampered with).',
+    );
     const vscode = require('vscode');
     vscode.window.showErrorMessage.mockResolvedValue(undefined);
 
@@ -1480,7 +1671,9 @@ describe('ensureBinary error classification', () => {
 
   test('checksum-not-found in SHA256SUMS shows corruption message (case-insensitive match)', async () => {
     // This error has capital-C "Checksum" — verifies the classifier uses case-insensitive matching
-    setupDownloadError('Security check failed: Checksum for perllsp-x86_64-unknown-linux-gnu.tar.gz not found in SHA256SUMS file.');
+    setupDownloadError(
+      'Security check failed: Checksum for perllsp-x86_64-unknown-linux-gnu.tar.gz not found in SHA256SUMS file.',
+    );
     const vscode = require('vscode');
     vscode.window.showErrorMessage.mockResolvedValue(undefined);
 
@@ -1548,7 +1741,7 @@ describe('ensureBinary error classification', () => {
     await downloader.ensureBinary();
 
     expect(vscode.env.openExternal).toHaveBeenCalledWith(
-      expect.objectContaining({ toString: expect.any(Function) })
+      expect.objectContaining({ toString: expect.any(Function) }),
     );
     const uriArg = vscode.env.openExternal.mock.calls[0][0];
     expect(uriArg.toString()).toMatch(/github\.com.*perl-lsp/i);

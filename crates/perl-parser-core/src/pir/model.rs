@@ -12,7 +12,7 @@
 //! authoritative contract is [`PLSP-SPEC-0025`](../../../../docs/specs/PLSP-SPEC-0025-pir-v0.md).
 
 use crate::SourceLocation;
-use crate::hir::{HirId, HirScopeId};
+use crate::hir::{DerefAggregateKind, DerefOperandKind, HirId, HirScopeId};
 use perl_semantic_facts::AnchorId;
 use std::collections::BTreeMap;
 
@@ -345,6 +345,14 @@ pub enum PirOperation {
         /// Number of parsed arguments.
         arg_count: usize,
     },
+    /// An aggregate or slot dereference whose target expression is preserved
+    /// as a runtime-shaped operand rather than evaluated by PIR.
+    Deref {
+        /// Aggregate or slot selected by the dereference.
+        aggregate_kind: DerefAggregateKind,
+        /// Syntactic shape supplying the runtime target.
+        operand_kind: DerefOperandKind,
+    },
     /// A branch (condition is populated by later control-flow lowering).
     Branch {
         /// PIR node computing the branch condition, when modeled.
@@ -380,6 +388,7 @@ impl PirOperation {
             Self::Assign => "Assign",
             Self::Call { .. } => "Call",
             Self::MethodCall { .. } => "MethodCall",
+            Self::Deref { .. } => "Deref",
             Self::Branch { .. } => "Branch",
             Self::Loop { .. } => "Loop",
             Self::Return => "Return",
@@ -395,6 +404,7 @@ impl PirOperation {
         "Assign",
         "Branch",
         "Call",
+        "Deref",
         "DynamicBoundary",
         "LexicalRead",
         "LexicalWrite",
@@ -652,6 +662,7 @@ mod tests {
             "Assign",
             "Branch",
             "Call",
+            "Deref",
             "DynamicBoundary",
             "LexicalRead",
             "LexicalWrite",
@@ -726,6 +737,15 @@ mod tests {
             arg_count: 1,
         };
         assert_eq!(op.name(), "MethodCall");
+    }
+
+    #[test]
+    fn pir_operation_deref_name() {
+        let op = PirOperation::Deref {
+            aggregate_kind: DerefAggregateKind::Array,
+            operand_kind: DerefOperandKind::Variable,
+        };
+        assert_eq!(op.name(), "Deref");
     }
 
     #[test]

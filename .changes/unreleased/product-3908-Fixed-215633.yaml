@@ -1,0 +1,9 @@
+project: product
+component: Language intelligence
+kind: Fixed
+body: "`my $a = 1, $b;` now binds the initializer of $a to just `1`, matching Perl's `=`-binds-tighter-than-`,` precedence, instead of folding the trailing comma term into the initializer."
+time: 2026-07-11T21:56:33Z
+custom:
+  PR: "3908"
+  Slug: my-decl-assign-comma-precedence
+  Breaking: "no"

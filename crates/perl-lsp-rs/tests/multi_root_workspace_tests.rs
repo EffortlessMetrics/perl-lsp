@@ -1093,12 +1093,10 @@ fn test_workspace_symbol_during_building_state() -> TestResult {
     // to stay in Building/Indexing state (not transitioning to Ready).
     // This simulates the background file scan path: files get indexed while the
     // coordinator is still in Building state.
-    server
-        .test_index_file_in_building_state(
-            "file:///building_state_test/scanned_module.pm",
-            "package ScannedModule;\nsub building_func { return 42; }\n1;\n",
-        )
-        .map_err(|e| e)?;
+    server.test_index_file_in_building_state(
+        "file:///building_state_test/scanned_module.pm",
+        "package ScannedModule;\nsub building_func { return 42; }\n1;\n",
+    )?;
 
     // NO documents are open via didOpen — so the open-documents-only fallback
     // returns nothing. This is the key condition: the file is indexed but not open.
@@ -1150,20 +1148,14 @@ fn test_workspace_symbol_includes_folder_uri_for_disambiguation() -> TestResult 
         "file:///disambiguation_test/svc-a/".to_string(),
         "file:///disambiguation_test/svc-b/".to_string(),
     ]);
-    index
-        .index_file(
-            Url::parse("file:///disambiguation_test/svc-a/lib/Runner.pm")
-                .map_err(|e| e.to_string())?,
-            "package Runner;\nsub run { return 'from-a'; }\n1;\n".to_string(),
-        )
-        .map_err(|e| e)?;
-    index
-        .index_file(
-            Url::parse("file:///disambiguation_test/svc-b/lib/Runner.pm")
-                .map_err(|e| e.to_string())?,
-            "package Runner;\nsub run { return 'from-b'; }\n1;\n".to_string(),
-        )
-        .map_err(|e| e)?;
+    index.index_file(
+        Url::parse("file:///disambiguation_test/svc-a/lib/Runner.pm").map_err(|e| e.to_string())?,
+        "package Runner;\nsub run { return 'from-a'; }\n1;\n".to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///disambiguation_test/svc-b/lib/Runner.pm").map_err(|e| e.to_string())?,
+        "package Runner;\nsub run { return 'from-b'; }\n1;\n".to_string(),
+    )?;
 
     // Search for "run" — both folders define it.
     let symbols = index.search_symbols("run");

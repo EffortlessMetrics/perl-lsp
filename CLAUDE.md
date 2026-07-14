@@ -1,468 +1,205 @@
 # CLAUDE.md
 
-**Latest Release**: 0.17.0 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md) | **Implementation agents**: [AGENTS.md](AGENTS.md)
+**Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md) | **Implementation agents**: [AGENTS.md](AGENTS.md)
 
-## Orchestration Model
+This file is a **router**, not the doctrine itself: it names what every agent must
+hold in working memory; everything else is one link away. Full operating model
+(levels, truth hierarchy, delegation, receipts):
+[docs/swarm/modern-claude-operating-model.md](docs/swarm/modern-claude-operating-model.md).
+Why this file stays thin (it hit 2521 lines once and had to be pruned):
+[CLAUDE_MD_EVOLUTION.md](docs/project/CLAUDE_MD_EVOLUTION.md).
 
-perl-lsp's orchestration is **orchestrator-driven**: a long-lived orchestrator routes work to consolidated, long-running warm agents under the closure discipline in *Operating doctrine* below. (The early *Octopus Cluster* framing — [docs/reference/OCTOPUS_CLUSTER.md](docs/reference/OCTOPUS_CLUSTER.md), Feb 2026 — is historical; the model has since consolidated into fewer, longer-lived agents with differently-directed review.)
+## Orchestration model
 
-> For the design rationale and direction behind this orchestration model, see [docs/reference/ORCHESTRATION_DOCTRINE.md](docs/reference/ORCHESTRATION_DOCTRINE.md).
->
-> For the operating contract a maintainer-agent follows when making consequential PR decisions — work PR by PR, verify from primary artifacts, never destructively batch, choose the workflow from current repo state, and override stale instructions out loud — see [docs/reference/MAINTAINER_AGENT_DOCTRINE.md](docs/reference/MAINTAINER_AGENT_DOCTRINE.md).
+perl-lsp is **orchestrator-driven**: a long-lived orchestrator routes work through
+[7 lifecycle moments](docs/reference/PIPELINE_GATES.md) (Identify → Spec → Build →
+Review → CI green → Merge → Learn) — boundaries that block work at the earliest
+reliable point (unsettled context before mutation, structural defects before commit,
+missing proof before publication, stale review/integration defects before merge),
+enforced by evidence and rulesets rather than role/label machinery — to
+consolidated, long-running warm agents (roster:
+[.claude/agents/AGENT_CATALOG.md](.claude/agents/AGENT_CATALOG.md)). It routes and
+writes code directly only by exception, always followed by an independent adversarial
+pass. **The CI/merge control plane (ripr, Codecov-patch, the fmt/clippy meta-gate,
+main-green) is the binding constraint, not codegen** — treat infra as product
+velocity. Rationale: [ORCHESTRATION_DOCTRINE.md](docs/reference/ORCHESTRATION_DOCTRINE.md)
+and [operating model § why this doc exists](docs/swarm/modern-claude-operating-model.md#why-this-doc-exists).
+Consequential-PR-decision contract: [MAINTAINER_AGENT_DOCTRINE.md](docs/reference/MAINTAINER_AGENT_DOCTRINE.md).
 
-The orchestrator routes work to agents, and writes code directly only by exception (see *Operating doctrine* below).
+## Truth hierarchy
 
-### Operating doctrine (2026-06)
+When sources disagree, higher wins: **(1)** live `origin/main` + GitHub PR/check state
+**(2)** active lane manifest (`.perl-lsp/goals/`) + generated status boards **(3)**
+machine receipts + accepted baselines **(4)** specs/ADRs/contracts/policy **(5)**
+CLAUDE.md + scoped rules **(6)** auto-memory + `CLAUDE.local.md` **(7)** conversation
+handoffs (lowest — self-report is unverified). Never let a lower rank override a
+higher one. CI-specific instance of this rule:
+[LIVE_SIGNALS_VS_LABELS.md](docs/reference/LIVE_SIGNALS_VS_LABELS.md).
 
-The gate/agent pipeline below encodes **intent**, not a fixed agent-per-stage relay. Long-running warm agents + compaction + ultracode have made consolidation the default: prefer **one long-running builder + one consolidated review/verify pass** over the full granular scout→red→build→green→review→deep chain — keeping each gate's *intent* (independent judgment, adversarial verification) while collapsing the agent count. The gates are best read as **stages a single long-running agent traverses** (build → self-review → harden → verify) — checkpoints in one agent's lifecycle — not a relay handing off between distinct single-purpose agents. Use the granular relay where independence is genuinely load-bearing. "The orchestrator never writes code" is the strong default, not a ban: the orchestrator writes/verifies directly when salvaging a stalled agent's artifact or making a focused full-context fix — and **always routes an independent adversarial pass before merge**. Orchestration leans on modern Claude Code techniques: **ultracode** (multi-agent Workflows for fan-out + adversarial verification), context **compaction** (sustained long sessions), git **worktrees** (parallel isolated edits), and **long-running steerable agents** re-aimed across angles. See [docs/forensics/2026-06-25-closure-gap-the-recurring-defect.md](docs/forensics/2026-06-25-closure-gap-the-recurring-defect.md).
+## Session start and work discipline
 
-**Closure discipline — component-proved ≠ system-proved.** A passing component test never proves the system; the gap hides in the seam the author didn't build (the caller, the reachability edge, the last-mile handoff). Before "done"/"merge"/"live", verify the full production chain: the live caller, reachability from a real request, the durable artifact on `origin`, and the externally observable effect — bound to the current repo identity + HEAD SHA. Track completion on independent axes (Implemented · Merged · Reachable · Correct · Measured · Promoted · Consolidated), not one "done" flag; any gap on Reachable/Promoted/Consolidated is **inventory, not product**. Attach a **closure receipt** to security/correctness/"live" claims: `repo, base+head SHA, production_entrypoint, call_chain_verified, independent_expected_behavior, remote_head_confirmed, user_visible_effect, fallback_remaining, uncertainty`.
+Run `just doctor` and `just clean-worktrees` before spawning agents; labels are
+navigation only — routing and priority read live GitHub + issue/spec state, per
+[PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) and
+[LIVE_SIGNALS_VS_LABELS.md](docs/reference/LIVE_SIGNALS_VS_LABELS.md). One accountable
+writer per PR. Production writes happen in a **worktree**, never the main checkout.
+Finish or disposition same-lane active work before starting another branch. One
+change, one proof, one PR. **Never weaken a test or ratchet for green** — a red gate
+is signal, not an obstacle to route around.
 
-**Adversarial review is seam-anchored.** A cold/oppositional pass walks one level outward in both directions (*what feeds this? what consumes this? what on None/Err/empty?*), not the changed function. Its value is the different **direction**, not clean context — "independent" means independent *direction*, not a separate body. Re-aim a warm agent across successive angles rather than spinning up a panel; **change agents when the context FOCUS changes, re-aim within a focus**. Closure is attested by a different direction than the producer.
+## Issue-first implementation
 
-**The control plane is the binding constraint.** Codegen is cheap; the CI/merge control plane (ripr, Codecov-patch, the serial fmt/clippy meta-gate, main-green) is the bottleneck — and the bottleneck **migrates upward** (codegen → compile → CI → merge → API → reconciliation → reviewer). Treat infra (cached builds, idempotent bulk ops, current-main preflight, durable agent receipts, API-aware write queues) as product velocity, not support work.
+Before creating a writer worktree, branch, or production edit for substantive work,
+establish or reconcile one controlling issue whose latest plan revision carries a
+`BUILD` verdict (research → synthesize plan → independent verdict). Read-only
+investigation may precede `builder-ready`. Run `/start-work <issue>` before taking
+write ownership — it is an advisory pre-mutation guard, not a required check.
+Comments carry evidence; labels are navigation, not authorization. Full model:
+[#3971](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3971) /
+[#3807](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3807).
 
-### Gates and Agents
+## Delegation
 
-The pipeline is organized into **7 gates** (coarse stages) with multiple agents working within each gate:
+Haiku for search/mechanical-verify/external-fact-check/narrow-review; Sonnet for
+plan/implement/synthesize/refactor/deep-review; Workflows for broad independent
+fan-out or repeatable audits; Teams only when workers must actually communicate.
+Independent review approaches the seam from a **different direction**, not just a
+fresh context. Leave `CLAUDE_CODE_SUBAGENT_MODEL` **unset** — per-agent `model:`
+frontmatter is the routing decision. Review/audit workflows must be **capability
+read-only** (Edit/Write/mutating-git/GitHub-write excluded from the allowlist, not
+merely prompted against — workflow subagents run in `acceptEdits` and inherit the
+parent's tools). Full model:
+[docs/swarm/modern-claude-operating-model.md#delegation-model](docs/swarm/modern-claude-operating-model.md#delegation-model).
 
-| Gate | Purpose | Key agents |
-|------|---------|-----------|
-| **1. Identify** | Accurate, builder-ready problem statement | scout, accuracy-scout, research-verifier |
-| **2. Spec** | Scoped, project-aligned approach | plan-reviewer, oppositional-planner, advocatus-diaboli, architecture-reviewer, maintainer-issue, spec-planner |
-| **3. Build** | Well-tested, implemented PR | red-tdd, builder, green-tdd |
-| **4. Review/improve** | Right thing × what codebase needs × right way | reviewer, maintainer-pr, refactor-planner, green-refactor, reviewer-deep, diff-auditor |
-| **5. CI green** | Live CI actually green (not just a label) | green-ci, pr-responder |
-| **6. Merge** | Land it | ops |
-| **7. Learn** | Consolidate captured learning into durable artifacts | wisdom, memory-recalibrator, learning-scribe |
+## Closure discipline and one-decision-per-pass
 
-**Sequencing within a gate** is preferred when agents build on each other's output, but is not strict — parallel agents within a gate are fine when they don't depend on each other.
+**Component-proved ≠ system-proved.** Before "done"/"merge"/"live", verify the full
+production chain: the live caller, reachability from a real request, the durable
+artifact on `origin`, the externally observable effect — bound to the current repo
+identity + HEAD SHA. Track completion on independent axes (Implemented · Merged ·
+Reachable · Correct · Measured · Promoted · Consolidated); a gap on
+Reachable/Promoted/Consolidated is **inventory, not product**. Background:
+[docs/forensics/2026-06-25-closure-gap-the-recurring-defect.md](docs/forensics/2026-06-25-closure-gap-the-recurring-defect.md).
 
-**Some gates may be skipped** when they are not relevant for a given PR's nature (e.g., a 1-line fmt fix skips Gates 1 and 2; a docs-only PR skips reviewer-deep in Gate 4).
+**Each agent's pass produces exactly ONE routing decision**: sign off (`<gate>-reviewed`)
+OR bounce back (`needs-*`) — never both in the same pass. Per the 2026-04-26 #6780
+incident, applying both confused the merge gate and let unfixed bugs ride to main.
 
-**Learning is captured continuously** by every agent in every gate. Gate 7 is the dedicated consolidation layer — it shapes captured artifacts into durable memory, doctrine, and follow-up work.
+**No GitHub-enforced merge check depends on label state**: the two required checks
+(`Perl LSP Rust Small Result`, `ripr+ New Gap Gate` — classic branch-protection status
+checks) green on the exact head, plus 0 unresolved conversation threads (this repo's
+conversation-resolution convention — enforced by the `main` branch ruleset's
+`required_review_thread_resolution` rule; classic branch protection's own
+`required_conversation_resolution` setting is off) is what gates a merge
+attempt — not `needs-*`/`merge-ready`. The mechanical `needs-label-gate` that once
+blocked a GitHub merge on `needs-*` presence was retired (#4005). That doesn't make
+`needs-*` inert: the `queue_reconciler` cron strips the `merge-ready` navigation
+label when a non-CI `needs-*` label is present or live CI is red, and the ops merge
+checklist still treats an active `needs-*` label as a hard stop — an unaddressed
+bounce label still blocks a PR from merging in practice, as reconciliation/process
+discipline, not a ruleset gate. **Main must stay green; merge requires green**
+(2026-04-26 directive) — verify workspace-wide CI, not just per-crate, before merging.
 
-**Gate-7 capture loop**: Every deep-review fix or observable incident => one  entry (YAML frontmatter with tags + search_terms, links the PR# and the  pattern) + a spec/contract follow-up in  or  if the class is recurring.
+## Publication and proof
 
-See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for the full gate model: skip criteria, within-gate ordering, three-axis triangulation in Gate 4, and worked examples.
+Every PR body should answer: Intent · Controlling issue · Scope · Non-goals · Change
+shape · Behavioral proof · Receipts · Independent review · What was not run · Claim
+boundary · Risk & rollback · Remaining work (full shape:
+[operating model § receipts](docs/swarm/modern-claude-operating-model.md#receipts--pr-cockpit)).
+Receipts are machine-produced, SHA-bound, claim-bounded evidence — not narrative
+summaries. **GitHub/repo state is truth**, not conversational checkboxes; the
+TaskList board's `completed` status does not reliably persist across sessions (known
+harness bug) — never rely on it for cross-session state.
 
-The tables above name the load-bearing gate agents; for the full roster — including the pipeline **leads** (`lead-discovery`, `lead-build`, `lead-review`) and the **Issue Discovery Desk** scouts (`scout-find-*`) — see [.claude/agents/AGENT_CATALOG.md](.claude/agents/AGENT_CATALOG.md).
+## Coding standards
 
-### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
+Invoke `/coding-standards` for full detail; [WORKTREE_PROTOCOL.md](docs/reference/WORKTREE_PROTOCOL.md)
+for worktree mechanics.
 
-The default sequence within and across gates. Adapt to PR nature; skip gates that don't apply.
+- **Banned in production code**: `unwrap()`, `expect()`, `panic!()`, `todo!()`,
+  `unimplemented!()`, `std::process::abort()`, `dbg!()`. Use `?`, `.ok_or_else()`,
+  pattern matching, `Result`/`Option`. `std::process::exit()` only in `bin/` and
+  `lifecycle.rs`. Narrow exceptions exist (LazyLock regex initializers, profiling
+  bins) — see `/coding-standards` for the exact list.
+  Tests: `Result<()>` returns or `perl_tdd_support::must`/`must_some`.
+- **Never use `git stash` in a worktree agent.** The stash list is shared across all
+  worktrees and the main checkout — `git stash pop` may silently restore another
+  agent's changes. Use `git restore <file>` to discard, or `git commit -m "wip"` to
+  save work in progress.
+- Run `cargo fmt` and `cargo clippy --workspace` before committing. Prefer
+  `.first()` over `.get(0)`, `.push(char)` over `.push_str`, `or_default()` over
+  `or_insert_with(Vec::new)`; avoid unnecessary `.clone()` on Copy types.
 
-Every change flows through this pipeline. Each stage is a cheap pass that catches what the previous one missed.
+## Merge and CI
 
-| Stage | Model | Purpose | Fix forward? |
-|-------|-------|---------|-------------|
-| **Scout** (haiku) | Broad discovery | Find the problem, file roughly-right spec | N/A — files issues |
-| **Accuracy-scout** (haiku) | Mechanical fact check | Verify file paths, function names, issue status against master | No — corrects facts, not plans |
-| **Research-verifier** (haiku) | External fact check | Verify Perl semantics, LSP spec, crate API claims via web + grep | No — verifies facts, not plans |
-| **Oppositional-planner** (haiku) | Challenge approach | Surface objections, overlooked alternatives, risk flags | No — generates challenges for plan-reviewer |
-| **Advocatus-diaboli** (haiku) | Challenge premise | Should this exist at all? User impact, yak-shaving, scope fit | No — BUILD/DEFER/CLOSE verdict |
-| **Architecture-reviewer** (haiku) | Structural alignment | Verify design fits microcrate layering, dependency direction, type placement | No — flags violations |
-| **Maintainer-issue** (haiku) | Project vision (issue) | Does this align with perl-lsp's goals, roadmap, and user base? | No — ALIGNED/DEFERRED/OUT OF SCOPE |
-| **Plan-review** (sonnet) | Improve the plan | Fill gaps, correct root cause, add edge cases | Yes — complete the spec yourself |
-| **Spec-planner** (haiku) | Implementation roadmap | Create `impl/` branch, write `.spec/` files (checklist, acceptance, context) | No — plans, doesn't implement |
-| **Red-TDD** (haiku) | Write failing tests | Commit red tests to impl branch; define "done" before builder starts | No — tests only, no implementation |
-| **Build** (sonnet) | Make tests green | Check out impl branch (spec + red tests), implement, verify, PR | Yes — adapt if plan-reviewed; bump back if not |
-| **Green-TDD** (haiku) | Harden tests | Add edge case, boundary, regression tests after builder implements | No — tests only, flags bugs for reviewer |
-| **Review** (haiku) | Standards check | Banned patterns, scope, formatting — push fixes directly | Yes — always fix forward |
-| **Maintainer-PR** (haiku) | Project vision (PR) | Does the implementation fit perl-lsp's direction and quality bar? | No — ALIGNED/SCOPE DRIFT/QUALITY GAP |
-| **PR-responder** (haiku) | Address bot comments | Fix CI failures, validate-title, linter warnings, resolve conversations | Yes — fix what's broken |
-| **Refactor-planner** (haiku) | Refactor analysis | Identify simplification, reuse, dead code, type tightness — posts plan for green-refactor | No — analysis only |
-| **Green-refactor** (sonnet) | Refactor while green | Execute refactor plan: simplify, extract helpers, improve naming — tests stay green | Yes — behavior-preserving only |
-| **Review-deep** (sonnet) | Correctness check | Does the logic work? Edge cases? Regressions? | Yes — fix forward, final gate |
-| **Green-CI** (haiku) | CI freshness gate | Verify all checks pass on current HEAD SHA — no stale green | Yes — fixes mechanical CI failures |
-| **Diff-auditor** (haiku) | Final diff check | Verify cumulative diff is coherent, clean, matches spec, no artifacts | No — CLEAN/ARTIFACTS/REGRESSION/DRIFT |
-| **Green** | CI gate | SHA-verified, merge-time fresh check | N/A |
-| **Merge** | Ops | Batch of 3, wait for green, ratchet corpus | N/A |
-| **Wisdom** | Learning | Retrospective, update memory, log patterns | N/A |
-
-**Key principles:**
-- The orchestrator routes, it doesn't execute. Never poll CI, read diffs, or check PR state in loops. Launch an agent with the full job and move to the next routing decision.
-- One status check to inform routing, then delegate. When the orchestrator has context (exact edits, file contents), pass it to the agent — don't make agents re-research what you already know.
-- Scouts are honest about uncertainty — plan-reviewers correct. Being roughly right > confidently wrong.
-- Accuracy-scouts verify mechanical facts only (file paths, function names, issue status). They do not redesign the spec or suggest approaches.
-- Plan-reviewers improve plans, never punt "needs more scout work." They're enhanced scouts with sonnet.
-- Builders execute the spec as given. Fix forward on small gaps, bump back if structural.
-- Reviewers push improvements directly to PR branches. Every PR gets improved, no LGTM-only.
-- Every agent recommends next steps for the orchestrator.
-- Learning is continuous — every agent-wrapup captures what was learned.
-- **Master must stay green; merge requires green** (2026-04-26 directive). Per-crate green is necessary but not sufficient — workspace-wide xtask fmt and clippy cascades break master if a single PR's drift goes unchecked. Verify workspace-wide CI before merging; route to fmt/clippy fix if not.
-- **Each agent's pass produces ONE routing decision.** Sign-off is itself one of the routing options — applied across ALL agents (reviewer, maintainer-pr, refactor-planner, green-tdd, deep-reviewer, diff-auditor, green-ci, accuracy-scout, research-verifier, oppositional-planner, advocatus-diaboli, architecture-reviewer, maintainer-issue, spec-test-code-match). Each pass picks exactly one of: (a) sign off (gate clean, apply `<gate>-reviewed`) OR (b) bounce back (apply the appropriate `needs-*` routing label). Never both. Per the 2026-04-26 #6780 incident: applying `review-reviewed` AND `needs-builder-fix` simultaneously confused the merge gate and let unfixed bugs ride to master. The principle is one-decision-per-pass: gate-clean OR bounce, not gate-clean AND bounce.
-- **No `needs-*` label on a PR may merge.** Even with `merge-ready`, presence of any `needs-builder-fix` / `needs-ci-fix` / `needs-diff-fix` / `needs-spec-fix` / `needs-red-tdd-fix` label MUST block ops merge. The presence of an active routing label means the PR has unaddressed work.
-- **External-source PRs (claude-burst, codex-burst, diffguard-bot, etc.) require the same gate set as internal PRs.** Don't shortcut review on third-party PRs; they're frequently the source of cross-PR contamination, hallucinated APIs, and scope drift between title and diff.
-
-### Pipeline State Labels
-
-Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them. For the principle distinguishing live-truth labels (CI, mergeability) from authoritative-only labels (signoffs, routing), see [docs/reference/LIVE_SIGNALS_VS_LABELS.md](docs/reference/LIVE_SIGNALS_VS_LABELS.md).
-
-**Sign-off labels** (`<agent>-reviewed` = agent completed its pass):
-
-| Label | Set by | Means |
-|-------|--------|-------|
-| `accuracy-reviewed` | accuracy-scout | Mechanical facts verified (file paths, function names) |
-| `research-reviewed` | research-verifier | External claims verified (Perl docs, LSP spec, crate APIs) |
-| `oppositional-reviewed` | oppositional-planner | Approach challenged, alternatives surfaced |
-| `diaboli-reviewed` | advocatus-diaboli | Existence challenged — BUILD/DEFER/CLOSE verdict |
-| `plan-reviewed` | plan-reviewer | Spec refined and approved |
-| `spec-reviewed` | spec-planner | Impl branch created with `.spec/` files |
-| `red-tdd-reviewed` | red-tdd | Failing tests committed on impl branch |
-| `green-tdd-reviewed` | green-tdd | Edge case and regression tests added |
-| `architecture-reviewed` | architecture-reviewer | Design fits microcrate layering and dependency contracts |
-| `maintainer-issue-reviewed` | maintainer-issue | Issue aligns with project goals, roadmap, user base |
-| `green-tdd-reviewed` | green-tdd | Edge case and regression tests added |
-| `review-reviewed` | reviewer | Standards check passed (banned patterns, scope) |
-| `maintainer-pr-reviewed` | maintainer-pr | PR implementation fits project direction and quality bar |
-| `pr-responded` | pr-responder | Bot comments and CI failures addressed |
-| `refactor-planner-reviewed` | refactor-planner | Simplification/reuse plan posted for green-refactor |
-| `green-refactor-reviewed` | green-refactor | Implementation simplified while tests stay green |
-| `deep-reviewed` | reviewer-deep | Correctness check passed — required before merge |
-| `ci-green` | green-ci | All CI checks pass on current HEAD SHA |
-| `diff-audited` | diff-auditor | Cumulative diff is coherent, clean, matches spec — ready for ops |
-
-**State labels** (where the issue/PR is now):
-
-| Label | Set by | Means |
-|-------|--------|-------|
-| `builder-ready` | plan-reviewer | Spec finalized — ready for build pipeline |
-| `in-build` | builder | Builder actively working |
-| `in-review` | reviewer | PR in review process |
-| `merge-ready` | pr-ready | All gates passed — ready for ops merge |
-| `already-fixed` | any agent | Close without build |
-
-**Routing labels** (`needs-<action>` = work needed):
-
-| Label | Set by | Means |
-|-------|--------|-------|
-| `needs-plan-review` | scout | Entry to verification pipeline |
-| `needs-deep-review` | reviewer | Standards done, deep review needed |
-| `needs-builder-fix` | green-tdd | Edge case test found bug — route back to builder |
-| `needs-ci-fix` | green-ci | CI check failed or stale — route to pr-responder |
-| `needs-diff-fix` | diff-auditor | Diff has artifacts, regressions, or scope drift — route to pr-responder |
-
-**Meta labels:**
-
-| Label | Purpose |
-|-------|---------|
-| `structural-blocker` | Blocks parallel work |
-| `follow-up-recommended` | Needs follow-up issue |
-| `swarm-discovered` | Found by automated sweep |
-| `size/S`, `size/M`, `size/L` | Effort estimate |
-
-Labels are sign-off receipts. The *presence* of a label means an agent reviewed and approved. The *absence* means the pass hasn't happened yet. The orchestrator routes based on what's missing.
-
-### Label-based routing
-
-Default routing pattern. The orchestrator may skip individual queries when the PR's nature makes that gate's check trivially satisfied or irrelevant. See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for skip criteria.
-
-**Pre-plan-review verification** (issue has `needs-plan-review`):
-```
-Missing accuracy-reviewed?          → spawn accuracy-scout (first — corrects line numbers for everyone else)
-Missing research-reviewed?          → spawn research-verifier (reads accuracy-corrected facts)
-Missing oppositional-reviewed?      → spawn oppositional-planner (reads verified facts to challenge approach)
-Missing diaboli-reviewed?           → spawn advocatus-diaboli (reads verified + challenged spec to judge existence)
-Missing architecture-reviewed?      → spawn architecture-reviewer (reads verified spec to check structural fit)
-Missing maintainer-issue-reviewed?  → spawn maintainer-issue (reads all above to judge project alignment)
-All six present?                    → spawn plan-reviewer
-```
-These are **sequential** — each layer reads and builds on the previous. The accuracy-scout
-corrects facts, the research-verifier works from corrected facts, the oppositional-planner
-challenges a verified approach, the architecture-reviewer checks structure of a challenged
-spec, the maintainer checks project fit of an architecturally-validated proposal. Running
-them out of order wastes tokens and produces worse results.
-
-**Pre-build preparation** (issue has `builder-ready`):
-```
-Missing spec-reviewed?          → spawn spec-planner
-Missing red-tdd-reviewed?       → spawn red-tdd (after spec-planner)
-Both present?                  → spawn builder
-```
-These are sequential — red-tdd needs the branch from spec-planner.
-
-**Post-build hardening** (issue has `in-build`, PR exists):
-```
-PR created?                        → spawn green-tdd on the PR branch
-green-tdd done?                    → spawn reviewer
-needs-builder-fix set?             → route back to builder first
-```
-
-**Post-build PR pipeline** (PR exists, sequential):
-```
-Missing green-tdd-reviewed?        → spawn green-tdd (add edge case tests)
-Missing review-reviewed?           → spawn reviewer (standards check, pushes fixes)
-Missing maintainer-pr-reviewed?    → spawn maintainer-pr (project fit check)
-Missing pr-responded?              → spawn pr-responder (address bot comments, CI failures)
-Missing refactor-planner-reviewed?  → spawn refactor-planner (haiku analysis of simplification opportunities)
-Missing green-refactor-reviewed?   → spawn green-refactor (execute refactor plan — sonnet)
-All six present?                   → spawn reviewer-deep (final correctness gate)
-Missing ci-green? (after deep)     → spawn green-ci (verify CI on current HEAD, fix mechanical failures)
-needs-ci-fix set?                  → route back to pr-responder
-Missing diff-audited? (after CI)   → spawn diff-auditor (final coherence check)
-needs-diff-fix set?                → route back to pr-responder
-diff-audited + ci-green present?   → spawn ops (merge)
-```
-Each reads the previous agents' comments. The pr-responder fixes bot comments
-and CI failures. Green-ci is the final mechanical gate — verifies CI is
-genuinely green on the current HEAD SHA, not a stale result from an earlier push.
-
-**Query examples:**
-```bash
-gh issue list --label "needs-plan-review" -l "accuracy-reviewed" -l "research-reviewed" -l "oppositional-reviewed" -l "diaboli-reviewed" --state open  # fully verified, ready for plan-review
-gh issue list --label "builder-ready" --state open   # ready to build
-gh issue list --label "red-tdd-reviewed" --state open # red tests done, builder can start
-gh issue list --label "in-build" --state open        # builder working
-gh issue list --label "needs-builder-fix" --state open  # green-tdd found bug
-gh issue list --label "structural-blocker" --state open  # blocked work
-gh pr list --search "label:merge-ready"              # ready to merge
-```
-
-### Routing patterns
-
-- **Code change** -> worktree agent: `Agent(isolation: "worktree", prompt: "...")`
-- **Research** -> explore agent: `Agent(subagent_type: "Explore", prompt: "...")`
-- **Multiple changes** -> parallel worktree agents, one per crate. Microcrate architecture prevents conflicts.
-  - Reserve 10 agent slots for late-cycle routing. Use SendMessage to repurpose idle agents.
-- **Idle warm agent** -> re-task it, don't let it expire (~5-min agent cache TTL vs ~1-hr orchestrator). Re-aim across adversarial angles / verification / cleanup *within the same focus*; spawn a fresh agent only when the focus changes. Cache is a discount, not a reason to manufacture low-value work.
-- **Independent verification** -> a different *direction* on the seam, not necessarily a fresh agent. Background subagents must **self-post** findings via SendMessage **and write them to a durable file** — verify the durable artifact, not the agent's word (background agents reliably drop reports otherwise).
-
-### Issue-scout protocol
-
-> **Post where the work lives. Verify in opposition. Land only on convergence.**
-
-The GitHub issue thread is not a report destination — it is the database, the whiteboard, the audit log, and the convergence rail. Findings become real *on the issue*, never solely in an agent's or the orchestrator's private context. Full doctrine and prompt templates: [docs/reference/ISSUE_SCOUT_PROTOCOL.md](docs/reference/ISSUE_SCOUT_PROTOCOL.md).
-
-- Scouts post findings directly on GitHub issues. Do **not** return substantive issue analysis only to the orchestrator.
-- Every scout comment must include: **current state, evidence (file:line / tests / PRs / commands), opposing checks, verdict, plan, acceptance criteria, residual uncertainty.**
-- Oppositional verifiers post `CONFIRMED` / `REFUTED` / `CORRECTED` on the same issue, with the exact correction when prior evidence was path-mis-scoped.
-- Posting may tolerate the expected ~12% hallucination rate — convergence corrects it. **Closing, merging, and `builder-ready` routing require a converged verdict** from an oppositional pass; a single scout's "dual evidence" is not enough if it may be path-mis-scoped.
-- **A real test is not enough if it exercises the wrong code path** (the #3106 lesson — same disease as NodeKind blindness: proof for one shape does not prove the semantic case).
-- The coordinator does not centralize raw analysis. It reads the converged issue state, routes labels / follow-up work, and gates landing actions. Asymmetric by design: **parallelize posting, parallelize opposition, serialize landing.**
-
-### Merge Queue Protocol
-
-- Don't rebase PRs unless merge conflicts exist
-- Merge in batches of 3 (CI cancellation cascade -- rapid merges cancel each other's CI runs)
-- Run `just cpan-corpus-ratchet` after parser fix merges
-- `docs/project/status/*.md` subsystem files are regenerated automatically post-merge (no manual step needed)
-
-**Required CI checks for merge** — exactly three branch-protection required checks:
+Exactly two branch-protection required checks (authoritative:
+[.ci/policies/required-checks.toml](.ci/policies/required-checks.toml)):
 - `Perl LSP Rust Small Result`
 - `ripr+ New Gap Gate`
-- `Codecov / Patch 95`
 
-(`CI Gate (Merge-Blocking)` and `PR Smoke` are **not** required — their failure does not block merge.)
+(`Codecov / Patch 95`, `CI Gate (Merge-Blocking)`, `PR Smoke` are advisory — not
+required.) Merge in batches of 3 (CI cancellation cascade); run
+`just cpan-corpus-ratchet` after parser merges — batch-of-3 mechanics:
+[.claude/agents/ops.md](.claude/agents/ops.md) and
+[PROCESS_LESSONS.md §3](docs/reference/PROCESS_LESSONS.md). **Before merging a batch,
+compare changed-file lists (`gh pr diff --name-only`); when two PRs in the batch touch
+the same file, merge the older/smaller one first and expect the other to need a
+conflict-resolution merge afterward — don't merge same-file PRs back-to-back blind**
+(observed 2026-07-04: #3397 and #3381 both touched `runtime/scheduler.rs`; wrong order
+created an avoidable conflict). Local preflight, timing, and the Codecov false-low
+recipe: [CI_GATE_PLAYBOOK.md](docs/reference/CI_GATE_PLAYBOOK.md).
 
-**Local preflight before merge** — run per-crate, separately (the combined `-p X -p Y` form glitches with a spurious failure):
-```bash
-cargo fmt --check -p <crate>                             # per-crate, one at a time
-cargo clippy -p <crate> --locked -- -D warnings -A missing_docs  # per-crate
-```
-This catches the #1 recurring failure: fmt/clippy drift landing on main through a PR that looked green.
+**Never enable or retain auto-merge while any requested review is still active or any
+substantive review conversation remains unresolved.** Resolve threads for a reason
+(fixed/refuted/superseded/follow-up), each backed by a machine-readable
+`Disposition:`/`Evidence:` reply posted BEFORE resolution — never performatively. Main
+mechanically requires conversation resolution before merge. The
+`resolved_without_disposition` gate — which will mechanically block any resolved
+thread with no reply, the resolved-to-clear pattern that shipped 6 live P1 defects
+through #3647 — is proposed in #3732 but **deliberately held back** for a
+dogfood-advisory-first rollout, so it doesn't retroactively block PRs already in
+flight; until it lands, follow the convention as process discipline, not yet
+mechanically enforced. Canonical convention: [review-convergence.md § Disposition-reply
+convention](.claude/reference/review-convergence.md#disposition-reply-convention-before-calling-resolvereviewthread).
 
-**Merge with UNSTABLE is OK** when all 3 required checks are green and the red check is non-required. Do not block on a non-required check.
-
-**CI timing** — CX53 self-hosted CI + the separate `ripr` workflow + Codecov upload take ~20-30 min. A sparse rollup (e.g. `EM CI Routed Rust = success` but Codecov/ripr+ still empty) means **RUNNING, not stuck**. Verify via `gh run list --branch <branch>`; don't re-poll faster than the gates complete.
-
-**`Codecov / Patch 95`** measures `--lib` coverage only. Integration-tested production code that lacks a `--lib` unit test will fail this gate. Fix: add a `--lib` unit test, or document a narrow/expiring exception. A SKIPPED-vs-SUCCESS duplicate for the same check (draft→ready transition) can briefly show BLOCKED — it reconciles on its own; do not re-push.
-
-See [docs/reference/CI_GATE_PLAYBOOK.md](docs/reference/CI_GATE_PLAYBOOK.md) for the full playbook.
-
-## Quick Reference
-
-```bash
-just doctor                           # Workspace health check (run before any agent-spawning session)
-just pr-fast                          # Canonical fast push guard
-nix develop -c just ci-gate           # Canonical local merge gate (before merge)
-cargo build -p perl-lsp-rs --release     # Build LSP server
-cargo test --workspace --lib          # Run all tests
-```
-
-| Task | Pattern |
-|------|---------|
-| Code change | `Agent(isolation: "worktree", ...)` |
-| Research | `Agent(subagent_type: "Explore", ...)` |
-| Parser fix | `/parser-fix` |
-| Swarm cycle | `/swarm all` |
-| Crate verification | `/verify <crate>` |
-
-## Crate Structure
-
-39 workspace members across 38 crate directories under `crates/` plus `xtask/` at the root (see `cargo metadata --no-deps`). The pre-v0.13.0 count of ~135 reflected the original microcrate split; successive collapse waves (D, G1a/G1b, G2, G3, Final-PR-B, H) absorbed those crates into larger units. Key crates:
-
-| Crate | Path | Purpose |
-|-------|------|---------|
-| **perl-parser** | `crates/perl-parser/` | Main parser (v3 recursive descent) |
-| **perl-lsp** | `crates/perl-lsp-rs/` | LSP server binary |
-| **perl-dap** | `crates/perl-dap/` | Debug Adapter Protocol |
-| **perl-lexer** | `crates/perl-lexer/` | Context-aware tokenizer |
-| **perl-parser-core** | `crates/perl-parser-core/` | Core parsing infrastructure |
-| **perl-workspace** | `crates/perl-workspace/` | Workspace symbol indexing |
-| **perl-semantic-analyzer** | `crates/perl-semantic-analyzer/` | Semantic analysis |
-
-Active crate groups: `perl-parser*` (parser family), `perl-lsp-rs*` (LSP server), `perl-semantic-*` (semantic analysis), `perl-tdd-*` / `perl-test-*` (test infrastructure), `tree-sitter-perl-*` (tree-sitter bindings), core leaf crates (`perl-token`, `perl-ast`, `perl-regex`, `perl-lexer`, `perl-pod`, `perl-uri`).
-
-## Essential Commands
-
-### Build & Test
+## Quick reference
 
 ```bash
-cargo build -p perl-lsp-rs --release     # LSP server
-cargo build -p perl-parser --release  # Parser library
-cargo test                            # All tests
-cargo test -p perl-parser             # Parser tests
-cargo test -p perl-lsp-rs                # LSP tests
-cargo test -p perl-parser -- test_name --exact  # Exact test in crate
-RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2  # LSP threading
-just ci-lsp-def                       # Semantic definition tests
+just doctor && just pr-fast           # health check, then canonical fast push guard
+nix develop -c just ci-gate           # canonical local merge gate (before merge)
+cargo test --workspace --lib          # run all tests
 ```
 
-### Lint, Format, Quality
+Full command catalog: [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) and
+the `justfile`. Crate map (~30 post-collapse crates; run `cargo metadata --no-deps` for
+the current member count — do not hardcode it, it drifts):
+[AGENTS.md § Project shape](AGENTS.md#project-shape).
+Key paths, parser-version notes, workspace exclusions:
+[AGENTS.md](AGENTS.md) and [WORKSPACE_ARCHITECTURE.md](docs/project/WORKSPACE_ARCHITECTURE.md).
 
-```bash
-cargo fmt --check -p <crate>          # Quick per-crate fmt check (run separately per crate — combined -p X -p Y glitches)
-cargo xtask fmt                       # Full-workspace formatter (heavyweight — cold build is slow; use for workspace-wide fmt, not routine checks)
-cargo clippy --workspace              # Lint all crates
-cargo clippy --workspace --lib        # Lint libraries only (faster)
-just dead-code                        # Dead code report
-cargo machete                         # Unused dependencies
-just security-audit                   # Security audit
-just semver-check                     # SemVer check all published packages
-```
+## Documentation index
 
-### Benchmarks, Fuzzing, Coverage
+Gates, agent roster, label taxonomy, skip criteria:
+[PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md). Per-label live-vs-authoritative
+audit: [LIVE_SIGNALS_VS_LABELS.md](docs/reference/LIVE_SIGNALS_VS_LABELS.md).
+Post-where-work-lives protocol: [ISSUE_SCOUT_PROTOCOL.md](docs/reference/ISSUE_SCOUT_PROTOCOL.md).
+Also: [ROADMAP.md](docs/project/ROADMAP.md) ·
+[FAILURE_MODES.md](docs/reference/FAILURE_MODES.md) ·
+[PROVIDER_READINESS_CONTRACT.md](docs/reference/PROVIDER_READINESS_CONTRACT.md) ·
+[features.toml](features.toml) · [SPEC_TEMPLATE.md](docs/reference/SPEC_TEMPLATE.md) ·
+[SUBSYSTEM_HAZARD_DEFAULTS.md](docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md) ·
+[docs/learnings/README.md](docs/learnings/README.md) (repo incidents, greppable) ·
+[docs/concepts/](docs/concepts/) (portable patterns).
 
-```bash
-just benchmarks                       # Run all benchmarks
-just fuzz-bounded                     # Bounded fuzz run (60s per target)
-just mutation-subset                  # Mutation testing subset
-just coverage                         # HTML coverage report
-just coverage-lcov                    # lcov.info for CI
-```
+**User-facing semantic PRs** (hover/completion docs, builtin signatures, version-gated
+behavior, diagnostic wording) require correctness review against an **external
+oracle** (perldoc, the LSP/DAP spec, the real crate API) before merge — green CI
+proves internal consistency, never external truth (the #3118 incident: fully green
+CI still shipped a hallucinated fact). See [external-truth-gate.md](docs/concepts/external-truth-gate.md).
 
-### Health & Status
+**PR title `(#N)` rule**: `(#0000)` is accepted when the real issue number is unknown
+(never guess a real one) and auto-applies `needs-issue-link`, which self-clears once
+the title carries a real number. See `.github/workflows/pr-title-check.yml`.
 
-```bash
-just health                           # Codebase metrics
-just status-check                     # Verify computed metrics
-just debt-report                      # Technical debt status
-just debt-check                       # Debt budget compliance
-```
-
-### CPAN Corpus
-
-```bash
-just cpan-corpus-sweep                # Sweep and report
-just cpan-corpus-check                # Enforce manifest (fails on regression)
-just cpan-corpus-ratchet              # Auto-add clean modules to manifest
-```
-
-## Development Workflow
-
-**Local-first** -- all gates run locally before CI. Install hook: `bash scripts/install-githooks.sh`
-
-### CI Gate Tiers
-
-| Tier | Command | Time | When |
-|------|---------|------|------|
-| **A (PR-fast)** | `just pr-fast` | ~1-2 min | Quick iteration and pre-push hook |
-| **B (Merge gate)** | `just ci-gate` | ~3-5 min | Before merge |
-| **C (Nightly)** | `just ci-full` | ~15-30 min | Mutation, fuzzing, benchmarks |
-
-## Parser Versions
-
-- **v3 (Native)**: Current recursive descent parser
-- **v2 (Pest)**: Legacy, kept out of default gate
-- **v1 (C-based)**: Benchmarking only
-
-## Workspace Exclusions
-
-`tree-sitter-perl/` (legacy C), `fuzz/` (fuzz builds), `archive/` (archived).
-
-## Key Paths
-
-| What | Where |
-|------|-------|
-| Parser source | `crates/perl-parser/src/` |
-| LSP providers | `crates/perl-lsp-*/src/` |
-| LSP server binary | `crates/perl-lsp-rs/src/` |
-| DAP server | `crates/perl-dap/src/` |
-| Tests | `crates/*/tests/` |
-| Test corpus | `test_corpus/`, `tree-sitter-perl/test/corpus/` |
-| VSCode extension | `vscode-extension/` |
-| Documentation | `docs/` |
-| Features catalog | `features.toml` |
-| CI config | `.ci/` |
-| Known blockers | `.ci/blockers.yaml` |
-| Build tooling | `xtask/` |
-| Slash commands | `.claude/commands/` |
-| Swarm ops | `.ops-perl-lsp/` |
-
-## Architecture Patterns
-
-**Dual indexing**: Index workspace symbols under both qualified and bare names (see PR #122).
-
-**LSP threading**: `RUST_TEST_THREADS=2`, `CARGO_BUILD_JOBS=1`, `RUSTC_WRAPPER=""`.
-
-**Worktree stash prohibition**: Never use `git stash` in a worktree agent. The stash list is shared across all worktrees and the main checkout — `git stash pop` may silently restore another agent's changes. Use `git restore <file>` to discard changes, or `git commit -m "wip"` to save work in progress.
-
-## Truth Sources
-
-Metrics are **computed, not hand-edited**:
-- `docs/project/status/*.md` subsystem files auto-generated via `just status-update` (writes lsp.md, tests.md, parser.md, quality.md)
-- `docs/project/CURRENT_STATUS.md` is now a stable stub linking to the subsystem files (no `<!-- BEGIN: -->` markers)
-- `features.toml` is the canonical LSP capability definition
-- Test output and CI receipts are evidence for all claims
-- `README.md` must not contain volatile metrics -- link to `docs/project/status/index.md`
-- `.ci/blockers.yaml` is manually maintained — verify counts against `parser-corpus-baseline.json` before trusting `affected_files` values
-- `docs/reference/PARSER_CONTRACTS.md` is the durable contract index for parser behavioral invariants (quote-like, indirect-object, embedded-code, NodeKind classification, recovery nodes, formatting gates)
-- `docs/reference/SEMANTIC_SNAPSHOT_ARCHITECTURE.md` is the umbrella contract for the semantic model substrate (ownership boundary, semantic identity, FileSemanticBundle, SemanticSnapshot, SemanticResult, dynamic boundaries); implemented by #1600 / #1598 / #1601
-
-## Coding Standards
-
-Invoke `/coding-standards` for full detail.
-
-- Run `cargo fmt` and `cargo clippy --workspace` before committing
-- **Banned in production code**: `unwrap()`, `expect()`, `panic!()`, `todo!()`, `unimplemented!()`, `std::process::abort()`, `dbg!()`
-  - Use `?`, `.ok_or_else()`, pattern matching, `Result`/`Option` instead
-  - `std::process::exit()` only in `bin/` and `lifecycle.rs`
-  - Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp-rs/src/util/uri.rs`
-  - Exception: `bin/` targets may use `#[allow(clippy::expect_used)]` for profiling / CLI entry points, including `crates/perl-workspace/src/bin/workspace_memory_profile.rs`
-  - Exception: static `LazyLock<Regex>` initializers may use `unreachable!()`/`expect()` for known-good patterns, including `crates/perl-heredoc-anti-patterns/src/lib.rs`
-  - Tests: `Result<()>` returns or `perl_tdd_support::must`/`must_some`
-- **Prefer**: `.first()` over `.get(0)`, `.push(char)` over `.push_str("x")`, `or_default()` over `or_insert_with(Vec::new)`
-- **Avoid**: unnecessary `.clone()` on Copy types
-- **Regex**: `Option<Regex>` with `.ok()` for graceful degradation
-- After adding tests, no manual status update needed — `docs/project/status/*.md` files are auto-regenerated post-merge
-
-## Documentation
-
-[Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [FAILURE_MODES.md](docs/reference/FAILURE_MODES.md) | [CI_ARCHITECTURE.md](docs/reference/CI_ARCHITECTURE.md) | [CI_GATE_PLAYBOOK.md](docs/reference/CI_GATE_PLAYBOOK.md) | [PROVIDER_READINESS_CONTRACT.md](docs/reference/PROVIDER_READINESS_CONTRACT.md) | [features.toml](features.toml)
-
-**Learnings**: [docs/learnings/README.md](docs/learnings/README.md) (repo-specific incidents, greppable by symbol/PR/hazard-class/tag; key 2026-06 incidents: [2026-06-rerunning-broken-gates.md](docs/learnings/2026-06-rerunning-broken-gates.md), [2026-06-agent-claims-vs-ground-truth.md](docs/learnings/2026-06-agent-claims-vs-ground-truth.md), [2026-06-coverage-job-ran-tests.md](docs/learnings/2026-06-coverage-job-ran-tests.md), [2026-06-substrate-self-validation-bootstrap.md](docs/learnings/2026-06-substrate-self-validation-bootstrap.md)) | [docs/concepts/](docs/concepts/) (portable patterns: shift-left-ladder, cache-aware-agent-lanes, hazard-class-invariants, multi-angle-haiku-early-spec, serialize-merges-and-cancellation, re-create-over-untangle, orchestrator-substrate-model, model-conformance, human-corrects-substrate, type-level-id-space-promotion, slow-stochastic-compiler, stochastic-ready-pipelines, verify-the-instrument, gate-names-must-match-failure-classes, triage-as-claim-audit, non-exhaustive-check-silent-drop, enforcement-over-doctrine, doctrine-is-a-hypothesis)
-
-**Spec hazard defaults**: [SUBSYSTEM_HAZARD_DEFAULTS.md](docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md) — per-subsystem hazard rows (DAP, Parser, LSP, Coverage/CI) that spec-planner should seed into `acceptance.md`; extends SPEC_UPDATE_CHECKLIST §8 with subsystem-specific invariants and adversarial test obligations.
-
-**Spec system**: [SPEC_TEMPLATE.md](docs/reference/SPEC_TEMPLATE.md) — canonical `.spec/<issue#>-<slug>/` structure (checklist.md / acceptance.md with §Behavior §Hazards §Contracts §API-Shape §Test-Grid §Blast-Radius / context.md) with three worked shapes (parser-fix, LSP-feature, test-only). The [spec-builder workflow](.claude/workflows/spec-builder.js) populates the rich acceptance.md sections via six parallel haiku angles; spec-planner invokes it for non-trivial issues.
-
-**SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table. | **Campaign narratives**: [docs/writeups/2026-06-agentic-maintenance-field-notes.md](docs/writeups/2026-06-agentic-maintenance-field-notes.md) (field notes from the June 2026 autonomous campaign: concrete incidents, isomorphic failure modes, shift-left evidence, instrument-is-the-bug recursion), [docs/writeups/2026-06-agentic-development-observations.md](docs/writeups/2026-06-agentic-development-observations.md) (central isomorphism: self-report unreliable at code/CI/cognitive layers; economics inversion; branch contamination; observability buggier than logic).
-
-## Contributing
-
-Run `just pr-fast` while iterating and `nix develop -c just ci-gate` before merge. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Continuous Swarm Development
-
-**Session start**: Run `just clean-worktrees` to prune stale agent worktrees before spawning new ones.
-
-Start with `/swarm all`. Orchestrator spawns scoped agents from the catalog in worktree isolation. ~20% capacity reserved for background improvement.
-
-**Key commands**: `/swarm` (start), `/swarm-protocol` (rules), `/coding-standards` (standards), `/verify` (crate gate), `/parser-fix` (TDD fix).
-
-**PR lifecycle**: Draft PR -> reviewer agent -> `/pr-ready` -> CI -> ops agent merges.
-
-**Files**: `.ops-perl-lsp/` (metrics), `.claude/agents/` (agent defs and catalog), `.claude/commands/` (step skills and shared ops).
-
-
+**Files**: `.ops-perl-lsp/` (metrics), `.claude/agents/` (agent defs and catalog),
+`.claude/commands/` (step skills), `.spec/<issue#>-<slug>/` (per-work-item specs).

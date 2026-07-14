@@ -78,7 +78,7 @@ To extend coverage, add a new `.pl` fixture under `fixtures/` and run
 
 These snapshots record what the grammar **actually** emits today, including
 several pre-existing highlighting bugs. That is intentional: a regression
-baseline captures current behaviour so that *any* change — including a fix —
+baseline captures current behaviour so that _any_ change — including a fix —
 shows up as an explicit `.snap` diff. When the grammar is corrected, regenerate
 the affected snapshots (`npm run test:grammar:update`) and the diff will show the
 scope improving.
@@ -95,7 +95,7 @@ defects (and the grammar-fix work) is tracked in
   tokenized as arithmetic division (`/` → `keyword.operator.arithmetic.perl`);
   `m//`, `s///`, `tr///`, `qr//` are correct.
 - **`length` / barewords** (`functions.pl`): the `le`/`gt` string-comparison
-  operator patterns match *inside* identifiers, shredding `length` into
+  operator patterns match _inside_ identifiers, shredding `length` into
   `le` + `gt` scopes.
 - **`<STDIN>`** (`keywords_control.pl`): the readline diamond is mis-scoped as
   `keyword.operator.comparison.perl` (the `<`/`>` comparison rule).

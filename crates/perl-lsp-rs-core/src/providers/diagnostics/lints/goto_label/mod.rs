@@ -27,7 +27,7 @@ pub fn check_goto_labels(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     walk_node(root, &mut |node| {
-        let NodeKind::Goto { target } = &node.kind else {
+        let NodeKind::Goto { target, .. } = &node.kind else {
             return;
         };
 

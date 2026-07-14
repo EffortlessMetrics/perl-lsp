@@ -1,7 +1,7 @@
 /// Tests for prototype character validation (issue #3355).
 ///
 /// Perl only allows a specific set of characters in old-style prototypes:
-/// `$`, `@`, `%`, `&`, `*`, `\`, `;`, `+`, `_`, and spaces.
+/// `$`, `@`, `%`, `&`, `*`, `\`, `;`, `+`, `_`, brackets, and spaces.
 /// Any other character should emit a warning-level diagnostic.
 use perl_parser_core::{NodeKind, Parser};
 use perl_tdd_support::must;
@@ -87,6 +87,20 @@ fn valid_proto_plus() {
 fn valid_proto_underscore() {
     // _ — default $_ prototype character
     assert_no_prototype_warning("sub under_proto (_) { }");
+}
+
+#[test]
+fn valid_proto_bracketed_ref_group() {
+    // Bracketed reference groups from core comp/proto.t: \[$@%&*].
+    assert_no_prototype_warning(r"sub ref_group (\[$@%&*]) { }");
+}
+
+#[test]
+fn valid_proto_mixed_bracketed_groups() {
+    assert_no_prototype_warning(r"sub multi1 (\[%@]) { }");
+    assert_no_prototype_warning(r"sub multi2 (\[$*&]) { }");
+    assert_no_prototype_warning(r"sub multi4 ($\[%]) { }");
+    assert_no_prototype_warning(r"sub multi5 (\[$@]$) { }");
 }
 
 // --- Invalid prototype tests (warning expected) ---

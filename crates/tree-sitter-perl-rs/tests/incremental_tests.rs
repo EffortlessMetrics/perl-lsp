@@ -3,7 +3,7 @@
 use perl_parser_core::edit::Edit;
 use perl_position_tracking::Position;
 use perl_tdd_support::must_some;
-use tree_sitter_perl_rs::{InputEdit, Parser};
+use tree_sitter_perl_rs::{FallbackReason, InputEdit, Parser, ReparseMode};
 
 fn parse(source: &str) -> tree_sitter_perl_rs::Tree {
     let mut parser = Parser::new();
@@ -220,4 +220,137 @@ fn when_parse_with_old_tree_given_unchanged_source_but_pending_edits_then_tree_i
         "pending edits should disable unchanged-source reuse and force a reparse"
     );
     assert_eq!(reparsed.source(), "my $x = 1;");
+}
+
+#[test]
+fn when_one_valid_edit_is_pending_then_token_replay_is_reported() {
+    let source = "my $value = 1;\n".repeat(40);
+    let mut parser = Parser::new();
+    let old_tree = must_some(parser.parse(&source));
+    let start = must_some(source.find('1'));
+    let new_source = source.replacen('1', "22", 1);
+    let edit = Edit::new(
+        start,
+        start + 1,
+        start + 2,
+        Position::new(start, 0, start as u32),
+        Position::new(start + 1, 0, (start + 1) as u32),
+        Position::new(start + 2, 0, (start + 2) as u32),
+    );
+    let mut edited_tree = old_tree;
+    edited_tree.edit(&edit);
+
+    let replayed = must_some(parser.parse_with_old_tree(&new_source, &edited_tree));
+    let fresh = must_some(parser.parse(&new_source));
+
+    assert_eq!(replayed.root_node().to_sexp(), fresh.root_node().to_sexp());
+    assert_eq!(replayed.diagnostics(), fresh.diagnostics());
+    assert_eq!(replayed.reparse_mode(), Some(ReparseMode::TokenReplay));
+    let metrics = must_some(replayed.incremental_metrics());
+    assert!(metrics.tokens_reused > 0);
+    assert!(metrics.tokens_relexed > 0);
+    assert!(!replayed.reprocessed_ranges().is_empty());
+}
+
+#[test]
+fn unchanged_reuse_does_not_expose_previous_operation_metrics() {
+    let source = "my $value = 1;\n".repeat(40);
+    let mut parser = Parser::new();
+    let old_tree = must_some(parser.parse(&source));
+    let start = must_some(source.find('1'));
+    let new_source = source.replacen('1', "22", 1);
+    let edit = Edit::new(
+        start,
+        start + 1,
+        start + 2,
+        Position::new(start, 0, start as u32),
+        Position::new(start + 1, 0, (start + 1) as u32),
+        Position::new(start + 2, 0, (start + 2) as u32),
+    );
+    let mut edited_tree = old_tree;
+    edited_tree.edit(&edit);
+    let replayed = must_some(parser.parse_with_old_tree(&new_source, &edited_tree));
+
+    let unchanged = must_some(parser.parse_with_old_tree(&new_source, &replayed));
+    assert_eq!(unchanged.reparse_mode(), Some(ReparseMode::Unchanged));
+    assert!(unchanged.incremental_metrics().is_none());
+    assert!(unchanged.reprocessed_ranges().is_empty());
+}
+
+#[test]
+fn multiple_pending_edits_use_an_explicit_full_parse_fallback() {
+    let mut tree = parse("my $x = 1; my $y = 2;");
+    let edit = |start, old_end, new_end| {
+        Edit::new(
+            start,
+            old_end,
+            new_end,
+            Position::new(start, 0, start as u32),
+            Position::new(old_end, 0, old_end as u32),
+            Position::new(new_end, 0, new_end as u32),
+        )
+    };
+    tree.edit(&edit(8, 9, 10));
+    tree.edit(&edit(18, 19, 20));
+
+    let mut parser = Parser::new();
+    let reparsed = must_some(parser.parse_with_old_tree("my $x = 10; my $y = 20;", &tree));
+
+    assert_eq!(
+        reparsed.reparse_mode(),
+        Some(ReparseMode::FullParseFallback(FallbackReason::MultipleEdits))
+    );
+    assert!(reparsed.incremental_metrics().is_some_and(|metrics| metrics.full_parse));
+}
+
+#[test]
+fn stale_input_edit_uses_a_full_parse_fallback_without_partial_replay() {
+    let mut parser = Parser::new();
+    let old_tree = must_some(parser.parse("my $x = 1;"));
+    let mut edited_tree = old_tree;
+    edited_tree.edit(&Edit::new(
+        8,
+        9,
+        99,
+        Position::new(8, 0, 8),
+        Position::new(9, 0, 9),
+        Position::new(99, 0, 99),
+    ));
+
+    let reparsed = must_some(parser.parse_with_old_tree("my $x = 42;", &edited_tree));
+
+    assert_eq!(
+        reparsed.reparse_mode(),
+        Some(ReparseMode::FullParseFallback(FallbackReason::InvalidEdit))
+    );
+    assert_eq!(
+        reparsed.root_node().to_sexp(),
+        must_some(parser.parse("my $x = 42;")).root_node().to_sexp()
+    );
+}
+
+#[test]
+fn same_length_change_outside_the_edit_uses_an_invalid_edit_fallback() {
+    let old_source = "my $x = 1; my $y = 2;";
+    let new_source = "my $x = 1; my $y = 3;";
+    let mut parser = Parser::new();
+    let old_tree = must_some(parser.parse(old_source));
+    let mut edited_tree = old_tree;
+    edited_tree.edit(&Edit::new(
+        8,
+        9,
+        9,
+        Position::new(8, 0, 8),
+        Position::new(9, 0, 9),
+        Position::new(9, 0, 9),
+    ));
+
+    let reparsed = must_some(parser.parse_with_old_tree(new_source, &edited_tree));
+    let fresh = must_some(parser.parse(new_source));
+
+    assert_eq!(
+        reparsed.reparse_mode(),
+        Some(ReparseMode::FullParseFallback(FallbackReason::InvalidEdit))
+    );
+    assert_eq!(reparsed.root_node().to_sexp(), fresh.root_node().to_sexp());
 }

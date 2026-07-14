@@ -30,6 +30,10 @@ all-features = true
 name = "tree_sitter_perl_rs"
 doctest = true
 
+[features]
+default = []
+queries = []
+
 [[bin]]
 name = "bench_facade"
 path = "src/bin/bench_facade.rs"

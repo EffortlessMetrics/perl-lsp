@@ -47,7 +47,7 @@ impl LspServer {
 
         match docs.get(uri) {
             Some(state) => {
-                match &state.ast {
+                match state.current_parsed().and_then(|p| p.ast().cloned()) {
                     Some(ast) => {
                         // Serialize the AST to S-expression format
                         let sexp = ast.to_sexp();

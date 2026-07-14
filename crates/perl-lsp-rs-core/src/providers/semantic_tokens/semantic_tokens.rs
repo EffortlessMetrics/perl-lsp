@@ -298,6 +298,35 @@ fn loop_control_label_offsets(
     None
 }
 
+/// Locate the method-name span of a `MethodCall` node by scanning forward from the
+/// receiver's end.
+///
+/// Perl treats whitespace (including newlines) around the `->` operator as
+/// insignificant (perldoc perlop), so the method name does not necessarily abut the
+/// receiver at `object_end + 2`. Hard-coding that offset mis-paints the token for
+/// `$obj ->name`, `$obj-> name`, and leading-arrow chains. Instead, starting at
+/// `object_end`: skip whitespace, require the `->` arrow, skip whitespace again, then
+/// take `method.len()` bytes as the method-name span. Mirrors the text-scan approach
+/// of `statement_label_offsets` / `loop_control_label_offsets`.
+fn method_call_name_offsets(text: &str, object_end: usize, method: &str) -> Option<(usize, usize)> {
+    let rest = text.get(object_end..)?;
+    // Skip whitespace between the receiver and the arrow.
+    let after_ws1 = rest.trim_start();
+    let ws1_len = rest.len() - after_ws1.len();
+    // Require the arrow operator.
+    let after_arrow = after_ws1.strip_prefix("->")?;
+    // Skip whitespace between the arrow and the method name.
+    let after_ws2 = after_arrow.trim_start();
+    let ws2_len = after_arrow.len() - after_ws2.len();
+    let name_start = object_end + ws1_len + "->".len() + ws2_len;
+    let name_end = name_start.checked_add(method.len())?;
+    // Confirm the scanned span actually equals the method name before painting it.
+    if text.get(name_start..name_end)? != method {
+        return None;
+    }
+    Some((name_start, name_end))
+}
+
 // ---------------------------------------------------------------------------
 // Heredoc language injection helpers (Issue #2059)
 // ---------------------------------------------------------------------------
@@ -783,15 +812,19 @@ pub fn collect_semantic_tokens(
                 return true;
             }
             NodeKind::MethodCall { object, method, args } => {
-                // Emit a narrow token for just the method name, not the entire expression.
-                // object.location.end is the byte offset after the receiver; +2 skips "->".
-                let method_name_start = object.location.end + 2;
-                let method_name_end = method_name_start + method.len();
-                let (sl, sc) = to_pos16(method_name_start);
-                let (el, ec) = to_pos16(method_name_end);
-                let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
-                if len > 0 {
-                    ast_tokens.push((sl, sc, len, kind_idx(&leg, "method"), 0));
+                // Emit a narrow token for just the method name, not the entire
+                // expression. Whitespace/newlines may separate the receiver from
+                // `->method` (perldoc perlop), so scan forward for the span rather
+                // than assuming `->` abuts the receiver at object.location.end + 2.
+                if let Some((method_name_start, method_name_end)) =
+                    method_call_name_offsets(text, object.location.end, method)
+                {
+                    let (sl, sc) = to_pos16(method_name_start);
+                    let (el, ec) = to_pos16(method_name_end);
+                    let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                    if len > 0 {
+                        ast_tokens.push((sl, sc, len, kind_idx(&leg, "method"), 0));
+                    }
                 }
                 // If this is a SQL-bearing DBI method, classify the first string arg as sql_string.
                 let is_sql_method = matches!(
@@ -1521,5 +1554,65 @@ print "ok" foreach @ys;
                 );
             }
         }
+    }
+
+    /// Regression: the `method` semantic token must paint exactly the method name
+    /// regardless of whitespace/newlines around `->`. Perl treats such whitespace as
+    /// insignificant (external oracle: perldoc perlop — "whitespace is insignificant"
+    /// around the arrow operator). Pre-fix, the hard-coded `object.location.end + 2`
+    /// mislocated the span: `$obj ->name` painted ">nam", `$obj-> name` painted " nam",
+    /// and the leading-arrow chain painted the indent+arrow instead of the method name.
+    #[test]
+    fn repro_method_token_spacing_paints_method_name_regardless_of_arrow_whitespace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let method_idx =
+            *legend().map.get("method").ok_or("method token type missing from legend")?;
+
+        // Drive the real provider and decode the source substrings painted by
+        // `method` tokens (inputs are ASCII, so utf16 columns == byte/char columns).
+        let painted_methods = |source: &str| -> Result<Vec<String>, Box<dyn std::error::Error>> {
+            let mut parser = Parser::new(source);
+            let ast = parser.parse()?;
+            let tokens = collect_semantic_tokens(&ast, source, &|offset| pos16(source, offset));
+            let lines: Vec<&str> = source.split('\n').collect();
+            let mut line = 0u32;
+            let mut col = 0u32;
+            let mut painted = Vec::new();
+            for [delta_line, delta_start, length, token_type, _mods] in tokens {
+                if delta_line == 0 {
+                    col = col.saturating_add(delta_start);
+                } else {
+                    line = line.saturating_add(delta_line);
+                    col = delta_start;
+                }
+                if token_type == method_idx {
+                    let src_line = lines.get(line as usize).ok_or("token line out of range")?;
+                    let start = col as usize;
+                    let chars: String =
+                        src_line.chars().skip(start).take(length as usize).collect();
+                    painted.push(chars);
+                }
+            }
+            Ok(painted)
+        };
+
+        assert_eq!(painted_methods("$obj->name;")?, vec!["name".to_string()]);
+        assert_eq!(painted_methods("$obj ->name;")?, vec!["name".to_string()]);
+        assert_eq!(painted_methods("$obj-> name;")?, vec!["name".to_string()]);
+        assert_eq!(painted_methods("$obj -> name;")?, vec!["name".to_string()]);
+
+        // Leading-arrow multi-line method chain: both method names paint exactly.
+        let chain = "$dbh\n    ->prepare($sql)\n    ->execute;";
+        let painted = painted_methods(chain)?;
+        assert!(
+            painted.contains(&"prepare".to_string()),
+            "expected `prepare` painted, got {painted:?}"
+        );
+        assert!(
+            painted.contains(&"execute".to_string()),
+            "expected `execute` painted, got {painted:?}"
+        );
+
+        Ok(())
     }
 }

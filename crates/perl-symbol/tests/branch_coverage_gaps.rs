@@ -7,7 +7,7 @@
 //!
 //! No production code is modified; this file only adds tests.
 
-use perl_ast::{Node, NodeKind, SourceLocation};
+use perl_ast::{GotoTargetForm, Node, NodeKind, SourceLocation};
 use perl_symbol::SymbolKind;
 use perl_symbol::VarKind;
 use perl_symbol::cursor::{
@@ -141,7 +141,10 @@ fn goto_with_ampersand_variable_is_classified_as_coderef() -> Result<()> {
         NodeKind::Variable { sigil: "&".to_string(), name: "handler".to_string() },
         loc(5, 13),
     );
-    let goto = Node::new(NodeKind::Goto { target: Box::new(amp_var) }, loc(0, 13));
+    let goto = Node::new(
+        NodeKind::Goto { target: Box::new(amp_var), form: GotoTargetForm::Sub },
+        loc(0, 13),
+    );
     let program = Node::new(NodeKind::Program { statements: vec![goto] }, loc(0, 13));
 
     let refs = extract_symbol_refs(&program);
@@ -265,8 +268,16 @@ fn named_parameter_node_is_not_emitted_as_ref() -> Result<()> {
         NodeKind::Variable { sigil: "$".to_string(), name: "key".to_string() },
         loc(8, 12),
     );
-    let named_param =
-        Node::new(NodeKind::NamedParameter { variable: Box::new(param_var) }, loc(8, 12));
+    let named_param = Node::new(
+        NodeKind::NamedParameter {
+            variable: Box::new(param_var),
+            external_name: String::new(),
+            default_operator: None,
+            default_value: None,
+            required: true,
+        },
+        loc(8, 12),
+    );
     let sig = Node::new(NodeKind::Signature { parameters: vec![named_param] }, loc(7, 13));
     let body = Node::new(NodeKind::Block { statements: vec![] }, loc(14, 16));
     let sub_node = Node::new(

@@ -4,7 +4,30 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
+### Changed
+
+- **Moved the extension toolchain authority to Node 26.x and npm 11.18.0; CI
+  pins Node 26.5.0.** The shipped-extension compatibility boundary remains
+  `engines.vscode`. (#4121)
+- **Migrated the extension toolchain to TypeScript 7, type-aware Oxlint,
+  Oxfmt, and Rolldown.** TypeScript remains the type-check authority;
+  Rolldown now produces the CommonJS extension bundle. (#3645, #3690,
+  #3721, #3736, #3755)
+- **Reduced the packaged VSIX from 458 files / 1.25 MB to 33 files / 291
+  KB** while preserving extension activation, command registration, native
+  LSP and DAP startup, binary auto-download and extraction, source maps,
+  integration tests, and published-extension smoke coverage. (#3755)
+- **Removed the legacy `ts-jest`, ESLint, and `@typescript-eslint`
+  compiler-API dependencies.** No TypeScript or JavaScript toolchain
+  binaries are shipped inside the extension. (#3645, #3690)
+- **Made extension development and packaging reproducible:** npm/Node
+  authority, all TypeScript authority configurations, non-growing strictness
+  and lint baselines, exact-source VSIX/current-server smoke, repeated startup
+  receipts, and VSIX inventory/size checks now have explicit gates and current
+  documentation.
+
 ### Added
+
 - **First-run include-path discovery**: on activation the extension scans
   common Perl module directories (`src`, `local`, `vendor`, `lib`, `t/lib`,
   `blib/lib`, `modules`) and offers a one-time suggestion to add any directory
@@ -21,9 +44,18 @@ All notable changes to the Perl Language Server extension will be documented in 
   completion, hover, and go-to-definition without their own project ready. The
   Get Started walkthrough's "Open a Perl Project" step now links to it. (#1635)
 
+### Fixed
+
+- **Extension activation no longer blocks on language-server startup.** UI and
+  commands now register and activation returns immediately while the language
+  client's startup tail completes in the background, instead of blocking
+  activation (and every command that depends on it) behind a slow server
+  start on large workspaces. (#3162)
+
 ## [0.12.4] - 2026-04-12
 
 ### Added
+
 - **DAP debugger launch scorecard**: the debug adapter now tracks cold-launch
   success rate and P50/P95 latency across a suite of fixture programs; results
   surface in the new `status/dap.md` page. (#4237)
@@ -48,6 +80,7 @@ All notable changes to the Perl Language Server extension will be documented in 
   present on PATH, falling back to `prove` and `perl`. (#4031)
 
 ### Fixed
+
 - **Rename operations are faster on large files**: the internal scope traversal
   was O(n×d) per rename; replaced with a single-pass BFS so renames on deeply
   nested files no longer stall. (#4240)
@@ -63,6 +96,7 @@ All notable changes to the Perl Language Server extension will be documented in 
   folders during indexing without crashing. (#4059)
 
 ### Changed
+
 - **Pre-push hook speed**: the hook now runs the fast Tier A (`pr-fast`) check
   instead of the full `ci-gate`, making pre-push validation ~3× faster for
   routine pushes. (#4088, #4110)
@@ -73,6 +107,7 @@ The 0.12.3 release line. Aligned with the workspace `v0.12.3` cut and consolidat
 the user-facing UX hardening work from April 2026.
 
 ### Fixed
+
 - **Actionable error messages**: server startup errors now surface specific,
   actionable messages instead of a generic "corrupted" fallback
   (PR #3308, PR #3291).
@@ -92,6 +127,7 @@ The 0.12.2 release line. Aligned with the workspace `v0.12.2` cut on 2026-04-04
 and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 
 ### Added
+
 - **AI inline completion**: opt-in OpenAI-compatible streaming provider with
   session management, version-aware cancellation, and a deterministic fallback
   when AI is disabled. Wired into the LSP server's `inlineCompletion` request
@@ -108,30 +144,36 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
   inspecting parser output during diagnostics.
 
 ### Performance
+
 - Incremental parsing pipeline (token caching + checkpoint recovery).
 - Large-workspace HashMap optimization (faster startup).
 - CPAN-scale benchmarks: 10K files indexed in 672ms.
 
 ### Fixed
+
 - Inline completion duplicate backend types removed.
 - Streaming completion controller gating on AI config flags.
 
 ### Changed
+
 - **Version Bump**: 0.12.2 release aligned with the workspace and shipped
   `perllsp` asset line.
 
 ## [0.12.1] - 2026-03-30
 
 ### Fixed
+
 - **Release Surface Recovery**: Restored the top-level source snapshot and release-facing docs after the launch regressions that slipped into the first `0.12.0` tag.
 - **Hook Hygiene**: Hardened hook-test fixture isolation and worktree hook installation so placeholder identities do not leak into normal local commit flows.
 
 ### Changed
+
 - **Version Bump**: 0.12.1 fix-forward release aligned with the workspace and shipped `perllsp` asset line.
 
 ## [0.12.0] - 2026-03-19
 
 ### Changed
+
 - **Display Name**: Updated to "Perl Language Server (perl-lsp)" for clearer marketplace identification
 - **Description**: Rewritten for marketplace SEO: highlights key features, speed, and zero-dependency install
 - **Version Bump**: 0.12.0 public alpha release
@@ -140,12 +182,14 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 - **Categories**: Added "Testing" to reflect Test Explorer integration
 
 ### Added
+
 - **Open VSX Publishing**: Extension now publishes to Open VSX Registry alongside VS Marketplace, enabling first-class support for VSCodium and other open-source VS Code derivatives. Added `ovsx` publish/check scripts and `@types/vscode` dev dependency fix for compatible builds.
 - **Comprehensive README**: Rewritten for marketplace listing with full configuration reference table, keyboard shortcuts, troubleshooting guide, and command reference
 
 ## [0.11.0] - 2026-03-11
 
 ### Fixed
+
 - **Corrupted Extension Icon**: Added binary rules for image files in `.gitattributes` to prevent line-ending normalization from corrupting PNGs; regenerated `icon.png` with correct PNG signature header.
 - **TextMate Grammar Registration**: Registered `syntaxes/perl.tmLanguage.json` in `contributes.grammars` so VS Code actually loads the bundled grammar.
 - **Stub Refactoring Commands**: Removed `Extract Subroutine`, `Extract Variable`, and `Inline Variable` from editor context and command palette menus (still available from the full command list with "in development" messaging).
@@ -153,6 +197,7 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 - **pnpm Compatibility**: Made `vsce package`/`publish` resilient in pnpm environments.
 
 ### Changed
+
 - **Parser Bug Fixes** (6 fixes in the underlying `perl-lsp` server):
   - Handle postfix modifiers after dereference expressions (`$obj->method if $cond`)
   - Re-lex slash as regex delimiter after `split` keyword
@@ -170,6 +215,7 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 - **Documentation**: Comprehensive release readiness updates including README, roadmap, and launch article series.
 
 ### Added
+
 - Marketplace readiness workflow via `npm run verify:marketplace` for compile + bundle + package validation.
 - VS Marketplace badges and installation link in extension README.
 - Publishing guide refreshed with launch checklist and pre-release recommendation.
@@ -179,6 +225,7 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 ## [0.10.0] - 2026-02-28
 
 ### Changed
+
 - **Version Sync**: Extension version aligned with workspace v0.10.0.
 - **LSP Coverage**: Maintained 100% user-visible feature coverage (53/53).
 - **Protocol Compliance**: Maintained 100% protocol compliance (97/97).
@@ -186,6 +233,7 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 ## [0.9.0] - 2026-01-18
 
 ### Added
+
 - 🔧 **Advanced Refactoring Support**
   - Extract method refactoring with parameter detection
   - Inline variable/expression refactoring
@@ -206,6 +254,7 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 - 📋 **Context Menu**: Run Tests exposed in editor context menu
 
 ### Changed
+
 - Cross-file Package->method resolution improved
 - Better error logging for incremental document changes
 - Configuration setting descriptions improved
@@ -213,18 +262,21 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 ## [0.8.0] - 2025-09-01
 
 ### Added
+
 - **Cross-File Navigation**: Workspace indexing with dual storage pattern for qualified and bare names
 - **Import Optimization**: Detect and organize imports, remove unused imports
 - **Incremental Parsing V2**: Advanced edit tracking with node reuse for faster re-parsing
 - **File Path Completion**: Enterprise-grade file completion with security safeguards
 
 ### Changed
+
 - Optimized workspace indexing for large codebases
 - Enhanced comment documentation extraction for hover
 
 ## [0.7.0] - 2025-08-24
 
 ### Added
+
 - **LSP 3.17 Features**: Inlay hints, document links, selection ranges, on-type formatting
 - **Code Actions**: Robust refactoring and quick fixes
 - **Type Hierarchy**: View inheritance relationships
@@ -233,6 +285,7 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 ## [0.6.0] - 2025-01-29
 
 ### Added
+
 - 🔍 **Call Hierarchy Support**
   - View incoming calls (functions that call the selected function)
   - View outgoing calls (functions called by the selected function)
@@ -262,11 +315,13 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
   - 10x faster symbol lookup in large projects
 
 ### Enhanced
+
 - Added "Testing" category to extension capabilities
 - Improved activation events for test files
 - Better TypeScript types and error handling
 
 ### Fixed
+
 - Improved handling of anonymous subroutines in navigation features
 - Better error recovery for malformed syntax
 - Fixed race conditions in document synchronization
@@ -274,6 +329,7 @@ and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
 ## [0.5.0] - 2025-01-01
 
 ### Added
+
 - Initial release of Perl Language Server for Visual Studio Code
 - Full Language Server Protocol support with 8 core features:
   - Real-time syntax diagnostics

@@ -3,6 +3,11 @@
 //! Each test represents a complete user story, simulating real-world usage patterns
 //! to ensure the LSP server provides a smooth developer experience.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stderr doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stderr)]
+
 #[path = "support/mod.rs"]
 mod support;
 
@@ -36,7 +41,7 @@ fn send_request_with_timeout(
 ) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: method.to_string(),
         params,
     };

@@ -21,144 +21,128 @@ import * as vscode from 'vscode';
 // ---------------------------------------------------------------------------
 
 export class WhatsNewManager {
-    private readonly context: vscode.ExtensionContext;
-    private readonly outputChannel: vscode.OutputChannel;
+  private readonly context: vscode.ExtensionContext;
+  private readonly outputChannel: vscode.OutputChannel;
 
-    constructor(
-        context: vscode.ExtensionContext,
-        outputChannel: vscode.OutputChannel,
-    ) {
-        this.context = context;
-        this.outputChannel = outputChannel;
+  constructor(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel) {
+    this.context = context;
+    this.outputChannel = outputChannel;
+  }
+
+  // -----------------------------------------------------------------------
+  // Version tracking
+  // -----------------------------------------------------------------------
+
+  /**
+   * Returns `true` when the extension version stored in global state differs
+   * from the currently installed extension version.
+   *
+   * On a fresh install there is no stored version, so this returns `true` to
+   * trigger the panel — but `OnboardingManager.shouldShowWelcome()` handles
+   * the truly first-run case.  The caller is responsible for coordinating
+   * which panel to show.
+   */
+  shouldShowWhatsNew(): boolean {
+    const currentVersion = this.currentVersion();
+    if (!currentVersion) {
+      return false;
     }
+    const storedVersion = this.context.globalState.get<string>('perl-lsp.lastVersion');
+    return storedVersion !== currentVersion;
+  }
 
-    // -----------------------------------------------------------------------
-    // Version tracking
-    // -----------------------------------------------------------------------
-
-    /**
-     * Returns `true` when the extension version stored in global state differs
-     * from the currently installed extension version.
-     *
-     * On a fresh install there is no stored version, so this returns `true` to
-     * trigger the panel — but `OnboardingManager.shouldShowWelcome()` handles
-     * the truly first-run case.  The caller is responsible for coordinating
-     * which panel to show.
-     */
-    shouldShowWhatsNew(): boolean {
-        const currentVersion = this.currentVersion();
-        if (!currentVersion) {
-            return false;
-        }
-        const storedVersion = this.context.globalState.get<string>(
-            'perl-lsp.lastVersion',
-        );
-        return storedVersion !== currentVersion;
+  /**
+   * Persist the current version so `shouldShowWhatsNew()` returns `false`
+   * until the next update.
+   */
+  async markVersionSeen(): Promise<void> {
+    const currentVersion = this.currentVersion();
+    if (currentVersion) {
+      await this.context.globalState.update('perl-lsp.lastVersion', currentVersion);
     }
+  }
 
-    /**
-     * Persist the current version so `shouldShowWhatsNew()` returns `false`
-     * until the next update.
-     */
-    async markVersionSeen(): Promise<void> {
-        const currentVersion = this.currentVersion();
-        if (currentVersion) {
-            await this.context.globalState.update(
-                'perl-lsp.lastVersion',
-                currentVersion,
-            );
-        }
+  // -----------------------------------------------------------------------
+  // Webview panel
+  // -----------------------------------------------------------------------
+
+  /**
+   * Open (or reveal) the "What's New" webview panel.
+   *
+   * Reads CHANGELOG.md from the extension root and extracts the section for
+   * the current version.  Falls back to showing the full CHANGELOG on
+   * parse failure so the user always sees something useful.
+   */
+  async showWhatsNew(): Promise<void> {
+    const version = this.currentVersion() ?? 'Unknown';
+    const changelogSection = this.extractChangelogSection(version);
+
+    const panel = vscode.window.createWebviewPanel(
+      'perlLspWhatsNew',
+      `What's New in Perl LSP v${version}`,
+      vscode.ViewColumn.One,
+      {
+        enableScripts: false,
+        localResourceRoots: [],
+      },
+    );
+
+    panel.webview.html = this.buildHtml(version, changelogSection);
+    this.outputChannel.appendLine(`[whats-new] Opened What's New panel for v${version}`);
+  }
+
+  // -----------------------------------------------------------------------
+  // Internal helpers
+  // -----------------------------------------------------------------------
+
+  /**
+   * Read the version from the extension's `package.json`.
+   *
+   * Returns `undefined` when the extension cannot be located (e.g., in
+   * unit tests that do not supply a real extension context).
+   */
+  currentVersion(): string | undefined {
+    try {
+      const pkgPath = path.join(this.context.extensionPath, 'package.json');
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as {
+        version?: string;
+      };
+      return pkg.version ?? undefined;
+    } catch {
+      return undefined;
     }
+  }
 
-    // -----------------------------------------------------------------------
-    // Webview panel
-    // -----------------------------------------------------------------------
-
-    /**
-     * Open (or reveal) the "What's New" webview panel.
-     *
-     * Reads CHANGELOG.md from the extension root and extracts the section for
-     * the current version.  Falls back to showing the full CHANGELOG on
-     * parse failure so the user always sees something useful.
-     */
-    async showWhatsNew(): Promise<void> {
-        const version = this.currentVersion() ?? 'Unknown';
-        const changelogSection = this.extractChangelogSection(version);
-
-        const panel = vscode.window.createWebviewPanel(
-            'perlLspWhatsNew',
-            `What's New in Perl LSP v${version}`,
-            vscode.ViewColumn.One,
-            {
-                enableScripts: false,
-                localResourceRoots: [],
-            },
-        );
-
-        panel.webview.html = this.buildHtml(version, changelogSection);
-        this.outputChannel.appendLine(
-            `[whats-new] Opened What's New panel for v${version}`,
-        );
+  /**
+   * Extract the changelog section for the given version from CHANGELOG.md.
+   *
+   * Returns the raw Markdown text for that version heading and its content,
+   * or an empty string when the version is not found.
+   */
+  extractChangelogSection(version: string): string {
+    try {
+      const changelogPath = path.join(this.context.extensionPath, 'CHANGELOG.md');
+      const full = fs.readFileSync(changelogPath, 'utf8');
+      return extractVersionSection(full, version);
+    } catch {
+      return '';
     }
+  }
 
-    // -----------------------------------------------------------------------
-    // Internal helpers
-    // -----------------------------------------------------------------------
+  /**
+   * Build the HTML page for the webview.
+   *
+   * The content is static — no scripts are loaded.  Markdown is converted
+   * to HTML via a minimal inline renderer so the webview does not need an
+   * external Markdown library.
+   */
+  buildHtml(version: string, markdownContent: string): string {
+    const htmlBody =
+      markdownContent.trim().length > 0
+        ? markdownToHtml(markdownContent)
+        : `<p>See the full <a href="https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/CHANGELOG.md">CHANGELOG</a> for details.</p>`;
 
-    /**
-     * Read the version from the extension's `package.json`.
-     *
-     * Returns `undefined` when the extension cannot be located (e.g., in
-     * unit tests that do not supply a real extension context).
-     */
-    currentVersion(): string | undefined {
-        try {
-            const pkgPath = path.join(
-                this.context.extensionPath,
-                'package.json',
-            );
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as {
-                version?: string;
-            };
-            return pkg.version ?? undefined;
-        } catch {
-            return undefined;
-        }
-    }
-
-    /**
-     * Extract the changelog section for the given version from CHANGELOG.md.
-     *
-     * Returns the raw Markdown text for that version heading and its content,
-     * or an empty string when the version is not found.
-     */
-    extractChangelogSection(version: string): string {
-        try {
-            const changelogPath = path.join(
-                this.context.extensionPath,
-                'CHANGELOG.md',
-            );
-            const full = fs.readFileSync(changelogPath, 'utf8');
-            return extractVersionSection(full, version);
-        } catch {
-            return '';
-        }
-    }
-
-    /**
-     * Build the HTML page for the webview.
-     *
-     * The content is static — no scripts are loaded.  Markdown is converted
-     * to HTML via a minimal inline renderer so the webview does not need an
-     * external Markdown library.
-     */
-    buildHtml(version: string, markdownContent: string): string {
-        const htmlBody =
-            markdownContent.trim().length > 0
-                ? markdownToHtml(markdownContent)
-                : `<p>See the full <a href="https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/CHANGELOG.md">CHANGELOG</a> for details.</p>`;
-
-        return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -201,7 +185,7 @@ export class WhatsNewManager {
 ${htmlBody}
 </body>
 </html>`;
-    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -217,31 +201,22 @@ ${htmlBody}
  *
  * Returns an empty string when the version is not found.
  */
-export function extractVersionSection(
-    changelog: string,
-    version: string,
-): string {
-    // Match headings like: ## [0.12.0] - 2026-03-19  or  ## 0.12.0
-    const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const headingRe = new RegExp(
-        `^##\\s+(?:\\[${escaped}\\]|${escaped})(?:\\s+[^\\n]*)?$`,
-        'm',
-    );
-    const match = headingRe.exec(changelog);
-    if (!match) {
-        return '';
-    }
+export function extractVersionSection(changelog: string, version: string): string {
+  // Match headings like: ## [0.12.0] - 2026-03-19  or  ## 0.12.0
+  const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headingRe = new RegExp(`^##\\s+(?:\\[${escaped}\\]|${escaped})(?:\\s+[^\\n]*)?$`, 'm');
+  const match = headingRe.exec(changelog);
+  if (!match) {
+    return '';
+  }
 
-    const start = match.index;
-    // Find the next ## heading after this one
-    const rest = changelog.slice(start + match[0].length);
-    const nextHeading = /^## /m.exec(rest);
-    const end =
-        nextHeading !== null
-            ? start + match[0].length + nextHeading.index
-            : changelog.length;
+  const start = match.index;
+  // Find the next ## heading after this one
+  const rest = changelog.slice(start + match[0].length);
+  const nextHeading = /^## /m.exec(rest);
+  const end = nextHeading !== null ? start + match[0].length + nextHeading.index : changelog.length;
 
-    return changelog.slice(start, end).trim();
+  return changelog.slice(start, end).trim();
 }
 
 /**
@@ -258,70 +233,90 @@ export function extractVersionSection(
  * dependency-free.
  */
 export function markdownToHtml(md: string): string {
-    const lines = md.split('\n');
-    const out: string[] = [];
-    let inList = false;
+  const lines = md.split('\n');
+  const out: string[] = [];
+  let inList = false;
 
-    for (const rawLine of lines) {
-        const line = rawLine.trimEnd();
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
 
-        // Headings
-        if (line.startsWith('### ')) {
-            if (inList) { out.push('</ul>'); inList = false; }
-            out.push(`<h3>${inlineMarkdown(line.slice(4))}</h3>`);
-            continue;
-        }
-        if (line.startsWith('## ')) {
-            if (inList) { out.push('</ul>'); inList = false; }
-            out.push(`<h2>${inlineMarkdown(line.slice(3))}</h2>`);
-            continue;
-        }
-        if (line.startsWith('# ')) {
-            if (inList) { out.push('</ul>'); inList = false; }
-            out.push(`<h1>${inlineMarkdown(line.slice(2))}</h1>`);
-            continue;
-        }
-
-        // Unordered list items
-        if (/^[-*] /.test(line)) {
-            if (!inList) { out.push('<ul>'); inList = true; }
-            out.push(`<li>${inlineMarkdown(line.slice(2))}</li>`);
-            continue;
-        }
-
-        // Blank line — paragraph break
-        if (line.trim() === '') {
-            if (inList) { out.push('</ul>'); inList = false; }
-            out.push('');
-            continue;
-        }
-
-        // Plain paragraph text
-        if (inList) { out.push('</ul>'); inList = false; }
-        out.push(`<p>${inlineMarkdown(line)}</p>`);
+    // Headings
+    if (line.startsWith('### ')) {
+      if (inList) {
+        out.push('</ul>');
+        inList = false;
+      }
+      out.push(`<h3>${inlineMarkdown(line.slice(4))}</h3>`);
+      continue;
+    }
+    if (line.startsWith('## ')) {
+      if (inList) {
+        out.push('</ul>');
+        inList = false;
+      }
+      out.push(`<h2>${inlineMarkdown(line.slice(3))}</h2>`);
+      continue;
+    }
+    if (line.startsWith('# ')) {
+      if (inList) {
+        out.push('</ul>');
+        inList = false;
+      }
+      out.push(`<h1>${inlineMarkdown(line.slice(2))}</h1>`);
+      continue;
     }
 
-    if (inList) { out.push('</ul>'); }
-    return out.join('\n');
+    // Unordered list items
+    if (/^[-*] /.test(line)) {
+      if (!inList) {
+        out.push('<ul>');
+        inList = true;
+      }
+      out.push(`<li>${inlineMarkdown(line.slice(2))}</li>`);
+      continue;
+    }
+
+    // Blank line — paragraph break
+    if (line.trim() === '') {
+      if (inList) {
+        out.push('</ul>');
+        inList = false;
+      }
+      out.push('');
+      continue;
+    }
+
+    // Plain paragraph text
+    if (inList) {
+      out.push('</ul>');
+      inList = false;
+    }
+    out.push(`<p>${inlineMarkdown(line)}</p>`);
+  }
+
+  if (inList) {
+    out.push('</ul>');
+  }
+  return out.join('\n');
 }
 
 /**
  * Process inline Markdown: bold, code, and HTML escaping.
  */
 function inlineMarkdown(text: string): string {
-    // Escape HTML first, then apply Markdown inline rules.
-    let s = escapeHtml(text);
-    // `code`
-    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // **bold**
-    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    return s;
+  // Escape HTML first, then apply Markdown inline rules.
+  let s = escapeHtml(text);
+  // `code`
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // **bold**
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  return s;
 }
 
 function escapeHtml(text: string): string {
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }

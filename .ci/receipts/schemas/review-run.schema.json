@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Review Run Receipt (v1)",
+  "description": "PR-level marker recording a review pass. Embedded in a PR issue comment as `<!-- review-run:v1 {json} -->` and posted/updated by scripts/reviews/run. review-start writes status=running; review-done flips it to status=done. The check-pr-review-convergence closeout reads these to compute review_runs_in_flight and deep_review_receipt_head_match (#3693 R1).",
+  "type": "object",
+  "required": ["v", "kind", "head", "reviewer", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "v": {"const": 1},
+    "kind": {"enum": ["deep", "standard"]},
+    "head": {"type": "string", "description": "The PR headRefOid this review pass ran against."},
+    "reviewer": {"type": "string", "description": "Identity of the reviewer/agent."},
+    "status": {"enum": ["running", "done"]}
+  }
+}

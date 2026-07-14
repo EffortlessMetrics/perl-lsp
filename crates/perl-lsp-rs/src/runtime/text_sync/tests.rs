@@ -1,3 +1,7 @@
+// Tests are permitted to use `.expect()` on Result/Option per the repo's
+// coding standards (unlike production code, where it is banned).
+#![allow(clippy::expect_used)]
+
 use super::*;
 use serde_json::json;
 use std::io::{self, Write};
@@ -186,6 +190,9 @@ fn test_build_incremental_edits_negative_shift_uses_checked_add() {
 #[test]
 fn test_incremental_path_taken_on_ranged_change() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    // Opt into the dormant incremental fast-path this test exercises (#3396):
+    // it is off by default because nothing on the read path consumes it.
+    server.set_incremental_eager(true);
     let uri = "file:///test_incremental.pl";
     let text = "my $x = 42;\nmy $y = 99;\n";
 
@@ -217,7 +224,10 @@ fn test_incremental_path_taken_on_ranged_change() -> Result<(), Box<dyn std::err
         let docs = server.documents.lock();
         let doc = docs.get(uri).ok_or("document not stored after didChange")?;
         assert!(doc.text.contains("43"), "document text must be updated");
-        assert!(doc.ast.is_some(), "AST must be present after incremental change");
+        assert!(
+            doc.current_parsed().is_some_and(|p| p.ast().is_some()),
+            "AST must be present after incremental change"
+        );
         // incremental_doc must still be present after a ranged edit
         assert!(doc.incremental_doc.is_some(), "incremental_doc must survive a ranged edit");
         // The incremental doc's internal source must reflect the edit.
@@ -252,6 +262,7 @@ fn test_incremental_path_taken_on_ranged_change() -> Result<(), Box<dyn std::err
 #[test]
 fn test_full_replace_reinitializes_incremental_doc() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    server.set_incremental_eager(true);
     let uri = "file:///test_inc_replace.pl";
     let text = "my $x = 1;\n";
 
@@ -307,6 +318,7 @@ fn test_incremental_fallback_on_parse_error() -> Result<(), Box<dyn std::error::
 #[test]
 fn test_incremental_empty_content_changes() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    server.set_incremental_eager(true);
     let uri = "file:///test_inc_empty_changes.pl";
     let text = "my $x = 1;\n";
 
@@ -357,6 +369,7 @@ fn test_did_change_ranged_edit_ignored_for_unopened_document()
 #[test]
 fn test_incremental_insert_at_end_of_document() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    server.set_incremental_eager(true);
     let uri = "file:///test_inc_insert_end.pl";
     let text = "my $x = 1;\n";
 
@@ -433,6 +446,7 @@ fn test_incremental_utf16_multi_byte_character_positions() -> Result<(), Box<dyn
 #[test]
 fn test_incremental_state_wired_into_did_change() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
+    server.set_incremental_eager(true);
     let uri = "file:///test_inc_state_gap_a.pl";
 
     // Build a document large enough to have checkpoints before the edit site.
@@ -488,6 +502,78 @@ fn test_incremental_state_wired_into_did_change() -> Result<(), Box<dyn std::err
             state.source.contains("999"),
             "incremental_state.source must reflect edit; got: {:?}",
             &state.source[state.source.len().saturating_sub(50)..]
+        );
+    }
+
+    Ok(())
+}
+
+/// Regression guard for #3396: with the default (non-eager) configuration the
+/// incremental parsing state is NOT maintained on the `didChange` hot path, yet
+/// the committed AST, parse errors, and updated text are fully correct because
+/// they come from the full parse. This proves the incremental machinery is off
+/// the critical section by default without affecting what providers read.
+#[cfg(feature = "incremental")]
+#[test]
+fn test_incremental_state_off_by_default_on_did_change() -> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::new();
+    // NOTE: no `set_incremental_eager(true)` — exercise the default path.
+    let uri = "file:///test_inc_default_off.pl";
+    let text = "my $x = 42;\nmy $y = 99;\n";
+
+    server.did_open(json!({
+        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+    }))?;
+
+    // On didOpen the incremental fields must be absent by default.
+    {
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after didOpen")?;
+        assert!(
+            doc.incremental_doc.is_none(),
+            "incremental_doc must be None by default (off the hot path)"
+        );
+        assert!(
+            doc.incremental_state.is_none(),
+            "incremental_state must be None by default (off the hot path)"
+        );
+        // The full-parse AST is still present — providers read this.
+        assert!(
+            doc.current_parsed().is_some_and(|p| p.ast().is_some()),
+            "committed AST must be present after didOpen"
+        );
+    }
+
+    // A ranged edit: replace "42" with "43".
+    server.handle_did_change(Some(json!({
+        "textDocument": { "uri": uri, "version": 2 },
+        "contentChanges": [{
+            "range": {
+                "start": { "line": 0, "character": 8 },
+                "end":   { "line": 0, "character": 10 }
+            },
+            "text": "43"
+        }]
+    })))?;
+
+    // After didChange: incremental fields stay None, but the committed AST and
+    // text are correct (produced by the full parse, unaffected by the gate).
+    {
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after didChange")?;
+        assert!(
+            doc.incremental_doc.is_none(),
+            "incremental_doc must stay None by default after a ranged edit"
+        );
+        assert!(
+            doc.incremental_state.is_none(),
+            "incremental_state must stay None by default after a ranged edit"
+        );
+        assert!(doc.text.contains("43"), "document text must be updated by the full parse path");
+        assert!(!doc.text.contains("42"), "old value must be gone from committed text");
+        assert!(
+            doc.current_parsed().is_some_and(|p| p.ast().is_some()),
+            "committed AST must be present after the ranged edit"
         );
     }
 
@@ -749,7 +835,6 @@ fn test_diagnostics_churn_drains_retained_state_after_close_delete()
         let path = dir.path().join("diagnostics_churn.pl");
         let uri = url::Url::from_file_path(&path).map_err(|_| "invalid file path")?;
         let uri = uri.to_string();
-        let normalized_uri = server.normalize_uri_key(&uri);
         let fixed_template = |version: i32| {
             format!("package Diagnostics::Churn;\nmy $value = {version};\n$value;\n1;\n")
         };
@@ -766,17 +851,14 @@ fn test_diagnostics_churn_drains_retained_state_after_close_delete()
             }
         }))?;
 
-        let _ = server.handle_hover(Some(json!({
+        let hover_before_churn = server.handle_hover(Some(json!({
             "textDocument": { "uri": uri },
             "position": { "line": 1, "character": 4 }
         })));
-        {
-            let cache = server.semantic_analyzer_cache.lock();
-            assert!(
-                cache.keys().any(|(cached_uri, _)| cached_uri == &normalized_uri),
-                "hover should populate semantic analyzer cache before churn"
-            );
-        }
+        assert!(
+            matches!(hover_before_churn, Ok(Some(ref v)) if !v.is_null()),
+            "hover should return symbol info before churn (generation-owned snapshot populated)"
+        );
 
         let mut saw_debounce_pressure = false;
         for version in 2..10 {
@@ -841,12 +923,6 @@ fn test_diagnostics_churn_drains_retained_state_after_close_delete()
         assert_eq!(pressure.pending_index_tasks, 0);
         assert_eq!(pressure.diagnostic_debounce_pending_uris, 0);
         assert_eq!(pressure.active_stream_sessions, 0);
-
-        let cache = server.semantic_analyzer_cache.lock();
-        assert!(
-            !cache.keys().any(|(cached_uri, _)| cached_uri == &normalized_uri),
-            "semantic analyzer cache must not retain diagnostics churn URI after close/delete"
-        );
 
         Ok::<(), Box<dyn std::error::Error>>(())
     })?;
@@ -950,6 +1026,197 @@ fn test_did_close_removes_document_symbols_from_index() -> Result<(), Box<dyn st
     server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
 
     assert!(server.symbol_index.lock().search_prefix("close_").is_empty());
+    Ok(())
+}
+
+/// Publication validity != side-effect validity (#3396 Phase 3): a deferred
+/// side effect (here, `reindex_document_symbols` via
+/// `run_post_parse_side_effects`) must re-validate freshness at its OWN
+/// commit point, not just trust that the `ParsedSnapshot` it carries was
+/// valid when some earlier publish succeeded.
+///
+/// This directly exercises `run_post_parse_side_effects`'s
+/// `commit_parse_effect_if_current` oracle with a generation that has been
+/// superseded between "this parse was captured" and "its side effects are
+/// about to commit" -- exactly the window an async parse worker's
+/// `on_published` callback can be delayed across, even though this test
+/// does not need the worker itself to prove it.
+#[test]
+fn stale_generation_side_effects_never_reindex_symbols() -> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = LspServer::new();
+    let uri = "file:///stale_side_effect_symbol_race.pl";
+
+    server.did_open(json!({
+        "textDocument": {
+            "uri": uri,
+            "languageId": "perl",
+            "version": 1,
+            "text": "sub kept_symbol { 1 }\n"
+        }
+    }))?;
+    assert!(server.symbol_index.lock().search_prefix("kept_").contains(&"kept_symbol".to_string()));
+
+    // Capture the generation handle exactly as a deferred side effect
+    // would (e.g. the async parse worker's `on_published` callback carries
+    // `PublishedParseTicket::document_instance`).
+    let normalized_uri = server.normalize_uri_key(uri);
+    let generation_handle = {
+        let docs = server.documents.lock();
+        must_some(docs.get(&normalized_uri)).generation.clone()
+    };
+
+    // Simulate a newer edit landing AFTER this generation's parse was
+    // captured but BEFORE its deferred side effects committed -- bump the
+    // generation directly (as a real `didChange` would, without publishing
+    // a snapshot for it) to reproduce the window between an async worker's
+    // publish and its side effects actually running.
+    generation_handle.fetch_add(1, Ordering::SeqCst);
+
+    let stale_text = "sub stale_symbol_must_never_appear { 1 }\n";
+    let mut parser = perl_parser::Parser::new(stale_text);
+    let stale_ast = Arc::new(must_some(parser.parse().ok()));
+    let stale_snapshot =
+        Arc::new(ParsedSnapshot::from_parse_result(0, stale_text, Some(stale_ast), Vec::new()));
+
+    // Call the side-effect method directly with a ticket for the STALE
+    // (superseded) generation -- reproduces what `on_published` would do if
+    // it committed after the document had already moved on.
+    server.run_post_parse_side_effects(parse_worker::PublishedParseTicket {
+        uri: uri.to_string(),
+        document_instance: generation_handle,
+        generation: 0, // the generation this (now-stale) parse was captured for
+        snapshot: stale_snapshot,
+        text: Arc::from(stale_text),
+        // Simulates what `process_job`/`on_published` would construct on
+        // the real async path -- see `PublishedParseTicket`'s doc comment.
+        settle_notified_by_worker: true,
+    });
+
+    assert!(
+        server.symbol_index.lock().search_prefix("stale_symbol").is_empty(),
+        "a superseded generation's side effects must never reindex symbols"
+    );
+    assert!(
+        server.symbol_index.lock().search_prefix("kept_").contains(&"kept_symbol".to_string()),
+        "the untouched symbol index must survive a rejected stale side-effect attempt"
+    );
+
+    Ok(())
+}
+
+/// End-to-end proof of the exact race the coordinator's deep-review flagged,
+/// through the REAL production wiring (the installed async parse worker's
+/// side-effect barrier, not a direct method call): parse N publishes, is
+/// paused immediately before its side effects commit, a real edit N+1 lands
+/// and commits for real, N's side-effect barrier is released -- and N's
+/// side effects (symbol reindex) must never have reached the symbol index.
+#[test]
+fn stale_side_effects_never_commit_through_the_real_worker_after_a_newer_edit()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = StdArc::new(LspServer::new());
+    server.install_default_parse_worker();
+    let uri = "file:///real_worker_side_effect_race.pl";
+
+    server.test_apply_did_open(uri, "sub kept_real_symbol { 1 }\n", 1)?;
+    assert!(
+        server
+            .symbol_index
+            .lock()
+            .search_prefix("kept_real_")
+            .contains(&"kept_real_symbol".to_string())
+    );
+
+    let worker = must_some(server.parse_worker());
+    let side_effect_barrier = worker.side_effect_barrier();
+    let normalized_uri = server.normalize_uri_key(uri);
+
+    // RAII guard: releases the paused worker thread even if an assertion
+    // below panics. Without this, a panic between `arm` and the manual
+    // `release()` call leaves a real worker thread permanently blocked
+    // inside `ParseWorkerTestBarrier::maybe_pause`'s condvar wait -- which
+    // has no shutdown-awareness (see its doc comment) -- so `server`'s own
+    // drop (during the panic's unwind) hangs forever inside
+    // `ParseWorker::drop`'s `handle.join()`. A failing assertion must
+    // report FAILED, not hang the whole test binary.
+    struct ReleaseOnDrop<'a>(&'a parse_worker::ParseWorkerTestBarrier);
+    impl Drop for ReleaseOnDrop<'_> {
+        fn drop(&mut self) {
+            self.0.release();
+        }
+    }
+    let _release_guard = ReleaseOnDrop(&side_effect_barrier);
+
+    // Edit N (generation 1): arm the side-effect barrier so the worker
+    // pauses immediately after N's publish succeeds, before its side
+    // effects (symbol reindex) commit.
+    side_effect_barrier.arm(&normalized_uri, 1);
+    server.test_apply_did_change(uri, "sub gen1_symbol_must_never_be_indexed { 1 }\n", 2)?;
+    side_effect_barrier.wait_until_paused();
+
+    // Publish already landed -- current_parsed() must be generation 1.
+    {
+        let docs = server.documents.lock();
+        let doc = must_some(docs.get(&normalized_uri));
+        let current = must_some(doc.current_parsed());
+        assert_eq!(current.generation(), 1);
+    }
+    // But its side effects have not committed -- the symbol index must
+    // still be exactly as it was after the initial didOpen.
+    assert!(server.symbol_index.lock().search_prefix("gen1_symbol").is_empty());
+
+    // Edit N+1 (generation 2) commits for REAL while N's side effects are
+    // still paused. `didChange` applies the text and bumps the generation
+    // counter SYNCHRONOUSLY (that part never waits on the worker) and only
+    // then enqueues its own parse job -- which, per the per-URI
+    // single-flight design, cannot be dequeued until generation 1's
+    // `process_job` call fully returns (i.e. after its side effects
+    // resolve, whether they commit or are skipped). So at this point the
+    // TEXT/generation for this URI is already 2, but generation 2's own
+    // parse+side-effects have NOT run yet -- this is exactly the coordinator's
+    // race: "the document's generation moved on" without generation 1's
+    // deferred side effects having had a chance to notice yet.
+    server.test_apply_did_change(uri, "sub gen2_symbol_is_the_real_current_fact { 1 }\n", 3)?;
+    assert_eq!(
+        server.test_document_generation(uri),
+        Some(2),
+        "the text/generation commit for edit N+1 must land immediately, independent of the paused worker"
+    );
+    assert!(
+        server.symbol_index.lock().search_prefix("gen2_symbol").is_empty(),
+        "generation 2's parse has not run yet (its job is queued behind generation 1's still-in-flight one)"
+    );
+
+    // Release generation 1's paused side effects. Its callback
+    // (`run_post_parse_side_effects`) must now detect staleness (the
+    // document is at generation 2, not 1) and skip the reindex entirely --
+    // then, per the per-URI serialization, generation 2's own queued job is
+    // picked up and runs to completion (publish + side effects) once
+    // generation 1's `process_job` call returns.
+    side_effect_barrier.release();
+
+    assert!(
+        server.test_wait_for_parse_worker_settled(uri, Duration::from_secs(5)),
+        "generation 1's released side-effect callback must finish running"
+    );
+    assert!(
+        server.symbol_index.lock().search_prefix("gen1_symbol").is_empty(),
+        "generation 1's side effects must NEVER reach the symbol index once superseded -- \
+         this is the publication-validity != side-effect-validity invariant"
+    );
+    // The document's real current fact (generation 2) must still be intact.
+    assert!(
+        server
+            .symbol_index
+            .lock()
+            .search_prefix("gen2_symbol")
+            .contains(&"gen2_symbol_is_the_real_current_fact".to_string()),
+        "generation 1's rejected side effects must not have clobbered generation 2's index entry"
+    );
+
     Ok(())
 }
 
@@ -1181,11 +1448,14 @@ fn test_binary_file_guard_did_open_skips_parse() -> Result<(), Box<dyn std::erro
     let docs = server.documents.lock();
     let doc = docs.get(uri).ok_or("document not stored after binary didOpen")?;
     assert_eq!(
-        doc.degradation_tier,
+        doc.current_parsed().map_or(DegradationTier::Minimal, |p| p.degradation_tier()),
         DegradationTier::Minimal,
         "binary content should result in Minimal degradation tier"
     );
-    assert!(doc.ast.is_none(), "parser must not be called on binary content");
+    assert!(
+        doc.current_parsed().is_none_or(|p| p.ast().is_none()),
+        "parser must not be called on binary content"
+    );
     Ok(())
 }
 
@@ -1209,11 +1479,14 @@ fn test_binary_file_guard_single_null_byte_triggers_guard() -> Result<(), Box<dy
     let docs = server.documents.lock();
     let doc = docs.get(uri).ok_or("document not stored after single-null didOpen")?;
     assert_eq!(
-        doc.degradation_tier,
+        doc.current_parsed().map_or(DegradationTier::Minimal, |p| p.degradation_tier()),
         DegradationTier::Minimal,
         "a single null byte must trigger the binary guard"
     );
-    assert!(doc.ast.is_none(), "parser must not be called when null byte is present");
+    assert!(
+        doc.current_parsed().is_none_or(|p| p.ast().is_none()),
+        "parser must not be called when null byte is present"
+    );
     Ok(())
 }
 
@@ -1235,7 +1508,7 @@ fn test_binary_file_guard_normal_perl_still_parses() -> Result<(), Box<dyn std::
     let docs = server.documents.lock();
     let doc = docs.get(uri).ok_or("document not stored after normal didOpen")?;
     assert_ne!(
-        doc.degradation_tier,
+        doc.current_parsed().map_or(DegradationTier::Minimal, |p| p.degradation_tier()),
         DegradationTier::Minimal,
         "normal Perl should not be treated as binary content"
     );
@@ -1267,11 +1540,14 @@ fn test_binary_file_guard_did_change_skips_parse() -> Result<(), Box<dyn std::er
     let docs = server.documents.lock();
     let doc = docs.get(uri).ok_or("document not stored after binary didChange")?;
     assert_eq!(
-        doc.degradation_tier,
+        doc.current_parsed().map_or(DegradationTier::Minimal, |p| p.degradation_tier()),
         DegradationTier::Minimal,
         "binary content via didChange should result in Minimal degradation tier"
     );
-    assert!(doc.ast.is_none(), "parser must not be called on binary content via didChange");
+    assert!(
+        doc.current_parsed().is_none_or(|p| p.ast().is_none()),
+        "parser must not be called on binary content via didChange"
+    );
     Ok(())
 }
 
@@ -1293,11 +1569,14 @@ fn test_template_file_guard_skips_parse_for_non_perl_language_id()
     let docs = server.documents.lock();
     let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
     assert_eq!(
-        doc.degradation_tier,
+        doc.current_parsed().map_or(DegradationTier::Minimal, |p| p.degradation_tier()),
         DegradationTier::Minimal,
         "template with non-Perl language mode should stay in no-parse mode"
     );
-    assert!(doc.ast.is_none(), "template with non-Perl languageId must skip parse");
+    assert!(
+        doc.current_parsed().is_none_or(|p| p.ast().is_none()),
+        "template with non-Perl languageId must skip parse"
+    );
     Ok(())
 }
 
@@ -1323,11 +1602,14 @@ fn test_template_file_guard_persists_across_did_change() -> Result<(), Box<dyn s
     let docs = server.documents.lock();
     let doc = docs.get(uri).ok_or("template document not stored after didChange")?;
     assert_eq!(
-        doc.degradation_tier,
+        doc.current_parsed().map_or(DegradationTier::Minimal, |p| p.degradation_tier()),
         DegradationTier::Minimal,
         "template should remain in no-parse mode after didChange"
     );
-    assert!(doc.ast.is_none(), "template should continue skipping parse on didChange");
+    assert!(
+        doc.current_parsed().is_none_or(|p| p.ast().is_none()),
+        "template should continue skipping parse on didChange"
+    );
     Ok(())
 }
 
@@ -1348,7 +1630,10 @@ fn test_template_file_guard_parses_embedded_perl_language_id()
 
     let docs = server.documents.lock();
     let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
-    assert!(doc.ast.is_some(), "template with embedded-perl languageId should be parsed as Perl");
+    assert!(
+        doc.current_parsed().is_some_and(|p| p.ast().is_some()),
+        "template with embedded-perl languageId should be parsed as Perl"
+    );
     Ok(())
 }
 
@@ -1369,166 +1654,10 @@ fn test_template_file_guard_parses_mojolicious_language_id()
 
     let docs = server.documents.lock();
     let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
-    assert!(doc.ast.is_some(), "template with mojolicious languageId should be parsed as Perl");
-    Ok(())
-}
-
-/// Semantic analyzer cache must accumulate at most one entry per document
-/// version across multiple hover calls at different offsets.
-///
-/// This verifies the (uri, content_hash) key strategy: two hovers on the
-/// same document text must reuse the cached SemanticAnalyzer rather than
-/// constructing a fresh one.
-#[test]
-fn test_semantic_analyzer_cache_reuses_entry_on_same_version()
--> Result<(), Box<dyn std::error::Error>> {
-    let server = LspServer::new();
-    let uri = "file:///test_cache_hover.pl";
-    let text = "my $x = 1;\nmy $y = 2;\n";
-
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
-    }))?;
-
-    // Two hover calls at different positions on the same document version.
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 1, "character": 3 }
-    })));
-
-    // Cache must have exactly 1 entry: one per (uri, content_hash).
-    let cache = server.semantic_analyzer_cache.lock();
-    assert_eq!(
-        cache.len(),
-        1,
-        "should cache exactly one analyzer entry per document version (got {})",
-        cache.len()
-    );
-
-    Ok(())
-}
-
-/// The semantic analyzer cache must be cleared for a URI when the document
-/// changes (textDocument/didChange), so stale analysis is never served.
-#[test]
-fn test_semantic_analyzer_cache_invalidated_on_did_change() -> Result<(), Box<dyn std::error::Error>>
-{
-    let server = LspServer::new();
-    let uri = "file:///test_cache_invalidate_change.pl";
-    let text = "my $x = 1;\n";
-
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
-    }))?;
-
-    // Prime the cache with a hover call.
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    // Verify the cache has an entry before the change.
-    {
-        let cache = server.semantic_analyzer_cache.lock();
-        assert!(!cache.is_empty(), "cache must be populated before didChange");
-    }
-
-    // Apply a document change.
-    server.handle_did_change(Some(json!({
-        "textDocument": { "uri": uri, "version": 2 },
-        "contentChanges": [{ "text": "my $x = 99;\n" }]
-    })))?;
-
-    // Cache must be cleared for this URI after didChange.
-    let cache = server.semantic_analyzer_cache.lock();
-    let uri_key = server.normalize_uri_key(uri);
-    let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
-    assert!(!still_has_stale, "semantic_analyzer_cache must evict entries for changed URI");
-
-    Ok(())
-}
-
-/// The semantic analyzer cache must be cleared for a URI when the document
-/// is closed (textDocument/didClose), preventing stale memory retention.
-#[test]
-fn test_semantic_analyzer_cache_invalidated_on_did_close() -> Result<(), Box<dyn std::error::Error>>
-{
-    let server = LspServer::new();
-    let uri = "file:///test_cache_invalidate_close.pl";
-    let text = "my $x = 1;\n";
-
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
-    }))?;
-
-    // Prime the cache with a hover call.
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    // Verify the cache has an entry before the close.
-    {
-        let cache = server.semantic_analyzer_cache.lock();
-        assert!(!cache.is_empty(), "cache must be populated before didClose");
-    }
-
-    // Close the document.
-    server.handle_did_close(Some(json!({ "textDocument": { "uri": uri } })))?;
-
-    // Cache must be cleared for this URI after didClose.
-    let cache = server.semantic_analyzer_cache.lock();
-    let uri_key = server.normalize_uri_key(uri);
-    let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
-    assert!(!still_has_stale, "semantic_analyzer_cache must evict entries for closed URI");
-
-    Ok(())
-}
-
-/// A new document version must produce a distinct cache entry (different
-/// content hash) while the old version's entry is evicted on didChange.
-#[test]
-fn test_semantic_analyzer_cache_separates_document_versions()
--> Result<(), Box<dyn std::error::Error>> {
-    let server = LspServer::new();
-    let uri = "file:///test_cache_versions.pl";
-    let text_v1 = "my $x = 1;\n";
-    let text_v2 = "my $x = 999;\n";
-
-    // Open v1 and prime the cache.
-    server.did_open(json!({
-        "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text_v1 }
-    }))?;
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    // Change to v2 (invalidates v1 entry) then hover again.
-    server.handle_did_change(Some(json!({
-        "textDocument": { "uri": uri, "version": 2 },
-        "contentChanges": [{ "text": text_v2 }]
-    })))?;
-
-    let _ = server.handle_hover(Some(json!({
-        "textDocument": { "uri": uri },
-        "position": { "line": 0, "character": 3 }
-    })));
-
-    // Cache must have at most 1 entry (v2 only; v1 was evicted on didChange).
-    let cache = server.semantic_analyzer_cache.lock();
     assert!(
-        cache.len() <= 1,
-        "cache must hold at most one entry after version change (got {})",
-        cache.len()
+        doc.current_parsed().is_some_and(|p| p.ast().is_some()),
+        "template with mojolicious languageId should be parsed as Perl"
     );
-
     Ok(())
 }
 
@@ -1770,5 +1899,223 @@ fn did_open_normalizes_plain_windows_path_uri() -> Result<(), Box<dyn std::error
         "plain Windows path should normalize to canonical key; keys: {:?}",
         docs.keys().collect::<Vec<_>>()
     );
+    Ok(())
+}
+
+/// #3660 regression: a rapid burst of same-URI edits on the async parse
+/// worker path must NOT leave `IndexCoordinator` permanently stuck in
+/// `Degraded{ParseStorm}` once the burst has fully settled.
+///
+/// Root cause (independently confirmed both ways during #3618 review): the
+/// pre-fix code called `coordinator.notify_change(uri)` once per edit
+/// (`handle_did_change_with_cancellation`'s async branch), but the parse
+/// worker coalesces same-URI jobs so only the surviving job ever publishes
+/// and calls the matching `coordinator.notify_parse_complete(uri)` (from
+/// `run_post_parse_side_effects`) -- for N rapid edits to one URI, only 1
+/// decrement ever fires against N increments, so the pending-parse counter
+/// never returns to zero and the coordinator's `if pending == 0` recovery
+/// guard (`workspace_index.rs`) never fires. Confirmed this does NOT
+/// reproduce on bare `origin/main` (no off-lock parse worker exists there,
+/// so every edit fully parses synchronously with no coalescing possible,
+/// keeping `notify_change`/`notify_parse_complete` inherently 1:1) --
+/// this is introduced by, not pre-existing to, the off-lock coalescing
+/// path.
+///
+/// Fix: `ParseWorker::enqueue` (and the internal `Coordinator::enqueue` it
+/// wraps) now returns `true` only when this call establishes a NEW
+/// pending-parse lifecycle for the URI (nothing was queued or in-flight a
+/// moment ago), `false` when it coalesces into an already-outstanding one.
+/// The caller only calls `notify_change` on `true`, so a burst of N
+/// coalesced edits increments the counter at most once per lifecycle,
+/// matching the (also once-per-lifecycle, in the common case) eventual
+/// `notify_parse_complete`.
+#[cfg(feature = "workspace")]
+#[test]
+fn rapid_burst_does_not_permanently_degrade_the_workspace_index_coordinator()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = StdArc::new(LspServer::new());
+    server.install_default_parse_worker();
+    let uri = "file:///burst_does_not_degrade_coordinator.pl";
+    server.test_apply_did_open(uri, "my $a = 1;\n", 1)?;
+    let normalized_uri = server.normalize_uri_key(uri);
+    assert!(
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "initial open must settle"
+    );
+
+    // Burst well above the parse-storm threshold (10) so a pre-fix run
+    // would reliably transition to Degraded and (per the bug) never
+    // recover.
+    for v in 2..=16i32 {
+        server.test_apply_did_change(uri, &format!("my $a = {v};\n"), v)?;
+    }
+    assert!(
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "the burst must settle within the timeout"
+    );
+
+    let coordinator = must_some(server.coordinator());
+    assert!(
+        !matches!(coordinator.state(), perl_parser::workspace_index::IndexState::Degraded { .. }),
+        "the coordinator must not remain Degraded once the burst has fully settled; got: {:?}",
+        coordinator.state()
+    );
+
+    Ok(())
+}
+
+/// #3660 follow-up (factory-droid): a NEW-lifecycle job that ends WITHOUT
+/// publishing must still credit its pending-parse settle. `notify_change`
+/// fires once per new lifecycle (`ParseWorker::enqueue` returning `true`);
+/// prior to `on_settled`, only a SUCCESSFUL publish ever called
+/// `on_published` (and transitively `notify_parse_complete`) -- a job that
+/// panics is caught by `catch_unwind` and never reaches `on_published` at
+/// all, so with no coalesced successor to inherit `active` ownership, that
+/// lifecycle's decrement was permanently uncredited: a #3660-class leak via
+/// a different path than the one #3660 itself fixed.
+///
+/// Wires the REAL `LspServer` + installed async worker + real
+/// `IndexCoordinator` (not a bare `ParseWorker` with a synthetic callback,
+/// which has no coordinator to leak against) and injects a real panic via
+/// the production panic-recovery path.
+#[cfg(feature = "workspace")]
+#[test]
+fn panicking_new_lifecycle_job_still_credits_the_pending_parse_settle()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = StdArc::new(LspServer::new());
+    server.install_default_parse_worker();
+    let uri = "file:///panic_credits_settle.pl";
+    server.test_apply_did_open(uri, "my $a = 1;\n", 1)?;
+    let normalized_uri = server.normalize_uri_key(uri);
+    assert!(
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "initial open must settle"
+    );
+
+    let coordinator = must_some(server.coordinator());
+    let baseline = coordinator.pending_parse_count();
+
+    // Arm the panic injector for generation 1, then apply the edit that
+    // both bumps to generation 1 AND establishes this as a NEW pending-parse
+    // lifecycle (nothing was queued/active for this URI a moment ago, so
+    // `enqueue` returns `true` and `notify_change` fires -- see #3660).
+    server.test_parse_worker_arm_panic(uri, 1);
+    server.test_apply_did_change(uri, "my $aa = 1;\n", 2)?;
+    assert!(
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "the panicking job's lifecycle must settle (worker recovers, URI released) within the timeout"
+    );
+
+    let metrics = must_some(server.test_parse_worker_metrics());
+    assert!(
+        metrics.jobs_panicked >= 1,
+        "the panic injector must have actually fired for this test to prove anything; metrics={metrics:?}"
+    );
+
+    assert_eq!(
+        coordinator.pending_parse_count(),
+        baseline,
+        "a panicking job's pending-parse increment must still be credited a matching decrement \
+         even though it never reaches on_published; got pending_parse_count={}, baseline={baseline}",
+        coordinator.pending_parse_count()
+    );
+    assert!(
+        !matches!(coordinator.state(), perl_parser::workspace_index::IndexState::Degraded { .. }),
+        "the coordinator must not be left Degraded by an uncredited panic; got: {:?}",
+        coordinator.state()
+    );
+
+    Ok(())
+}
+
+/// #3660 follow-up (factory-droid): a NEW-lifecycle job terminally rejected
+/// as stale (no coalesced successor queued behind it to inherit `active`
+/// ownership) must still credit its pending-parse settle -- the same class
+/// of leak as the panic case above, via `process_job`'s `!published` early
+/// return instead of a caught panic.
+///
+/// Constructs the terminal-stale-reject-with-no-successor case via the
+/// close/reopen document-instance-identity (ABA) hazard: a job paused at
+/// the pre-publish barrier, whose document is then closed and reopened
+/// (`didOpen` is always synchronous -- see `handle_did_open` -- so this
+/// enqueues NOTHING behind the paused job), so when released it is rejected
+/// by `Arc::ptr_eq` failing against the fresh `DocumentState`'s generation
+/// handle, `pending` is empty for this URI at that point, and `finish()`
+/// takes its terminal branch on a job that was rejected, not published.
+#[cfg(feature = "workspace")]
+#[test]
+fn terminal_stale_reject_with_no_successor_still_credits_the_pending_parse_settle()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_tdd_support::must_some;
+
+    let server = StdArc::new(LspServer::new());
+    server.install_default_parse_worker();
+    let uri = "file:///terminal_reject_credits_settle.pl";
+    server.test_apply_did_open(uri, "my $a = 1;\n", 1)?;
+    let normalized_uri = server.normalize_uri_key(uri);
+    assert!(
+        must_some(server.parse_worker())
+            .wait_until_settled(&normalized_uri, Duration::from_secs(5)),
+        "initial open must settle"
+    );
+
+    let coordinator = must_some(server.coordinator());
+    let baseline = coordinator.pending_parse_count();
+
+    // Pause generation 1's job immediately before it attempts to publish --
+    // this is the new-lifecycle enqueue, so `notify_change` fires once here.
+    server.test_parse_worker_arm_barrier(uri, 1);
+    server.test_apply_did_change(uri, "my $aa = 1;\n", 2)?;
+    server.test_parse_worker_wait_until_paused();
+
+    // Close + reopen while generation 1 is paused: `didOpen` is always
+    // synchronous (never touches the async worker), so nothing gets
+    // enqueued behind the paused job -- `pending` stays empty for this URI.
+    // The reopened document gets a brand-new `DocumentState` with a fresh
+    // `Arc<AtomicU32>` generation handle.
+    server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+    server.test_apply_did_open(uri, "my $reopened = 1;\n", 1)?;
+
+    // Release generation 1's paused job: `Arc::ptr_eq` against the fresh
+    // document's generation handle fails, so `publish_parsed_if_current`'s
+    // caller treats it as unpublished -- `jobs_rejected_stale` increments,
+    // `on_published` never fires, and (with nothing queued behind it)
+    // `finish()` takes its terminal branch on this rejected job.
+    server.test_parse_worker_release_barrier();
+    assert!(
+        must_some(server.parse_worker())
+            .wait_until_settled(&server.normalize_uri_key(uri), Duration::from_secs(5)),
+        "the rejected job's lifecycle must settle within the timeout"
+    );
+
+    let metrics = must_some(server.test_parse_worker_metrics());
+    assert!(
+        metrics.jobs_rejected_stale >= 1,
+        "the close/reopen ABA must have actually produced a stale rejection for this test to \
+         prove anything; metrics={metrics:?}"
+    );
+
+    assert_eq!(
+        coordinator.pending_parse_count(),
+        baseline,
+        "a terminally-stale-rejected job's pending-parse increment must still be credited a \
+         matching decrement even though it never reaches on_published; got \
+         pending_parse_count={}, baseline={baseline}",
+        coordinator.pending_parse_count()
+    );
+    assert!(
+        !matches!(coordinator.state(), perl_parser::workspace_index::IndexState::Degraded { .. }),
+        "the coordinator must not be left Degraded by an uncredited terminal stale-reject; got: {:?}",
+        coordinator.state()
+    );
+
     Ok(())
 }

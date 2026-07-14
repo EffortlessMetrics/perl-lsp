@@ -3,6 +3,11 @@
 //! This file contains tests for the remaining 15% of LSP user stories to achieve
 //! complete coverage of real-world Perl development scenarios.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stdout)]
+
 use serde_json::{Value, json};
 use std::collections::HashMap;
 

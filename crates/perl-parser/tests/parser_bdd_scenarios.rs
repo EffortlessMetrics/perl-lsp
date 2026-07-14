@@ -354,8 +354,15 @@ fn bdd_given_do_while_and_until_loops_when_parsed_then_post_condition_flow_is_re
     let sexp = parse_sexp(code)?;
 
     // Then: do/while and normalized until flow should be represented without recovery markers.
+    // Note: `do BLOCK while (COND)` is a post-condition loop expressed in Perl's grammar
+    // as a `do` block carrying a postfix `while` statement modifier, so the parser emits a
+    // `statement_modifier_while` node (not a `while` loop node). `until (...) {}` is
+    // normalized to `(until (unary_not ...))`.
     assert!(sexp.contains("(do"), "Expected Do node in: {sexp}");
-    assert!(sexp.contains("(while"), "Expected While node in: {sexp}");
+    assert!(
+        sexp.contains("statement_modifier_while"),
+        "Expected post-condition do-while (while statement modifier) in: {sexp}"
+    );
     assert!(sexp.contains("(unary_not"), "Expected normalized Until condition in: {sexp}");
     assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
 

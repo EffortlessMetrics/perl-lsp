@@ -156,8 +156,14 @@ fn check_assignment_in_condition(condition: &Node, diagnostics: &mut Vec<Diagnos
 fn might_be_undef(node: &Node, symbol_table: &SymbolTable) -> bool {
     match &node.kind {
         NodeKind::Variable { name, .. } => {
+            // Resolve the scope that actually encloses this variable use
+            // (not the hard-coded global scope) so a `my` declared inside a
+            // sub/block is visible for the rest of that lexical scope, per
+            // perlsub/perlsyn. Falling back to global scope 0 -- the prior
+            // behavior -- would make any sub-local lexical look undefined.
+            let enclosing_scope = symbol_table.scope_at_offset(node.location.start);
             // If variable is not defined in scope, it might be undef
-            symbol_table.find_symbol(name, 0, SymbolKind::scalar()).is_empty()
+            symbol_table.find_symbol(name, enclosing_scope, SymbolKind::scalar()).is_empty()
         }
         NodeKind::Undef => true,
         _ => false,
@@ -270,6 +276,47 @@ mod tests {
         assert!(
             diags.iter().all(|d| d.code.as_deref() != Some("PL404")),
             "numeric compare with declared scalar should not fire PL404: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn numeric_compare_with_sub_local_scalar_no_pl404() {
+        // Regression for #3644: `my $x` declared inside a subroutine body is
+        // lexically visible for the rest of the enclosing block (perlsub,
+        // "Persistent Private Variables" / perlsyn "my"). find_symbol used
+        // to be called with a hard-coded global ScopeId (0), which meant a
+        // `my` declared inside a sub (ScopeId > 0) was invisible to the
+        // lookup and PL404 wrongly fired on a well-defined lexical.
+        let diags = common_mistakes_diags("sub is_five { my $x = 10; if ($x == 5) { } }");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL404")),
+            "numeric compare with sub-local declared scalar should not fire PL404: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn numeric_compare_with_nested_block_local_scalar_no_pl404() {
+        // Regression for #3695 (re-applying #3644/#3659 hardening): `my $x`
+        // declared inside a nested block (an `if` block inside a `sub`, not
+        // just directly inside the sub body) must still be visible at the
+        // comparison site. This exercises scope_at_offset picking the
+        // innermost of two NESTED (not just one-level) enclosing scopes.
+        let diags = common_mistakes_diags("sub outer { if (1) { my $x = 10; if ($x == 5) { } } }");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL404")),
+            "numeric compare with nested-block declared scalar should not fire PL404: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn numeric_compare_with_sub_local_undeclared_scalar_fires_pl404() {
+        // True-positive guard: a genuinely undeclared variable inside a sub
+        // should still fire PL404 -- the fix must not over-suppress across
+        // scope boundaries.
+        let diags = common_mistakes_diags("sub is_five { if ($y == 5) { } }");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL404")),
+            "numeric compare with truly undeclared scalar inside a sub should still fire PL404: {diags:?}"
         );
     }
 

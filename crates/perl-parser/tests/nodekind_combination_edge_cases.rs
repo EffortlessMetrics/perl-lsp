@@ -358,7 +358,7 @@ sub fallback_handler {
     // Inspect each goto target shape.
     let mut target_kinds: Vec<&'static str> = Vec::new();
     fn walk(n: &Node, out: &mut Vec<&'static str>) {
-        if let NodeKind::Goto { target } = &n.kind {
+        if let NodeKind::Goto { target, .. } = &n.kind {
             out.push(target.kind.kind_name());
         }
         n.for_each_child(|c| walk(c, out));

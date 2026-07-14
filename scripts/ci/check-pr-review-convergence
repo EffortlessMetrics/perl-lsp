@@ -1,0 +1,831 @@
+#!/usr/bin/env bash
+# check-pr-review-convergence — CANONICAL review-convergence authority
+#
+# Answers exactly one question, in exactly one place: "has this PR converged
+# on review, as of the CURRENT head commit?" Every skill/agent surface that
+# needs to gate on reviewer completion or thread resolution MUST call this
+# script instead of re-deriving the GraphQL query locally.
+#
+# ── Why this exists ─────────────────────────────────────────────────────────
+#
+# `latestReviews` alone is NOT sufficient. It proves each reviewer's most
+# recent review *state* (APPROVED / CHANGES_REQUESTED / COMMENTED) and the
+# commit they reviewed at — nothing more. Thread resolution is a SEPARATE
+# axis: a reviewer can APPROVE while leaving inline comment threads open,
+# and `reviewDecision` does not surface that at all. A correct convergence
+# check must look at BOTH axes:
+#
+#   1. Reviewer completion at HEAD — every HUMAN reviewer's latest review has
+#      a `commit.oid` equal to the PR's current `headRefOid`. Earlier reviews
+#      (submitted before the latest push) are superseded and do not count, no
+#      matter how recent their `state`. Bot-authored reviews (author
+#      `__typename == "Bot"` — sourcery-ai, coderabbitai,
+#      chatgpt-codex-connector, cubic-dev-ai, factory-droid, etc.) are
+#      EXCLUDED from this blocking check: they're unrequested auto-review
+#      apps, never appear in `reviewRequests`, aren't required by branch
+#      protection, and don't reliably re-run on every push (rate limits). A
+#      stale bot review is reported ADVISORY, not BLOCK — see the #3621
+#      self-check incident below.
+#   2. Thread resolution — every review thread that is still unresolved
+#      (`isResolved == false`, regardless of `isOutdated` — see below) has
+#      been resolved for a real reason
+#      (fixed/refuted/superseded/accepted-with-follow-up).
+#
+# This exact check was re-inlined independently across pr-ready.md,
+# pr-respond.md, ops-merge-batch.md, pr-responder.md, and ops.md, and drifted
+# across three separate review rounds (see PR #3621, which fixed #3598). This
+# script is the fix: ONE authority, everything else points at it.
+#
+# The bot-exclusion above was itself found by running this script against
+# #3621's own PR: five auto-review bots (none requested, all `Bot`-typed)
+# had commented on an earlier push, and treating their staleness as blocking
+# meant the PR could never converge again without a human re-triggering each
+# bot — the exact over-block class this script exists to eliminate, just one
+# axis over (bot review staleness instead of `reviews` vs `latestReviews`).
+#
+# ── ACTIVE vs outdated vs resolved threads ──────────────────────────────────
+#
+# `reviewThreads` has two independently-set booleans per thread:
+#   - `isResolved`  — a human/bot explicitly resolved the conversation
+#   - `isOutdated`  — the commented-on diff hunk no longer exists at HEAD
+#                      (the code moved/changed underneath the comment)
+#
+# ANY unresolved thread BLOCKS convergence — isResolved == false, regardless
+# of isOutdated. `isOutdated` is reported as METADATA (which unresolved
+# bucket a thread falls in: "active" vs "outdated") but is NOT a blocking
+# discriminator.
+#
+# This was previously wrong: an earlier version of this script treated
+# outdated-but-unresolved threads as ADVISORY/non-blocking, reasoning that
+# "it no longer points at live code, so it does not block." That reasoning
+# does not match GitHub's actual mergeability computation. This repo's
+# active `main` branch-protection ruleset enforces
+# `required_conversation_resolution`, and GitHub applies that check to
+# EVERY unresolved review thread — it does not consult `isOutdated` at all.
+# PR #3621 proved this directly: it sat BLOCKED for many review cycles with
+# 0 active threads but 9 outdated-unresolved threads; resolving those 9
+# (with no other change) made the merge fire immediately. Treating outdated
+# threads as non-blocking meant this script could report `converged:true`
+# while GitHub itself still refused to merge — exactly the "internal
+# verdict disagrees with GitHub mergeability" class of defect this script
+# exists to eliminate. See issue #3679.
+#
+# Resolving a genuinely-outdated thread is usually a safe, low-cost
+# cleanup step (the diff it commented on no longer exists), so this being a
+# BLOCK rather than an ADVISORY should rarely add real friction — but it is
+# still required, because the ruleset requires it.
+#
+# ── Resolved-without-disposition (#3693, follow-up to #3647) ───────────────
+#
+# "0 unresolved threads" is necessary but NOT sufficient for real
+# convergence. #3647 merged — out of band, while its independent
+# correctness review was still running — with 6 P1 defects live on main,
+# because a responder had silently `resolveReviewThread`'d 15 threads with
+# NO reply and no evidence. The ruleset enforces "resolved"; it cannot
+# enforce "resolved for a justified reason." Every unresolved-thread check
+# above is blind to this: a thread that is `isResolved == true` passes
+# those checks whether it was fixed-and-verified or just clicked away.
+#
+# The mechanical signature of resolved-to-clear: a resolved thread whose
+# `comments` connection has `totalCount <= 1` — i.e. it carries ONLY the
+# original review comment, with no reply from anyone (bot, human, or the
+# original author) posted before resolution. A real disposition — even a
+# terse one — always adds at least a second comment to the thread before
+# `resolveReviewThread` is called, so "no reply" is a strong, cheap,
+# id-stable proxy for "resolved without evidence."
+#
+# Heuristic limits (documented, not solved — this is a proxy, not intent
+# detection):
+#   - A thread the ORIGINAL author immediately resolves after posting a
+#     genuine one-line follow-up ("fixed in a1b2c3d") is NOT flagged: that
+#     follow-up IS the second comment, so `totalCount` is 2 and the thread
+#     passes. This is deliberate — the check is "was anything said after
+#     the finding," not "did a different person say it."
+#   - Conversely, a low-effort reply ("ok") that is not a real disposition
+#     (no commit/test/invariant/issue reference) still satisfies this
+#     check — the script cannot verify the CONTENT of a disposition reply,
+#     only its EXISTENCE. Content-quality enforcement is a human/reviewer
+#     judgment call, not a mechanical one; see #3693 item 2 for the
+#     disposition-format convention this check assumes reviewers follow.
+#   - A thread with a reply that itself gets edited to blank/deleted after
+#     resolution would still show `totalCount >= 2` (comment count does not
+#     decrease on edit) and would NOT be flagged — a known blind spot.
+#   - `totalCount` is read from GraphQL's connection metadata, which is
+#     accurate regardless of how many comment `nodes` are actually
+#     fetched (this script only fetches `first: 1`, for the opening
+#     comment's author, to keep the query cheap) — so the count itself is
+#     not subject to the "first N" pagination cap.
+#
+# ── Independent-review-pending marker (#3693) ───────────────────────────────
+#
+# A correctness/deep review existing only in an orchestrator's task list is
+# not repository truth and cannot protect the merge (the other half of the
+# #3647 root cause: the PR merged while its deep review was still running,
+# because nothing in the repo made that in-flight review visible). This
+# script treats the `needs-deep-review` label as a durable, repo-visible
+# blocking marker: while present, convergence is BLOCKED regardless of
+# thread/review state. The label is expected to be applied when an
+# independent review is launched and cleared once the reviewer posts a
+# verdict and any confirmed defects are fixed/refuted — see the sequence in
+# issue #3693.
+#
+# ── Pagination ───────────────────────────────────────────────────────────────
+#
+# Both `reviewThreads` and `latestReviews`/`reviews` can exceed a single
+# page (GitHub's GraphQL default/max page sizes). This script pages through
+# BOTH connections with `hasNextPage`/`endCursor` until exhausted — a PR
+# with more than 50 threads or more than 50 review submissions must not
+# silently truncate.
+#
+# ── Usage ────────────────────────────────────────────────────────────────────
+#
+#   scripts/ci/check-pr-review-convergence <pr-number> [owner/repo]
+#
+# If [owner/repo] is omitted, it is resolved from the current git remote via
+# `gh repo view`.
+#
+# ── Exit codes ───────────────────────────────────────────────────────────────
+#
+#   0  CONVERGED — no pending review requests, every human reviewer's latest
+#      review is at the current HEAD SHA, NO unresolved thread remains
+#      (neither active nor outdated — see the ACTIVE vs outdated vs resolved
+#      section above), NO resolved thread lacks a disposition reply (see the
+#      resolved-without-disposition section above), and NO independent
+#      review is in flight (`needs-deep-review` label absent). (Stale bot
+#      reviews do not block — see bot-exclusion note above.) Merge-ready
+#      from a review-convergence standpoint (other gates — CI, other labels
+#      — are separate and NOT checked by this script).
+#   1  NOT CONVERGED — one or more blocking conditions found; reasons are
+#      printed to stderr, one per line, prefixed "BLOCK".
+#   2  USAGE / FETCH ERROR — bad arguments, `gh`/`jq` missing, or the GraphQL
+#      call failed. Not a review-convergence verdict either way.
+#
+# ── Output ───────────────────────────────────────────────────────────────────
+#
+# stdout: a short human-readable summary line + a machine-readable JSON
+# object on the final line (for callers that want structured output):
+#   {"pr":N,"headRefOid":"...","converged":true|false,
+#    "pending_reviewers":[...],"stale_reviews":[...],"stale_bot_reviews":[...],
+#    "unresolved_active":N,"unresolved_outdated":N,"unresolved_total":N,
+#    "resolved_threads":N,"resolved_without_disposition":N,
+#    "independent_review_pending":true|false}
+# ("stale_reviews" is human reviewers only — BLOCKING. "stale_bot_reviews" is
+# auto-review-app reviewers whose latest review predates HEAD — ADVISORY,
+# never blocking; see the bot-exclusion note above. "unresolved_active" and
+# "unresolved_outdated" both BLOCK; "unresolved_total" is their sum.
+# "resolved_without_disposition" counts RESOLVED threads whose comment
+# count is <= 1, i.e. no reply was ever posted — BLOCKING; see the
+# resolved-without-disposition section above. "independent_review_pending"
+# reflects the `needs-deep-review` label — BLOCKING while true.)
+# stderr: BLOCK lines for anything that fails convergence (unresolved
+# threads — active and outdated; resolved-without-disposition threads; a
+# pending independent review); ADVISORY lines only for stale bot reviews,
+# which never block.
+#
+# ── Test seam (no network) ──────────────────────────────────────────────────
+#
+# When the CONVERGENCE_TEST_FIXTURE_DIR environment variable is set, the two
+# gh-calling points below (the `gh pr view` metadata fetch and the
+# `paginate_pr_connection` GraphQL fetch) read canned JSON from files in
+# that directory instead of calling `gh`. This lets
+# scripts/tests/test-check-pr-review-convergence.sh exercise the
+# verdict/reporting logic deterministically and offline. See the
+# "Test seam" comment further down for the exact fixture file contract.
+# This variable must never be set outside of tests.
+#
+set -euo pipefail
+
+# Test-only seam — see the "Test seam (no network)" header comment above.
+# Empty string means "not in test mode" (the default, always true in
+# production usage).
+CONVERGENCE_TEST_FIXTURE_DIR="${CONVERGENCE_TEST_FIXTURE_DIR:-}"
+
+# ── Review-protocol enforcement flag (#3693 R1 — advisory-first rollout) ─────
+#
+# The review-protocol axes ADDED in R1 (disposition markers, verification
+# receipts, review-run receipts, fix-commit reachability, follow-up issue
+# numbers — everything below documented as "R1 protocol axis") default to
+# ADVISORY: they are computed, reported in the JSON object, and printed as
+# `WARN` lines on stderr, but they DO NOT flip `converged` and DO NOT change
+# the exit code. Set REVIEW_PROTOCOL_ENFORCE=1 to promote every R1 protocol
+# axis to a hard BLOCK (flips `converged` to false, exit 1, `WARN` becomes
+# `BLOCK`).
+#
+# Why advisory-first: as of R1's landing, ~10 of the 14 most-recent PRs would
+# trip one of these axes because their threads were resolved before the
+# disposition-marker convention existed. Turning the axes on as hard blocks
+# immediately would retroactively wall off every in-flight PR. So R1 SHIPS
+# advisory; flipping the default to enforce is a deliberate later PR (R4),
+# gated on a dogfood window proving the axes don't deadlock legitimate PRs.
+#
+# The TWO axes that are NOT part of this advisory rollout — they were already
+# hard blocks before R1 and STAY hard blocks regardless of this flag:
+#   - unresolved threads (active + outdated)      — #3684 / #3679
+#   - resolved_without_disposition (totalCount<=1) — #3732
+# The R1 `dispositions_missing_marker` axis is the *content-aware* tightening
+# of #3732's count-only heuristic; it is advisory here so the tightening does
+# not retroactively block PRs whose resolved threads carry a prose reply but
+# no machine marker.
+REVIEW_PROTOCOL_ENFORCE="${REVIEW_PROTOCOL_ENFORCE:-}"
+
+if [[ $# -lt 1 ]]; then
+    echo "usage: $0 <pr-number> [owner/repo]" >&2
+    exit 2
+fi
+PR="$1"
+
+if [[ -z "$CONVERGENCE_TEST_FIXTURE_DIR" ]] && ! command -v gh >/dev/null 2>&1; then
+    echo "ERROR: gh CLI not found on PATH" >&2
+    exit 2
+fi
+if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq not found on PATH" >&2
+    exit 2
+fi
+
+if [[ -n "$CONVERGENCE_TEST_FIXTURE_DIR" && -z "${2:-}" ]]; then
+    # In fixture mode arg2 (owner/repo) MUST be explicit — otherwise the
+    # REPO_SLUG default below would fall through to a live `gh repo view`
+    # call, defeating the point of the offline test seam.
+    echo "ERROR: CONVERGENCE_TEST_FIXTURE_DIR requires an explicit owner/repo (arg 2)" >&2
+    exit 2
+fi
+
+REPO_SLUG="${2:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+OWNER="${REPO_SLUG%%/*}"
+REPO="${REPO_SLUG##*/}"
+
+if [[ -z "$OWNER" || -z "$REPO" ]]; then
+    echo "ERROR: could not resolve owner/repo (pass it explicitly as arg 2)" >&2
+    exit 2
+fi
+
+PAGE_SIZE=50
+
+# ── GraphQL: page through a connection field on pullRequest ────────────────
+#
+# $1 = field name (reviewThreads | latestReviews | comments)
+# $2 = inner node selection (GraphQL selection set, no braces needed beyond
+#      what's passed)
+# $3 = OPTIONAL fixture basename override (defaults to $field). The GraphQL
+#      query always uses $field; only the offline fixture filename changes.
+#      This lets the PR-level `comments` connection (#3693 R1) read from
+#      "pr_comments.json" so its fixture is not confused with the
+#      thread-level `comments` sub-selection inside reviewThreads.json.
+# Prints one JSON array (concatenation of every page's `nodes`) to stdout.
+#
+# Test seam: when CONVERGENCE_TEST_FIXTURE_DIR is set, this reads
+# "$CONVERGENCE_TEST_FIXTURE_DIR/<fixture-basename>.json" (a plain JSON array
+# of nodes, already fully "paginated" — no gh call, no pagination loop)
+# instead of querying GraphQL. This is the only place
+# `latestReviews`/`reviewThreads`/`comments` data enters the script, so
+# stubbing it here is sufficient to make the whole verdict/reporting pipeline
+# testable offline.
+paginate_pr_connection() {
+    local field="$1"
+    local node_selection="$2"
+    local fixture_basename="${3:-$field}"
+
+    if [[ -n "$CONVERGENCE_TEST_FIXTURE_DIR" ]]; then
+        local fixture_file="$CONVERGENCE_TEST_FIXTURE_DIR/${fixture_basename}.json"
+        if [[ ! -f "$fixture_file" ]]; then
+            echo "ERROR: test fixture missing: $fixture_file" >&2
+            exit 2
+        fi
+        jq -c '.' "$fixture_file"
+        return
+    fi
+
+    local cursor="null"
+    local all_nodes="[]"
+    local has_next="true"
+
+    while [[ "$has_next" == "true" ]]; do
+        local after_arg
+        if [[ "$cursor" == "null" ]]; then
+            after_arg=""
+        else
+            after_arg=", after: \"$cursor\""
+        fi
+
+        local query
+        query=$(cat <<EOF
+query {
+  repository(owner: "$OWNER", name: "$REPO") {
+    pullRequest(number: $PR) {
+      $field(first: $PAGE_SIZE$after_arg) {
+        nodes { $node_selection }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}
+EOF
+)
+        local page
+        if ! page=$(gh api graphql -f query="$query" 2>&1); then
+            echo "ERROR: GraphQL fetch failed for $field: $page" >&2
+            exit 2
+        fi
+
+        local page_nodes
+        page_nodes=$(printf '%s' "$page" | jq ".data.repository.pullRequest.${field}.nodes")
+        all_nodes=$(jq -n --argjson a "$all_nodes" --argjson b "$page_nodes" '$a + $b')
+
+        has_next=$(printf '%s' "$page" | jq -r ".data.repository.pullRequest.${field}.pageInfo.hasNextPage")
+        cursor=$(printf '%s' "$page" | jq -r ".data.repository.pullRequest.${field}.pageInfo.endCursor")
+    done
+
+    printf '%s' "$all_nodes"
+}
+
+# ── Marker extraction (#3693 R1) ────────────────────────────────────────────
+#
+# R1 receipts are single-line HTML-comment JSON markers embedded in comment
+# bodies: `<!-- <kind>:v1 {json-payload} -->`. Three kinds:
+#   - review-run    (PR-level comment) — a review pass's start/done receipt
+#   - verification  (PR-level comment) — an independent verifier's receipt
+#   - disposition   (thread reply)     — why a review thread was resolved
+# See .ci/receipts/schemas/review-*.schema.json for the payload shapes.
+#
+# $1 = marker kind (review-run | verification | disposition)
+# $2 = JSON array of comment nodes (each a {author,body,...} object)
+# stdout = JSON array of parsed marker payload objects (malformed markers are
+#          silently dropped via `fromjson?`, so a broken marker degrades to
+#          "no marker" rather than aborting the whole verdict).
+#
+# Pure jq: `scan` finds every `<!-- <kind>:v1 {json} -->` in each body and
+# emits the captured `{json}` group; `fromjson?` parses it (dropping any
+# unparseable marker). Oniguruma `.` does not cross newlines, so a marker is
+# matched within its own single line even inside a multi-line comment body,
+# and the greedy `\\{.*\\}` correctly spans a payload with nested braces up
+# to the last `}` before ` -->` on that line.
+extract_markers() {
+    local kind="$1"
+    local nodes="$2"
+    printf '%s' "$nodes" | jq -c --arg kind "$kind" '
+        [ .[]?
+          | (.body // "")
+          | scan("<!-- " + $kind + ":v1 (\\{.*\\}) -->")
+          | .[0]
+          | fromjson? ]'
+}
+
+# ── Fix-commit reachability oracle (#3693 R1) ───────────────────────────────
+#
+# A `disposition:v1` marker of class "fixed" cites `evidence.commit`. The
+# closeout must confirm that commit is actually reachable from the PR's
+# current head (a fix pointing at a commit that never landed on this branch,
+# or at a typo SHA, is not a real fix). Offline (fixture mode) this reads a
+# JSON array of head-reachable SHAs from head_reachable_commits.json; in
+# production it uses `git merge-base --is-ancestor <sha> <head>`. When the
+# fixture file is absent, the reachable set is empty (conservative: every
+# cited fix commit reads as unreachable) — a fixed-disposition fixture must
+# therefore ship head_reachable_commits.json listing its own commit.
+#
+# $1 = candidate commit SHA
+# returns 0 (reachable) / 1 (not reachable)
+commit_reachable_from_head() {
+    local sha="$1"
+    if [[ -z "$sha" || "$sha" == "null" ]]; then
+        return 1
+    fi
+    if [[ -n "$CONVERGENCE_TEST_FIXTURE_DIR" ]]; then
+        local reach_file="$CONVERGENCE_TEST_FIXTURE_DIR/head_reachable_commits.json"
+        if [[ ! -f "$reach_file" ]]; then
+            return 1
+        fi
+        if jq -e --arg s "$sha" 'index($s) != null' "$reach_file" >/dev/null 2>&1; then
+            return 0
+        fi
+        return 1
+    fi
+    # Production: is $sha an ancestor of (or equal to) the current head?
+    if git merge-base --is-ancestor "$sha" "$HEAD_REF_OID" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+# ── Fetch headRefOid + reviewRequests (small, rarely paginated, but still
+#    read via the REST-ish `gh pr view` for simplicity — reviewRequests over
+#    50 simultaneous requested reviewers is not a realistic case for this
+#    repo's review model) ─────────────────────────────────────────────────
+#
+# Test seam: when CONVERGENCE_TEST_FIXTURE_DIR is set, read
+# "$CONVERGENCE_TEST_FIXTURE_DIR/pr_view.json" (same shape as
+# `gh pr view --json headRefOid,reviewRequests,labels,author`) instead of
+# calling `gh`. The `author` field (#3693 R1) carries the PR author's login,
+# used as the canonical "writer" identity for the writer!=verifier check.
+if [[ -n "$CONVERGENCE_TEST_FIXTURE_DIR" ]]; then
+    fixture_file="$CONVERGENCE_TEST_FIXTURE_DIR/pr_view.json"
+    if [[ ! -f "$fixture_file" ]]; then
+        echo "ERROR: test fixture missing: $fixture_file" >&2
+        exit 2
+    fi
+    PR_META="$(jq -c '.' "$fixture_file")"
+elif ! PR_META="$(gh pr view "$PR" --repo "$OWNER/$REPO" --json headRefOid,reviewRequests,labels,author 2>&1)"; then
+    echo "ERROR: could not fetch PR #$PR metadata: $PR_META" >&2
+    exit 2
+fi
+HEAD_REF_OID="$(printf '%s' "$PR_META" | jq -r '.headRefOid')"
+# Writer identity (#3693 R1). `.author.login` is absent on older fixtures;
+# `// empty` degrades that to an empty string (no PR author in the writer
+# set) rather than the literal "null".
+PR_AUTHOR_LOGIN="$(printf '%s' "$PR_META" | jq -r '.author.login // empty')"
+# NOTE: reviewRequests mixes User nodes (have `.login`) and Team nodes (have
+# `.name`, no `.login`). The fallback MUST be applied per-element — piping
+# each node through `(.login // .name // empty)` individually — not across
+# the whole generator. `[.reviewRequests[]?.login // .reviewRequests[]?.name
+# // empty]` looks equivalent but isn't: jq's `//` operator evaluates its
+# right side only when the LEFT side produces zero truthy outputs across ALL
+# of `.reviewRequests[]?.login`'s results, so a single requested User in the
+# list makes `//` skip `.name` entirely and any co-requested Team is silently
+# dropped from the pending-reviewer set — the exact "reports CONVERGED with a
+# team review still pending" bug this script exists to prevent.
+PENDING_REVIEWERS="$(printf '%s' "$PR_META" | jq -c '[.reviewRequests[]? | (.login // .name // empty)]')"
+PENDING_REVIEWER_COUNT="$(printf '%s' "$PENDING_REVIEWERS" | jq 'length')"
+
+# ── Independent-review-pending marker (#3693) ───────────────────────────────
+# `.labels` is a plain array of `{name, ...}` objects (no User/Team-style
+# fallback trap like reviewRequests above — every label node always has
+# `.name`). Iterating `.labels[]?` on a missing/null `labels` key yields no
+# results rather than erroring, so older fixtures without a "labels" key
+# are still handled safely.
+LABELS="$(printf '%s' "$PR_META" | jq -c '[.labels[]?.name]')"
+INDEPENDENT_REVIEW_PENDING="false"
+if printf '%s' "$LABELS" | jq -e 'index("needs-deep-review") != null' >/dev/null; then
+    INDEPENDENT_REVIEW_PENDING="true"
+fi
+
+if [[ -z "$HEAD_REF_OID" || "$HEAD_REF_OID" == "null" ]]; then
+    echo "ERROR: could not resolve headRefOid for PR #$PR" >&2
+    exit 2
+fi
+
+# ── Fetch latestReviews (paginated) — latest review PER REVIEWER only.
+#    This is deliberately `latestReviews`, not the full historical `reviews`
+#    connection: superseded reviews from before the current push must not
+#    count as "finished". ──────────────────────────────────────────────────
+#
+#    Bot-authored reviews (sourcery-ai, coderabbitai, chatgpt-codex-connector,
+#    cubic-dev-ai, factory-droid, etc.) are EXCLUDED from staleness blocking.
+#    These are unrequested auto-review apps — they never appear in
+#    `reviewRequests`, this repo's branch protection does not require their
+#    approval, and they don't reliably re-run on every push (rate limits).
+#    Blocking on their staleness means a PR can never converge once ANY
+#    auto-review bot's last run predates the latest push — the same
+#    over-block class this script exists to eliminate (see #3621 self-test:
+#    every push after a bot's last comment permanently fails convergence).
+#    A stale bot review is reported as ADVISORY — visible, not blocking.
+#    NOTE: this is the ONLY advisory-only (non-blocking) category left in
+#    this script. Unresolved review threads, whether active or outdated,
+#    both BLOCK convergence (see the "ACTIVE vs outdated vs resolved
+#    threads" section above and issue #3679) — stale bot reviews are NOT
+#    "the same treatment as an outdated thread" anymore. Only non-bot
+#    (human) reviewers' staleness blocks convergence among review
+#    submissions.
+LATEST_REVIEWS="$(paginate_pr_connection "latestReviews" "author { login __typename } state commit { oid }")"
+
+HUMAN_REVIEWS="$(printf '%s' "$LATEST_REVIEWS" | jq -c '[.[] | select((.author.__typename // "User") != "Bot")]')"
+BOT_REVIEWS="$(printf '%s' "$LATEST_REVIEWS" | jq -c '[.[] | select(.author.__typename == "Bot")]')"
+
+STALE_REVIEWS="$(printf '%s' "$HUMAN_REVIEWS" | jq -c --arg head "$HEAD_REF_OID" \
+    '[.[] | select(.commit.oid != $head) | {login: .author.login, reviewedAt: .commit.oid, state: .state}]')"
+STALE_REVIEW_COUNT="$(printf '%s' "$STALE_REVIEWS" | jq 'length')"
+
+STALE_BOT_REVIEWS="$(printf '%s' "$BOT_REVIEWS" | jq -c --arg head "$HEAD_REF_OID" \
+    '[.[] | select(.commit.oid != $head) | {login: .author.login, reviewedAt: .commit.oid, state: .state}]')"
+STALE_BOT_REVIEW_COUNT="$(printf '%s' "$STALE_BOT_REVIEWS" | jq 'length')"
+
+# ── Fetch reviewThreads (paginated) — classify unresolved-active vs
+#    unresolved-outdated vs resolved. BOTH unresolved buckets block
+#    convergence (isOutdated is metadata, not a blocking discriminator —
+#    see the "ACTIVE vs outdated vs resolved threads" header section).
+#    ────────────────────────────────────────────────────────────────────────
+#    `comments(first: 20)` is fetched alongside `totalCount` so the verdict
+#    can report the opening commenter's login AND scan reply bodies for
+#    `disposition:v1` markers (#3693 R1 — the content-aware tightening of
+#    #3732's count-only heuristic). `totalCount` itself is connection
+#    metadata, accurate regardless of the `first` cap (see the
+#    resolved-without-disposition header section above); the widened `first`
+#    only bounds how many reply BODIES are scanned for a marker (20 replies
+#    is far beyond any real disposition thread).
+REVIEW_THREADS="$(paginate_pr_connection "reviewThreads" "id isResolved isOutdated path comments(first: 20) { totalCount nodes { author { login } body } }")"
+
+# ── Fetch PR-level comments (#3693 R1) — carries review-run + verification
+#    receipts as `<!-- review-run:v1 … -->` / `<!-- verification:v1 … -->`
+#    markers. In production, page the `comments` connection; the fixture
+#    basename override makes the offline file pr_comments.json (distinct from
+#    the thread-level comments inside reviewThreads.json). A fixture that
+#    predates this connection simply omits pr_comments.json — that is treated
+#    as "no PR-level receipts" ([]), NOT a fetch error, so every pre-R1
+#    fixture keeps passing unchanged.
+if [[ -n "$CONVERGENCE_TEST_FIXTURE_DIR" ]]; then
+    if [[ -f "$CONVERGENCE_TEST_FIXTURE_DIR/pr_comments.json" ]]; then
+        PR_COMMENTS="$(jq -c '.' "$CONVERGENCE_TEST_FIXTURE_DIR/pr_comments.json")"
+    else
+        PR_COMMENTS="[]"
+    fi
+else
+    PR_COMMENTS="$(paginate_pr_connection "comments" "author { login } body" "pr_comments")"
+fi
+
+REVIEW_RUN_MARKERS="$(extract_markers "review-run" "$PR_COMMENTS")"
+VERIFICATION_MARKERS="$(extract_markers "verification" "$PR_COMMENTS")"
+
+UNRESOLVED_ACTIVE_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '[.[] | select(.isResolved == false and .isOutdated == false)]')"
+UNRESOLVED_ACTIVE_COUNT="$(printf '%s' "$UNRESOLVED_ACTIVE_THREADS" | jq 'length')"
+
+UNRESOLVED_OUTDATED_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '[.[] | select(.isResolved == false and .isOutdated == true)]')"
+UNRESOLVED_OUTDATED_COUNT="$(printf '%s' "$UNRESOLVED_OUTDATED_THREADS" | jq 'length')"
+
+UNRESOLVED_TOTAL_COUNT="$((UNRESOLVED_ACTIVE_COUNT + UNRESOLVED_OUTDATED_COUNT))"
+
+RESOLVED_THREAD_COUNT="$(printf '%s' "$REVIEW_THREADS" | jq '[.[] | select(.isResolved == true)] | length')"
+
+# ── Resolved-without-disposition (#3693) — see header section above for the
+#    heuristic and its documented limits. `(.comments.totalCount // 0) <= 1`
+#    means "only the original comment (or none at all) — no reply from
+#    anyone before resolution." Missing `.comments` (old fixtures with no
+#    resolved threads never hit this select) defaults to 0, which is
+#    correctly conservative (flagged) rather than silently passing.
+RESOLVED_WITHOUT_DISPOSITION_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '[.[] | select(.isResolved == true) | select((.comments.totalCount // 0) <= 1)]')"
+RESOLVED_WITHOUT_DISPOSITION_COUNT="$(printf '%s' "$RESOLVED_WITHOUT_DISPOSITION_THREADS" | jq 'length')"
+
+# ══ R1 protocol axes (#3693) — ADVISORY by default, BLOCK under
+#    REVIEW_PROTOCOL_ENFORCE=1. See the enforcement-flag header comment. ══════
+#
+# All counts/flags below are ALWAYS computed and ALWAYS reported in the JSON
+# object; the enforcement flag only decides whether a non-zero/false value
+# flips `converged`.
+
+# ── dispositions_missing_marker: content-aware tightening of #3732 ──────────
+# A resolved thread is "marked" iff one of its reply bodies carries a valid
+# `disposition:v1` marker. #3732's resolved_without_disposition catches the
+# no-reply subset (totalCount<=1); this axis additionally catches the
+# prose-reply-but-no-machine-marker case (totalCount>=2, no marker). The
+# COUNT is the full set of resolved threads lacking a marker; the advisory
+# WARN loop below only emits lines for the NET-NEW threads (those with a
+# reply) so it does not duplicate #3732's hard BLOCK lines.
+DISPOSITIONS_MISSING_MARKER_THREADS="$(printf '%s' "$REVIEW_THREADS" | jq -c '
+    [ .[]
+      | select(.isResolved == true)
+      | . as $t
+      | ( [ (.comments.nodes // [])[]
+            | (.body // "")
+            | scan("<!-- disposition:v1 (\\{.*\\}) -->")
+            | .[0] | fromjson? ] ) as $markers
+      | select(($markers | length) == 0)
+      | {id: $t.id, path: $t.path, totalCount: ($t.comments.totalCount // 0)} ]')"
+DISPOSITIONS_MISSING_MARKER_COUNT="$(printf '%s' "$DISPOSITIONS_MISSING_MARKER_THREADS" | jq 'length')"
+
+# ── All disposition markers across resolved threads (for the class-specific
+#    axes below): each carries the thread it came from for reporting. ────────
+DISPOSITION_MARKERS="$(printf '%s' "$REVIEW_THREADS" | jq -c '
+    [ .[]
+      | select(.isResolved == true)
+      | . as $t
+      | (.comments.nodes // [])[]
+      | (.body // "")
+      | scan("<!-- disposition:v1 (\\{.*\\}) -->")
+      | .[0] | fromjson?
+      | . + {thread_id: $t.id, thread_path: $t.path} ]')"
+
+# ── followups_without_issue: class==follow-up marker whose evidence.issue is
+#    missing or not a positive integer. ─────────────────────────────────────
+FOLLOWUPS_WITHOUT_ISSUE_MARKERS="$(printf '%s' "$DISPOSITION_MARKERS" | jq -c '
+    [ .[]
+      | select(.class == "follow-up")
+      | select((.evidence.issue | (type == "number" and . > 0)) | not) ]')"
+FOLLOWUPS_WITHOUT_ISSUE_COUNT="$(printf '%s' "$FOLLOWUPS_WITHOUT_ISSUE_MARKERS" | jq 'length')"
+
+# ── unreachable_fix_commits: class==fixed marker whose evidence.commit is not
+#    reachable from head (git ancestry / fixture reachable-set). ────────────
+UNREACHABLE_FIX_COMMITS="[]"
+while IFS= read -r marker; do
+    [[ -z "$marker" ]] && continue
+    sha="$(printf '%s' "$marker" | jq -r '.evidence.commit // empty')"
+    if ! commit_reachable_from_head "$sha"; then
+        UNREACHABLE_FIX_COMMITS="$(jq -n --argjson acc "$UNREACHABLE_FIX_COMMITS" --argjson m "$marker" '$acc + [$m]')"
+    fi
+done < <(printf '%s' "$DISPOSITION_MARKERS" | jq -c '.[] | select(.class == "fixed")')
+UNREACHABLE_FIX_COMMITS_COUNT="$(printf '%s' "$UNREACHABLE_FIX_COMMITS" | jq 'length')"
+
+# ── Writer identity set (#3693 R1, open-decision #4): the union of the PR
+#    author and every disposer (`disposition.by`). A verification receipt only
+#    counts if its verifier is OUTSIDE this set — a writer cannot verify their
+#    own substantive disposition. (Fix-commit author is a further member the
+#    closeout cannot see offline; see review-convergence.md / open decision.)
+WRITER_SET="$(jq -n \
+    --arg author "$PR_AUTHOR_LOGIN" \
+    --argjson markers "$DISPOSITION_MARKERS" \
+    '([$author] + [$markers[] | .by // empty]) | map(select(length > 0)) | unique')"
+
+# ── review-run / verification receipt axes (PR-level markers) ───────────────
+REVIEW_RUNS_IN_FLIGHT_COUNT="$(printf '%s' "$REVIEW_RUN_MARKERS" | jq '[.[] | select(.status == "running")] | length')"
+# Reserved symmetric counter — verification markers carry no "running" status
+# in v1, so this is 0 today; kept for forward-compatibility/symmetry.
+VERIFICATION_RUNS_IN_FLIGHT_COUNT="$(printf '%s' "$VERIFICATION_MARKERS" | jq '[.[] | select(.status == "running")] | length')"
+
+# deep_review_receipt_head_match: if a kind=="deep" review-run receipt was
+# posted as status=="done", require one whose head matches the current head.
+# (A "running" deep receipt is covered by review_runs_in_flight, not here —
+# that avoids double-flagging the same in-flight review.)
+DEEP_DONE_POSTED="$(printf '%s' "$REVIEW_RUN_MARKERS" | jq 'any(.[]; .kind == "deep" and .status == "done")')"
+DEEP_DONE_AT_HEAD="$(printf '%s' "$REVIEW_RUN_MARKERS" | jq --arg head "$HEAD_REF_OID" 'any(.[]; .kind == "deep" and .status == "done" and .head == $head)')"
+DEEP_REVIEW_RECEIPT_HEAD_MATCH="true"
+if [[ "$DEEP_DONE_POSTED" == "true" && "$DEEP_DONE_AT_HEAD" != "true" ]]; then
+    DEEP_REVIEW_RECEIPT_HEAD_MATCH="false"
+fi
+
+# verification_receipt_head_match: for every resolved thread carrying a
+# class∈{fixed,refuted} disposition, require a PR-level verification receipt
+# at the current head with result=="pass" whose verifier is outside the
+# writer set. If any such thread lacks a qualifying receipt -> false.
+SUBSTANTIVE_DISPOSITIONS="$(printf '%s' "$DISPOSITION_MARKERS" | jq -c '[.[] | select(.class == "fixed" or .class == "refuted")]')"
+SUBSTANTIVE_DISPOSITION_COUNT="$(printf '%s' "$SUBSTANTIVE_DISPOSITIONS" | jq 'length')"
+QUALIFYING_VERIFICATION_AT_HEAD="$(jq -n \
+    --argjson markers "$VERIFICATION_MARKERS" \
+    --argjson writers "$WRITER_SET" \
+    --arg head "$HEAD_REF_OID" \
+    'any($markers[]; .head == $head and .result == "pass" and ((.verifier // "") as $v | ($writers | index($v)) == null))')"
+VERIFICATION_RECEIPT_HEAD_MATCH="true"
+if [[ "$SUBSTANTIVE_DISPOSITION_COUNT" -gt 0 && "$QUALIFYING_VERIFICATION_AT_HEAD" != "true" ]]; then
+    VERIFICATION_RECEIPT_HEAD_MATCH="false"
+fi
+
+# ── Advisory/enforce dispatcher for R1 protocol axes ────────────────────────
+# In enforce mode a violation flips CONVERGED and prints BLOCK; in advisory
+# mode (default) it prints a WARN and leaves the verdict untouched. Uses a
+# nameref-free global-append pattern for portability.
+PROTOCOL_ADVISORY_COUNT=0
+protocol_violation() {
+    if [[ "$REVIEW_PROTOCOL_ENFORCE" == "1" ]]; then
+        CONVERGED="false"
+        echo "BLOCK PR #$PR: $1" >&2
+    else
+        PROTOCOL_ADVISORY_COUNT=$((PROTOCOL_ADVISORY_COUNT + 1))
+        echo "WARN PR #$PR (advisory — set REVIEW_PROTOCOL_ENFORCE=1 to block): $1" >&2
+    fi
+}
+
+# ── Verdict — the ONE place the merge-ready condition is computed ──────────
+#
+# Converged iff:
+#   (a) no pending (unfulfilled) review requests, AND
+#   (b) no reviewer's latest review is stale relative to headRefOid, AND
+#   (c) no unresolved thread remains — active OR outdated (the live 'main'
+#       ruleset's required_conversation_resolution blocks on isResolved
+#       alone; it does not consult isOutdated — see issue #3679)
+CONVERGED="true"
+
+if [[ "$PENDING_REVIEWER_COUNT" -gt 0 ]]; then
+    CONVERGED="false"
+    while IFS= read -r reviewer; do
+        echo "BLOCK PR #$PR: review still requested from '$reviewer' — not yet reviewed" >&2
+    done < <(printf '%s' "$PENDING_REVIEWERS" | jq -r '.[]')
+fi
+
+if [[ "$STALE_REVIEW_COUNT" -gt 0 ]]; then
+    CONVERGED="false"
+    while IFS= read -r row; do
+        login="$(printf '%s' "$row" | jq -r '.login')"
+        state="$(printf '%s' "$row" | jq -r '.state')"
+        echo "BLOCK PR #$PR: '$login's latest review ($state) predates the current HEAD ($HEAD_REF_OID) — needs a fresh review on this push" >&2
+    done < <(printf '%s' "$STALE_REVIEWS" | jq -c '.[]')
+fi
+
+if [[ "$UNRESOLVED_ACTIVE_COUNT" -gt 0 ]]; then
+    CONVERGED="false"
+    while IFS= read -r row; do
+        path="$(printf '%s' "$row" | jq -r '.path')"
+        id="$(printf '%s' "$row" | jq -r '.id')"
+        echo "BLOCK PR #$PR: unresolved review thread on '$path' (id=$id) — resolve for a real reason (fixed/refuted/superseded/accepted-with-follow-up)" >&2
+    done < <(printf '%s' "$UNRESOLVED_ACTIVE_THREADS" | jq -c '.[]')
+fi
+
+if [[ "$UNRESOLVED_OUTDATED_COUNT" -gt 0 ]]; then
+    CONVERGED="false"
+    while IFS= read -r row; do
+        path="$(printf '%s' "$row" | jq -r '.path')"
+        id="$(printf '%s' "$row" | jq -r '.id')"
+        echo "BLOCK PR #$PR: unresolved review thread on '$path' (id=$id) is outdated (diff moved underneath it) — the live 'main' ruleset's required_conversation_resolution still blocks on it regardless of isOutdated (see #3679); resolve it, usually a safe cleanup since the code moved" >&2
+    done < <(printf '%s' "$UNRESOLVED_OUTDATED_THREADS" | jq -c '.[]')
+fi
+
+if [[ "$RESOLVED_WITHOUT_DISPOSITION_COUNT" -gt 0 ]]; then
+    CONVERGED="false"
+    while IFS= read -r row; do
+        path="$(printf '%s' "$row" | jq -r '.path')"
+        id="$(printf '%s' "$row" | jq -r '.id')"
+        opener="$(printf '%s' "$row" | jq -r '.comments.nodes[0].author.login // "unknown"')"
+        echo "BLOCK PR #$PR: resolved review thread on '$path' (id=$id, opened by '$opener') has NO disposition reply — post 'Disposition: fixed|refuted|superseded|follow-up' with evidence before resolving (resolved-to-clear signature; see #3647/#3693)" >&2
+    done < <(printf '%s' "$RESOLVED_WITHOUT_DISPOSITION_THREADS" | jq -c '.[]')
+fi
+
+if [[ "$INDEPENDENT_REVIEW_PENDING" == "true" ]]; then
+    CONVERGED="false"
+    echo "BLOCK PR #$PR: 'needs-deep-review' label present — an independent review is in flight; convergence is blocked until the reviewer posts a verdict, confirmed defects are fixed/refuted, and the label clears (see #3693)" >&2
+fi
+
+# ══ R1 protocol-axis verdicts (#3693) — advisory unless REVIEW_PROTOCOL_ENFORCE=1 ══
+
+# dispositions_missing_marker — only emit lines for the NET-NEW threads (those
+# WITH a reply but no marker); the no-reply subset is already a hard #3732
+# BLOCK above, so this avoids duplicate lines while the count stays honest.
+if [[ "$DISPOSITIONS_MISSING_MARKER_COUNT" -gt 0 ]]; then
+    while IFS= read -r row; do
+        [[ -z "$row" ]] && continue
+        path="$(printf '%s' "$row" | jq -r '.path')"
+        id="$(printf '%s' "$row" | jq -r '.id')"
+        protocol_violation "resolved review thread on '$path' (id=$id) has a reply but NO 'disposition:v1' marker — reply via scripts/reviews/disposition so the disposition is machine-checkable (content-aware tightening of #3732; see #3693)"
+    done < <(printf '%s' "$DISPOSITIONS_MISSING_MARKER_THREADS" | jq -c '.[] | select(.totalCount >= 2)')
+fi
+
+if [[ "$UNREACHABLE_FIX_COMMITS_COUNT" -gt 0 ]]; then
+    while IFS= read -r row; do
+        [[ -z "$row" ]] && continue
+        path="$(printf '%s' "$row" | jq -r '.thread_path // "?"')"
+        sha="$(printf '%s' "$row" | jq -r '.evidence.commit // "?"')"
+        protocol_violation "disposition on '$path' claims class=fixed at commit $sha, which is NOT reachable from head $HEAD_REF_OID — the cited fix never landed on this branch (see #3693)"
+    done < <(printf '%s' "$UNREACHABLE_FIX_COMMITS" | jq -c '.[]')
+fi
+
+if [[ "$FOLLOWUPS_WITHOUT_ISSUE_COUNT" -gt 0 ]]; then
+    while IFS= read -r row; do
+        [[ -z "$row" ]] && continue
+        path="$(printf '%s' "$row" | jq -r '.thread_path // "?"')"
+        protocol_violation "disposition on '$path' is class=follow-up but cites no tracking issue number (evidence.issue missing/non-numeric) — a follow-up must file an issue (see #3693)"
+    done < <(printf '%s' "$FOLLOWUPS_WITHOUT_ISSUE_MARKERS" | jq -c '.[]')
+fi
+
+if [[ "$REVIEW_RUNS_IN_FLIGHT_COUNT" -gt 0 ]]; then
+    protocol_violation "$REVIEW_RUNS_IN_FLIGHT_COUNT review-run receipt(s) still status=running — an independent review is in flight; wait for its review-done receipt before merging (see #3693)"
+fi
+
+if [[ "$VERIFICATION_RUNS_IN_FLIGHT_COUNT" -gt 0 ]]; then
+    protocol_violation "$VERIFICATION_RUNS_IN_FLIGHT_COUNT verification receipt(s) still status=running (see #3693)"
+fi
+
+if [[ "$DEEP_REVIEW_RECEIPT_HEAD_MATCH" != "true" ]]; then
+    protocol_violation "a deep review-run receipt is marked done but none is bound to the current head $HEAD_REF_OID — the deep review ran against an older push; re-verify at head (see #3693)"
+fi
+
+if [[ "$VERIFICATION_RECEIPT_HEAD_MATCH" != "true" ]]; then
+    protocol_violation "$SUBSTANTIVE_DISPOSITION_COUNT substantive (fixed/refuted) disposition(s) present but no independent verification receipt at head $HEAD_REF_OID (result=pass, verifier outside the writer set) — the branch writer cannot verify their own substantive findings (see #3693)"
+fi
+
+if [[ "$STALE_BOT_REVIEW_COUNT" -gt 0 ]]; then
+    while IFS= read -r row; do
+        login="$(printf '%s' "$row" | jq -r '.login')"
+        state="$(printf '%s' "$row" | jq -r '.state')"
+        echo "ADVISORY PR #$PR: bot reviewer '$login's latest review ($state) predates the current HEAD — not blocking (auto-review bots aren't required reviewers and don't reliably re-run per push)" >&2
+    done < <(printf '%s' "$STALE_BOT_REVIEWS" | jq -c '.[]')
+fi
+
+# ── Report ───────────────────────────────────────────────────────────────────
+
+if [[ "$CONVERGED" == "true" ]]; then
+    advisory_note=""
+    if [[ "$PROTOCOL_ADVISORY_COUNT" -gt 0 ]]; then
+        advisory_note=", $PROTOCOL_ADVISORY_COUNT R1-protocol advisory finding(s) — see WARN lines (REVIEW_PROTOCOL_ENFORCE=1 to block)"
+    fi
+    echo "OK   PR #$PR: review convergence achieved at $HEAD_REF_OID (0 pending reviewers, 0 stale human reviews, 0 unresolved threads [$UNRESOLVED_ACTIVE_COUNT active + $UNRESOLVED_OUTDATED_COUNT outdated], $RESOLVED_THREAD_COUNT resolved [0 without disposition], 0 independent review pending, $STALE_BOT_REVIEW_COUNT stale-bot-advisory$advisory_note)"
+else
+    # Per the documented output contract (script header + review-convergence.md):
+    # stdout always carries a human-readable summary line + the JSON verdict,
+    # on BOTH the converged and not-converged paths. This line previously went
+    # to stderr only, so a caller reading stdout for the summary got just the
+    # bare JSON object on a non-converged PR.
+    echo "FAIL PR #$PR: review convergence NOT achieved at $HEAD_REF_OID — see BLOCK lines above"
+fi
+
+jq -n \
+    --argjson pr "$PR" \
+    --arg head "$HEAD_REF_OID" \
+    --argjson converged "$CONVERGED" \
+    --argjson pending "$PENDING_REVIEWERS" \
+    --argjson stale "$STALE_REVIEWS" \
+    --argjson staleBot "$STALE_BOT_REVIEWS" \
+    --argjson unresolvedActive "$UNRESOLVED_ACTIVE_COUNT" \
+    --argjson unresolvedOutdated "$UNRESOLVED_OUTDATED_COUNT" \
+    --argjson unresolvedTotal "$UNRESOLVED_TOTAL_COUNT" \
+    --argjson resolved "$RESOLVED_THREAD_COUNT" \
+    --argjson resolvedWithoutDisposition "$RESOLVED_WITHOUT_DISPOSITION_COUNT" \
+    --argjson independentReviewPending "$INDEPENDENT_REVIEW_PENDING" \
+    --argjson enforce "$([[ "$REVIEW_PROTOCOL_ENFORCE" == "1" ]] && echo true || echo false)" \
+    --argjson reviewRunsInFlight "$REVIEW_RUNS_IN_FLIGHT_COUNT" \
+    --argjson verificationRunsInFlight "$VERIFICATION_RUNS_IN_FLIGHT_COUNT" \
+    --argjson deepReviewReceiptHeadMatch "$DEEP_REVIEW_RECEIPT_HEAD_MATCH" \
+    --argjson verificationReceiptHeadMatch "$VERIFICATION_RECEIPT_HEAD_MATCH" \
+    --argjson dispositionsMissingMarker "$DISPOSITIONS_MISSING_MARKER_COUNT" \
+    --argjson followupsWithoutIssue "$FOLLOWUPS_WITHOUT_ISSUE_COUNT" \
+    --argjson unreachableFixCommits "$UNREACHABLE_FIX_COMMITS_COUNT" \
+    '{pr: $pr, headRefOid: $head, converged: $converged, pending_reviewers: $pending, stale_reviews: $stale, stale_bot_reviews: $staleBot, unresolved_active: $unresolvedActive, unresolved_outdated: $unresolvedOutdated, unresolved_total: $unresolvedTotal, resolved_threads: $resolved, resolved_without_disposition: $resolvedWithoutDisposition, independent_review_pending: $independentReviewPending, review_protocol_enforce: $enforce, review_runs_in_flight: $reviewRunsInFlight, verification_runs_in_flight: $verificationRunsInFlight, deep_review_receipt_head_match: $deepReviewReceiptHeadMatch, verification_receipt_head_match: $verificationReceiptHeadMatch, dispositions_missing_marker: $dispositionsMissingMarker, followups_without_issue: $followupsWithoutIssue, unreachable_fix_commits: $unreachableFixCommits}'
+
+if [[ "$CONVERGED" == "true" ]]; then
+    exit 0
+else
+    exit 1
+fi

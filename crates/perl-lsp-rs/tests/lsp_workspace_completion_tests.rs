@@ -822,7 +822,7 @@ fn test_completion_textedit_replaces_qualified_prefix() -> Result<(), Box<dyn st
     // Find the CFG_VALUE completion item.
     let cfg_item = items
         .iter()
-        .find(|item| item["label"].as_str().map_or(false, |l| l.contains("CFG_VALUE")))
+        .find(|item| item["label"].as_str().is_some_and(|l| l.contains("CFG_VALUE")))
         .ok_or_else(|| format!("Expected a CFG_VALUE completion item. Got items: {items:?}"))?;
 
     // The item must carry a `textEdit` field.
@@ -930,7 +930,7 @@ fn test_completion_textedit_utf16_position() -> Result<(), Box<dyn std::error::E
     // Find the ENC_KEY completion item.
     let enc_item = items
         .iter()
-        .find(|item| item["label"].as_str().map_or(false, |l| l.contains("ENC_KEY")))
+        .find(|item| item["label"].as_str().is_some_and(|l| l.contains("ENC_KEY")))
         .ok_or_else(|| format!("Expected an ENC_KEY completion item. Got items: {items:?}"))?;
 
     let text_edit =

@@ -1,7 +1,13 @@
 name: Version Bump & Changelog Generation
 
-# Automated version bumping and changelog generation
-# Triggered by workflow_dispatch or after successful release
+# Automated version bumping and changelog generation.
+# Triggered by workflow_dispatch.
+#
+# Single source of truth: `cargo xtask bump-version <VERSION>` handles all
+# version sites (workspace.package, workspace.dependencies, doc badges,
+# RELEASE_HISTORY ledger, release-notes scaffold). cargo-release is NOT used
+# for the bump — it missed [workspace.package] and [workspace.dependencies]
+# during the 0.17.0 cut (issue #3155).
 
 on:
   workflow_dispatch:
@@ -11,7 +17,7 @@ on:
         required: false
         type: string
       bump_type:
-        description: 'Version bump type'
+        description: 'Version bump type (ignored when version is set explicitly)'
         required: false
         type: choice
         options:
@@ -37,7 +43,7 @@ jobs:
   version-bump:
     name: Bump Version & Generate Changelog
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -47,32 +53,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: stable
-
-      - name: Install cargo-release
-        run: |
-          install_dir="$(mktemp -d)"
-          CARGO_RELEASE_TAG="$(curl -s https://api.github.com/repos/crate-ci/cargo-release/releases/latest | jq -r '.tag_name // ""')"
-          if [ -z "$CARGO_RELEASE_TAG" ] || [ "$CARGO_RELEASE_TAG" = "null" ]; then
-            echo "::error::Failed to resolve latest cargo-release tag"
-            exit 1
-          fi
-
-          CARGO_RELEASE_ASSET_URL="$(curl -s "https://api.github.com/repos/crate-ci/cargo-release/releases/tags/${CARGO_RELEASE_TAG}" | \
-            jq -r '.assets[].browser_download_url | select(test("x86_64-unknown-linux-musl\\.tar\\.gz$"))' | head -n 1)"
-          if [ -z "$CARGO_RELEASE_ASSET_URL" ] || [ "$CARGO_RELEASE_ASSET_URL" = "null" ]; then
-            echo "::error::Failed to resolve linux x86_64 cargo-release asset from ${CARGO_RELEASE_TAG}"
-            exit 1
-          fi
-
-          curl -fsSL "$CARGO_RELEASE_ASSET_URL" -o "${install_dir}/cargo-release.tar.gz"
-          tar -xzf "${install_dir}/cargo-release.tar.gz" -C "$install_dir"
-          cargo_release_dir="$(tar -tzf "${install_dir}/cargo-release.tar.gz" | head -n 1 | cut -d'/' -f1)"
-          mkdir -p /usr/local/bin
-          sudo mv "${install_dir}/${cargo_release_dir}/cargo-release" /usr/local/bin/
-          sudo chmod +x /usr/local/bin/cargo-release
 
       - name: Install git-cliff
         run: |
@@ -110,7 +93,6 @@ jobs:
             fi
             echo "mode=explicit" >> "$GITHUB_OUTPUT"
             echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "bump_type=${BUMP_TYPE}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -119,29 +101,57 @@ jobs:
             exit 1
           fi
 
+          # Auto-bump: derive the new version from the current workspace version.
+          CURRENT=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          if [ -z "$CURRENT" ]; then
+            echo "::error::Could not read current version from [workspace.package] in Cargo.toml"
+            exit 1
+          fi
+
+          IFS='.' read -ra PARTS <<< "$CURRENT"
+          MAJOR="${PARTS[0]}"
+          MINOR="${PARTS[1]}"
+          PATCH="${PARTS[2]}"
+          case "$BUMP_TYPE" in
+            major) VERSION="$((MAJOR+1)).0.0" ;;
+            minor) VERSION="${MAJOR}.$((MINOR+1)).0" ;;
+            patch) VERSION="${MAJOR}.${MINOR}.$((PATCH+1))" ;;
+            *) echo "::error::Unknown bump_type: ${BUMP_TYPE}"; exit 1 ;;
+          esac
+
           echo "mode=auto" >> "$GITHUB_OUTPUT"
-          echo "bump_type=${BUMP_TYPE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Computed version: ${CURRENT} --${BUMP_TYPE}--> ${VERSION}"
 
       - name: Bump workspace version
         id: bump-version
         run: |
-          BUMP_TYPE="${{ steps.resolved-version.outputs.bump_type }}"
           VERSION="${{ steps.resolved-version.outputs.version }}"
+          echo "Bumping workspace to ${VERSION} via cargo xtask bump-version..."
+          cargo xtask bump-version "${VERSION}"
+          # Regenerate Cargo.lock to reflect the new [workspace.package] version.
+          cargo update --workspace --quiet
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Bump complete: ${VERSION}"
 
-          if [ -n "$VERSION" ]; then
-            cargo release version "$VERSION" --workspace -x --no-confirm
-          else
-            cargo release version "$BUMP_TYPE" --workspace -x --no-confirm
+      - name: Assert bump completeness
+        run: |
+          VERSION="${{ steps.bump-version.outputs.version }}"
+
+          # 1. Verify [workspace.package] version in root Cargo.toml.
+          CARGO_VER=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          if [ "$CARGO_VER" != "$VERSION" ]; then
+            echo "::error::[workspace.package] version is '${CARGO_VER}', expected '${VERSION}'"
+            exit 1
           fi
 
-          if [ -z "$VERSION" ]; then
-            VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          # 2. Verify RELEASE_HISTORY.md has a ledger row for the new version.
+          if ! grep -qF "| [${VERSION}]" RELEASE_HISTORY.md; then
+            echo "::error::RELEASE_HISTORY.md is missing ledger row for ${VERSION}"
+            exit 1
           fi
 
-          if [ -n "${VERSION}" ]; then
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "Current workspace version: ${VERSION}"
-          fi
+          echo "Assertion passed: [workspace.package]=${VERSION}, RELEASE_HISTORY.md updated"
 
       - name: Generate changelog
         id: changelog
@@ -182,14 +192,26 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add Cargo.toml
-          git add CHANGELOG.md
+          # Stage all tracked file modifications (bump-version touches many files:
+          # Cargo.toml, crate Cargo.tomls, features.toml, RELEASE_HISTORY.md,
+          # CLAUDE.md, README.md, ROADMAP.md, copilot-instructions.md,
+          # book/src/introduction.md, vscode-extension/package*.json, flake.nix).
+          git add -u
+          # Stage Cargo.lock (updated by cargo update --workspace above).
+          git add Cargo.lock
+          # Stage the new release notes scaffold (untracked until created by bump).
+          git add "docs/releases/v${VERSION}.md" 2>/dev/null || true
 
           printf '%s\n' \
             "chore(release): bump version to v${VERSION}" \
             "" \
-            "- Update workspace version to ${VERSION}" \
-            "- Generate changelog for release" \
+            "- Update [workspace.package] version to ${VERSION}" \
+            "- Update all [workspace.dependencies] version requirements" \
+            "- Update version-doc badges (CLAUDE.md, README, ROADMAP, copilot-instructions.md, book)" \
+            "- Append RELEASE_HISTORY.md ledger row + 4 link defs" \
+            "- Scaffold docs/releases/v${VERSION}.md" \
+            "- Regenerate Cargo.lock" \
+            "- Generate changelog for v${VERSION}" \
             > /tmp/release-commit-message.txt
           git commit -F /tmp/release-commit-message.txt
 
@@ -206,7 +228,10 @@ jobs:
             ## Release v${{ steps.bump-version.outputs.version }}
 
             This PR prepares the release with:
-            - Version bump to ${{ steps.bump-version.outputs.version }}
+            - Version bump to ${{ steps.bump-version.outputs.version }} (all sites: workspace.package, workspace.dependencies, doc badges)
+            - Updated RELEASE_HISTORY.md ledger row
+            - Scaffolded docs/releases/v${{ steps.bump-version.outputs.version }}.md
+            - Regenerated Cargo.lock
             - Updated changelog
 
             ### Checklist
@@ -229,9 +254,11 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Version Bump Complete :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Version Bump Complete" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Version**: v${{ steps.bump-version.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Branch**: ${{ steps.branch.outputs.branch }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **PR**: Created" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Changelog**: Generated" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **RELEASE_HISTORY.md**: Ledger row appended" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Release notes scaffold**: docs/releases/v${{ steps.bump-version.outputs.version }}.md" >> "$GITHUB_STEP_SUMMARY"

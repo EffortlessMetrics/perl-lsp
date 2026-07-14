@@ -1,0 +1,24 @@
+{
+  // Test build: compile the extension sources AND their Jest unit tests to
+  // plain CommonJS JS under out-test/, with inline source maps so Jest stack
+  // traces and coverage map back to the original .ts. This decouples the Jest
+  // suite from the TypeScript compiler API (previously via ts-jest, whose
+  // `typescript` peer is capped at `<7`) — Jest now runs the tsc-emitted JS
+  // with no transformer while TypeScript 7 remains the checked-in compiler
+  // authority.
+  //
+  // Integration (@vscode/test-electron) and published-smoke suites are Mocha,
+  // not Jest; they keep their own tsconfig + runner and are excluded here.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-test",
+    "rootDir": "./src",
+    "sourceMap": false,
+    "inlineSourceMap": true,
+    "inlineSources": true,
+    "isolatedModules": true,
+    "types": ["jest", "node"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "out", "out-test", "src/test/integration/**", "src/test/published/**"]
+}

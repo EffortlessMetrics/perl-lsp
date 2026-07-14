@@ -3044,10 +3044,10 @@ print $VAR;
 }
 
 #[test]
-fn package_our_same_package_redeclaration_is_silent() -> Result<(), Box<dyn std::error::Error>> {
-    // `our $x; our $x;` in the SAME package is redundant but valid Perl — the
-    // second declaration is a no-op that re-imports the same package global.
-    // Must NOT emit VariableRedeclaration.
+fn package_our_same_package_redeclaration_is_error() -> Result<(), Box<dyn std::error::Error>> {
+    // `our $x; our $x;` in the SAME package now DOES emit VariableRedeclaration.
+    // Issue #1661 makes perl-lsp stricter than Perl itself (which allows silent re-import).
+    // This is intentional for linting purposes — redundant `our` declarations are flagged.
     let code = r#"
 use strict;
 package Foo;
@@ -3061,9 +3061,9 @@ print $x;
         .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
         .collect();
     assert!(
-        redecl.is_empty(),
-        "our $x redeclared in same package must not emit VariableRedeclaration; got: {:?}",
-        redecl
+        !redecl.is_empty(),
+        "our $x redeclared in same package SHOULD emit VariableRedeclaration; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -4600,6 +4600,331 @@ my $qualified = $ref->{FOO::BAR};
         }),
         "qualified arrow-deref key must still be flagged under strict subs; got: {:?}",
         issues
+    );
+    Ok(())
+}
+
+// ============================================================================
+// RED TDD: Issue #1661 — our variable redeclaration validation
+// ============================================================================
+// These tests define the expected behavior for package-aware `our` redeclaration
+// checking. Tests will FAIL until the builder implements the feature.
+
+#[test]
+fn scope_our_same_scope_redeclaration_error() -> Result<(), Box<dyn std::error::Error>> {
+    // Test 1: Same package, same scope, redeclared `our` should ERROR
+    // This is the primary acceptance criterion: `our $x = 1; our $x = 2;` in the
+    // same package and scope should report VariableRedeclaration.
+    let code = r#"
+use strict;
+package Foo;
+our $x = 1;
+our $x = 2;
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        !redecl.is_empty(),
+        "our $x redeclared in same scope must emit VariableRedeclaration; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_different_package_redeclaration_allowed() -> Result<(), Box<dyn std::error::Error>> {
+    // Test 2: Different packages, redeclared `our` should NOT ERROR
+    // When switching packages, `our $x` in package Foo and `our $x` in package Bar
+    // should be silently accepted (different package-qualified names: Foo::x vs Bar::x).
+    let code = r#"
+use strict;
+package Foo;
+our $x = 1;
+
+package Bar;
+our $x = 2;
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our $x redeclared in different packages must NOT emit VariableRedeclaration; got: {:?}",
+        redecl
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_our_uninitialized_same_scope_redeclaration_error() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Test 3: Same package, uninitialized `our` declarations should also error
+    // Edge case: `our $x; our $x;` (without initialization) in the same scope
+    // should also report VariableRedeclaration.
+    let code = r#"
+use strict;
+package Foo;
+our $x;
+our $x;
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        !redecl.is_empty(),
+        "uninitialized our $x redeclared in same scope must emit VariableRedeclaration"
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_different_block_scopes_allowed() -> Result<(), Box<dyn std::error::Error>> {
+    // Test 4: Nested blocks in same package create different scopes
+    // Even in the same package, declarations in separate block scopes should be allowed.
+    // `our` operates at package level, so different block scopes within the same
+    // package should NOT trigger redeclaration error.
+    let code = r#"
+use strict;
+package Foo;
+{
+    our $x = 1;
+}
+{
+    our $x = 2;
+}
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our declarations in different block scopes must NOT trigger redeclaration; got: {:?}",
+        redecl
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_block_syntax_same_scope_redeclaration_error()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Test 5: Package block syntax (Perl 5.10+) with same-scope redeclaration
+    // Modern `package Foo { ... }` block syntax should still detect redeclaration
+    // in the same scope.
+    let code = r#"
+use strict;
+package Foo {
+    our $x = 1;
+    our $x = 2;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        !redecl.is_empty(),
+        "our redeclaration in package block scope must emit VariableRedeclaration"
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_my_redeclaration_same_scope_error() -> Result<(), Box<dyn std::error::Error>> {
+    // Test 6: Ensure `my` redeclaration behavior is unchanged
+    // This is a control test to verify we didn't break existing `my` redeclaration
+    // detection. `my` redeclaration in same scope should still error.
+    let code = r#"
+use strict;
+my $x = 1;
+my $x = 2;
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        !redecl.is_empty(),
+        "my $x redeclared in same scope must emit VariableRedeclaration (existing behavior unchanged)"
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_our_then_my_shadowing() -> Result<(), Box<dyn std::error::Error>> {
+    // Test 7: `our` in package scope followed by `my` in nested scope = shadowing, not redeclaration
+    // When `our $x` is in package scope and `my $x` is in a nested lexical scope,
+    // this should NOT report VariableRedeclaration (they are in different scope kinds).
+    let code = r#"
+use strict;
+package Foo;
+our $x = 1;
+{
+    my $x = 2;
+    print $x;
+}
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    // Should not have VariableRedeclaration for $x
+    // (shadowing may be reported, but not redeclaration)
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our then my should be shadowing, not redeclaration; got: {:?}",
+        redecl
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_package_switch_allows_redecl() -> Result<(), Box<dyn std::error::Error>> {
+    // Test 8: Package switching (Foo -> Bar -> Foo) allows redeclaration
+    // When switching packages away and back, each package's `$x` is independent.
+    // `our $x` in Foo, then Bar, then back to Foo should not error because
+    // Foo::x is declared independently on re-entry to Foo.
+    let code = r#"
+use strict;
+package Foo;
+our $x = 1;
+
+package Bar;
+our $x = 2;
+
+package Foo;
+our $x = 3;
+
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our declarations across package switches must NOT trigger redeclaration; got: {:?}",
+        redecl
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_our_multiple_redeclarations() -> Result<(), Box<dyn std::error::Error>> {
+    // Test 9: Multiple redeclarations (3+ times) in same scope should all error
+    // Adversarial test: `our $x = 1; our $x = 2; our $x = 3;` should report
+    // redeclaration on the second and/or third declaration.
+    let code = r#"
+use strict;
+package Foo;
+our $x = 1;
+our $x = 2;
+our $x = 3;
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        !redecl.is_empty(),
+        "multiple our redeclarations must emit at least one VariableRedeclaration"
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_our_list_same_package_redeclaration_error() -> Result<(), Box<dyn std::error::Error>> {
+    // Test 10: List declarations use the same package-aware redeclaration rule.
+    let code = r#"
+use strict;
+package Foo;
+our ($x, $x) = (1, 2);
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        !redecl.is_empty(),
+        "our ($x, $x) in the same package visit must emit VariableRedeclaration; got: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_our_list_package_switch_reimport_then_redeclaration()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Test 11: Re-entering a package is a fresh import for list declarations, but a
+    // subsequent declaration in that same visit is still a redeclaration.
+    let code = r#"
+use strict;
+package Foo;
+our ($x) = (1);
+
+package Bar;
+our ($x) = (2);
+
+package Foo;
+our ($x) = (3);
+our ($x) = (4);
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert_eq!(
+        redecl.len(),
+        1,
+        "package re-entry should be accepted once, then same-visit list redeclaration should error; got: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_our_qualified_names_keep_legacy_silent_redeclaration()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Test 12: Qualified names are not rewritten through the package-generation
+    // tracker, preserving the existing silent behavior for explicit package vars.
+    let code = r#"
+use strict;
+package Foo;
+our $Foo::x;
+our $Foo::x;
+our ($Foo::y, $Foo::y);
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> =
+        issues.iter().filter(|i| i.kind == IssueKind::VariableRedeclaration).collect();
+    assert!(
+        redecl.is_empty(),
+        "qualified our variables should not be reported as package-generation redeclarations; got: {:?}",
+        redecl
     );
     Ok(())
 }

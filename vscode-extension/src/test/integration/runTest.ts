@@ -1,10 +1,20 @@
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { runTests } from '@vscode/test-electron';
 
+function toolchainNpmVersion(): string {
+  const npmUserAgent = process.env.npm_config_user_agent ?? '';
+  const configuredVersion = /(?:^|\s)npm\/([^\s]+)/.exec(npmUserAgent)?.[1];
+  if (configuredVersion) {
+    return configuredVersion;
+  }
+  return execSync('npm --version', { encoding: 'utf8', windowsHide: true }).trim();
+}
+
 function getGrepArg(args: string[]): string | undefined {
-  const grepIndex = args.findIndex(arg => arg === '--grep' || arg === '-g');
+  const grepIndex = args.findIndex((arg) => arg === '--grep' || arg === '-g');
   if (grepIndex >= 0) {
     const parts: string[] = [];
     for (const arg of args.slice(grepIndex + 1)) {
@@ -17,7 +27,7 @@ function getGrepArg(args: string[]): string | undefined {
   }
 
   const grepPrefix = '--grep=';
-  const prefixed = args.find(arg => arg.startsWith(grepPrefix));
+  const prefixed = args.find((arg) => arg.startsWith(grepPrefix));
   return prefixed ? prefixed.slice(grepPrefix.length) : undefined;
 }
 
@@ -25,6 +35,8 @@ async function main(): Promise<void> {
   const extensionDevelopmentPath = path.resolve(__dirname, '../../..');
   const repoRoot = path.resolve(extensionDevelopmentPath, '..');
   const extensionTestsPath = path.resolve(__dirname, './suite');
+  const toolchainNodeVersion = process.version;
+  const toolchainNpmVersionValue = toolchainNpmVersion();
   const configuredWorkspace = process.env.PERL_LSP_SMOKE_WORKSPACE;
   const workspacePath = configuredWorkspace
     ? path.resolve(configuredWorkspace)
@@ -32,12 +44,16 @@ async function main(): Promise<void> {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-vscode-smoke-user-'));
   const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-vscode-smoke-extensions-'));
   const grep = getGrepArg(process.argv.slice(2));
-  const receiptsRoot = process.env.PERL_LSP_SMOKE_RECEIPTS_DIR
-    || path.join(repoRoot, 'target', 'receipts', 'vscode-smoke');
+  const receiptsRoot =
+    process.env.PERL_LSP_SMOKE_RECEIPTS_DIR ||
+    path.join(repoRoot, 'target', 'receipts', 'vscode-smoke');
   fs.mkdirSync(receiptsRoot, { recursive: true });
 
   if (!configuredWorkspace) {
-    fs.writeFileSync(path.join(workspacePath, 'smoke.pl'), "use strict;\nuse warnings;\nprint \"ok\\n\";\n");
+    fs.writeFileSync(
+      path.join(workspacePath, 'smoke.pl'),
+      'use strict;\nuse warnings;\nprint "ok\\n";\n',
+    );
   }
 
   const configuredServerPath = process.env.PERL_LSP_FIRST_HOUR_SERVER_PATH;
@@ -46,11 +62,15 @@ async function main(): Promise<void> {
     fs.mkdirSync(settingsDir, { recursive: true });
     fs.writeFileSync(
       path.join(settingsDir, 'settings.json'),
-      JSON.stringify({
-        'perl-lsp.autoDownload': false,
-        'perl-lsp.perlcritic.enabled': false,
-        'perl-lsp.serverPath': path.resolve(configuredServerPath),
-      }, null, 2),
+      JSON.stringify(
+        {
+          'perl-lsp.autoDownload': false,
+          'perl-lsp.perlcritic.enabled': false,
+          'perl-lsp.serverPath': path.resolve(configuredServerPath),
+        },
+        null,
+        2,
+      ),
     );
   }
 
@@ -59,10 +79,11 @@ async function main(): Promise<void> {
     extensionTestsPath,
     extensionTestsEnv: {
       ...process.env,
-      PERL_LSP_EXTENSION_TEST_SKIP_STARTUP:
-        process.env.PERL_LSP_EXTENSION_TEST_SKIP_STARTUP ?? '1',
+      PERL_LSP_EXTENSION_TEST_SKIP_STARTUP: process.env.PERL_LSP_EXTENSION_TEST_SKIP_STARTUP ?? '1',
       PERL_LSP_SMOKE_RECEIPTS_DIR: receiptsRoot,
       PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || 'integration',
+      PERL_LSP_TOOLCHAIN_NODE_VERSION: toolchainNodeVersion,
+      PERL_LSP_TOOLCHAIN_NPM_VERSION: toolchainNpmVersionValue,
       VSCODE_TEST_GREP: grep ?? '',
     },
     launchArgs: [

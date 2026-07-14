@@ -62,7 +62,7 @@ collect_live_worktree_target_names() {
     repo_root="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
 
     # Collect all registered worktree paths and branches from git's porcelain
-    # listing. We emit "safe" target dir basenames from two sources:
+    # listing. We emit "safe" target dir basenames from three sources:
     #
     # 1. The worktree PATH basename — agent-preflight.sh names the target dir
     #    after the worktree dir (for the main checkout or early conventions).
@@ -73,7 +73,26 @@ collect_live_worktree_target_names() {
     #    CARGO_TARGET_DIR=/tmp/agent-<branch | tr '/' '-'>-target
     #    e.g. branch "worktree-agent-XXXX" → "agent-worktree-agent-XXXX-target"
     #
-    # We emit both so we cover old and new conventions without false positives.
+    # 3. The worktree PATH basename under the "agent-worktree-<basename>"
+    #    convention. Agents typically start on a default branch literally
+    #    named "worktree-<dirname>" (matching #2 above at CARGO_TARGET_DIR
+    #    creation time), then LATER rename/checkout to their real work
+    #    branch (e.g. "impl/NNN-slug") once a spec/issue is assigned.
+    #    CARGO_TARGET_DIR is fixed at session start and never updates on
+    #    branch rename, so deriving safe names from the *current* branch
+    #    (source #2) misses this case entirely — confirmed in production:
+    #    PR #3577's `--prune` run reclaimed a live open-PR worktree's 4.5GB
+    #    cache (`agent-worktree-agent-adb287b548d29729c-target`) because its
+    #    branch had since been renamed to `impl/3396-...`, and neither #1
+    #    nor #2 (evaluated against the current branch) matched the dir name
+    #    that was fixed back when the branch was still "worktree-<dirname>".
+    #    The path basename, unlike the branch, is stable across renames, so
+    #    this pattern is derived from it directly rather than from history
+    #    we can't observe.
+    #
+    # We emit all three so we cover old, new, and renamed-branch conventions
+    # without false positives (a target dir only matches if SOME currently
+    # registered worktree's path or branch produces that exact name).
 
     local wt_path="" branch_ref=""
     while IFS= read -r line; do
@@ -85,6 +104,7 @@ collect_live_worktree_target_names() {
                     wt_base="$(basename "$wt_path")"
                     echo "agent-${wt_base#agent-}-target"
                     echo "${wt_base}-target"
+                    echo "agent-worktree-${wt_base}-target"
                 fi
                 wt_path="${line#worktree }"
                 branch_ref=""
@@ -106,6 +126,7 @@ collect_live_worktree_target_names() {
         wt_base="$(basename "$wt_path")"
         echo "agent-${wt_base#agent-}-target"
         echo "${wt_base}-target"
+        echo "agent-worktree-${wt_base}-target"
     fi
 }
 

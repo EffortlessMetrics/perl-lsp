@@ -213,9 +213,8 @@ impl DebugAdapter {
                         message: Some(format!(
                             "Cannot start Perl debugger: {}. \
                              {perl_info}. \
-                             To use a specific Perl interpreter, set the `perl-lsp.perl.path` \
-                             extension setting or add a `perl` field to your launch.json \
-                             (e.g. {{\"perl\": \"/path/to/perl\"}}).",
+                             To use a specific Perl interpreter, add `perlPath` to your launch.json \
+                             (e.g. {{\"perlPath\": \"/path/to/perl\"}}).",
                             e
                         )),
                     }
@@ -1022,7 +1021,8 @@ impl DebugAdapter {
     ) -> DapMessage {
         // Parse attach arguments
         if let Some(args) = arguments {
-            let process_id = args.get("processId").and_then(|p| p.as_u64()).map(|p| p as u32);
+            let process_id =
+                args.get("processId").and_then(|p| p.as_u64()).map(Self::u64_to_u32_saturating);
 
             // PID attachment mode: best-effort process control without requiring TCP shim transport.
             if let Some(pid) = process_id {
@@ -1115,7 +1115,7 @@ impl DebugAdapter {
                     .get("timeout")
                     .or_else(|| args.get("timeoutMs"))
                     .and_then(|t| t.as_u64())
-                    .map(|t| t as u32);
+                    .map(Self::u64_to_u32_saturating);
                 let stop_on_entry =
                     args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
@@ -1428,7 +1428,7 @@ impl DebugAdapter {
         #[cfg(unix)]
         {
             let pid = process.id();
-            match signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
+            match signal::kill(Pid::from_raw(Self::u32_to_i32_saturating(pid)), Signal::SIGTERM) {
                 Ok(()) => {
                     if Self::wait_for_child_exit(
                         process,
@@ -1634,7 +1634,7 @@ impl DebugAdapter {
         }
         #[cfg(unix)]
         {
-            let pid_i = pid as i32;
+            let pid_i = Self::u32_to_i32_saturating(pid);
             match signal::kill(Pid::from_raw(pid_i), Signal::SIGCONT) {
                 Ok(()) => {
                     tracing::info!("Sent SIGCONT to process {}", pid);
@@ -1676,7 +1676,7 @@ impl DebugAdapter {
         }
         #[cfg(unix)]
         {
-            let pid_i = pid as i32;
+            let pid_i = Self::u32_to_i32_saturating(pid);
             match signal::kill(Pid::from_raw(pid_i), Signal::SIGINT) {
                 Ok(()) => {
                     tracing::info!("Sent SIGINT to process {}", pid);
@@ -2007,8 +2007,12 @@ mod tests {
 
         assert!(message.contains("Install Perl"), "expected install guidance, got: {message}");
         assert!(
-            message.contains("perl-lsp.perl.path"),
-            "expected perl-lsp.perl.path guidance, got: {message}"
+            message.contains("launch.json") && message.contains("perlPath"),
+            "expected launch.json perlPath guidance, got: {message}"
+        );
+        assert!(
+            !message.contains("perl-lsp.perl.path"),
+            "spawn error should not point at stale perl-lsp.perl.path setting, got: {message}"
         );
     }
 

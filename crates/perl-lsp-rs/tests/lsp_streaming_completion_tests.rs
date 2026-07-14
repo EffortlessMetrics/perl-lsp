@@ -9,6 +9,10 @@
 //!     -- streaming --test-threads=2
 //! ```
 
+// Tests are permitted to use `.expect()` on Result/Option per the repo's
+// coding standards (unlike production code, where it is banned).
+#![allow(clippy::expect_used)]
+
 mod support;
 
 use serde_json::json;
@@ -592,7 +596,7 @@ mod mock_streaming_completion_tests {
 
         let init_request = JsonRpcRequest {
             _jsonrpc: "2.0".into(),
-            id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
             method: "initialize".into(),
             params: Some(json!({
                 "processId": std::process::id(),
@@ -656,7 +660,7 @@ mod mock_streaming_completion_tests {
     fn request_streaming_completion(server: &LspServer, uri: &str, token: &str) -> Value {
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".into(),
-            id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
             method: "textDocument/perlInlineCompletionStream".into(),
             params: Some(json!({
                 "textDocument": { "uri": uri, "version": 1 },

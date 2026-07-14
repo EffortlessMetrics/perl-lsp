@@ -1458,13 +1458,14 @@ fn scenario_20_diagnostics_missing_module_fires_pl701_hard_assert() -> anyhow::R
     Ok(())
 }
 
-/// Known gap — server fires a PL304 diagnostic mentioning 'alias' for the typeglob
-/// `*alias = \&helper`, which is a false positive for this dynamic symbol.
+/// Regression lock — the server must not fire a PL304 diagnostic mentioning
+/// 'alias' for the typeglob `*alias = \&helper`, which would be a false
+/// positive for this dynamic symbol.
 ///
-/// Observed FAIL on current main: PL304 fires for 'alias' because it appears in
-/// `@EXPORT_OK` but the server does not recognize typeglob-created subs as documented.
-/// Hard assertion written; test is ignored until the gap is fixed.
-/// Tracking: https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3071
+/// Was a known gap (PL304 fired for 'alias' because it appears in
+/// `@EXPORT_OK`, while the server did not recognize typeglob-created subs as
+/// documented); fixed and now passes on current main.
+/// Tracking: https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3071 (closed)
 #[test]
 fn scenario_20_diagnostics_typeglob_alias_no_false_positive_hard_assert() -> anyhow::Result<()> {
     if !binary_available() {

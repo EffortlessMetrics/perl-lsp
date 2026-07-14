@@ -15,6 +15,11 @@ pub(super) struct GatePlan {
     pub(super) package_args: Vec<String>,
     pub(super) selected: Vec<PlannedGate>,
     pub(super) skipped: Vec<SkippedGate>,
+    /// `git write-tree` OID of the staged tree this plan was built against
+    /// (issue #3786). `Some` only when the run was invoked with `--staged`;
+    /// carried through to `AgentReceipt.staged_tree_oid` in the action
+    /// packet.
+    pub(super) staged_tree_oid: Option<String>,
 }
 
 #[derive(Debug, Clone)]

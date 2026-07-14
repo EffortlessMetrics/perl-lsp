@@ -7,6 +7,7 @@
 
 use perl_ci_hygiene::categorize_ignore;
 use perl_ci_hygiene::version_sync;
+use perl_ci_hygiene::walk_rs_files;
 
 use chrono::Utc;
 use clap::Parser;
@@ -1555,21 +1556,7 @@ pub(crate) fn read_lines(path: &Path) -> Result<Vec<String>> {
 }
 
 fn walk_rust_sources(root: &Path) -> Vec<PathBuf> {
-    walk_entries(root)
-        .filter_map(|entry| {
-            if !entry.file_type().is_file() {
-                return None;
-            }
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext != "rs") {
-                return None;
-            }
-            if is_excluded_test_path(path) {
-                return None;
-            }
-            Some(path.to_path_buf())
-        })
-        .collect()
+    walk_rs_files(root).into_iter().filter(|path| !is_excluded_test_path(path)).collect()
 }
 
 fn count_pattern_before_cfg_test(
@@ -2393,13 +2380,7 @@ fn run_module_ratchet(
         return Ok(0);
     }
     let mut offenders = Vec::new();
-    for path in walk_entries(dir).filter_map(|entry| {
-        let path = entry.path();
-        if !entry.file_type().is_file() || path.extension().is_some_and(|ext| ext != "rs") {
-            return None;
-        }
-        Some(path.to_path_buf())
-    }) {
+    for path in walk_rs_files(dir) {
         for (line_no, text) in count_pattern_before_cfg_test(&path, pattern, false)? {
             offenders.push(format!("{}:{line_no}:{text}", display_path(repo_root, &path)));
         }
@@ -2435,20 +2416,10 @@ fn run_module_ratchet(
 }
 
 pub(crate) fn walk_rust_source_files_for_ci_checks(repo_root: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    for entry in walk_entries(&repo_root.join("crates")) {
-        let path = entry.path();
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        if path.extension().is_some_and(|ext| ext != "rs") {
-            continue;
-        }
-        if is_excluded_test_path(path) {
-            continue;
-        }
-        files.push(path.to_path_buf());
-    }
+    let files = walk_rs_files(&repo_root.join("crates"))
+        .into_iter()
+        .filter(|path| !is_excluded_test_path(path))
+        .collect();
     Ok(files)
 }
 
@@ -2903,13 +2874,9 @@ fn collect_ignored_matches(crates_root: &Path, repo_root: &Path) -> Result<Vec<I
     let fn_re = Regex::new(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)")?;
     let comment_re = Regex::new(r"//\s*(.+)$")?;
 
-    for entry in walk_entries(crates_root) {
-        let path = entry.path();
-        if !entry.file_type().is_file() || path.extension().is_some_and(|ext| ext != "rs") {
-            continue;
-        }
-        let rel = display_path(repo_root, path);
-        let lines = read_lines(path)?;
+    for path in walk_rs_files(crates_root) {
+        let rel = display_path(repo_root, &path);
+        let lines = read_lines(&path)?;
         for i in 0..lines.len() {
             let line = &lines[i];
             if !line.trim_start().starts_with("#[ignore") {

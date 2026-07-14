@@ -10,6 +10,7 @@ package-lock.json
 # Debug and build artifacts
 /debug_parse/
 /target/
+crates/*/target/
 /target-tests/
 .build/
 *.a
@@ -212,6 +213,10 @@ plans/*
 !plans/real-perl-editor-trust/implementation-plan.md
 !plans/compiler-program/
 !plans/compiler-program/implementation-plan.md
+!plans/lsp-freshness/
+!plans/lsp-freshness/implementation-plan.md
+!plans/spec-governance/
+!plans/spec-governance/implementation-plan.md
 scanner_comparison/
 issue_updates/
 

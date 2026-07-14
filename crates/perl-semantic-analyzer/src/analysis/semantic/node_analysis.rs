@@ -310,6 +310,14 @@ impl SemanticAnalyzer {
                 });
             }
 
+            NodeKind::VString { value: _ } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::String,
+                    modifiers: vec![],
+                });
+            }
+
             NodeKind::Number { value: _ } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
@@ -792,7 +800,7 @@ impl SemanticAnalyzer {
             NodeKind::MandatoryParameter { variable }
             | NodeKind::OptionalParameter { variable, .. }
             | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => {
+            | NodeKind::NamedParameter { variable, .. } => {
                 self.analyze_node(variable, scope_id);
             }
 
@@ -869,7 +877,7 @@ impl SemanticAnalyzer {
                 });
             }
 
-            NodeKind::Goto { target } => {
+            NodeKind::Goto { target, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::KeywordControl,
@@ -1242,6 +1250,7 @@ impl SemanticAnalyzer {
         match &node.kind {
             NodeKind::Number { .. } => Some("number".to_string()),
             NodeKind::String { .. } => Some("string".to_string()),
+            NodeKind::VString { .. } => Some("vstring".to_string()),
             NodeKind::ArrayLiteral { .. } => Some("array".to_string()),
             NodeKind::HashLiteral { .. } => Some("hash".to_string()),
 
@@ -1310,7 +1319,7 @@ fn format_signature_params(sig_node: &Node) -> String {
                 NodeKind::MandatoryParameter { variable }
                 | NodeKind::OptionalParameter { variable, .. }
                 | NodeKind::SlurpyParameter { variable }
-                | NodeKind::NamedParameter { variable } => variable.as_ref(),
+                | NodeKind::NamedParameter { variable, .. } => variable.as_ref(),
                 NodeKind::Variable { .. } => param,
                 _ => return None,
             };

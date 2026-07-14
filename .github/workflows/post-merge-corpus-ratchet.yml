@@ -108,7 +108,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: 1.95.0
 
@@ -119,7 +119,7 @@ jobs:
           shared-key: post-merge-corpus-ratchet-${{ hashFiles('Cargo.lock') }}
 
       - name: Install just
-        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145  # v2.83.1
         with:
           tool: just
 
@@ -127,7 +127,7 @@ jobs:
       # immediately after a successful install, independent of downstream steps.
       - name: Restore CPAN corpus cache (bounded)
         id: cpan-bounded-cache-restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: target/cpan-corpus-bounded
           key: cpan-corpus-bounded-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-50-distributions.txt') }}
@@ -147,7 +147,7 @@ jobs:
       # if a subsequent sweep/ratchet step fails (breaking the cache cycle).
       - name: Save CPAN corpus cache (bounded)
         if: steps.cpan-bounded-install.outcome == 'success'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: target/cpan-corpus-bounded
           key: cpan-corpus-bounded-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-50-distributions.txt') }}
@@ -226,7 +226,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537  # stable (master)
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
         with:
           toolchain: 1.95.0
 
@@ -237,7 +237,7 @@ jobs:
           shared-key: post-merge-corpus-ratchet-${{ hashFiles('Cargo.lock') }}
 
       - name: Install just
-        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2.82.2
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145  # v2.83.1
         with:
           tool: just
 
@@ -251,7 +251,7 @@ jobs:
       # successful install warm-starts all future runs (see issue #1505).
       - name: Restore CPAN corpus cache (full)
         id: cpan-corpus-cache-restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: target/cpan-corpus
           key: cpan-corpus-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-1000-distributions.txt') }}
@@ -272,7 +272,7 @@ jobs:
       # self-reinforcing cache-miss → timeout → no-cache cycle.
       - name: Save CPAN corpus cache (full)
         if: steps.cpan-install.outcome == 'success'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: target/cpan-corpus
           key: cpan-corpus-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-1000-distributions.txt') }}

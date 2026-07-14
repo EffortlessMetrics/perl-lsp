@@ -1,0 +1,14 @@
+[
+  {
+    "id": "PRRT_resolved_with_reply_pending_review_1",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/handlers/rename.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        { "author": { "login": "reviewbot" } }
+      ]
+    }
+  }
+]

@@ -148,5 +148,5 @@ Advertises only GA core capabilities with extensive production validation.
 
 - [LSP_CAPABILITY_POLICY.md](../reference/LSP_CAPABILITY_POLICY.md) - Policy specification
 - [features.toml](../../features.toml) - Feature tracking
-- [LSP_ACTUAL_STATUS.md](../project/LSP_ACTUAL_STATUS.md) - Current capability status
+- [status/index.md](../project/status/index.md) - Current capability status
 - [ADR-0016: Feature Governance](0016-feature-governance.md) - Related feature governance ADR

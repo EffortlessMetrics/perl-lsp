@@ -52,6 +52,10 @@ fn scenario_17_deleted_module_evicted_from_symbols_and_definition() {
     .expect("Failed to create UX harness");
 
     harness.open_file("main.pl", SCRIPT_SOURCE).expect("didOpen should succeed");
+    assert!(
+        harness.wait_for_index_ready(Duration::from_secs(20)),
+        "Expected workspace index to become ready before querying ModuleGone"
+    );
 
     let cursor = harness.position_cursor("main.pl", 5, 25);
     let before_deadline = Instant::now() + Duration::from_secs(10);

@@ -145,14 +145,20 @@ impl<'a> Parser<'a> {
             allow_indent,
             quote,
             decl_span: heredoc_collector::Span { start: decl_start, end: decl_end },
+            body_start: after_line_break(self.src_bytes, decl_end),
         });
     }
 
-    /// Drain all pending heredocs after statement completion (FIFO order)
+    /// Drain heredocs added after `pending_start` and retain any parent statement's queue.
+    ///
+    /// A compound statement can declare a heredoc in its condition before recursively
+    /// parsing its block. Statements in that block must attach their own heredocs as
+    /// they complete, but cannot consume the parent's placeholder before its AST node
+    /// exists. Keeping the prefix also prevents sequential block statements from
+    /// accumulating against the global depth cap.
     #[allow(clippy::print_stderr, reason = "debug-only diagnostic — conditional on debug_assertions, cannot use #[expect]")]
-    fn drain_pending_heredocs(&mut self, root: &mut Node) {
-        if self.pending_heredocs.is_empty() {
-            self.heredoc_start_time = None;
+    fn drain_pending_heredocs_from(&mut self, pending_start: usize, root: &mut Node) {
+        if pending_start >= self.pending_heredocs.len() {
             return;
         }
 
@@ -170,17 +176,13 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Advance to first content line (handle newline after statement terminator)
-        self.byte_cursor = after_line_break(self.src_bytes, self.byte_cursor);
+        // Keep a copy of the suffix declarations so we can match outputs back to inputs.
+        // The prefix belongs to an enclosing statement and must remain queued until that
+        // statement has a complete AST node for attachment.
+        let queued = self.pending_heredocs.split_off(pending_start);
+        let pending: Vec<_> = queued.iter().cloned().collect();
 
-        // Keep a copy of the declarations so we can match outputs back to inputs
-        let pending: Vec<_> = self.pending_heredocs.iter().cloned().collect();
-
-        let out = collect_all(
-            self.src_bytes,
-            self.byte_cursor,
-            std::mem::take(&mut self.pending_heredocs),
-        );
+        let out = collect_at_declaration_offsets(self.src_bytes, queued);
 
         // Zip 1:1 in order (collector preserves input order)
         for (decl, body) in pending.into_iter().zip(out.contents) {
@@ -209,7 +211,13 @@ impl<'a> Parser<'a> {
                 );
             }
         }
-        self.byte_cursor = out.next_offset;
+        // A nested statement may attach a later body before its enclosing statement
+        // attaches an earlier declaration. Never move the cursor backwards when the
+        // parent queue is finally drained.
+        self.byte_cursor = self.byte_cursor.max(out.next_offset);
+        if self.pending_heredocs.is_empty() {
+            self.heredoc_start_time = None;
+        }
     }
 
     /// Attach collected heredoc content to its declaration node by matching declaration span

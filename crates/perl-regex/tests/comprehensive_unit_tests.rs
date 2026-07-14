@@ -288,10 +288,10 @@ fn validate_rejects_plus_on_star_group() -> Result<(), Box<dyn std::error::Error
 }
 
 #[test]
-fn validate_rejects_question_on_plus_group() -> Result<(), Box<dyn std::error::Error>> {
+fn validate_accepts_question_on_plus_group() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
-    assert!(v.validate("(a+)?", 0).is_err());
-    assert!(v.detect_nested_quantifiers("(a+)?"));
+    v.validate("(a+)?", 0)?;
+    assert!(!v.detect_nested_quantifiers("(a+)?"));
     Ok(())
 }
 
@@ -949,6 +949,15 @@ fn validate_accepts_non_capturing_with_quantifier() -> Result<(), Box<dyn std::e
     // (?:pattern)+ is a perfectly normal Perl regex
     v.validate("(?:pattern)+", 0)?;
     assert!(!v.detect_nested_quantifiers("(?:pattern)+"));
+    Ok(())
+}
+
+#[test]
+fn validate_accepts_optional_group_with_inner_optional_atom()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    v.validate(r"parser\.t(?:\.[bl]eb?)?$", 0)?;
+    assert!(!v.detect_nested_quantifiers(r"parser\.t(?:\.[bl]eb?)?$"));
     Ok(())
 }
 

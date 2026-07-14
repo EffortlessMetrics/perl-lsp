@@ -9,6 +9,11 @@
 //! RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_init_torture_test -- --test-threads=1
 //! ```
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod support;
 
 use serde_json::json;

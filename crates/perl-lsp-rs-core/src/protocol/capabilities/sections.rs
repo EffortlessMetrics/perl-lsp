@@ -162,7 +162,10 @@ pub(super) fn apply_analysis_features(caps: &mut ServerCapabilities, build: &Bui
                     token_modifiers: semantic_token_modifiers(),
                 },
                 range: Some(true),
-                full: Some(SemanticTokensFullOptions::Bool(true)),
+                // Advertise delta support so clients send
+                // `textDocument/semanticTokens/full/delta` for incremental
+                // token updates (LSP 3.17).
+                full: Some(SemanticTokensFullOptions::Delta { delta: Some(true) }),
             }));
     }
 }

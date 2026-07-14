@@ -21,7 +21,7 @@ rtk just coverage-baseline-refresh
 - The gate is a ratchet, not a hard 80% blocker on day one
 - `allowed_drop_percentage` is the regression budget
 - `target_branch_coverage` documents the long-term target
-- Codecov patch status is the front-door PR coverage policy at `95%` with `0%` threshold
+- Codecov patch status keeps the advisory `95%` / `0%` target for explicit coverage runs
 - Codecov project status advertises the final `95%` target but remains informational during burn-down
 
 In GitHub Actions, the gate script also writes a step summary so branch coverage, line coverage, baseline, and pass/fail status are visible without digging through raw logs.

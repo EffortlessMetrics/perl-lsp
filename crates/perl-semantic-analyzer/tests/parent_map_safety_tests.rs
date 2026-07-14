@@ -375,24 +375,24 @@ fn parent_map_built_from_real_parsed_code() {
 
 // ---------------------------------------------------------------------------
 // 10. with_parent_map validation: root-in-map triggers debug_assert
-//     (compile-time: also documents that the map is !Send + !Sync)
+//     (compile-time: also enforces that the map is !Send + !Sync)
 // ---------------------------------------------------------------------------
+
+// `ParentMap` is `FxHashMap<*const Node, *const Node>`. Raw pointers are
+// `!Send + !Sync`, so `ParentMap` inherits those bounds. This is a
+// compile-time contract, not just documentation: it fails to *compile* if a
+// future change (e.g. wrapping the map in `Mutex`/`Arc` to make it
+// thread-shareable) accidentally makes `ParentMap` implement `Send` or
+// `Sync`, which would be the wrong pattern for this raw-pointer,
+// single-thread-owned structure.
+static_assertions::assert_not_impl_any!(ParentMap: Send, Sync);
 
 #[test]
 fn parent_map_not_send_not_sync_is_documented() {
-    // `ParentMap` is `FxHashMap<*const Node, *const Node>`.
-    // Raw pointers are `!Send + !Sync`, so `ParentMap` inherits those bounds.
-    // This test serves as a living specification of that fact.
-    //
-    // We cannot write `static_assertions::assert_not_impl_all!(ParentMap: Send)`
-    // here without adding a dependency, so instead we document it with
-    // this commentary test and use a runtime assertion as a smoke-check
-    // that the map was used within a single thread (which is always the case
-    // for LSP request handlers — each request is handled synchronously).
-    //
-    // The thread::spawn test below would cause a compile error if ParentMap
-    // were accidentally made Send (e.g., by wrapping in Mutex and Arc), which
-    // is the wrong pattern for this use case.
+    // The compile-time contract above guarantees `ParentMap: !Send + !Sync`.
+    // This test is a runtime smoke-check that the map is used correctly
+    // within a single thread (which is always the case for LSP request
+    // handlers — each request is handled synchronously).
 
     let ast = minimal_ast();
     let mut map: ParentMap = ParentMap::default();

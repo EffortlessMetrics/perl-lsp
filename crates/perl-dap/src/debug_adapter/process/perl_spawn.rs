@@ -25,7 +25,7 @@ pub(super) fn format_perl_spawn_error(perl_interpreter: &str, error: &std::io::E
             return format!(
                 "Perl executable ('{perl_interpreter}') is not available on PATH. Install Perl from \
                     https://strawberryperl.com (or ActivePerl), then reload VS Code. \
-                    You can also set `perl-lsp.perl.path` or launch.json `perl` to a full Perl path."
+                    You can also set launch.json `perlPath` to a full Perl path."
             );
         }
         #[cfg(not(windows))]
@@ -33,8 +33,7 @@ pub(super) fn format_perl_spawn_error(perl_interpreter: &str, error: &std::io::E
             return format!(
                 "Perl executable ('{perl_interpreter}') is not available on PATH. Install Perl with your package manager \
                     (for example `brew install perl`, `apt install perl`, or your distro equivalent), \
-                    then reload VS Code. You can also set `perl-lsp.perl.path` or launch.json `perl` \
-                    to a full Perl path."
+                    then reload VS Code. You can also set launch.json `perlPath` to a full Perl path."
             );
         }
     }

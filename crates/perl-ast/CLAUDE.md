@@ -84,5 +84,8 @@ match &node.kind {
 - `ast::Node` is a concrete struct, not a trait -- work with it via pattern matching on `NodeKind`
 - `Node::to_sexp()` produces tree-sitter-compatible S-expressions for test comparison
 - `NodeKind::kind_name()` returns a static string name; `NodeKind::ALL_KIND_NAMES` lists all names
-- Adding new `NodeKind` variants requires updating `to_sexp()`, `to_sexp_inner()`, `kind_name()`, and the `visit_children()` method — `ALL_KIND_NAMES` is auto-derived and does not need manual updating
+- `NodeKind::grammar_kind_name_static()` is the allocation-free canonical grammar-kind table; `grammar_kind_name()` handles only runtime-derived names
+- Adding a new `NodeKind` variant also requires deliberate classification in `grammar_kind_name_static()`; its exhaustive match is part of the metadata drift guard
+- `Node::for_each_child_with_field()` is the canonical read-only traversal source for positional and named-child access; keep `FieldId` names stable when extending the AST
+- Adding new `NodeKind` variants require updating `to_sexp()`, `to_sexp_inner()`, `kind_name()`, and the exhaustive child traversal methods (`try_for_each_child_with_field()` and `for_each_child_mut()`) — `ALL_KIND_NAMES` is auto-derived and does not need manual updating
 - Dependents: `perl-parser-core`, `perl-tokenizer`, `perl-pragma`, `perl-error`

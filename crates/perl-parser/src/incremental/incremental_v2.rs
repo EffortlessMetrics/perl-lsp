@@ -1130,6 +1130,8 @@ impl IncrementalParserV2 {
                 NodeKind::String { value: v1, interpolated: i1 },
                 NodeKind::String { value: v2, interpolated: i2 },
             ) => v1 == v2 && i1 == i2,
+            // VString nodes - version value must match exactly
+            (NodeKind::VString { value: v1 }, NodeKind::VString { value: v2 }) => v1 == v2,
 
             // Variable nodes - sigil and name must match
             (
@@ -1320,6 +1322,24 @@ mod tests {
             }
         }
         Ok(())
+    }
+
+    #[test]
+    fn vstring_nodes_match_only_when_version_text_matches() {
+        let parser = IncrementalParserV2::new();
+        let loc = |start, end| perl_parser_core::ast::SourceLocation { start, end };
+        let vstring = |value: &str| {
+            Node::new(NodeKind::VString { value: value.to_string() }, loc(0, value.len()))
+        };
+
+        assert!(
+            parser.nodes_match(&vstring("v1.2.3"), &vstring("v1.2.3")),
+            "incremental v2 reuse should match equal v-string literals"
+        );
+        assert!(
+            !parser.nodes_match(&vstring("v1.2.3"), &vstring("v2.0.0")),
+            "incremental v2 reuse must not match different v-string literals"
+        );
     }
 
     #[test]

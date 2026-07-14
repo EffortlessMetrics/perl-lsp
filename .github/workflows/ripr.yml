@@ -146,15 +146,29 @@ jobs:
           echo "idle_cx53=${idle_cx53:-0}"
           echo "idle_cx43=${idle_cx43:-0}"
 
+          # TEMPORARY: CX43 is demoted from routing. The CX43 host has lost its
+          # preloaded em-ci-rust:1.95 Docker image (a local-only image, not in any
+          # registry), so every CX43 job fails preflight in ~11-14s with
+          # "Unable to find image 'em-ci-rust:1.95' locally / pull access denied".
+          # The GitHub-hosted disk-full fallback then rescues the required
+          # "ripr+ New Gap Gate" aggregate, but this (a) shows a misleading red
+          # "ripr+ on CX43" check on every PR and (b) wastes a doomed CX43 start plus
+          # a full ~20 min GH-hosted ripr re-run. Evidence: PR #3321 job 85060946907.
+          # Route straight to CX53 (or GH-hosted when CX53 is busy) until ops restores
+          # the CX43 image. Revert: restore the `elif ... emit cx43` branch (preserved
+          # below) once `docker image inspect em-ci-rust:1.95` passes on CX43.
           if [ "${idle_cx53:-0}" -gt 0 ]; then
             emit "cx53" "cx53_idle" "false"
-          elif [ "${idle_cx43:-0}" -gt 0 ]; then
-            emit "cx43" "cx43_idle" "false"
           else
-            # No self-hosted runner idle -- fall back to GitHub-hosted.
+            # No self-hosted runner idle (CX43 demoted) -- fall back to GitHub-hosted.
             # ripr analysis on large diffs may OOM, but small/medium PRs pass.
             emit "github" "no_idle_runner" "true"
           fi
+
+          # --- BEGIN temporarily dead code (restore to re-enable CX43) ---
+          # elif [ "${idle_cx43:-0}" -gt 0 ]; then
+          #   emit "cx43" "cx43_idle" "false"
+          # --- END temporarily dead code ---
 
   # -------------------------------------------------------------------------
   # 2a. ripr on CX53 (28 GB, 14 cores) -- preferred self-hosted lane.

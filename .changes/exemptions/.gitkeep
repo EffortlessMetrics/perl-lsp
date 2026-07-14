@@ -1,0 +1,10 @@
+# Optional file-based "no changelog needed" exemptions.
+#
+# The canonical way to declare an exemption is a PR-body marker line, e.g.:
+#
+#     changelog-exempt: tests — adds regression coverage only, no user-facing change
+#
+# If a PR author prefers a tracked file instead of a PR-body line, they may add
+# `.changes/exemptions/<slug>.md` here with the category and reason. Either form
+# satisfies the advisory `cargo xtask changelog check` disposition rule. This
+# .gitkeep keeps the directory tracked when it is otherwise empty.

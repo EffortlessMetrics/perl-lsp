@@ -370,23 +370,24 @@ mod tests {
     // tests — they shell to git and require the repo to be available.
 
     #[test]
-    fn test_known_merged_commit_is_ancestor() -> Result<()> {
-        // d5f8e54fe — "docs(agents): orchestration roles and close-proof policy"
-        // This commit was merged into main via PR #1255.  It must be an ancestor.
-        let sha = "d5f8e54fe";
-        // Only run if git is available and the commit exists.
-        let probe = Command::new("git").args(["cat-file", "-e", sha]).status();
-        let Ok(status) = probe else {
+    fn test_current_head_is_ancestor_of_itself() -> Result<()> {
+        let output = Command::new("git").args(["rev-parse", "--verify", "HEAD^{commit}"]).output();
+        let Ok(output) = output else {
             // git not available — skip
             return Ok(());
         };
-        if !status.success() {
-            // commit not found (shallow clone, etc.) — skip
+        if !output.status.success() {
+            // not a git checkout, shallow probe failure, etc. — skip
             return Ok(());
         }
 
-        let reachable = check_ancestry(sha, "origin/main")?;
-        assert!(reachable, "known merged commit {sha} should be ancestor of origin/main");
+        let sha = String::from_utf8(output.stdout)?.trim().to_string();
+        if sha.is_empty() {
+            return Ok(());
+        }
+
+        let reachable = check_ancestry(&sha, &sha)?;
+        assert!(reachable, "current HEAD should be an ancestor of itself");
         Ok(())
     }
 

@@ -1974,14 +1974,31 @@ fn visit_node(
                 visit_node(init, start, end, inputs, outputs, declared_in_scope, declared_in_range);
             }
         }
-        NodeKind::MandatoryParameter { variable }
-        | NodeKind::SlurpyParameter { variable }
-        | NodeKind::NamedParameter { variable } => {
+        NodeKind::MandatoryParameter { variable } | NodeKind::SlurpyParameter { variable } => {
             let name = extract_var_name(variable);
             if in_range {
                 declared_in_range.insert(name);
             } else {
                 declared_in_scope.insert(name);
+            }
+        }
+        NodeKind::NamedParameter { variable, default_value, .. } => {
+            let name = extract_var_name(variable);
+            if in_range {
+                declared_in_range.insert(name);
+            } else {
+                declared_in_scope.insert(name);
+            }
+            if let Some(default_value) = default_value {
+                visit_node(
+                    default_value,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    declared_in_scope,
+                    declared_in_range,
+                );
             }
         }
         NodeKind::OptionalParameter { variable, default_value } => {

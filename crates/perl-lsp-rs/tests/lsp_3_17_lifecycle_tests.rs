@@ -326,6 +326,93 @@ fn test_initialize_contract_3_17() -> TestResult {
 }
 
 #[test]
+fn test_position_encoding_advertised_is_clamped_to_utf16_pending_phase_2() -> TestResult {
+    // Phase 1 parses and stores the client's `general.positionEncodings`
+    // preference (see the `initialize_prefers_first_supported_position_encoding`
+    // family of unit tests in `runtime/lifecycle/capabilities.rs` for coverage
+    // of that internal negotiation). But `text_sync` and every feature
+    // provider (hover, definition, diagnostics, ...) still compute positions
+    // in UTF-16 code units — threading the negotiated encoding through those
+    // call sites is deferred to phase 2.
+    //
+    // Per the LSP 3.17 spec, client and server MUST agree on one encoding or
+    // offsets are misinterpreted. So regardless of what the client prefers,
+    // the *advertised* `capabilities.positionEncoding` MUST stay pinned to
+    // "utf-16" (the spec's mandatory default) until phase 2 lands — anything
+    // else would silently corrupt document sync and every position-bearing
+    // response for non-ASCII content on a client that prefers a different
+    // encoding.
+
+    // Scenario 1: client prefers UTF-8 first, then UTF-16 -- must still get utf-16.
+    let mut harness = LspHarness::new();
+    let result = harness.initialize(Some(json!({
+        "processId": 1234,
+        "clientInfo": { "name": "test-client" },
+        "rootUri": "file:///workspace",
+        "capabilities": {
+            "general": {
+                "positionEncodings": ["utf-8", "utf-16"]
+            }
+        }
+    })))?;
+
+    let capabilities = &result["capabilities"];
+    let encoding = capabilities
+        .get("positionEncoding")
+        .and_then(|v| v.as_str())
+        .ok_or("positionEncoding not found or not string")?;
+
+    assert_eq!(
+        encoding, "utf-16",
+        "server must advertise utf-16 even when the client prefers utf-8, \
+         because providers do not yet convert positions in utf-8"
+    );
+
+    // Scenario 2: client prefers UTF-16 first, then UTF-8 -- utf-16 either way.
+    let mut harness = LspHarness::new();
+    let result = harness.initialize(Some(json!({
+        "processId": 1234,
+        "clientInfo": { "name": "test-client" },
+        "rootUri": "file:///workspace",
+        "capabilities": {
+            "general": {
+                "positionEncodings": ["utf-16", "utf-8"]
+            }
+        }
+    })))?;
+
+    let capabilities = &result["capabilities"];
+    let encoding = capabilities
+        .get("positionEncoding")
+        .and_then(|v| v.as_str())
+        .ok_or("positionEncoding not found or not string")?;
+
+    assert_eq!(encoding, "utf-16", "server should advertise utf-16 when the client prefers it");
+
+    // Scenario 3: client doesn't specify positionEncodings - default to utf-16.
+    let mut harness = LspHarness::new();
+    let result = harness.initialize(Some(json!({
+        "processId": 1234,
+        "clientInfo": { "name": "test-client" },
+        "rootUri": "file:///workspace",
+        "capabilities": {}
+    })))?;
+
+    let capabilities = &result["capabilities"];
+    let encoding = capabilities
+        .get("positionEncoding")
+        .and_then(|v| v.as_str())
+        .ok_or("positionEncoding not found or not string")?;
+
+    assert_eq!(
+        encoding, "utf-16",
+        "server should default to utf-16 when client doesn't specify positionEncodings"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_initialized_notification() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;

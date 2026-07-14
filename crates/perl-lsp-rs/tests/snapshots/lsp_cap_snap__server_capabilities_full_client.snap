@@ -63,6 +63,7 @@ executeCommandProvider:
     - perl.runSubtest
     - perl.debugFile
     - perl.debugTest
+    - perl.debugTestFile
     - perl.goToTest
     - perl.goToImplementation
     - perl.explainProviderDecision
@@ -94,7 +95,8 @@ renameProvider:
   prepareProvider: true
 selectionRangeProvider: true
 semanticTokensProvider:
-  full: true
+  full:
+    delta: true
   legend:
     tokenModifiers:
       - declaration

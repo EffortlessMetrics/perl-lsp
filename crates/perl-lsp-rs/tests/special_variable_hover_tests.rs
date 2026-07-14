@@ -497,3 +497,177 @@ fn test_hover_dollar_zero_is_not_capture_group() -> TestResult {
     }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Tests for issue #1698 – missing documentation for @+, @-, @EXPORT,
+// @EXPORT_OK, %!, %EXPORT_TAGS special variables
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_hover_regex_match_end_positions() -> TestResult {
+    // @+ contains the end positions of captures in the last successful match
+    // Using the same pattern as test_hover_argv_array above
+    let doc = "my @result = @+;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///at_plus_1698.pl", doc)?;
+    // "my @result = @+;"
+    // 0-1: my, 2: space, 3-10: @result, 11: space, 12: =, 13: space, 14: @, 15: +
+    // Hover at position 15 to hit the +
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///at_plus_1698.pl"},
+                "position": {"line": 0, "character": 15}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover content for @+")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("match") || lower.contains("end") || lower.contains("position"),
+        "@+ hover should mention regex match positions, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_regex_match_start_positions() -> TestResult {
+    // @- contains the start positions of captures in the last successful match
+    let doc = "my @offset = @-;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///at_minus_1698.pl", doc)?;
+    // "my @offset = @-;"
+    // 0-1: my, 2: space, 3-10: @offset, 11: space, 12: =, 13: space, 14: @, 15: -
+    // Hover at position 15 to hit the -
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///at_minus_1698.pl"},
+                "position": {"line": 0, "character": 15}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover content for @-")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("match") || lower.contains("start") || lower.contains("position"),
+        "@- hover should mention regex match positions, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_export_array() -> TestResult {
+    // @EXPORT is the list of symbols exported from a module
+    let doc = "our @EXPORT = qw(foo);\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///export_1698.pl", doc)?;
+    // "our @EXPORT = qw(foo);"
+    // 0-2: our, 3: space, 4: @, 5-10: EXPORT
+    // Hover at position 7 (middle of EXPORT word)
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///export_1698.pl"},
+                "position": {"line": 0, "character": 7}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover content for @EXPORT")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("export") || lower.contains("symbol"),
+        "@EXPORT hover should mention exports, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_export_ok_array() -> TestResult {
+    // @EXPORT_OK is the list of symbols that can optionally be exported
+    let doc = "our @EXPORT_OK = qw(baz);\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///export_ok_1698.pl", doc)?;
+    // "our @EXPORT_OK = qw(baz);"
+    // 0-2: our, 3: space, 4: @, 5-15: EXPORT_OK
+    // Hover at position 10 (middle of EXPORT_OK)
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///export_ok_1698.pl"},
+                "position": {"line": 0, "character": 10}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover content for @EXPORT_OK")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("export") || lower.contains("optional") || lower.contains("ok"),
+        "@EXPORT_OK hover should mention optional exports, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_os_error_hash() -> TestResult {
+    // %! is the OS-specific error status hash
+    let doc = "my %errs = %!;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///percent_bang_1698.pl", doc)?;
+    // "my %errs = %!;"
+    // 0-1: my, 2: space, 3-7: %errs, 8: space, 9: =, 10: space, 11: %, 12: !
+    // Hover at position 12 to hit the !
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///percent_bang_1698.pl"},
+                "position": {"line": 0, "character": 12}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover content for %!")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("error") || lower.contains("errno") || lower.contains("os"),
+        "%! hover should mention OS error details, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_export_tags_hash() -> TestResult {
+    // %EXPORT_TAGS defines tag-to-list mappings for convenient imports
+    let doc = "my %tags = %EXPORT_TAGS;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///export_tags_1698.pl", doc)?;
+    // "my %tags = %EXPORT_TAGS;"
+    // 0-1: my, 2: space, 3-8: %tags, 9: space, 10: =, 11: space, 12: %, 13-25: EXPORT_TAGS
+    // Hover at position 17 (middle of EXPORT_TAGS)
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///export_tags_1698.pl"},
+                "position": {"line": 0, "character": 17}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover content for %EXPORT_TAGS")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("export") || lower.contains("tag") || lower.contains("group"),
+        "%EXPORT_TAGS hover should mention export tags, got: {val}"
+    );
+    Ok(())
+}

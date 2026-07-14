@@ -1,0 +1,8 @@
+[
+  {
+    "author": {
+      "login": "bob"
+    },
+    "body": "Verified the fix at head.\n\n<!-- verification:v1 {\"v\":1,\"head\":\"5555555555555555555555555555555555555555\",\"verifier\":\"bob\",\"findings\":0,\"result\":\"pass\"} -->"
+  }
+]

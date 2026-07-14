@@ -43,6 +43,7 @@ Choose the path that matches what you are trying to do:
 | Run builds, tests, and CI commands | [Commands Reference](reference/COMMANDS_REFERENCE.md) |
 | Add or audit public API documentation | [Missing Documentation Guide](reference/MISSING_DOCUMENTATION_GUIDE.md) |
 | Understand stability and compatibility | [Stability Policy](reference/STABILITY.md) |
+| Understand the native stack product policy | [Native Stack Product Policy](reference/NATIVE_STACK_POLICY.md) |
 | Read the historical analyses and launch material | [Articles and Research Notes](articles/README.md) |
 | Decide where a doc belongs in Diataxis | [Diataxis Authoring Guide](reference/DIATAXIS_GUIDE.md) |
 | **Contribute code to perl-lsp** | **[Contributing Guide](../CONTRIBUTING.md)** |
@@ -117,6 +118,7 @@ Decision records, project status, and planning documents.
 - [User-Facing Trust Surfaces Spec](specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md)
 - [Agent Build Storage and Gates Spec](specs/PLSP-SPEC-0013-agent-build-storage-and-gates.md)
 - [Refactor Acceptance Spec](specs/PLSP-SPEC-0014-refactor-acceptance.md)
+- [Native Stack Product Surface Spec](specs/PLSP-SPEC-0015-native-stack-product-surface.md)
 - [Receiver Expression Facts Spec](specs/PLSP-SPEC-0005-receiver-expression-facts.md), [Receiver Facts Implementation Plan](project/RECEIVER_FACTS_IMPLEMENTATION_PLAN.md), and [Receiver Facts Status](project/status/receiver_facts.md)
 - [Project Milestones](project/MILESTONES.md)
 - [Feature Governance](project/FEATURE_GOVERNANCE.md)

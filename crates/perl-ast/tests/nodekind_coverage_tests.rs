@@ -1,4 +1,4 @@
-use perl_ast::{Node, NodeKind, SourceLocation};
+use perl_ast::{GotoTargetForm, Node, NodeKind, SourceLocation};
 
 fn loc() -> SourceLocation {
     SourceLocation::new(0, 0)
@@ -118,6 +118,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             "String",
             0,
         ),
+        (Node::new(NodeKind::VString { value: "v1.2.3".to_string() }, loc()), "VString", 0),
         (
             Node::new(
                 NodeKind::Heredoc {
@@ -332,9 +333,22 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             1,
         ),
         (
-            Node::new(NodeKind::NamedParameter { variable: Box::new(leaf("var")) }, loc()),
+            // Defaulted named parameter: traversal must descend into the
+            // default expression, so the child count is 2 (variable + default).
+            // (This file keeps exactly one case per NodeKind, so the defaulted
+            // shape is used here to exercise default-value traversal.)
+            Node::new(
+                NodeKind::NamedParameter {
+                    variable: Box::new(leaf("var")),
+                    external_name: "var".to_string(),
+                    default_operator: Some("=".to_string()),
+                    default_value: Some(Box::new(leaf("default"))),
+                    required: false,
+                },
+                loc(),
+            ),
             "NamedParameter",
-            1,
+            2,
         ),
         (
             Node::new(
@@ -362,7 +376,14 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             "LoopControl",
             0,
         ),
-        (Node::new(NodeKind::Goto { target: Box::new(leaf("target")) }, loc()), "Goto", 1),
+        (
+            Node::new(
+                NodeKind::Goto { target: Box::new(leaf("target")), form: GotoTargetForm::Label },
+                loc(),
+            ),
+            "Goto",
+            1,
+        ),
         (
             Node::new(
                 NodeKind::MethodCall {

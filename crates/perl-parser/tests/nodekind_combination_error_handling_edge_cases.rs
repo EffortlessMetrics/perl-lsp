@@ -819,11 +819,14 @@ my $pipe_sub = s|pattern|replacement|modifiers;
 my $exclamation_sub = s!pattern!replacement!modifiers;
 
 # Edge case: Transliteration with various delimiters
-my $slash_trans = tr/search/replace/modifiers;
-my $bracket_trans = tr[search][replace]modifiers;
-my $brace_trans = tr{search}{replace}modifiers;
-my $angle_trans = tr<search><replace>modifiers;
-my $pipe_trans = tr|search|replace|modifiers;
+# Note: `r` (return) is a valid tr/// modifier; the bare word `modifiers`
+# used elsewhere as a placeholder contains chars that are NOT valid tr///
+# modifiers (m, o, f, i, e), which Perl — and this parser — reject as an error.
+my $slash_trans = tr/search/replace/r;
+my $bracket_trans = tr[search][replace]r;
+my $brace_trans = tr{search}{replace}r;
+my $angle_trans = tr<search><replace>r;
+my $pipe_trans = tr|search|replace|r;
 
 # Edge case: Complex quote-like operators
 my $single_q = q'Single quoted string $variable';

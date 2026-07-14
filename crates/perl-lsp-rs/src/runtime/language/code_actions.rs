@@ -491,14 +491,20 @@ impl LspServer {
             None => return Ok(Some(json!([]))),
         };
 
-        if let Some(ast) = &doc.ast {
+        let parsed = doc.current_parsed();
+        if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
             let start_offset = self.pos16_to_offset(doc, start_line, start_char);
             let end_offset = self.pos16_to_offset(doc, end_line, end_char);
 
-            // Get diagnostics from the document
+            // Get diagnostics from the document. `parsed` is guaranteed `Some`
+            // here since `ast` was derived from it.
+            let empty_errors: std::sync::Arc<[perl_parser::error::ParseError]> =
+                std::sync::Arc::from([]);
+            let parse_errors =
+                parsed.as_ref().map_or_else(|| empty_errors.clone(), |p| p.parse_errors_arc());
             let diag_provider = DiagnosticsProvider::new(ast, doc.text.clone());
             let mut diagnostics =
-                diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, None);
+                diag_provider.get_diagnostics(ast, &parse_errors, &doc.text, None);
             diagnostics.extend(self.context_diagnostics_for_code_actions(&params, doc));
 
             // Get code actions from both providers
@@ -522,50 +528,165 @@ impl LspServer {
             }
             code_actions.extend(pragma_actions);
 
-            // Add Perl::Critic quick fixes
-            let builtin_analyzer = BuiltInAnalyzer::new();
-            let violations = builtin_analyzer.analyze(ast, &doc.text);
-            for violation in &violations {
-                if let Some(quick_fix) = builtin_analyzer.get_quick_fix(violation, &doc.text) {
-                    let mut changes = HashMap::new();
-                    let (start_line, start_char) =
-                        self.offset_to_pos16(doc, violation.range.start.byte);
-                    let (end_line, end_char) = self.offset_to_pos16(doc, violation.range.end.byte);
+            // Add critic quick-fixes for the *configured* engine. The code
+            // action's embedded diagnostic must line up (source + code) with the
+            // diagnostic the publish path emits, so a client associates the fix
+            // with the problem it resolves. The default native engine publishes
+            // `native.*` codes under source "perl-lsp-critic"; the opt-in legacy
+            // engine keeps the `Perl::Critic` policy names it shares with the
+            // external tool it emulates. Running the legacy analyzer
+            // unconditionally (as before) leaked the `Perl::Critic` brand onto
+            // the native product surface and produced quick-fixes whose source +
+            // code never matched the published native diagnostic.
+            // Read the engine and every critic field in ONE lock scope so the
+            // code action is built from a single coherent config snapshot. A
+            // split lock (engine, then the rest) could tear if
+            // didChangeConfiguration lands between the two acquisitions —
+            // "we decided Native" (stale) + a fresh profile/include/exclude — a
+            // state that never coherently existed. This mirrors
+            // `collect_native_critic_diagnostics` in runtime/diagnostics.rs.
+            let (critic_engine, severity, profile, native_profile, native_include, native_exclude) = {
+                let cfg = self.config.lock();
+                (
+                    cfg.critic_engine,
+                    cfg.perlcritic_severity,
+                    cfg.perlcritic_profile.clone(),
+                    cfg.native_critic_profile.clone(),
+                    cfg.native_critic_include.clone(),
+                    cfg.native_critic_exclude.clone(),
+                )
+            };
+            match critic_engine {
+                perl_lsp_rs_core::config::CriticEngine::Native => {
+                    let critic_config = crate::perl_critic::CriticConfig {
+                        severity: severity.clamp(1, 5),
+                        profile,
+                        include: native_include,
+                        exclude: native_exclude,
+                        ..crate::perl_critic::CriticConfig::default()
+                    };
+                    let critic_context =
+                        crate::perl_critic::CriticContext::new(&doc.text, ast, &critic_config);
+                    let native_profile =
+                        crate::perl_critic::NativeCriticProfile::parse(&native_profile)
+                            .unwrap_or(crate::perl_critic::NativeCriticProfile::Strict);
+                    let registry =
+                        crate::perl_critic::NativeCriticRegistry::for_profile(native_profile);
+                    for finding in registry.check(&critic_context) {
+                        // Only findings that carry an automatic edit become
+                        // quick-fixes. A finding with no fix, an explicitly
+                        // manual-only fix, or empty edits is diagnostic-only
+                        // guidance — never surface it as an "apply fix" action.
+                        // Checking FixSafety (not just emptiness) keeps the type's
+                        // own safety tier load-bearing: a future ManualOnly fix
+                        // that ships illustrative edits must still be skipped.
+                        let Some(fix) = finding.fix.as_ref() else {
+                            continue;
+                        };
+                        if fix.safety == crate::perl_critic::FixSafety::ManualOnly
+                            || fix.edits.is_empty()
+                        {
+                            continue;
+                        }
+                        let (start_line, start_char) =
+                            self.offset_to_pos16(doc, finding.range.start.byte);
+                        let (end_line, end_char) =
+                            self.offset_to_pos16(doc, finding.range.end.byte);
 
-                    changes.insert(
-                        uri.to_string(),
-                        vec![json!({
-                            "range": {
-                                "start": {"line": start_line, "character": start_char},
-                                "end": {"line": end_line, "character": end_char},
-                            },
-                            "newText": quick_fix.edit.new_text,
-                        })],
-                    );
+                        let edits: Vec<Value> = fix
+                            .edits
+                            .iter()
+                            .map(|edit| {
+                                let (es_line, es_char) =
+                                    self.offset_to_pos16(doc, edit.range.start.byte);
+                                let (ee_line, ee_char) =
+                                    self.offset_to_pos16(doc, edit.range.end.byte);
+                                json!({
+                                    "range": {
+                                        "start": {"line": es_line, "character": es_char},
+                                        "end": {"line": ee_line, "character": ee_char},
+                                    },
+                                    "newText": edit.new_text.clone(),
+                                })
+                            })
+                            .collect();
+                        let mut changes = HashMap::new();
+                        changes.insert(uri.to_string(), edits);
 
-                    code_actions.push(json!({
-                        "title": quick_fix.title,
-                        "kind": "quickfix",
-                        "diagnostics": [{
-                            "range": {
-                                "start": {"line": start_line, "character": start_char},
-                                "end": {"line": end_line, "character": end_char},
+                        code_actions.push(json!({
+                            "title": fix.title.clone(),
+                            "kind": "quickfix",
+                            "diagnostics": [{
+                                "range": {
+                                    "start": {"line": start_line, "character": start_char},
+                                    "end": {"line": end_line, "character": end_char},
+                                },
+                                "severity": match finding.severity {
+                                    crate::perl_critic::Severity::Gentle => 1, // Error
+                                    crate::perl_critic::Severity::Stern |
+                                    crate::perl_critic::Severity::Harsh => 2, // Warning
+                                    crate::perl_critic::Severity::Cruel => 3, // Information
+                                    crate::perl_critic::Severity::Brutal => 4, // Hint
+                                },
+                                "code": finding.rule_id.clone(),
+                                "source": "perl-lsp-critic",
+                                "message": finding.message.clone(),
+                            }],
+                            "edit": {
+                                "changes": changes,
                             },
-                            "severity": match violation.severity {
-                                crate::perl_critic::Severity::Gentle => 1, // Error
-                                crate::perl_critic::Severity::Stern |
-                                crate::perl_critic::Severity::Harsh => 2, // Warning
-                                crate::perl_critic::Severity::Cruel => 3, // Information
-                                crate::perl_critic::Severity::Brutal => 4, // Hint
-                            },
-                            "code": violation.policy.clone(),
-                            "source": "Perl::Critic",
-                            "message": violation.description.clone()
-                        }],
-                        "edit": {
-                            "changes": changes,
-                        },
-                    }));
+                        }));
+                    }
+                }
+                perl_lsp_rs_core::config::CriticEngine::Legacy => {
+                    let builtin_analyzer = BuiltInAnalyzer::new();
+                    let violations = builtin_analyzer.analyze(ast, &doc.text);
+                    for violation in &violations {
+                        if let Some(quick_fix) =
+                            builtin_analyzer.get_quick_fix(violation, &doc.text)
+                        {
+                            let mut changes = HashMap::new();
+                            let (start_line, start_char) =
+                                self.offset_to_pos16(doc, violation.range.start.byte);
+                            let (end_line, end_char) =
+                                self.offset_to_pos16(doc, violation.range.end.byte);
+
+                            changes.insert(
+                                uri.to_string(),
+                                vec![json!({
+                                    "range": {
+                                        "start": {"line": start_line, "character": start_char},
+                                        "end": {"line": end_line, "character": end_char},
+                                    },
+                                    "newText": quick_fix.edit.new_text,
+                                })],
+                            );
+
+                            code_actions.push(json!({
+                                "title": quick_fix.title,
+                                "kind": "quickfix",
+                                "diagnostics": [{
+                                    "range": {
+                                        "start": {"line": start_line, "character": start_char},
+                                        "end": {"line": end_line, "character": end_char},
+                                    },
+                                    "severity": match violation.severity {
+                                        crate::perl_critic::Severity::Gentle => 1, // Error
+                                        crate::perl_critic::Severity::Stern |
+                                        crate::perl_critic::Severity::Harsh => 2, // Warning
+                                        crate::perl_critic::Severity::Cruel => 3, // Information
+                                        crate::perl_critic::Severity::Brutal => 4, // Hint
+                                    },
+                                    "code": violation.policy.clone(),
+                                    "source": "Perl::Critic",
+                                    "message": violation.description.clone()
+                                }],
+                                "edit": {
+                                    "changes": changes,
+                                },
+                            }));
+                        }
+                    }
                 }
             }
 
@@ -1123,6 +1244,10 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
 
     #[test]
@@ -1402,7 +1527,17 @@ mod tests {
         {
             let mut docs = server.documents.lock();
             let doc = docs.get_mut(uri).ok_or("missing opened document")?;
-            doc.ast = None;
+            // Simulate "no AST available" by rebuilding the document state
+            // with no `ParsedSnapshot` published, rather than mutating a
+            // field directly (parsed state is private -- see
+            // `state::ParsedSnapshot`). Same rope/text/version/generation,
+            // just no snapshot.
+            *doc = crate::state::DocumentState::from_parts(
+                doc.rope.clone(),
+                doc.text.clone(),
+                doc.version,
+                doc.generation.clone(),
+            );
         }
 
         let response = server.handle_code_action(Some(json!({

@@ -9,9 +9,9 @@ use std::borrow::Cow;
 pub fn extract_regex_parts(text: &str) -> (String, String, String) {
     // Handle different prefixes
     let content = if let Some(stripped) = text.strip_prefix("qr") {
-        stripped
+        skip_paired_replacement_gap(stripped)
     } else if let Some(stripped) = strip_match_prefix(text) {
-        stripped
+        skip_paired_replacement_gap(stripped)
     } else {
         text
     };
@@ -34,7 +34,7 @@ pub fn extract_regex_parts(text: &str) -> (String, String, String) {
 
 fn strip_match_prefix(text: &str) -> Option<&str> {
     let stripped = text.strip_prefix('m')?;
-    let delimiter = stripped.chars().next()?;
+    let delimiter = skip_paired_replacement_gap(stripped).chars().next()?;
     (!delimiter.is_alphabetic()).then_some(stripped)
 }
 
@@ -89,8 +89,9 @@ pub fn extract_substitution_parts_strict(
 ) -> Result<(String, String, String), SubstitutionError> {
     // Skip 's' prefix
     let after_s = text.strip_prefix('s').unwrap_or(text);
-    // Perl allows whitespace between 's' and its delimiter (e.g. `s { pattern } { replacement }g`)
-    let content = after_s.trim_start();
+    // Perl allows whitespace and line comments between `s` and a paired delimiter
+    // (e.g. `s # comment\n [pattern] [replacement]` in upstream `t/base/lex.t`).
+    let content = skip_paired_replacement_gap(after_s);
 
     // Get delimiter - check for missing delimiter (just 's' or 's' followed by nothing)
     let delimiter = match content.chars().next() {
@@ -257,7 +258,7 @@ fn extract_delimited_content_strict(text: &str, open: char, close: char) -> (Str
 /// use `extract_substitution_parts_strict` instead.
 pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     // Skip 's' prefix
-    let content = text.strip_prefix('s').unwrap_or(text);
+    let content = skip_paired_replacement_gap(text.strip_prefix('s').unwrap_or(text));
 
     // Get delimiter - content must be non-empty to have a delimiter
     let delimiter = match content.chars().next() {
@@ -301,7 +302,7 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
             (String::new(), Cow::Borrowed(rest1))
         }
     } else if is_paired {
-        let trimmed = rest1.trim_start();
+        let trimmed = skip_paired_replacement_gap(rest1);
         if let Some(rd) = trimmed.chars().next() {
             if rd.is_ascii_alphanumeric() || rd.is_whitespace() {
                 (String::new(), Cow::Borrowed(trimmed))
@@ -333,7 +334,7 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     } else {
         text
     };
-    let content = after_op.trim_start();
+    let content = skip_paired_replacement_gap(after_op);
 
     // Get delimiter - content must be non-empty to have a delimiter
     let delimiter = match content.chars().next() {
@@ -353,7 +354,7 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     // replacement list. Perl accepts forms like tr[abc]{xyz} in addition to tr[abc][xyz].
     let rest2_owned;
     let rest2 = if is_paired {
-        rest1.trim_start()
+        skip_paired_replacement_gap(rest1)
     } else {
         rest2_owned = format!("{}{}", delimiter, rest1);
         &rest2_owned
@@ -436,7 +437,7 @@ pub fn extract_transliteration_parts_strict(
     } else {
         text
     };
-    let content = after_op.trim_start();
+    let content = skip_paired_replacement_gap(after_op);
 
     // Get delimiter.
     let delimiter = match content.chars().next() {
@@ -946,8 +947,9 @@ pub fn validate_substitution_modifiers(modifiers_str: &str) -> Result<String, ch
 ///
 /// # Behaviour
 ///
-/// Strips `operator` from the start of `s`, trims any optional whitespace
-/// between the operator and its opening delimiter (Perl allows `qw (a b)`),
+/// Strips `operator` from the start of `s`, skips optional whitespace and
+/// line comments before its opening delimiter (Perl allows `qw (a b)` and
+/// upstream `t/base/lex.t` uses `q # comment\n "b"#`),
 /// reads the opening delimiter, maps it to its paired closing delimiter
 /// (`(` → `)`, `{` → `}`, `[` → `]`, `<` → `>`; all others self-close),
 /// rejects an alphanumeric or underscore character in delimiter position
@@ -967,11 +969,9 @@ pub fn validate_substitution_modifiers(modifiers_str: &str) -> Result<String, ch
 /// assert_eq!(parse_quote_operator_content("qwfoo", "qw"), None);
 /// ```
 pub fn parse_quote_operator_content<'a>(s: &'a str, operator: &str) -> Option<&'a str> {
-    // Perl allows whitespace between a quote-like operator and its opening
-    // delimiter, e.g. `qw [a b]` or `q (x)`.  Trim it before reading the
-    // delimiter so the space-before-delimiter form is handled the same as the
-    // compact form.
-    let rest = s.strip_prefix(operator)?.trim_start();
+    // Perl allows whitespace and line comments between a quote-like operator
+    // and its opening delimiter, e.g. `qw [a b]` or `q # comment\n "x"#`.
+    let rest = skip_paired_replacement_gap(s.strip_prefix(operator)?);
     let mut chars = rest.chars();
     let open = chars.next()?;
     // Reject bareword: `qwfoo` where the char after qw is alphanumeric/underscore.

@@ -13,7 +13,7 @@ fn from_perldoc_uri_parses_valid_perldoc_uri() {
 #[test]
 fn from_perldoc_uri_accepts_already_trimmed_name_boundary() {
     let name = "Local::Trimmed";
-    assert!(name == name.trim(), "name == name.trim() must take the accepted URI branch",);
+    assert!(name == name.trim(), "name == name.trim() must take the accepted URI branch");
     let uri = format!("perldoc://{name}");
 
     let target = must_some(PerlDocumentationTarget::from_perldoc_uri(&uri));

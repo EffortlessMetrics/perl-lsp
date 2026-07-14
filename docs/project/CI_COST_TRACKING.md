@@ -58,7 +58,7 @@ Based on typical perl-lsp CI runs:
 |-----|----------|----------|------|---------|
 | Mutation testing | Linux | 20 min | $0.160 | `ci:mutation` |
 | Benchmarks | Linux | 5 min | $0.040 | `ci:bench` |
-| Coverage analysis | Linux | 8 min | $0.064 | `ci:coverage` |
+| Coverage analysis | Linux | 8 min | $0.064 | Schedule/manual only |
 | macOS validation | macOS | 10 min | $0.800 | `ci:mac` |
 | Full LSP tests | Linux | 4 min | $0.032 | Code changes |
 | Property tests | Linux | 6 min | $0.048 | `ci:property` |
@@ -277,7 +277,7 @@ concurrency:
 |-----|---------|-------------|
 | Mutation testing | `ci:mutation` | Before releases, major refactors |
 | Benchmarks | `ci:bench` | Performance-critical changes |
-| Coverage | `ci:coverage` | Quarterly health checks |
+| Coverage | Schedule/manual only | Quarterly health checks |
 | macOS | `ci:mac` | Platform-specific features only |
 
 **Example workflow**:
@@ -477,7 +477,7 @@ Use third-party tools:
   - Cost: $0.04/run
   - Time: ~5 minutes
 
-- 🏷️ **Coverage** (`ci:coverage`)
+- 🕒 **Coverage** (schedule/manual only)
   - When: Quarterly health checks
   - Cost: $0.06/run
   - Time: ~8 minutes

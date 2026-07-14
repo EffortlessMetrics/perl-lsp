@@ -1820,6 +1820,42 @@ $self->"#;
     Ok(())
 }
 
+#[test]
+fn test_default_method_completion_includes_universal_destroy_autoload()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"my $obj = bless {}, 'MyLib';
+$obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    let destroy = completions
+        .iter()
+        .find(|item| item.label == "DESTROY")
+        .ok_or("DESTROY fallback method completion missing")?;
+    assert_eq!(destroy.detail.as_deref(), Some("method"));
+    assert_eq!(
+        destroy.documentation.as_deref(),
+        Some("Called when the last reference to the object is released (garbage collected)")
+    );
+    assert_eq!(destroy.insert_text.as_deref(), Some("DESTROY()"));
+    assert_eq!(destroy.sort_text.as_deref(), Some("2_DESTROY"));
+
+    let autoload = completions
+        .iter()
+        .find(|item| item.label == "AUTOLOAD")
+        .ok_or("AUTOLOAD fallback method completion missing")?;
+    assert_eq!(autoload.detail.as_deref(), Some("method"));
+    assert_eq!(
+        autoload.documentation.as_deref(),
+        Some("Automatic method dispatcher for undefined methods")
+    );
+    assert_eq!(autoload.insert_text.as_deref(), Some("AUTOLOAD()"));
+    assert_eq!(autoload.sort_text.as_deref(), Some("2_AUTOLOAD"));
+    Ok(())
+}
+
 // -------------------------------------------------------------------------
 // Literal `bless` receiver inference (issue #7896)
 // -------------------------------------------------------------------------
@@ -7705,4 +7741,417 @@ fn extract_fat_comma_keys_covers_quoted_and_bareword_forms() {
     assert!(collect("\"x.y\" => 1").iter().any(|k| k == "x.y"));
     // Unquoted token with a non-word character is rejected (no quoting).
     assert!(collect("a-b => 1").is_empty());
+
+    // Duplicate keys are de-duplicated via the `seen` set carried across calls.
+    let mut keys = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    CompletionProvider::extract_fat_comma_keys("host => 1, host => 2", &mut keys, &mut seen);
+    assert_eq!(
+        keys.iter().filter(|k| *k == "host").count(),
+        1,
+        "already-seen key must not be re-added"
+    );
+}
+
+// --- Indirect-object method completion (#1758) ---------------------------------
+//
+// Perl's indirect-object call syntax (`new Class @args`, `method $obj @args`)
+// should offer the same method completions as the arrow form (`$obj->method`),
+// including methods inherited through @ISA. These tests exercise the unified
+// routing added in dispatch.rs that synthesizes an arrow-equivalent context.
+
+/// Build a two-package workspace index where `Child` inherits from `Parent`,
+/// so inherited-method resolution can be asserted.
+fn indirect_child_parent_index() -> Result<Arc<WorkspaceIndex>, Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Parent.pm")?,
+        r#"package Parent;
+sub speak { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Child.pm")?,
+        r#"package Child;
+use parent 'Parent';
+sub run { }
+1;
+"#
+        .to_string(),
+    )?;
+    Ok(index)
+}
+
+#[test]
+fn test_indirect_bareword_receiver_offers_inherited_methods()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = indirect_child_parent_index()?;
+
+    // Cursor right after the method word `new`; receiver `Child` follows.
+    let code = "new Child";
+    let pos = "new".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+    let labels: Vec<&String> = completions.iter().map(|c| &c.label).collect();
+
+    assert!(
+        completions.iter().any(|c| c.label == "run"),
+        "indirect `new Child` should offer Child's own method `run`; got {labels:?}"
+    );
+    assert!(
+        completions.iter().any(|c| c.label == "speak"),
+        "indirect `new Child` should offer inherited method `speak`; got {labels:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_variable_receiver_offers_assigned_class_methods()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = indirect_child_parent_index()?;
+
+    // `$obj` is assigned from `Child->new`; `process $obj` is indirect syntax.
+    let code = "my $obj = Child->new;\nprocess $obj";
+    let pos = code.find("process").ok_or("missing process")? + "process".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+    let labels: Vec<&String> = completions.iter().map(|c| &c.label).collect();
+
+    assert!(
+        completions.iter().any(|c| c.label == "run"),
+        "indirect `process $obj` should offer own method `run` from assigned class; got {labels:?}"
+    );
+    assert!(
+        completions.iter().any(|c| c.label == "speak"),
+        "indirect `process $obj` should offer inherited method `speak`; got {labels:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_arrow_method_completion_still_works_after_indirect_routing()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Regression: the arrow form must be unaffected by the indirect branch.
+    let index = indirect_child_parent_index()?;
+
+    let code = "my $obj = Child->new;\n$obj->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+    let labels: Vec<&String> = completions.iter().map(|c| &c.label).collect();
+
+    assert!(
+        completions.iter().any(|c| c.label == "run"),
+        "arrow `$obj->` should still offer `run`; got {labels:?}"
+    );
+    assert!(
+        completions.iter().any(|c| c.label == "speak"),
+        "arrow `$obj->` should still offer inherited `speak`; got {labels:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_array_receiver_degrades_gracefully() -> Result<(), Box<dyn std::error::Error>> {
+    // `method @args` has no scalar/bareword receiver — must not offer methods
+    // and must not panic.
+    let index = indirect_child_parent_index()?;
+
+    let code = "process @args";
+    let pos = "process".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|c| c.label == "run" || c.label == "speak"),
+        "indirect call with no scalar/bareword receiver must not offer class methods"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_print_filehandle_does_not_offer_methods() -> Result<(), Box<dyn std::error::Error>>
+{
+    // `print $fh` is a builtin filehandle write, not a user method call.
+    let index = indirect_child_parent_index()?;
+
+    let code = "open my $fh, '<', 'x' or die;\nprint $fh";
+    let pos = code.find("print").ok_or("missing print")? + "print".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|c| c.label == "run" || c.label == "speak"),
+        "`print $fh` must not be treated as an indirect method call"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_die_exception_object_does_not_offer_methods()
+-> Result<(), Box<dyn std::error::Error>> {
+    // `die $e` is an exception throw, not an indirect method call.
+    // Even when $e is assigned from a class constructor, method completions
+    // must NOT fire because `die` is a Perl builtin (per #1758 exclusion list).
+    let index = indirect_child_parent_index()?;
+
+    let code = "my $e = Child->new;
+die $e";
+    let pos = code.find("die").ok_or("missing die")? + "die".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|c| c.label == "run" || c.label == "speak"),
+        "`die $e` must not offer class methods even when $e is a class instance; got {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_warn_object_does_not_offer_methods() -> Result<(), Box<dyn std::error::Error>> {
+    // `warn $obj` is a diagnostic output call, not an indirect method call.
+    let index = indirect_child_parent_index()?;
+
+    let code = "my $obj = Child->new;
+warn $obj";
+    let pos = code.find("warn").ok_or("missing warn")? + "warn".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|c| c.label == "run" || c.label == "speak"),
+        "`warn $obj` must not offer class methods; got {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_completion_inserts_bare_method_name() -> Result<(), Box<dyn std::error::Error>> {
+    // In indirect syntax the inserted method must be bare (`run`), not the
+    // arrow-form parenthesized `run()` which would yield invalid `run() Child`.
+    let index = indirect_child_parent_index()?;
+
+    let code = "new Child";
+    let pos = "new".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    let run = must_some(completions.iter().find(|c| c.label == "run"));
+    assert_eq!(
+        run.insert_text.as_deref(),
+        Some("run"),
+        "indirect-call completion must insert the bare method name, got {:?}",
+        run.insert_text
+    );
+    let speak = must_some(completions.iter().find(|c| c.label == "speak"));
+    assert_eq!(speak.insert_text.as_deref(), Some("speak"));
+    Ok(())
+}
+
+#[test]
+fn test_indirect_length_builtin_does_not_offer_methods() -> Result<(), Box<dyn std::error::Error>> {
+    // `length $obj` is a builtin call, not an indirect method call — even when
+    // `$obj` resolves to a workspace class.
+    let index = indirect_child_parent_index()?;
+
+    let code = "my $obj = Child->new;\nlength $obj";
+    let pos = code.find("length").ok_or("missing length")? + "length".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|c| c.label == "run" || c.label == "speak"),
+        "`length $obj` builtin must not offer class methods"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_delete_builtin_does_not_offer_methods() -> Result<(), Box<dyn std::error::Error>> {
+    let index = indirect_child_parent_index()?;
+
+    let code = "my $obj = Child->new;\ndelete $obj";
+    let pos = code.find("delete").ok_or("missing delete")? + "delete".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|c| c.label == "run" || c.label == "speak"),
+        "`delete $obj` builtin must not offer class methods"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_inside_string_offers_no_methods() -> Result<(), Box<dyn std::error::Error>> {
+    // `new Child` appearing inside a string literal must not trigger indirect
+    // method completion (exercises the in_string guard).
+    let index = indirect_child_parent_index()?;
+
+    let code = "my $s = \"new Child\";";
+    let pos = code.find("new").ok_or("missing new")? + "new".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|c| c.label == "run" || c.label == "speak"),
+        "indirect syntax inside a string literal must not offer class methods"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_unindexed_class_offers_no_methods() -> Result<(), Box<dyn std::error::Error>> {
+    // `new SomeUnknownClass` where the class is not in the workspace index must
+    // fall through (exercises the empty-workspace-probe guard) rather than
+    // offering bare object defaults.
+    let index = indirect_child_parent_index()?;
+
+    let code = "new TotallyUnknownClass";
+    let pos = "new".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|c| c.label == "run" || c.label == "speak"),
+        "unindexed indirect receiver must not offer Child/Parent methods"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_after_arrow_segment_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    // A method token immediately preceded by `->` is an arrow-call segment, not
+    // a statement-level indirect call, and must not re-trigger indirect routing
+    // (exercises the preceding-character guard).
+    let index = indirect_child_parent_index()?;
+
+    let code = "my $obj = Child->new;\n$obj->run Child";
+    let pos = code.rfind("run").ok_or("missing run")? + "run".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    // Must not panic and must not synthesize indirect method completions from
+    // the trailing `Child` receiver.
+    let _ = provider.get_completions(code, pos);
+    Ok(())
+}
+
+#[test]
+fn test_indirect_uppercase_method_word_offers_no_methods() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Grips the lowercase/underscore gate in `is_indirect_method_word`
+    // (dispatch.rs:176) through the production `get_completions` call chain: an
+    // uppercase-initial word in the method slot (`Frobnicate Child`) is a
+    // receiver bareword, not a method name, so it must be rejected before any
+    // synthesized method completion. A mutation that accepted uppercase method
+    // words here would wrongly offer `Child`'s methods — this observes that it
+    // does not.
+    let index = indirect_child_parent_index()?;
+
+    let code = "Frobnicate Child";
+    let pos = "Frobnicate".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+
+    assert!(
+        !completions.iter().any(|c| c.label == "run" || c.label == "speak"),
+        "uppercase-initial method word must not route as an indirect call; got {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_underscore_method_word_offers_methods() -> Result<(), Box<dyn std::error::Error>> {
+    // Grips the `|| first == '_'` accept branch of the lowercase/underscore gate
+    // (dispatch.rs:176) through the production `get_completions` call chain: a
+    // leading-underscore bareword (`_process Child`) is a valid indirect-method
+    // name, so it must route through to `Child`'s method completions. A mutation
+    // that dropped the underscore branch would reject `_process` and offer
+    // nothing — this observes that the methods are offered.
+    let index = indirect_child_parent_index()?;
+
+    let code = "_process Child";
+    let pos = "_process".len();
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+    let labels: Vec<&String> = completions.iter().map(|c| &c.label).collect();
+
+    assert!(
+        completions.iter().any(|c| c.label == "run"),
+        "underscore-initial indirect `_process Child` should offer `run`; got {labels:?}"
+    );
+    assert!(
+        completions.iter().any(|c| c.label == "speak"),
+        "underscore-initial indirect `_process Child` should offer inherited `speak`; got {labels:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_indirect_midword_cursor_offers_methods_with_insert_range()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Cursor in the MIDDLE of the method word (`pro|cess Child`): `indirect_word_end`
+    // must scan forward from the cursor to the full word boundary to locate the
+    // `Child` receiver, so indirect routing still fires. The edit range uses the
+    // same insert semantics as every other completion provider — `(prefix_start,
+    // position)` — replacing the text before the cursor, identical to the arrow
+    // form (`$obj->pro|cess`). This is uniform server behavior, not indirect-specific.
+    let index = indirect_child_parent_index()?;
+
+    let code = "process Child";
+    let pos = "pro".len(); // cursor after `pro`, inside the `process` token
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, pos);
+    let labels: Vec<&String> = completions.iter().map(|c| &c.label).collect();
+
+    let run = must_some(completions.iter().find(|c| c.label == "run"));
+    assert!(
+        completions.iter().any(|c| c.label == "speak"),
+        "mid-word indirect cursor should still route through to methods; got {labels:?}"
+    );
+    // Edit range replaces only the pre-cursor prefix (`pro`), consistent with the
+    // arrow path and all providers — the trailing `cess` is left by design, not
+    // a defect introduced by indirect routing.
+    assert_eq!(
+        run.text_edit_range,
+        Some((0, pos)),
+        "indirect method edit range must match the uniform (prefix_start, position) insert semantics"
+    );
+    Ok(())
 }

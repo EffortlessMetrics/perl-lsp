@@ -350,6 +350,85 @@ fn case8_dynamic_import_receiver_does_not_suppress_bareword_pl109()
     Ok(())
 }
 
+/// Case 9: `print foo;\n eval "sub foo { 1 }";`
+///
+/// The eval-sub declaration is at a byte offset *after* `foo`.  PL109 must
+/// still fire because the sub was not yet visible when `foo` appeared.
+/// This is the order-awareness guard for Path 2 (eval-sub evidence), symmetric
+/// with Case 2's guard for Path 1 (dynamic imports).
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[test]
+fn case9_eval_sub_declared_after_bareword_fires_pl109() -> Result<(), Box<dyn std::error::Error>> {
+    use perl_lsp::features::diagnostics::PullDiagnosticsContext;
+    use perl_workspace::workspace_index::WorkspaceIndex;
+
+    let uri_str = "file:///test_case9_eval_after.pl";
+    let uri: Uri = uri_str.parse()?;
+
+    // `foo` bareword at byte ~20; eval-sub declaration is after it.
+    // PL109 MUST fire: the eval-sub comes AFTER the usage site.
+    let content = "use strict 'subs';\nprint foo;\neval \"sub foo { 1 }\";\n";
+
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(uri_str.parse()?, content.to_string())?;
+
+    let mut context = PullDiagnosticsContext::new();
+    context.workspace_index = Some(Arc::clone(&index));
+
+    let provider = PullDiagnosticsProvider::new();
+    let items = items_from_report(
+        provider.get_document_diagnostics_with_context(&uri, content, None, &context, None),
+    )?;
+
+    if !has_pl109_for(&items, "foo") {
+        return Err(format!(
+            "Case 9: PL109 MUST fire for `foo` when the eval-sub declaration \
+             comes AFTER the bareword usage (order violation).\nDiagnostics: {items:#?}"
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
+/// Case 9b: `eval "sub foo { 1 }";\nprint foo;` — eval-sub BEFORE bareword.
+///
+/// Regression guard: the order-awareness fix must not break the happy path
+/// where the eval-sub declaration precedes the usage (Case 3 analogue).
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[test]
+fn case9b_eval_sub_declared_before_bareword_still_suppresses()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_lsp::features::diagnostics::PullDiagnosticsContext;
+    use perl_workspace::workspace_index::WorkspaceIndex;
+
+    let uri_str = "file:///test_case9b_eval_before.pl";
+    let uri: Uri = uri_str.parse()?;
+
+    let content = "use strict 'subs';\neval \"sub foo { 1 }\";\nprint foo;\n";
+
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(uri_str.parse()?, content.to_string())?;
+
+    let mut context = PullDiagnosticsContext::new();
+    context.workspace_index = Some(Arc::clone(&index));
+
+    let provider = PullDiagnosticsProvider::new();
+    let items = items_from_report(
+        provider.get_document_diagnostics_with_context(&uri, content, None, &context, None),
+    )?;
+
+    if has_pl109_for(&items, "foo") {
+        return Err(format!(
+            "Case 9b: PL109 must NOT fire for `foo` when the eval-sub declaration \
+             comes BEFORE the bareword usage (correct suppression).\nDiagnostics: {items:#?}"
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
 /// Pull diagnostics case: the pull provider's textDocument/diagnostic path
 /// also threads semantic queries for eval-sub suppression (case 3 via pull path).
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]

@@ -1,35 +1,48 @@
-# Active Goals
+# Goal Portfolio
 
-Active goals are machine-readable current-state manifests for `perl-lsp-swarm`
-lanes. They let agents identify the current objective, repo roles, WIP caps,
-active work item, proof commands, and status pointers without scraping chat or
-hand-maintained narrative.
+The portfolio is machine-readable repository state for `perl-lsp-swarm`. It
+records enabled programs, lane ownership, WIP caps, dependencies, and proof
+surfaces without appointing one repository-global objective for every worker.
+An orchestrator claims an issue for one session and worktree; that claim is not
+stored as a mutable default in this file.
 
 | Layer | Owns | Must not do |
 |---|---|---|
-| Active goal | Machine-readable current work, status pointers, active work-item IDs, proof command list | Prose-only strategy, generated status content, durable design rationale |
+| Portfolio | Enabled programs, lane caps, selection inputs, and authority boundaries | One session's current issue, branch lease, or worker state |
+| Program manifest | Program objective, lanes, work items, proof commands, and status pointers | Repository-global priority across sibling programs |
 
 ## Manifest Contract
 
-The active manifest should live at `.perl-lsp/goals/active.toml`. Future archived
+The portfolio lives at `.perl-lsp/goals/active.toml` as the in-place schema 3
+compatibility migration. There is no second portfolio file; future archived
 manifests should move under `.perl-lsp/goals/archive/`.
 
 An active manifest should include:
 
-- stable lane ID and title
-- active/inactive status
-- objective and end state
-- current repo and release-lineage repo
-- trust/substrate/reliability lane caps and ownership
-- current work items
-- links to the relevant proposal, specs, plan, status docs, and operating model
-- RTK-prefixed proof commands that define the current checkable boundary
+- schema and `mode = "portfolio"`
+- authority and selection policy
+- one or more enabled/disabled program manifest entries
+- an explicit `kind` for every program: `lane_routing` or `milestone_ledger`
 
-Run the manifest validator after changing the active goal:
+All entries must have valid identity, path, kind, and parseable manifest shape.
+Only enabled entries contribute active lanes, work items, and milestone
+validation totals.
+
+Legacy `active_program`, `active_lane`, and `default_program` fields are accepted
+only as temporary compatibility warnings. They are never selection authority.
+
+Run the manifest validator after changing the portfolio:
 
 ```bash
 cargo xtask check-active-goal-manifest
 ```
+
+## Program and claim layers
+
+Program manifests retain the durable objective, lane caps, work items, status
+documents, and proof commands. A future work-order/claim command will compile a
+single GitHub issue into a session-local lease. Until then, `goals next` remains
+read-only and an explicit `--program` is required to inspect one program.
 
 ## Status Pointers
 
@@ -43,55 +56,22 @@ current-state pointers for Real Perl Editor Trust are:
 - [semantic shadow compare](../../docs/project/status/semantic_shadow_compare.md)
 - [UX capability dashboard](../../docs/project/status/ux_capability_dashboard.md)
 
-## Minimal Shape
+## Minimal Portfolio Shape
 
 ```toml
-id = "plsp-swarm-real-perl-editor-trust"
-title = "perl-lsp-swarm execution lane"
-status = "active"
-owner = "codex-swarm"
-created = "YYYY-MM-DD"
+schema = 3
+mode = "portfolio"
 
-proposal = "docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md"
-plan = "plans/real-perl-editor-trust/implementation-plan.md"
-status_pointer = "docs/project/status/real_perl_editor_trust_v1.md"
-operating_model = "docs/swarm/operating-model.md"
+[selection]
+strategy = "eligible_portfolio"
+require_explicit_claim = true
+respect_lane_caps = true
+respect_dependencies = true
+respect_conflict_surfaces = true
 
-objective = """
-State the active lane objective.
-"""
-
-end_state = [
-  "State a checkable lane outcome.",
-]
-
-[current]
-lane = "real_perl_editor_trust_v1"
-repo = "perl-lsp-swarm"
-release_lineage_repo = "perl-lsp"
-status = "swarm_execution_cutover"
-
-[limits]
-trust_prs = 2
-substrate_prs = 2
-reliability_prs = 4
-
-[[lanes]]
-id = "trust"
-pr_cap = 2
-owns = ["provider_promotion_ledger"]
-rule = "No broadening; name promotion, fallback, blocker, and receipt boundaries."
-
-[trust.next]
-items = ["real_perl_editor_trust_smoke_receipt"]
-
-[[work_item]]
-id = "work-item-id"
-status = "active"
-lane = "trust"
-claim_boundary = "State the no-broadening boundary."
-files = ["docs/project/status/parser_accuracy_next.md"]
-commands = [
-  "rtk cargo xtask update-status --only parser --check",
-]
+[[program]]
+id = "real_perl_editor_trust"
+manifest = ".perl-lsp/goals/programs/real_perl_editor_trust.toml"
+kind = "lane_routing"
+enabled = true
 ```

@@ -88,14 +88,45 @@ impl<'a> Parser<'a> {
                 // parsing continues at the declared variable.
                 self.consume_legacy_decl_type_constraint()?;
 
-                // For my/our/state, parse a simple variable
+                // For my/our/state, parse a variable declaration target.
+                //
+                // Real Perl accepts an ARROW-postfix chain after the declared
+                // variable (`my $cache->{key} = ...`, `my $cache->[0] = ...`,
+                // `my $obj->method()`) — that's an autovivifying dereference
+                // on the freshly-declared lexical scalar, not a declaration
+                // of an array/hash *element*. Ground truth (perl 5.42.2):
+                //
+                //   $ perl -c -e 'my $cache->{key} = [1,2,3];'
+                //   -e syntax OK
+                //
+                // A DIRECT subscript with no arrow (`my $cache[0]`, `my
+                // $cache{key}`, `my @cache[0,1]`) is a syntax error in real
+                // Perl — `my`/`our`/`state` cannot declare an array or hash
+                // *element*, only whole variables:
+                //
+                //   $ perl -c -e 'my $cache[0] = 5;'
+                //   syntax error at -e line 1, near "$cache["
+                //   $ perl -c -e 'my $cache{key} = 5;'
+                //   syntax error at -e line 1, near "$cache{key"
+                //
+                // So only continue into the postfix chain when the next
+                // token is `->`. A direct `[`/`{` immediately after the bare
+                // declared variable is rejected outright here, matching real
+                // Perl's rejection, instead of silently parsing it as two
+                // unrelated statements or (the #3627 regression) folding the
+                // subscript into the declaration target itself.
                 let var = self.parse_variable()?;
-                // If -> follows the declared variable, treat it as an lvalue subscript chain
-                // e.g. my $cache->{key} = expr  or  my $foo->method()
-                if self.peek_kind() == Some(TokenKind::Arrow) {
-                    self.parse_postfix_chain(var)?
-                } else {
-                    var
+                match self.peek_kind() {
+                    Some(TokenKind::Arrow) => self.parse_postfix_chain(var)?,
+                    Some(kind @ (TokenKind::LeftBracket | TokenKind::LeftBrace)) => {
+                        let element_kind =
+                            if kind == TokenKind::LeftBracket { "array" } else { "hash" };
+                        return Err(ParseError::syntax(
+                            format!("Can't declare {element_kind} element in \"{declarator}\""),
+                            self.current_position(),
+                        ));
+                    }
+                    _ => var,
                 }
             };
 
@@ -106,15 +137,40 @@ impl<'a> Parser<'a> {
                 Vec::new()
             };
 
+            // Perl's `my`/`our`/`state`/`local` declare ONLY the first variable
+            // when the declaration list is not parenthesized:
+            //
+            //   `perl -MO=Deparse,-p -e 'my $a, $b, $c = 1;'`
+            //   => `(my($a), $b, ($c = 1));`
+            //
+            // (perlsub: "If more than one value is listed, the list must be
+            // placed in parentheses.") So a comma immediately following the
+            // declared variable is NOT part of this declaration — it belongs
+            // to the surrounding comma-expression, which the callers of
+            // `parse_variable_declaration` (statement- and expression-level)
+            // pick up via their own comma continuation handling. Parenthesized
+            // lists (`my ($a, $b)`) are handled entirely by the branch above
+            // and are unaffected by this.
+
             // Accept both simple `=` and compound operators (`||=`, `//=`, `.=`, etc.)
             // Perl allows `our $x ||= 0;` and `my $y .= "suffix";`
+            //
+            // The RHS is parsed at ASSIGNMENT precedence, not comma
+            // (`parse_expression`) precedence. Per perlop, `=` binds tighter
+            // than `,`, so `my $a = 1, $b;` deparses as
+            // `((my($a) = 1), $b);` — the initializer of `$a` is just `1`,
+            // and `$b` is a separate trailing comma term picked up by the
+            // statement-level comma continuation (see the comment below).
+            // A parenthesized RHS (`my $a = (1, $b);`) is unaffected: the
+            // parens are parsed as a single primary term by `parse_ternary`
+            // regardless of the outer precedence level.
             let assign_op = self.peek_compound_assign_op();
             let initializer = if let Some(op) = assign_op {
                 let op_token = self.tokens.next()?;
                 let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
                     missing
                 } else {
-                    self.parse_expression()?
+                    self.parse_assignment()?
                 };
                 if op == "=" {
                     Some(Box::new(rhs))
@@ -300,6 +356,24 @@ impl<'a> Parser<'a> {
         // We need to split the sigil from the name
         let text = &token.text;
 
+        if let Some(name) = Self::simple_braced_scalar_token_name(text) {
+            return Ok(Node::new(
+                NodeKind::Variable { sigil: String::from("$"), name: name.to_string() },
+                SourceLocation { start: token.start, end: token.end },
+            ));
+        }
+
+        // `${Foo::bar}` (no internal whitespace): the lexer's braced-variable
+        // scan consumes `::`-delimited segments to the matching `}` as one
+        // token (issue #3593). Fold to the scalar `$Foo::bar`, matching
+        // perlref's "Not-so-symbolic references" rule.
+        if let Some(name) = Self::qualified_braced_scalar_token_name(text) {
+            return Ok(Node::new(
+                NodeKind::Variable { sigil: String::from("$"), name: name.to_string() },
+                SourceLocation { start: token.start, end: token.end },
+            ));
+        }
+
         // Special handling for @{, %{, and ${ (array/hash/scalar dereference)
         // e.g. @{$ref}, %{$hash}, ${"${pkg}::$sym"}
         if &**text == "@{" || &**text == "%{" || &**text == "${" {
@@ -313,18 +387,25 @@ impl<'a> Parser<'a> {
             let start = token.start;
 
             // Parse the expression inside the braces
-            let expr = if sigil == "$" {
-                match self.try_parse_braced_qualified_scalar()? {
-                    Some(expr) => expr,
-                    None => self.parse_expression()?,
-                }
+            let (expr, folded) = if sigil == "$" {
+                self.parse_braced_scalar_body()?
             } else {
-                self.parse_expression()?
+                (self.parse_expression()?, false)
             };
 
             self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
+
+            if folded {
+                // `${ name }` == `$name` (perlref): already folded to a
+                // scalar variable node; do not re-wrap in Unary{"${}"}.
+                // Widen the span to cover the whole `${ ... }`, matching the
+                // no-whitespace single-token fast path above.
+                let mut folded_node = expr;
+                folded_node.location = SourceLocation { start, end };
+                return Ok(folded_node);
+            }
 
             let op = format!("{}{{}}", sigil);
             return Ok(Node::new(
@@ -356,6 +437,37 @@ impl<'a> Parser<'a> {
             ));
         };
 
+        if matches!(sigil.as_str(), "$" | "@" | "%")
+            && name.is_empty()
+            && self.peek_kind() == Some(TokenKind::LeftBrace)
+        {
+            self.tokens.next()?; // consume {
+
+            let (expr, folded) = if sigil == "$" {
+                self.parse_braced_scalar_body()?
+            } else {
+                (self.parse_expression()?, false)
+            };
+
+            self.consume_deref_body_terminators()?;
+            self.expect(TokenKind::RightBrace)?;
+            let end = self.previous_position();
+
+            if folded {
+                // `${ name }` == `$name` (perlref): already folded to a
+                // scalar variable node; do not re-wrap in Unary{"${}"}.
+                let mut folded_node = expr;
+                folded_node.location = SourceLocation { start: token.start, end };
+                return Ok(folded_node);
+            }
+
+            let op = format!("{}{{}}", sigil);
+            return Ok(Node::new(
+                NodeKind::Unary { op, operand: Box::new(expr) },
+                SourceLocation { start: token.start, end },
+            ));
+        }
+
         // Handle sigil + partial deref: when the lexer produces e.g. `%{shift` as one
         // token (name starts with `{` but doesn't end with `}`), this is a dereference
         // expression like `%{shift()}` where the lexer consumed `%{shift` greedily.
@@ -365,6 +477,25 @@ impl<'a> Parser<'a> {
             let inner_name = &name[1..]; // strip leading {
             let inner_start = token.start + sigil.len() + 1; // after sigil and {
             let inner_end = token.end;
+
+            // `${sep }` (trailing whitespace before `}`, none after `${`):
+            // the lexer greedily captures `${sep` as one token because
+            // there's no space right after `${`. When the captured name is
+            // a plain bareword immediately followed by `}` — no postfix, no
+            // `::` — this is `${name}` == `$name` folding (perlref), not a
+            // dereference; mirror `try_parse_simple_braced_scalar`'s fast
+            // path instead of wrapping in Unary{"${}"}.
+            if sigil == "$"
+                && is_simple_scalar_name(inner_name)
+                && self.peek_kind() == Some(TokenKind::RightBrace)
+            {
+                self.expect(TokenKind::RightBrace)?;
+                let end = self.previous_position();
+                return Ok(Node::new(
+                    NodeKind::Variable { sigil: "$".to_string(), name: inner_name.to_string() },
+                    SourceLocation { start: token.start, end },
+                ));
+            }
 
             let mut inner = if sigil == "$" && self.peek_kind() == Some(TokenKind::DoubleColon) {
                 self.parse_qualified_scalar_tail(inner_name.to_string(), inner_start, inner_end)?
@@ -506,18 +637,145 @@ impl<'a> Parser<'a> {
         chars.next().is_some_and(|c| c.is_alphanumeric() || c == '_')
     }
 
+    /// Parse `${Foo::bar}` when the tokens inside the braces are a
+    /// package-qualified scalar name, in either token shape the lexer can
+    /// produce for it:
+    ///
+    /// - Multi-token: `Identifier("Foo")` `DoubleColon` `Identifier("bar")`
+    ///   `...` — walked segment-by-segment by [`Self::parse_qualified_scalar_tail`].
+    /// - Single merged token: `Identifier("Foo::bar")` immediately followed
+    ///   by `RightBrace` — produced when the general bareword scanner (not
+    ///   the sigil's braced-variable scan) already folded the `::`-segments
+    ///   into one token, e.g. inside `${ Foo::bar }` where the leading
+    ///   whitespace routes tokenization through the general word scanner.
+    ///
+    /// Returns `None` (not a package-qualified name) so callers can fall
+    /// back to general expression parsing for real dereferences like
+    /// `${$ref}` (issue #3593).
     fn try_parse_braced_qualified_scalar(&mut self) -> ParseResult<Option<Node>> {
         if self.peek_kind() != Some(TokenKind::Identifier) {
             return Ok(None);
         }
 
-        if self.tokens.peek_second()?.kind != TokenKind::DoubleColon {
+        if self.tokens.peek_second()?.kind == TokenKind::DoubleColon {
+            let first = self.tokens.next()?;
+            return self
+                .parse_qualified_scalar_tail(first.text.to_string(), first.start, first.end)
+                .map(Some);
+        }
+
+        if is_package_qualified_scalar_name(&self.tokens.peek()?.text)
+            && self.tokens.peek_second()?.kind == TokenKind::RightBrace
+        {
+            let name_token = self.tokens.next()?;
+            return Ok(Some(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: name_token.text.to_string() },
+                SourceLocation { start: name_token.start, end: name_token.end },
+            )));
+        }
+
+        Ok(None)
+    }
+
+    /// Parse the body of a `${...}` and report whether it was already
+    /// folded to a bare scalar variable by the `${name}` == `$name` rule
+    /// (perlref), via `try_parse_simple_braced_scalar` or
+    /// `try_parse_braced_qualified_scalar`.
+    ///
+    /// When the returned flag is `true`, the caller MUST NOT wrap the node
+    /// in `Unary{"${}"}` — it is already the correct scalar variable node.
+    /// All other cases (caret-special variables and real scalar-ref
+    /// dereferences such as `${$ref}`) return `false` and must still be
+    /// wrapped — even though `${$ref}` produces a structurally identical
+    /// `Variable` node once parsed, so the flag (not the node shape) is
+    /// what distinguishes folding from dereferencing.
+    fn parse_braced_scalar_body(&mut self) -> ParseResult<(Node, bool)> {
+        if let Some(expr) = self.try_parse_braced_caret_special_scalar()? {
+            return Ok((expr, false));
+        }
+
+        if let Some(expr) = self.try_parse_simple_braced_scalar()? {
+            return Ok((expr, true));
+        }
+
+        match self.try_parse_braced_qualified_scalar()? {
+            Some(expr) => Ok((expr, true)),
+            None => Ok((self.parse_expression()?, false)),
+        }
+    }
+
+    fn try_parse_simple_braced_scalar(&mut self) -> ParseResult<Option<Node>> {
+        if self.peek_kind() != Some(TokenKind::Identifier) {
             return Ok(None);
         }
 
-        let first = self.tokens.next()?;
-        self.parse_qualified_scalar_tail(first.text.to_string(), first.start, first.end)
-            .map(Some)
+        // The peeked identifier must be a plain bareword (e.g. `sep`), not a
+        // sigil-prefixed variable reference (e.g. `$ref` inside `${$ref}`,
+        // which is a nested dereference, not `${name}` == `$name` folding).
+        if !is_simple_scalar_name(&self.tokens.peek()?.text) {
+            return Ok(None);
+        }
+
+        if self.tokens.peek_second()?.kind != TokenKind::RightBrace {
+            return Ok(None);
+        }
+
+        let name_token = self.tokens.next()?;
+        Ok(Some(Node::new(
+            NodeKind::Variable { sigil: String::from("$"), name: name_token.text.to_string() },
+            SourceLocation { start: name_token.start, end: name_token.end },
+        )))
+    }
+
+    fn simple_braced_scalar_token_name(text: &str) -> Option<&str> {
+        let inner = text.strip_prefix("${")?.strip_suffix('}')?;
+        if is_simple_scalar_name(inner) {
+            Some(inner)
+        } else {
+            None
+        }
+    }
+
+    /// Extract the package-qualified name from a token whose full text is a
+    /// closed braced scalar with a `::`-delimited name, e.g.
+    /// `"${Foo::bar}"` -> `"Foo::bar"`. Produced by the lexer's
+    /// braced-variable scan when it consumes `::` segments to a matching
+    /// `}` with no internal whitespace (see `perl-lexer`'s braced-variable
+    /// scan). Mirrors `simple_braced_scalar_token_name` for the qualified
+    /// case (issue #3593).
+    fn qualified_braced_scalar_token_name(text: &str) -> Option<&str> {
+        let inner = text.strip_prefix("${")?.strip_suffix('}')?;
+        if is_package_qualified_scalar_name(inner) {
+            Some(inner)
+        } else {
+            None
+        }
+    }
+
+    fn try_parse_braced_caret_special_scalar(&mut self) -> ParseResult<Option<Node>> {
+        if !matches!(self.peek_kind(), Some(TokenKind::Unknown | TokenKind::BitwiseXor)) {
+            return Ok(None);
+        }
+
+        let caret_token = self.tokens.peek()?;
+        if caret_token.text.as_ref() != "^" {
+            return Ok(None);
+        }
+
+        let caret_token = self.tokens.next()?;
+        let mut name = String::from("^");
+        let mut end = caret_token.end;
+
+        if self.peek_kind() == Some(TokenKind::Identifier) {
+            let ident = self.tokens.next()?;
+            name.push_str(&ident.text);
+            end = ident.end;
+        }
+
+        Ok(Some(Node::new(
+            NodeKind::Variable { sigil: String::from("$"), name },
+            SourceLocation { start: caret_token.start, end },
+        )))
     }
 
     fn parse_qualified_scalar_tail(
@@ -771,11 +1029,23 @@ impl<'a> Parser<'a> {
             self.tokens.next()?; // consume {
 
             // Parse the expression inside the braces
-            let expr = self.parse_expression()?;
+            let (expr, folded) = if sigil == "$" {
+                self.parse_braced_scalar_body()?
+            } else {
+                (self.parse_expression()?, false)
+            };
 
             self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
+
+            if folded {
+                // `${ name }` == `$name` (perlref): already folded to a
+                // scalar variable node; do not re-wrap in Unary{"${}"}.
+                let mut folded_node = expr;
+                folded_node.location = SourceLocation { start, end };
+                return Ok(folded_node);
+            }
 
             let op = format!("{}{{}}", sigil);
             return Ok(Node::new(
@@ -1008,9 +1278,19 @@ impl<'a> Parser<'a> {
         let mut end = variable.location.end;
         end = self.consume_signature_param_attributes(end)?;
 
-        // Check for default value (= expression)
-        let default_value = if self.peek_kind() == Some(TokenKind::Assign) {
-            self.tokens.next()?; // consume =
+        // Check for a default value. Positional parameters accept only `=`;
+        // named parameters (Perl 5.44 / PPC0024) additionally accept the `//=`
+        // and `||=` default operators (`sub f (:$x //= 1)`), which apply the
+        // default when the caller omits the argument or passes undef / a false
+        // value respectively.
+        let default_op: Option<&'static str> = match self.peek_kind() {
+            Some(TokenKind::Assign) => Some("="),
+            Some(TokenKind::DefinedOrAssign) if named => Some("//="),
+            Some(TokenKind::LogicalOrAssign) if named => Some("||="),
+            _ => None,
+        };
+        let default_value = if default_op.is_some() {
+            self.tokens.next()?; // consume the default operator
             // Parse a full scalar expression for the default value (perlsub: "any scalar
             // expression").  parse_ternary covers calls, binops, and ternary expressions
             // while stopping at the `,` or `)` that delimits signature parameters, since
@@ -1031,7 +1311,27 @@ impl<'a> Parser<'a> {
 
         // Create the appropriate parameter node type
         let param_kind = if named {
-            NodeKind::NamedParameter { variable: Box::new(variable) }
+            // The external argument name is the lexical variable name without
+            // its sigil (`:$alpha` is supplied by callers as `alpha => ...`).
+            let external_name = match &variable.kind {
+                NodeKind::Variable { name, .. } => name.clone(),
+                _ => String::new(),
+            };
+            // A named parameter without a default is required; with a default
+            // it is optional. Preserve which operator introduced the default
+            // (`=`, `//=`, or `||=`) so downstream layers can distinguish the
+            // defaulting semantics.
+            let (default_operator, required) = match default_op {
+                Some(op) => (Some(op.to_string()), false),
+                None => (None, true),
+            };
+            NodeKind::NamedParameter {
+                variable: Box::new(variable),
+                external_name,
+                default_operator,
+                default_value,
+                required,
+            }
         } else if is_slurpy {
             NodeKind::SlurpyParameter { variable: Box::new(variable) }
         } else if let Some(default) = default_value {
@@ -1249,7 +1549,7 @@ impl<'a> Parser<'a> {
         }
 
         // Validate every character in the collected prototype string.
-        // Perl only allows: $ @ % & * \ ; + _ and ASCII space.
+        // Perl allows: $ @ % & * \ ; + _ bracketed ref groups, and ASCII space.
         // Anything else triggers Perl's "Illegal character in prototype" warning.
         // We emit a SyntaxError diagnostic (collected as a warning by the LSP layer
         // via DiagnosticCode::InvalidPrototype / PL302) but do NOT abort parsing —
@@ -1283,9 +1583,57 @@ impl<'a> Parser<'a> {
 /// Return `true` if `c` is a character that Perl permits in old-style prototypes.
 ///
 /// Valid characters (from perlsub):
-/// `$` `@` `%` `&` `*` `\` `;` `+` `_` and ASCII space.
+/// `$` `@` `%` `&` `*` `\` `;` `+` `_`, bracketed ref groups, and ASCII space.
 fn is_valid_prototype_char(c: char) -> bool {
-    matches!(c, '$' | '@' | '%' | '&' | '*' | '\\' | ';' | '+' | '_' | ' ')
+    matches!(c, '$' | '@' | '%' | '&' | '*' | '\\' | ';' | '+' | '_' | '[' | ']' | ' ')
+}
+
+/// Return `true` if `name` is a simple bareword identifier suitable for the
+/// `${name}` == `$name` folding described in perlref: `${foo}` is exactly
+/// `$foo` when `foo` is a plain identifier, not an arbitrary dereference
+/// expression.
+///
+/// Valid: first character alphabetic or underscore, remaining characters
+/// alphanumeric or underscore. Matches the identifier text the lexer already
+/// produces for the `${identifier}` single-token form (see
+/// `perl-lexer`'s braced-variable scan), so no `::` package-separator
+/// handling is needed here.
+fn is_simple_scalar_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// `true` when `name` is a package-qualified scalar name made of two or
+/// more `::`-delimited identifier segments, e.g. `"Foo::bar"` or
+/// `"Foo::Bar::baz"`. Each segment must independently satisfy
+/// [`is_simple_scalar_name`]; a single segment (no `::`) is rejected so
+/// callers don't overlap with the plain-name fold path.
+///
+/// Used to fold `${Foo::bar}` to the scalar `$Foo::bar` (perlref
+/// "Not-so-symbolic references"): `${NAME}` === `$NAME` for any bareword
+/// `NAME`, including package-qualified ones.
+fn is_package_qualified_scalar_name(name: &str) -> bool {
+    let mut segments = name.split("::");
+    let Some(first) = segments.next() else {
+        return false;
+    };
+    if !is_simple_scalar_name(first) {
+        return false;
+    }
+    let mut has_more_segments = false;
+    for segment in segments {
+        has_more_segments = true;
+        if !is_simple_scalar_name(segment) {
+            return false;
+        }
+    }
+    has_more_segments
 }
 
 #[cfg(test)]
@@ -1320,6 +1668,209 @@ mod prototype_heuristic_tests {
             assert!(signature.is_some(), "sub foo($x) should have a signature");
             assert!(prototype.is_none(), "sub foo($x) should not have a prototype");
         }
+    }
+
+    /// `--lib` coverage for the named-parameter construction branch in
+    /// `parse_signature_param`: the external name is derived from the variable
+    /// (sigil-stripped), a `= <expr>` default is preserved (not discarded), the
+    /// default operator is recorded, and `required` reflects default presence.
+    #[test]
+    fn named_parameter_carries_external_name_and_default() {
+        fn find_named(node: &Node, out: &mut Vec<(String, bool, bool, Option<String>)>) {
+            if let NodeKind::NamedParameter {
+                external_name, default_value, required, default_operator, ..
+            } = &node.kind
+            {
+                out.push((
+                    external_name.clone(),
+                    *required,
+                    default_value.is_some(),
+                    default_operator.clone(),
+                ));
+            }
+            node.for_each_child(|c| find_named(c, out));
+        }
+
+        let node = parse_sub("sub f (:$alpha, :$beta = 1) {}").expect("parse named-param sub");
+        let mut found = Vec::new();
+        find_named(&node, &mut found);
+
+        assert_eq!(found.len(), 2, "both named params surface, got {found:?}");
+
+        let alpha = found.iter().find(|f| f.0 == "alpha").expect("named param :$alpha");
+        assert!(alpha.1, ":$alpha has no default → required");
+        assert!(!alpha.2, ":$alpha has no default value");
+        assert!(alpha.3.is_none(), ":$alpha has no default operator");
+
+        let beta = found.iter().find(|f| f.0 == "beta").expect("named param :$beta");
+        assert!(!beta.1, ":$beta has a default → optional");
+        assert!(beta.2, ":$beta preserves its default value");
+        assert_eq!(beta.3.as_deref(), Some("="), ":$beta records the `=` default operator");
+    }
+
+    /// Perl 5.44 named parameters accept `//=` and `||=` default operators in
+    /// addition to `=` (PPC0024). Positional parameters accept only `=`.
+    #[test]
+    fn named_parameter_records_slash_slash_and_pipe_pipe_default_operators() -> Result<(), String> {
+        // Collect every named parameter's (external_name, default_operator) pair
+        // in one straight-line walk, then assert by literal name — mirroring the
+        // sibling `find_named` collector. Deliberately avoids a per-node
+        // `external_name == name` comparison so this coverage test asserts
+        // behaviour without introducing a branch seam of its own.
+        fn collect_named_ops(node: &Node, out: &mut Vec<(String, Option<String>)>) {
+            if let NodeKind::NamedParameter { external_name, default_operator, .. } = &node.kind {
+                out.push((external_name.clone(), default_operator.clone()));
+            }
+            node.for_each_child(|c| collect_named_ops(c, out));
+        }
+
+        let node = parse_sub("sub f (:$a = 1, :$b //= 2, :$c ||= 3) {}")
+            .ok_or("parse named params with //= and ||= defaults")?;
+        let mut ops = Vec::new();
+        collect_named_ops(&node, &mut ops);
+
+        assert_eq!(
+            ops.iter().find(|(n, _)| n == "a").map(|(_, op)| op.clone()),
+            Some(Some("=".to_string())),
+            ":$a uses `=`"
+        );
+        assert_eq!(
+            ops.iter().find(|(n, _)| n == "b").map(|(_, op)| op.clone()),
+            Some(Some("//=".to_string())),
+            ":$b uses `//=`"
+        );
+        assert_eq!(
+            ops.iter().find(|(n, _)| n == "c").map(|(_, op)| op.clone()),
+            Some(Some("||=".to_string())),
+            ":$c uses `||=`"
+        );
+        Ok(())
+    }
+
+    /// `--lib` call-observation coverage for `parse_signature_param`'s
+    /// default-operator match (`match self.peek_kind() { ... }`): call the
+    /// seam-owning method directly — not through the full `parse_sub` chain
+    /// — so each match arm is exercised and observed with an exact-value
+    /// assertion on the resulting node, rather than only inferred from a
+    /// downstream parse error.
+    #[test]
+    fn parse_signature_param_directly_selects_each_default_operator_arm() -> Result<(), String> {
+        fn parse_param(src: &str) -> Result<Node, String> {
+            let mut parser = Parser::new(src);
+            parser.parse_signature_param().map_err(|e| format!("parse `{src}`: {e:?}"))
+        }
+
+        // `=` arm: available to named parameters (and, separately, to
+        // positional parameters via `OptionalParameter`).
+        let node = parse_param(":$a = 1")?;
+        match &node.kind {
+            NodeKind::NamedParameter { default_operator, required, .. } => {
+                assert_eq!(default_operator.as_deref(), Some("="), ":$a = 1 selects the `=` arm");
+                assert!(!required, ":$a = 1 has a default -> optional");
+            }
+            other => return Err(format!("expected NamedParameter, got {}", other.kind_name())),
+        }
+
+        // `//=` arm: named-only, gated by `named`.
+        let node = parse_param(":$b //= 2")?;
+        match &node.kind {
+            NodeKind::NamedParameter { default_operator, required, .. } => {
+                assert_eq!(
+                    default_operator.as_deref(),
+                    Some("//="),
+                    ":$b //= 2 selects the `//=` arm"
+                );
+                assert!(!required, ":$b //= 2 has a default -> optional");
+            }
+            other => return Err(format!("expected NamedParameter, got {}", other.kind_name())),
+        }
+
+        // `||=` arm: named-only, gated by `named`.
+        let node = parse_param(":$c ||= 3")?;
+        match &node.kind {
+            NodeKind::NamedParameter { default_operator, required, .. } => {
+                assert_eq!(
+                    default_operator.as_deref(),
+                    Some("||="),
+                    ":$c ||= 3 selects the `||=` arm"
+                );
+                assert!(!required, ":$c ||= 3 has a default -> optional");
+            }
+            other => return Err(format!("expected NamedParameter, got {}", other.kind_name())),
+        }
+
+        // Fallback `_ => None` arm for a named parameter: no default token
+        // follows, so no default operator is recorded and the parameter is
+        // required.
+        let node = parse_param(":$d")?;
+        match &node.kind {
+            NodeKind::NamedParameter { default_operator, required, .. } => {
+                assert!(default_operator.is_none(), ":$d has no default token -> None arm");
+                assert!(required, ":$d has no default -> required");
+            }
+            other => return Err(format!("expected NamedParameter, got {}", other.kind_name())),
+        }
+
+        // Fallback `_ => None` arm for a *positional* parameter: `named` is
+        // false, so the `//=` guard fails even though `DefinedOrAssign`
+        // follows, and default_op falls through to `_ => None`. The `//= 1`
+        // tokens are left unconsumed by this call (the caller reports the
+        // error), but this seam-owner call directly observes that no default
+        // was consumed at all -- proving the guard, not an incidental
+        // downstream parse failure.
+        let node = parse_param("$x //= 1")?;
+        assert!(
+            matches!(&node.kind, NodeKind::MandatoryParameter { .. }),
+            "positional `$x //= 1`: named=false so the `//=` arm guard fails, \
+             falling through to `_ => None` (no default consumed)"
+        );
+
+        // Discriminator for the type-constraint `peek_kind() == Some(Identifier)`
+        // boundary at the head of `parse_signature_param`: a leading *bareword*
+        // identifier (`Type`) is consumed as a type constraint before the
+        // variable, exercising the true side of the inner
+        // `!token.text.starts_with('$')` check — whereas every `$`/`:$`-sigiled
+        // case above takes the false side (the identifier text starts with a
+        // sigil, so it is the variable, not a type).
+        let node = parse_param("Type $x")?;
+        assert!(
+            matches!(&node.kind, NodeKind::MandatoryParameter { .. }),
+            "`Type $x`: the bareword `Type` is a type constraint, `$x` the parameter"
+        );
+
+        Ok(())
+    }
+
+    /// Exact error-variant coverage for the named-parameter seam in
+    /// `parse_signature_param`: a named parameter whose default operator is
+    /// present but followed by no default expression (`:$x =`) must surface the
+    /// underlying `parse_ternary` error rather than fabricating a defaulted
+    /// parameter. Grips the weakly-covered error edge of the named seam.
+    #[test]
+    fn parse_signature_param_named_default_without_expression_is_an_error() {
+        let mut parser = Parser::new(":$x =");
+        assert!(
+            parser.parse_signature_param().is_err(),
+            "`:$x =` has a default operator with no following expression, so \
+             parse_signature_param must propagate the parse_ternary error"
+        );
+    }
+
+    /// The `//=` / `||=` default operators are named-only (PPC0024). A
+    /// *positional* parameter must not consume them as a default — the parser
+    /// reports an error instead of silently accepting the named-only syntax.
+    /// Guards the `named` gate in `parse_signature_param` against regression.
+    #[test]
+    fn positional_parameter_rejects_slash_slash_and_pipe_pipe_defaults() -> Result<(), String> {
+        for src in ["sub f ($x //= 1) {}", "sub f ($x ||= 1) {}"] {
+            let mut parser = Parser::new(src);
+            parser.parse().map_err(|e| format!("parse `{src}`: {e:?}"))?;
+            assert!(
+                !parser.get_errors().is_empty(),
+                "expected a parse error for positional default operator in `{src}`",
+            );
+        }
+        Ok(())
     }
 
     #[test]

@@ -198,6 +198,31 @@ pub(super) fn extract_xs_bootstrap_target(
         .or_else(|| extract_qualified_bootstrap_target(text, cursor))
 }
 
+fn xs_boot_symbol_name(module_name: &str) -> String {
+    format!("boot_{}", normalize_package_separator(module_name).replace("::", "__"))
+}
+
+pub(super) fn xs_bootstrap_location(path: &Path, module_name: &str) -> Value {
+    let uri = Url::from_file_path(path).map(|url| url.to_string()).unwrap_or_default();
+    let boot_symbol = xs_boot_symbol_name(module_name);
+
+    if let Ok(text) = read_text_file_with_encoding(path)
+        && let Some(offset) = text.find(&boot_symbol)
+    {
+        let (start_line, start_char) = byte_to_line_col(&text, offset);
+        let (end_line, end_char) = byte_to_line_col(&text, offset + boot_symbol.len());
+        return json!({
+            "uri": uri,
+            "range": {
+                "start": {"line": start_line, "character": start_char},
+                "end": {"line": end_line, "character": end_char},
+            },
+        });
+    }
+
+    location_from_path(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,29 +276,4 @@ mod tests {
         let result = extract_bare_bootstrap_target(text, 0, "main");
         assert_eq!(result.as_deref(), Some("MyModule"));
     }
-}
-
-fn xs_boot_symbol_name(module_name: &str) -> String {
-    format!("boot_{}", normalize_package_separator(module_name).replace("::", "__"))
-}
-
-pub(super) fn xs_bootstrap_location(path: &Path, module_name: &str) -> Value {
-    let uri = Url::from_file_path(path).map(|url| url.to_string()).unwrap_or_default();
-    let boot_symbol = xs_boot_symbol_name(module_name);
-
-    if let Ok(text) = read_text_file_with_encoding(path)
-        && let Some(offset) = text.find(&boot_symbol)
-    {
-        let (start_line, start_char) = byte_to_line_col(&text, offset);
-        let (end_line, end_char) = byte_to_line_col(&text, offset + boot_symbol.len());
-        return json!({
-            "uri": uri,
-            "range": {
-                "start": {"line": start_line, "character": start_char},
-                "end": {"line": end_line, "character": end_char},
-            },
-        });
-    }
-
-    location_from_path(path)
 }

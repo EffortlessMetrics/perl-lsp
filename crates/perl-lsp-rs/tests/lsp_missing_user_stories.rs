@@ -4,6 +4,11 @@
 //! in the comprehensive E2E test suite. These represent real-world scenarios
 //! that Perl developers encounter daily.
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout doesn't apply the
+// way it does to production code.
+#![allow(clippy::print_stdout)]
+
 use serde_json::{Value, json};
 use std::collections::HashMap;
 

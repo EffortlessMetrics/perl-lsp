@@ -52,6 +52,33 @@ global:
 
 tiers:
   # ---------------------------------------------------------------------------
+  # commit: Sub-30s staged-tree hygiene, run before `git commit` (issue #3786)
+  # ---------------------------------------------------------------------------
+  # Target: median <5s, p95 <15s, hard budget 30s
+  # Purpose: catch cheap, deterministic staged-artifact defects at the
+  #   earliest reliable boundary — before commit, not first-discovered by
+  #   cloud CI. Answers exactly one question: is the staged artifact
+  #   structurally sound? Never compiles the workspace (that's pre-push).
+  # Enforcement: local only — not a CI-required tier. `xtask gates --tier
+  #   commit --staged` (alias: `xtask precommit` — no `--staged` flag on the
+  #   alias; the subcommand is staged by definition) is invoked by an
+  #   agent/developer or a future prek hook, never by a GitHub Actions job.
+  #   Individual checks are advisory-first in V1: only a deterministic
+  #   BLOCKED posture fails the run; CLASSIFICATION REQUIRED/ADVISORY/NOT
+  #   PROVEN are recorded but never block (the arming clock is a later PR —
+  #   mirrors policy/changelog.toml's blocking_enforced_from pattern).
+  # Rollout: #3786-A shipped the tier + the --staged/git write-tree
+  #   substrate + the coach-style output shape, proven by one wiring check.
+  #   #3786-B adds the nine real structural checks: whitespace_check,
+  #   conflict_markers_staged, staged_exec_mode_policy, staged_config_syntax,
+  #   forbidden_machine_paths, staged_oversized_or_binary,
+  #   changie_fragment_staged, rustfmt_staged, from_raw_staged.
+  commit:
+    description: "Staged-tree hygiene checks that run before git commit"
+    target_duration_seconds: 30
+    enforcement: local
+
+  # ---------------------------------------------------------------------------
   # pr_fast: Required for every PR, must complete quickly
   # ---------------------------------------------------------------------------
   # Target: < 3 minutes
@@ -113,6 +140,170 @@ tiers:
 # Each gate defines a single check with its configuration.
 
 gates:
+  # ===========================================================================
+  # Tier: commit (issue #3786 — the commit-gate feedback ladder)
+  # ===========================================================================
+  # `command` is dispatched in-process by `run_internal_commit_check` in
+  # xtask/src/tasks/gates.rs (matched on the literal "cargo xtask
+  # commit-check <name>" string), never shelled out, so the whole tier stays
+  # well inside its sub-30s budget. Implementations live in
+  # xtask/src/tasks/commit_checks.rs; every check reads through
+  # xtask/src/tasks/staged.rs, pinned to the `git write-tree` OID
+  # `plan_gates` captured once for this run — never the live index, never a
+  # second `git write-tree`.
+  #
+  # #3786-A shipped the substrate (GateTier::Commit, --staged/git write-tree
+  # identity, the coach-style output shape) proven by one wiring check.
+  # #3786-B (this slice) adds the nine real structural checks below. V1 is
+  # advisory-first: only a deterministic BLOCKED posture fails the run;
+  # CLASSIFICATION REQUIRED/ADVISORY/NOT PROVEN are recorded but never block
+  # (the arming clock is a later PR).
+
+  - name: staged_tree_identity
+    tier: commit
+    description: "Wiring proof: resolves git write-tree and reports staged-file count (not a hygiene check)"
+    required: true
+    command: cargo xtask commit-check staged_tree_identity
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - staged
+      - wiring-proof
+
+  - name: whitespace_check
+    tier: commit
+    description: "git diff --cached --check: trailing whitespace + conflict markers in the staged diff"
+    required: true
+    command: cargo xtask commit-check whitespace_check
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+
+  - name: conflict_markers_staged
+    tier: commit
+    description: "Full-content scan of staged files for leftover merge-conflict markers"
+    required: true
+    command: cargo xtask commit-check conflict_markers_staged
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - conflict-markers
+
+  - name: staged_exec_mode_policy
+    tier: commit
+    description: "Staged executable-bit policy via git ls-tree (core.fileMode=false safe; the R1 chmod defect class)"
+    required: true
+    command: cargo xtask commit-check staged_exec_mode_policy
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - file-mode
+
+  - name: staged_config_syntax
+    tier: commit
+    description: "Malformed staged JSON/TOML/YAML"
+    required: true
+    command: cargo xtask commit-check staged_config_syntax
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - config
+
+  - name: forbidden_machine_paths
+    tier: commit
+    description: "Machine-specific absolute paths (Windows user profile, POSIX home dir) in staged non-doc files"
+    required: true
+    command: cargo xtask commit-check forbidden_machine_paths
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+
+  - name: staged_oversized_or_binary
+    tier: commit
+    description: "Oversized staged files and disallowed native-binary extensions"
+    required: true
+    command: cargo xtask commit-check staged_oversized_or_binary
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+
+  - name: changie_fragment_staged
+    tier: commit
+    description: "Changie fragment schema validity for staged .changes/unreleased/*.yaml (dry-render deferred to pre-push, #3985)"
+    required: true
+    command: cargo xtask commit-check changie_fragment_staged
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - changelog
+
+  - name: rustfmt_staged
+    tier: commit
+    description: "rustfmt --check against staged Rust blob content (not the working-tree file)"
+    required: true
+    command: cargo xtask commit-check rustfmt_staged
+    timeout_seconds: 20
+    retry_count: 0
+    budgets:
+      max_duration_ms: 15000
+    quarantine: false
+    tags:
+      - formatting
+      - staged
+
+  - name: from_raw_staged
+    tier: commit
+    description: "ExitStatus::from_raw() policy over staged Rust content (folds in .ci/hooks/pre-commit)"
+    required: true
+    command: cargo xtask commit-check from_raw_staged
+    timeout_seconds: 15
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: false
+    tags:
+      - hygiene
+      - staged
+      - process-policy
+
   # ===========================================================================
   # Tier: pr_fast
   # ===========================================================================
@@ -732,6 +923,7 @@ gates:
       cargo xtask check-workspace-symbol-classes &&
       cargo xtask check-provider-promotion-ledger &&
       cargo xtask check-provider-confidence-matrix &&
+      cargo xtask check-native-product-surface --strict &&
       bash scripts/check-version-sync.sh &&
       bash scripts/check_release_history.sh &&
       bash ci/check_missing_docs.sh &&
@@ -746,6 +938,28 @@ gates:
       - policy
       - docs
       - invariants
+
+  # M6 (issue #3848 / epic #3612): package-local agent-context coverage.
+  # Advisory (required: false) -- `needs_context` in
+  # .ci/policies/agent-context-policy.toml still lists 12 core-product
+  # crates awaiting a CLAUDE.md (tracked in issue #3874); this gate is not
+  # promoted to required/branch-protection until that debt list is empty.
+  # It still fails on a truly UNACCOUNTED workspace member (neither
+  # has-context, exempt, nor needs_context), so drift stays visible.
+  - name: agent_context_coverage
+    tier: merge_gate
+    description: "Every workspace member has package-local context, an exemption, or tracked context debt (advisory; needs_context non-empty)"
+    required: false
+    command: cargo run --locked -p xtask -- check-agent-context
+    timeout_seconds: 120
+    retry_count: 0
+    budgets:
+      max_duration_ms: 90000
+    quarantine: false
+    tags:
+      - policy
+      - docs
+      - advisory
 
   - name: docs_build
     tier: merge_gate

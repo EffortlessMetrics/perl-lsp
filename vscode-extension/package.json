@@ -2,13 +2,16 @@
   "name": "perl-lsp-rs",
   "displayName": "Perl Language Server (perl-lsp)",
   "description": "Native Rust LSP + DAP for Perl 5. Code intelligence, diagnostics, refactoring, tests, and step debugging.",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "publisher": "EffortlessMetrics",
   "preview": true,
   "markdown": "github",
   "engines": {
-    "vscode": "^1.120.0"
+    "node": ">=26.0.0 <27",
+    "npm": "11.18.0",
+    "vscode": "^1.125.0"
   },
+  "packageManager": "npm@11.18.0",
   "categories": [
     "Programming Languages",
     "Linters",
@@ -188,6 +191,71 @@
                 "type": "object",
                 "description": "Environment variables",
                 "default": {}
+              },
+              "debuggerBackend": {
+                "type": "string",
+                "enum": [
+                  "native",
+                  "external",
+                  "ptkdb-bootstrap"
+                ],
+                "enumDescriptions": [
+                  "Native perl -d adapter (default)",
+                  "External debugger peer (e.g. Devel::ptkdb) over the Perl Debugger Peer Protocol",
+                  "Generate a .ptkdbrc bootstrap and launch perl -d:ptkdb (no live bridge)"
+                ],
+                "description": "Which debug backend perl-dap should drive",
+                "default": "native"
+              },
+              "externalDebugger": {
+                "type": "object",
+                "description": "Configuration for debuggerBackend=external (the Perl Debugger Peer Protocol)",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "ptkdb",
+                      "custom"
+                    ],
+                    "description": "The external debugger engine to cooperate with",
+                    "default": "ptkdb"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "connect",
+                      "listen",
+                      "launchPeer"
+                    ],
+                    "enumDescriptions": [
+                      "perl-dap connects out to a peer already listening at host:port (the supported rendezvous)",
+                      "perl-dap listens for the peer to connect (not yet implemented)",
+                      "perl-dap launches the peer itself (not yet implemented)"
+                    ],
+                    "description": "How perl-dap rendezvous with the peer. 'connect' is the supported mode; 'listen'/'launchPeer' are future work.",
+                    "default": "connect"
+                  },
+                  "control": {
+                    "type": "string",
+                    "enum": [
+                      "mirror",
+                      "cooperative",
+                      "dapControlled"
+                    ],
+                    "description": "Who owns stepping/control. 'mirror' (the peer's UI stays authoritative) is the supported default",
+                    "default": "mirror"
+                  },
+                  "host": {
+                    "type": "string",
+                    "description": "Host for the peer socket",
+                    "default": "127.0.0.1"
+                  },
+                  "port": {
+                    "type": "number",
+                    "description": "Port of the running debugger peer to connect to",
+                    "default": 13604
+                  }
+                }
               }
             }
           },
@@ -230,6 +298,20 @@
             "host": "localhost",
             "port": 13603,
             "timeout": 5000
+          },
+          {
+            "type": "perl",
+            "request": "launch",
+            "name": "Perl: ptkdb peer (mirror)",
+            "program": "${workspaceFolder}/script.pl",
+            "debuggerBackend": "external",
+            "externalDebugger": {
+              "kind": "ptkdb",
+              "mode": "connect",
+              "control": "mirror",
+              "host": "127.0.0.1",
+              "port": 13604
+            }
           }
         ]
       }
@@ -292,32 +374,118 @@
             "default": true,
             "scope": "resource",
             "order": 10,
-            "description": "Enable document formatting using perltidy. This requires perltidy to be installed on your system.",
-            "markdownDescription": "Enable document formatting using `perltidy`. This requires `perltidy` to be installed on your system."
+            "description": "Enable native Perl document formatting.",
+            "markdownDescription": "Enable native Perl document formatting. `perltidy` is not required unless you explicitly select an external compatibility mode."
           },
           "perl-lsp.formatOnSave": {
             "type": "boolean",
             "default": false,
             "scope": "resource",
             "order": 20,
-            "description": "Format the document automatically on save. This requires perltidy to be installed.",
-            "markdownDescription": "Format the document automatically on save. This requires `perltidy` to be installed."
+            "description": "Format the document automatically on save using the configured formatter engine. The default engine is native.",
+            "markdownDescription": "Format the document automatically on save using the configured formatter engine. The default engine is native; `perltidy` is used only when an external compatibility mode is explicitly selected."
           },
           "perl-lsp.perltidyConfig": {
             "type": "string",
             "default": "",
             "scope": "resource",
             "order": 30,
-            "description": "Path to your .perltidyrc configuration file. If omitted, perl-lsp searches the workspace and home directory.",
-            "markdownDescription": "Path to your `.perltidyrc` configuration file. If omitted, perl-lsp searches the workspace and home directory."
+            "description": "Path to a .perltidyrc profile used for compatibility reporting or explicit external perltidy mode. It is not required for native formatting. If omitted, perl-lsp searches the workspace and home directory.",
+            "markdownDescription": "Path to a `.perltidyrc` profile used for compatibility reporting or explicit external `perltidy` mode. It is not required for native formatting. If omitted, perl-lsp searches the workspace and home directory."
+          },
+          "perl-lsp.critic.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "order": 32,
+            "description": "Enable native critic diagnostics. Native critic is built in and requires no external tools.",
+            "markdownDescription": "Enable native critic diagnostics. Native critic is built into perl-lsp and requires no external tools."
+          },
+          "perl-lsp.critic.engine": {
+            "type": "string",
+            "enum": [
+              "native",
+              "legacy"
+            ],
+            "enumDescriptions": [
+              "Native built-in critic (default, no external tools required)",
+              "Legacy external Perl::Critic (requires the perlcritic binary on PATH)"
+            ],
+            "default": "native",
+            "scope": "resource",
+            "order": 33,
+            "description": "Critic engine. 'native' uses the built-in critic (default); 'legacy' shells out to an external perlcritic binary for compatibility.",
+            "markdownDescription": "Critic engine. `native` uses the built-in critic (default, no external tools); `legacy` shells out to an external `perlcritic` binary for compatibility and requires it on `PATH`."
+          },
+          "perl-lsp.critic.profile": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "strict"
+            ],
+            "enumDescriptions": [
+              "Recommended native rule set (balanced default)",
+              "Strict native rule set (more rules enabled)"
+            ],
+            "default": "recommended",
+            "scope": "resource",
+            "order": 34,
+            "description": "Native critic rule profile.",
+            "markdownDescription": "Native critic rule profile: `recommended` (balanced default) or `strict` (more rules enabled)."
+          },
+          "perl-lsp.critic.severity": {
+            "type": "number",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "enumDescriptions": [
+              "Severity 1 - very permissive",
+              "Severity 2 - permissive",
+              "Severity 3 - balanced default",
+              "Severity 4 - strict",
+              "Severity 5 - very strict"
+            ],
+            "default": 3,
+            "scope": "resource",
+            "order": 35,
+            "description": "Critic minimum severity (1 = least severe/reports more, 5 = most severe/reports less).",
+            "markdownDescription": "Critic minimum severity (`1` = least severe/reports more, `5` = most severe/reports less)."
+          },
+          "perl-lsp.critic.include": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "scope": "resource",
+            "order": 36,
+            "description": "Native critic rule IDs to force-enable (e.g. native.testing.require_use_strict). Overrides the profile default for the listed rules.",
+            "markdownDescription": "Native critic rule IDs to force-enable (e.g. `native.testing.require_use_strict`). Overrides the profile default for the listed rules."
+          },
+          "perl-lsp.critic.exclude": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "scope": "resource",
+            "order": 37,
+            "description": "Native critic rule IDs to disable (e.g. native.common.assignment_in_condition).",
+            "markdownDescription": "Native critic rule IDs to disable (e.g. `native.common.assignment_in_condition`)."
           },
           "perl-lsp.perlcritic.enabled": {
             "type": "boolean",
             "default": false,
             "scope": "resource",
             "order": 40,
-            "description": "Enable external Perl::Critic diagnostics from the VS Code extension.",
-            "markdownDescription": "Enable external `perlcritic` diagnostics from the VS Code extension."
+            "deprecationMessage": "Deprecated: use perl-lsp.critic.enabled (with perl-lsp.critic.engine = \"legacy\" for the external binary). This alias still works but perl-lsp.critic.* wins if both are set.",
+            "markdownDeprecationMessage": "**Deprecated:** use `perl-lsp.critic.enabled` (with `perl-lsp.critic.engine` = `legacy` for the external binary). This alias still works but `perl-lsp.critic.*` wins if both are set.",
+            "description": "Enable the optional external perlcritic diagnostics for legacy compatibility. Native critic diagnostics are on by default; this setting only takes effect when the critic engine is set to legacy in .perl-lsp.toml (the perlcritic binary must then be on PATH).",
+            "markdownDescription": "Enable the optional external `perlcritic` diagnostics for legacy compatibility. Native critic diagnostics are always on by default; this setting only takes effect when `[critic].engine = \"legacy\"` is set in `.perl-lsp.toml`, in which case the `perlcritic` binary must be on `PATH`."
           },
           "perl-lsp.perlcritic.severity": {
             "type": "number",
@@ -338,14 +506,18 @@
             "default": 3,
             "scope": "resource",
             "order": 41,
-            "description": "Perl::Critic minimum severity (1 = least severe/reports more, 5 = most severe/reports less).",
-            "markdownDescription": "Perl::Critic minimum severity (`1` = least severe/reports more, `5` = most severe/reports less)."
+            "deprecationMessage": "Deprecated: use perl-lsp.critic.severity. This alias still works but perl-lsp.critic.* wins if both are set.",
+            "markdownDeprecationMessage": "**Deprecated:** use `perl-lsp.critic.severity`. This alias still works but `perl-lsp.critic.*` wins if both are set.",
+            "description": "Critic minimum severity (1 = least severe/reports more, 5 = most severe/reports less). Applies to the native critic; the legacy external engine uses the same scale.",
+            "markdownDescription": "Critic minimum severity (`1` = least severe/reports more, `5` = most severe/reports less). Applies to the native critic; the legacy external engine uses the same scale."
           },
           "perl-lsp.perlcritic.profile": {
             "type": "string",
             "default": "",
             "scope": "resource",
             "order": 42,
+            "deprecationMessage": "Deprecated: use perl-lsp.critic.profile for the native profile, or the legacy [critic] settings in .perl-lsp.toml for an external .perlcriticrc.",
+            "markdownDeprecationMessage": "**Deprecated:** use `perl-lsp.critic.profile` for the native profile, or the legacy `[critic]` settings in `.perl-lsp.toml` for an external `.perlcriticrc`.",
             "description": "Optional path to a .perlcriticrc profile file used by the extension when synchronizing critic settings.",
             "markdownDescription": "Optional path to a `.perlcriticrc` profile file used by the extension when synchronizing critic settings."
           },
@@ -354,6 +526,8 @@
             "default": "",
             "scope": "resource",
             "order": 43,
+            "deprecationMessage": "Deprecated: reserved legacy UI label with no native equivalent. It will be removed in a future release.",
+            "markdownDeprecationMessage": "**Deprecated:** reserved legacy UI label with no native equivalent. It will be removed in a future release.",
             "description": "Optional display theme label for PerlCritic settings. Reserved for editor-facing UI organization.",
             "markdownDescription": "Optional display theme label for PerlCritic settings. Reserved for editor-facing UI organization."
           },
@@ -664,13 +838,13 @@
       },
       {
         "command": "perl-lsp.runPerlCritic",
-        "title": "Run PerlCritic",
+        "title": "Run Critic",
         "category": "Perl",
         "icon": "$(checklist)"
       },
       {
         "command": "perl-lsp.setPerlCriticSeverity",
-        "title": "Set PerlCritic Severity",
+        "title": "Set Critic Severity",
         "category": "Perl",
         "icon": "$(symbol-numeric)"
       },
@@ -1065,7 +1239,7 @@
           {
             "id": "verify-perl",
             "title": "Verify Your Perl Installation",
-            "description": "Run the health check to confirm Perl tooling (perl, perltidy, optional perlcritic) is available.",
+            "description": "Run the health check to confirm your Perl interpreter is available (used by the test runner and debugger). Native formatting and native critic diagnostics are built in — perltidy and perlcritic are optional and only used for explicit external-compatibility modes.",
             "media": {
               "image": "media/walkthrough/verify-perl.svg",
               "altText": "Verify Perl"
@@ -1110,7 +1284,7 @@
           {
             "id": "configure-settings",
             "title": "Configure Settings",
-            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. Use `perl-lsp.perlcritic.enabled` and `perl-lsp.perlcritic.severity` for quick local Perl::Critic tuning, or run the `Perl: Run PerlCritic` / `Perl: Set PerlCritic Severity` commands from the palette. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable Perl::Critic linting (requires `perlcritic` on PATH)\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
+            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. Use `perl-lsp.critic.enabled` and `perl-lsp.critic.severity` for quick local native-critic tuning, or run the `Perl: Run Critic` / `Perl: Set Critic Severity` commands from the palette. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable critic linting, native by default with the external `perlcritic` binary used only by the opt-in legacy engine\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
             "media": {
               "image": "media/walkthrough/configure-settings.svg",
               "altText": "Configure Settings"
@@ -1130,34 +1304,48 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext .ts",
-    "test": "jest --verbose",
-    "test:ci": "jest --ci --coverage",
+    "vscode:prepublish": "npm run doctor && npm run typecheck:all && npm run compile",
+    "doctor": "node scripts/toolchain-doctor.js",
+    "typecheck": "tsc --noEmit -p ./tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p ./tsconfig.test.json",
+    "typecheck:integration": "tsc --noEmit -p ./tsconfig.integration.json",
+    "typecheck:published": "tsc --noEmit -p ./tsconfig.published-smoke.json",
+    "typecheck:scripts": "tsc --noEmit -p ./tsconfig.scripts.json",
+    "typecheck:strictness": "node scripts/check-typescript-strictness.js && node scripts/check-typescript-strictness.js --option exactOptionalPropertyTypes",
+    "typecheck:all": "npm run typecheck && npm run typecheck:test && npm run typecheck:integration && npm run typecheck:published && npm run typecheck:scripts && npm run typecheck:strictness",
+    "clean:out": "node -e \"const fs=require('fs'),path=require('path'); if(fs.existsSync('out')){for(const f of fs.readdirSync('out')){if(f!=='test')fs.rmSync(path.join('out',f),{recursive:true,force:true});}}\"",
+    "compile": "npm run clean:out && rolldown -c rolldown.config.mjs",
+    "clean:test": "node -e \"require('fs').rmSync('out-test',{recursive:true,force:true})\"",
+    "compile:test": "npm run clean:test && tsc -p ./tsconfig.test.json",
+    "watch": "npm run clean:out && rolldown -c rolldown.config.mjs --watch",
+    "watch:types": "tsc -watch --noEmit -p ./tsconfig.json",
+    "lint": "npm run lint:canary && node scripts/check-oxlint-warning-budget.js",
+    "lint:ratchet": "node scripts/check-oxlint-warning-budget.js",
+    "lint:canary": "node scripts/lint-canary.js",
+    "fmt": "oxfmt --write .",
+    "fmt:check": "oxfmt --check .",
+    "test": "npm run compile:test && node scripts/run-jest.js",
+    "test:ci": "npm run compile:test && npm run test:receipt-summary && node scripts/run-jest.js --ci --coverage --verbose",
     "test:grammar": "vscode-tmgrammar-snap --config package.json \"test/grammar/fixtures/*.pl\"",
     "test:grammar:update": "vscode-tmgrammar-snap --config package.json -u \"test/grammar/fixtures/*.pl\"",
-    "test:integration": "npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
+    "test:receipt-summary": "node --test scripts/summarize-vscode-receipts.test.js && node --test scripts/check-typescript-strictness.test.js && node --test scripts/sample-local-vsix-smoke.test.js && node --test scripts/check-vsix-inventory.test.js",
+    "check:package-inventory": "node scripts/check-vsix-inventory.js",
+    "summarize:vscode": "node scripts/summarize-vscode-receipts.js",
+    "sample:published:local": "node scripts/sample-local-vsix-smoke.js",
+    "test:integration": "npm run typecheck && npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
     "test:published": "tsc -p ./tsconfig.published-smoke.json && node ./out/test/published/runPublishedSmoke.js",
+    "test:published:local": "node ./scripts/run-local-vsix-smoke.js",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
-    "package": "npx @vscode/vsce package",
-    "publish": "npx @vscode/vsce publish",
-    "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package",
+    "package": "npm exec -- @vscode/vsce package && npm run check:package-inventory",
+    "publish": "npm exec -- @vscode/vsce publish",
+    "verify:marketplace": "npm run bundle-lsp && npm run package",
     "publish:openvsx": "npx ovsx publish",
     "check:openvsx": "npx ovsx --version"
   },
-  "pnpm": {
-    "overrides": {
-      "diff@>=6.0.0 <8.0.3": ">=8.0.3",
-      "serialize-javascript@<7.0.5": ">=7.0.5",
-      "serialize-javascript@<=7.0.2": ">=7.0.3"
-    }
-  },
   "dependencies": {
-    "adm-zip": "^0.5.17",
-    "tar": "^7.5.16",
-    "vscode-languageclient": "^10.0.0"
+    "adm-zip": "^0.6.0",
+    "tar": "^7.5.20",
+    "vscode-languageclient": "^10.1.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
@@ -1165,16 +1353,16 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^26.x",
     "@types/tar": "^7.0.87",
-    "@types/vscode": "~1.120.0",
-    "@typescript-eslint/eslint-plugin": "^8.61.1",
-    "@typescript-eslint/parser": "^8.59.4",
+    "@types/vscode": "~1.125.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
-    "eslint": "^10.5.0",
     "jest": "^30.4.2",
     "mocha": "^11.7.6",
-    "ts-jest": "^29.4.11",
-    "typescript": "^6.0.3",
+    "oxfmt": "0.58.0",
+    "oxlint": "1.73.0",
+    "oxlint-tsgolint": "0.24.0",
+    "rolldown": "1.1.5",
+    "typescript": "^7.0.2",
     "vscode-tmgrammar-test": "^0.1.3"
   }
 }

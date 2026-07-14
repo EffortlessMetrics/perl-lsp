@@ -1,0 +1,242 @@
+[
+  {
+    "id": "PRRT_3647_1",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f1.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_2",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f2.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_3",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f3.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_4",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f4.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_5",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f5.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_6",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f6.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_7",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f7.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_8",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f8.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_9",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f9.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_10",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f10.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_11",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f11.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_12",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f12.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_13",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f13.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_14",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f14.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_3647_15",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/f15.rs",
+    "comments": {
+      "totalCount": 1,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        }
+      ]
+    }
+  }
+]

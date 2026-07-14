@@ -133,6 +133,13 @@ sub get_behavior_spec {
 }
 
 #[test]
+fn test_identifier_label_can_end_eval_block() {
+    // From Perl core comp/parser.t: a label can be the final statement in an
+    // eval block, with the closing brace immediately after the label colon.
+    assert_clean_parse(r#"eval { $1 = eval { a: } };"#);
+}
+
+#[test]
 fn test_return_keyword_can_be_label_before_statement() {
     assert_clean_parse(
         r#"

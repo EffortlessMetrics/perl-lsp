@@ -13,6 +13,8 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 #[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
+#[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
 use perl_lsp_rs_core::providers::completion::collect_module_names_from_roots_with_cache;
@@ -414,7 +416,8 @@ impl LspServer {
                 message: format!("Document not open: {}", uri),
                 data: None,
             })?;
-            if let Some(ref ast) = doc.ast {
+            let parsed = doc.current_parsed();
+            if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                 let mut hints = Vec::new();
                 if param_hints {
                     // Build a workspace method resolver that is called for every
@@ -609,7 +612,8 @@ impl LspServer {
 
         let documents = self.documents_guard();
         let doc = self.get_document(&documents, uri)?;
-        let ast = doc.ast.as_ref()?;
+        let parsed = doc.current_parsed();
+        let ast = parsed.as_ref().and_then(|p| p.ast())?;
 
         let sub_node = Self::find_subroutine_node(ast, function_name).or_else(|| {
             (short_name != function_name)
@@ -707,7 +711,8 @@ impl LspServer {
             if let Some(doc) = doc_snapshot {
                 let start = Instant::now();
                 let deadline = code_lens_resolve_deadline();
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let provider = CodeLensProvider::with_source(doc.text.clone())
                         .with_file_path(uri.to_string());
                     let mut lenses = provider.extract(ast);
@@ -1074,7 +1079,7 @@ impl LspServer {
             // Without this, an inlineCompletion request while the index is in Building
             // state routes to Partial and fewer workspace module completions are returned.
             // Mirrors the pattern used by completion (#3069) and workspace/symbol (#1514).
-            self.wait_for_index_ready_if_building();
+            let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
             let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
                 return;
             };
@@ -1385,7 +1390,8 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let runner = TestRunner::new(doc.text.clone(), uri.to_string());
                     let tests = runner.discover_tests(ast);
 
@@ -1505,8 +1511,29 @@ impl LspServer {
                 }
             }
 
+            // Snapshot the critic config under a short-lived lock (not held across
+            // the workspace_config lock below) so `perl.runCritic` (engine Native)
+            // reports the same rule set as the editor's on-type native pull
+            // diagnostics.
+            let (critic_engine, native_profile, native_include, native_exclude, native_severity) = {
+                let config = self.config.lock();
+                (
+                    config.critic_engine,
+                    config.native_critic_profile.clone(),
+                    config.native_critic_include.clone(),
+                    config.native_critic_exclude.clone(),
+                    config.perlcritic_severity,
+                )
+            };
             let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots)
-                .with_workspace_config(self.workspace_config.lock().clone());
+                .with_workspace_config(self.workspace_config.lock().clone())
+                .with_critic_engine(critic_engine)
+                .with_native_critic_config(
+                    native_profile,
+                    native_include,
+                    native_exclude,
+                    native_severity,
+                );
 
             match command {
                 // Keep existing test commands for backward compatibility
@@ -1521,6 +1548,33 @@ impl LspServer {
                     }
                 }
                 "perl.runSubtest" => {
+                    // Two argument forms:
+                    //   [file, subtest_name] -> run the whole file through the
+                    //       runner and focus TAP output on the named subtest
+                    //       (we never execute the anonymous block in isolation).
+                    //   [subtest_name]       -> legacy echo (no file to run).
+                    if arguments.len() >= 2 {
+                        match provider.execute_command(command, arguments) {
+                            Ok(result) => return Ok(Some(result)),
+                            Err(e) => {
+                                let error_code = if e.contains("Missing") || e.contains("argument")
+                                {
+                                    -32602
+                                } else {
+                                    -32603
+                                };
+                                return Err(JsonRpcError {
+                                    code: error_code,
+                                    message: format!("Execute command failed: {}", e),
+                                    data: Some(json!({
+                                        "command": command,
+                                        "errorType": "executeCommand",
+                                        "originalError": e
+                                    })),
+                                });
+                            }
+                        }
+                    }
                     let subtest_name = arguments
                         .first()
                         .and_then(|v| v.as_str())
@@ -1573,6 +1627,7 @@ impl LspServer {
                 | "perl.goToTest"
                 | "perl.goToImplementation"
                 | "perl.debugTests"
+                | "perl.debugTestFile"
                 | "perl.explainProviderDecision" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
@@ -1819,6 +1874,10 @@ fn lexical_path_key(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::{filter_workspace_root_from_inline_module_scan_roots, lexical_path_key};
     use crate::LspServer;
     use crate::state::ClientCapabilities;
@@ -1963,6 +2022,48 @@ mod tests {
         assert!(
             !environment.available_modules.contains(&"My::RootOnly".to_string()),
             "workspace-root-only module must not leak through scan roots; got {:?}",
+            environment.available_modules
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_environment_honors_no_lib_for_default_local_lib()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+        use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
+        use tempfile::TempDir;
+        use url::Url;
+
+        let temp = TempDir::new()?;
+        let workspace = temp.path().join("workspace");
+        let local_module =
+            workspace.join("local").join("lib").join("perl5").join("Local").join("Thing.pm");
+        std::fs::create_dir_all(local_module.parent().ok_or("missing local module parent")?)?;
+        std::fs::write(&local_module, "package Local::Thing;\n1;\n")?;
+
+        let doc_path = workspace.join("script.pl");
+        let doc_text = "no lib 'local/lib/perl5';\nuse Local::";
+        std::fs::write(&doc_path, doc_text)?;
+
+        let workspace_uri =
+            Url::from_file_path(&workspace).map_err(|()| "failed workspace URI")?.to_string();
+        let doc_uri =
+            Url::from_file_path(&doc_path).map_err(|()| "failed document URI")?.to_string();
+
+        let server = LspServer::default();
+        let folder = WorkspaceFolderState::new(workspace_uri).with_path(workspace.clone());
+        server.workspace_folders.lock().push(folder);
+        *server.root_path.lock() = Some(workspace);
+
+        let provider = InlineCompletionProvider::new();
+        let context = provider.prepare_context(doc_text, 1, 11).ok_or("expected inline context")?;
+        let environment =
+            server.inline_completion_environment_for_context(&doc_uri, doc_text, 1, 11, &context);
+
+        assert!(
+            !environment.available_modules.contains(&"Local::Thing".to_string()),
+            "no lib cancellation must suppress default local/lib/perl5 modules; got {:?}",
             environment.available_modules
         );
         Ok(())
@@ -2165,10 +2266,7 @@ mod tests {
     {
         let resolved = std::path::PathBuf::from("script.pl");
         let err = super::debug_command_from_oracle(None, &resolved).err().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "expected missing Perl oracle to reject debug launch",
-            )
+            std::io::Error::other("expected missing Perl oracle to reject debug launch")
         })?;
 
         assert_eq!(err.code, -32603);

@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 
 const mockLanguageClientStart = jest.fn(() => new Promise<void>(() => undefined));
 const mockLanguageClientStop = jest.fn(async () => undefined);
+const mockLanguageClientDispose = jest.fn(async () => undefined);
 const mockLanguageClientSetTrace = jest.fn(async () => undefined);
 const mockLanguageClientOnDidChangeState = jest.fn(() => ({ dispose: jest.fn() }));
 
@@ -15,6 +16,7 @@ jest.mock('vscode-languageclient/node', () => ({
     setTrace: mockLanguageClientSetTrace,
     start: mockLanguageClientStart,
     stop: mockLanguageClientStop,
+    dispose: mockLanguageClientDispose,
   })),
   Trace: { Off: 'off', Messages: 'messages', Verbose: 'verbose' },
   TransportKind: { stdio: 0 },
@@ -23,7 +25,7 @@ jest.mock('vscode-languageclient/node', () => ({
 import { activate, deactivate } from '../extension';
 
 function delay(ms: number): Promise<'timeout'> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(() => resolve('timeout'), ms);
   });
 }
@@ -34,7 +36,7 @@ async function waitUntil(condition: () => boolean, timeoutMs: number): Promise<v
     if (Date.now() - startedAt > timeoutMs) {
       throw new Error('condition not met before timeout');
     }
-    await new Promise(resolve => {
+    await new Promise((resolve) => {
       setTimeout(resolve, 10);
     });
   }
@@ -79,7 +81,10 @@ describe('extension activation startup scheduling (#3159)', () => {
   test('activation resolves even when language client start is still pending', async () => {
     process.env.PERL_LSP_EXTENSION_TEST_SKIP_STARTUP = '0';
     const extensionRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-activation-'));
-    const serverPath = path.join(extensionRoot, process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp');
+    const serverPath = path.join(
+      extensionRoot,
+      process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp',
+    );
     fs.writeFileSync(serverPath, '');
 
     (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
@@ -99,11 +104,15 @@ describe('extension activation startup scheduling (#3159)', () => {
 
     const activation = activate(makeContext(extensionRoot));
 
-    await expect(Promise.race([activation.then(() => 'activated' as const), delay(250)]))
-      .resolves
-      .toBe('activated');
+    await expect(
+      Promise.race([activation.then(() => 'activated' as const), delay(250)]),
+    ).resolves.toBe('activated');
     await waitUntil(() => mockLanguageClientStart.mock.calls.length > 0, 500);
 
     expect(mockLanguageClientStart).toHaveBeenCalledTimes(1);
+
+    await deactivate();
+    expect(mockLanguageClientStop).toHaveBeenCalledTimes(1);
+    expect(mockLanguageClientDispose).toHaveBeenCalledTimes(1);
   });
 });

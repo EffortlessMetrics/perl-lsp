@@ -1,6 +1,11 @@
 //! Real tests for Document Highlight feature
 //! Tests that the LSP server correctly highlights all occurrences of a symbol
 
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use serde_json::json;
 
 mod support;

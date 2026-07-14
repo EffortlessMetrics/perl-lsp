@@ -59,7 +59,7 @@ Major version updates are **excluded** for these critical dependencies:
 
 **Grouped Dependencies**:
 - `vscode` - VS Code API and related packages
-- `typescript` - TypeScript and ESLint tooling
+- `typescript` - TypeScript and Oxlint tooling
 - `npm-dependencies` - All other npm packages
 
 **Major Version Exclusions**:

@@ -148,6 +148,34 @@ impl DebugAdapter {
                     };
                 }
 
+                // Short-circuit: stale Child ref (cache miss after resume).
+                //
+                // Child refs are allocated when the client expands a nested variable
+                // (a HASH or ARRAY element) during a stopped state. On resume,
+                // variable_cache.clear() makes any outstanding Child refs stale. Like
+                // stale EvalResult refs, stale Child refs must return honest-empty
+                // (success=true, variables=[]) immediately. Without this guard, a stale
+                // Child ref would fall through to the scope-routing match below and take
+                // the None arm — which silently produces an empty list after an avoidable
+                // 75 ms wait_for_debugger_output_window delay. The observable response is
+                // the same, but the code path is wrong and the latency is unnecessary.
+                //
+                // Protocol contract: a Child ref that is no longer valid after a resume
+                // simply has no children — return honest empty, no debugger query.
+                if matches!(
+                    VariableReference::decode(variables_ref),
+                    Some(VariableReference::Child { .. })
+                ) {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: true,
+                        command: "variables".to_string(),
+                        body: Some(json!({ "variables": [] })),
+                        message: None,
+                    };
+                }
+
                 let (scope_frame_id, scope_kind) = match VariableReference::decode(variables_ref) {
                     Some(VariableReference::Scope { frame_id, kind }) => (frame_id, Some(kind)),
                     _ => (0, None),
@@ -255,10 +283,10 @@ impl DebugAdapter {
                     None => {
                         // Non-Scope variablesReference — no framed output to fetch.
                         // Cache hits were already returned via variable_cache above.
-                        // Stale EvalResult refs short-circuit to an empty response
-                        // before reaching this branch (see the early return above).
-                        // A stale Child ref on cache miss silently produces an empty
-                        // list here; that gap is tracked in issue #1445.
+                        // Stale EvalResult and Child refs both short-circuit to an
+                        // honest-empty response before reaching this branch (see the
+                        // early returns above). This arm is now a true fallthrough for
+                        // unrecognised or gap wire values only.
                     }
                 }
 

@@ -48,7 +48,7 @@ row links to its source of truth so the claim can be re-verified.
 | Launch honors both `perl` and `perlPath` | PASS | `resolve_launch_interpreter` (`crates/perl-dap/src/debug_adapter/process.rs`) + tests |
 | Release archives contain `perl-dap` | PASS | built/packaged in `.github/workflows/release.yml`; guarded by `cargo xtask release artifact-check` |
 | Native path avoids `Perl::LanguageServer` dependency | PASS | native launch/attach use the in-binary Rust runtime + local Perl only |
-| Bridge path documents `Perl::LanguageServer` requirement | PASS | `crates/perl-dap/README.md` "External dependencies" |
+| Legacy bridge references confined to reference/compatibility docs | PASS | first-mile docs (`crates/perl-dap/README.md`, tutorials, this status page) carry no bridge/PLS requirement; legacy detail lives in `docs/reference/DAP_LEGACY_BRIDGE_COMPAT.md` |
 | Downstream artifact contract documented | PASS | `docs/reference/DOWNSTREAM_DAP_INTEGRATIONS.md` |
 
 ## How to Update

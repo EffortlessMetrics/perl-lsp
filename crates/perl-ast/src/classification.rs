@@ -259,6 +259,7 @@ impl NodeKind {
 
             NodeKind::Number { .. }
             | NodeKind::String { .. }
+            | NodeKind::VString { .. }
             | NodeKind::Heredoc { .. }
             | NodeKind::Regex { .. }
             | NodeKind::Undef => NodeKindCategory::Literal,
@@ -450,6 +451,15 @@ impl NodeKind {
                 bp = false
             ),
             NodeKind::String { .. } => flags!(
+                exec = false,
+                scope = false,
+                decl = false,
+                refs = false,
+                children = false,
+                recovery = false,
+                bp = false
+            ),
+            NodeKind::VString { .. } => flags!(
                 exec = false,
                 scope = false,
                 decl = false,
@@ -1015,7 +1025,7 @@ impl NodeKind {
 mod tests {
     use super::NodeKindCategory;
     use super::NodeKindFlags;
-    use crate::ast::{Node, NodeKind};
+    use crate::ast::{GotoTargetForm, Node, NodeKind};
     use perl_position_tracking::SourceLocation;
 
     fn loc() -> SourceLocation {
@@ -1154,7 +1164,13 @@ mod tests {
                 default_value: Box::new(leaf()),
             },
             NodeKind::SlurpyParameter { variable: Box::new(leaf()) },
-            NodeKind::NamedParameter { variable: Box::new(leaf()) },
+            NodeKind::NamedParameter {
+                variable: Box::new(leaf()),
+                external_name: String::new(),
+                default_operator: None,
+                default_value: None,
+                required: true,
+            },
             NodeKind::Method {
                 name: "bar".to_string(),
                 name_span: None,
@@ -1164,7 +1180,7 @@ mod tests {
             },
             NodeKind::Return { value: None },
             NodeKind::LoopControl { op: "next".to_string(), label: None },
-            NodeKind::Goto { target: Box::new(leaf()) },
+            NodeKind::Goto { target: Box::new(leaf()), form: GotoTargetForm::Label },
             NodeKind::MethodCall {
                 object: Box::new(leaf()),
                 method: "foo".to_string(),
@@ -1580,6 +1596,7 @@ mod tests {
             n(NodeKind::Typeglob { name: "foo".to_string() }),
             n(NodeKind::Number { value: "42".to_string() }),
             n(NodeKind::String { value: "hello".to_string(), interpolated: false }),
+            n(NodeKind::VString { value: "v1.2.3".to_string() }),
             n(NodeKind::Heredoc {
                 delimiter: "EOF".to_string(),
                 content: "body".to_string(),
@@ -1666,7 +1683,13 @@ mod tests {
                 default_value: Box::new(leaf()),
             }),
             n(NodeKind::SlurpyParameter { variable: Box::new(leaf()) }),
-            n(NodeKind::NamedParameter { variable: Box::new(leaf()) }),
+            n(NodeKind::NamedParameter {
+                variable: Box::new(leaf()),
+                external_name: String::new(),
+                default_operator: None,
+                default_value: None,
+                required: true,
+            }),
             n(NodeKind::Method {
                 name: "bar".to_string(),
                 name_span: None,
@@ -1679,7 +1702,7 @@ mod tests {
             }),
             n(NodeKind::Return { value: Some(Box::new(leaf())) }),
             n(NodeKind::LoopControl { op: "next".to_string(), label: None }),
-            n(NodeKind::Goto { target: Box::new(leaf()) }),
+            n(NodeKind::Goto { target: Box::new(leaf()), form: GotoTargetForm::Label }),
             n(NodeKind::MethodCall {
                 object: Box::new(leaf()),
                 method: "foo".to_string(),

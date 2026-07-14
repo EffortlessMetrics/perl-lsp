@@ -1,0 +1,33 @@
+id = "substrate"
+program = "real_perl_editor_trust"
+program_manifest = ".perl-lsp/goals/programs/real_perl_editor_trust.toml"
+pr_cap = 2
+
+# Board pointer (status board for the active lane).
+board = "docs/project/status/real_perl_editor_trust_v1.md"
+
+# Eligible work classes this lane may change (unchanged from the prior
+# [[lanes]] "owns" list in active.toml).
+may_change = [
+  "lexer_parser_proptest",
+  "constant_provider_proof",
+  "prototype_table",
+  "bareword_classifier",
+  "pir_skeleton",
+  "determinism_prep",
+  "oracle_prep",
+]
+
+# Proof policy (unchanged from the prior [[lanes]] "rule").
+proof_policy = "No provider cutover unless the trust lane explicitly promotes a fact class."
+
+# Work that falls outside may_change routes elsewhere: any provider cutover
+# or live-behavior promotion routes to the trust lane (only the trust lane
+# may promote a fact class); assignment-gated queue triage, docs, and
+# cleanup route to the reliability lane.
+must_route_elsewhere = "Provider cutover or fact-class promotion owned by the trust lane; routine queue triage, docs, and cleanup owned by the reliability lane."
+
+next_items = [
+  "oracle-runner-explicit-command-when-assigned",
+  "pir-v0-contract-when-assigned",
+]

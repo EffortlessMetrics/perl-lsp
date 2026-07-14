@@ -31,7 +31,7 @@ pub(crate) use map::normalize_state;
 pub(crate) use version::enable_effective_version_semantics;
 
 /// Pragma state at a given point in the code
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PragmaState {
     /// Whether strict vars is enabled
     pub strict_vars: bool,
@@ -71,6 +71,41 @@ pub struct PragmaState {
     pub features: Vec<&'static str>,
     /// Lexically imported builtin short names from `use builtin`.
     pub builtin_imports: Vec<String>,
+}
+
+impl Default for PragmaState {
+    /// The baseline pragma state for source outside any `use`/`no` declaration.
+    ///
+    /// In Perl, a file with no `use VERSION` and no `use feature` still has the
+    /// `:default` feature bundle enabled: `indirect`, `multidimensional`,
+    /// `bareword_filehandles`, `apostrophe_as_package_separator`, and
+    /// `smartmatch`. Seeding the baseline with these default-on features keeps
+    /// [`PragmaState::has_feature`] honest at file scope and lets `use vX.Y`
+    /// bundles correctly *disable* them — for example `use v5.36` turns off
+    /// `indirect`/`multidimensional`, and `use v5.38` additionally turns off
+    /// `bareword_filehandles`. Everything else (strict, warnings, utf8,
+    /// encoding, locale, explicit features) starts cleared.
+    ///
+    /// Reference: <https://perldoc.perl.org/feature#FEATURE-BUNDLES> — the
+    /// `:default` bundle "represents the feature set that is enabled before any
+    /// `use feature` or `no feature` declaration".
+    fn default() -> Self {
+        Self {
+            strict_vars: false,
+            strict_subs: false,
+            strict_refs: false,
+            warnings: false,
+            utf8: false,
+            encoding: None,
+            unicode_strings: false,
+            locale: false,
+            locale_scope: None,
+            disabled_warning_categories: Vec::new(),
+            signatures_strict: false,
+            features: version::DEFAULT_FEATURES.to_vec(),
+            builtin_imports: Vec::new(),
+        }
+    }
 }
 
 /// Immutable compile-time snapshot of pragma state.
@@ -133,23 +168,13 @@ impl From<PragmaSnapshot> for PragmaState {
 }
 
 impl PragmaState {
-    /// Create a new pragma state with all strict modes enabled
+    /// Create a new pragma state with all strict modes enabled.
+    ///
+    /// This mirrors the effective state of a plain `use strict`: the three
+    /// strict categories are on and everything else (including the `:default`
+    /// feature bundle inherited from [`PragmaState::default`]) is unchanged.
     pub fn all_strict() -> Self {
-        Self {
-            strict_vars: true,
-            strict_subs: true,
-            strict_refs: true,
-            warnings: false,
-            utf8: false,
-            encoding: None,
-            unicode_strings: false,
-            locale: false,
-            locale_scope: None,
-            disabled_warning_categories: Vec::new(),
-            signatures_strict: false,
-            features: Vec::new(),
-            builtin_imports: Vec::new(),
-        }
+        Self { strict_vars: true, strict_subs: true, strict_refs: true, ..Self::default() }
     }
 
     /// Returns `true` if warnings are active for the given category.

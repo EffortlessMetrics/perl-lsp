@@ -55,9 +55,18 @@ pub fn validate_name(
         return Err("Name can only contain letters, numbers, and underscores".to_string());
     }
 
-    // Check if it's a keyword
-    if is_rename_keyword(name) {
-        return Err("Cannot use a keyword as a name".to_string());
+    // Keyword check is context-sensitive:
+    //   - Variables (scalar/array/hash): keyword names are allowed — Perl permits
+    //     `$if`, `@while`, `%for`, etc. as valid variable names distinguished by sigil.
+    //   - Subroutines and methods: keyword names are rejected — `sub if { }` is a
+    //     Perl syntax error that would break the file.
+    //   - Other symbol kinds (Package, Constant, etc.): keywords are rejected.
+    if !kind.is_variable() && is_rename_keyword(name) {
+        return Err(if kind.is_callable() {
+            format!("'{}' is a reserved Perl keyword; subroutine names cannot be keywords", name)
+        } else {
+            format!("Cannot use reserved keyword '{}' as a name", name)
+        });
     }
 
     // Check for naming conflicts

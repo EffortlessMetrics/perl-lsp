@@ -8,9 +8,9 @@
 
 ## Architecture Overview (*Diataxis: Explanation* - LSP design concepts)
 
-### UTF-16 Position Security Enhancement (PR #153) (*Diataxis: Explanation* - Security-first position mapping)
+### UTF-16 Position Security Enhancement (PR #753) (*Diataxis: Explanation* - Security-first position mapping)
 
-**Critical Security Update**: PR #153 introduces comprehensive UTF-16 position conversion security enhancements that eliminate boundary violations and ensure symmetric position handling. This is important for LSP implementations processing Unicode-rich Perl code.
+**Critical Security Update**: PR #753 introduces comprehensive UTF-16 position conversion security enhancements that eliminate boundary violations and ensure symmetric position handling. This is important for LSP implementations processing Unicode-rich Perl code.
 
 **Security Issues Resolved:**
 - **Asymmetric Position Conversion**: Fixed critical vulnerability in UTF-8 ↔ UTF-16 position mapping
@@ -260,7 +260,7 @@ cargo test -p perl-parser --test missing_docs_ac_tests -- test_performance_docum
    - Dual indexing strategy usage and benefits
    - Cross-file navigation and workspace management
 
-## Secure UTF-16 Position Mapping (PR #153) (*Diataxis: Reference* - Position conversion API and security patterns)
+## Secure UTF-16 Position Mapping (PR #753) (*Diataxis: Reference* - Position conversion API and security patterns)
 
 ### Security-Enhanced Position Conversion API
 
@@ -4797,7 +4797,7 @@ Parse → Index → Navigate → Complete → Analyze → Debug
    - Workspace-aware variable inspection
 
 3. **Position Mapping** (Future Phase 2): UTF-16/UTF-8 conversion for breakpoints
-   - Reuse secure position conversion infrastructure (PR #153)
+   - Reuse secure position conversion infrastructure (PR #753)
    - Symmetric position handling for Unicode-rich Perl code
 
 4. **Incremental Parsing** (Future Phase 2): Fast breakpoint updates

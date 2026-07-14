@@ -19,14 +19,16 @@ mod dap_dependencies {
         Ok(std::fs::read_to_string(path)?)
     }
 
-    /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-fallback
+    /// Tests native stack policy: public crate docs must not require legacy bridge dependencies.
     #[test]
     // AC:18
-    fn test_cpan_module_installation_fallback() -> Result<()> {
+    fn test_crate_readme_is_native_first() -> Result<()> {
         let readme = read(repo_root().join("crates/perl-dap/README.md"))?;
-        assert!(readme.contains("BridgeAdapter"));
-        assert!(readme.contains("Perl::LanguageServer"));
-        assert!(readme.contains("cpanm Perl::LanguageServer"));
+        assert!(!readme.contains("Perl::LanguageServer"));
+        assert!(!readme.contains("BridgeAdapter"));
+        assert!(!readme.contains("cpanm Perl::LanguageServer"));
+        assert!(readme.contains("Native launch"));
+        assert!(readme.contains("Legacy compatibility"));
         Ok(())
     }
 
@@ -62,18 +64,31 @@ mod dap_dependencies {
         Ok(())
     }
 
-    /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-documentation
+    /// Tests native stack policy: first-mile DAP docs must describe native perl-dap only.
     #[test]
     // AC:18
-    fn test_dependency_management_documentation() -> Result<()> {
+    fn test_native_dap_user_docs_do_not_require_bridge_or_pls() -> Result<()> {
         let user_guide = read(repo_root().join("docs/tutorials/DAP_USER_GUIDE.md"))?;
-        assert!(user_guide.contains("Perl::LanguageServer"));
-        assert!(user_guide.contains("BridgeAdapter"));
-        assert!(user_guide.contains("cpanm Perl::LanguageServer"));
+        assert!(!user_guide.contains("Perl::LanguageServer"));
+        assert!(!user_guide.contains("BridgeAdapter"));
+        assert!(!user_guide.contains("cpanm Perl::LanguageServer"));
+        assert!(user_guide.contains("Native `perl-dap`"));
+        assert!(user_guide.contains("local Perl interpreter"));
 
-        let bridge_guide = read(repo_root().join("docs/tutorials/DAP_BRIDGE_SETUP_GUIDE.md"))?;
-        assert!(bridge_guide.contains("cpan Perl::LanguageServer"));
-        assert!(bridge_guide.contains("cpanm Perl::LanguageServer"));
+        let bridge_pointer = read(repo_root().join("docs/tutorials/DAP_BRIDGE_SETUP_GUIDE.md"))?;
+        assert!(!bridge_pointer.contains("Perl::LanguageServer"));
+        assert!(!bridge_pointer.contains("BridgeAdapter"));
+        assert!(!bridge_pointer.contains("cpanm Perl::LanguageServer"));
+
+        let book_page = read(repo_root().join("book/src/dap/user-guide.md"))?;
+        assert!(!book_page.contains("Perl::LanguageServer"));
+        assert!(!book_page.contains("BridgeAdapter"));
+        assert!(!book_page.contains("0.9.x"));
+
+        let book_bridge_page = read(repo_root().join("book/src/dap/bridge-setup.md"))?;
+        assert!(!book_bridge_page.contains("Perl::LanguageServer"));
+        assert!(!book_bridge_page.contains("BridgeAdapter"));
+        assert!(!book_bridge_page.contains("cpanm Perl::LanguageServer"));
         Ok(())
     }
 
@@ -106,14 +121,17 @@ mod dap_dependencies {
         Ok(())
     }
 
-    /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-install
+    /// Tests native stack policy: legacy bridge dependency details live in reference docs only.
     #[test]
     // AC:18
-    fn test_cpan_dependency_installation() -> Result<()> {
-        let guide = read(repo_root().join("docs/tutorials/DAP_BRIDGE_SETUP_GUIDE.md"))?;
+    fn test_legacy_bridge_reference_documents_pls_dependency() -> Result<()> {
+        let guide = read(repo_root().join("docs/reference/DAP_LEGACY_BRIDGE_COMPAT.md"))?;
         assert!(guide.contains("cpan Perl::LanguageServer"));
         assert!(guide.contains("cpanm Perl::LanguageServer"));
         assert!(guide.contains("Perl::LanguageServer not found"));
+        assert!(guide.contains("--bridge"));
+        assert!(guide.contains("BridgeAdapter"));
+        assert!(guide.contains("launch.json"));
         Ok(())
     }
 }

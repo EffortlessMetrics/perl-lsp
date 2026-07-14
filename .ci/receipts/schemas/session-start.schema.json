@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp-swarm/.ci/receipts/schemas/session-start.schema.json",
+  "title": "Session Start Receipt",
+  "description": "Machine-produced session-start receipt (M5 phase 4, #3777): captures checkout identity (repo/branch/SHA relative to origin/main) and the inputs to the advisory staleness liveness check. Emitted by `cargo xtask session-receipt --json`. Advisory only -- `stale_warning` firing is visibility, not a build gate. Uniformly fail-closed: any field this receipt cannot actually verify reports null, never a value that looks like a confirmed fact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "captured_at",
+    "timestamp_source",
+    "repo",
+    "branch",
+    "head_sha",
+    "fetch_ok",
+    "origin_main_sha",
+    "behind_origin_main",
+    "ahead",
+    "dirty",
+    "dirty_check_ok",
+    "toolchain_version",
+    "program",
+    "lane",
+    "program_note",
+    "warn_threshold",
+    "stale_warning"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "session_start"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "timestamp_source": {
+      "type": "string",
+      "enum": ["system_clock", "ci_environment"]
+    },
+    "repo": {
+      "type": ["string", "null"],
+      "description": "owner/repo, derived from `git config --get remote.origin.url` (the same source `git fetch origin` resolves against), never from `gh`'s auth context. Null when the remote is missing or unparseable -- fail-closed, never a mismatched guess."
+    },
+    "branch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "head_sha": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fetch_ok": {
+      "type": "boolean",
+      "description": "Whether `git fetch origin main` succeeded. When false, origin_main_sha/behind_origin_main/ahead are all null -- fail-closed rather than silently reporting 0-behind."
+    },
+    "origin_main_sha": {
+      "type": ["string", "null"]
+    },
+    "behind_origin_main": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "ahead": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "dirty": {
+      "type": ["boolean", "null"],
+      "description": "Null when `git status --porcelain` failed to run -- fail-closed rather than ever reporting a false clean. See dirty_check_ok."
+    },
+    "dirty_check_ok": {
+      "type": "boolean",
+      "description": "Whether the `git status --porcelain` call that produced `dirty` succeeded. `dirty` is only meaningful when this is true."
+    },
+    "toolchain_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "program": {
+      "type": ["string", "null"],
+      "description": "Resolved program id, validated via goals::manifest::validate_program_id (bare id, no path separators/.., manifest exists). Null when unresolved or invalid -- see program_note."
+    },
+    "lane": {
+      "type": ["string", "null"]
+    },
+    "program_note": {
+      "type": ["string", "null"],
+      "description": "Populated when program is null because the candidate id failed validation (as opposed to simply being absent)."
+    },
+    "warn_threshold": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The commits-behind-origin/main threshold in effect when stale_warning was computed."
+    },
+    "stale_warning": {
+      "type": ["string", "null"],
+      "description": "Populated only when behind_origin_main exceeds warn_threshold. Advisory text, never a build-blocking condition."
+    }
+  }
+}

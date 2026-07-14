@@ -1,0 +1,8 @@
+[
+  {
+    "author": {
+      "login": "alice"
+    },
+    "body": "Verified my own fix.\n\n<!-- verification:v1 {\"v\":1,\"head\":\"7777777777777777777777777777777777777777\",\"verifier\":\"alice\",\"findings\":0,\"result\":\"pass\"} -->"
+  }
+]

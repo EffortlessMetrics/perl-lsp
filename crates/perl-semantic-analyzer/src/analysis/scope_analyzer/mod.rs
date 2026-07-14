@@ -60,7 +60,7 @@ use crate::pragma_tracker::{PragmaQueryCursor, PragmaState};
 use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -386,6 +386,20 @@ pub(super) struct AnalysisContext<'a> {
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
     current_package: RefCell<String>,
+    /// Monotonic counter incremented on every `package X` declaration.
+    ///
+    /// Used together with `our_decl_generations` to distinguish a true same-package
+    /// redeclaration (`our $x; our $x;` without switching packages) from a legitimate
+    /// re-import after a package switch (`package A; our $x; package B; our $x; package A; our $x;`).
+    pub(super) package_change_generation: Cell<u64>,
+    /// Maps the qualified name of each `our`-declared variable (e.g., `"Foo::x"`) to the
+    /// `package_change_generation` value at the time of its most recent declaration.
+    ///
+    /// On first declaration the entry is inserted.  On a subsequent declaration:
+    /// - same generation → same package visit → `VariableRedeclaration` is emitted.
+    /// - different generation → package switched since last declaration → silently accepted
+    ///   as a re-import; the entry is updated to the new generation.
+    pub(super) our_decl_generations: RefCell<HashMap<String, u64>>,
 }
 
 impl<'a> AnalysisContext<'a> {
@@ -397,6 +411,8 @@ impl<'a> AnalysisContext<'a> {
             imported_barewords: collect_imported_barewords(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
+            package_change_generation: Cell::new(0),
+            our_decl_generations: RefCell::new(HashMap::new()),
         }
     }
 
@@ -1261,7 +1277,7 @@ impl ScopeAnalyzer {
             NodeKind::MandatoryParameter { variable }
             | NodeKind::OptionalParameter { variable, .. }
             | NodeKind::SlurpyParameter { variable }
-            | NodeKind::NamedParameter { variable } => self.extract_variable_name(variable),
+            | NodeKind::NamedParameter { variable, .. } => self.extract_variable_name(variable),
             NodeKind::ArrayLiteral { elements } => {
                 // Handle array reference patterns like @{$ref}
                 if elements.len() == 1 {
@@ -1898,5 +1914,116 @@ fn is_filehandle(name: &str) -> bool {
             // Check if it's all uppercase (common convention for filehandles)
             name.chars().all(|c| c.is_ascii_uppercase() || c == '_') && !name.is_empty()
         }
+    }
+}
+
+// ============================================================================
+// Inline lib tests — required for Codecov Patch 95 (`--lib` coverage gate).
+// These exercise the package-change-generation paths added for #1661.
+// ============================================================================
+#[cfg(test)]
+mod tests_our_redecl {
+    use super::{IssueKind, ScopeAnalyzer, ScopeIssue};
+    use crate::Parser;
+    use crate::pragma_tracker::PragmaTracker;
+
+    fn analyze(code: &str) -> Vec<ScopeIssue> {
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().unwrap();
+        let pragma_map = PragmaTracker::build(&ast);
+        ScopeAnalyzer::new().analyze(&ast, code, &pragma_map)
+    }
+
+    fn redecls_for_var<'a>(issues: &'a [ScopeIssue], name: &str) -> Vec<&'a ScopeIssue> {
+        issues
+            .iter()
+            .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name == name)
+            .collect()
+    }
+
+    /// Same-package `our` redeclaration must emit `VariableRedeclaration` (#1661).
+    #[test]
+    fn our_same_package_redecl_is_error() {
+        let issues = analyze("use strict;\npackage Foo;\nour $x = 1;\nour $x = 2;\nprint $x;\n");
+        assert!(
+            !redecls_for_var(&issues, "$x").is_empty(),
+            "input that hits the boundary: is_our; got: {:?}",
+            issues
+        );
+    }
+
+    /// Lexical `my` redeclaration still uses the non-`our` path (#1661 control).
+    #[test]
+    fn my_same_scope_redecl_exercises_non_our_branch() {
+        let issues = analyze("use strict;\nmy $x = 1;\nmy $x = 2;\nprint $x;\n");
+        assert!(
+            !redecls_for_var(&issues, "$x").is_empty(),
+            "input that hits the boundary: !is_our; got: {:?}",
+            issues
+        );
+    }
+
+    /// Redeclaration assertions must stay bound to the exact variable name.
+    #[test]
+    fn redecls_for_var_filters_exact_variable_name() {
+        let issues = analyze(
+            "use strict;\npackage Foo;\nour $x = 1;\nour $x = 2;\nour $y = 3;\nprint $x + $y;\n",
+        );
+
+        let x_redecls = redecls_for_var(&issues, "$x");
+        assert_eq!(
+            x_redecls.len(),
+            1,
+            "expected exactly one VariableRedeclaration for $x; got: {:?}",
+            x_redecls
+        );
+        assert!(
+            x_redecls.iter().all(|issue| issue.kind == IssueKind::VariableRedeclaration
+                && issue.variable_name == "$x"),
+            "expected only $x VariableRedeclaration issues; got: {:?}",
+            x_redecls
+        );
+
+        assert!(
+            redecls_for_var(&issues, "$y").is_empty(),
+            "non-redeclared $y must not match $x redeclaration issues; got: {:?}",
+            issues
+        );
+    }
+
+    /// Cross-package `our` re-import after a package switch must NOT emit an error (#1661).
+    #[test]
+    fn our_package_switch_reimport_allowed() {
+        let issues = analyze(
+            "use strict;\npackage Foo;\nour $x = 1;\npackage Bar;\nour $x = 2;\npackage Foo;\nour $x = 3;\nprint $x;\n",
+        );
+        assert!(
+            redecls_for_var(&issues, "$x").is_empty(),
+            "expected no VariableRedeclaration across package switches; got: {:?}",
+            redecls_for_var(&issues, "$x")
+        );
+    }
+
+    /// Uninitialized same-package `our` redeclaration is also an error (#1661).
+    #[test]
+    fn our_uninit_same_package_redecl_is_error() {
+        let issues = analyze("use strict;\npackage Foo;\nour $x;\nour $x;\nprint $x;\n");
+        assert!(
+            !redecls_for_var(&issues, "$x").is_empty(),
+            "expected VariableRedeclaration for uninitialized same-package our $x"
+        );
+    }
+
+    /// Different-package `our` declarations must not error (#1661 positive control).
+    #[test]
+    fn our_different_packages_no_error() {
+        let issues = analyze(
+            "use strict;\npackage Foo;\nour $x = 1;\npackage Bar;\nour $x = 2;\nprint $x;\n",
+        );
+        assert!(
+            redecls_for_var(&issues, "$x").is_empty(),
+            "expected no VariableRedeclaration across packages; got: {:?}",
+            redecls_for_var(&issues, "$x")
+        );
     }
 }

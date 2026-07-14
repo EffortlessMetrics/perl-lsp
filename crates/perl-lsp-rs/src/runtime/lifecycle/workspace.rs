@@ -122,6 +122,9 @@ impl LspServer {
         for folder in folders.iter_mut() {
             // Try to load .perl-lsp.toml from this folder
             if let Some(folder_path) = &folder.path {
+                folder.project_config = None;
+                folder.effective_workspace_config = WorkspaceConfig::default();
+
                 match perl_lsp_rs_core::config::load_project_config(folder_path) {
                     Ok(None) => {
                         // No .perl-lsp.toml found — normal, no action needed
@@ -162,6 +165,7 @@ impl LspServer {
                         }
                     }
                 }
+                folder.refresh_workspace_metadata();
             }
         }
 
@@ -174,6 +178,10 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
 
     #[test]
@@ -243,9 +251,20 @@ mod tests {
 
         // The workspace profile is searched first, so this assertion holds
         // regardless of any ambient $HOME/.perltidyrc or $PERLTIDY on the host.
+        //
+        // On Windows the URI-to-path round-trip lowercases the drive letter (the
+        // `normalize_windows_path_to_key` helper in perl-uri lowercases it for URI
+        // normalisation, so the stored path is e.g. `c:\…` while `profile.to_str()`
+        // retains the OS-reported `C:\…`). Canonicalize both sides so that the
+        // assertion tests path *equivalence* rather than byte equality, keeping the
+        // check meaningful (wrong path → `canonicalize` succeeds on a different
+        // location → paths still differ) without producing false failures on Windows.
+        let discovered = server.discovered_perltidy_profile.lock().clone();
+        let canon_discovered = discovered.as_deref().and_then(|s| std::fs::canonicalize(s).ok());
+        let canon_expected = std::fs::canonicalize(&profile).ok();
         assert_eq!(
-            server.discovered_perltidy_profile.lock().as_deref(),
-            profile.to_str(),
+            canon_discovered.as_deref(),
+            canon_expected.as_deref(),
             "workspace .perltidyrc should be discovered and cached at initialize"
         );
         Ok(())
@@ -371,6 +390,65 @@ include_paths = ["other_lib"]
         assert!(folder_state.project_config.is_none());
         // Should have default include paths
         assert!(!folder_state.effective_workspace_config.include_paths.is_empty());
+    }
+
+    #[test]
+    fn load_and_apply_project_config_clears_stale_folder_config() -> anyhow::Result<()> {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir()?;
+        let folder = temp.path().join("folder");
+        std::fs::create_dir_all(&folder)?;
+
+        let config = folder.join(".perl-lsp.toml");
+        std::fs::write(
+            &config,
+            r#"
+[perl]
+include_paths = ["stale_lib"]
+"#,
+        )?;
+
+        let uri = url::Url::from_directory_path(&folder)
+            .map_err(|()| anyhow::anyhow!("failed to create folder URI"))?
+            .to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri.clone())
+                .with_path(folder.clone()),
+        );
+
+        server.load_and_apply_project_config();
+        {
+            let folders = server.workspace_folders.lock();
+            let folder_state = folders
+                .iter()
+                .find(|f| f.uri == uri)
+                .ok_or_else(|| anyhow::anyhow!("missing folder"))?;
+            assert!(folder_state.project_config.is_some());
+            assert!(
+                folder_state
+                    .effective_workspace_config
+                    .include_paths
+                    .contains(&"stale_lib".to_string())
+            );
+        }
+
+        std::fs::remove_file(config)?;
+        server.load_and_apply_project_config();
+
+        let folders = server.workspace_folders.lock();
+        let folder_state = folders
+            .iter()
+            .find(|f| f.uri == uri)
+            .ok_or_else(|| anyhow::anyhow!("missing folder"))?;
+        assert!(folder_state.project_config.is_none());
+        assert!(
+            !folder_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"stale_lib".to_string())
+        );
+        Ok(())
     }
 
     #[test]

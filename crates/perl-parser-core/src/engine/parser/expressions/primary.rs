@@ -198,7 +198,7 @@ impl<'a> Parser<'a> {
             TokenKind::VString => {
                 let token = self.tokens.next()?;
                 Ok(Node::new(
-                    NodeKind::String { value: token.text.to_string(), interpolated: false },
+                    NodeKind::VString { value: token.text.to_string() },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -245,24 +245,14 @@ impl<'a> Parser<'a> {
                     0
                 };
                 if op_len > 0 {
-                    let after_op = text[op_len..].trim_start();
-                    if let Some(open) = after_op.chars().next() {
-                        let close = match open {
-                            '(' => ')',
-                            '[' => ']',
-                            '{' => '}',
-                            '<' => '>',
-                            c => c, // symmetric delimiter closes with itself
-                        };
-                        if !after_op.ends_with(close) {
-                            self.record_error(ParseError::syntax(
-                                format!(
-                                    "Unclosed {} delimiter in string operator before end of file",
-                                    open
-                                ),
-                                token.start,
-                            ));
-                        }
+                    let operator = &text[..op_len];
+                    if quote_parser::parse_quote_operator_content(text, operator).is_none() {
+                        self.record_error(ParseError::syntax(
+                            format!(
+                                "Unclosed {operator} delimiter in string operator before end of file"
+                            ),
+                            token.start,
+                        ));
                     }
                 }
 
@@ -279,38 +269,19 @@ impl<'a> Parser<'a> {
 
                 // Parse qw(...) to extract words
                 if let Some(content) = text.strip_prefix("qw") {
-                    let content = content.trim_start();
-                    // Find the delimiter and extract content.
-                    // Track whether the closing delimiter was present so we can record an error
-                    // when the qw() is unclosed (e.g. qw(one two three at EOF).
-                    let (content_str, _delimiter, delim_closed) =
-                        if let Some(rest) = content.strip_prefix('(') {
-                            let closed = rest.strip_suffix(')').is_some();
-                            (rest.strip_suffix(')').unwrap_or(rest), '(', closed)
-                        } else if let Some(rest) = content.strip_prefix('[') {
-                            let closed = rest.strip_suffix(']').is_some();
-                            (rest.strip_suffix(']').unwrap_or(rest), '[', closed)
-                        } else if let Some(rest) = content.strip_prefix('{') {
-                            let closed = rest.strip_suffix('}').is_some();
-                            (rest.strip_suffix('}').unwrap_or(rest), '{', closed)
-                        } else if let Some(rest) = content.strip_prefix('<') {
-                            let closed = rest.strip_suffix('>').is_some();
-                            (rest.strip_suffix('>').unwrap_or(rest), '<', closed)
+                    let content_str =
+                        if let Some(content_str) = quote_parser::parse_quote_operator_content(
+                            text,
+                            "qw",
+                        ) {
+                            content_str
                         } else {
-                            // Other delimiter - find matching pair
-                            let delim = content.chars().next().unwrap_or(' ');
-                            let inner = &content[delim.len_utf8()..];
-                            let trimmed = inner.trim_end_matches(delim);
-                            let closed = trimmed.len() < inner.len();
-                            (trimmed, delim, closed)
-                        };
-
-                    if !delim_closed {
                         self.record_error(ParseError::syntax(
                             "Unclosed qw() delimiter: missing closing delimiter before end of file",
                             start,
                         ));
-                    }
+                            content
+                        };
 
                     // Split into words, stripping # line comments first (perlop).
                     let cleaned = strip_qw_comments(content_str);
@@ -522,8 +493,18 @@ impl<'a> Parser<'a> {
             // Note: TokenKind::Sub is handled in the keyword-as-identifier case below
             // This allows 'sub' to be used as a hash key or identifier in expressions
             TokenKind::Try => {
-                // Check for autoquoting: `try => value`
-                if self.is_keyword_hash_key_boundary() {
+                // Check for autoquoting (`try => value`) and old-style
+                // bareword argument uses (`open(try, ...)`).
+                let second_token = self.tokens.peek_second().ok();
+                let next_is_arg_boundary = second_token.as_ref().is_some_and(|t| {
+                    matches!(t.kind, TokenKind::Comma | TokenKind::RightParen)
+                });
+                let next_is_parenthesized_call =
+                    second_token.as_ref().is_some_and(|t| t.kind == TokenKind::LeftParen);
+                if self.is_keyword_hash_key_boundary()
+                    || next_is_arg_boundary
+                    || next_is_parenthesized_call
+                {
                     let token = self.tokens.next()?;
                     Ok(Node::new(
                         NodeKind::Identifier { name: token.text.to_string() },
@@ -895,22 +876,14 @@ impl<'a> Parser<'a> {
                             // Could be an operator like 'or', 'and', etc.
                             // Also detect no-paren function calls inside parens:
                             //   (func KEY => VALUE or ...)
-                            // When the first element is a bare identifier and the
-                            // next tokens are IDENT => , the identifier is a
-                            // function being called with fat-comma arguments.
-                            let is_no_paren_call =
-                                matches!(&expr.kind, NodeKind::Identifier { .. })
-                                    && self.peek_kind() == Some(TokenKind::Identifier)
-                                    && self.tokens
-                                        .peek_second()
-                                        .ok()
-                                        .map(|t| t.kind)
-                                        == Some(TokenKind::FatArrow);
-                            if is_no_paren_call {
-                                let NodeKind::Identifier { name } = &expr.kind else {
-                                    return self.parse_word_or_expr(expr);
-                                };
-                                let name = name.clone();
+                            //   (func 0 || 5)
+                            let bare_call_name = match &expr.kind {
+                                NodeKind::Identifier { name } if self.looks_like_bare_call(name) => {
+                                    Some(name.clone())
+                                }
+                                _ => None,
+                            };
+                            if let Some(name) = bare_call_name {
                                 let call_start = expr.location.start;
                                 let first_arg = self.parse_assignment_or_declaration()?;
                                 let args_node =
@@ -959,10 +932,12 @@ impl<'a> Parser<'a> {
                         if self.peek_kind() == Some(TokenKind::FatArrow) {
                             self.tokens.next()?; // consume redundant chained =>
                         }
-                        // The value after => may be followed by a word operator inside the list:
-                        // e.g. `(key => $val or "default")`.
-                        let val = self.parse_assignment_or_declaration()?;
-                        elements.push(self.parse_word_or_expr(val)?);
+                        if self.peek_kind() != Some(TokenKind::RightParen) {
+                            // The value after => may be followed by a word operator inside the list:
+                            // e.g. `(key => $val or "default")`.
+                            let val = self.parse_assignment_or_declaration()?;
+                            elements.push(self.parse_word_or_expr(val)?);
+                        }
                     }
 
                     while self.peek_kind() == Some(TokenKind::Comma)
@@ -992,6 +967,9 @@ impl<'a> Parser<'a> {
                             self.consume_token()?; // consume =>
                             if self.peek_kind() == Some(TokenKind::FatArrow) {
                                 self.consume_token()?; // consume redundant chained =>
+                            }
+                            if self.peek_kind() == Some(TokenKind::RightParen) {
+                                break;
                             }
                         }
 

@@ -147,3 +147,23 @@ fn deep_nesting_recovers_with_nesting_diagnostic_on_lsp_path() {
         "parse_with_recovery should surface a NestingTooDeep diagnostic for deep nesting"
     );
 }
+
+#[test]
+fn comp_parser_pl_lex_brackstack_block_depth_parses() {
+    let code = nested_eval_blocks(150);
+    assert_clean_parse(&code);
+}
+
+#[test]
+fn pathological_block_depth_still_hits_limit() {
+    let code = nested_eval_blocks(600);
+    assert!(fails_gracefully(&code), "600-deep bare blocks should still hit the block guard");
+}
+
+fn nested_eval_blocks(depth: usize) -> String {
+    let mut code = "eval ".to_string();
+    code.push_str(&"{".repeat(depth + 1));
+    code.push_str(&"}".repeat(depth + 1));
+    code.push(';');
+    code
+}

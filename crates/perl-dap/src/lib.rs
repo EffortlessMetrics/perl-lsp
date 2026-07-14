@@ -374,6 +374,19 @@ pub mod value;
 /// Variable parsing and rendering for Perl DAP (from perl-dap-variables).
 pub mod variables;
 
+/// Backend abstraction (`DebugBackend`) and its implementations.
+pub mod backend;
+/// Breakpoint oracle: reusable breakpoint truth layer over the AST validator.
+pub mod breakpoint_oracle;
+/// Canonical, backend-neutral Perl debug model shared by all debug backends.
+pub mod model;
+/// The Perl Debugger Peer Protocol spoken to external engines (ptkdb-first).
+pub mod peer_protocol;
+/// `.ptkdbrc` bootstrap/fallback rendering for `Devel::ptkdb`.
+pub mod ptkdb_bootstrap;
+/// Frozen debug-session packet builder (the stable external handoff format).
+pub mod session_plan;
+
 // Phase 2 modules (AC5-AC12) - IN PROGRESS
 /// Breakpoint storage and management for the DAP adapter.
 pub mod breakpoints;

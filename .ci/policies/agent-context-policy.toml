@@ -1,0 +1,81 @@
+version = 1
+
+# Package-local agent-context coverage policy (M6, issue #3848 / epic #3612).
+#
+# `cargo xtask check-agent-context` classifies every workspace member (from
+# `cargo metadata --no-deps`) into exactly one bucket:
+#   - has-context   : a `CLAUDE.md` exists in the crate directory (detected at
+#                     runtime by file presence -- not listed here).
+#   - exempt        : genuine infra/test-only support crate with no product
+#                     surface to document. PERMANENT.
+#   - needs_context : core-product crate that should have package-local
+#                     context but does not yet. EXPLICIT TRACKED DEBT -- this
+#                     list must be printed loudly on every run and must not be
+#                     used to hide crates that should really be documented.
+#                     M6 is not complete until this list is empty.
+#
+# A workspace member found in NONE of the three buckets is UNACCOUNTED and
+# fails `cargo xtask check-agent-context`. This keeps every member visible:
+# new crates cannot silently skip context, and debt cannot be silently
+# swept into a blanket exemption.
+
+# ---------------------------------------------------------------------------
+# exempt -- genuine infra/test-only crates (permanent)
+# ---------------------------------------------------------------------------
+
+[[exempt]]
+name = "perl-ci-hygiene"
+reason = "CI/policy hygiene tooling crate; no product surface to document."
+
+[[exempt]]
+name = "perl-core-harness"
+reason = "Upstream Perl core test-suite harness integration; test infra, not product."
+
+[[exempt]]
+name = "perl-core-harness-types"
+reason = "Private receipt types (publish = false) for perl-core-harness; types-only companion to an already-exempt harness crate, no independent product surface."
+
+[[exempt]]
+name = "perl-core-test-runner"
+reason = "Test-runner binary crate; drives test execution, not product logic."
+
+[[exempt]]
+name = "perl-parser-bench"
+reason = "Benchmark-only crate; no product surface to document."
+
+[[exempt]]
+name = "perl-parser-comparison"
+reason = "C-vs-Rust parser comparison harness; dev tooling, not product."
+
+[[exempt]]
+name = "perl-kwalitee"
+reason = "Crate-quality metrics tooling; internal audit surface, not product."
+
+[[exempt]]
+name = "perl-ripr-facts"
+reason = "RIPR fact-generation support crate for the CI gap gate; tooling, not product."
+
+[[exempt]]
+name = "perl-subprocess-runtime"
+reason = "Subprocess execution test/runtime support; infra, not product."
+
+[[exempt]]
+name = "perl-test-generators"
+reason = "Test-fixture generation tooling; no product surface to document."
+
+[[exempt]]
+name = "perl-test-must"
+reason = "`must`/`must_some` test-assertion helpers; test infra, not product."
+
+# ---------------------------------------------------------------------------
+# needs_context -- core-product crates tracked as explicit context debt
+# ---------------------------------------------------------------------------
+# Tracking issue: https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/3874
+# Remove an entry here once the crate's CLAUDE.md is authored -- the gate
+# picks up the file's presence automatically; no other change is needed.
+#
+# The 12 crates originally tracked here now each have a package-local
+# CLAUDE.md and have been removed from this list: perllsp, perl-lsp-rs-core,
+# perl-module, perl-workspace-core, perl-pod, perl-lsp-perltidy,
+# perl-diagnostics, perl-line-index, perl-ast-v2, perl-semantic-facts,
+# perl-tree-sitter-compat, perl-dead-code.

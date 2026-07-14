@@ -1339,6 +1339,33 @@ impl<'a> PerlLexer<'a> {
                                     break;
                                 } else if is_perl_identifier_continue(ch) {
                                     self.advance();
+                                } else if ch == ':'
+                                    && self.peek_char(1) == Some(':')
+                                    && self.qualified_name_closes_brace_from_here()
+                                {
+                                    // Package-qualified segment inside braces,
+                                    // e.g. ${Foo::bar} — mirror the bare
+                                    // $Foo::bar scan below (lines ~1359-1370)
+                                    // so `::`-delimited names are consumed as
+                                    // part of the same braced-variable token,
+                                    // BUT only when the qualified name is the
+                                    // entire braced content (this `::` chain
+                                    // leads directly to `}`, verified by the
+                                    // guard above without consuming). A
+                                    // partial-deref/postfix-chain case like
+                                    // ${Foo::bar->{baz}} or ${Foo::bar[0]}
+                                    // must NOT fold `::` here — stop at the
+                                    // same "Foo" boundary the pre-fix lexer
+                                    // used, so `::`/`bar`/`->`/... remain
+                                    // separate tokens and the parser's
+                                    // existing multi-token qualified-scalar
+                                    // walk (parse_qualified_scalar_tail)
+                                    // reconstructs `Foo::bar` as the variable
+                                    // operand of the postfix chain instead of
+                                    // losing it to a merged bareword
+                                    // Identifier token (issue #3939).
+                                    self.advance();
+                                    self.advance();
                                 } else {
                                     break;
                                 }
@@ -1448,26 +1475,50 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
-    /// Return the next non-space char and the char immediately following it (without consuming).
-    /// Used to detect quote-operator delimiters while distinguishing `=>` (fat-arrow autoquote)
-    /// from `=` used as a plain delimiter.
+    /// Return the next quote-operator delimiter candidate and following char
+    /// without consuming. Whitespace-led line comments are part of the delimiter
+    /// gap, but an immediate `#` remains a valid delimiter.
     fn peek_nonspace_and_following(&self) -> (Option<char>, Option<char>) {
-        let mut i = self.position;
-        while i < self.input.len() {
-            let c = match self.input.get(i..).and_then(|s| s.chars().next()) {
-                Some(c) => c,
-                None => return (None, None),
-            };
-            if c.is_whitespace() {
-                i += c.len_utf8();
+        let mut offset = self.position;
+        let mut comment_eligible = false;
+
+        loop {
+            let mut saw_whitespace = false;
+            while let Some(ch) = self.input.get(offset..).and_then(|suffix| suffix.chars().next()) {
+                if ch.is_whitespace() {
+                    offset += ch.len_utf8();
+                    saw_whitespace = true;
+                } else {
+                    break;
+                }
+            }
+            comment_eligible |= saw_whitespace;
+
+            if comment_eligible
+                && self.input.get(offset..).is_some_and(|suffix| suffix.starts_with('#'))
+            {
+                while let Some(ch) =
+                    self.input.get(offset..).and_then(|suffix| suffix.chars().next())
+                {
+                    offset += ch.len_utf8();
+                    if matches!(ch, '\n' | '\r') {
+                        break;
+                    }
+                }
+                comment_eligible = true;
                 continue;
             }
-            // Found non-space at position i; peek the next char after it
-            let j = i + c.len_utf8();
-            let following = self.input.get(j..).and_then(|s| s.chars().next());
-            return (Some(c), following);
+
+            break;
         }
-        (None, None)
+
+        let c = match self.input.get(offset..).and_then(|suffix| suffix.chars().next()) {
+            Some(c) => c,
+            None => return (None, None),
+        };
+        let next_offset = offset + c.len_utf8();
+        let following = self.input.get(next_offset..).and_then(|suffix| suffix.chars().next());
+        (Some(c), following)
     }
 
     /// Is `c` a valid quote-like delimiter? (non-alnum, including paired)
@@ -1744,18 +1795,8 @@ impl<'a> PerlLexer<'a> {
                 && self.hash_brace_depth == 0
                 && matches!(text, "s" | "tr" | "y")
             {
-                let immediate = self.current_char();
-                let (candidate, char_after_next, has_whitespace) =
-                    if immediate.is_some_and(|c| c.is_whitespace()) {
-                        let (nc, ca) = self.peek_nonspace_and_following();
-                        (nc, ca, true)
-                    } else {
-                        let following = immediate.and_then(|c| {
-                            let j = self.position + c.len_utf8();
-                            self.input.get(j..).and_then(|s| s.chars().next())
-                        });
-                        (immediate, following, false)
-                    };
+                let (candidate, char_after_next, has_gap) =
+                    self.peek_quote_operator_gap_and_following();
 
                 if let Some(next) = candidate {
                     // `s => 1` should remain a fat-arrow hash key, not quote op.
@@ -1765,12 +1806,12 @@ impl<'a> PerlLexer<'a> {
                     let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
                     let is_quote_char = matches!(next, '\'' | '"') && text != "s";
                     let transliteration_allows_whitespace = text == "tr" || text == "y";
-                    let substitution_disallows_whitespace = text == "s" && has_whitespace;
+                    let substitution_disallows_whitespace = text == "s" && has_gap;
                     let is_valid_delim = Self::is_quote_delim(next)
                         && !is_fat_arrow
                         && !is_filetest_s
                         && !substitution_disallows_whitespace
-                        && (!has_whitespace
+                        && (!has_gap
                             || is_paired_delim
                             || is_quote_char
                             || transliteration_allows_whitespace);
@@ -1838,20 +1879,8 @@ impl<'a> PerlLexer<'a> {
                         //      If it is a valid delimiter → any non-alnum, non-whitespace char.
                         //   2. If the adjacent char is whitespace, peek past it.
                         //      Only accept PAIRED delimiters ({, [, (, <) in that case.
-                        let immediate = self.current_char();
-                        let (candidate, char_after_next, has_whitespace) =
-                            if immediate.is_some_and(|c| c.is_whitespace()) {
-                                // There is whitespace — peek past it
-                                let (nc, ca) = self.peek_nonspace_and_following();
-                                (nc, ca, true)
-                            } else {
-                                // No whitespace — use immediate char
-                                let following = immediate.and_then(|c| {
-                                    let j = self.position + c.len_utf8();
-                                    self.input.get(j..).and_then(|s| s.chars().next())
-                                });
-                                (immediate, following, false)
-                            };
+                        let (candidate, char_after_next, has_gap) =
+                            self.peek_quote_operator_gap_and_following();
 
                         if let Some(next) = candidate {
                             // Fat-arrow autoquoting: `s => value` — `=` followed by `>` is '=>',
@@ -1882,10 +1911,10 @@ impl<'a> PerlLexer<'a> {
                                 && !is_fat_arrow
                                 && !is_filetest_s
                                 && !is_hash_subscript_bare_key_boundary
-                                && (!has_whitespace
-                                    || is_paired_delim
-                                    || is_quote_char
-                                    || is_spaced_slash_delim);
+                                    && (!has_gap
+                                        || is_paired_delim
+                                        || is_quote_char
+                                        || is_spaced_slash_delim);
 
                             if is_valid_delim {
                                 self.mode = LexerMode::ExpectDelimiter;
@@ -1896,14 +1925,7 @@ impl<'a> PerlLexer<'a> {
                                 });
 
                                 // Don't return a keyword token - continue to parse the delimiter
-                                // Skip any whitespace between operator and delimiter
-                                while let Some(ch) = self.current_char() {
-                                    if ch.is_whitespace() {
-                                        self.advance();
-                                    } else {
-                                        break;
-                                    }
-                                }
+                                self.skip_quote_operator_delimiter_gap();
 
                                 // Get the delimiter
                                 #[allow(clippy::collapsible_if)]
@@ -2762,6 +2784,7 @@ impl<'a> PerlLexer<'a> {
 
     fn parse_substitution(&mut self, start: usize) -> Option<Token> {
         // We've already consumed 's'
+        self.skip_quote_operator_delimiter_gap();
         let delimiter = self.current_char()?;
         self.advance(); // Skip delimiter
         self.parse_substitution_with_delimiter(start, delimiter)
@@ -2818,6 +2841,16 @@ impl<'a> PerlLexer<'a> {
     }
 
     fn skip_paired_substitution_replacement_gap(&mut self) {
+        self.skip_comment_gap_after_whitespace();
+    }
+
+    fn skip_quote_operator_delimiter_gap(&mut self) {
+        if self.current_char().is_some_and(char::is_whitespace) {
+            self.skip_comment_gap_after_whitespace();
+        }
+    }
+
+    fn skip_comment_gap_after_whitespace(&mut self) {
         let mut comment_eligible = false;
         loop {
             let mut saw_whitespace = false;
@@ -2840,6 +2873,12 @@ impl<'a> PerlLexer<'a> {
 
             break;
         }
+    }
+
+    fn peek_quote_operator_gap_and_following(&self) -> (Option<char>, Option<char>, bool) {
+        let (candidate, following) = self.peek_nonspace_and_following();
+        let saw_gap = self.current_char().is_some_and(char::is_whitespace);
+        (candidate, following, saw_gap)
     }
 
     fn read_substitution_replacement_body(&mut self, delim: char) -> (String, bool) {

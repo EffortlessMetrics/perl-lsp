@@ -55,9 +55,9 @@
 //! ```
 
 use crate::{
-    ast::{Node, NodeKind, SourceLocation},
-    error::{ParseError, ParseOutput, ParseResult, RecoveryKind, RecoverySite},
-    heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_all},
+    ast::{GotoTargetForm, Node, NodeKind, SourceLocation},
+    error::{BudgetTracker, ParseError, ParseOutput, ParseResult, RecoveryKind, RecoverySite},
+    heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_at_declaration_offsets},
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
 };
@@ -89,6 +89,8 @@ pub struct Parser<'a> {
     tokens: TokenStream<'a>,
     /// Current recursion depth for overflow protection during complex Perl script parsing
     recursion_depth: usize,
+    /// Current structural block depth for nested Perl blocks.
+    block_depth: usize,
     /// Position tracking for error reporting and AST location information
     last_end_position: usize,
     /// Context flag for disambiguating for-loop initialization syntax
@@ -123,6 +125,7 @@ pub struct Parser<'a> {
 // for the precedence parsing chain). 128 * 30 = ~3840 frames which
 // is safe. Real Perl code rarely exceeds 20-30 nesting levels.
 const MAX_RECURSION_DEPTH: usize = 128;
+const MAX_BLOCK_NESTING_DEPTH: usize = 512;
 
 impl<'a> Parser<'a> {
     /// Create a new parser for the provided Perl source.
@@ -148,6 +151,7 @@ impl<'a> Parser<'a> {
         Parser {
             tokens: TokenStream::new(input),
             recursion_depth: 0,
+            block_depth: 0,
             last_end_position: 0,
             in_for_loop_init: false,
             in_class_body: 0,
@@ -282,6 +286,7 @@ impl<'a> Parser<'a> {
         Parser {
             tokens: TokenStream::from_vec(tokens),
             recursion_depth: 0,
+            block_depth: 0,
             last_end_position: 0,
             in_for_loop_init: false,
             in_class_body: 0,
@@ -414,8 +419,8 @@ impl<'a> Parser<'a> {
     /// assert!(!output.diagnostics.is_empty() || matches!(output.ast.kind, perl_parser_core::NodeKind::Program { .. }));
     /// ```
     pub fn parse_with_recovery(&mut self) -> ParseOutput {
-        let ast = match self.parse() {
-            Ok(node) => node,
+        let (ast, terminated_early) = match self.parse() {
+            Ok(node) => (node, false),
             Err(e) => {
                 // If parse() returned Err, it was a non-recoverable error (e.g. recursion limit)
                 // Ensure it's recorded if not already
@@ -424,14 +429,19 @@ impl<'a> Parser<'a> {
                 }
 
                 // Return a dummy Program node with the error
-                Node::new(
-                    NodeKind::Program { statements: vec![] },
-                    SourceLocation { start: 0, end: 0 },
+                (
+                    Node::new(
+                        NodeKind::Program { statements: vec![] },
+                        SourceLocation { start: 0, end: 0 },
+                    ),
+                    true,
                 )
             }
         };
 
-        ParseOutput::with_errors(ast, self.errors.clone())
+        let mut budget_usage = BudgetTracker::new();
+        budget_usage.errors_emitted = self.errors.len();
+        ParseOutput::finish(ast, self.errors.clone(), budget_usage, terminated_early)
     }
 }
 

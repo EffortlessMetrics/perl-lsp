@@ -1,0 +1,24 @@
+[package]
+name = "perl-tree-sitter-compat"
+version = "0.17.0"
+edition = "2024"
+description = "Tree-sitter-compatible node/capture output over the native Perl parser — an adapter, not a re-implementation (PLSP-ADR-0006 PR 9)."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/effortlessmetrics/perl-lsp-swarm"
+publish = false
+
+[dependencies]
+# An adapter over the native parser + the LSP-free substrate's line index.
+perl-parser-core = { workspace = true }
+perl-workspace-core = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

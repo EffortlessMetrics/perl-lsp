@@ -1,0 +1,9 @@
+project: product
+component: Developer experience
+kind: Added
+body: Added a hard-assert regression lock for cross-file signature-help, closing the last vacuous-green gap in the scenario_21 provider dogfood suite.
+time: 2026-07-11T00:00:00Z
+custom:
+  PR: "3902"
+  Slug: scenario21-signature-help-hard-assert
+  Breaking: "no"

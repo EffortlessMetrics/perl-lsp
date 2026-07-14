@@ -43,23 +43,7 @@ pub(super) fn register_request_cancellation(
         return Some(cancelled_response_with_method(request_id, &request.method));
     }
 
-    let needs_cancellation = matches!(
-        request.method.as_str(),
-        "textDocument/completion"
-            | "textDocument/hover"
-            | "textDocument/definition"
-            | "textDocument/references"
-            | "textDocument/documentSymbol"
-            | "textDocument/codeAction"
-            | "textDocument/formatting"
-            | "textDocument/rename"
-            | "workspace/symbol"
-            | "callHierarchy/incomingCalls"
-            | "callHierarchy/outgoingCalls"
-            | "textDocument/inlayHint"
-    );
-
-    if !needs_cancellation {
+    if !method_supports_cancellation(&request.method) {
         return None;
     }
 
@@ -91,6 +75,28 @@ pub(super) fn register_request_cancellation(
     None
 }
 
+fn method_supports_cancellation(method: &str) -> bool {
+    matches!(
+        method,
+        "textDocument/completion"
+            | "textDocument/hover"
+            | "textDocument/definition"
+            | "textDocument/references"
+            | "textDocument/documentSymbol"
+            | "textDocument/codeAction"
+            | "textDocument/formatting"
+            | "textDocument/rename"
+            | "workspace/symbol"
+            | "callHierarchy/incomingCalls"
+            | "callHierarchy/outgoingCalls"
+            | "textDocument/prepareTypeHierarchy"
+            | "typeHierarchy/prepare"
+            | "typeHierarchy/supertypes"
+            | "typeHierarchy/subtypes"
+            | "textDocument/inlayHint"
+    )
+}
+
 pub(super) fn finalize_cancellation_state(request_id: Option<&Value>) -> Option<JsonRpcResponse> {
     let request_id = request_id?;
     // Convert at the boundary; if conversion fails, skip registry interaction.
@@ -112,4 +118,29 @@ pub(super) fn finalize_cancellation_state(request_id: Option<&Value>) -> Option<
 
     GLOBAL_CANCELLATION_REGISTRY.remove_request(&typed_id);
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::method_supports_cancellation;
+
+    #[test]
+    fn type_hierarchy_methods_are_registered_for_cancellation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for method in [
+            "textDocument/prepareTypeHierarchy",
+            "typeHierarchy/prepare",
+            "typeHierarchy/supertypes",
+            "typeHierarchy/subtypes",
+        ] {
+            if !method_supports_cancellation(method) {
+                return Err(std::io::Error::other(format!(
+                    "{method} must be registered for cancellation"
+                ))
+                .into());
+            }
+        }
+
+        Ok(())
+    }
 }

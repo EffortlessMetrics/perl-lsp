@@ -349,6 +349,24 @@ impl BudgetTracker {
 /// strategies across all pipeline stages.
 pub type ParseResult<T> = Result<T, ParseError>;
 
+/// Severity for a parser diagnostic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ParseDiagnosticSeverity {
+    /// The parser produced a clean AST; surface this finding without failing compilation.
+    Advisory,
+    /// The diagnostic represents invalid syntax or recovery that prevents a clean receipt.
+    Blocking,
+}
+
+impl ParseDiagnosticSeverity {
+    /// Whether this severity prevents a clean parser/compiler receipt.
+    #[must_use]
+    pub const fn blocks_clean_parse(self) -> bool {
+        matches!(self, Self::Blocking)
+    }
+}
+
 #[derive(Error, Debug, Clone, PartialEq)]
 /// Comprehensive error types that can occur during Perl parsing workflows
 ///
@@ -398,6 +416,15 @@ pub enum ParseError {
         /// Descriptive error message explaining the syntax issue
         message: String,
         /// Byte position where syntax error occurred in Perl script
+        location: usize,
+    },
+
+    /// A valid construct that warrants an editor warning but does not invalidate the AST.
+    #[error("{message}")]
+    Advisory {
+        /// Descriptive warning message.
+        message: String,
+        /// Byte position where the advisory applies.
         location: usize,
     },
 
@@ -678,6 +705,29 @@ impl ParseOutput {
 }
 
 impl ParseError {
+    /// Create the advisory emitted for valid but potentially expensive nested regex quantifiers.
+    pub fn nested_quantifier_advisory(location: usize) -> Self {
+        Self::Advisory {
+            message: "Nested quantifiers detected (possible backtracking risk)".to_string(),
+            location,
+        }
+    }
+
+    /// Classify whether this diagnostic blocks a clean parser/compiler receipt.
+    #[must_use]
+    pub fn severity(&self) -> ParseDiagnosticSeverity {
+        match self {
+            Self::Advisory { .. } => ParseDiagnosticSeverity::Advisory,
+            _ => ParseDiagnosticSeverity::Blocking,
+        }
+    }
+
+    /// Whether this diagnostic prevents a clean parser/compiler receipt.
+    #[must_use]
+    pub fn blocks_clean_parse(&self) -> bool {
+        self.severity().blocks_clean_parse()
+    }
+
     /// Create a new syntax error for Perl parsing workflow failures
     ///
     /// # Arguments
@@ -739,6 +789,7 @@ impl ParseError {
         match self {
             ParseError::UnexpectedToken { location, .. } => Some(*location),
             ParseError::SyntaxError { location, .. } => Some(*location),
+            ParseError::Advisory { location, .. } => Some(*location),
             ParseError::Recovered { location, .. } => Some(*location),
             _ => None,
         }

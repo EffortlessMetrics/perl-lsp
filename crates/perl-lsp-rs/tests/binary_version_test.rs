@@ -13,6 +13,12 @@
 //!
 //! Fix: Run `cargo build -p perl-lsp-rs` or just `cargo test -p perl-lsp-rs`
 
+// Integration tests print diagnostic output for CI troubleshooting, and this
+// helper's `panic!` on a timed-out request is an accepted test-infra failure
+// mode (mirrors an assert-with-message); neither applies the way it does to
+// production code.
+#![allow(clippy::print_stderr, clippy::panic)]
+
 mod common;
 
 use serde_json::json;

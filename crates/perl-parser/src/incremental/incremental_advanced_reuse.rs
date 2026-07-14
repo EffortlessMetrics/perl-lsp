@@ -592,6 +592,7 @@ impl AdvancedReuseAnalyzer {
                 interpolated.hash(&mut hasher);
                 "string".hash(&mut hasher);
             }
+            NodeKind::VString { .. } => "vstring".hash(&mut hasher),
             NodeKind::Variable { sigil, .. } => {
                 sigil.hash(&mut hasher);
                 "variable".hash(&mut hasher);
@@ -610,6 +611,7 @@ impl AdvancedReuseAnalyzer {
         match &node.kind {
             NodeKind::Number { value } => value.hash(&mut hasher),
             NodeKind::String { value, .. } => value.hash(&mut hasher),
+            NodeKind::VString { value } => value.hash(&mut hasher),
             NodeKind::Variable { name, .. } => name.hash(&mut hasher),
             NodeKind::Identifier { name } => name.hash(&mut hasher),
             _ => {
@@ -723,6 +725,7 @@ impl AdvancedReuseAnalyzer {
                 NodeKind::String { interpolated: i1, .. },
                 NodeKind::String { interpolated: i2, .. },
             ) => i1 == i2,
+            (NodeKind::VString { .. }, NodeKind::VString { .. }) => true,
             (NodeKind::Variable { sigil: s1, .. }, NodeKind::Variable { sigil: s2, .. }) => {
                 s1 == s2
             }
@@ -789,6 +792,7 @@ impl AdvancedReuseAnalyzer {
             node.kind,
             NodeKind::Number { .. }
                 | NodeKind::String { .. }
+                | NodeKind::VString { .. }
                 | NodeKind::Identifier { .. }
                 | NodeKind::Variable { .. }
         )
@@ -1040,6 +1044,34 @@ mod tests {
     }
 
     #[test]
+    fn vstring_hashes_preserve_kind_and_value_boundaries() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+
+        let node1 = Node::new(
+            NodeKind::VString { value: "v1.2.3".to_string() },
+            SourceLocation { start: 0, end: 6 },
+        );
+        let node2 = Node::new(
+            NodeKind::VString { value: "v2.0.0".to_string() },
+            SourceLocation { start: 0, end: 6 },
+        );
+
+        let structural_hash1 = analyzer.calculate_structural_hash(&node1);
+        let structural_hash2 = analyzer.calculate_structural_hash(&node2);
+        assert_eq!(
+            structural_hash1, structural_hash2,
+            "v-string structural hash should depend on kind, not version text"
+        );
+
+        let content_hash1 = analyzer.calculate_content_hash(&node1);
+        let content_hash2 = analyzer.calculate_content_hash(&node2);
+        assert_ne!(
+            content_hash1, content_hash2,
+            "v-string content hash must distinguish version text"
+        );
+    }
+
+    #[test]
     fn test_children_count_calculation() {
         let analyzer = AdvancedReuseAnalyzer::new();
 
@@ -1098,11 +1130,37 @@ mod tests {
             SourceLocation { start: 0, end: 7 },
         );
 
+        let vstring1 = Node::new(
+            NodeKind::VString { value: "v1.2.3".to_string() },
+            SourceLocation { start: 0, end: 6 },
+        );
+
+        let vstring2 = Node::new(
+            NodeKind::VString { value: "v1.2.4".to_string() },
+            SourceLocation { start: 0, end: 6 },
+        );
+
         // Same type nodes should be compatible
         assert!(analyzer.are_compatible_for_content_update(&num1, &num2));
+        assert!(analyzer.are_compatible_for_content_update(&vstring1, &vstring2));
 
         // Different type nodes should not be compatible
         assert!(!analyzer.are_compatible_for_content_update(&num1, &str1));
+        assert!(!analyzer.are_compatible_for_content_update(&vstring1, &str1));
+    }
+
+    #[test]
+    fn vstring_is_content_stable_leaf_for_position_shift_scoring() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let vstring = Node::new(
+            NodeKind::VString { value: "v1.2.3".to_string() },
+            SourceLocation { start: 0, end: 6 },
+        );
+
+        assert!(
+            analyzer.is_content_stable_leaf(&vstring),
+            "v-string literals should use the same stable-leaf shift penalty as strings"
+        );
     }
 
     #[test]

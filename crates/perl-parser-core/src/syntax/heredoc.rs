@@ -33,6 +33,11 @@ pub struct PendingHeredoc {
     pub quote: QuoteKind,
     /// Source span of the heredoc declaration (e.g., `<<EOF`).
     pub decl_span: ByteSpan,
+    /// Byte offset of the first physical line following this declaration.
+    ///
+    /// A later argument in the same expression may be parsed after this
+    /// heredoc's terminator, so this cannot be derived from statement completion.
+    pub body_start: usize,
     // Optional: add your node id here if convenient for AST attachment.
     // pub node_id: NodeId,
 }
@@ -77,6 +82,31 @@ pub fn collect_all(
         offset = off2;
     }
     CollectionResult { contents: results, terminators_found, next_offset: offset }
+}
+
+/// Collect queued heredocs from the physical line following each declaration.
+///
+/// Perl permits a later heredoc declaration to appear after an earlier heredoc
+/// terminator while the surrounding call or list expression remains open. A
+/// declaration on the same physical line still consumes the next body in FIFO
+/// order, while a declaration on a later line resets collection to that line.
+pub fn collect_at_declaration_offsets(
+    src: &[u8],
+    mut pending: VecDeque<PendingHeredoc>,
+) -> CollectionResult {
+    let mut results = Vec::with_capacity(pending.len());
+    let mut terminators_found = Vec::with_capacity(pending.len());
+    let mut next_offset = pending.front().map_or(0, |heredoc| heredoc.body_start);
+
+    while let Some(hd) = pending.pop_front() {
+        let body_start = next_offset.max(hd.body_start);
+        let (content, offset, found) = collect_one(src, body_start, &hd);
+        results.push(content);
+        terminators_found.push(found);
+        next_offset = offset;
+    }
+
+    CollectionResult { contents: results, terminators_found, next_offset }
 }
 
 /// Reads content lines until `label` matches after optional leading whitespace.
@@ -201,11 +231,16 @@ mod tests {
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     fn pending(label: &str, allow_indent: bool) -> PendingHeredoc {
+        pending_at(label, allow_indent, 0)
+    }
+
+    fn pending_at(label: &str, allow_indent: bool, body_start: usize) -> PendingHeredoc {
         PendingHeredoc {
             label: Arc::from(label),
             allow_indent,
             quote: QuoteKind::Unquoted,
             decl_span: ByteSpan { start: 0, end: 0 },
+            body_start,
         }
     }
 
@@ -229,6 +264,59 @@ mod tests {
         assert_eq!(result.next_offset, 16);
 
         Ok(())
+    }
+
+    #[test]
+    fn declaration_offsets_empty_pending_returns_zero_offset() {
+        let result = collect_at_declaration_offsets(b"source", VecDeque::new());
+
+        assert!(result.contents.is_empty());
+        assert!(result.terminators_found.is_empty());
+        assert_eq!(result.next_offset, 0);
+    }
+
+    #[test]
+    fn declaration_offsets_same_line_heredocs_remain_fifo_aligned() -> TestResult {
+        let src = b"a\nA\nb\nB\n";
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending_at("A", false, 0));
+        pending_docs.push_back(pending_at("B", false, 0));
+
+        let result = collect_at_declaration_offsets(src, pending_docs);
+
+        assert_eq!(result.terminators_found, vec![true, true]);
+        assert_eq!(slice(src, result.contents[0].segments[0])?, "a");
+        assert_eq!(slice(src, result.contents[1].segments[0])?, "b");
+        Ok(())
+    }
+
+    #[test]
+    fn declaration_offsets_later_declaration_resets_collection_start() -> TestResult {
+        let src = b"a\nA\n    << 'B'\nb\nB\n";
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending_at("A", false, 0));
+        pending_docs.push_back(pending_at("B", false, 15));
+
+        let result = collect_at_declaration_offsets(src, pending_docs);
+
+        assert_eq!(result.terminators_found, vec![true, true]);
+        assert_eq!(slice(src, result.contents[0].segments[0])?, "a");
+        assert_eq!(slice(src, result.contents[1].segments[0])?, "b");
+        Ok(())
+    }
+
+    #[test]
+    fn declaration_offsets_unterminated_first_heredoc_cascades_to_eof() {
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending_at("A", false, 0));
+        pending_docs.push_back(pending_at("B", false, 0));
+
+        let result = collect_at_declaration_offsets(b"body\n", pending_docs);
+
+        assert_eq!(result.terminators_found, vec![false, false]);
+        assert!(!result.contents[0].terminated);
+        assert!(!result.contents[1].terminated);
+        assert_eq!(result.next_offset, 5);
     }
 
     #[test]

@@ -1,0 +1,101 @@
+# Changelog ledger policy (tracking issue #3784 — the Changie program).
+# #3768 is the retrospective baseline artifact only (see
+# `retrospective_covered_through` below), not the program tracker.
+#
+# Consumed by `cargo xtask changelog check`. FOUNDATION / ADVISORY: with
+# `blocking_enforced_from` empty, the check NEVER returns a blocking exit code
+# (exit 1) — see the three-clock model below. This file declares the projects,
+# the disposition rule, exemption categories, and the changelog-path mapping;
+# `xtask/src/tasks/changelog.rs` deserializes this file rather than
+# hand-duplicating any of it. A follow-up PR fills `blocking_enforced_from` to
+# flip enforcement on.
+#
+# xtask exit codes (advisory checker; see xtask/src/tasks/changelog.rs):
+#   0 = policy satisfied, OR an advisory finding was reported (soak period).
+#   1 = blocking policy violation (only reachable once `blocking_enforced_from`
+#       is set AND a PR's base is at/after it).
+#   2 = instrument/config failure (malformed `.changie.yaml` or this file,
+#       unresolvable changed-file list, `changie` render crash) — never a
+#       policy verdict.
+
+schema_version = 1
+
+# "advisory" => a missing disposition is reported but never fails a PR.
+# "blocking" => paired with a reached `blocking_enforced_from`, a missing
+#               disposition returns a blocking exit code (1).
+enforcement = "advisory"
+
+# --- Three-clock cutoff model (tracking issue #3784; #3768 is the retrospective
+# --- baseline artifact only) --------------------------------------------------
+#
+# A single "cutoff SHA" is the wrong model: #3768's manual catalog audit was
+# authored before several PRs (e.g. #3765, merged AFTER #3768 was written but
+# BEFORE #3768 itself merged) landed on main. A single optical boundary at
+# #3768's merge SHA would silently drop every PR merged in that authoring-to-
+# merge window from BOTH the retrospective coverage and the forward-looking
+# expectation. Three independent clocks close that gap:
+#
+# 1. `retrospective_covered_through` — the last `main` SHA #3768's manual
+#    catalog actually audited (a conservative floor, NOT #3768's merge SHA).
+#    Anything at/before this commit is covered by the 0.18.0 retrospective.
+# 2. `advisory_expected_from` — the Changie foundation PR's (#3775) OWN merge
+#    SHA. A disposition (fragment or exemption) is only EXPECTED — reported as
+#    an advisory finding when missing — for PRs whose base is at/after this
+#    commit. Empty = #3775 has not merged yet = the advisory boundary is not
+#    armed = no PR is expected to carry a disposition (findings are purely
+#    informational). Filled in at/after #3775 merges (a maintainer or a
+#    one-line follow-up commit sets it).
+# 3. `blocking_enforced_from` — a FUTURE SHA, set only after the advisory
+#    period has soaked. A missing disposition only becomes a blocking
+#    violation (non-zero exit) for PRs whose base is at/after this commit.
+#    Empty = no blocking path is reachable, ever, regardless of
+#    `enforcement` below.
+#
+# The half-open interval `(retrospective_covered_through, advisory_expected_from]`
+# — PRs merged after the retrospective floor but before the advisory boundary
+# armed — was closed by the bridge audit in #3784: of the 9 commits in
+# `da86c123a..af58b72a`, 8 are internal (orchestration/docs/test/dev-tooling/
+# changelog-infra, covered by exemption categories) and 1 is user-facing (#3765,
+# completion → generation-owned type environment), now carried by a retrospective
+# fragment under `.changes/unreleased/`. With the window covered, the floor
+# advances to the advisory boundary, collapsing the interval to empty.
+retrospective_covered_through = "af58b72a"
+advisory_expected_from = "af58b72a"
+blocking_enforced_from = ""
+
+# Every PR carries ONE explicit disposition: a Changie fragment OR an
+# exemption-with-reason drawn from these categories. This is NOT "every PR needs
+# a fragment" — an evidenced exemption is a first-class disposition.
+#
+# NOTE: this MUST appear before the `[[projects]]` array-of-tables below.
+# TOML scopes bare `key = value` lines to the most recently opened table —
+# after a `[[projects]]` header, any following key=value pairs are read as
+# fields of THAT array entry, not of the top-level document. Declaring
+# `exemption_categories` after `[[projects]]` silently nests it under the
+# last project entry instead of the document root, which
+# `ChangelogPolicy` (`xtask/src/tasks/changelog.rs`) then fails to
+# deserialize with "missing field `exemption_categories`". Caught by
+# `check_malformed_policy_toml_is_instrument_failure_exit2`'s sibling
+# happy-path tests once this file started being deserialized as a whole
+# struct (Correction 2) instead of via ad-hoc `toml::Value` lookups.
+exemption_categories = [
+  "tests",                    # test-only changes
+  "ci",                       # CI/workflow/policy plumbing
+  "refactor",                 # behavior-preserving internal refactor
+  "generated-status",         # auto-generated status/metrics surfaces
+  "docs-no-contract-change",  # docs that change no user-facing contract
+  "deps",                     # dependency lockfile/version bumps
+  "release-prep",             # version bump + changelog batch PRs
+  "changelog-tooling",        # changes to the changelog tooling itself
+]
+
+# The two release-note projects. Keys match `.changie.yaml` project keys.
+[[projects]]
+key = "product"
+label = "Product (perl-lsp workspace)"
+changelog = "CHANGELOG.md"
+
+[[projects]]
+key = "vscode"
+label = "VS Code extension"
+changelog = "vscode-extension/CHANGELOG.md"

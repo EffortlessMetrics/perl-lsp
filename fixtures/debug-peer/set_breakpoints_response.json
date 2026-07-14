@@ -1,0 +1,13 @@
+{
+  "type": "response",
+  "seq": 21,
+  "requestSeq": 20,
+  "success": true,
+  "command": "debugger/setBreakpoints",
+  "body": {
+    "breakpoints": [
+      { "id": 1, "verified": true, "line": 42 },
+      { "id": 2, "verified": false, "line": 7, "message": "no executable code on line 7" }
+    ]
+  }
+}

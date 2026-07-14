@@ -147,12 +147,15 @@ updates:
         update-types:
           - "minor"
           - "patch"
-      # Group all typescript/eslint related packages
+      # Group all typescript/oxlint/oxfmt related packages (PREP-2 #3662:
+      # ESLint + @typescript-eslint replaced by Oxlint + oxlint-tsgolint;
+      # PREP-3 #3662: Oxfmt adopted as the sole formatter, no Prettier)
       typescript:
         patterns:
           - "typescript"
-          - "@typescript-eslint/*"
-          - "eslint*"
+          - "oxlint"
+          - "oxlint-tsgolint"
+          - "oxfmt"
         update-types:
           - "minor"
           - "patch"

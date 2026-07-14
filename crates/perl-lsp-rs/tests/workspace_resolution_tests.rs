@@ -283,7 +283,7 @@ fn initialize_rejects_double_initialize() -> Result<(), Box<dyn std::error::Erro
     // Second initialize should fail
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2_i64)),
         method: "initialize".into(),
         params: Some(json!({
             "rootUri": "file:///workspace2",

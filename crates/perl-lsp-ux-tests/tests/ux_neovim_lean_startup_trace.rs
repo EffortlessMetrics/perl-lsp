@@ -122,9 +122,9 @@ fn ux_neovim_lean_startup_trace_receipt() -> Result<()> {
 
     let init = harness.client.initialize_result();
     assert_eq!(
-        init.pointer("/result/capabilities/semanticTokensProvider/full"),
+        init.pointer("/result/capabilities/semanticTokensProvider/full/delta"),
         Some(&json!(true)),
-        "lean startup trace must not advertise semantic token delta support"
+        "lean startup trace must advertise semantic token delta support (LSP 3.17)"
     );
     record_event(&mut events, "semantic_tokens_capability_checked", start);
 
@@ -176,7 +176,7 @@ fn ux_neovim_lean_startup_trace_receipt() -> Result<()> {
         "workspace_indexing_decision_observed": indexing_skip_observed,
         "file_watchers_registered": watcher_registered,
         "inline_completion_registered": inline_registered,
-        "semantic_tokens_delta_advertised": false,
+        "semantic_tokens_delta_advertised": true,
         "text_document_content_schemes": ["perldoc"],
         "diagnostic_mode": "syntax_only",
         "diagnostic_debounce_ms": 0,

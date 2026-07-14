@@ -7,6 +7,7 @@
 use perl_ast::{Node, NodeKind, SourceLocation};
 use perl_symbol::surface::{SymbolDecl, extract_symbol_decls};
 use perl_symbol::{SymbolKind, VarKind};
+use perl_tdd_support::must_some;
 
 fn loc(start: usize, end: usize) -> SourceLocation {
     SourceLocation { start, end }
@@ -1005,5 +1006,86 @@ fn test_deeply_nested_varlist_vars_are_extracted() {
         "expected 4 decls for $a, $b, $c, $d but got {}: {:?}",
         decls.len(),
         decls.iter().map(|d| &d.name).collect::<Vec<_>>()
+    );
+}
+
+// ── Bare-block package scoping (perlmod block scope) ─────────────────────────
+
+/// A `package` declared inside a *bare* `{ ... }` block is scoped to that block
+/// (perlmod: a package declaration's scope runs to the end of the enclosing
+/// block). It must NOT leak its package context to siblings after the block.
+///
+/// ```perl
+/// package Foo;
+/// {
+///     package Bar;
+///     sub helper { 1 }
+/// }
+/// sub after { 1 }   # belongs to Foo, not Bar
+/// ```
+#[test]
+fn test_bare_block_package_does_not_leak_to_siblings() {
+    // package Foo;
+    let pkg_foo = Node::new(
+        NodeKind::Package { name: "Foo".to_string(), name_span: loc(8, 11), block: None },
+        loc(0, 12),
+    );
+
+    // Inside the bare block: package Bar; sub helper { }
+    let pkg_bar = Node::new(
+        NodeKind::Package { name: "Bar".to_string(), name_span: loc(22, 25), block: None },
+        loc(14, 26),
+    );
+    let helper_body = Node::new(NodeKind::Block { statements: vec![] }, loc(42, 45));
+    let helper = Node::new(
+        NodeKind::Subroutine {
+            name: Some("helper".to_string()),
+            name_span: Some(loc(31, 37)),
+            declarator: None,
+            prototype: None,
+            signature: None,
+            attributes: vec![],
+            body: Box::new(helper_body),
+        },
+        loc(27, 45),
+    );
+    let bare_block = Node::new(NodeKind::Block { statements: vec![pkg_bar, helper] }, loc(13, 47));
+
+    // sub after { } — sibling after the bare block, still under Foo
+    let after_body = Node::new(NodeKind::Block { statements: vec![] }, loc(58, 61));
+    let after = Node::new(
+        NodeKind::Subroutine {
+            name: Some("after".to_string()),
+            name_span: Some(loc(52, 57)),
+            declarator: None,
+            prototype: None,
+            signature: None,
+            attributes: vec![],
+            body: Box::new(after_body),
+        },
+        loc(48, 61),
+    );
+
+    let program =
+        Node::new(NodeKind::Program { statements: vec![pkg_foo, bare_block, after] }, loc(0, 61));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    let helper_decl = must_some(decls.iter().find(|d| d.name == "helper"));
+    assert_eq!(
+        helper_decl.container.as_deref(),
+        Some("Bar"),
+        "sub helper is inside the bare block's `package Bar` and must belong to Bar",
+    );
+
+    let after_decl = must_some(decls.iter().find(|d| d.name == "after"));
+    assert_eq!(
+        after_decl.container.as_deref(),
+        Some("Foo"),
+        "sub after follows the bare block, so `package Bar` must NOT leak — it belongs to Foo",
+    );
+    assert_eq!(
+        after_decl.qualified_name, "Foo::after",
+        "after's qualified name must reflect Foo, not the leaked Bar",
     );
 }

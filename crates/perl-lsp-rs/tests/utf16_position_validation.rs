@@ -1,3 +1,8 @@
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use lsp_types::Position;
 use perl_lsp::textdoc::{PosEnc, byte_to_lsp_pos, lsp_pos_to_byte};
 use ropey::Rope;

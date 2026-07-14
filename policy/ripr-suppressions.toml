@@ -11,7 +11,7 @@ schema_version = 1
 policy = "ripr-suppressions"
 owner = "EffortlessMetrics"
 status = "advisory"
-updated = "2026-06-22"
+updated = "2026-07-07"
 
 # -----------------------------------------------------------------------------
 # Generated status docs: validated through status-generation checks, not
@@ -133,6 +133,24 @@ review_after = "2026-07-18"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# Type hierarchy cancellation routing: method-string dispatch and inline observer
+# plumbing are covered by focused cancellation and live-handler tests, but RIPR
+# 0.9.x cannot connect the route helper call and test helper branches to those
+# oracles in diff-scoped analysis.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-type-hierarchy-cancellation-routing"
+kind = "call_presence_static_tracing_limit"
+paths = ["crates/perl-lsp-rs/src/runtime/dispatch/routing.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed", "static_unknown", "infection_unknown", "propagation_unknown", "call_presence"]
+owner = "lsp-lane"
+issue = "#1774"
+reason = "PR #3455 adds type hierarchy cancellation dispatch for textDocument/prepareTypeHierarchy, typeHierarchy/prepare, typeHierarchy/supertypes, and typeHierarchy/subtypes. Focused tests cover method registration (type_hierarchy_methods_are_registered_for_cancellation), immediate cancellation short-circuit and marker cleanup (cancelled_type_hierarchy_routes_return_immediate_responses), uncancelled live-handler dispatch and response values (route_request_call_presence_observer), and protocol-level cancellation behavior (lsp_cancellation_protocol_tests). RIPR 0.9.x still reports weak/static call-presence gaps on the method-string route helper and inline observer helper plumbing because it cannot trace the method matrix and RoutedResponse assertions through the dispatch helper. Remove when RIPR can trace routed string-dispatch call presence or targeted mutation replaces this static advisory path."
+created = "2026-07-07"
+review_after = "2026-08-07"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
 # Seam-proof test files: diff-scoped RIPR harness plumbing, not production seams.
 # Tracks EffortlessMetrics/ripr#1428 (RIPR flags test-harness plumbing in newly
 # added test files as production seams). Remove this suppression once #1428 lands.
@@ -147,6 +165,46 @@ issue = "#1289"
 reason = "Seam-proof test files (ripr_seam_proof_*.rs) are diff-scoped proof harnesses whose internal plumbing — Ok(()) returns, .contains() calls, ? operators — must not be treated as new production seams by diff-scoped RIPR analysis. This is the same class as ripr-suppress-ux-receipt-tests. Tracks EffortlessMetrics/ripr#1428; remove when fixed upstream."
 created = "2026-06-10"
 review_after = "2026-07-10"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# goals-selector --json CLI regression test: same ripr#1428 class as
+# ripr-suppress-seam-proof-tests, one file.
+#
+# xtask/tests/goals_next_json_cli.rs (#3692 defect 1 / PR #3701) is a
+# single-scenario `-> Result<()>` integration test that spawns the compiled
+# `xtask` binary end to end to prove `goals next --json` prints parseable
+# JSON and exits 1 (never an unstructured color_eyre stderr dump) on an
+# internal error. The 6 flagged seams are ALL test-harness plumbing, not
+# production behavior:
+#   :29  call_deletion  — assert_cmd's .assert() chain call
+#   :37,:39 call_deletion — the anyhow::anyhow!(...) message-building
+#                            closure passed to .map_err(), only reached if
+#                            the very invariant under test (stdout IS valid
+#                            JSON) were to regress — there is no way to
+#                            "test the test's own failure message" without
+#                            deliberately breaking the production behavior
+#                            it verifies
+#   :40  error_path      — the `?` after that .map_err()
+#   :58  call_deletion / return_value — the terminal Ok(()) test-passed
+#                            marker
+# The actual production seam this test proves (next()'s json=true branch
+# calling std::process::exit(1) with parseable JSON on stdout and nothing
+# on stderr) is real production-code behavior, and IS exercised — this
+# suppression covers only the test file's own scaffolding around that
+# assertion, exactly as ripr-suppress-seam-proof-tests does for
+# ripr_seam_proof_*.rs. Remove this suppression once #1428 lands.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-goals-next-json-cli-test"
+kind = "test_receipt_surface"
+paths = ["xtask/tests/goals_next_json_cli.rs"]
+classification = ["call_deletion", "return_value", "error_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "xtask/tests/goals_next_json_cli.rs (#3692 defect 1, PR #3701) is a single-scenario Result<()> integration test driving the compiled xtask binary end to end to prove `goals next --json` emits parseable JSON on stdout and exits 1 on any internal error, never an unstructured color_eyre stderr dump. All 6 flagged seams (lines 29, 37, 39, 40, 58) are test-harness plumbing — the assert_cmd .assert() chain, the anyhow::anyhow!(...) message-building closure inside .map_err() (only reachable if the test's own invariant regressed), the ? error-path after it, and the terminal Ok(()) test-passed marker — not production behavior. Same ripr#1428 class as ripr-suppress-seam-proof-tests (test-harness plumbing flagged as production seams). The production seam this test proves (next()'s json=true branch in xtask/src/tasks/goals/mod.rs) is real and covered; only the test file's own scaffolding is suppressed. Remove when ripr#1428 is fixed upstream."
+created = "2026-07-11"
+review_after = "2026-08-11"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
@@ -662,6 +720,25 @@ review_after = "2026-07-12"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# perl-dap CLI entry point (PR #3277): ripr#1429-class no_static_path on the
+# clap-derived Args struct after the --bridge flag removal. Bin entry point
+# (excluded from lcov in the same PR); CLI surface covered by in-process #[bin]
+# tests. Same proc_macro_opaque class as the native_product_surface / xtask CLI
+# suppressions.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-perl-dap-cli-entry-point"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-dap/src/main.rs"]
+classification = ["no_static_path", "weakly_exposed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3277 (epic #3276, PR1) removes the shipped --bridge flag so the perl-dap CLI is native-only. The change reshapes the clap-derived Args struct in crates/perl-dap/src/main.rs; ripr 0.9.x reports a no_static_path seam on the derive because it cannot trace activation through the clap #[derive(Parser)] proc-macro to a static test path. perl-dap/src/main.rs is a bin entry point (excluded from lcov coverage in this same PR); its CLI surface is covered by in-process #[bin] tests that render clap help and parse args (cli_help_has_no_bridge_product_surface, cli_rejects_removed_bridge_flag) plus the resolve_socket_port transport tests. Same proc_macro_opaque ripr#1429 class as the native_product_surface and xtask CLI suppressions. Suppression is narrow (single bin entry file, one PR #3277). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
+
+# -----------------------------------------------------------------------------
 # LSP declaration equality-guard seams (PR #854): ripr#1429-class boundary
 # predicates in collect_subroutine_declarations and collect_package_declarations.
 #
@@ -1096,7 +1173,8 @@ created = "2026-06-15"
 review_after = "2026-07-15"
 expires = "2026-09-30"
 
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 # Coverage measure/route decoupling (PR #1482 / #1470): ripr#1429-class
 # predicate-infection-untraceable seams in two xtask coverage decision points.
 #
@@ -1135,7 +1213,8 @@ expires = "2026-09-30"
 #
 # Suppression is narrow (two specific predicates in one xtask file, one PR #1482).
 # Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289.
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 [[suppress]]
 id = "ripr-suppress-coverage-measure-route-decoupling"
 kind = "predicate_infection_untraceable"
@@ -1148,7 +1227,8 @@ created = "2026-06-15"
 review_after = "2026-07-15"
 expires = "2026-09-30"
 
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 # Multi-root workspace symbol tests (PR #1522): ripr#1428-class false-positives
 # in newly added test code.
 #
@@ -1171,7 +1251,8 @@ expires = "2026-09-30"
 #
 # Suppression is minimal (single test file, test-only additions). Path scope
 # expires 2026-09-30. Remove when ripr#1428 is fixed upstream.
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 [[suppress]]
 id = "ripr-suppress-multi-root-workspace-symbol-test-surface"
 kind = "test_receipt_surface"
@@ -1184,7 +1265,8 @@ created = "2026-06-16"
 review_after = "2026-07-16"
 expires = "2026-09-30"
 
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 # DAP transport framing + lifecycle test surfaces (#991): ripr#1428-class
 # false-positives in newly added test code.
 #
@@ -1212,7 +1294,8 @@ expires = "2026-09-30"
 #
 # Suppression is minimal (one production file scoped to its #[cfg(test)] mod and
 # one test file). Remove when ripr#1428 is fixed upstream.
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 [[suppress]]
 id = "ripr-suppress-dap-transport-framing-and-lifecycle-test-surface"
 kind = "test_receipt_surface"
@@ -1228,7 +1311,8 @@ created = "2026-06-20"
 review_after = "2026-07-20"
 expires = "2026-09-30"
 
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 # Windows CWD-planting RCE fix (#2764): windows.rs platform-gated code.
 #
 # PR #2967 (fix/windows-bare-tool-cwd-rce) tightens the Windows subprocess
@@ -1259,7 +1343,8 @@ expires = "2026-09-30"
 # Suppression is narrow (single production file). Remove when ripr adds
 # cross-platform cfg-guard simulation or when targeted mutation covers
 # the Windows-only orchestration path on a non-Linux runner.
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 [[suppress]]
 id = "ripr-suppress-windows-subprocess-platform-guard-2764"
 kind = "predicate_infection_untraceable"
@@ -1272,7 +1357,8 @@ created = "2026-06-25"
 review_after = "2026-09-25"
 expires = "2026-12-31"
 
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 # Windows CWD-planting RCE fix (#2764): path_selection.rs match arm guards.
 #
 # path_selection.rs is the cross-platform extraction of select_path_candidate
@@ -1293,7 +1379,8 @@ expires = "2026-12-31"
 # where match arm dispatch on string literals is not statically traced by
 # RIPR 0.9.x.  Remove when ripr gains match-guard discrimination or targeted
 # mutation is scheduled post-review.
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 [[suppress]]
 id = "ripr-suppress-path-selection-match-arm-guards-2764"
 kind = "predicate_infection_untraceable"
@@ -1306,7 +1393,8 @@ created = "2026-06-25"
 review_after = "2026-09-25"
 expires = "2026-12-31"
 
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 # Windows CWD-planting RCE second front (#3028): windows.rs platform guard.
 #
 # PR #3032 (fix/3028-perl-lsp-rs-command-rce) closes the second RCE front:
@@ -1324,7 +1412,8 @@ expires = "2026-12-31"
 #
 # Suppression is narrow (single production file). Remove when ripr adds
 # cross-platform cfg-guard simulation.
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 [[suppress]]
 id = "ripr-suppress-windows-subprocess-platform-guard-3028"
 kind = "predicate_infection_untraceable"
@@ -1337,7 +1426,8 @@ created = "2026-06-25"
 review_after = "2026-09-25"
 expires = "2026-12-31"
 
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 # Windows CWD-planting RCE second front (#3028): platform.rs test setup and
 # lib.rs Windows branch.
 #
@@ -1361,7 +1451,8 @@ expires = "2026-12-31"
 #
 # Suppressions are minimal (two production files, test-only and cfg-gated code
 # only). Remove when ripr#1428 and ripr#1429 are fixed upstream.
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 [[suppress]]
 id = "ripr-suppress-platform-test-setup-and-lib-windows-branch-3028"
 kind = "predicate_infection_untraceable"
@@ -1377,7 +1468,8 @@ created = "2026-06-25"
 review_after = "2026-09-25"
 expires = "2026-12-31"
 
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 # Completion auto-import additionalTextEdits (PR #1919, issue #1694):
 # ripr#1429-class weakly_exposed false-positives in production completion code.
 #
@@ -1391,7 +1483,8 @@ expires = "2026-12-31"
 # unrelated files). All seams are covered by dedicated #[cfg(test)] lib tests
 # with exact (strong-oracle) assertions. Same ripr#1429 class as the
 # hover_cards.rs and workspace_rename.rs production-file suppressions.
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 [[suppress]]
 id = "ripr-suppress-completion-auto-import-edits"
 kind = "predicate_infection_untraceable"
@@ -1408,7 +1501,8 @@ created = "2026-06-25"
 review_after = "2026-07-25"
 expires = "2026-09-30"
 
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 # PL304 use-constant NodeKind blind-spot fix (PR #3078, issue #3071):
 # ripr#1429-class: RIPR 0.9.x cannot mutation-trace let-chain match-condition
 # seams in collect_constant_names() in pod_coverage.rs.
@@ -1450,7 +1544,8 @@ expires = "2026-09-30"
 #
 # Suppression is narrow: single production file, 3 seams. Remove when
 # ripr#1429 is fixed upstream or when ripr can trace let-chain predicates.
-# =============================================================================
+# ======================================================================
+# -----------------------------------------------------------------------------
 [[suppress]]
 id = "ripr-suppress-pod-coverage-use-constant-let-chain"
 kind = "activation_unknown"
@@ -1505,6 +1600,574 @@ classification = ["weakly_exposed", "no_static_path"]
 owner = "proof-lane"
 issue = "EffortlessMetrics/ripr#1429"
 reason = "PR #3142 (issue #3141) adds the release-archive DAP guard. RIPR 0.9.x cannot statically trace activation from on-disk binary fixtures (tar.gz/zip + SHA256SUMS) and JSON-deserialized Contract through serde_json::from_str + fs::read_dir + the gzip/tar and ZIP central-directory byte parsers to the per-branch predicates in validate_dist (missing-binary, exec-bit, version-mismatch, undeclared-archive, extension-mismatch, platform-not-declared, checksum missing/not-listed/mismatch, completeness) and the archive readers. Same ripr#1429 class as the quality_baseline, agent_ledgers, and pr_close_proof xtask suppressions. Coverage: 28 inline #[cfg(test)] unit tests drive every branch in-process against committed fixtures (good/bad-missing-dap/bad-checksum) and tempdir edge dists, plus 6 CLI integration tests; Codecov patch coverage 96.88% with only genuinely-unreachable defensive guards (e.g. platform_for_triple None) residual. Suppression is narrow (single xtask file, one PR #3142). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+
+# native_product_surface.rs first-mile guard: clap-dispatch + tempdir-fixture
+# seams untraceable by ripr 0.9.x (ripr#1429 class).
+#
+# PR #3283 (epic #3276, PR7) adds xtask/src/tasks/native_product_surface.rs —
+# the `cargo xtask check-native-product-surface` guard that greps first-mile
+# product surfaces for legacy/external-tool framing. RIPR cannot statically
+# trace activation from the tempdir fixture trees (run_at) and the new top-level
+# clap `Commands::CheckNativeProductSurface` dispatch arm through the proc-macro
+# derive to the per-line seams: the violations-present report branch
+# (eprintln! block), the `format!` violation-string construction (idx + 1), and
+# the SURFACES / DISALLOWED const tables. ripr's own stop_reasons for these are
+# `proc_macro_opaque` and `fixture_opaque`. Same predicate/activation-untraceable
+# class as the quality_baseline, agent_ledgers, pr_close_proof, ci_route, and
+# release_artifact_check xtask suppressions above.
+#
+# Coverage evidence: 7 inline #[cfg(test)] tests drive every branch in-process —
+# flags_each_disallowed_marker (every DISALLOWED marker), allows_native_first_
+# negations (no false positives), reports_line_numbers (exact line-number
+# oracle), flags_markdown_wrapped_and_capitalized_variants (backtick/case
+# normalization), run_at_is_ok_on_a_clean_tree, run_at_errors_when_a_surface_
+# regresses (violations-present error branch), and live_product_surface_is_clean
+# (the real `run` entry point over the live repo surfaces).
+[[suppress]]
+id = "ripr-suppress-native-product-surface-scanner"
+kind = "predicate_infection_untraceable"
+paths = ["xtask/src/tasks/native_product_surface.rs", "xtask/src/main.rs"]
+classification = ["weakly_exposed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
+reason = "PR #3283 (epic #3276, PR7) adds the native product-surface guard xtask. RIPR 0.9.x cannot statically trace activation from tempdir fixture trees and the new top-level clap Commands::CheckNativeProductSurface dispatch arm (xtask/src/main.rs) through the proc-macro derive to the per-line seams in native_product_surface.rs: the violations-present report branch (eprintln! block ~line 68), the format! violation-string construction (idx + 1, ~lines 108-111), and the SURFACES/DISALLOWED const tables (~lines 24, 36). ripr's own stop_reasons are proc_macro_opaque and fixture_opaque. Same ripr#1429 class as the quality_baseline, agent_ledgers, pr_close_proof, ci_route, and release_artifact_check xtask suppressions. Coverage: 7 inline #[cfg(test)] tests drive every branch in-process (flags_each_disallowed_marker, allows_native_first_negations, reports_line_numbers with an exact line-number oracle, flags_markdown_wrapped_and_capitalized_variants, run_at_is_ok_on_a_clean_tree, run_at_errors_when_a_surface_regresses, live_product_surface_is_clean). The main.rs entry is scoped to the same two diff-scoped classifications (weakly_exposed, no_static_path) and only ever affects new clap dispatch arms, which are proc_macro_opaque by construction and delegate to task modules that carry their own coverage. Suppression is narrow (one new xtask task file + its dispatch arm, one PR #3283). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+
+# Mid-surrogate call-observation test surface (#2478): ripr#1428-class
+# false-positives in newly added call-observation test file.
+#
+# PR #3040 adds one new integration test file:
+#   crates/perl-lsp-rs-core/tests/detect_dead_code_mid_surrogate_position.rs
+#
+# The file contains one test function:
+#   detect_dead_code_position_to_offset_clamps_mid_surrogate_column
+#
+# It exercises detect_dead_code (a production caller of LineStartsCache::
+# position_to_offset in dead_code.rs:52) with emoji-containing source text
+# whose UTF-16 column 2 is the trailing surrogate of "😀".  The assertion
+# proves the returned byte offset clamps to the emoji start.
+#
+# ripr's diff-scoped analysis flags the test-harness plumbing inside this
+# newly added file (calls to WorkspaceIndex::new, index_file_str,
+# find_unused_symbols, detect_dead_code) as new production seams.  This is
+# the same ripr#1428 class as ripr-suppress-seam-proof-tests and
+# ripr-suppress-ux-receipt-tests: internal calls within a newly added test
+# file are classified as production seams even though they are pure test
+# scaffolding driving existing production APIs.
+#
+# Suppression is minimal (single test file, one PR). Remove when ripr#1428
+# is fixed upstream.
+# ======================================================================
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-mid-surrogate-call-observation-test"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs-core/tests/detect_dead_code_mid_surrogate_position.rs"]
+classification = ["weakly_gripped", "no_static_path", "call_presence"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "PR #3040 adds detect_dead_code_mid_surrogate_position.rs as a call-observation test for the mid-surrogate UTF-16 clamp fix (#2478). The single test function (detect_dead_code_position_to_offset_clamps_mid_surrogate_column) drives the production detect_dead_code path (dead_code.rs:52 calls LineStartsCache::position_to_offset) with emoji source text whose UTF-16 column 2 is the trailing surrogate of '😀'. ripr's diff-scoped analyzer flags the test-harness plumbing (WorkspaceIndex::new, index_file_str, find_unused_symbols, detect_dead_code calls inside the newly added test file) as new production seams. This is the same ripr#1428 class as ripr-suppress-seam-proof-tests and ripr-suppress-ux-receipt-tests (test-harness plumbing inside newly added test files falsely classified as production seams). The production seam itself (line_index.rs:91) is covered by ripr-suppress-mid-surrogate-position-clamp-predicate. Suppression is minimal (single test file, PR #3040). Remove when ripr#1428 is fixed upstream."
 created = "2026-06-28"
 review_after = "2026-07-28"
 expires = "2026-09-30"
+
+
+# -----------------------------------------------------------------------------
+# utf16_column line_start > text.len() overflow guard: private-field-write-to-
+# predicate activation untraceable by ripr 0.9.x (ripr#1428 class).
+#
+# PR #3042 (issue #2484) adds `if line_start > self.text.len()` at line 232 in
+# the private `utf16_column` method of `LineIndex`. The guard protects against
+# corrupt internal state where `line_starts[i]` exceeds the text length —
+# reachable only by mutating the private `line_starts` field directly (not via
+# the public API, which normalizes offsets before any lookup).
+#
+# RIPR seam f197bc96baa7df76 is classified `activation_unknown` / `infect: weak`
+# because the discriminating input (`line_start > self.text.len()`) is only
+# reachable by writing to the private `line_starts` field
+# (`index.line_starts = vec![0, 100]`). RIPR's static tracer cannot follow a
+# private-field write to the predicate boundary — the ripr#1428 blind spot.
+#
+# Call-observation discriminator test was attempted first per gap-closure
+# playbook: `utf16_column_boundary_discriminator` uses a named variable
+# `line_start_past_end: usize = 100` with `debug_assert!(line_start_past_end >
+# text.len())` to make the inequality visible in source. The test passes but the
+# seam persisted in the subsequent ripr run, confirming the ripr#1428 class.
+#
+# Behavioral coverage is confirmed via green Codecov / Patch 95 (line 232 IS
+# instrumented-executed per LLVM coverage) and two --lib unit tests:
+#   utf16_column_clamps_line_start_past_text_end — line_start=100 > text.len()=3
+#   utf16_column_boundary_discriminator          — explicit named-variable form
+#
+# Suppression is narrow: single production file, one PR (#3042), one seam ID
+# (f197bc96baa7df76). Remove when EffortlessMetrics/ripr#1428 (private-field
+# mutation tracing) is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-line-index-utf16-column-overflow-guard"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-position-tracking/src/line_index.rs"]
+classification = ["activation_unknown"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "PR #3042 (issue #2484) hardens utf16_column with `if line_start > self.text.len()` at line 232. RIPR seam f197bc96baa7df76 is activation_unknown / infect:weak because the predicate's discriminating input is only reachable via private-field mutation (`index.line_starts = vec![0, 100]`), which ripr#1428 cannot trace from field write to predicate boundary. Call-observation discriminator test was tried first (utf16_column_boundary_discriminator: named variable + debug_assert!(line_start_past_end > text.len())); seam persisted in post-discriminator ripr run, confirming the ripr#1428 class. Behavioral coverage is confirmed: Codecov / Patch 95 is GREEN (line 232 is instrumented-executed), and two --lib unit tests exercise the truthy branch (utf16_column_clamps_line_start_past_text_end and utf16_column_boundary_discriminator). Suppression is narrow: single production file, one PR (#3042), seam ID f197bc96baa7df76. Remove when ripr#1428 (private-field-mutation tracing) is fixed upstream."
+created = "2026-06-28"
+review_after = "2026-09-28"
+expires = "2026-12-31"
+
+# ======================================================================
+# -----------------------------------------------------------------------------
+# References includeDeclaration=true quality tests (PR #3050 / #2673):
+# ripr#1428-class false-positives in newly added test functions.
+#
+# PR #3050 adds two test functions to the existing
+# crates/perl-lsp-rs/src/runtime/language/navigation_runtime_quality_tests.rs
+# #[cfg(test)] module:
+#   - references_source_backed_tier_used_when_include_declaration_true
+#   - references_include_declaration_true_adds_declaration_to_source_backed_result
+#
+# Both functions use `?` operators to propagate errors from `test_handle_references`
+# calls.  ripr 0.9.x diff-scoped analysis flags these error-path seams (lines
+# 481 and 487) as new production exposure because the functions are newly added
+# to the diff.
+#
+# These are ripr#1428-class false-positives: the `?` operators are in test
+# helper function bodies, not in production code.  The test functions exercise
+# the #2673 fix: serving includeDeclaration=true requests from the semantic
+# source-backed tier rather than falling through to the workspace-index tier.
+# The production seam (live_source_backed_reference_locations, references.rs
+# ~line 862) IS covered by strong oracle assertions in both test functions.
+#
+# This is the same class as ripr-suppress-multi-root-workspace-symbol-test-surface
+# (multi_root_workspace_tests.rs: error_path seams in test setup code) and
+# ripr-suppress-seam-proof-tests (newly added test files). Remove when
+# ripr#1428 is fixed upstream.
+# ======================================================================
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-references-include-declaration-quality-tests"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs/src/runtime/language/navigation_runtime_quality_tests.rs"]
+classification = ["error_path", "reachable_unrevealed"]
+owner = "proof-lane"
+issue = "#2673"
+reason = "PR #3050 adds two test functions (references_source_backed_tier_used_when_include_declaration_true and references_include_declaration_true_adds_declaration_to_source_backed_result) to the navigation_runtime_quality_tests.rs #[cfg(test)] module. Both functions use ? operators (lines 481 and 487) to propagate errors from test_handle_references calls. ripr 0.9.x diff-scoped analysis flags these as new production seams (error_path / reachable_unrevealed). These are ripr#1428-class false-positives: the ? operators are inside newly added test functions, not production code. The production fix (#2673: live_source_backed_reference_locations serves includeDeclaration=true requests) is covered by strong oracle assertions in both test functions (tier verification, location count comparison, declaration-line presence). Same class as ripr-suppress-multi-root-workspace-symbol-test-surface (error_path seams in test setup code). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-25"
+review_after = "2026-09-25"
+expires = "2026-12-31"
+
+# ======================================================================
+# -----------------------------------------------------------------------------
+# LineStartsCache::position_to_offset for-loop surrogate clamp (fix #2478):
+# ripr#1429-class predicate-infection-untraceable seams in the changed loop
+# condition `uc + ch.len_utf16() > character` in line_index.rs.
+#
+# PR #3040 changes the break guard in `position_to_offset` from
+#   `uc >= character as usize`
+# to
+#   `uc + ch.len_utf16() > character as usize`
+# so a column landing inside a surrogate pair clamps to the codepoint start
+# instead of over-advancing past it.
+#
+# ripr 0.9.x flags 3 `weakly_gripped` seams in `LineStartsCache::position_to_offset`
+# (mapped to `reachable_unrevealed` in the evidence receipt). The seams correspond to
+# the three discriminator boundaries of the changed for-loop condition:
+#   (1) Condition fires on the FIRST char iteration (e.g. character=0 on "x😀y"):
+#       uc=0, ch.len_utf16()=1, 0+1>0 = true → immediate break.
+#   (2) Condition fires MID-LOOP at a surrogate boundary (e.g. character=2 on "x😀y"):
+#       after 'x': uc=1; ch='😀', 1+2>2 = true → clamps to emoji start (byte 1).
+#   (3) Condition never fires — loop exhausts (e.g. character=4 on "x😀y"):
+#       all chars consumed without break → returns ls + lt.len() = end of line.
+#
+# Coverage evidence: the regression test
+#   `line_starts_cache_position_to_offset_mid_surrogate_clamps_to_char_start`
+# in `crates/perl-position-tracking/tests/comprehensive_unit_tests.rs` exercises
+# all three discriminator boundaries with exact-value assertions:
+#   column 0 → byte 0 (fires on first char)
+#   column 1 → byte 1 (fires at emoji start without clamping)
+#   column 2 → byte 1 (mid-surrogate clamp, the fixed boundary)
+#   column 3 → byte 5 (fires after emoji)
+#   column 4 → byte 6 (loop exhausts — past all UTF-16 units)
+# All five assertions would fail if the fix were reverted to `uc >= character`.
+# A call-observation test in `detect_dead_code_mid_surrogate_position.rs` drives
+# `detect_dead_code` (a production caller of LineStartsCache::position_to_offset)
+# with column 2 on "x😀y" text and asserts the returned byte offset is 1.
+#
+# RIPR cannot statically trace activation of the for-loop break condition from
+# test inputs through the accumulating `uc` variable across loop iterations.
+# This is the same ripr#1429 predicate-infection-untraceable class that suppresses
+# `is_method_call_context` (paren-scan loop predicates), `parse_quote_operator_content`
+# (string-parsing chain), and `quality_baseline_cfg_test_scanner` (line-scanning loops).
+#
+# Suppression is narrow (single production file, one PR #3040). Remove when
+# ripr#1429 is fixed upstream or targeted mutation is scheduled.
+# ======================================================================
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-position-tracking-surrogate-loop-seam"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-position-tracking/src/line_index.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3040 changes the for-loop break guard in LineStartsCache::position_to_offset from `uc >= character` to `uc + ch.len_utf16() > character` (fix #2478: mid-surrogate UTF-16 column clamping). ripr 0.9.x reports 3 weakly_gripped seams (classified reachable_unrevealed) for the three discriminator boundaries of the new condition: (1) fires on first char, (2) fires mid-loop at a surrogate boundary (the fixed case), (3) never fires / loop exhausts. All three boundaries are covered by the regression test line_starts_cache_position_to_offset_mid_surrogate_clamps_to_char_start in comprehensive_unit_tests.rs with exact assertions at columns 0, 1, 2, 3, 4 over 'x😀y' — all five assertions would fail on the reverted guard. A call-observation test in detect_dead_code_mid_surrogate_position.rs additionally drives detect_dead_code (a production caller of LineStartsCache::position_to_offset) with column 2 on 'x😀y' text and asserts the returned byte offset is 1 (not 5). RIPR cannot statically trace the accumulating `uc` variable through for-loop iterations to confirm the condition fires at the test-supplied column value — the same ripr#1429 predicate-infection-untraceable limitation as is_method_call_context, parse_quote_operator_content, and quality_baseline_cfg_test_scanner. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-06-28"
+review_after = "2026-07-28"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# perl-ripr-facts string-scan emitter seams (PR #3294, tracking #3293):
+# ripr#1429-class weakly_gripped seams in the relocated ripr-facts exporter.
+#
+# PR #3294 relocates the `ripr-perl-facts-v1` exporter behavior-preserving out of
+# the LSP server runtime (perl-lsp-rs::ripr_facts_emitter + the packet-assembly
+# helpers in perl-lsp-rs::cli) into the new leaf crate perl-ripr-facts. Because
+# the whole crate is new to `origin/main`, diff-scoped ripr re-analyzes the moved
+# emitter and reports 3 `weakly_gripped` seams (classified reachable_unrevealed in
+# the 0.9.x receipt).
+#
+# The emitter is a conservative string-scanner: detect_framework
+# (content.contains("use Test::More") / Test2::V0/V1/Suite / Test::Exception /
+# Test::Fatal), count_assertion_calls, collect_t_files directory/line scanning, and
+# the run_ripr_facts packet-assembly / partial-upgrade branch. RIPR's static tracer
+# cannot follow activation from test inputs through these string/`.contains()` scans
+# to the predicate branches — the same ripr#1429 predicate-infection-untraceable
+# class as parse_quote_operator_content (string-parsing chain),
+# quality_baseline_cfg_test_scanner (line-scanning loops), and is_method_call_context
+# (char-by-char scan). Adding tests cannot fix a static-tracer limitation.
+#
+# Coverage evidence: 49 tests in the crate (34 emitter unit tests + 15 lib tests),
+# including the new end-to-end call-observation test
+# ripr_facts_success_with_test_facts_writes_partial_packet, which drives
+# run_ripr_facts on the success-with-facts path (discovers a Test::More `.t` file,
+# emits the test fact, upgrades the packet to `partial`, writes it) and asserts
+# framework detection + partial status. All migrated behavior is byte-identical to
+# the pre-relocation perl-lsp-rs implementation.
+#
+# Suppression is narrow (the two source files of the new crate, one PR). Remove
+# when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-perl-ripr-facts-string-scan-emitter"
+kind = "predicate_infection_untraceable"
+paths = [
+  "crates/perl-ripr-facts/src/emitter.rs",
+  "crates/perl-ripr-facts/src/lib.rs",
+]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3294 (tracking #3293) relocates the ripr-perl-facts-v1 exporter behavior-preserving from perl-lsp-rs into the new leaf crate perl-ripr-facts. Diff-scoped ripr 0.9.x re-analyzes the moved emitter (the whole crate is new to origin/main) and reports 3 weakly_gripped seams (classified reachable_unrevealed). The emitter is a conservative string-scanner: detect_framework (content.contains for Test::More / Test2::V0/V1/Suite / Test::Exception / Test::Fatal), count_assertion_calls, collect_t_files directory/line scanning, and the run_ripr_facts packet assembly / partial-upgrade branch. RIPR cannot statically trace activation from test inputs through these string scans to the predicate branches — the same ripr#1429 predicate-infection-untraceable class as parse_quote_operator_content, quality_baseline_cfg_test_scanner, and is_method_call_context. Coverage: 49 tests (34 emitter unit tests + 15 lib tests) including the new end-to-end call-observation test ripr_facts_success_with_test_facts_writes_partial_packet, which drives run_ripr_facts on the success-with-facts path (discovers a Test::More .t file, emits the test fact, upgrades the packet to partial, writes it) and asserts framework detection + partial status. All migrated behavior is byte-identical to the pre-relocation perl-lsp-rs implementation. Suppression is narrow (two source files of the new crate, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
+
+# -----------------------------------------------------------------------------
+# eval-sub Path-2 order-guard loop/closure seams (PR #3286, closes #1429):
+[[suppress]]
+id = "ripr-suppress-eval-sub-order-guard-loop-closure"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-workspace/src/semantic/queries.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3286 (closes #1429) adds the Path-2 order guard to dynamic_callable_may_be_visible_at: `let Some(anchor) = shard.anchors.iter().find(|a| a.id == occurrence.anchor_id) else { continue }` (fail-closed) and `if anchor.span_start_byte <= byte_offset { return Some(EvalSub{..}) }`. ripr 0.9.x reports 3 weakly_gripped seams (reachable_unrevealed): the before-offset suppress branch, the after-offset continue branch, and the missing-anchor fail-closed branch. All sit behind an iterator .find() closure over the anchors vec and a byte-offset comparison inside a loop — RIPR cannot statically trace the closure/loop activation from the test-supplied byte offsets to each branch, the same ripr#1429 predicate-infection-untraceable / loop-accumulator class as the position-tracking surrogate loop seam (#3040). Coverage: direct call-observation --lib unit tests in queries.rs — dynamic_callable_eval_sub_order_guard_returns_some_when_anchor_before_offset, dynamic_callable_eval_sub_order_guard_returns_none_when_anchor_after_offset, dynamic_callable_eval_sub_fail_closed_when_anchor_missing — each constructs FileFactShard/AnchorFact/OccurrenceFact fixtures inline and asserts the exact Some/None outcome. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
+
+# -----------------------------------------------------------------------------
+# eval-string package-scope string-scan seams (PR #3251, closes #1397):
+[[suppress]]
+id = "ripr-suppress-eval-string-package-scope-string-scan"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-workspace/src/semantic/eval_sub_extractor.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3251 (closes #1397) adds package-scope attribution to the eval-string sub extractor: find_package_keyword (word-boundary content scan), is_valid_package_name, find_package_declarations (pre-scan returning (decl_end_offset, name) pairs), and the active-package rfind + qualified-name id-hash in extract_from_eval_string/emit_triple. ripr 0.9.x reports 3 weakly_gripped seams (reachable_unrevealed): the package-active attribution branch, the rfind-over-declarations selection, and the qualified-id hash path. All sit behind string scanning (.contains / word-boundary checks) and an rfind loop over accumulated declaration offsets — RIPR cannot statically trace activation from the eval-string test inputs through these string scans / loop accumulators to the predicate branches, the same ripr#1429 predicate-infection-untraceable class as quality_baseline_cfg_test_scanner. Coverage: direct call-observation --lib unit tests in eval_sub_extractor.rs (39 total, incl. package_switch_mid_eval_via_ast_parse, three_packages_middle_sub_uses_nearest_preceding_package, distinct_packages_via_ast_parse_produce_distinct_ids, sub_before_package_remains_unscoped_via_ast_parse) with exact-value assertions on canonical names and entity IDs. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
+
+# -----------------------------------------------------------------------------
+# DebugAdapter Drop process-kill boundary seam (PR #3247, closes #1405):
+# ripr#1429-class predicate-infection-untraceable seam in the new
+# `impl Drop for DebugAdapter` cleanup path.
+#
+# PR #3247 (closes #1405) adds `impl Drop for DebugAdapter` in
+# crates/perl-dap/src/debug_adapter/mod.rs: `self.cancel_requested.store(true,
+# Ordering::Release)` followed by `self.clear_active_session_state()`, so that
+# child `perl -d` processes and TCP debugger sessions are always released when
+# the adapter is abandoned without an explicit `disconnect` call. ripr 0.9.x
+# reports the Drop body as weakly_gripped (reachable_unrevealed): the primary
+# uncovered branch is inside `terminate_child_process`
+# (crates/perl-dap/src/debug_adapter/process.rs), which first tries a
+# zero-wait reap, then sends a real `SIGTERM` via `nix::sys::signal::kill` and
+# waits, then falls back to `Child::kill`. RIPR cannot statically trace which
+# of these three branches fires because activation depends on the real OS
+# process's exit timing under SIGTERM — a runtime/process-scheduler predicate,
+# not a value ripr's static tracer can follow from a test input.
+#
+# Coverage evidence: two direct call-observation --lib unit tests added to
+# crates/perl-dap/src/debug_adapter/mod.rs's `#[cfg(test)] mod tests`
+# construct a `DebugAdapter` and exercise the real Drop path (not a direct
+# call to `clear_active_session_state`):
+#   - `test_drop_sets_cancel_requested_before_clearing_session_state` clones
+#     the `Arc<AtomicBool>` cancel flag before `drop(adapter)` and asserts it
+#     flips from false to true, proving the ordering contract in Drop's body.
+#   - `test_drop_clears_attached_pid_session_state` seeds `attached_pid` with
+#     a fake PID, drops the adapter, and asserts `attached_pid` is `None`
+#     afterward, proving `clear_active_session_state` genuinely runs as part
+#     of Drop (not merely reachable in isolation).
+# The nine tests in `crates/perl-dap/tests/dap_session_cleanup_e2e.rs`
+# (5 pure-Rust + 2 Perl-gated tokio integration + 2 fast unit shapes) cover the
+# same Drop path end-to-end, including `test_drop_reaps_launched_perl_process`
+# which drives a real `perl -d` child through the SIGTERM branch — but as
+# `tests/` integration tests they do not count toward `--lib` Codecov patch
+# coverage, hence the additional --lib tests above.
+#
+# This is the same ripr#1429 predicate-infection-untraceable class as
+# ripr-suppress-position-tracking-surrogate-loop-seam (#3040) and
+# ripr-suppress-eval-sub-order-guard-loop-closure (#3286): a real branch
+# whose activation depends on runtime state (there: an accumulating loop
+# variable / closure capture; here: OS process exit timing under SIGTERM)
+# that ripr's static tracer cannot follow from a test's inputs.
+#
+# Suppression is narrow (single production file, one PR). Remove when
+# ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-debug-adapter-drop-process-boundary"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-dap/src/debug_adapter/mod.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3247 (closes #1405) adds impl Drop for DebugAdapter: self.cancel_requested.store(true, Ordering::Release) followed by self.clear_active_session_state(), ensuring child perl -d processes and TCP debugger sessions are released when the adapter is abandoned without an explicit disconnect call. ripr 0.9.x reports the Drop body as weakly_gripped (reachable_unrevealed): the primary uncovered branch is inside terminate_child_process (crates/perl-dap/src/debug_adapter/process.rs), which tries a zero-wait reap, then sends a real SIGTERM via nix::sys::signal::kill and waits, then falls back to Child::kill. RIPR cannot statically trace which branch fires because activation depends on the real OS process's exit timing under SIGTERM -- a runtime/process-scheduler predicate, not a value ripr's static tracer can follow from a test input. Coverage: two direct call-observation --lib unit tests in debug_adapter/mod.rs's #[cfg(test)] mod tests exercise the real Drop path -- test_drop_sets_cancel_requested_before_clearing_session_state clones the cancel-flag Arc before drop(adapter) and asserts it flips false-to-true; test_drop_clears_attached_pid_session_state seeds attached_pid with a fake PID, drops the adapter, and asserts attached_pid is None afterward, proving clear_active_session_state genuinely runs as part of Drop. The nine tests in crates/perl-dap/tests/dap_session_cleanup_e2e.rs (5 pure-Rust + 2 Perl-gated tokio integration + 2 fast unit shapes) cover the same path end-to-end including a real perl -d child through the SIGTERM branch, but as tests/ integration tests do not count toward --lib Codecov patch coverage. Same ripr#1429 predicate-infection-untraceable class as ripr-suppress-position-tracking-surrogate-loop-seam (#3040) and ripr-suppress-eval-sub-order-guard-loop-closure (#3286): a real branch whose activation depends on runtime state ripr's static tracer cannot follow from test inputs. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+# rename keyword-guard predicate seams (PR #3109, closes #1401):
+[[suppress]]
+id = "ripr-suppress-rename-keyword-guard-predicate"
+kind = "predicate_infection_untraceable"
+paths = [
+  "crates/perl-lsp-rs-core/src/providers/rename/validate.rs",
+  "crates/perl-lsp-rs/src/runtime/language/rename.rs",
+]
+classification = ["weakly_gripped", "reachable_unrevealed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3109 (closes #1401) makes rename keyword-validation context-aware: validate_name rejects reserved keywords only for non-variable kinds (`if !kind.is_variable() && is_rename_keyword(name)`) with a callable-specific Err arm and a generic namespace/constant Err arm; normalize_rename_target adds a handler-layer guard `if is_rename_keyword(requested_name) { return Err(JsonRpcError{..}) }` for the non-sigiled (subroutine/package) branch. ripr 0.9.x reports 3 weakly_gripped seams (reachable_unrevealed) for the two validate.rs Err arms and the rename.rs handler-guard Err — all gated on the is_rename_keyword predicate, which is `RENAME_KEYWORDS.binary_search(&token).is_ok()` (a bool-returning predicate over a sorted string slice). RIPR cannot statically trace which test-supplied name activates the binary_search predicate into each Err branch — the same ripr#1429 predicate-infection-untraceable class as is_method_call_context and parse_quote_operator_content. Coverage: direct call-observation --lib unit tests — test_validate_new_name (crates/perl-lsp-rs-core/src/providers/rename/mod.rs) asserts validate_name(if, Subroutine) -> callable message, validate_name(if, Package) -> generic message, validate_name(for, Constant) -> Err; normalize_rename_target_rejects_invalid_targets (crates/perl-lsp-rs/src/runtime/language/rename.rs) asserts sub->keyword rejection and $var->keyword allowance; plus LSP integration tests test_rename_sub_to_keyword_fails / test_rename_variable_to_keyword_allowed. Suppression is narrow (two production files, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
+
+# -----------------------------------------------------------------------------
+# Test2::V1 import-option scanner split-closure predicates (PR #3355, closes
+# #2384): focused boundary discriminator tests cover every flagged char-class
+# and exact-match boundary, but ripr 0.9.x cannot trace closure predicates
+# inside `str::split` to those oracles and reports the seams weakly_exposed
+# with activation_unknown.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-test2-v1-import-scanner-predicates"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs-core/src/providers/testing/test2.rs"]
+classification = ["weakly_exposed", "activation_unknown"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3355 (closes #2384) makes Test2::V1 default-export only the T2() handle and adds -ipP grouped short-flag parsing. ripr 0.9.x reports 2 weakly_exposed severe seams (activation_unknown) for the split-closure character-class predicate at v1_short_flag/args_contains_option (crates/perl-lsp-rs-core/src/providers/testing/test2.rs:544): the tracer names missing discriminators `c == '-'`, `c == '_'`, and `c.is_ascii_alphanumeric() || c == '_'` even though direct --lib discriminator tests exist for each exact boundary — v1_short_flag_predicate_boundary_discriminators (dash retained: -i matches; underscore glue: -i_p matches neither i nor p; alphanumeric glue: -i2p matches neither), v1_import_all_predicate_exact_module_match_boundary and v1_pragma_default_predicate_exact_module_match_boundary (module == \"Test2::V1\" exact matches in resolve_import), and test2_v1_grouped_short_flags (end-to-end -ipP/-P per metacpan Test2::V1 SYNOPSIS). RIPR cannot statically connect test-supplied strings through the `str::split(|c: char| ...)` closure boundary to the seam — the same EffortlessMetrics/ripr#1429 predicate-infection-untraceable class as ripr-suppress-completion-lexical-string-scanner-boundaries and ripr-suppress-rename-keyword-guard-predicate. Suppression is narrow (one production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-04"
+review_after = "2026-08-04"
+expires = "2026-10-04"
+
+# -----------------------------------------------------------------------------
+# positionEncoding negotiation capability predicates (PR #1856, closes #1690):
+# the phase-1 clamp adds a negotiation block inside handle_initialize, changing
+# the function body and causing RIPR 0.9.x diff-scoped analysis to re-attribute
+# PRE-EXISTING client-capability predicate seams in the same function as new
+# weakly_gripped findings.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-position-encoding-negotiation-capability-predicates"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed"]
+owner = "editor-trust"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #1856 (closes #1690) adds the LSP 3.17 positionEncoding negotiation block to handle_initialize (parse capabilities.general.positionEncodings, pick the first server-supported encoding via an enc.as_str() match, store it on ClientCapabilities.position_encoding; the advertised capabilities.positionEncoding stays clamped to \"utf-16\" pending phase 2). Because handle_initialize's body changed, RIPR 0.9.x diff-scoped analysis re-flags THREE seams in the function as new weakly_gripped (reachable_unrevealed): (1) completion_list_item_defaults_data_support = ...completionList/itemDefaults.any(|item| item.as_str() == Some(\"data\")) and (2) code_action_llm_generated_tag_support = ...codeAction/tagSupport/valueSet.any(|tag| tag.as_i64() == Some(1)) are PRE-EXISTING production predicates unchanged by this PR, plus (3) the new positionEncoding enc.as_str() unknown-encoding->default branch. All three are JSON-pointer predicates over parsed params that RIPR cannot statically trace from a test input through the handle_initialize entry point — the same ripr#1429 predicate-infection-untraceable class as the neighboring hover/rename predicate suppressions. Coverage: direct --lib unit tests in capabilities.rs's #[cfg(test)] mod — handle_initialize_boundary_discriminator drives itemDefaults=[..,\"data\"] and tagSupport.valueSet=[2,1] and asserts both flags flip true (naming both boundaries), and the negotiation scenario tests (initialize_prefers_first_supported_position_encoding, initialize_accepts_utf16_when_it_is_first_supported_position_encoding, initialize_falls_back_to_utf16_when_position_encodings_have_no_supported_values) exercise the enc.as_str() match including the unknown-encoding [\"utf-32\",\"utf-7\"]->utf16 default branch. Suppression is narrow (single production file, one PR) and does not touch the pre-existing coverage. Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+# find_symbol scope-walk predicates (PR #1836, closes #1699): the DESTROY/
+# AUTOLOAD UNIVERSAL-method correction adds a doc comment on UNIVERSAL_METHODS
+# and two #[cfg(test)] discriminator tests to symbol.rs. Touching the file
+# causes RIPR 0.9.x diff-scoped analysis to re-attribute the PRE-EXISTING
+# SymbolTable::find_symbol scope-chain-walk predicate seams as new
+# weakly_gripped findings.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-find-symbol-scope-walk-predicates"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-semantic-analyzer/src/analysis/symbol.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #1836 (closes #1699) corrects the DESTROY/AUTOLOAD categorization: it adds a doc comment on the UNIVERSAL_METHODS const and two #[cfg(test)] tests to crates/perl-semantic-analyzer/src/analysis/symbol.rs. It makes NO change to SymbolTable::find_symbol (unchanged vs origin/main). Because the file was touched, RIPR 0.9.x diff-scoped analysis re-flags THREE pre-existing scope-chain-walk predicate seams inside find_symbol as new weakly_gripped (reachable_unrevealed): (1) symbol.scope_id == scope_id and (2) symbol.kind == kind (the direct-scope match filter), and (3) scope.kind != ScopeKind::Package (the `our`-variable package-scope fallback guard). All three are predicates evaluated while walking the parent scope chain that RIPR cannot statically trace from a test input to a specific branch — the same ripr#1429 predicate-infection-untraceable class as the neighboring rename/hover predicate suppressions. Coverage: a direct call-observation --lib unit test, find_symbol_boundary_discriminator (symbol.rs #[cfg(test)] mod), builds a SymbolTable by hand with a package scope and a nested block scope, then asserts each boundary in isolation — a Subroutine queried from its defining scope with matching kind returns exactly one hit (scope_id + kind match), the same name queried with a scalar kind returns empty (kind mismatch), and an `our` scalar is surfaced from the non-package block scope via the fallback (scope.kind != Package). RIPR still cannot connect the test to the scope-walk branches. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-07-03"
+review_after = "2026-08-03"
+expires = "2026-10-03"
+
+# perl-workspace-core + perl-tree-sitter-compat: additive facts-substrate crates
+# that are NOT yet wired into any production binary. See PLSP-ADR-0006 (#3312).
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-workspace-core-substrate-not-yet-wired"
+kind = "generated_or_non_production_surface"
+paths = ["crates/perl-workspace-core/**", "crates/perl-tree-sitter-compat/**"]
+classification = ["exposed", "weakly_exposed", "weakly_gripped", "static_unknown", "propagation_unknown", "infection_unknown", "no_static_path", "reachable_unrevealed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/perl-lsp-swarm#3312"
+reason = "PR #3313 lands perl-workspace-core (the LSP-free project-facts substrate) and perl-tree-sitter-compat (its first adapter) as ADDITIVE crates that no shipped binary consumes yet: the substrate is deliberately wired into ripr-facts / critic / tidy / DAP only in the later staged-rollout PRs 5 and 8 (PLSP-ADR-0006). Because nothing calls into these crates from a production entrypoint, ripr's static production-reachability analysis has no caller to trace and classifies the crates' own public surface as exposed/weakly_exposed/no_static_path/static_unknown (670 diff-scoped severe gaps -> after adding the direct --lib observe tests below, 536). Those are not un-revealed production seams; they are a facts substrate whose correctness is proven by its own 187 unit + integration tests (perl-workspace-core lib tests, import_facts/dist_facts/pod_relation_facts integration suites, tree-sitter-compat adapter tests) plus the enforced dependency contract (tests/dependency_contract.rs). The genuinely reachable_unrevealed seams ripr DID find (13, all the DynamicBoundary/export/inheritance side-effect pushes in crates/perl-workspace-core/src/import_walk.rs) are NOT suppressed on their merits: they are directly covered by 8 new call-observation --lib unit tests in import_walk.rs's #[cfg(test)] mod tests (string_eval/typeglob/runtime-require/source-filter boundary observation, use-parent inheritance, @EXPORT symbols), which drop reachable_unrevealed to 0. This suppression is a time-boxed bridge for the not-yet-wired remainder only; when PRs 5/8 wire the substrate into a production entrypoint, ripr can trace it for real and this entry must be removed."
+created = "2026-07-03"
+review_after = "2026-08-15"
+expires = "2026-10-15"
+removal_criteria = "perl-workspace-core / perl-tree-sitter-compat are consumed by a production entrypoint (PLSP-ADR-0006 PR 5 or PR 8); then ripr traces them for real and this suppression is deleted."
+
+# -----------------------------------------------------------------------------
+# PERL_LSP_TIMING parse_mode exact-value predicates (PR #3397, #3396): direct
+# unit tests call parse_mode with the exact "0"/"1" target literals, but the
+# ripr 0.9.x run mis-associates them — its guidance pass timed out (210s) and
+# the mis-association reproduced on a clean re-run of the same head.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-lsp-timing-parse-mode-exact-values"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs/src/runtime/timing.rs"]
+classification = ["weakly_exposed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #3397 (#3396) adds the PERL_LSP_TIMING instrumentation sink. ripr 0.9.x reports 2 weakly_exposed severe seams for the exact-value predicates trimmed == \"0\" (timing.rs:108) and trimmed == \"1\" (timing.rs:113) in parse_mode, claiming no related test uses those values — but parse_mode is a pure function and the same file's test module already calls it directly with the exact target literals: parse_mode_off_variants asserts parse_mode(\"0\") -> TimingMode::Off and parse_mode_stderr_variants asserts parse_mode(\"1\") -> TimingMode::Stderr, plus case-insensitive neighbors (off/OFF/false, stderr/STDERR/true) and the file-path fallthrough in parse_mode_file_path. The flagging run's own guidance pass reported tool_error: ripr timed out after 210s with zero annotations, and the identical mis-association reproduced on a clean re-run (run 28712164718) — an instrument-degradation case of the EffortlessMetrics/ripr#1429 class (tracer fails to associate direct exact-value oracles). Suppression is narrow (one production file, one PR). Remove when ripr#1429 is fixed upstream, when PR #3363 (#2015) makes weakly_exposed-only findings non-blocking, or when targeted mutation replaces this advisory path."
+created = "2026-07-04"
+review_after = "2026-08-04"
+expires = "2026-10-04"
+
+# -----------------------------------------------------------------------------
+# INDIRECT_METHOD_EXCLUDED const array (PR #1914, #1758): no_static_path on a
+# const-data declaration that ripr cannot trace to a test through `.contains()`.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-indirect-method-excluded-const-no-static-path"
+kind = "const_data_no_static_path"
+paths = ["crates/perl-lsp-rs-core/src/providers/completion/completion/request/dispatch.rs"]
+classification = ["no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/perl-lsp-swarm#1758"
+reason = "PR #1914 (#1758) adds indirect-object method-call completion in dispatch.rs. ripr 0.9.x reports 2 no_static_path severe seams on the `const INDIRECT_METHOD_EXCLUDED: &[&str]` array — dispatch.rs:144 (family field_construction, the `const ... = &[` declaration) and dispatch.rs:145 (family return_value, the string-literal contents) — each reach:no, \"No static test path\", confidence 0.48, severity info. The const IS exercised: is_indirect_method_word gates on `INDIRECT_METHOD_EXCLUDED.contains(&word)` (dispatch.rs:182), and the inline indirect_helper_tests assert is_indirect_method_word(\"print\"), (\"my\"), (\"return\"), (\"croak\") == false plus the through-dispatch tests test_indirect_print_filehandle/die/warn_*_does_not_offer_methods in completion/tests.rs exercise the exclusion end-to-end. But ripr's field-construction/return-value probes on a const *data literal* cannot statically trace a path from a test through `.contains()` to the const's storage — const data has no call path the way a function body does. This is a no_static_path-on-const analyzer artifact of the EffortlessMetrics/ripr#1429 class (tracer cannot connect a direct oracle to a const-data seam), not a missing test. HONEST SCOPE NOTE: like every sibling entry, the matcher (read_ripr_suppression_rules) is PATH-scoped — the `classification` field records intent but is not enforced, so this covers all diff-scoped ripr findings in dispatch.rs, not only the no_static_path pair. Net blocking impact is still exactly those 2 seams: under the merged #3363 (#2015) recalibration only reachable_unrevealed + no_static_path block (weakly_exposed is already advisory-excluded) and this diff has reachable_unrevealed = 0. The accepted, time-boxed residual is that a FUTURE reachable_unrevealed gap introduced in dispatch.rs would be masked for this window — tighten by isolating INDIRECT_METHOD_EXCLUDED into its own file (narrower path) or by the ripr#1429 fix. Remove when ripr can trace const-data references, when targeted mutation replaces this advisory path (#1289), or when the exclusion set is restructured so ripr traces it."
+created = "2026-07-04"
+review_after = "2026-08-04"
+expires = "2026-10-04"
+removal_criteria = "ripr#1429 fixed upstream (const-data seams traceable), OR targeted mutation scheduled for dispatch.rs (#1289), OR INDIRECT_METHOD_EXCLUDED restructured so ripr finds a static path."
+
+# -----------------------------------------------------------------------------
+# perl-core-harness xtask extraction (PR #3421, closes #3420): the old
+# xtask/src/tasks/perl_core_harness.rs implementation was mechanically moved
+# into the private perl-core-harness crate, leaving xtask as CLI glue only.
+# ripr 0.9.x reports deleted/moved seams from the old xtask path as new
+# reachable_unrevealed findings even though the active implementation now lives
+# under crates/perl-core-harness and is covered by the focused harness tests.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-perl-core-harness-xtask-extraction-move"
+kind = "mechanical_move_extraction"
+paths = ["xtask/src/tasks/perl_core_harness.rs"]
+classification = ["weakly_gripped", "reachable_unrevealed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/perl-lsp-swarm#3420"
+reason = "PR #3421 extracts the active Perl core harness orchestration from xtask/src/tasks/perl_core_harness.rs into the private crates/perl-core-harness crate, leaving the xtask file as a re-export/CLI glue surface. ripr 0.9.x reports 37 reachable_unrevealed findings on deleted/moved old xtask lines (run/prepare/smoke/baseline helper calls and test-helper branches) even though the behavior is preserved and covered by cargo test -p perl-core-harness plus PR Smoke's perl-core-harness unit_scoped path. This suppression is deliberately path-scoped to the old xtask file, which now contains no implementation logic; active harness code in crates/perl-core-harness remains visible to RIPR. Remove if implementation logic returns to this xtask file or when RIPR can classify mechanical moves without re-opening deleted seams."
+created = "2026-07-05"
+review_after = "2026-08-05"
+expires = "2026-10-05"
+removal_criteria = "xtask/src/tasks/perl_core_harness.rs contains implementation logic again, OR ripr correctly treats the #3421 mechanical move/deleted old lines as non-actionable."
+
+# -----------------------------------------------------------------------------
+# navigation_same_document_toctou_regression_tests.rs: Result<()> test-helper
+# error_path/side_effect seams flagged as new production seams (ripr#1428
+# class).
+#
+# PR #3622 (fix #3613) is a Result<()>-returning integration test file per
+# this repo's own mandated test convention ("Tests: Result<()> returns or
+# perl_tdd_support::must/must_some" -- CLAUDE.md Coding Standards). ripr 0.9.x
+# reports 17 severe-gap findings entirely within this one test file:
+#   - 16 `error_path` findings on the `?`-terminated closing braces of
+#     `.ok_or_else(...)`/`.map_err(...)` chains that convert a channel
+#     recv/send failure or an unexpected non-array handler result into the
+#     test's own `Err(String)` -- pure test-assertion plumbing, not
+#     exploitable production behavior.
+#   - 1 `side_effect` finding on a `resume_tx.send(())?` call -- the
+#     test-only signal that releases a handler paused at the
+#     `wait_at_same_doc_fallback_gap` hook.
+#
+# ripr's own reach/infect/propagate fields report "yes" (the tests do reach
+# and exercise this code), but "observe"/"discriminate" report "no" because
+# each finding's guarded failure condition is exactly what the test's own
+# `assert!`/`assert_eq!` immediately following it already proves does not
+# happen. This is the same ripr#1428 class (test-harness plumbing flagged as
+# production seams) as ripr-suppress-seam-proof-tests and
+# ripr-suppress-quote-operator-conformance-test-helpers above. All findings
+# sit inside `#[test]` functions in a `tests/` integration file, not
+# production code; the behavior under test (same-document TOCTOU pinning
+# across a racing didChange/didClose, and the raw/normalized URI-key
+# deduplication in `pinned_doc_map_for`) is proven by the assert! calls
+# immediately following each flagged line.
+#
+# Suppression is narrow: single test file, one PR. Remove when ripr#1428 is
+# fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-navigation-toctou-regression-test-helpers"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs/tests/navigation_same_document_toctou_regression_tests.rs"]
+classification = ["reachable_unrevealed", "weakly_exposed", "error_path", "side_effect"]
+owner = "lsp-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "PR #3622 (fix #3613) adds/extends navigation_same_document_toctou_regression_tests.rs, a Result<()>-returning integration test file per this repo's mandated test convention. ripr 0.9.x reports 17 severe-gap findings entirely within this file: 16 error_path findings on `?`-terminated .ok_or_else(...)/.map_err(...) chains, and 1 side_effect finding on a resume_tx.send(())? handshake call -- all pure test-assertion/synchronization plumbing. ripr reports reach/infect/propagate=yes but observe/discriminate=no because it cannot recognize that the immediately-following assert!/assert_eq! already proves the guarded failure condition does not occur. Same ripr#1428 class (test-harness plumbing flagged as production seams) as ripr-suppress-seam-proof-tests and ripr-suppress-quote-operator-conformance-test-helpers. Suppression is narrow: single test file, one PR. Remove when ripr#1428 is fixed upstream."
+created = "2026-07-10"
+review_after = "2026-08-10"
+expires = "2026-09-30"
+removal_criteria = "ripr correctly recognizes the guarding assert!/assert_eq! as the discriminator for a preceding `?`/send() in Result<()> test functions, OR ripr#1428 is fixed upstream."
+
+# -----------------------------------------------------------------------------
+# my-declaration comma-precedence fixture: match-arm error-reporting branches
+# in a new Result<(), String> test file (fix #3748):
+#
+# PR #3908 adds fix_3748_my_assign_comma_rhs.rs, a Result<(), String>-returning
+# integration test file per this repo's mandated test convention. ripr 0.9.x
+# reports 3 severe-gap findings (error_path, reachable_unrevealed) at lines 53,
+# 88, and 145 -- each is the `));` that closes a
+# `other => return Err(format!("...", other))` fallback arm inside a `match`
+# over the parsed AST shape. These arms exist so a shape the fix does NOT
+# produce fails the test with a diagnostic message instead of an unwrap/panic
+# (per this repo's coding standards for tests). ripr reports reach/infect/
+# propagate=yes but observe/discriminate=no because it cannot recognize that
+# the SAME match's happy-path arms (the assert_eq!/element-count assertions a
+# few lines above each flagged line) are exactly what proves the guarded
+# "unexpected shape" condition does not occur -- the match itself IS the
+# oracle; the `other =>` arm is its failure-reporting path, not a separate
+# unproven seam. Same ripr#1428 class (test-harness plumbing flagged as
+# production seams) as ripr-suppress-navigation-toctou-regression-test-helpers
+# and ripr-suppress-references-include-declaration-quality-tests above.
+#
+# Suppression is narrow: single test file, one PR. Remove when ripr#1428 is
+# fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-my-assign-comma-rhs-test-helpers"
+kind = "test_receipt_surface"
+paths = ["crates/perl-parser-core/tests/fix_3748_my_assign_comma_rhs.rs"]
+classification = ["error_path", "reachable_unrevealed"]
+owner = "parser-lane"
+issue = "#3748"
+reason = "PR #3908 (fix #3748: my-declaration initializer RHS binds at assignment precedence) adds fix_3748_my_assign_comma_rhs.rs, a Result<(), String>-returning integration test file. ripr 0.9.x flags 3 findings (error_path/reachable_unrevealed) at lines 53, 88, and 145, each the closing `));` of an `other => return Err(format!(...))` fallback arm in a `match` over the parsed AST node shape. These are ripr#1428-class false-positives: the arms are test-diagnostic plumbing (fail loudly with a message instead of unwrap/panic, per repo test-coding standards), not unproven production behavior -- the SAME match's preceding happy-path arms carry the real assert_eq!/element-count oracle assertions that prove the guarded shape mismatch does not occur. The production fix (crates/perl-parser-core/src/engine/parser/variables.rs) is separately classified 'exposed' by the same ripr run. Same class as ripr-suppress-navigation-toctou-regression-test-helpers and ripr-suppress-references-include-declaration-quality-tests. Remove when ripr#1428 is fixed upstream."
+created = "2026-07-11"
+review_after = "2026-08-11"
+expires = "2026-09-30"
+removal_criteria = "ripr correctly recognizes the guarding assert_eq!/happy-path match arms as the discriminator for a sibling `other => return Err(...)` fallback arm in Result<(), String> test functions, OR ripr#1428 is fixed upstream."

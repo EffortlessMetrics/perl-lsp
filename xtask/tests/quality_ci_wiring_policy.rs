@@ -43,7 +43,7 @@ fn ripr_workflow_blocks_new_gaps_and_requires_receipts() {
 }
 
 #[test]
-fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
+fn coverage_workflow_is_manual_or_nightly_only_and_requires_receipts() {
     let root = repo_root();
     let workflow = must(fs::read_to_string(root.join(".github/workflows/ci-nightly.yml")));
     let justfile = must(fs::read_to_string(root.join("justfile")));
@@ -55,11 +55,11 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
 
     assert!(
         workflow.contains("types: [opened, synchronize, reopened, ready_for_review, labeled]"),
-        "coverage workflow must rerun when a draft PR becomes ready"
+        "ci-nightly may still host other label-gated jobs"
     );
     assert!(
         coverage_job.contains("name: Codecov / Patch 95"),
-        "coverage job must have a branch-protection-ready check name"
+        "coverage job keeps the familiar advisory check name"
     );
     let checkout_ref = must_some(checkout_action_ref(coverage_job));
     assert!(
@@ -67,10 +67,14 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "coverage proof checkout must be pinned and must not persist write credentials"
     );
     assert!(
-        coverage_job.contains("github.event.pull_request.draft != true")
-            && coverage_job.contains("github.event.action != 'labeled'")
-            && !coverage_job.contains("ci:coverage"),
-        "patch coverage must be a front-door PR gate, skip label-only churn, and not be label-gated"
+        coverage_job.contains("github.event_name == 'schedule'")
+            && coverage_job.contains("github.event_name == 'workflow_dispatch'")
+            && !coverage_job.contains("github.event_name == 'pull_request'")
+            && !coverage_job.contains("github.event.pull_request")
+            && !coverage_job.contains("ci:coverage")
+            && !coverage_job.contains("github.event_name == 'merge_group'")
+            && !workflow.contains("\n  merge_group:"),
+        "patch coverage must be advisory: schedule/workflow_dispatch only, with no PR or merge_group path"
     );
     let route_step =
         must_some(coverage_job.find("- name: Emit changed-file coverage route summary"));
@@ -88,10 +92,10 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
     ] {
         let step = must_some(workflow_step(coverage_job, setup_step));
         assert!(
-            step.contains("merge_group")
-                && step.contains("pull_request")
-                && step.contains("coverage_required"),
-            "coverage setup step `{setup_step}` must run only when routed coverage is required (including merge_group support)"
+            !step.contains("merge_group")
+                && !step.contains("pull_request")
+                && !step.contains("coverage_required"),
+            "coverage setup step `{setup_step}` must not carry PR routing conditions"
         );
     }
     let codecov_upload_start = must_some(coverage_job.find("- name: Upload coverage to Codecov"));
@@ -111,16 +115,11 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "Codecov upload step must upload the workspace library plus xtask proof-lane LCOV receipt"
     );
     for required in [
-        "BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}",
+        "BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}",
         "base_ref=\"$BASE_REF\"",
         "id: coverage_route",
         "coverage_required=$coverage_required",
-        "Run routed PR coverage proof",
-        "steps.coverage_route.outputs.coverage_required == 'true'",
-        "just coverage-proof-routed \"origin/$base_ref\" \"HEAD\"",
         "changed-file routing selected no LCOV coverage proof packs",
-        "if: github.event_name != 'pull_request'",
-        "github.event_name != 'pull_request' && github.event_name != 'merge_group'",
         "just coverage-proof \"origin/$base_ref\"",
         "cache-targets: false",
         "RUSTFLAGS: \"-Cdebuginfo=0\"",
@@ -144,6 +143,18 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
     ] {
         assert!(coverage_job.contains(required), "coverage job missing `{required}`");
     }
+    for forbidden in [
+        "Run routed PR coverage proof",
+        "coverage-proof-routed",
+        "github.event_name == 'pull_request'",
+        "github.event.pull_request",
+        "ci:coverage",
+    ] {
+        assert!(
+            !coverage_job.contains(forbidden),
+            "coverage job must not include PR coverage path `{forbidden}`"
+        );
+    }
     assert!(
         coverage_job
             .contains("uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"),
@@ -154,10 +165,10 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "coverage patch proof must stay enforced before non-fatal Codecov telemetry upload"
     );
     assert!(
-        codecov_router.contains("CI-enforced lightweight Codecov coverage-pack route")
-            && codecov_router.contains("feed Codecov / Patch 95")
-            && !codecov_router.contains("not enforced by CI yet"),
-        "Codecov route receipt must not describe live routed patch proof as advisory"
+        codecov_router.contains("Advisory lightweight Codecov coverage-pack route")
+            && codecov_router.contains("feed manual routed coverage diagnostics")
+            && !codecov_router.contains("CI-enforced lightweight Codecov coverage-pack route"),
+        "Codecov route receipt must describe routed patch proof as advisory"
     );
     for required in [
         "coverage-proof-routed base='origin/main' head='HEAD':",
@@ -179,16 +190,16 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
     assert_eq!(
         routed_recipe.matches("cargo xtask coverage-baseline").count(),
         1,
-        "routed PR coverage proof should generate the coverage receipt once"
+        "manual routed coverage proof should generate the coverage receipt once"
     );
     assert_eq!(
         routed_recipe.matches("cargo xtask quality-gate").count(),
         1,
-        "routed PR coverage proof should evaluate the patch gate once"
+        "manual routed coverage proof should evaluate the patch gate once"
     );
     assert!(
         !routed_recipe.contains("--check"),
-        "routed PR coverage proof writes task-owned receipts and should not immediately recheck them"
+        "manual routed coverage proof writes task-owned receipts and should not immediately recheck them"
     );
     for required in [
         "coverage-proof base='origin/main':",
@@ -261,19 +272,19 @@ fn docs_describe_transitional_blocking_contract() {
         "RIPR docs must distinguish new-gap blocking from final total-zero enforcement"
     );
     assert!(
-        coverage_doc.contains("coverage proof workflow now routes PR patch coverage")
-            && coverage_doc.contains("just coverage-proof-routed <base> HEAD")
+        coverage_doc.contains("Patch coverage is an advisory coverage signal")
+            && coverage_doc.contains("Coverage does not run on PRs or merge queues")
             && coverage_doc.contains("just coverage-proof <base>")
             && coverage_doc.contains("Project coverage remains informational during burn-down"),
-        "coverage docs must describe PR8 patch enforcement and transitional project coverage"
+        "coverage docs must describe advisory patch coverage and transitional project coverage"
     );
     assert!(
         status_doc.contains("quality-gate")
             && status_doc.contains("Markdown summaries")
             && status_doc.contains("Current Blocking Proof Floor")
-            && status_doc.contains("coverage routing or setup")
-            && status_doc.contains("failures. Codecov upload")
-            && status_doc.contains("Codecov upload and Test Analytics telemetry are non-fatal")
+            && status_doc.contains("Codecov / Patch 95")
+            && status_doc.contains("advisory coverage contexts")
+            && status_doc.contains("coverage proof artifacts are advisory")
             && status_doc.contains(
                 "generated quality-gate receipts are freshness-checked for patch, new-RIPR,"
             )
@@ -303,9 +314,7 @@ fn conventional_required_checks_record_live_proof_floor() {
         must(fs::read_to_string(root.join("docs/project/status/coverage_and_ripr_enforcement.md")));
     let parsed: toml::Value = must(toml::from_str(&policy));
 
-    for required in
-        ["Perl LSP Rust Small Result", "ripr+ New Gap Gate", "Codecov / Patch 95", "codecov/patch"]
-    {
+    for required in ["Perl LSP Rust Small Result", "ripr+ New Gap Gate"] {
         assert!(
             policy_required_check(&parsed, required),
             "required-check policy must mark `{required}` as required under GitHub enforcement"
@@ -313,6 +322,16 @@ fn conventional_required_checks_record_live_proof_floor() {
         assert!(
             merge_ready_doc.contains(required) && status_doc.contains(required),
             "docs must name live required proof context `{required}`"
+        );
+    }
+    for advisory in ["Codecov / Patch 95", "codecov/patch"] {
+        assert!(
+            !policy_required_check(&parsed, advisory),
+            "required-check policy must not mark advisory coverage context `{advisory}` as required"
+        );
+        assert!(
+            merge_ready_doc.contains(advisory) && status_doc.contains(advisory),
+            "docs must name advisory coverage context `{advisory}`"
         );
     }
 }

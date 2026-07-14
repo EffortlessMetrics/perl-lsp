@@ -1,0 +1,33 @@
+[
+  {
+    "number": 860,
+    "title": "VS Code extension activation-events regression",
+    "state": "CLOSED",
+    "labels": [
+      { "name": "builder-ready" },
+      { "name": "plan-reviewed" }
+    ],
+    "body": "## Problem\nEager activation.\n## Acceptance tests\nLazy activation restored."
+  },
+  {
+    "number": 911,
+    "title": "nodekind: Shared classification API (#0000)",
+    "state": "OPEN",
+    "labels": [
+      { "name": "builder-ready" },
+      { "name": "needs-plan-review" },
+      { "name": "plan-reviewed" },
+      { "name": "architecture-reviewed" }
+    ],
+    "body": "## Problem\nDivergent NodeKind matching.\n## Reproduction / example\nSee consumers.\n## Suspected root area\nperl-ast classification.\n## Acceptance tests\nClassification API covered.\n## Non-goals\nNo consumer migration here.\n## Dependencies / sequencing\nBlocks #910.\n## Risk / rollback\nLOW.\n## Verification notes\nVerified against main."
+  },
+  {
+    "number": 1,
+    "title": "incomplete builder-ready issue",
+    "state": "OPEN",
+    "labels": [
+      { "name": "builder-ready" }
+    ],
+    "body": "## Problem\nOnly a problem statement, no other sections."
+  }
+]

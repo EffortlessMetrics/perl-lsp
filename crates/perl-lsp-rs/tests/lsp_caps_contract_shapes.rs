@@ -278,8 +278,11 @@ fn test_capability_shapes_lsp_318_contract() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
-fn semantic_tokens_do_not_advertise_delta_without_result_id()
--> Result<(), Box<dyn std::error::Error>> {
+fn semantic_tokens_advertise_delta_with_result_id_support() -> Result<(), Box<dyn std::error::Error>>
+{
+    // The server now mints a `resultId` for every full result and computes real
+    // edits for `textDocument/semanticTokens/full/delta`, so the capability must
+    // advertise delta support (LSP 3.17).
     let caps_json =
         capabilities_json(BuildFlags { semantic_tokens: true, ..BuildFlags::default() });
     let semantic_provider = caps_json
@@ -287,13 +290,14 @@ fn semantic_tokens_do_not_advertise_delta_without_result_id()
         .ok_or("semanticTokensProvider must be advertised when semantic tokens are enabled")?;
 
     assert_eq!(
-        semantic_provider.get("full"),
+        semantic_provider.pointer("/full/delta"),
         Some(&json!(true)),
-        "semanticTokensProvider.full must advertise full-only tokens, not delta"
+        "semanticTokensProvider.full.delta must be advertised now that delta is implemented"
     );
-    assert!(
-        semantic_provider.pointer("/full/delta").is_none(),
-        "semanticTokensProvider must not advertise delta without resultId support"
+    assert_eq!(
+        semantic_provider.get("range"),
+        Some(&json!(true)),
+        "semanticTokensProvider.range must remain advertised"
     );
     Ok(())
 }

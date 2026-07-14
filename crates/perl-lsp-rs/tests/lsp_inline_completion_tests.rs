@@ -14,7 +14,7 @@ fn setup_server() -> Result<LspServer, Box<dyn std::error::Error>> {
             "processId": 1,
             "capabilities": {}
         })),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
     };
 
     server.handle_request(init_request);
@@ -72,7 +72,7 @@ fn inline_completion(
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: "textDocument/inlineCompletion".into(),
         params: Some(json!({
             "textDocument": { "uri": uri },

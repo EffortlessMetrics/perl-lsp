@@ -7,9 +7,8 @@ class you are investigating.
 
 For the portable, repo-agnostic patterns behind these incidents, see
 [docs/concepts/](../concepts/). The 2026-06-11→13 campaign's meta-orchestration
-learnings (substrate-model, model-conformance, human-corrects-substrate, paced-merges,
-lane-relevance, spawn-guards) are distilled into three new concept docs:
-`orchestrator-substrate-model.md`, `model-conformance.md`, `human-corrects-substrate.md`.
+learnings are distilled into concept docs including `orchestrator-substrate-model.md`,
+`model-conformance.md`, and `human-corrects-substrate.md`.
 
 For spec contracts and hazard-class acceptance criteria, see
 [docs/reference/PARSER_CONTRACTS.md](../reference/PARSER_CONTRACTS.md) and
@@ -49,6 +48,10 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | [2026-06-docs-only-runs-rust-matrix.md](2026-06-docs-only-runs-rust-matrix.md) | Docs-only PRs run full Rust build matrix; pure .md changes fail irrelevantly | ci, routing, workflow-dispatch, build-matrix, documentation | #1558, #1512 |
 | [2026-06-validate-title-issue-ref-gap.md](2026-06-validate-title-issue-ref-gap.md) | validate-title fails on agent-generated PRs lacking issue reference in title | ci, pr-metadata, validation, agent-generated, title-check | #1583, #1519 |
 | [2026-06-merge-funnel-throughput-constraint.md](2026-06-merge-funnel-throughput-constraint.md) | Merge funnel, not discovery, is the binding throughput constraint | ci, workflow, throughput, merge-velocity, bottleneck, economics | #1578, #1574, #1556, #1555, #1512, #1511, #1558, #1583 |
+
+| [2026-07-config-scope-predicate-drift.md](2026-07-config-scope-predicate-drift.md) | Config-read scope mismatch and predicate drift in VS Code settings integration | config-read-scope, predicate-drift, vscode-config, component-vs-system, external-truth-gate | #3308, #3276 |
+| [2026-07-guard-trigger-coverage-and-matching.md](2026-07-guard-trigger-coverage-and-matching.md) | Guard trigger coverage and substring-matching in strict-product-surface scanner | guard-trigger-coverage, substring-matching, scanner-blindness, enforcement-over-doctrine, cross-pr-coupling, strict-surface, product-surface | #3315, #3308, #3319, #3276 |
+| [2026-07-external-truth-review-product-docs.md](2026-07-external-truth-review-product-docs.md) | External-truth review of product-surface documentation and CI noise triage | external-truth-gate, product-docs, fact-verification, cross-pr-reference, ci-noise, non-required-checks, flaky-gates | #3319, #3315, #3308, #3324, #3276 |
 
 ---
 
@@ -113,3 +116,20 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | title-check | PR title validation / format enforcement |
 | throughput | Merge funnel throughput / cycle time |
 | bottleneck | Pipeline bottleneck / binding constraint |
+| config-read-scope | Config API scope mismatch in integration points |
+| predicate-drift | Change-detection predicate diverges from writer parser |
+| vscode-config | VS Code configuration API integration |
+| component-vs-system | Component passes tests; system fails in integration |
+| external-truth-gate | User-visible facts verified against code/spec/oracle |
+| guard-trigger-coverage | Enforcement gate trigger condition too narrow |
+| substring-matching | Text scanner false-negative from substring vs word matching |
+| enforcement-over-doctrine | Mechanical gate required, not doctrine-only rule |
+| cross-pr-coupling | Feature or fix reaches across PR boundaries |
+| strict-surface | Strict product-surface scanner / policy enforcer |
+| product-surface | User-visible product API surface |
+| product-docs | User-facing documentation of features/capabilities |
+| fact-verification | Fact-checking docs against source |
+| cross-pr-reference | Doc references feature in in-flight/unmerged PR |
+| ci-noise | Non-actionable CI output / noise vs signal triage |
+| non-required-checks | Advisory CI checks; do not block merge |
+| flaky-gates | Stochastic gate failures on stable code |

@@ -10,6 +10,10 @@
 #![allow(dead_code)]
 #![allow(clippy::assertions_on_constants)]
 #![allow(clippy::collapsible_if)]
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use parking_lot::{Condvar, Mutex};
 use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};

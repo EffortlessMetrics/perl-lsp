@@ -1,6 +1,10 @@
 //! Comprehensive integration tests for LSP features
 
 #![allow(clippy::collapsible_if)]
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use perl_lsp::features::code_lens_provider::{CodeLensProvider, get_shebang_lens};
 use perl_lsp::{JsonRpcRequest, LspServer};
@@ -18,7 +22,7 @@ fn create_test_server() -> LspServer {
 fn send_request(server: &LspServer, method: &str, params: Option<Value>) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1_i64)),
         method: method.to_string(),
         params,
     };

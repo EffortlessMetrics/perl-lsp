@@ -65,6 +65,9 @@ impl<'a> Parser<'a> {
 
     /// Parse a single statement
     fn parse_statement(&mut self) -> ParseResult<Node> {
+        if self.peek_kind() == Some(TokenKind::LeftBrace) {
+            return self.parse_statement_inner();
+        }
         self.with_recursion_guard(|s| s.parse_statement_inner())
     }
 
@@ -150,6 +153,10 @@ impl<'a> Parser<'a> {
     fn parse_statement_inner(&mut self) -> ParseResult<Node> {
         // Every new statement begins here
         self.at_stmt_start = true;
+        // A surrounding compound statement can queue a heredoc while it parses
+        // its condition, then recursively parse this statement as a block body.
+        // Remember its queue length so this statement drains only declarations it adds.
+        let pending_heredoc_start = self.pending_heredocs.len();
 
         // A `/` at statement start is always a regex delimiter, never division.
         // The lexer may be in ExpectOperator mode after a preceding block's `}`,
@@ -186,9 +193,11 @@ impl<'a> Parser<'a> {
             // Check for optional semicolon
             if self.peek_kind() == Some(TokenKind::Semicolon) {
                 let semi_token = self.consume_token()?;
-                self.byte_cursor = semi_token.end;
+                if self.pending_heredocs.is_empty() {
+                    self.byte_cursor = semi_token.end;
+                }
             }
-            self.drain_pending_heredocs(&mut stmt);
+            self.drain_pending_heredocs_from(pending_heredoc_start, &mut stmt);
             return Ok(stmt);
         }
 
@@ -252,7 +261,18 @@ impl<'a> Parser<'a> {
                     Ok(sub_node)
                 } else {
                     let decl = self.parse_variable_declaration()?;
-                    if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    // `my`/`our`/`state` declare only the FIRST variable when the
+                    // list is unparenthesized (perlsub: "the list must be placed
+                    // in parentheses"). A comma directly following the
+                    // declaration is therefore NOT part of it — it starts the
+                    // surrounding comma expression (e.g. `my $a, $b, $c = 1;`
+                    // deparses as `(my($a), $b, ($c = 1));`), so fold it into the
+                    // same statement-level comma/fat-arrow continuation used for
+                    // autoquoted keys.
+                    if matches!(
+                        self.peek_kind(),
+                        Some(TokenKind::FatArrow) | Some(TokenKind::Comma)
+                    ) {
                         self.finish_expression_from(decl)
                     } else {
                         Ok(self.parse_word_or_expr(decl)?)
@@ -318,7 +338,14 @@ impl<'a> Parser<'a> {
             TokenKind::Foreach => self.parse_foreach_statement(),
             TokenKind::Given => self.parse_given_statement(),
             TokenKind::Default => self.parse_default_statement(),
-            TokenKind::Try => self.parse_try(),
+            // `try` can be a user-defined subroutine name. Only the block form
+            // is the try/catch construct; `try(...)` is an ordinary call.
+            TokenKind::Try
+                if self
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .is_some_and(|token| token.kind == TokenKind::LeftBrace) => self.parse_try(),
                 TokenKind::Defer => self.parse_defer(),
 
             // Loop control — next/last/redo can be followed by a word operator at statement level,
@@ -490,11 +517,13 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Semicolon) {
             let semi_token = self.consume_token()?;
             // Track cursor after semicolon for heredoc content collection
-            self.byte_cursor = semi_token.end;
+            if self.pending_heredocs.is_empty() {
+                self.byte_cursor = semi_token.end;
+            }
         }
 
         // Drain pending heredocs after statement completion (attach content to AST)
-        self.drain_pending_heredocs(&mut stmt);
+        self.drain_pending_heredocs_from(pending_heredoc_start, &mut stmt);
 
         Ok(stmt)
     }
@@ -531,6 +560,7 @@ impl<'a> Parser<'a> {
                 | NodeKind::Defer { .. }
                 | NodeKind::Subroutine { .. }
                 | NodeKind::Package { .. }
+                | NodeKind::Format { .. }
                 | NodeKind::Block { .. }
                 | NodeKind::PhaseBlock { .. }
         )
@@ -1099,7 +1129,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a block statement
     fn parse_block(&mut self) -> ParseResult<Node> {
-        self.with_recursion_guard(|s| {
+        self.with_block_recursion_guard(|s| {
             let start = s.current_position();
 
             s.expect(TokenKind::LeftBrace)?;
@@ -1194,12 +1224,13 @@ impl<'a> Parser<'a> {
     /// - `:` — ternary else-part (always follows the then-branch)
     /// - `,` — comma separator (expression continuation)
     /// - `=>` — fat arrow (hash key-value context)
-    /// - `)` / `]` / `}` — closing delimiters (orphan, not a statement)
+    /// - `)` / `]` — closing delimiters (orphan, not a statement)
     /// - EOF — nothing follows the colon
     ///
-    /// Notably absent: `TokenKind::Semicolon`.  In Perl, `LABEL: ;` is a valid
-    /// labeled empty-statement, so `;` as the third token must be allowed through
-    /// as a potential label start.
+    /// Notably absent: `TokenKind::Semicolon` and `TokenKind::RightBrace`.  In
+    /// Perl, `LABEL: ;` and a final `LABEL:` before a block end are valid
+    /// labeled empty-statements, so both must be allowed through as potential
+    /// label starts.
     fn third_token_cannot_start_statement(kind: TokenKind) -> bool {
         matches!(
             kind,
@@ -1209,7 +1240,6 @@ impl<'a> Parser<'a> {
             | TokenKind::FatArrow   // hash key-value context
             | TokenKind::RightParen // closing paren
             | TokenKind::RightBracket // closing bracket
-            | TokenKind::RightBrace // orphan closing brace
             | TokenKind::Eof        // end of input
         )
     }

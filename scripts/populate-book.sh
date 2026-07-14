@@ -38,7 +38,11 @@ copy_doc() {
 
 # Getting Started section
 echo "Setting up Getting Started..."
-copy_doc "$DOCS_DIR/how-to/EDITOR_SETUP.md" "$BOOK_SRC/getting-started/editor-setup.md"
+# editor-setup.md is a committed canonical-pointer stub (see #3642) — do not
+# overwrite it with the full canonical doc, or the published book drifts back
+# to a copy that goes stale independently of docs/how-to/EDITOR_SETUP.md.
+# Copy the canonical source to reference/ for in-book linking from the stub.
+copy_doc "$DOCS_DIR/how-to/EDITOR_SETUP.md" "$BOOK_SRC/reference/editor-setup-canonical.md"
 copy_doc "$DOCS_DIR/reference/CONFIG.md" "$BOOK_SRC/getting-started/configuration.md"
 copy_doc "$DOCS_DIR/project/ORIENTATION.md" "$BOOK_SRC/getting-started/first-steps.md"
 
@@ -90,7 +94,9 @@ copy_doc "$DOCS_DIR/reference/MUTATION_TESTING_METHODOLOGY.md" "$BOOK_SRC/advanc
 
 # Reference section
 echo "Setting up Reference..."
-copy_doc "$DOCS_DIR/project/CURRENT_STATUS.md" "$BOOK_SRC/reference/current-status.md"
+# current-status.md is a committed canonical-pointer stub (see #3642) — do not
+# overwrite it with CURRENT_STATUS.md, or the published book drifts back to a
+# copy that goes stale independently of the canonical status overview.
 # Also copy modular status files (linked from the stub)
 mkdir -p "$BOOK_SRC/reference/status"
 copy_doc "$DOCS_DIR/project/status/index.md" "$BOOK_SRC/reference/status/index.md"

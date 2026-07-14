@@ -227,60 +227,10 @@ impl LspServer {
         let docs = self.documents.lock();
         docs.iter().map(|(uri, doc)| (uri.clone(), doc.text.clone())).collect()
     }
-
-    /// Get or compute a `SemanticAnalyzer` for the given document text and AST.
-    ///
-    /// Cache key: `(normalized_uri, content_hash_of_text)`.
-    /// The entry is valid as long as the content hash matches — no TTL needed.
-    /// Cache is bounded to 50 entries; a simple clear is used when full.
-    ///
-    /// **Lock discipline**: acquires `semantic_analyzer_cache` in two short
-    /// scopes (read, then write). May be called while `documents` is held;
-    /// always acquire `documents` before `semantic_analyzer_cache` to maintain
-    /// a consistent lock ordering and avoid deadlock.
-    pub(crate) fn get_or_build_analyzer(
-        &self,
-        uri: &str,
-        text: &str,
-        ast: &perl_parser::ast::Node,
-    ) -> Arc<crate::semantic::SemanticAnalyzer> {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        text.hash(&mut hasher);
-        let content_hash = hasher.finish();
-
-        let normalized = self.normalize_uri_key(uri);
-        let key = (normalized, content_hash);
-
-        // Read path: return clone of cached entry if present.
-        {
-            let cache = self.semantic_analyzer_cache.lock();
-            if let Some(cached) = cache.get(&key) {
-                return Arc::clone(cached);
-            }
-        }
-
-        // Cache miss: build the analyzer outside the lock.
-        let analyzer = Arc::new(crate::semantic::SemanticAnalyzer::analyze_with_source(ast, text));
-
-        // Write path: insert, evicting all entries when the cache is full.
-        {
-            let mut cache = self.semantic_analyzer_cache.lock();
-            if cache.len() >= 50 {
-                cache.clear();
-            }
-            cache.insert(key, Arc::clone(&analyzer));
-        }
-
-        analyzer
-    }
 }
 
 #[cfg(all(test, feature = "workspace"))]
 mod tests {
-    use super::*;
     use crate::runtime::LspServer;
 
     #[test]

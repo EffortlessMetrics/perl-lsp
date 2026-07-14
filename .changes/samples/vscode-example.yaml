@@ -1,0 +1,14 @@
+# Sample `vscode` fragment (documentation only — NOT batched).
+#
+# Demonstrates a second project routing into vscode-extension/CHANGELOG.md and a
+# breaking-change render (the bold "**Breaking:**" prefix). Copy the shape into
+# a real fragment via `changie new` or by hand.
+project: vscode
+component: Editor behavior
+kind: Changed
+body: Extension release notes now flow from Changie fragments (advisory foundation).
+time: 2026-07-10T00:00:00Z
+custom:
+  PR: "3768"
+  Slug: changie-foundation
+  Breaking: "no"

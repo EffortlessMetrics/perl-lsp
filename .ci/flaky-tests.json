@@ -18,11 +18,13 @@
       "test": "test_folding_range_region_markers_multiple_non_nested",
       "crate": "perl-lsp-rs",
       "subsystem": "lsp",
-      "state": "active",
+      "state": "resolved",
       "failure_mode": "Nondeterministic + duplicate output: the folding-range provider emits each subroutine fold twice (no dedup across passes) and computes a nondeterministic start line for the second #region fold (observed startLine 6 vs the expected 7), so the test's region-fold filter only matches on ~1/3 of runs. Inside the merge-blocking unit_routed_full gate (pr-smoke), this single flake throttled the entire merge queue.",
       "issue": 3123,
       "first_seen": "2026-06-28",
-      "notes": "Quarantined via #[ignore] in crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs to unblock the merge queue. The underlying provider defect (duplicate folds + nondeterministic region start line in crates/perl-lsp-rs-core/src/providers/folding/) must still be fixed; un-ignore once #3123 lands."
+      "resolved_in": 3168,
+      "resolved_at": "2026-06-28",
+      "notes": "Fixed by deduplicating folding ranges at the response-assembly seam and correcting the test's expected region-start-line from 7 to 6 (# region Main Logic is on line 6)."
     },
     {
       "test": "tests::test_file_watcher_debounce_batches_rapid_events",
@@ -39,8 +41,8 @@
   ],
   "summary": {
     "total": 2,
-    "active": 1,
-    "resolved": 1,
+    "active": 0,
+    "resolved": 2,
     "by_subsystem": {
       "lsp": 2
     }

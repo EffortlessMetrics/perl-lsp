@@ -59,29 +59,45 @@ fn scenario_16_removed_workspace_folder_symbols_disappear() {
     )
     .expect("Failed to create UX harness");
 
+    assert!(
+        harness.wait_for_index_ready(Duration::from_secs(20)),
+        "Expected initial workspace index to become ready before querying multi-root symbols"
+    );
+
     let before_deadline = Instant::now() + Duration::from_secs(10);
-    let mut symbols_before = Vec::new();
+    let mut symbols_before_a = Vec::new();
     while Instant::now() < before_deadline {
-        symbols_before = harness
-            .workspace_symbols("Module")
+        symbols_before_a = harness
+            .workspace_symbols("ModuleA")
             .expect("workspace/symbol must not error before folder removal");
-        if contains_symbol_in_folder(&symbols_before, "ModuleA", "/svc-a/")
-            && contains_symbol_in_folder(&symbols_before, "ModuleB", "/svc-b/")
-        {
+        if contains_symbol_in_folder(&symbols_before_a, "ModuleA", "/svc-a/") {
             break;
         }
         std::thread::sleep(Duration::from_millis(200));
     }
 
     assert!(
-        contains_symbol_in_folder(&symbols_before, "ModuleA", "/svc-a/"),
+        contains_symbol_in_folder(&symbols_before_a, "ModuleA", "/svc-a/"),
         "Expected ModuleA to be present before folder removal, got: {:?}",
-        symbols_before
+        symbols_before_a
     );
+
+    let before_deadline = Instant::now() + Duration::from_secs(10);
+    let mut symbols_before_b = Vec::new();
+    while Instant::now() < before_deadline {
+        symbols_before_b = harness
+            .workspace_symbols("ModuleB")
+            .expect("workspace/symbol must not error before folder removal");
+        if contains_symbol_in_folder(&symbols_before_b, "ModuleB", "/svc-b/") {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
     assert!(
-        contains_symbol_in_folder(&symbols_before, "ModuleB", "/svc-b/"),
+        contains_symbol_in_folder(&symbols_before_b, "ModuleB", "/svc-b/"),
         "Expected ModuleB to be present before folder removal, got: {:?}",
-        symbols_before
+        symbols_before_b
     );
 
     harness
@@ -89,29 +105,30 @@ fn scenario_16_removed_workspace_folder_symbols_disappear() {
         .expect("workspace folder removal notification must not fail");
 
     let after_deadline = Instant::now() + Duration::from_secs(10);
-    let mut symbols_after = Vec::new();
+    let mut symbols_after_b = Vec::new();
     while Instant::now() < after_deadline {
-        symbols_after = harness
-            .workspace_symbols("Module")
+        symbols_after_b = harness
+            .workspace_symbols("ModuleB")
             .expect("workspace/symbol must not error after folder removal");
 
-        if contains_symbol_in_folder(&symbols_after, "ModuleA", "/svc-a/")
-            && !contains_symbol_in_folder(&symbols_after, "ModuleB", "/svc-b/")
-        {
+        if !contains_symbol_in_folder(&symbols_after_b, "ModuleB", "/svc-b/") {
             break;
         }
         std::thread::sleep(Duration::from_millis(200));
     }
 
+    let symbols_after_a = harness
+        .workspace_symbols("ModuleA")
+        .expect("workspace/symbol must not error after folder removal");
     assert!(
-        contains_symbol_in_folder(&symbols_after, "ModuleA", "/svc-a/"),
+        contains_symbol_in_folder(&symbols_after_a, "ModuleA", "/svc-a/"),
         "Expected ModuleA to remain after removing svc-b, got: {:?}",
-        symbols_after
+        symbols_after_a
     );
     assert!(
-        !contains_symbol_in_folder(&symbols_after, "ModuleB", "/svc-b/"),
+        !contains_symbol_in_folder(&symbols_after_b, "ModuleB", "/svc-b/"),
         "Expected ModuleB symbols to disappear after removing svc-b, got: {:?}",
-        symbols_after
+        symbols_after_b
     );
 
     harness.assert_no_crash();

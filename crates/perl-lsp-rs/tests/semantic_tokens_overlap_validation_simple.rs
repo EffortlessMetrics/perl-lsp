@@ -1,262 +1,178 @@
-use perl_lsp::features::semantic_tokens_provider::SemanticTokensProvider;
-/// Simplified semantic token overlap validation tests for LSP protocol compliance
-/// These tests target semantic token overlap detection and validation
-/// to ensure robust token generation and position validation.
-///
-/// Labels: tests:semantic-tokens, tests:mutation-hardening
-use perl_parser::Parser;
+//! Semantic-token invariant validation through the LIVE canonical renderer.
+//!
+//! These tests exercise `textDocument/semanticTokens/full` end-to-end (the
+//! `collect_semantic_tokens` path) rather than any standalone provider, so the
+//! invariants they pin — non-empty generation, positive lengths, same-line
+//! non-overlap, idempotence, UTF-8 sanity — hold for the tokens editors
+//! actually receive. (#3388: single canonical renderer; the legacy AST-only
+//! `SemanticTokensProvider` is retired.)
+//!
+//! Labels: tests:semantic-tokens, tests:mutation-hardening
 
-// Test basic semantic token generation without overlaps
-#[test]
-fn test_semantic_token_basic_generation() -> Result<(), Box<dyn std::error::Error>> {
-    let code = "my $var = 123;";
-    let provider = SemanticTokensProvider::new(code.to_string());
-    let mut parser = Parser::new(code);
-    let ast = parser.parse()?;
+use perl_lsp::{JsonRpcRequest, LspServer};
+use serde_json::json;
 
-    let tokens = provider.extract(&ast);
+/// Spin up a fresh LspServer, open `uri` with `source`, request full semantic
+/// tokens, and return decoded absolute (line, col, len, type) tuples.
+fn get_tokens(
+    uri: &str,
+    source: &str,
+) -> Result<Vec<(u32, u32, u32, u32)>, Box<dyn std::error::Error>> {
+    let srv = LspServer::new();
 
-    // Should generate semantic tokens
-    assert!(!tokens.is_empty(), "Should generate semantic tokens for variable declaration");
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1)),
+        method: "initialize".into(),
+        params: Some(json!({"capabilities": {}})),
+    };
+    srv.handle_request(init);
 
-    // All tokens should have positive length
-    for token in &tokens {
-        assert!(token.length > 0, "All tokens should have positive length");
-        assert!(token.line < 100, "Line numbers should be reasonable");
-        assert!(token.start_char < 1000, "Character positions should be reasonable");
-    }
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    srv.handle_request(initialized);
 
-    // Verify no overlaps exist in token list
-    verify_no_semantic_token_overlaps(&tokens)?;
-    Ok(())
-}
-
-// Test semantic token generation with complex code
-#[test]
-fn test_semantic_token_complex_code_generation() -> Result<(), Box<dyn std::error::Error>> {
-    let code = "package MyModule::Test; sub test_func { my $variable = \"string\"; }";
-    let provider = SemanticTokensProvider::new(code.to_string());
-    let mut parser = Parser::new(code);
-    let ast = parser.parse()?;
-
-    let tokens = provider.extract(&ast);
-
-    // Should generate tokens for complex code
-    assert!(!tokens.is_empty(), "Should generate semantic tokens for complex code");
-
-    // Test that we have tokens for different constructs
-    let has_namespace = tokens.iter().any(|token| {
-        matches!(
-            token.token_type,
-            perl_lsp::features::semantic_tokens_provider::SemanticTokenType::Namespace
-        )
-    });
-    let has_function = tokens.iter().any(|token| {
-        matches!(
-            token.token_type,
-            perl_lsp::features::semantic_tokens_provider::SemanticTokenType::Function
-        )
-    });
-    let has_variable = tokens.iter().any(|token| {
-        matches!(
-            token.token_type,
-            perl_lsp::features::semantic_tokens_provider::SemanticTokenType::Variable
-        )
-    });
-
-    assert!(
-        has_namespace || has_function || has_variable,
-        "Should have tokens for different code constructs"
-    );
-
-    // Verify no overlaps
-    verify_no_semantic_token_overlaps(&tokens)?;
-    Ok(())
-}
-
-// Test UTF-8 boundary handling in semantic tokens
-#[test]
-fn test_semantic_token_utf8_handling() -> Result<(), Box<dyn std::error::Error>> {
-    let code = "my $🦀_var = \"🚀 test\"; # Comment with 🎯";
-    let provider = SemanticTokensProvider::new(code.to_string());
-    let mut parser = Parser::new(code);
-    let ast = parser.parse()?;
-
-    let tokens = provider.extract(&ast);
-
-    // Should handle UTF-8 characters correctly
-    assert!(!tokens.is_empty(), "Should generate tokens for UTF-8 code");
-
-    // All tokens should have reasonable positions and lengths
-    for token in &tokens {
-        assert!(token.length > 0, "All tokens should have positive length");
-        assert!(token.length < 100, "Token lengths should be reasonable for UTF-8");
-    }
-
-    // Verify no overlaps with UTF-8 characters
-    verify_no_semantic_token_overlaps(&tokens)?;
-    Ok(())
-}
-
-// Test edge cases that might cause overlap issues
-#[test]
-fn test_semantic_token_edge_cases() -> Result<(), Box<dyn std::error::Error>> {
-    let test_cases = vec![
-        "my $a = 1;",                        // Single character tokens
-        ";;; # Empty statements",            // Minimal content
-        "my $abc = 123; my $def = 456;",     // Multiple variables
-        "package Test::Module; use strict;", // Package and use statements
-    ];
-
-    for code in test_cases {
-        let provider = SemanticTokensProvider::new(code.to_string());
-        let mut parser = Parser::new(code);
-        if let Ok(ast) = parser.parse() {
-            let tokens = provider.extract(&ast);
-
-            // Verify all tokens are valid
-            for token in &tokens {
-                assert!(
-                    token.length > 0,
-                    "All tokens should have positive length in code: {}",
-                    code
-                );
+    let open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "textDocument/didOpen".into(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": source
             }
+        })),
+    };
+    srv.handle_request(open);
 
-            // Verify no overlaps
-            verify_no_semantic_token_overlaps(&tokens)?;
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(2)),
+        method: "textDocument/semanticTokens/full".into(),
+        params: Some(json!({"textDocument": {"uri": uri}})),
+    };
+
+    let res = srv.handle_request(req).ok_or("handle_request returned None")?;
+    let result = res.result.ok_or("response result is None")?;
+    let data = result["data"].as_array().ok_or("data field is not an array")?;
+
+    assert_eq!(data.len() % 5, 0, "semantic tokens must be 5-tuples");
+
+    let data_u32: Vec<u32> = data.iter().filter_map(|v| v.as_u64().map(|u| u as u32)).collect();
+
+    let mut tokens: Vec<(u32, u32, u32, u32)> = Vec::new();
+    let mut abs_line = 0u32;
+    let mut abs_col = 0u32;
+    for chunk in data_u32.chunks(5) {
+        if chunk.len() < 5 {
+            break;
+        }
+        let (dl, dc, len, kind, _mods) = (chunk[0], chunk[1], chunk[2], chunk[3], chunk[4]);
+        if dl > 0 {
+            abs_line += dl;
+            abs_col = dc;
+        } else {
+            abs_col += dc;
+        }
+        tokens.push((abs_line, abs_col, len, kind));
+    }
+
+    Ok(tokens)
+}
+
+/// Assert the core wire invariants for a decoded token stream: positive
+/// lengths and no same-line overlap (each token ends at or before the next
+/// token on that line begins — the invariant this file is named for).
+fn assert_stream_invariants(tokens: &[(u32, u32, u32, u32)], label: &str) {
+    for (i, tok) in tokens.iter().enumerate() {
+        assert!(tok.2 > 0, "{label}: token {i} must have positive length, got {tok:?}");
+    }
+    for pair in tokens.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        if a.0 == b.0 {
+            assert!(a.1 + a.2 <= b.1, "{label}: same-line tokens overlap: {a:?} then {b:?}");
         }
     }
+}
+
+#[test]
+fn live_tokens_basic_generation() -> Result<(), Box<dyn std::error::Error>> {
+    let tokens = get_tokens("file:///overlap_basic.pl", "my $x = 42;\n")?;
+    assert!(!tokens.is_empty(), "variable declaration should produce semantic tokens");
+    assert_stream_invariants(&tokens, "basic");
     Ok(())
 }
 
-// Test semantic token idempotence
 #[test]
-fn test_semantic_token_idempotence() -> Result<(), Box<dyn std::error::Error>> {
-    let code = "package Test::Module; use strict; use warnings; sub test { my $var = 42; }";
-    let provider = SemanticTokensProvider::new(code.to_string());
-    let mut parser = Parser::new(code);
-    let ast = parser.parse()?;
+fn live_tokens_complex_code_no_overlap() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"package My::Module;
 
-    // Generate tokens multiple times
-    let tokens1 = provider.extract(&ast);
-    let tokens2 = provider.extract(&ast);
+use strict;
+use warnings;
 
-    // Should be identical
-    assert_eq!(tokens1.len(), tokens2.len(), "Token count should be identical across runs");
-
-    for (i, (token1, token2)) in tokens1.iter().zip(tokens2.iter()).enumerate() {
-        assert_eq!(token1.line, token2.line, "Token {} line should be identical", i);
-        assert_eq!(
-            token1.start_char, token2.start_char,
-            "Token {} start_char should be identical",
-            i
-        );
-        assert_eq!(token1.length, token2.length, "Token {} length should be identical", i);
-        assert_eq!(token1.token_type, token2.token_type, "Token {} type should be identical", i);
+sub process_data {
+    my ($self, %args) = @_;
+    my @items = @{ $args{items} // [] };
+    foreach my $item (@items) {
+        next unless defined $item;
+        $self->{count}++;
     }
+    return $self->{count};
+}
 
-    // Verify both results have no overlaps
-    verify_no_semantic_token_overlaps(&tokens1)?;
-    verify_no_semantic_token_overlaps(&tokens2)?;
+1;
+"#;
+    let tokens = get_tokens("file:///overlap_complex.pl", code)?;
+    assert!(!tokens.is_empty(), "complex code should produce semantic tokens");
+    assert_stream_invariants(&tokens, "complex");
     Ok(())
 }
 
-// Test performance characteristics
 #[test]
-fn test_semantic_token_performance_characteristics() -> Result<(), Box<dyn std::error::Error>> {
-    // Generate a moderate-sized code sample
-    let mut code = String::new();
-    for i in 0..50 {
-        code.push_str(&format!("my $var{} = {}; ", i, i));
+fn live_tokens_utf8_lengths_sane() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "my $greeting = \"héllo wörld — ünïcode\";\nmy $emoji = \"🐪 camel\";\n";
+    let tokens = get_tokens("file:///overlap_utf8.pl", code)?;
+    assert!(!tokens.is_empty(), "UTF-8 code should produce semantic tokens");
+    assert_stream_invariants(&tokens, "utf8");
+    for tok in &tokens {
+        assert!(tok.2 < 100, "UTF-16 token length should stay reasonable, got {tok:?}");
     }
-
-    let provider = SemanticTokensProvider::new(code.clone());
-    let mut parser = Parser::new(&code);
-    let ast = parser.parse()?;
-
-    let start = std::time::Instant::now();
-    let tokens = provider.extract(&ast);
-    let duration = start.elapsed();
-
-    // Performance should be reasonable
-    assert!(
-        duration.as_millis() < 1000,
-        "Token generation should complete within 1s for 50 variables"
-    );
-
-    // Should generate reasonable number of tokens
-    assert!(tokens.len() >= 50, "Should generate at least 50 tokens for 50 variables");
-
-    // All tokens should be valid
-    verify_no_semantic_token_overlaps(&tokens)?;
-
-    // Memory usage should be reasonable
-    let total_token_size = tokens.len()
-        * std::mem::size_of::<perl_lsp::features::semantic_tokens_provider::SemanticToken>();
-    assert!(total_token_size < 100_000, "Token memory usage should be reasonable");
     Ok(())
 }
 
-// Test nested structure handling
 #[test]
-fn test_semantic_token_nested_structures() -> Result<(), Box<dyn std::error::Error>> {
-    let code = r#"
-    package Nested::Test;
-    sub outer {
-        my $outer_var = "test";
-        {
-            my $inner_var = $outer_var;
-            for my $item (1..10) {
-                print "$item: $inner_var\n";
-            }
+fn live_tokens_idempotent_across_requests() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "sub greet { my ($name) = @_; return \"hi $name\"; }\n";
+    let first = get_tokens("file:///overlap_idem.pl", code)?;
+    let second = get_tokens("file:///overlap_idem.pl", code)?;
+    assert_eq!(first, second, "identical source must decode to identical token streams");
+    Ok(())
+}
+
+#[test]
+fn live_tokens_nested_structures() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"my %config = (
+    db => {
+        host => "localhost",
+        opts => [1, 2, 3],
+    },
+);
+for my $key (sort keys %config) {
+    if (ref $config{$key} eq 'HASH') {
+        while (my ($k, $v) = each %{ $config{$key} }) {
+            print "$k\n";
         }
     }
-    "#;
-
-    let provider = SemanticTokensProvider::new(code.to_string());
-    let mut parser = Parser::new(code);
-    let ast = parser.parse()?;
-
-    let tokens = provider.extract(&ast);
-
-    // Should handle nested structures
-    assert!(!tokens.is_empty(), "Should generate tokens for nested code");
-
-    // Verify we have tokens across multiple lines
-    let _line_count = tokens.iter().map(|token| token.line).max().unwrap_or(0);
-
-    // Verify no overlaps in complex nested structure
-    verify_no_semantic_token_overlaps(&tokens)?;
-    Ok(())
 }
-
-// Helper function to verify no overlaps exist in semantic token list
-fn verify_no_semantic_token_overlaps(
-    tokens: &[perl_lsp::features::semantic_tokens_provider::SemanticToken],
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Sort tokens by position for overlap checking
-    let mut sorted_tokens: Vec<_> = tokens.iter().collect();
-    sorted_tokens.sort_by(|a, b| a.line.cmp(&b.line).then_with(|| a.start_char.cmp(&b.start_char)));
-
-    for i in 1..sorted_tokens.len() {
-        let prev_token = sorted_tokens[i - 1];
-        let curr_token = sorted_tokens[i];
-
-        // Check for overlaps on the same line
-        if prev_token.line == curr_token.line {
-            let prev_end = prev_token.start_char + prev_token.length;
-            assert!(
-                curr_token.start_char >= prev_end,
-                "Tokens overlap: prev[{}:{}-{}] curr[{}:{}-{}]",
-                prev_token.line,
-                prev_token.start_char,
-                prev_end,
-                curr_token.line,
-                curr_token.start_char,
-                curr_token.start_char + curr_token.length
-            );
-        }
-    }
+"#;
+    let tokens = get_tokens("file:///overlap_nested.pl", code)?;
+    assert!(!tokens.is_empty(), "nested structures should produce semantic tokens");
+    assert_stream_invariants(&tokens, "nested");
     Ok(())
 }

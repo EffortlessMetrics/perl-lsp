@@ -38,16 +38,16 @@ reason = "Proof lane blocks new RIPR gaps and stale/missing RIPR receipts."
 [[checks]]
 name = "Codecov / Patch 95"
 workflow = ".github/workflows/ci-nightly.yml"
-required = true
-enforcement = "github-branch-protection"
-reason = "Proof lane blocks patch coverage below 95% and stale/missing coverage receipts."
+required = false
+enforcement = "advisory-nightly-or-manual"
+reason = "Coverage is advisory and expensive; RIPR+ plus focused tests are the required PR proof."
 
 [[checks]]
 name = "codecov/patch"
 workflow = "codecov"
-required = true
-enforcement = "github-branch-protection"
-reason = "External Codecov patch status must finish and pass as a coverage-only signal before merge; test failures belong to test-named gates."
+required = false
+enforcement = "advisory-nightly-or-manual"
+reason = "External Codecov telemetry may report coverage, but it must not block normal PR or merge-queue flow."
 
 [[checks]]
 name = "tokmd Review Cockpit"

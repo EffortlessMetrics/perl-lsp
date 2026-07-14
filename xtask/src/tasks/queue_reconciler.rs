@@ -25,17 +25,30 @@
 //! - Live CI RED → strip `merge-ready` (live CI blocks merge)
 //! - Live CI PENDING → leave both
 //!
-//! ## Labels without live ground truth — "later-applied wins"
+//! ## Review-label pairs — timestamp arbitration removed (#4005 D5)
 //!
-//! These pairs don't have a live equivalent; timeline is the best signal:
-//! - `deep-reviewed + needs-deep-review` → whichever was applied later wins
-//! - `diff-audited + needs-diff-fix` → whichever was applied later wins
-//! - `review-reviewed + needs-builder-fix` → whichever was applied later wins
-//! - `maintainer-pr-reviewed + needs-builder-fix` → whichever was applied later wins
+//! `deep-reviewed + needs-deep-review`, `diff-audited + needs-diff-fix`,
+//! `review-reviewed + needs-builder-fix`, and `maintainer-pr-reviewed +
+//! needs-builder-fix` have no *live* ground truth (no CI check to query
+//! against). Per #4005 (repository protocol cleanup), this reconciler no
+//! longer arbitrates any of these pairs by label-apply timestamp
+//! ("whichever was applied later wins") — click-order is not authority.
 //!
-//! When both labels were applied within 5 seconds of each other (simultaneous),
-//! sign-off beats routing. When no timeline is available, use the conservative
-//! fallback: keep the sign-off, strip the routing label.
+//! For `diff-audited`/`needs-diff-fix` and `review-reviewed`/`needs-builder-fix`,
+//! a SHA-bound review receipt already resolves the contradiction against a
+//! concrete artifact (see `ReviewReceipt` /
+//! `contradictions_from_current_review_receipt` below): a current-head
+//! *independent* `Approved` receipt (one where the reviewer did not also
+//! fix-forward in the same pass — invariant #4, a fix-forward pass can't
+//! stand in for independent sign-off) strips the routing label, and a
+//! `NeedsBuilder`/`NeedsDiff` verdict strips the sign-off label. Only
+//! `deep-reviewed`/`needs-deep-review` has no receipt-verdict mapping — for
+//! that pair, removing the timestamp arbitration leaves the contradiction
+//! genuinely un-resolved, which is the intended effect of this cut.
+//!
+//! Merge readiness for these pairs is decided by required checks and review
+//! convergence (#3693/#3988), not by which label a human or agent clicked
+//! last.
 //!
 //! ## merge-ready + non-CI needs-* labels
 //!
@@ -68,22 +81,26 @@ use crate::utils::project_root;
 const DEFAULT_QUEUE_RECEIPT_PATH: &str = "target/receipts/queue-reconcile.json";
 const REQUIRED_CHECKS_PATH: &str = ".ci/policies/required-checks.toml";
 
-/// Within this many seconds, treat two label-applied timestamps as simultaneous.
-/// When simultaneous, sign-off labels beat routing (needs-*) labels.
-const SIMULTANEOUS_THRESHOLD_SECS: i64 = 5;
-
 // ---------------------------------------------------------------------------
 // Label name constants
 // ---------------------------------------------------------------------------
 
 const MERGE_READY: &str = "merge-ready";
 const CI_GREEN: &str = "ci-green";
+// deep-reviewed/needs-deep-review and maintainer-pr-reviewed are no longer resolved
+// by this reconciler (#4005 D5 removed the label-pair timestamp arbitration) — they
+// remain un-arbitrated navigation labels. Kept as named constants (rather than
+// inlined strings) because they document the full review-label taxonomy this module
+// is aware of, and the "left alone" behavior is pinned by tests below.
+#[allow(dead_code)]
 const DEEP_REVIEWED: &str = "deep-reviewed";
 const DIFF_AUDITED: &str = "diff-audited";
 const REVIEW_REVIEWED: &str = "review-reviewed";
+#[allow(dead_code)]
 const MAINTAINER_PR_REVIEWED: &str = "maintainer-pr-reviewed";
 
 const NEEDS_CI_FIX: &str = "needs-ci-fix";
+#[allow(dead_code)]
 const NEEDS_DEEP_REVIEW: &str = "needs-deep-review";
 const NEEDS_DIFF_FIX: &str = "needs-diff-fix";
 const NEEDS_BUILDER_FIX: &str = "needs-builder-fix";
@@ -123,21 +140,6 @@ pub struct ReviewReceipt {
 // ---------------------------------------------------------------------------
 // Data structures
 // ---------------------------------------------------------------------------
-
-/// A label event from the GitHub timeline API.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct LabelEvent {
-    pub label: String,
-    /// RFC 3339 timestamp at which the label was applied.
-    pub applied_at: String,
-    pub applied_by: String,
-}
-
-impl LabelEvent {
-    fn epoch_secs(&self) -> i64 {
-        chrono::DateTime::parse_from_rfc3339(&self.applied_at).map(|dt| dt.timestamp()).unwrap_or(0)
-    }
-}
 
 /// A label that should be stripped, with the reason.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -259,9 +261,6 @@ pub fn reconcile_queue(
     let mut actions: Vec<PrAction> = Vec::new();
 
     for pr in &prs {
-        // Fetch timeline events (best-effort; empty → conservative label-only fallback).
-        let events = fetch_label_timeline(pr.number).unwrap_or_default();
-
         // Query live CI state for this PR.
         let ci_outcome = query_live_ci_state(pr.number).unwrap_or(CiOutcome::Pending);
 
@@ -269,9 +268,7 @@ pub fn reconcile_queue(
         // None → no projection contradictions emitted (safe no-op).
         let review_receipt = fetch_current_review_receipt(pr.number).unwrap_or(None);
 
-        let mut contradictions = detect_contradictions(pr, &events, ci_outcome);
-        contradictions
-            .extend(contradictions_from_current_review_receipt(pr, review_receipt.as_ref()));
+        let contradictions = merge_contradictions(pr, ci_outcome, review_receipt.as_ref());
 
         if contradictions.is_empty() {
             continue;
@@ -359,15 +356,13 @@ pub fn reconcile_queue(
 // Core contradiction detection
 // ---------------------------------------------------------------------------
 
-/// Detect all label contradictions for a PR, using live CI state and timeline events.
+/// Detect all label contradictions for a PR, using live CI state as ground truth.
 ///
-/// This is the authoritative entry point for detection. It dispatches to
-/// CI-specific logic (live ground truth) and timeline-based logic (no ground truth).
-pub fn detect_contradictions(
-    pr: &OpenPr,
-    events: &[LabelEvent],
-    ci_outcome: CiOutcome,
-) -> Vec<Contradiction> {
+/// This is the authoritative entry point for detection. Only pairs with a live
+/// ground truth (CI status, or `merge-ready` vs. any present `needs-*`) are
+/// resolved here. Review-label pairs (`deep-reviewed`/`needs-deep-review`, etc.)
+/// have no live ground truth and are left alone — see the module doc comment.
+pub fn detect_contradictions(pr: &OpenPr, ci_outcome: CiOutcome) -> Vec<Contradiction> {
     let mut out = Vec::new();
 
     let has = |name: &str| pr.labels.iter().any(|l| l == name);
@@ -426,50 +421,88 @@ pub fn detect_contradictions(
         });
     }
 
-    // --- Non-CI pairs: "later-applied wins" via timeline ---
-    let non_ci_pairs: &[(&str, &str)] = &[
-        (DEEP_REVIEWED, NEEDS_DEEP_REVIEW),
-        (DIFF_AUDITED, NEEDS_DIFF_FIX),
-        (REVIEW_REVIEWED, NEEDS_BUILDER_FIX),
-        (MAINTAINER_PR_REVIEWED, NEEDS_BUILDER_FIX),
-    ];
-
-    let mut stripped_routing: Vec<&str> = Vec::new(); // track to avoid duplicates
-
-    for &(signoff, routing) in non_ci_pairs {
-        if !has(signoff) || !has(routing) {
-            continue;
-        }
-        // Avoid emitting the same routing-label strip twice (e.g., both review-reviewed
-        // and maintainer-pr-reviewed with needs-builder-fix).
-        if stripped_routing.contains(&routing) {
-            continue;
-        }
-
-        let c = resolve_non_ci_pair(signoff, routing, events);
-        stripped_routing.push(routing);
-        out.push(c);
-    }
+    // Review-label pairs (deep-reviewed/needs-deep-review, diff-audited/needs-diff-fix,
+    // review-reviewed|maintainer-pr-reviewed/needs-builder-fix) are intentionally NOT
+    // resolved here — see the module doc comment. They remain un-arbitrated navigation
+    // labels; the receipt-projection path below (`contradictions_from_current_review_receipt`)
+    // is the only mechanism that may strip the routing half of those pairs, and only
+    // against a SHA-bound receipt.
 
     out
+}
+
+/// True when `receipt` names the CURRENT head of `pr` (same sha, same PR number, expected
+/// kind/schema). Shared by the receipt-projection path below and by
+/// [`is_fix_forward_current_approval`] so both use exactly the same "is this receipt live"
+/// test — no drift between the two consumers of `ReviewReceipt`.
+fn is_current_head_receipt(pr: &OpenPr, receipt: &ReviewReceipt) -> bool {
+    receipt.kind == REVIEW_RECEIPT_KIND
+        && receipt.schema_version == 1
+        && receipt.sha == pr.head_ref_oid
+        && receipt.pr == pr.number
+}
+
+/// True when `receipt` is a CURRENT-head `Approved` receipt with `fix_forward_applied`.
+///
+/// Per M4 invariant #4 (a pass that changes the implementation is a fix/responder pass,
+/// not independent review), such a receipt must never license stripping the routing
+/// labels `needs-builder-fix` / `needs-diff-fix` — regardless of *which* detector wants to
+/// strip them. This is consumed by [`merge_contradictions`] as a post-filter, retained as
+/// defense-in-depth: historically it also had to guard against a label-pair timeline
+/// resolver in [`detect_contradictions`] that had no receipt awareness at all (a
+/// fix-forward reviewer applying the `review-reviewed` / `diff-audited` sign-off labels
+/// could self-clear the routing labels via that label-only path even though the
+/// receipt-projection path below already refused to do so on its own). #4005 D5 removed
+/// that timeline resolver entirely (see the module doc comment); this post-filter stays
+/// because the receipt-projection path is still the thing it gates.
+fn is_fix_forward_current_approval(pr: &OpenPr, receipt: Option<&ReviewReceipt>) -> bool {
+    receipt.is_some_and(|r| {
+        is_current_head_receipt(pr, r)
+            && r.verdict == ReviewReceiptVerdict::Approved
+            && r.fix_forward_applied
+    })
+}
+
+/// Authoritative merge point: combine live-CI/merge-ready detection with the
+/// current-head receipt projection, then apply the invariant-#4 post-filter. Callers
+/// (`reconcile_queue` and tests) MUST go through this rather than re-implementing the
+/// merge inline — that inline duplication is exactly how a historical label-pair
+/// resolver bypass shipped (the two detectors were merged without the fix-forward gate
+/// applying to both; see [`is_fix_forward_current_approval`]).
+pub fn merge_contradictions(
+    pr: &OpenPr,
+    ci_outcome: CiOutcome,
+    receipt: Option<&ReviewReceipt>,
+) -> Vec<Contradiction> {
+    let mut contradictions = detect_contradictions(pr, ci_outcome);
+    contradictions.extend(contradictions_from_current_review_receipt(pr, receipt));
+
+    if is_fix_forward_current_approval(pr, receipt) {
+        contradictions.retain(|c| c.strip != NEEDS_BUILDER_FIX && c.strip != NEEDS_DIFF_FIX);
+    }
+
+    contradictions
 }
 
 pub fn contradictions_from_current_review_receipt(
     pr: &OpenPr,
     receipt: Option<&ReviewReceipt>,
 ) -> Vec<Contradiction> {
-    let Some(current) = receipt.filter(|r| {
-        r.kind == REVIEW_RECEIPT_KIND
-            && r.schema_version == 1
-            && r.sha == pr.head_ref_oid
-            && r.pr == pr.number
-    }) else {
+    let Some(current) = receipt.filter(|r| is_current_head_receipt(pr, r)) else {
         return Vec::new();
     };
     let mut out = Vec::new();
     let has = |name: &str| pr.labels.iter().any(|l| l == name);
 
     match current.verdict {
+        // Invariant #4 (M4 ledger): a pass that changes the implementation is a
+        // fix/responder pass, not independent review. A receipt where the reviewer
+        // both fixed AND approved in the same pass (`fix_forward_applied == true`)
+        // must NOT self-clear routing labels — that would let a reviewer's own
+        // fix-forward stand in for independent sign-off. The resulting head still
+        // requires a fresh, independent `Approved` receipt (`fix_forward_applied ==
+        // false`) at the same sha before routing labels are stripped.
+        ReviewReceiptVerdict::Approved if current.fix_forward_applied => {}
         ReviewReceiptVerdict::Approved => {
             if has(NEEDS_BUILDER_FIX) {
                 out.push(Contradiction {
@@ -517,67 +550,15 @@ pub fn contradictions_from_current_review_receipt(
     }
     out
 }
-/// Resolve a contradicting pair that has no live ground truth using timeline events.
+/// Fallback: detect contradictions using only the label list and live CI ground truth.
 ///
-/// Rule: whichever label was applied later wins. If within the simultaneous threshold,
-/// sign-off beats routing. If no timeline data, conservative fallback: keep sign-off.
-fn resolve_non_ci_pair(signoff: &str, routing: &str, events: &[LabelEvent]) -> Contradiction {
-    let find_latest = |name: &str| -> Option<i64> {
-        events.iter().filter(|e| e.label == name).map(|e| e.epoch_secs()).max()
-    };
-
-    let signoff_ts = find_latest(signoff);
-    let routing_ts = find_latest(routing);
-
-    let strip = match (signoff_ts, routing_ts) {
-        (Some(st), Some(rt)) => {
-            let diff = st - rt;
-            if diff.abs() <= SIMULTANEOUS_THRESHOLD_SECS {
-                // Simultaneous → keep sign-off.
-                routing.to_string()
-            } else if st > rt {
-                // Sign-off is newer → strip routing.
-                routing.to_string()
-            } else {
-                // Routing is newer → strip sign-off.
-                signoff.to_string()
-            }
-        }
-        // Conservative fallback: no timeline data → keep sign-off.
-        _ => routing.to_string(),
-    };
-
-    let keep = if strip == signoff { routing.to_string() } else { signoff.to_string() };
-
-    let (newer_ts, older_ts, newer_label, older_label) = if strip == routing {
-        (signoff_ts.unwrap_or(0), routing_ts.unwrap_or(0), signoff, routing)
-    } else {
-        (routing_ts.unwrap_or(0), signoff_ts.unwrap_or(0), routing, signoff)
-    };
-
-    let reason = if signoff_ts.is_none() || routing_ts.is_none() {
-        format!(
-            "{routing} contradicts {signoff}; no timeline data — conservative: keeping sign-off"
-        )
-    } else {
-        format!(
-            "`{newer_label}` applied later (ts={newer_ts}) supersedes `{older_label}` (ts={older_ts}) — later wins"
-        )
-    };
-
-    Contradiction { keep, strip, reason }
-}
-
-/// Fallback: detect contradictions using only the label list (no timeline, no live CI).
-///
-/// Conservative: always keeps sign-off labels and strips routing labels.
-/// Used when timeline API is unavailable and live CI is not queried.
-/// Available as a public test helper and for offline/fixture-based testing.
+/// Used when live CI is not queried (defaults to `Pending`, the most conservative
+/// state — leaves everything alone). Available as a public test helper and for
+/// offline/fixture-based testing.
 #[allow(dead_code)]
 pub fn detect_contradictions_from_labels(labels: &[String]) -> Vec<Contradiction> {
     let pr = OpenPr { number: 0, labels: labels.to_vec(), head_ref_oid: String::new() };
-    // Use conservative pending CI and no events → conservative sign-off preference.
-    detect_contradictions(&pr, &[], CiOutcome::Pending)
+    detect_contradictions(&pr, CiOutcome::Pending)
 }
 
 // ---------------------------------------------------------------------------
@@ -740,49 +721,6 @@ fn required_ci_checks_from_policy(policy: &toml::Value) -> BTreeSet<String> {
 // ---------------------------------------------------------------------------
 // GitHub API helpers (via gh CLI)
 // ---------------------------------------------------------------------------
-
-/// Fetch label timeline events for a PR via the GitHub REST API.
-///
-/// Returns empty on failure so callers fall back gracefully.
-fn fetch_label_timeline(pr_number: u64) -> Result<Vec<LabelEvent>> {
-    let root = project_root()?;
-    let endpoint = format!("repos/{{owner}}/{{repo}}/issues/{pr_number}/timeline?per_page=100");
-
-    let output = Command::new("gh")
-        .current_dir(&root)
-        .args(["api", &endpoint, "--paginate"])
-        .output()
-        .context("failed to execute gh api timeline")?;
-
-    if !output.status.success() {
-        return Ok(Vec::new());
-    }
-
-    let raw = String::from_utf8_lossy(&output.stdout);
-    let events_json: Vec<serde_json::Value> = serde_json::from_str(&raw).unwrap_or_default();
-
-    let label_events: Vec<LabelEvent> = events_json
-        .into_iter()
-        .filter(|e| e.get("event").and_then(serde_json::Value::as_str) == Some("labeled"))
-        .filter_map(|e| {
-            let label = e
-                .get("label")
-                .and_then(|l| l.get("name"))
-                .and_then(serde_json::Value::as_str)?
-                .to_string();
-            let applied_at = e.get("created_at").and_then(serde_json::Value::as_str)?.to_string();
-            let applied_by = e
-                .get("actor")
-                .and_then(|a| a.get("login"))
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("unknown")
-                .to_string();
-            Some(LabelEvent { label, applied_at, applied_by })
-        })
-        .collect();
-
-    Ok(label_events)
-}
 
 /// Fetch the current-SHA review receipt for a PR by scanning issue comments for
 /// fenced JSON blocks tagged `kind: "review_receipt"`.
@@ -1050,14 +988,6 @@ mod tests {
 
     fn make_pr(number: u64, label_names: &[&str]) -> OpenPr {
         OpenPr { number, labels: labels(label_names), head_ref_oid: format!("sha-{number}") }
-    }
-
-    fn make_event(label: &str, applied_at: &str) -> LabelEvent {
-        LabelEvent {
-            label: label.to_string(),
-            applied_at: applied_at.to_string(),
-            applied_by: "test-agent".to_string(),
-        }
     }
 
     const TEST_TS: &str = "2026-04-27T00:00:00Z";
@@ -1337,7 +1267,7 @@ required = false
     #[test]
     fn strips_needs_ci_fix_when_live_ci_is_green() {
         let pr = make_pr(1, &[CI_GREEN, NEEDS_CI_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Success);
+        let c = detect_contradictions(&pr, CiOutcome::Success);
         assert_eq!(c.len(), 1);
         assert_eq!(c[0].strip, NEEDS_CI_FIX);
         assert!(c[0].reason.contains("SUCCESS"), "reason should mention SUCCESS");
@@ -1347,7 +1277,7 @@ required = false
     fn does_not_strip_when_live_ci_is_failing() {
         // Live CI red: needs-ci-fix should stay, no strip.
         let pr = make_pr(1, &[CI_GREEN, NEEDS_CI_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Failure);
+        let c = detect_contradictions(&pr, CiOutcome::Failure);
         // No needs-ci-fix strip (only merge-ready would be stripped if present).
         assert!(c.iter().all(|x| x.strip != NEEDS_CI_FIX));
     }
@@ -1355,7 +1285,7 @@ required = false
     #[test]
     fn does_not_strip_when_live_ci_is_pending() {
         let pr = make_pr(1, &[CI_GREEN, NEEDS_CI_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Pending);
+        let c = detect_contradictions(&pr, CiOutcome::Pending);
         assert!(c.iter().all(|x| x.strip != NEEDS_CI_FIX));
     }
 
@@ -1366,7 +1296,7 @@ required = false
     #[test]
     fn merge_ready_plus_needs_ci_fix_live_green_strips_needs_ci_fix_not_merge_ready() {
         let pr = make_pr(1, &[MERGE_READY, NEEDS_CI_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Success);
+        let c = detect_contradictions(&pr, CiOutcome::Success);
         // Live CI green → strip needs-ci-fix, keep merge-ready.
         let strips: Vec<&str> = c.iter().map(|x| x.strip.as_str()).collect();
         assert!(strips.contains(&NEEDS_CI_FIX), "should strip needs-ci-fix");
@@ -1376,7 +1306,7 @@ required = false
     #[test]
     fn merge_ready_plus_needs_ci_fix_live_red_strips_merge_ready() {
         let pr = make_pr(1, &[MERGE_READY, NEEDS_CI_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Failure);
+        let c = detect_contradictions(&pr, CiOutcome::Failure);
         let strips: Vec<&str> = c.iter().map(|x| x.strip.as_str()).collect();
         assert!(strips.contains(&MERGE_READY), "should strip merge-ready when CI is red");
         assert!(!strips.contains(&NEEDS_CI_FIX), "should NOT strip needs-ci-fix when CI is red");
@@ -1385,7 +1315,7 @@ required = false
     #[test]
     fn merge_ready_plus_needs_ci_fix_pending_leaves_both() {
         let pr = make_pr(1, &[MERGE_READY, NEEDS_CI_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Pending);
+        let c = detect_contradictions(&pr, CiOutcome::Pending);
         let strips: Vec<&str> = c.iter().map(|x| x.strip.as_str()).collect();
         assert!(!strips.contains(&MERGE_READY), "should not strip merge-ready when pending");
         assert!(!strips.contains(&NEEDS_CI_FIX), "should not strip needs-ci-fix when pending");
@@ -1400,7 +1330,7 @@ required = false
         // Path-conditioned PR: all checks SKIPPED — gate is not applicable.
         // needs-ci-fix should be treated as stale and stripped.
         let pr = make_pr(1, &[CI_GREEN, NEEDS_CI_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Skipped);
+        let c = detect_contradictions(&pr, CiOutcome::Skipped);
         assert_eq!(c.len(), 1);
         assert_eq!(c[0].strip, NEEDS_CI_FIX);
         assert!(
@@ -1415,7 +1345,7 @@ required = false
         // Path-conditioned PR with merge-ready: SKIPPED means gate inapplicable,
         // so strip needs-ci-fix but keep merge-ready (same as Success path).
         let pr = make_pr(1, &[MERGE_READY, NEEDS_CI_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Skipped);
+        let c = detect_contradictions(&pr, CiOutcome::Skipped);
         let strips: Vec<&str> = c.iter().map(|x| x.strip.as_str()).collect();
         assert!(
             strips.contains(&NEEDS_CI_FIX),
@@ -1431,11 +1361,11 @@ required = false
     fn idempotent_with_skipped_ci() {
         // Second pass on a path-conditioned PR must be a no-op.
         let mut state = labels(&[MERGE_READY, CI_GREEN, NEEDS_CI_FIX]);
-        let pass1 = apply_pass(&mut state, &[], CiOutcome::Skipped);
+        let pass1 = apply_pass(&mut state, CiOutcome::Skipped);
         // Should strip needs-ci-fix only.
         assert!(pass1.contains(&NEEDS_CI_FIX.to_string()), "pass1 should strip needs-ci-fix");
         assert!(!pass1.contains(&MERGE_READY.to_string()), "pass1 should not strip merge-ready");
-        let pass2 = apply_pass(&mut state, &[], CiOutcome::Skipped);
+        let pass2 = apply_pass(&mut state, CiOutcome::Skipped);
         assert!(pass2.is_empty(), "second pass must be no-op on path-conditioned PR");
     }
 
@@ -1443,7 +1373,7 @@ required = false
     fn clean_pr_with_all_skipped_ci_produces_no_strips() {
         // A PR with only merge-ready + ci-green and all CI SKIPPED: nothing to strip.
         let mut state = labels(&[MERGE_READY, CI_GREEN, DEEP_REVIEWED, DIFF_AUDITED]);
-        let pass1 = apply_pass(&mut state, &[], CiOutcome::Skipped);
+        let pass1 = apply_pass(&mut state, CiOutcome::Skipped);
         assert!(pass1.is_empty(), "clean path-conditioned PR should produce no strips");
     }
 
@@ -1454,7 +1384,7 @@ required = false
     #[test]
     fn merge_ready_plus_needs_builder_fix_strips_merge_ready() {
         let pr = make_pr(1, &[MERGE_READY, NEEDS_BUILDER_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Pending);
+        let c = detect_contradictions(&pr, CiOutcome::Pending);
         let strips: Vec<&str> = c.iter().map(|x| x.strip.as_str()).collect();
         assert!(strips.contains(&MERGE_READY));
     }
@@ -1462,7 +1392,7 @@ required = false
     #[test]
     fn merge_ready_plus_needs_deep_review_strips_merge_ready() {
         let pr = make_pr(1, &[MERGE_READY, NEEDS_DEEP_REVIEW]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Pending);
+        let c = detect_contradictions(&pr, CiOutcome::Pending);
         let strips: Vec<&str> = c.iter().map(|x| x.strip.as_str()).collect();
         assert!(strips.contains(&MERGE_READY));
     }
@@ -1470,67 +1400,46 @@ required = false
     #[test]
     fn merge_ready_alone_no_contradiction() {
         let pr = make_pr(1, &[MERGE_READY, CI_GREEN, DEEP_REVIEWED]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Success);
+        let c = detect_contradictions(&pr, CiOutcome::Success);
         assert!(c.is_empty(), "no contradictions on clean merge-ready PR");
     }
 
     // -----------------------------------------------------------------------
-    // Non-CI pairs: "later-applied wins" via timeline
+    // Review-label pairs: no live ground truth → left un-arbitrated (#4005 D5)
+    //
+    // These pin the REMOVAL: a contradicting review-label pair, with no receipt
+    // and no merge-ready present, must produce ZERO contradictions from
+    // `detect_contradictions` — no click-order/timestamp resolution any more.
     // -----------------------------------------------------------------------
 
     #[test]
-    fn newer_signoff_strips_routing_when_timeline_available() {
+    fn deep_review_pair_left_unarbitrated() {
         let pr = make_pr(1, &[DEEP_REVIEWED, NEEDS_DEEP_REVIEW]);
-        let events = vec![
-            make_event(NEEDS_DEEP_REVIEW, "2026-04-23T10:00:00Z"),
-            make_event(DEEP_REVIEWED, "2026-04-26T22:00:00Z"),
-        ];
-        let c = detect_contradictions(&pr, &events, CiOutcome::Pending);
-        assert_eq!(c.len(), 1);
-        assert_eq!(c[0].strip, NEEDS_DEEP_REVIEW, "newer signoff wins");
+        let c = detect_contradictions(&pr, CiOutcome::Pending);
+        assert!(c.is_empty(), "review-label pairs are no longer arbitrated: {c:?}");
     }
 
     #[test]
-    fn newer_routing_strips_signoff_when_timeline_available() {
-        let pr = make_pr(1, &[DEEP_REVIEWED, NEEDS_DEEP_REVIEW]);
-        let events = vec![
-            make_event(DEEP_REVIEWED, "2026-04-23T10:00:00Z"),
-            make_event(NEEDS_DEEP_REVIEW, "2026-04-26T22:00:00Z"),
-        ];
-        let c = detect_contradictions(&pr, &events, CiOutcome::Pending);
-        assert_eq!(c.len(), 1);
-        assert_eq!(c[0].strip, DEEP_REVIEWED, "newer routing wins");
+    fn diff_audit_pair_left_unarbitrated() {
+        let pr = make_pr(1, &[DIFF_AUDITED, NEEDS_DIFF_FIX]);
+        let c = detect_contradictions(&pr, CiOutcome::Pending);
+        assert!(c.is_empty(), "review-label pairs are no longer arbitrated: {c:?}");
     }
 
     #[test]
-    fn simultaneous_labels_prefer_signoff() {
-        let pr = make_pr(1, &[DEEP_REVIEWED, NEEDS_DEEP_REVIEW]);
-        let events = vec![
-            make_event(DEEP_REVIEWED, "2026-04-26T22:00:00Z"),
-            make_event(NEEDS_DEEP_REVIEW, "2026-04-26T22:00:03Z"), // 3s — within threshold
-        ];
-        let c = detect_contradictions(&pr, &events, CiOutcome::Pending);
-        assert_eq!(c.len(), 1);
-        assert_eq!(c[0].strip, NEEDS_DEEP_REVIEW, "simultaneous: signoff wins");
-    }
-
-    #[test]
-    fn conservative_fallback_keeps_signoff_when_no_timeline() {
+    fn review_reviewed_pair_left_unarbitrated() {
         let pr = make_pr(1, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Pending);
-        assert_eq!(c.len(), 1);
-        assert_eq!(c[0].keep, REVIEW_REVIEWED);
-        assert_eq!(c[0].strip, NEEDS_BUILDER_FIX);
+        let c = detect_contradictions(&pr, CiOutcome::Pending);
+        assert!(c.is_empty(), "review-label pairs are no longer arbitrated: {c:?}");
     }
 
     #[test]
-    fn no_duplicate_needs_builder_fix_strip_when_both_signoffs_present() {
-        // Both review-reviewed and maintainer-pr-reviewed with needs-builder-fix.
-        // Should strip needs-builder-fix exactly once.
+    fn both_signoffs_with_needs_builder_fix_left_unarbitrated() {
+        // Both review-reviewed and maintainer-pr-reviewed with needs-builder-fix —
+        // previously "exactly one strip"; now zero strips, no arbitration at all.
         let pr = make_pr(1, &[REVIEW_REVIEWED, MAINTAINER_PR_REVIEWED, NEEDS_BUILDER_FIX]);
-        let c = detect_contradictions(&pr, &[], CiOutcome::Pending);
-        let strips: Vec<_> = c.iter().filter(|x| x.strip == NEEDS_BUILDER_FIX).collect();
-        assert_eq!(strips.len(), 1, "exactly one strip of needs-builder-fix");
+        let c = detect_contradictions(&pr, CiOutcome::Pending);
+        assert!(c.is_empty(), "review-label pairs are no longer arbitrated: {c:?}");
     }
 
     fn make_review_receipt(pr: u64, sha: &str, verdict: ReviewReceiptVerdict) -> ReviewReceipt {
@@ -1553,6 +1462,76 @@ required = false
         let receipt = make_review_receipt(7, "sha-7", ReviewReceiptVerdict::Approved);
         let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
         assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
+    }
+
+    // -----------------------------------------------------------------------
+    // Invariant #4 (M4 ledger): fix-forward pass != independent review.
+    // Audit: issuecomment-4944651562 on #3763.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn fix_forward_approved_receipt_does_not_strip_needs_builder_fix() {
+        let pr = make_pr(11, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let mut receipt = make_review_receipt(11, "sha-11", ReviewReceiptVerdict::Approved);
+        receipt.fix_forward_applied = true;
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(
+            c.is_empty(),
+            "a fix-forward approval (reviewer fixed AND approved in the same pass) must not \
+             self-clear needs-builder-fix — that would count a fix pass as independent sign-off"
+        );
+    }
+
+    #[test]
+    fn fix_forward_approved_receipt_does_not_strip_needs_diff_fix() {
+        let pr = make_pr(12, &[DIFF_AUDITED, NEEDS_DIFF_FIX]);
+        let mut receipt = make_review_receipt(12, "sha-12", ReviewReceiptVerdict::Approved);
+        receipt.fix_forward_applied = true;
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.is_empty(), "a fix-forward approval must not self-clear needs-diff-fix either");
+    }
+
+    #[test]
+    fn independent_approved_receipt_still_strips_needs_builder_fix() {
+        // Regression guard: an Approved receipt with fix_forward_applied == false (a genuine
+        // independent review) must keep stripping needs-builder-fix exactly as before.
+        let pr = make_pr(13, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(13, "sha-13", ReviewReceiptVerdict::Approved);
+        assert!(!receipt.fix_forward_applied, "helper default must stay false for this guard");
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
+    }
+
+    #[test]
+    fn fix_forward_receipt_at_old_head_does_not_satisfy_new_head() {
+        // A fix-forward Approved receipt posted at old head H (a) never strips anything even
+        // at H (gated above), and (b) once the PR moves to a new head H2, the H receipt fails
+        // the sha-staleness gate too — belt-and-suspenders per invariant #5 (new head needs a
+        // fresh independent review; a stale fix-forward receipt cannot substitute for one).
+        let mut fix_forward_receipt_at_h =
+            make_review_receipt(14, "sha-H", ReviewReceiptVerdict::Approved);
+        fix_forward_receipt_at_h.fix_forward_applied = true;
+
+        let pr_at_h = OpenPr {
+            number: 14,
+            labels: labels(&[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]),
+            head_ref_oid: "sha-H".to_string(),
+        };
+        let c_at_h =
+            contradictions_from_current_review_receipt(&pr_at_h, Some(&fix_forward_receipt_at_h));
+        assert!(c_at_h.is_empty(), "fix-forward receipt must not strip anything at its own head");
+
+        let pr_at_h2 = OpenPr {
+            number: 14,
+            labels: labels(&[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]),
+            head_ref_oid: "sha-H2".to_string(),
+        };
+        let c_at_h2 =
+            contradictions_from_current_review_receipt(&pr_at_h2, Some(&fix_forward_receipt_at_h));
+        assert!(
+            c_at_h2.is_empty(),
+            "an old-head receipt (fix-forward or not) must not satisfy a new head — sha gate"
+        );
     }
 
     #[test]
@@ -1732,35 +1711,23 @@ my $x = 1;
         assert!(extract_latest_review_receipt(&comments).is_none());
     }
 
-    /// Integration test: the full per-PR detection pipeline wired by `reconcile_queue`.
-    ///
-    /// Mirrors the inner loop:
-    /// 1. `detect_contradictions` against labels + timeline + live CI.
-    /// 2. Extend with `contradictions_from_current_review_receipt` from the loaded receipt.
+    /// Integration test: the full per-PR detection pipeline wired by `reconcile_queue`,
+    /// via the shared `merge_contradictions` entry point (the actual production merge
+    /// point — not a hand-inlined copy of it, so this test can't drift from what
+    /// `reconcile_queue` really runs).
     ///
     /// Verifies that an approved review_receipt at the current head SHA strips
-    /// `needs-builder-fix` *in addition to* whatever timeline-based pairs the
-    /// detector already found. This is the integration that closes the dead-code
+    /// `needs-builder-fix`. This is the integration that closes the dead-code
     /// loop: receipts loaded from comments now reach the strip-action stream.
     #[test]
     fn reconcile_pr_pipeline_extends_contradictions_with_review_receipt() {
-        // PR has both review-reviewed + needs-builder-fix. Two emitters fire:
-        //   1. Timeline-pair detector — conservative fallback keeps review-reviewed,
-        //      strips needs-builder-fix.
-        //   2. Receipt projection (verdict=approved, current SHA) — also strips
-        //      needs-builder-fix, but with `keep: review_receipt` for provenance.
-        //
-        // Both contradictions reach the strip-action stream; the strip-application
-        // loop in `reconcile_queue` calls `gh pr edit --remove-label` for each.
-        // GitHub treats removing an already-removed label as a no-op (idempotent
-        // at the API surface), so the live label state is "needs-builder-fix
-        // removed" regardless of how many times the strip is requested.
-        //
-        // This test pins the contract: receipts must REACH the strip stream
-        // (closing the dead-code loop), and at least one strip must carry
-        // receipt provenance (keep == review_receipt). We do NOT assert
-        // `contradictions.len() == 1` — both sources legitimately fire and the
-        // audit trail benefits from preserving both reasons.
+        // PR has both review-reviewed + needs-builder-fix. Since #4005 D5 removed the
+        // label-pair timestamp arbitration, the ONLY source of a strip here is the
+        // receipt projection (verdict=approved, current SHA) — `keep: review_receipt`
+        // for provenance. This test pins the contract: receipts must REACH the strip
+        // stream (closing the dead-code loop it was originally written to guard).
+        // `fix_forward_applied` is `false` here (a genuine independent review), so the
+        // invariant-#4 post-filter in `merge_contradictions` does not suppress the strip.
         let pr = make_pr(42, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
         let body = format!(
             r#"```json
@@ -1771,9 +1738,7 @@ my $x = 1;
         let receipt = extract_latest_review_receipt(&comments);
         assert!(receipt.is_some(), "loader must extract the embedded receipt");
 
-        // Simulate the per-PR pipeline exactly as `reconcile_queue` runs it.
-        let mut contradictions = detect_contradictions(&pr, &[], CiOutcome::Pending);
-        contradictions.extend(contradictions_from_current_review_receipt(&pr, receipt.as_ref()));
+        let contradictions = merge_contradictions(&pr, CiOutcome::Pending, receipt.as_ref());
 
         let strips: Vec<&str> = contradictions.iter().map(|c| c.strip.as_str()).collect();
         assert!(
@@ -1781,9 +1746,9 @@ my $x = 1;
             "wired pipeline must strip needs-builder-fix; got {strips:?}"
         );
 
-        // Provenance: at least one contradiction must come from the review_receipt
-        // (its `keep` references the receipt kind). This is the load-bearing
-        // assertion that proves receipts are no longer dead code.
+        // Provenance: the contradiction must come from the review_receipt (its `keep`
+        // references the receipt kind) — it is the ONLY source now that the label-pair
+        // timeline resolver is gone.
         assert!(
             contradictions.iter().any(|c| c.keep == REVIEW_RECEIPT_KIND),
             "wired pipeline must emit a receipt-sourced contradiction"
@@ -1791,20 +1756,81 @@ my $x = 1;
     }
 
     #[test]
-    fn reconcile_pr_pipeline_no_receipt_falls_back_to_label_only() {
-        // Same PR shape, but no comments → loader returns None → wired pipeline
-        // matches the legacy label-only behaviour.
+    fn reconcile_pr_pipeline_no_receipt_produces_no_contradictions() {
+        // Same PR shape, but no comments → loader returns None. Since #4005 D5 removed
+        // the label-pair timestamp arbitration, there is no fallback left: with no
+        // receipt, no live CI signal, and no merge-ready present, the contradicting
+        // review-reviewed/needs-builder-fix pair is left alone — un-arbitrated
+        // navigation labels, per the module doc comment.
         let pr = make_pr(43, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
         let receipt = extract_latest_review_receipt(&[]);
         assert!(receipt.is_none());
 
-        let mut contradictions = detect_contradictions(&pr, &[], CiOutcome::Pending);
-        contradictions.extend(contradictions_from_current_review_receipt(&pr, receipt.as_ref()));
+        let contradictions = merge_contradictions(&pr, CiOutcome::Pending, receipt.as_ref());
 
-        // Exactly one contradiction (the label-pair fallback), no receipt-sourced ones.
-        assert_eq!(contradictions.len(), 1);
-        assert_eq!(contradictions[0].strip, NEEDS_BUILDER_FIX);
-        assert_eq!(contradictions[0].keep, REVIEW_REVIEWED);
+        assert!(contradictions.is_empty(), "no ground truth → no arbitration: {contradictions:?}");
+    }
+
+    // -----------------------------------------------------------------------
+    // Invariant #4 bypass guard: a fix-forward reviewer applying `review-reviewed` /
+    // `diff-audited` must never self-clear `needs-builder-fix` / `needs-diff-fix`, even
+    // via the receipt-projection path (`contradictions_from_current_review_receipt`).
+    // Historically the label-pair timeline resolver was a second bypass route into the
+    // same strip (#4005 D5 removed that resolver entirely — it had no receipt
+    // awareness). These tests pin `merge_contradictions` (the actual `reconcile_queue`
+    // entry point) as the place the gate must hold, regardless of which detector wants
+    // to strip.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn label_pair_resolver_fix_forward_bypass_is_blocked_for_needs_builder_fix() {
+        // A current-head fix-forward Approved receipt must not strip needs-builder-fix.
+        let pr = make_pr(15, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let mut receipt = make_review_receipt(15, "sha-15", ReviewReceiptVerdict::Approved);
+        receipt.fix_forward_applied = true;
+
+        let c = merge_contradictions(&pr, CiOutcome::Pending, Some(&receipt));
+        assert!(
+            !c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX),
+            "label-pair resolver must not bypass the fix-forward gate: {c:?}"
+        );
+    }
+
+    #[test]
+    fn label_pair_resolver_fix_forward_bypass_is_blocked_for_needs_diff_fix() {
+        let pr = make_pr(16, &[DIFF_AUDITED, NEEDS_DIFF_FIX]);
+        let mut receipt = make_review_receipt(16, "sha-16", ReviewReceiptVerdict::Approved);
+        receipt.fix_forward_applied = true;
+
+        let c = merge_contradictions(&pr, CiOutcome::Pending, Some(&receipt));
+        assert!(
+            !c.iter().any(|item| item.strip == NEEDS_DIFF_FIX),
+            "label-pair resolver must not bypass the fix-forward gate: {c:?}"
+        );
+    }
+
+    #[test]
+    fn label_pair_resolver_still_strips_needs_builder_fix_for_independent_receipt() {
+        // Regression guard: a genuine independent Approved receipt (fix_forward_applied
+        // == false) at the current head must not be affected by the post-filter —
+        // needs-builder-fix keeps stripping exactly as before.
+        let pr = make_pr(17, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(17, "sha-17", ReviewReceiptVerdict::Approved);
+        assert!(!receipt.fix_forward_applied, "helper default must stay false for this guard");
+
+        let c = merge_contradictions(&pr, CiOutcome::Pending, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
+    }
+
+    #[test]
+    fn no_receipt_and_no_ground_truth_produces_no_strip() {
+        // With no receipt at all (and no live CI / merge-ready ground truth), there is
+        // nothing left to arbitrate the review-reviewed/needs-builder-fix pair — #4005
+        // D5 removed the label-pair timeline fallback that used to strip it here.
+        let pr = make_pr(18, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+
+        let c = merge_contradictions(&pr, CiOutcome::Pending, None);
+        assert!(c.is_empty(), "no ground truth → no strip: {c:?}");
     }
 
     // -----------------------------------------------------------------------
@@ -1812,9 +1838,9 @@ my $x = 1;
     // -----------------------------------------------------------------------
 
     /// Apply contradictions to a label set (simulate one reconciler pass).
-    fn apply_pass(labels: &mut Vec<String>, events: &[LabelEvent], ci: CiOutcome) -> Vec<String> {
+    fn apply_pass(labels: &mut Vec<String>, ci: CiOutcome) -> Vec<String> {
         let pr = OpenPr { number: 1, labels: labels.clone(), head_ref_oid: "sha".to_string() };
-        let contradictions = detect_contradictions(&pr, events, ci);
+        let contradictions = detect_contradictions(&pr, ci);
         let strips: Vec<String> = contradictions.iter().map(|c| c.strip.clone()).collect();
         labels.retain(|l| !strips.contains(l));
         strips
@@ -1823,9 +1849,9 @@ my $x = 1;
     #[test]
     fn idempotent_after_single_resolution() {
         let mut state = labels(&[MERGE_READY, NEEDS_BUILDER_FIX]);
-        let pass1 = apply_pass(&mut state, &[], CiOutcome::Pending);
+        let pass1 = apply_pass(&mut state, CiOutcome::Pending);
         assert!(!pass1.is_empty());
-        let pass2 = apply_pass(&mut state, &[], CiOutcome::Pending);
+        let pass2 = apply_pass(&mut state, CiOutcome::Pending);
         assert!(pass2.is_empty(), "second pass must be no-op");
     }
 
@@ -1840,25 +1866,31 @@ my $x = 1;
             NEEDS_DEEP_REVIEW,
             "size/M",
         ]);
-        let events = vec![
-            make_event(DEEP_REVIEWED, "2026-04-26T22:00:00Z"),
-            make_event(NEEDS_DEEP_REVIEW, "2026-04-23T10:00:00Z"),
-        ];
-        // Live CI green → strip needs-ci-fix; also deep-reviewed newer → strip needs-deep-review;
-        // merge-ready + needs-ci-fix with live green: strip needs-ci-fix (not merge-ready).
-        let pass1 = apply_pass(&mut state, &events, CiOutcome::Success);
+        // Live CI green → strip needs-ci-fix; merge-ready + needs-deep-review present →
+        // strip merge-ready (doctrine: any needs-* blocks merge). deep-reviewed and
+        // needs-deep-review are left un-arbitrated (#4005 D5) — they stay stuck as a
+        // contradictory navigation-label pair, which is fine: nothing consumes them
+        // as merge authority any more.
+        let pass1 = apply_pass(&mut state, CiOutcome::Success);
         assert!(!pass1.is_empty());
-        let pass2 = apply_pass(&mut state, &events, CiOutcome::Success);
+        assert!(pass1.contains(&NEEDS_CI_FIX.to_string()));
+        assert!(pass1.contains(&MERGE_READY.to_string()));
+        assert!(
+            !pass1.contains(&NEEDS_DEEP_REVIEW.to_string())
+                && !pass1.contains(&DEEP_REVIEWED.to_string()),
+            "review-label pair must NOT be touched: {pass1:?}"
+        );
+        let pass2 = apply_pass(&mut state, CiOutcome::Success);
         assert!(pass2.is_empty(), "second pass must be no-op, got: {pass2:?}");
     }
 
     #[test]
     fn idempotent_with_red_ci() {
         let mut state = labels(&[MERGE_READY, CI_GREEN, NEEDS_CI_FIX]);
-        let pass1 = apply_pass(&mut state, &[], CiOutcome::Failure);
+        let pass1 = apply_pass(&mut state, CiOutcome::Failure);
         // Should strip merge-ready.
         assert!(pass1.contains(&MERGE_READY.to_string()));
-        let pass2 = apply_pass(&mut state, &[], CiOutcome::Failure);
+        let pass2 = apply_pass(&mut state, CiOutcome::Failure);
         assert!(pass2.is_empty(), "second pass must be no-op");
     }
 
@@ -1872,7 +1904,7 @@ my $x = 1;
             REVIEW_REVIEWED,
             MAINTAINER_PR_REVIEWED,
         ]);
-        let pass1 = apply_pass(&mut state, &[], CiOutcome::Success);
+        let pass1 = apply_pass(&mut state, CiOutcome::Success);
         assert!(pass1.is_empty(), "clean PR should produce no strips");
     }
 

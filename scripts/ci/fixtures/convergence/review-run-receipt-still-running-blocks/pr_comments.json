@@ -1,0 +1,8 @@
+[
+  {
+    "author": {
+      "login": "bob"
+    },
+    "body": "Deep review in progress.\n\n<!-- review-run:v1 {\"v\":1,\"kind\":\"deep\",\"head\":\"9999999999999999999999999999999999999999\",\"reviewer\":\"bob\",\"status\":\"running\"} -->"
+  }
+]

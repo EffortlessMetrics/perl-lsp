@@ -16,6 +16,7 @@ fn pending(label: &str, allow_indent: bool, quote: QuoteKind) -> PendingHeredoc 
         allow_indent,
         quote,
         decl_span: perl_parser_core::heredoc_collector::Span { start: 0, end: 0 },
+        body_start: 0,
     }
 }
 

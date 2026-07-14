@@ -1,0 +1,24 @@
+[
+  {
+    "id": "PRRT_resolved_with_reply_1",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/handlers/rename.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        },
+        {
+          "author": {
+            "login": "replier"
+          },
+          "body": "Superseded by a later refactor.\n\n<!-- disposition:v1 {\"v\":1,\"class\":\"superseded\",\"thread_id\":\"PRRT_resolved_with_reply_1\",\"by\":\"alice\",\"head\":\"ffff6666ffff6666ffff6666ffff6666ffff6666\",\"evidence\":{\"superseded_by\":\"#4242\"}} -->"
+        }
+      ]
+    }
+  }
+]

@@ -13,6 +13,8 @@ use crate::cancellation::{
 use crate::completion::{
     CompletionItemKind, CompletionProvider, add_xs_api_completions_for_prefix,
 };
+#[cfg(feature = "workspace")]
+use crate::runtime::readiness::IndexReadinessPolicy;
 use crate::runtime::types::workspace_folder_matches_doc_uri;
 use crate::{
     protocol::{JsonRpcError, JsonRpcId, REQUEST_CANCELLED, req_position, req_uri},
@@ -22,7 +24,6 @@ use crate::{
 };
 use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_module::resolution::{IncRoot, IncRootKind};
-use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -40,6 +41,58 @@ use super::super::LspServer;
 /// global cancellation registry — it exists only as a local handle that the
 /// provider's cancel-check closure can read.
 const UNCANCELLABLE_LOCAL_TOKEN_ID: JsonRpcId = JsonRpcId::Integer(-1);
+
+/// Test-only observer, notified exactly once the next time
+/// `handle_completion_cancellable` enters its analysis phase (the
+/// `if let Some(doc)` arm, before any provider work begins) *for the URI it
+/// was armed with*. Lets a regression test cancel a request deterministically
+/// *after* analysis has genuinely started, instead of guessing the timing
+/// with a fixed sleep. Mirrors `set_index_ready_wait_entered_observer` in
+/// `readiness.rs`, but keyed by URI: unlike readiness (a rare, mostly-
+/// synthetic wait path), every completion test that resolves an open
+/// document passes through this call site, so an unkeyed global slot could
+/// be consumed by an unrelated concurrent test's request and wake the
+/// canceller before the armed test's own analysis started (cubic
+/// review-run fbb70c75, discussion_r3560238397).
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+static COMPLETION_ANALYSIS_STARTED_OBSERVER: std::sync::Mutex<
+    Option<(String, std::sync::mpsc::Sender<()>)>,
+> = std::sync::Mutex::new(None);
+
+// Narrower than the surrounding `expose_lsp_test_api`-eligible items: every
+// current caller is itself `cfg(test)`-gated (it arms
+// `COMPLETION_ANALYSIS_STARTED_OBSERVER`, which only `pub(crate)` in-crate test
+// code can reach), so under a plain `expose_lsp_test_api`-only build (no
+// `cfg(test)`) this would otherwise be genuinely unused (clippy::dead_code).
+#[cfg(test)]
+pub(crate) fn set_completion_analysis_started_observer(
+    uri: &str,
+    sender: std::sync::mpsc::Sender<()>,
+) {
+    if let Ok(mut observer) = COMPLETION_ANALYSIS_STARTED_OBSERVER.lock() {
+        *observer = Some((uri.to_string(), sender));
+    }
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn notify_completion_analysis_started(uri: &str) {
+    let sender = COMPLETION_ANALYSIS_STARTED_OBSERVER.lock().ok().and_then(|mut observer| {
+        // Only consume the slot for the URI it was armed with -- an
+        // unrelated concurrent test's request must not wake this one's
+        // canceller (leaves the slot untouched for its rightful owner).
+        if observer.as_ref().is_some_and(|(armed_uri, _)| armed_uri == uri) {
+            observer.take().map(|(_, tx)| tx)
+        } else {
+            None
+        }
+    });
+    if let Some(sender) = sender {
+        let _ = sender.send(());
+    }
+}
+
+#[cfg(not(any(test, feature = "expose_lsp_test_api")))]
+fn notify_completion_analysis_started(_uri: &str) {}
 
 static SNIPPET_PLACEHOLDER_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SNIPPET_SIMPLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
@@ -419,6 +472,78 @@ impl LspServer {
         }
 
         false
+    }
+
+    fn module_completion_prefix(doc_text: &str, offset: usize) -> Option<String> {
+        if !Self::is_module_import_completion_context(doc_text, offset) {
+            return None;
+        }
+
+        let text_before = &doc_text[..offset.min(doc_text.len())];
+        Some(
+            text_before
+                .chars()
+                .rev()
+                .take_while(|&c| c.is_ascii_alphanumeric() || c == '_' || c == ':')
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect(),
+        )
+    }
+
+    fn add_declared_dependency_completions(
+        &self,
+        completions: &mut Vec<crate::completion::CompletionItem>,
+        doc_text: &str,
+        doc_uri: &str,
+        offset: usize,
+        cap: usize,
+    ) {
+        let Some(prefix) = Self::module_completion_prefix(doc_text, offset) else {
+            return;
+        };
+        if completions.len() >= cap {
+            return;
+        }
+
+        let config =
+            self.config_for_doc(doc_uri).unwrap_or_else(|| self.workspace_config.lock().clone());
+        let mut seen: HashSet<String> =
+            completions.iter().map(|completion| completion.label.clone()).collect();
+
+        for dependency in config.declared_dependencies {
+            if completions.len() >= cap {
+                break;
+            }
+            if !prefix.is_empty() && !dependency.module.starts_with(&prefix) {
+                continue;
+            }
+            if !seen.insert(dependency.module.clone()) {
+                continue;
+            }
+
+            let summary = Self::declared_dependency_summary(&dependency);
+            let module = dependency.module;
+            let detail = format!("{summary}; not currently indexed");
+            let documentation = format!(
+                "`{module}` is {summary}, but it is not currently indexed. Install it or add its directory to `.perl-lsp.toml` `include_paths`.",
+            );
+
+            completions.push(crate::completion::CompletionItem {
+                label: module.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some(detail),
+                documentation: Some(documentation),
+                insert_text: Some(module.clone()),
+                sort_text: Some(format!("080_declared_dependency_{module}")),
+                filter_text: None,
+                additional_edits: Vec::new(),
+                text_edit_range: None,
+                commit_characters: None,
+                label_details: None,
+            });
+        }
     }
 
     fn add_runtime_workspace_completions(
@@ -838,7 +963,7 @@ impl LspServer {
             // workspace/symbol handler (issue #1514 race, extended to completion).
             // The wait is bounded (2 s) and a no-op when the index is already ready.
             #[cfg(feature = "workspace")]
-            self.wait_for_index_ready_if_building();
+            let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
 
             // Use routing to determine workspace index access mode
             let mut workspace_mode = route_index_access(self.coordinator());
@@ -846,14 +971,43 @@ impl LspServer {
                 workspace_mode = IndexAccessMode::None;
             }
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any analysis
+            // (#3396 off-lock provider consumption). `DocumentState` derives
+            // `Clone`: `rope` (structural sharing) and `generation`/`parsed`
+            // (`Arc` bumps, incl. the owned `Arc<ParsedSnapshot>` from #3579)
+            // clone cheaply, but `text` (`String`) and `line_starts`
+            // (`Vec<usize>`) are real O(document-size) copies -- both are
+            // needed by the analysis below (offset/position mapping, symbol
+            // text extraction), so this isn't wasted work, but it is a
+            // genuine per-request cost, not a free clone. It is bounded and
+            // single-threaded (a memcpy), unlike the alternative of holding
+            // the documents-map mutex -- shared by every open document, not
+            // just this one -- for the full analysis duration below.
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.completion.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+
+            let t_analyze_start = std::time::Instant::now();
+            let response = if let Some(doc) = doc_owned.as_ref() {
                 let offset = self.pos16_to_offset(doc, line, character);
-                let ast_available = doc.ast.is_some();
+                let ast_available = doc.current_parsed().is_some_and(|p| p.ast().is_some());
 
                 // Get completions, with fallback for missing AST
+                let parsed = doc.current_parsed();
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
-                let mut completions = if let Some(ast) = &doc.ast {
+                let mut completions = if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let (include_paths, system_inc_paths, include_system_inc) =
                         self.module_completion_roots_for_doc(uri, &doc.text, offset);
                     // Only provide workspace index when Full access is available
@@ -889,9 +1043,19 @@ impl LspServer {
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
 
-                    // Enhance completions with type information
-                    let mut type_engine = TypeInferenceEngine::new();
-                    let _ = type_engine.infer(ast); // Build type environment
+                    // Enhance completions with generation-owned type information
+                    // (#3760): the type environment is materialized once per
+                    // ParsedSnapshot generation and derived from the exact source
+                    // this snapshot was parsed from, so a completion request under
+                    // rapid edits always reads type facts for the current
+                    // generation — no cross-generation bleed. `type_environment()`
+                    // only returns `None` for an AST-less snapshot, which cannot
+                    // happen on this path (this branch is already gated on
+                    // `parsed.ast()` being `Some`, the same snapshot); the
+                    // `.and_then` is defensive plumbing against a future change to
+                    // that guard, not a reachable `None` today. The sigil-based
+                    // fallback below still runs regardless.
+                    let type_engine = parsed.as_ref().and_then(|p| p.type_environment());
 
                     // Add type information to completion items where possible
                     for completion in &mut base_completions {
@@ -900,7 +1064,9 @@ impl LspServer {
                             // Try to get the actual inferred type for the variable
                             let var_name =
                                 completion.label.trim_start_matches(['$', '@', '%', '&']);
-                            if let Some(perl_type) = type_engine.get_type_at(var_name) {
+                            if let Some(perl_type) =
+                                type_engine.as_ref().and_then(|engine| engine.get_type_at(var_name))
+                            {
                                 completion.detail = Some(Self::format_type_for_detail(&perl_type));
                             } else {
                                 // Fallback to sigil-based type hint
@@ -925,6 +1091,14 @@ impl LspServer {
                     // Fallback: provide basic keyword completions when AST is unavailable
                     self.lexical_complete(&doc.text, offset, Some(uri))
                 };
+
+                self.add_declared_dependency_completions(
+                    &mut completions,
+                    &doc.text,
+                    uri,
+                    offset,
+                    cap,
+                );
 
                 // Add workspace-wide completions using routing policy
                 #[cfg(feature = "workspace")]
@@ -991,12 +1165,24 @@ impl LspServer {
                 } else {
                     tracing::debug!(count = items.len(), "Returning completions");
                 }
-                return Ok(Some(Self::completion_list_response(
+                Some(Self::completion_list_response(
                     is_incomplete,
                     items,
                     item_defaults_data_support,
                     apply_kind_support,
-                )));
+                ))
+            } else {
+                None
+            };
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.completion.analyze",
+                    crate::runtime::timing::elapsed_ms(t_analyze_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            if let Some(response) = response {
+                return Ok(Some(response));
             }
         }
 
@@ -1060,7 +1246,7 @@ impl LspServer {
             // workspace/symbol handler (issue #1514 race, extended to completion).
             // The wait is bounded (2 s) and a no-op when the index is already ready.
             #[cfg(feature = "workspace")]
-            self.wait_for_index_ready_if_building();
+            let _ = self.check_index_readiness(IndexReadinessPolicy::WaitBriefly);
 
             // Use routing to determine workspace index access mode
             let mut workspace_mode = route_index_access(self.coordinator());
@@ -1068,10 +1254,53 @@ impl LspServer {
                 workspace_mode = IndexAccessMode::None;
             }
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any analysis
+            // (#3396 off-lock provider consumption). `DocumentState` derives
+            // `Clone`: `rope` (structural sharing) and `generation`/`parsed`
+            // (`Arc` bumps, incl. the owned `Arc<ParsedSnapshot>` from #3579)
+            // clone cheaply, but `text` (`String`) and `line_starts`
+            // (`Vec<usize>`) are real O(document-size) copies -- both are
+            // needed by the analysis below, so this isn't wasted work, but it
+            // is a genuine per-request cost, not a free clone. It is bounded
+            // and single-threaded (a memcpy), unlike the alternative of
+            // holding the documents-map mutex -- shared by every open
+            // document, not just this one -- for the full analysis duration
+            // below.
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.completion.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+
+            // RAII span: covers the whole analysis attempt via `Drop`, so it
+            // emits `provider.completion.analyze` on every exit path --
+            // including the cancellation early `return Err` below -- not
+            // just the normal fall-through. A manual Instant+emit pair
+            // placed after this `if`/`else` (the prior shape) is skipped
+            // by any early `return` inside the `if` arm; see
+            // `provider.references.analyze` in references.rs for the same
+            // pattern (#3619). Started outside the `if let Some(doc)` arm so
+            // the `lock_hold`/`analyze` pair is preserved on the
+            // doc-no-longer-in-map path too, matching the prior manual-
+            // Instant behavior, which emitted unconditionally regardless of
+            // whether `doc_owned` resolved.
+            let _analyze_span =
+                crate::runtime::timing::ScopedSpan::start("provider.completion.analyze", uri);
+            let response = if let Some(doc) = doc_owned.as_ref() {
+                notify_completion_analysis_started(uri);
+
                 let offset = self.pos16_to_offset(doc, line, character);
-                let ast_available = doc.ast.is_some();
+                let ast_available = doc.current_parsed().is_some_and(|p| p.ast().is_some());
 
                 // Create optimized cancellation callback with reduced frequency
                 // Performance optimization: reduced overhead from 16.66% to <10%
@@ -1088,7 +1317,8 @@ impl LspServer {
                 };
 
                 // Get completions with optimized cancellation support
-                let mut completions = if let Some(ast) = &doc.ast {
+                let parsed = doc.current_parsed();
+                let mut completions = if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let (include_paths, system_inc_paths, include_system_inc) =
                         self.module_completion_roots_for_doc(uri, &doc.text, offset);
                     // Only provide workspace index when Full access is available
@@ -1139,6 +1369,14 @@ impl LspServer {
                         data: None,
                     });
                 }
+
+                self.add_declared_dependency_completions(
+                    &mut completions,
+                    &doc.text,
+                    uri,
+                    offset,
+                    completion_cap(),
+                );
 
                 #[cfg(feature = "workspace")]
                 self.add_runtime_workspace_completions(
@@ -1194,12 +1432,17 @@ impl LspServer {
                     })
                     .collect();
 
-                return Ok(Some(Self::completion_list_response(
+                Some(Self::completion_list_response(
                     false,
                     items,
                     item_defaults_data_support,
                     apply_kind_support,
-                )));
+                ))
+            } else {
+                None
+            };
+            if let Some(response) = response {
+                return Ok(Some(response));
             }
 
             Ok(Some(json!({"isIncomplete": false, "items": []})))
@@ -1538,6 +1781,10 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
+    // Tests are permitted to use `.expect()` on Result/Option per the repo's
+    // coding standards (unlike production code, where it is banned).
+    #![allow(clippy::expect_used)]
+
     use super::*;
 
     fn explain_provider_decision(
@@ -1569,6 +1816,201 @@ mod tests {
         assert!(
             server.workspace_index_stale_for_document(uri),
             "test setup must leave the open document newer than the workspace index"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn completion_off_lock_analysis_emits_lock_hold_and_analyze_timing_spans()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // #3396 Phase 4: `handle_completion` grabs an owned `DocumentState`
+        // clone under a brief documents-map lock, then drops the guard before
+        // analysis. Proves this measurably: the `lock_hold` span (the brief
+        // guarded scope) must be recorded before the `analyze` span (the
+        // off-lock work), for the same request.
+        let server = LspServer::default();
+        let uri = "file:///workspace/timing_completion.pl";
+        server.test_apply_did_open(uri, "my $var = 42;\n$va", 1)?;
+
+        let _lock = crate::runtime::timing::capture::test_lock();
+        crate::runtime::timing::capture::start();
+        let _ = server.handle_completion(Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 1, "character": 3 }
+        })))?;
+        let spans = crate::runtime::timing::capture::drain();
+
+        let lock_hold_idx = spans.iter().position(|s| s.span == "provider.completion.lock_hold");
+        let analyze_idx = spans.iter().position(|s| s.span == "provider.completion.analyze");
+        assert!(
+            lock_hold_idx.is_some(),
+            "expected a provider.completion.lock_hold span, got: {spans:?}"
+        );
+        assert!(
+            analyze_idx.is_some(),
+            "expected a provider.completion.analyze span, got: {spans:?}"
+        );
+        assert!(
+            lock_hold_idx < analyze_idx,
+            "lock_hold span must be emitted before the analyze span (proves the documents-map \
+             guard is dropped before analysis runs): {spans:?}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn cancellable_completion_emits_analyze_span_on_normal_completion()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Baseline: the cancellable path must emit `provider.completion.analyze`
+        // on the ordinary, non-cancelled fall-through -- the same contract
+        // `handle_completion` already proves above, checked here for the
+        // `_cancellable` entry point specifically.
+        let server = LspServer::default();
+        let uri = "file:///workspace/timing_completion_cancellable.pl";
+        server.test_apply_did_open(uri, "my $var = 42;\n$va", 1)?;
+
+        let _lock = crate::runtime::timing::capture::test_lock();
+        crate::runtime::timing::capture::start();
+        let id = json!(1);
+        let _ = server.handle_completion_cancellable(
+            Some(json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": 1, "character": 3 }
+            })),
+            Some(&id),
+        )?;
+        let spans = crate::runtime::timing::capture::drain();
+
+        assert!(
+            spans.iter().any(|s| s.span == "provider.completion.analyze"),
+            "expected a provider.completion.analyze span, got: {spans:?}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn cancellable_completion_emits_analyze_span_when_cancelled_mid_flight()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // #3619 regression test. `handle_completion_cancellable` checks
+        // `token.is_cancelled_relaxed()` twice: once before analysis starts,
+        // and once again right after the provider call returns (to reject a
+        // request that was cancelled while completions were being
+        // generated). The old code placed its manual Instant+emit pair for
+        // `provider.completion.analyze` *after* that second check, so a
+        // cancellation landing between the two checks caused the early
+        // `return Err(..)` to skip the emit entirely -- the analyze span was
+        // silently dropped for every request cancelled mid-analysis. The fix
+        // wraps the analysis block in a `ScopedSpan` (RAII), which emits on
+        // `Drop` regardless of which `return` fires.
+        //
+        // This test uses a genuinely concurrent cancellation (a background
+        // thread calling `token.cancel()`) against a fixture with
+        // `sub_count` candidate subs, so the off-lock analysis phase
+        // (owned-document clone + completion generation over thousands of
+        // `func_`-prefixed candidates) has a wide window to observe the
+        // cancellation before it returns -- reproducing the exact
+        // interleaving the bug depended on, not just the general RAII
+        // contract already covered by `timing.rs`'s
+        // `scoped_span_emits_on_early_return_from_enclosing_fn`.
+        //
+        // Timing is controlled deterministically, not with a fixed sleep: a
+        // `notify_completion_analysis_started` hook (module-level, mirrors
+        // `set_index_ready_wait_entered_observer` in `readiness.rs`) fires
+        // the instant the handler enters its analysis phase. The canceller
+        // thread blocks on that signal before calling `token.cancel()`, so
+        // the cancellation is guaranteed to land no earlier than the start
+        // of analysis -- a fixed sleep can only guess at that boundary and
+        // is either too short (fires before analysis begins, proving
+        // nothing) or too long (analysis already finished) under CI load.
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        // Each sub is called once below so the dead-code lint stays quiet --
+        // keeps this test's diagnostics payload small while still giving the
+        // completion provider thousands of `func_`-prefixed candidates to
+        // filter, which is what actually slows the analysis phase down.
+        let sub_count = 1_500;
+        let mut source = String::with_capacity(100_000);
+        for i in 0..sub_count {
+            source.push_str(&format!("sub func_{i} {{ my $x = {i}; return $x; }}\n"));
+        }
+        source.push_str("func_0(); ");
+        for i in 1..sub_count {
+            source.push_str(&format!("func_{i}(); "));
+        }
+        source.push('\n');
+        source.push_str("func_");
+        let uri = "file:///workspace/timing_completion_cancel_mid_flight.pl";
+
+        let server = LspServer::default();
+        server.test_apply_did_open(uri, &source, 1)?;
+
+        let request_id = JsonRpcId::Integer(918_273_645);
+        let token = PerlLspCancellationToken::new(
+            request_id.clone(),
+            "textDocument/completion".to_string(),
+        );
+        GLOBAL_CANCELLATION_REGISTRY
+            .register_token(token.clone())
+            .map_err(|e| format!("failed to register cancellation token: {e:?}"))?;
+
+        let _lock = crate::runtime::timing::capture::test_lock();
+        crate::runtime::timing::capture::start();
+
+        let (analysis_started_tx, analysis_started_rx) = std::sync::mpsc::channel();
+        set_completion_analysis_started_observer(uri, analysis_started_tx);
+
+        let landed = Arc::new(AtomicBool::new(false));
+        let canceller = {
+            let token = token.clone();
+            let landed = Arc::clone(&landed);
+            std::thread::spawn(move || -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                // Bounded wait: fail loudly instead of hanging forever if the
+                // analysis phase is never entered (e.g. a future refactor
+                // moves or removes the notify call).
+                analysis_started_rx.recv_timeout(std::time::Duration::from_secs(5)).map_err(
+                    |_| "timed out waiting for completion analysis to start".to_string(),
+                )?;
+                token.cancel();
+                landed.store(true, Ordering::SeqCst);
+                Ok(())
+            })
+        };
+
+        let last_line = source.lines().count() as u32 - 1;
+        let last_char = source.lines().next_back().map(str::len).unwrap_or(0) as u32;
+        let request_id_value = json!(918_273_645_i64);
+        let result = server.handle_completion_cancellable(
+            Some(json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": last_line, "character": last_char }
+            })),
+            Some(&request_id_value),
+        );
+
+        canceller
+            .join()
+            .map_err(|_| "canceller thread panicked")?
+            .map_err(|e| format!("canceller thread failed: {e}"))?;
+        assert!(landed.load(Ordering::SeqCst), "canceller thread must have run");
+
+        let spans = crate::runtime::timing::capture::drain();
+
+        // The race must actually land mid-analysis for this test to prove
+        // anything about the fix; fail loudly (rather than silently pass on
+        // an unrelated code path) if it did not.
+        assert!(
+            matches!(result, Err(ref e) if e.code == REQUEST_CANCELLED),
+            "test setup must trigger cancellation mid-analysis for this regression test to be \
+             meaningful; got: {result:?} (grow the fixture document if this flakes in CI)"
+        );
+
+        assert!(
+            spans.iter().any(|s| s.span == "provider.completion.analyze"),
+            "provider.completion.analyze span must be emitted even when the request is \
+             cancelled mid-analysis (#3619 regression), got spans: {spans:?}"
         );
 
         Ok(())
@@ -2119,6 +2561,69 @@ mod tests {
         assert!(
             include_paths.contains(&lib_dir),
             "use lib path should be in include_paths; got: {include_paths:?}",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn module_completion_offers_declared_but_unindexed_dependencies()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::config::{
+            DeclaredDependency, DeclaredDependencySource, WorkspaceConfig,
+        };
+
+        let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+        let mut config = WorkspaceConfig::default();
+        config.use_system_inc = false;
+        config.use_perl5lib = false;
+        config.declared_dependencies = vec![DeclaredDependency::new(
+            "JSON::PP",
+            Some("4.16"),
+            "requires",
+            DeclaredDependencySource::Cpanfile,
+        )];
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                "file:///workspace".to_string(),
+            )
+            .with_effective_workspace_config(config),
+        );
+
+        let uri = "file:///workspace/app.pl";
+        let text = "use JS";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        })))?;
+
+        let response = server
+            .handle_completion(Some(json!({
+                "textDocument": { "uri": uri, "version": 1 },
+                "position": { "line": 0, "character": text.len() }
+            })))?
+            .ok_or("expected completion response")?;
+        let items = response["items"].as_array().ok_or("expected completion items")?;
+        let item = items
+            .iter()
+            .find(|item| item["label"].as_str() == Some("JSON::PP"))
+            .ok_or_else(|| format!("expected declared dependency completion, got: {items:?}"))?;
+
+        assert_eq!(item["kind"].as_i64(), Some(9));
+        assert_eq!(item["insertText"].as_str(), Some("JSON::PP"));
+        assert!(
+            item["detail"].as_str().is_some_and(|detail| detail.contains("declared in cpanfile")),
+            "completion detail should explain declaration source: {item:?}"
+        );
+        assert!(
+            item.pointer("/documentation/value")
+                .and_then(Value::as_str)
+                .is_some_and(|doc| doc.contains("not currently indexed")),
+            "completion docs should explain the dependency is not indexed: {item:?}"
         );
         Ok(())
     }

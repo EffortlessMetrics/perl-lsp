@@ -14,7 +14,13 @@
 //! system behavior including timing, resource management, and graceful degradation
 //! following TDD patterns with comprehensive edge case coverage.
 
-#![allow(unused_imports, dead_code)] // Scaffolding may have unused imports initially
+#![allow(unused_imports, dead_code)]
+// Scaffolding may have unused imports initially
+
+// Integration tests print diagnostic output for CI troubleshooting; this is
+// not the LSP server's stdio transport, so print_stdout/print_stderr don't
+// apply the way they do to production code.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};

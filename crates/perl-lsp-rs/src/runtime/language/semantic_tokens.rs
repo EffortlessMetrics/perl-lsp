@@ -26,18 +26,42 @@ impl LspServer {
 
         if let Some(p) = params {
             let uri = req_uri(&p)?;
-            let documents = self.documents_guard();
-            let doc = self
-                .get_document(&documents, uri)
-                .ok_or_else(|| semantic_tokens_document_not_open(uri))?;
-            if let Some(ref ast) = doc.ast {
+
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any
+            // analysis (#3396 off-lock provider consumption).
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.semantic_tokens.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            let doc = doc_owned.as_ref().ok_or_else(|| semantic_tokens_document_not_open(uri))?;
+            // Covers the whole analysis block via `Drop`, so it emits
+            // correctly regardless of which exit point below fires.
+            let _analyze_span =
+                crate::runtime::timing::ScopedSpan::start("provider.semantic_tokens.analyze", uri);
+            let parsed = doc.current_parsed();
+            if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                 let data =
                     crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
                         self.offset_to_pos16(doc, off)
                     });
-                let flat_data: Vec<_> = data.into_iter().flatten().collect();
+                let flat_data: Vec<u32> = data.into_iter().flatten().collect();
                 let live_token_count = flat_data.len() / 5;
-                let live_result = json!({ "data": flat_data });
+                let result_id = semantic_tokens_result_id(&flat_data);
+                // Serialize the response by reference, then move the vector into the
+                // cache — avoids cloning the full token buffer on every request.
+                let live_result = json!({ "resultId": &result_id, "data": &flat_data });
+                self.store_semantic_tokens_result(uri, &result_id, flat_data);
                 let provider_trace = semantic_tokens_live_slice_provider_trace(
                     &doc.text,
                     &live_result,
@@ -70,36 +94,83 @@ impl LspServer {
         Ok(Some(json!({ "data": [] })))
     }
 
-    /// Handle semantic tokens full request (alternative method name)
-    #[allow(dead_code)] // Alternative implementation using SemanticTokensProvider
-    pub(crate) fn handle_semantic_tokens_full(
+    /// Record the latest semantic-tokens result for `uri` so a subsequent delta
+    /// request can diff against it.
+    fn store_semantic_tokens_result(&self, uri: &str, result_id: &str, data: Vec<u32>) {
+        let mut cache = self.semantic_tokens_cache.lock();
+        cache.insert(
+            uri.to_string(),
+            SemanticTokensCacheEntry { result_id: result_id.to_string(), data },
+        );
+    }
+
+    /// Handle the `textDocument/semanticTokens/full/delta` request (LSP 3.17).
+    ///
+    /// Computes the current full token set, then returns the minimal set of
+    /// edits transforming the client's previously cached result (identified by
+    /// `previousResultId`) into the current one. When `previousResultId` is
+    /// missing or no longer cached, falls back to a full token response so the
+    /// client can resynchronize.
+    pub(crate) fn handle_semantic_tokens_delta(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let uri = req_uri(&params)?;
+        let Some(params) = params else {
+            return Ok(Some(json!({ "data": [] })));
+        };
+        let uri = req_uri(&params)?;
+        let previous_result_id =
+            params.get("previousResultId").and_then(Value::as_str).map(str::to_string);
 
-            tracing::debug!(uri, "Getting semantic tokens");
+        tracing::debug!(uri, ?previous_result_id, "Getting semantic tokens delta");
 
+        // Compute the current full token set from the live AST (same source as
+        // `textDocument/semanticTokens/full`). Clone the `DocumentState` under a
+        // brief documents-map lock and drop the guard before any analysis runs
+        // (#3396 off-lock provider consumption), matching the sibling handlers.
+        let doc_owned = {
             let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
-                    let provider = SemanticTokensProvider::new(doc.text.clone());
-                    let tokens = provider.extract(ast);
-                    let encoded = encode_semantic_tokens(&tokens);
-
-                    tracing::debug!(count = tokens.len(), "Found semantic tokens");
-
-                    return Ok(Some(json!({
-                        "data": encoded
-                    })));
+            self.get_document(&documents, uri).cloned()
+        };
+        // documents guard dropped here
+        let current: Vec<u32> = {
+            let doc = doc_owned.as_ref().ok_or_else(|| semantic_tokens_document_not_open(uri))?;
+            let parsed = doc.current_parsed();
+            match parsed.as_ref().and_then(|p| p.ast()) {
+                Some(ast) => {
+                    crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
+                        self.offset_to_pos16(doc, off)
+                    })
+                    .into_iter()
+                    .flatten()
+                    .collect()
                 }
+                None => Vec::new(),
             }
-        }
+        };
 
-        Ok(Some(json!({
-            "data": []
-        })))
+        // Look up the cached prior result; only usable when its resultId matches
+        // the client's `previousResultId`.
+        let previous = previous_result_id.as_deref().and_then(|prev_id| {
+            let cache = self.semantic_tokens_cache.lock();
+            cache
+                .get(uri)
+                .filter(|entry| entry.result_id == prev_id)
+                .map(|entry| entry.data.clone())
+        });
+
+        // Build the response by reference, then move `current` into the cache so
+        // the full token buffer is not cloned on every delta request.
+        let result_id = semantic_tokens_result_id(&current);
+        let response = match previous {
+            Some(prev_data) => {
+                let edits = compute_semantic_tokens_delta_edits(&prev_data, &current);
+                json!({ "resultId": &result_id, "edits": edits })
+            }
+            None => json!({ "resultId": &result_id, "data": &current }),
+        };
+        self.store_semantic_tokens_result(uri, &result_id, current);
+        Ok(Some(response))
     }
 
     /// Semantic tokens runtime quality receipt.
@@ -375,6 +446,18 @@ impl LspServer {
                 "scoped compiler state-variable declaration class cutover proof only; lexical state variable declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
             ));
         }
+        if let Some(candidate) = semantic_token_named_function_call_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "named_function_call",
+                "function",
+                "matched_existing_live_function_token",
+                "unmatched_existing_live_function_token",
+                true,
+                "scoped compiler named-function-call class cutover proof only; named function calls may count as compiler-token identities only when their source-backed whole-call span already matches existing live parser/HIR function tokens, and no new token output is emitted",
+            ));
+        }
 
         receipts
     }
@@ -448,9 +531,30 @@ impl LspServer {
 
             tracing::debug!(uri, start_line, end_line, "Getting semantic tokens for range");
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
+            // Phase 1: grab an owned `DocumentState` clone under a brief
+            // documents-map lock, then drop the guard before doing any
+            // analysis (#3396 off-lock provider consumption).
+            let timing_on = crate::runtime::timing::is_enabled();
+            let t_lock_start = std::time::Instant::now();
+            let doc_owned = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
+            // documents guard dropped here
+            if timing_on {
+                crate::runtime::timing::emit(crate::runtime::timing::TimingSpan::labeled(
+                    "provider.semantic_tokens.lock_hold",
+                    crate::runtime::timing::elapsed_ms(t_lock_start),
+                    crate::runtime::timing::uri_tail(uri),
+                ));
+            }
+            if let Some(doc) = doc_owned.as_ref() {
+                let _analyze_span = crate::runtime::timing::ScopedSpan::start(
+                    "provider.semantic_tokens.analyze",
+                    uri,
+                );
+                let parsed = doc.current_parsed();
+                if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let all_tokens =
                         crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
                             self.offset_to_pos16(doc, off)
@@ -472,6 +576,55 @@ impl LspServer {
             "data": []
         })))
     }
+}
+
+/// Compute a deterministic `resultId` for a semantic-tokens result.
+///
+/// Derived from the encoded token data so an identical token stream yields the
+/// same id (idempotent full requests, unchanged documents) while any change
+/// produces a new id. Determinism also keeps the runtime quality-receipt
+/// equality checks stable across repeated handler calls.
+fn semantic_tokens_result_id(data: &[u32]) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    data.hash(&mut hasher);
+    hasher.finish().to_string()
+}
+
+/// Compute the minimal LSP semantic-tokens delta edits that transform `old`
+/// into `new`.
+///
+/// Both slices are flat encoded token arrays (groups of 5 `u32`). The result is
+/// a single contiguous `SemanticTokensEdit` covering the changed middle region,
+/// found by stripping the longest common prefix and suffix. An empty `Vec`
+/// means the two results are identical and no edit is required.
+fn compute_semantic_tokens_delta_edits(old: &[u32], new: &[u32]) -> Vec<Value> {
+    let max_prefix = old.len().min(new.len());
+    let mut prefix = 0;
+    while prefix < max_prefix && old[prefix] == new[prefix] {
+        prefix += 1;
+    }
+
+    // Common suffix length, never overlapping the shared prefix.
+    let max_suffix = max_prefix - prefix;
+    let mut suffix = 0;
+    while suffix < max_suffix && old[old.len() - 1 - suffix] == new[new.len() - 1 - suffix] {
+        suffix += 1;
+    }
+
+    let delete_count = old.len() - prefix - suffix;
+    let data: Vec<u32> = new[prefix..new.len() - suffix].to_vec();
+
+    // Identical results need no edit.
+    if delete_count == 0 && data.is_empty() {
+        return Vec::new();
+    }
+
+    vec![json!({
+        "start": prefix,
+        "deleteCount": delete_count,
+        "data": data,
+    })]
 }
 
 fn filter_encoded_semantic_tokens_by_range(
@@ -577,6 +730,125 @@ mod tests {
     }
 
     #[test]
+    fn named_function_call_candidate_spans_the_whole_call() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // The live FunctionCall token covers the entire call expression, so the
+        // candidate span must run from the callee name through the close paren.
+        let source = "use strict;\n\ncompute(1, 2);\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("a bareword call should be detected")?;
+        assert_eq!(candidate.identity, "token:named_function_call:compute:compiler");
+        let span = candidate.source_span.ok_or("call candidate must be source-backed")?;
+        // `compute(1, 2)` is 13 UTF-16 units on a single line.
+        assert_eq!(span.single_line_lsp_length(), Some(13));
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_handles_empty_argument_list()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "run_pipeline();\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("a no-argument call should be detected")?;
+        assert_eq!(candidate.identity, "token:named_function_call:run_pipeline:compiler");
+        let span = candidate.source_span.ok_or("call candidate must be source-backed")?;
+        // `run_pipeline()` is 14 UTF-16 units.
+        assert_eq!(span.single_line_lsp_length(), Some(14));
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_excludes_method_calls() {
+        // `->name(` is a method dispatch handled by the method-call class. The
+        // ONLY call here is the method call, so a detected candidate would prove
+        // the `>` prefix blocker failed; the detector must fall back instead.
+        let source = "my $c = shift;\n$c->stash(1);\n";
+        assert!(semantic_token_named_function_call_candidate(source).is_none());
+    }
+
+    #[test]
+    fn named_function_call_candidate_excludes_sigil_and_ampersand_calls() {
+        // `&name(` (ampersand call) and `$ref->(` (coderef dispatch) are not
+        // plain bareword `FunctionCall` function tokens; both must fall back.
+        assert!(semantic_token_named_function_call_candidate("&helper(1);\n").is_none());
+        assert!(semantic_token_named_function_call_candidate("$ref->(1);\n").is_none());
+    }
+
+    #[test]
+    fn named_function_call_candidate_scans_past_commented_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // A `name(` inside a `#` line comment must not shadow the real call that
+        // follows; the detector skips the comment and reports `dispatch`.
+        let source = "# run_pipeline()\ndispatch();\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("the real dispatch() call should be detected past the comment")?;
+        assert_eq!(candidate.identity, "token:named_function_call:dispatch:compiler");
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_scans_past_stringized_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // A `name(` inside a quoted string literal must not shadow a later real
+        // call.
+        let source = "my $x = 'foo(';\nbar();\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("the real bar() call should be detected past the string literal")?;
+        assert_eq!(candidate.identity, "token:named_function_call:bar:compiler");
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_balances_parens_inside_string_arguments()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Parentheses inside a quoted string argument must not be counted while
+        // balancing, so the whole-call span still covers `emit(")")` (9 units)
+        // to match the live FunctionCall token.
+        let source = "emit(\")\");\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("a call with a paren inside a string arg should still be detected")?;
+        assert_eq!(candidate.identity, "token:named_function_call:emit:compiler");
+        let span = candidate.source_span.ok_or("call candidate must be source-backed")?;
+        assert_eq!(span.single_line_lsp_length(), Some(9));
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_scans_past_multiline_call_to_single_line_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // A leading call whose parens span multiple lines cannot yield a
+        // single-line span, so the scan continues to the later single-line call.
+        let source = "outer(\n    1,\n);\ninner();\n";
+        let candidate = semantic_token_named_function_call_candidate(source)
+            .ok_or("the single-line inner() call should be detected")?;
+        assert_eq!(candidate.identity, "token:named_function_call:inner:compiler");
+        Ok(())
+    }
+
+    #[test]
+    fn named_function_call_candidate_excludes_control_keywords() {
+        // `if (...)` is not a FunctionCall function token; the detector must fall
+        // back rather than record a span that cannot match a live token.
+        let source = "if (1) {\n    1;\n}\n";
+        assert!(semantic_token_named_function_call_candidate(source).is_none());
+    }
+
+    #[test]
+    fn named_function_call_candidate_skips_multiline_calls() {
+        // A call whose parens span multiple lines fails closed: no single-line
+        // whole-call span can match a live token.
+        let source = "compute(\n    1,\n);\n";
+        assert!(semantic_token_named_function_call_candidate(source).is_none());
+    }
+
+    #[test]
+    fn named_function_call_candidate_ignores_declaration_without_call_parens() {
+        // `sub helper {` has no `(` after the name, so it is not a call site.
+        let source = "sub helper {\n    return 1;\n}\n";
+        assert!(semantic_token_named_function_call_candidate(source).is_none());
+    }
+
+    #[test]
     fn filter_encoded_semantic_tokens_by_range_reencodes_retained_range()
     -> Result<(), Box<dyn std::error::Error>> {
         let tokens: Vec<crate::semantic_tokens::EncodedToken> =
@@ -595,6 +867,78 @@ mod tests {
             vec![1, 7, 4, 3, 1]
         );
         assert!(filter_encoded_semantic_tokens_by_range(tokens, 3, 0, 4, 0).is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn compute_semantic_tokens_delta_edits_detects_no_change() {
+        let tokens = vec![0u32, 0, 5, 1, 0, 1, 2, 3, 2, 0];
+        assert!(compute_semantic_tokens_delta_edits(&tokens, &tokens).is_empty());
+        assert!(compute_semantic_tokens_delta_edits(&[], &[]).is_empty());
+    }
+
+    #[test]
+    fn compute_semantic_tokens_delta_edits_handles_append() {
+        let old = vec![0u32, 0, 5, 1, 0];
+        let new = vec![0u32, 0, 5, 1, 0, 1, 2, 3, 2, 0];
+        let edits = compute_semantic_tokens_delta_edits(&old, &new);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0]["start"], json!(5));
+        assert_eq!(edits[0]["deleteCount"], json!(0));
+        assert_eq!(edits[0]["data"], json!([1, 2, 3, 2, 0]));
+    }
+
+    #[test]
+    fn compute_semantic_tokens_delta_edits_handles_trailing_delete() {
+        let old = vec![0u32, 0, 5, 1, 0, 1, 2, 3, 2, 0];
+        let new = vec![0u32, 0, 5, 1, 0];
+        let edits = compute_semantic_tokens_delta_edits(&old, &new);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0]["start"], json!(5));
+        assert_eq!(edits[0]["deleteCount"], json!(5));
+        assert_eq!(edits[0]["data"], json!([]));
+    }
+
+    #[test]
+    fn compute_semantic_tokens_delta_edits_handles_middle_replacement() {
+        // Common prefix [0,0,5,1,0], changed middle, common suffix [9,9,9,9,9].
+        let old = vec![0u32, 0, 5, 1, 0, 1, 1, 1, 1, 1, 9, 9, 9, 9, 9];
+        let new = vec![0u32, 0, 5, 1, 0, 2, 2, 2, 2, 2, 9, 9, 9, 9, 9];
+        let edits = compute_semantic_tokens_delta_edits(&old, &new);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0]["start"], json!(5));
+        assert_eq!(edits[0]["deleteCount"], json!(5));
+        assert_eq!(edits[0]["data"], json!([2, 2, 2, 2, 2]));
+    }
+
+    #[test]
+    fn semantic_tokens_cache_evicted_on_document_close() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///cache_evict.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $x = 1;\n",
+            }
+        })))?;
+
+        // A full request populates the per-URI token cache.
+        server.handle_semantic_tokens(Some(json!({ "textDocument": { "uri": uri } })))?;
+        assert!(
+            server.semantic_tokens_cache.lock().contains_key(uri),
+            "cache should be populated after a full request"
+        );
+
+        // Closing the document (didClose path) must sweep the cache entry so
+        // long-lived sessions do not accumulate token arrays for closed files.
+        server.evict_open_document_session_state(uri);
+        assert!(
+            !server.semantic_tokens_cache.lock().contains_key(uri),
+            "semantic-token cache entry must be removed when the document is evicted"
+        );
 
         Ok(())
     }
@@ -1022,6 +1366,238 @@ fn line_start_variable_declaration_candidate(
     None
 }
 
+/// Detect a bareword named function call `name(...)` and emit its
+/// `token:named_function_call:<name>:compiler` candidate.
+///
+/// Unlike the name-scoped declaration classes, the live parser/HIR provider
+/// emits the `function` token for a call across the ENTIRE call expression
+/// (`compute(1, 2)`), not just the callee name: `NodeKind::FunctionCall`
+/// reports `node.location` spanning the whole call and the collector emits the
+/// token at that span (contrast `NodeKind::MethodCall`, which narrows to the
+/// method name). To match exactly one existing live token, this candidate's
+/// source-backed span therefore covers the callee name through the matching
+/// close paren on the same line.
+///
+/// Method calls (`->name(`), ampersand calls (`&name(`), sigiled/coderef calls
+/// (`$name(`), and control-flow / declaration keywords that the collector does
+/// NOT classify as `FunctionCall` function tokens are excluded so we never
+/// record a candidate that cannot match a live token. The scan skips Perl line
+/// comments and single/double-quoted strings, so a `name(` inside a comment or
+/// string cannot shadow a later real call and parentheses inside string
+/// arguments are not miscounted. A call whose parentheses do not balance on a
+/// single line is skipped (the scan continues to a later call), keeping the
+/// fail-closed boundary intact.
+fn semantic_token_named_function_call_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    let (name_start, paren_open, call_end) = first_named_function_call_span(source)?;
+    let name = &source[name_start..paren_open];
+    let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        source, name_start, call_end,
+    )?;
+
+    Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+        format!("token:named_function_call:{name}:compiler"),
+        ProviderFactSourceKind::CompilerFact,
+        Provenance::SemanticAnalyzer,
+        Confidence::Medium,
+        ProviderFactFreshness::Fresh,
+        span,
+    ))
+}
+
+/// Lightweight lexical state for scanning Perl source while skipping the two
+/// constructs that would otherwise be mistaken for call syntax: line comments
+/// and single/double-quoted string literals. Quote-like forms (`q//`, `qq//`),
+/// heredocs, and regex literals are deliberately NOT modeled — they fall
+/// through as code, and in the worst case a candidate simply fails to match a
+/// live token and the class falls back (output-neutral), never emitting a
+/// wrong token.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PerlScanState {
+    Code,
+    LineComment,
+    SingleQuote,
+    DoubleQuote,
+}
+
+/// Find the first bareword `name(...)` call whose parentheses balance on a
+/// single line, returning `(name_start, paren_open, call_end)` byte offsets
+/// (`call_end` is just past the matching close paren).
+///
+/// The scan is comment- and string-aware: a `name(` embedded in a `#` line
+/// comment or a quoted string is skipped rather than shadowing a later real
+/// call, and parentheses inside string arguments (`emit(")")`) are not counted
+/// while balancing. If a candidate call does not close on its line, the scan
+/// continues to the next call site rather than giving up — so a leading
+/// multi-line or malformed call cannot suppress a later single-line one.
+///
+/// Runs on nearly every document change, so it walks `char_indices()` once with
+/// no heap allocation.
+fn first_named_function_call_span(source: &str) -> Option<(usize, usize, usize)> {
+    let mut chars = source.char_indices().peekable();
+    let mut state = PerlScanState::Code;
+    // The character immediately before the current position, used only to
+    // distinguish `$#array` (last-index sigil) from a `#` comment and to apply
+    // the call-prefix blocker to an identifier run.
+    let mut prev = '\0';
+
+    while let Some((idx, ch)) = chars.next() {
+        match state {
+            PerlScanState::LineComment => {
+                if ch == '\n' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::SingleQuote => {
+                if ch == '\\' {
+                    chars.next();
+                } else if ch == '\'' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::DoubleQuote => {
+                if ch == '\\' {
+                    chars.next();
+                } else if ch == '"' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::Code => {
+                if ch == '#' && prev != '$' {
+                    state = PerlScanState::LineComment;
+                } else if ch == '\'' {
+                    state = PerlScanState::SingleQuote;
+                } else if ch == '"' {
+                    state = PerlScanState::DoubleQuote;
+                } else if ch.is_ascii_alphabetic() || ch == '_' {
+                    let run_start = idx;
+                    let mut run_end = idx + ch.len_utf8();
+                    while let Some(&(nidx, nch)) = chars.peek() {
+                        if is_subroutine_name_char(nch) {
+                            run_end = nidx + nch.len_utf8();
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if let Some(&(paren_open, '(')) = chars.peek() {
+                        let name = &source[run_start..run_end];
+                        if !is_call_prefix_blocker(prev) && !is_non_call_keyword(name) {
+                            if let Some(call_end) = string_aware_call_end(source, paren_open) {
+                                return Some((run_start, paren_open, call_end));
+                            }
+                        }
+                    }
+
+                    // `run_end` is one past the last name character; the next
+                    // loop iteration re-reads whatever follows the run.
+                    prev = source[..run_end].chars().next_back().unwrap_or('\0');
+                    continue;
+                }
+            }
+        }
+        prev = ch;
+    }
+
+    None
+}
+
+/// Scan from a call's opening `(` to its matching `)` on the same line, skipping
+/// parentheses that appear inside Perl line comments or single/double-quoted
+/// strings. Returns the byte offset just past the close paren, or `None` if the
+/// parentheses do not balance before end-of-line (fail-closed).
+fn string_aware_call_end(source: &str, paren_open: usize) -> Option<usize> {
+    let mut chars = source[paren_open..].char_indices();
+    let mut state = PerlScanState::Code;
+    let mut depth = 0usize;
+    let mut prev = '\0';
+
+    while let Some((offset, ch)) = chars.next() {
+        match state {
+            PerlScanState::LineComment => {
+                if ch == '\n' {
+                    return None;
+                }
+            }
+            PerlScanState::SingleQuote => {
+                if ch == '\\' {
+                    chars.next();
+                } else if ch == '\'' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::DoubleQuote => {
+                if ch == '\\' {
+                    chars.next();
+                } else if ch == '"' {
+                    state = PerlScanState::Code;
+                }
+            }
+            PerlScanState::Code => match ch {
+                '\n' => return None,
+                '#' if prev != '$' => state = PerlScanState::LineComment,
+                '\'' => state = PerlScanState::SingleQuote,
+                '"' => state = PerlScanState::DoubleQuote,
+                '(' => depth += 1,
+                ')' => {
+                    depth = depth.checked_sub(1)?;
+                    if depth == 0 {
+                        return Some(paren_open + offset + ch.len_utf8());
+                    }
+                }
+                _ => {}
+            },
+        }
+        prev = ch;
+    }
+
+    None
+}
+
+/// Characters immediately preceding an identifier that mark it as something
+/// other than a plain bareword function call (method dispatch, coderef/sigil
+/// call, ampersand call, reference-taking).
+fn is_call_prefix_blocker(ch: char) -> bool {
+    matches!(ch, '>' | '&' | '$' | '@' | '%' | '\\')
+}
+
+/// Keywords that take a parenthesised form but are NOT emitted as
+/// `NodeKind::FunctionCall` `function` tokens by the live collector
+/// (control flow, logical operators, and the collector's builtin skip-list).
+fn is_non_call_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "if" | "unless"
+            | "while"
+            | "until"
+            | "for"
+            | "foreach"
+            | "elsif"
+            | "else"
+            | "given"
+            | "when"
+            | "and"
+            | "or"
+            | "not"
+            | "eval"
+            | "do"
+            | "use"
+            | "no"
+            | "return"
+            | "my"
+            | "our"
+            | "local"
+            | "state"
+            | "sub"
+            | "next"
+            | "last"
+            | "redo"
+            | "goto"
+    )
+}
+
 fn lexical_variable_name_after_my_marker(
     source: &str,
     marker_start: usize,
@@ -1291,6 +1867,24 @@ fn semantic_tokens_live_slice_provider_trace(
             source_backed_state: "source_backed_state_variable_declaration_live_token_match",
             user_message: "Semantic tokens exposed the source-backed compiler state-variable declaration live trace because it matched the existing parser/HIR variable token. No new semantic tokens were emitted.",
             claim_boundary: "only source-backed compiler state-variable declaration spans that exactly match existing live parser/HIR variable tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader variable classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    let named_function_call_candidate = semantic_token_named_function_call_candidate(source);
+    saw_compiler_token_candidate |= named_function_call_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        named_function_call_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "function",
+            compiler_token_class: "named_function_call",
+            source_backed_state: "source_backed_named_function_call_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler named-function-call live trace because its whole-call span matched the existing parser/HIR function token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler named-function-call whole-call spans that exactly match existing live parser/HIR function tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader function classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
         },
     ) {
         return trace;

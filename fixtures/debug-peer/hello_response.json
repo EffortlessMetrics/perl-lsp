@@ -1,0 +1,18 @@
+{
+  "type": "response",
+  "seq": 1,
+  "requestSeq": 1,
+  "success": true,
+  "command": "peer/hello",
+  "body": {
+    "protocolVersion": "perl-debug-peer-v1",
+    "sessionId": "perl-dap-peer-127.0.0.1:49321",
+    "capabilities": {
+      "wantsBreakpoints": true,
+      "wantsStack": true,
+      "wantsVariables": true,
+      "wantsOutput": true,
+      "wantsSourceFacts": true
+    }
+  }
+}

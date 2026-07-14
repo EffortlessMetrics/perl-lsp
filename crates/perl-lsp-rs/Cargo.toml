@@ -61,6 +61,7 @@ perl-semantic-facts = { workspace = true }
 perl-symbol = { workspace = true }
 perl-module = { workspace = true }
 perl-pod = { workspace = true }
+perl-ripr-facts = { workspace = true }
 perl-ast = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-workspace = { workspace = true }
@@ -132,6 +133,7 @@ perl-tdd-support = { workspace = true }
 parking_lot.workspace = true
 criterion.workspace = true
 perl-corpus = { workspace = true }
+static_assertions.workspace = true
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/perl-lsp-{ version }-{ target }{ archive-suffix }"

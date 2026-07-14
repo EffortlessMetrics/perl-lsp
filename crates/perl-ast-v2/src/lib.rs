@@ -244,6 +244,8 @@ impl NodeKind {
                 format!("(variable {} {})", sigil, name)
             }
 
+            Identifier { name } => format!("(identifier {})", name),
+
             Number { value } => format!("(number {})", value),
 
             String { value, interpolated } => {
@@ -258,6 +260,47 @@ impl NodeKind {
                 format!("(binary_{} {} {})", op, left.to_sexp(), right.to_sexp())
             }
 
+            Unary { op, operand } => format!("(unary_{} {})", op, operand.to_sexp()),
+
+            If { condition, then_branch, elsif_branches, else_branch } => {
+                let mut s = format!("(if {} {}", condition.to_sexp(), then_branch.to_sexp());
+                for (elsif_cond, elsif_block) in elsif_branches {
+                    s.push_str(&format!(
+                        " (elsif {} {})",
+                        elsif_cond.to_sexp(),
+                        elsif_block.to_sexp()
+                    ));
+                }
+                if let Some(eb) = else_branch {
+                    s.push_str(&format!(" (else {})", eb.to_sexp()));
+                }
+                s.push(')');
+                s
+            }
+
+            VariableDeclaration { declarator, variable, initializer, .. } => match initializer {
+                Some(init) => format!(
+                    "(variable_declaration {} {} {})",
+                    declarator,
+                    variable.to_sexp(),
+                    init.to_sexp()
+                ),
+                None => format!("(variable_declaration {} {})", declarator, variable.to_sexp()),
+            },
+
+            VariableListDeclaration { declarator, variables, initializer, .. } => {
+                let vars = variables.iter().map(|v| v.to_sexp()).collect::<Vec<_>>().join(" ");
+                match initializer {
+                    Some(init) => format!(
+                        "(variable_list_declaration {} {} {})",
+                        declarator,
+                        vars,
+                        init.to_sexp()
+                    ),
+                    None => format!("(variable_list_declaration {} {})", declarator, vars),
+                }
+            }
+
             Error { message, .. } => format!("(ERROR {})", message),
             ErrorRef { diag_id } => format!("(ERROR_REF #{})", diag_id),
 
@@ -266,9 +309,6 @@ impl NodeKind {
             MissingIdentifier => "(MISSING_IDENTIFIER)".to_string(),
             MissingBlock => "(MISSING_BLOCK)".to_string(),
             Missing(kind) => format!("(MISSING {:?})", kind),
-
-            // Add other variants...
-            _ => format!("({:?})", self),
         }
     }
 }
@@ -334,5 +374,173 @@ mod tests {
         );
 
         assert_eq!(error.to_sexp(), "(ERROR Unexpected token)");
+    }
+
+    // --- Tests for previously-unhandled variants (wildcard was silently swallowing these) ---
+
+    #[test]
+    fn test_identifier_sexp_explicit_not_debug() -> Result<(), std::convert::Infallible> {
+        let range = Range::new(Position::new(0, 1, 1), Position::new(3, 1, 4));
+        let node = Node::new(0, NodeKind::Identifier { name: "foo".to_string() }, range);
+        let sexp = node.to_sexp();
+        // Must produce the proper form, NOT the old wildcard Debug output like `(Identifier { name: "foo" })`
+        assert_eq!(sexp, "(identifier foo)");
+        assert!(!sexp.contains('{'), "sexp must not contain Debug struct syntax: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_unary_sexp_explicit() -> Result<(), std::convert::Infallible> {
+        let range = Range::new(Position::new(0, 1, 1), Position::new(2, 1, 3));
+        let inner = Node::new(0, NodeKind::Number { value: "1".to_string() }, range.clone());
+        let node =
+            Node::new(1, NodeKind::Unary { op: "!".to_string(), operand: Box::new(inner) }, range);
+        let sexp = node.to_sexp();
+        assert_eq!(sexp, "(unary_! (number 1))");
+        assert!(!sexp.contains('{'), "sexp must not contain Debug struct syntax: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_if_sexp_no_branches() -> Result<(), std::convert::Infallible> {
+        let range = Range::new(Position::new(0, 1, 1), Position::new(0, 1, 1));
+        let cond = Node::new(0, NodeKind::Number { value: "1".to_string() }, range.clone());
+        let then_block = Node::new(1, NodeKind::Block { statements: vec![] }, range.clone());
+        let node = Node::new(
+            2,
+            NodeKind::If {
+                condition: Box::new(cond),
+                then_branch: Box::new(then_block),
+                elsif_branches: vec![],
+                else_branch: None,
+            },
+            range,
+        );
+        let sexp = node.to_sexp();
+        assert_eq!(sexp, "(if (number 1) (block ))");
+        assert!(!sexp.contains('{'), "sexp must not contain Debug struct syntax: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_if_sexp_with_elsif_and_else() -> Result<(), std::convert::Infallible> {
+        let range = Range::new(Position::new(0, 1, 1), Position::new(0, 1, 1));
+        let cond = Node::new(0, NodeKind::Number { value: "1".to_string() }, range.clone());
+        let then_block = Node::new(1, NodeKind::Block { statements: vec![] }, range.clone());
+        let elsif_cond = Node::new(2, NodeKind::Number { value: "0".to_string() }, range.clone());
+        let elsif_block = Node::new(3, NodeKind::Block { statements: vec![] }, range.clone());
+        let else_block = Node::new(4, NodeKind::Block { statements: vec![] }, range.clone());
+        let node = Node::new(
+            5,
+            NodeKind::If {
+                condition: Box::new(cond),
+                then_branch: Box::new(then_block),
+                elsif_branches: vec![(elsif_cond, elsif_block)],
+                else_branch: Some(Box::new(else_block)),
+            },
+            range,
+        );
+        let sexp = node.to_sexp();
+        assert_eq!(sexp, "(if (number 1) (block ) (elsif (number 0) (block )) (else (block )))");
+        Ok(())
+    }
+
+    #[test]
+    fn test_variable_declaration_sexp_no_init() -> Result<(), std::convert::Infallible> {
+        let range = Range::new(Position::new(0, 1, 1), Position::new(0, 1, 1));
+        let var = Node::new(
+            0,
+            NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+            range.clone(),
+        );
+        let node = Node::new(
+            1,
+            NodeKind::VariableDeclaration {
+                declarator: "my".to_string(),
+                variable: Box::new(var),
+                attributes: vec![],
+                initializer: None,
+            },
+            range,
+        );
+        let sexp = node.to_sexp();
+        assert_eq!(sexp, "(variable_declaration my (variable $ x))");
+        assert!(!sexp.contains('{'), "sexp must not contain Debug struct syntax: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_variable_declaration_sexp_with_init() -> Result<(), std::convert::Infallible> {
+        let range = Range::new(Position::new(0, 1, 1), Position::new(0, 1, 1));
+        let var = Node::new(
+            0,
+            NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+            range.clone(),
+        );
+        let init = Node::new(1, NodeKind::Number { value: "42".to_string() }, range.clone());
+        let node = Node::new(
+            2,
+            NodeKind::VariableDeclaration {
+                declarator: "my".to_string(),
+                variable: Box::new(var),
+                attributes: vec![],
+                initializer: Some(Box::new(init)),
+            },
+            range,
+        );
+        assert_eq!(node.to_sexp(), "(variable_declaration my (variable $ x) (number 42))");
+        Ok(())
+    }
+
+    #[test]
+    fn test_variable_list_declaration_sexp_no_init() -> Result<(), std::convert::Infallible> {
+        let range = Range::new(Position::new(0, 1, 1), Position::new(0, 1, 1));
+        let var_a = Node::new(
+            0,
+            NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() },
+            range.clone(),
+        );
+        let var_b = Node::new(
+            1,
+            NodeKind::Variable { sigil: "$".to_string(), name: "b".to_string() },
+            range.clone(),
+        );
+        let node = Node::new(
+            2,
+            NodeKind::VariableListDeclaration {
+                declarator: "my".to_string(),
+                variables: vec![var_a, var_b],
+                attributes: vec![],
+                initializer: None,
+            },
+            range,
+        );
+        let sexp = node.to_sexp();
+        assert_eq!(sexp, "(variable_list_declaration my (variable $ a) (variable $ b))");
+        assert!(!sexp.contains('{'), "sexp must not contain Debug struct syntax: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_variable_list_declaration_sexp_with_init() -> Result<(), std::convert::Infallible> {
+        let range = Range::new(Position::new(0, 1, 1), Position::new(0, 1, 1));
+        let var_a = Node::new(
+            0,
+            NodeKind::Variable { sigil: "$".to_string(), name: "a".to_string() },
+            range.clone(),
+        );
+        let init = Node::new(1, NodeKind::Number { value: "0".to_string() }, range.clone());
+        let node = Node::new(
+            2,
+            NodeKind::VariableListDeclaration {
+                declarator: "our".to_string(),
+                variables: vec![var_a],
+                attributes: vec![],
+                initializer: Some(Box::new(init)),
+            },
+            range,
+        );
+        assert_eq!(node.to_sexp(), "(variable_list_declaration our (variable $ a) (number 0))");
+        Ok(())
     }
 }

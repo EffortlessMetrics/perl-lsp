@@ -1,0 +1,24 @@
+[
+  {
+    "id": "PRRT_fixed_unreach_5",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "crates/perl-lsp-rs/src/handlers/hover.rs",
+    "comments": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "author": {
+            "login": "reviewbot"
+          }
+        },
+        {
+          "author": {
+            "login": "replier"
+          },
+          "body": "Fixed in the cited commit.\n\n<!-- disposition:v1 {\"v\":1,\"class\":\"fixed\",\"thread_id\":\"PRRT_fixed_unreach_5\",\"by\":\"alice\",\"head\":\"5555555555555555555555555555555555555555\",\"evidence\":{\"commit\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\"}} -->"
+        }
+      ]
+    }
+  }
+]

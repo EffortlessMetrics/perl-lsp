@@ -36,6 +36,7 @@ pub(super) fn apply_workspace_configuration_results(
         }
 
         folder.effective_workspace_config = effective_config;
+        folder.refresh_workspace_metadata();
     }
 }
 
@@ -80,5 +81,33 @@ mod tests {
 
         assert_eq!(folders[0].effective_workspace_config.resolution_timeout_ms, 200);
         assert_eq!(folders[1].effective_workspace_config.resolution_timeout_ms, 50);
+    }
+
+    #[test]
+    fn refreshes_declared_dependencies_from_folder_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        std::fs::write(temp.path().join("cpanfile"), "requires 'JSON::PP', '4.16';\n")?;
+        let folder_uri = url::Url::from_directory_path(temp.path())
+            .map_err(|_| "failed to create folder URI")?
+            .to_string();
+        let mut folders = vec![
+            WorkspaceFolderState::new(folder_uri.clone()).with_path(temp.path().to_path_buf()),
+        ];
+        let folder_uris = vec![folder_uri];
+        let results = vec![json!({})];
+
+        apply_workspace_configuration_results(&mut folders, &folder_uris, false, &results, 44);
+
+        assert!(
+            folders[0]
+                .effective_workspace_config
+                .declared_dependencies
+                .iter()
+                .any(|dependency| dependency.module == "JSON::PP"
+                    && dependency.source.display_name() == "cpanfile"),
+            "workspace configuration should cache declared dependencies from cpanfile"
+        );
+        Ok(())
     }
 }

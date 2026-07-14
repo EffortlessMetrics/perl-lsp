@@ -1,0 +1,7 @@
+# Changie unreleased fragments live here (one YAML file per change).
+#
+# Create one with `changie new` (interactive) or hand-write a file following
+# `.changes/samples/`. At release time `changie batch <version> --project <p>`
+# folds every fragment for a project into its Keep-a-Changelog file and (without
+# --keep) clears this directory. This .gitkeep keeps the directory tracked when
+# it is otherwise empty.

@@ -1,4 +1,4 @@
-# CI-enforced coverage proof-pack manifest used by Codecov / Patch 95 and
+# Advisory coverage proof-pack manifest used by manual coverage diagnostics and
 # `cargo xtask ci route`.
 #
 # This keeps coverage routing tied to changed surfaces instead of test-name
@@ -99,6 +99,20 @@ commands = [
 ]
 coverage_filters = [
   "gates",
+]
+
+[[pack]]
+id = "patch-coverage-xtask-ci-explain"
+files = [
+  "xtask/src/tasks/ci_explain.rs",
+  "xtask/tests/ci_explain_cli.rs",
+]
+commands = [
+  "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked ci_explain -- --nocapture",
+  "cargo test -p xtask --test ci_explain_cli --profile agent --locked -- --nocapture",
+]
+coverage_filters = [
+  "ci_explain",
 ]
 
 [[pack]]

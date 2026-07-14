@@ -279,7 +279,7 @@ fn parameter_variable(node: &Node) -> Option<&Node> {
         NodeKind::MandatoryParameter { variable }
         | NodeKind::OptionalParameter { variable, .. }
         | NodeKind::SlurpyParameter { variable }
-        | NodeKind::NamedParameter { variable } => Some(variable),
+        | NodeKind::NamedParameter { variable, .. } => Some(variable),
         _ => None,
     }
 }

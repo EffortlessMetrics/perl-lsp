@@ -15,10 +15,17 @@ use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 use std::{fs::File, io::Read};
 
+mod metadata_dependencies;
 mod native_build_hints;
 pub mod perl_oracle_env;
 pub mod toolchain_profile;
 
+pub use metadata_dependencies::{
+    DeclaredDependency, DeclaredDependencySource, detect_declared_dependencies,
+    extract_build_pl_requirements, extract_cpanfile_requirements, extract_dist_ini_requirements,
+    extract_makefile_pl_requirements, extract_meta_json_requirements,
+    extract_meta_yml_requirements,
+};
 pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
 pub use perl_lsp_perltidy::FormatterMode;
 #[cfg(not(target_arch = "wasm32"))]
@@ -29,9 +36,13 @@ pub use toolchain_profile::PerlToolchainProfile;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum CriticEngine {
     /// Existing built-in/external Perl::Critic-compatible path.
-    #[default]
     Legacy,
     /// Rust-native critic rule registry.
+    ///
+    /// This is the default: native diagnostics are always on and require no
+    /// external `perlcritic`. The legacy/external engine is opt-in via
+    /// `.perl-lsp.toml`.
+    #[default]
     Native,
 }
 
@@ -391,19 +402,27 @@ impl ServerConfig {
             }
         }
 
-        if let Some(critic) = settings.get("critic")
-            && let Some(engine) = critic.get("engine").and_then(|v| v.as_str())
-            && let Some(engine) = parse_critic_engine(engine)
-        {
-            self.critic_engine = engine;
-        }
-        if let Some(critic) = settings.get("critic")
-            && let Some(profile) = critic.get("profile").and_then(|v| v.as_str())
-            && let Some(profile) = parse_native_critic_profile(profile)
-        {
-            self.native_critic_profile = profile.to_string();
-        }
+        // Native `critic.*` settings are the product-surface keys. They are parsed
+        // after `perlcritic.*` so they win when both are present (see #3276): the
+        // legacy `perlcritic.*` block above seeds the shared severity/enabled state,
+        // and the native block below overrides it.
         if let Some(critic) = settings.get("critic") {
+            if let Some(enabled) = critic.get("enabled").and_then(|v| v.as_bool()) {
+                self.perlcritic_enabled = enabled;
+            }
+            if let Some(severity) = critic.get("severity").and_then(|v| v.as_u64()) {
+                self.perlcritic_severity = severity.clamp(1, 5) as u8;
+            }
+            if let Some(engine) =
+                critic.get("engine").and_then(|v| v.as_str()).and_then(parse_critic_engine)
+            {
+                self.critic_engine = engine;
+            }
+            if let Some(profile) =
+                critic.get("profile").and_then(|v| v.as_str()).and_then(parse_native_critic_profile)
+            {
+                self.native_critic_profile = profile.to_string();
+            }
             if let Some(include) = string_array(critic.get("include")) {
                 self.native_critic_include = include;
             }
@@ -596,6 +615,12 @@ pub struct WorkspaceConfig {
     /// Perl module search paths.
     pub native_build_hints: NativeBuildHints,
 
+    /// Declared dependency facts derived from workspace-root project metadata.
+    ///
+    /// These facts are advisory only. They do not mutate module search paths or
+    /// imply that a dependency is installed/indexed.
+    pub declared_dependencies: Vec<DeclaredDependency>,
+
     /// Resolution timeout in milliseconds
     /// Default: 50ms
     pub resolution_timeout_ms: u64,
@@ -618,6 +643,7 @@ impl Default for WorkspaceConfig {
             perl_path: None,
             perl_args: Vec::new(),
             native_build_hints: NativeBuildHints::default(),
+            declared_dependencies: Vec::new(),
             resolution_timeout_ms: 50,
             use_perl5lib: true,
             perl5lib_precedence: Perl5LibPrecedence::Prepend,
@@ -730,6 +756,14 @@ impl WorkspaceConfig {
     /// module-resolution include paths.
     pub fn refresh_native_build_hints(&mut self, workspace_root: &Path) {
         self.native_build_hints = detect_native_build_hints(workspace_root);
+    }
+
+    /// Refresh declared dependency facts from the selected workspace root.
+    ///
+    /// This is a workspace-initialization cache step only; it does not mutate
+    /// module-resolution include paths.
+    pub fn refresh_declared_dependencies(&mut self, workspace_root: &Path) {
+        self.declared_dependencies = detect_declared_dependencies(workspace_root);
     }
 
     /// Update workspace configuration from LSP settings.
@@ -1853,6 +1887,127 @@ profile = "recommended"
         assert_eq!(config.formatting_engine, FormatterMode::Native);
     }
 
+    // Native-first formatter guards. The formatter engine must default to
+    // native and only ever select external `perltidy` when explicitly
+    // configured — merely having `perltidy` on PATH must not change the
+    // default. These tests lock that contract against future regressions
+    // ("auto-use perltidy if present").
+
+    #[test]
+    fn default_formatter_engine_is_native() {
+        let config = ServerConfig::default();
+        assert_eq!(config.formatting_engine, FormatterMode::Native);
+        assert!(config.perltidy_enabled, "formatting is enabled by default via the native engine");
+    }
+
+    #[test]
+    fn external_perltidy_is_selected_only_by_explicit_engine() {
+        // `parse_formatter_mode` is a pure mapping with no environment/PATH
+        // probe: the external engine is reachable only through explicit config.
+        assert_eq!(parse_formatter_mode("external-perltidy"), Some(FormatterMode::ExternalLegacy));
+        assert_eq!(parse_formatter_mode("external-legacy"), Some(FormatterMode::ExternalLegacy));
+        assert_eq!(parse_formatter_mode("perltidy"), Some(FormatterMode::ExternalLegacy));
+        assert_eq!(parse_formatter_mode("native"), Some(FormatterMode::Native));
+        // Unknown values do not silently select external; the caller keeps its
+        // current value (native by default).
+        assert_eq!(parse_formatter_mode("definitely-not-an-engine"), None);
+        assert_eq!(parse_formatter_mode(""), None);
+    }
+
+    #[test]
+    fn perltidy_on_path_does_not_change_default_formatter_engine() {
+        // The default engine is a fixed value, not derived from whether
+        // `perltidy` exists on PATH. Applying config that does not name an
+        // engine leaves the native default intact.
+        let mut config = ServerConfig::default();
+        assert_eq!(config.formatting_engine, FormatterMode::Native);
+        config.update_from_value(&serde_json::json!({
+            "formatting": { "enabled": true }
+        }));
+        assert_eq!(config.formatting_engine, FormatterMode::Native);
+    }
+
+    #[test]
+    #[allow(unsafe_code)] // transient PATH mutation, serialized + restored (see below)
+    fn perltidy_discoverable_on_path_still_yields_native_default()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        // Stronger form of the guard above. The previous test only proves the
+        // default holds when `perltidy` is ABSENT from PATH (the usual CI
+        // condition), so it would not catch a regression that auto-selects the
+        // external engine only when a PATH probe (`which perltidy`) succeeds.
+        // Here we make a real `perltidy` executable discoverable on PATH and
+        // assert the default engine is STILL native — locking the "installed
+        // external tools must not change default behavior merely by existing on
+        // PATH" contract behaviorally, not just structurally.
+        //
+        // PATH is process-global, so serialize against any other PATH-touching
+        // test and restore it before asserting (a leaked mutation would poison
+        // sibling tests). The lock is crate-shared (`crate::test_support`), not
+        // function-local, so every PATH-mutating test acquires the SAME guard.
+        use std::io::Write as _;
+        let _lock = crate::test_support::PATH_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let dir = tempfile::tempdir()?;
+        let bin_name = if cfg!(windows) { "perltidy.exe" } else { "perltidy" };
+        let bin_path = dir.path().join(bin_name);
+        std::fs::File::create(&bin_path)?.write_all(b"#!/bin/sh\nexit 0\n")?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mut perms = std::fs::metadata(&bin_path)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&bin_path, perms)?;
+        }
+
+        let original_path = std::env::var_os("PATH");
+        let probe_path = {
+            let mut parts = vec![dir.path().to_path_buf()];
+            if let Some(existing) = &original_path {
+                parts.extend(std::env::split_paths(existing));
+            }
+            std::env::join_paths(parts)?
+        };
+        // SAFETY: serialized by PATH_ENV_LOCK; PATH is restored below before any
+        // assertion can unwind the thread. Mirrors the crate's existing
+        // `EnvVarGuard` pattern (runtime/launcher/mod.rs).
+        unsafe { std::env::set_var("PATH", &probe_path) };
+
+        let mut config = ServerConfig::default();
+        config.update_from_value(&serde_json::json!({
+            "formatting": { "enabled": true }
+        }));
+        let engine_with_perltidy_on_path = config.formatting_engine;
+
+        // Restore PATH before asserting so a failing assert cannot leak the
+        // mutated PATH into sibling tests. SAFETY: still under PATH_ENV_LOCK.
+        match original_path {
+            Some(prev) => unsafe { std::env::set_var("PATH", prev) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
+        assert_eq!(
+            engine_with_perltidy_on_path,
+            FormatterMode::Native,
+            "a `perltidy` discoverable on PATH must not flip the default formatter engine"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn perltidyrc_profile_does_not_force_external_formatting() {
+        // A `.perltidyrc` profile is usable for compatibility reporting or an
+        // explicit external mode, but setting it must NOT switch the engine
+        // away from native.
+        let mut config = ServerConfig::default();
+        config.update_from_value(&serde_json::json!({
+            "formatting": { "profile": "/path/to/.perltidyrc" }
+        }));
+        assert_eq!(config.perltidy_profile, Some("/path/to/.perltidyrc".to_string()));
+        assert_eq!(config.formatting_engine, FormatterMode::Native);
+    }
+
     #[test]
     fn server_config_accepts_native_critic_engine() {
         let mut config = ServerConfig::default();
@@ -1924,6 +2079,54 @@ profile = "recommended"
             config.native_critic_exclude,
             vec!["native.common.assignment_in_condition".to_string()]
         );
+    }
+
+    #[test]
+    fn server_config_native_critic_enabled_and_severity() {
+        let mut config = ServerConfig::default();
+
+        config.update_from_value(&serde_json::json!({
+            "critic": {
+                "enabled": false,
+                "severity": 5
+            }
+        }));
+        assert!(!config.perlcritic_enabled);
+        assert_eq!(config.perlcritic_severity, 5);
+
+        // Out-of-range severities clamp into 1..=5.
+        config.update_from_value(&serde_json::json!({
+            "critic": { "severity": 9 }
+        }));
+        assert_eq!(config.perlcritic_severity, 5);
+        config.update_from_value(&serde_json::json!({
+            "critic": { "severity": 0 }
+        }));
+        assert_eq!(config.perlcritic_severity, 1);
+    }
+
+    #[test]
+    fn native_critic_settings_win_over_legacy_perlcritic() {
+        let mut config = ServerConfig::default();
+
+        // When both `perlcritic.*` and `critic.*` are present in the same
+        // payload, the native `critic.*` block is parsed second and wins.
+        config.update_from_value(&serde_json::json!({
+            "perlcritic": {
+                "enabled": true,
+                "severity": 2,
+                "profile": "legacy-profile"
+            },
+            "critic": {
+                "enabled": false,
+                "severity": 4,
+                "profile": "strict"
+            }
+        }));
+
+        assert!(!config.perlcritic_enabled);
+        assert_eq!(config.perlcritic_severity, 4);
+        assert_eq!(config.native_critic_profile, "strict");
     }
 
     #[test]

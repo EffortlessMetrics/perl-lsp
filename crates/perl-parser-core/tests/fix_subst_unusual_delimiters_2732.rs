@@ -211,6 +211,53 @@ fn test_subst_space_before_paren() {
     assert_clean_parse(source);
 }
 
+/// Upstream Perl `t/base/lex.t` uses a legal substitution where `s` is followed
+/// by a line comment before the paired pattern and replacement delimiters.
+#[test]
+fn test_subst_comment_gap_before_paired_pattern_delimiter() {
+    let source = "$_ = \"a\";\ns # comment\n [a] #\n [b] #\n ;";
+    assert_clean_parse(source);
+}
+
+/// Upstream Perl `t/base/lex.t` also exercises quote-like operators where a
+/// line comment separates the operator from the first delimiter.
+#[test]
+fn test_quote_ops_comment_gap_before_delimiter() {
+    assert_clean_parse("$x = q # comment\n \"b\"#;");
+    assert_clean_parse("$x = qq # comment\n \"b\"#;");
+    assert_clean_parse("@x = qw # comment\n \"b\"#;");
+    assert_clean_parse("\"b\" =~ m # comment\n \"b\"#;");
+    assert_clean_parse("$x = qr # comment\n \"b\"#;");
+}
+
+#[test]
+fn test_base_lex_comment_gap_quote_ops_in_comparisons() {
+    let source = r##"
+q # comment
+ "b"#
+  eq 'b' or print "not ";
+qq # comment
+ "b"#
+  eq 'b' or print "not ";
+qw # comment
+ "b"#
+  [0] eq 'b' or print "not ";
+"b" =~ m # comment
+ "b"#
+  or print "not ";
+qr # comment
+ "b"#
+  eq qr/b/ or print "not ";
+"##;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_base_lex_fat_arrow_quotes_keyword_across_lines() {
+    let source = "print \"not \" unless (time\n                     =>) eq time=>;";
+    assert_clean_parse(source);
+}
+
 /// Mixed delimiter substitution: paired pattern + slash replacement.
 /// Perl accepts `s{foo}/bar/`, and this must not be misclassified as
 /// missing replacement.

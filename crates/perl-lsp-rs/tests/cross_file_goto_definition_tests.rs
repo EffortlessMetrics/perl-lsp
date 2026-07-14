@@ -1779,6 +1779,68 @@ builder {
     Ok(())
 }
 
+#[test]
+fn plack_builder_middleware_enable_ignores_misplaced_index_package() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/Plack/Middleware/Static.pm",
+        r#"package Plack::Middleware::Static;
+
+1;
+"#,
+    )?;
+    workspace.write(
+        "lib/Other/Static.pm",
+        r#"package Plack::Middleware::Static;
+
+1;
+"#,
+    )?;
+    workspace.write(
+        "app.psgi",
+        r#"use Plack::Builder;
+
+builder {
+    enable 'Static';
+};
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let misplaced_uri = workspace.uri("lib/Other/Static.pm");
+    let misplaced_content =
+        std::fs::read_to_string(workspace.dir.path().join("lib/Other/Static.pm"))?;
+    harness.open(&misplaced_uri, &misplaced_content)?;
+
+    let app_uri = workspace.uri("app.psgi");
+    let app_content = std::fs::read_to_string(workspace.dir.path().join("app.psgi"))?;
+    harness.open(&app_uri, &app_content)?;
+
+    harness.barrier();
+
+    let static_uri = workspace.uri("lib/Plack/Middleware/Static.pm");
+    let (static_line, static_character) = find_pos(&app_content, "Static", 3)?;
+    let static_def = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": app_uri},
+            "position": {"line": static_line, "character": static_character}
+        }),
+    )?;
+    let static_location = first_location(&static_def)?;
+    assert_valid_location(static_location);
+    assert_eq!(
+        static_location["uri"].as_str(),
+        Some(static_uri.as_str()),
+        "Plack middleware navigation must prefer the canonical module path over a misplaced indexed package"
+    );
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Tests 7+: Moose/Moo role composition goto-definition (Issue #2325)
 // ---------------------------------------------------------------------------
@@ -3058,6 +3120,227 @@ $store->fetch_session();
         uri.contains("Core.pm"),
         "5-deep catalyst-style chain: definition should point to Core.pm, got: {uri}"
     );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Prefix-sibling collision regression (navigation.rs lookup_workspace_definition)
+//
+// Goto-definition on `Foo->new` must NOT navigate to an unrelated package
+// whose qualified name merely has `Foo` as a *string* prefix (e.g.
+// `FooBar::new`). Perl method resolution walks `@ISA` (perlobj), never a
+// string-prefix of package names — `Foo` and `FooBar` are unrelated packages,
+// so the jump would be definitively wrong (Perl would die "Can't locate
+// object method \"new\" via package \"Foo\"").
+//
+// Pre-fix, the boundary-less `q.starts_with(pkg)` filter matched
+// "FooBar::new" for pkg="Foo" and returned FooBar.pm. Post-fix, the `::`-
+// anchored comparison rejects it, so the sibling package is never returned.
+// ---------------------------------------------------------------------------
+
+/// A location array (post-fix returns None/empty) must never point at the
+/// unrelated sibling module.
+fn assert_no_location_points_to(response: &Value, needle: &str) {
+    if let Some(locations) = response.as_array() {
+        for loc in locations {
+            if let Some(uri) = loc.get("uri").and_then(|u| u.as_str()) {
+                assert!(
+                    !uri.contains(needle),
+                    "goto-definition leaked to unrelated prefix-sibling package: {uri}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn go_to_definition_on_prefix_sibling_method_does_not_leak() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // FooBar defines `new`. Foo is an unrelated package (NOT a parent of
+    // FooBar, no @ISA) that only defines `greet` — it has no `new`.
+    harness.open(
+        "file:///lib/FooBar.pm",
+        r#"package FooBar;
+use strict;
+use warnings;
+
+sub new {
+    my $class = shift;
+    return bless {}, $class;
+}
+
+1;
+"#,
+    )?;
+
+    harness.open(
+        "file:///lib/Foo.pm",
+        r#"package Foo;
+use strict;
+use warnings;
+
+sub greet {
+    return "hi";
+}
+
+1;
+"#,
+    )?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use Foo;
+
+my $obj = Foo->new();
+"#;
+    harness.open("file:///app.pl", caller)?;
+    harness.barrier();
+
+    // Cursor on `new` in `Foo->new()`.
+    let (line, character) = find_line_char(caller, "new")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///app.pl"},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    // The bug: `Foo->new` navigated to FooBar::new in FooBar.pm because
+    // "FooBar::new".starts_with("Foo") == true. Post-fix it must not.
+    assert_no_location_points_to(&result, "FooBar.pm");
+    assert_no_location_points_to(&result, "FooBar%2Epm");
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_nested_prefix_sibling_method_does_not_leak() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // Foo::BarBaz defines `m`. Foo::Bar is an unrelated sibling package that
+    // shares the `Foo::Bar` *string* prefix but is a distinct namespace.
+    harness.open(
+        "file:///lib/Foo/BarBaz.pm",
+        r#"package Foo::BarBaz;
+use strict;
+use warnings;
+
+sub m {
+    return 1;
+}
+
+1;
+"#,
+    )?;
+
+    harness.open(
+        "file:///lib/Foo/Bar.pm",
+        r#"package Foo::Bar;
+use strict;
+use warnings;
+
+sub other {
+    return 2;
+}
+
+1;
+"#,
+    )?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+
+my $r = Foo::Bar->m();
+"#;
+    harness.open("file:///nested_app.pl", caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "->m")?;
+    // Advance past `->` onto `m`.
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///nested_app.pl"},
+            "position": {"line": line, "character": character + 2}
+        }),
+    )?;
+
+    // `Foo::Bar->m` must not resolve to Foo::BarBaz::m.
+    assert_no_location_points_to(&result, "BarBaz.pm");
+    assert_no_location_points_to(&result, "BarBaz%2Epm");
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_ancestor_prefix_does_not_leak_to_subpackage() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // Foo::Bar defines `new`. Foo is the (unrelated) ancestor-named package --
+    // Perl namespace nesting implies no `@ISA` relationship -- and has no
+    // `new` of its own.
+    harness.open(
+        "file:///lib/Foo/Bar.pm",
+        r#"package Foo::Bar;
+use strict;
+use warnings;
+
+sub new {
+    my $class = shift;
+    return bless {}, $class;
+}
+
+1;
+"#,
+    )?;
+
+    harness.open(
+        "file:///lib/Foo.pm",
+        r#"package Foo;
+use strict;
+use warnings;
+
+sub greet {
+    return "hi";
+}
+
+1;
+"#,
+    )?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use Foo;
+
+my $obj = Foo->new();
+"#;
+    harness.open("file:///subpkg_app.pl", caller)?;
+    harness.barrier();
+
+    // Cursor on `new` in `Foo->new()`.
+    let (line, character) = find_line_char(caller, "new")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///subpkg_app.pl"},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    // The bug: `Foo->new` navigated to Foo::Bar::new because
+    // "Foo::Bar::new".starts_with("Foo::") == true. Post-fix it must not --
+    // `Foo::Bar` is a nested subpackage, not `Foo` itself.
+    assert_no_location_points_to(&result, "Bar.pm");
+    assert_no_location_points_to(&result, "Bar%2Epm");
 
     Ok(())
 }
