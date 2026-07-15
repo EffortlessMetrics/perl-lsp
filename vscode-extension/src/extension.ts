@@ -56,6 +56,7 @@ import { registerNavigationCommandGroup } from './navigationCommandGroup';
 import { registerDiagnosticCommandGroup } from './diagnosticCommandGroup';
 import { registerDocumentCommandGroup } from './documentCommandGroup';
 import { registerRefactoringCommandGroup } from './refactoringCommandGroup';
+import { registerSupportCommandGroup } from './supportCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -1503,68 +1504,70 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   });
 
-  const reportIssueCommand = vscode.commands.registerCommand('perl-lsp.reportIssue', async () => {
-    const extensionVersion = (context.extension.packageJSON.version as string) ?? 'unknown';
-    const editorVersion = vscode.version;
-    const editorName = (vscode.env as unknown as { appName?: string }).appName;
-    const platform = process.platform;
-    const arch = process.arch;
+  const supportCommandDisposables = registerSupportCommandGroup({
+    reportIssue: async () => {
+      const extensionVersion = (context.extension.packageJSON.version as string) ?? 'unknown';
+      const editorVersion = vscode.version;
+      const editorName = (vscode.env as unknown as { appName?: string }).appName;
+      const platform = process.platform;
+      const arch = process.arch;
 
-    const getServerVersion = (): Promise<string> =>
-      new Promise((resolve) => {
-        if (!currentServerPath) {
-          resolve('unavailable');
-          return;
-        }
-        execFile(
-          currentServerPath,
-          ['--version'],
-          { timeout: 3000 },
-          (err: Error | null, stdout: string) => {
-            if (err) {
-              resolve('unavailable');
-              return;
-            }
-            const firstLine = stdout.trim().split('\n')[0] ?? '';
-            resolve(firstLine.trim() || 'unavailable');
-          },
-        );
+      const getServerVersion = (): Promise<string> =>
+        new Promise((resolve) => {
+          if (!currentServerPath) {
+            resolve('unavailable');
+            return;
+          }
+          execFile(
+            currentServerPath,
+            ['--version'],
+            { timeout: 3000 },
+            (err: Error | null, stdout: string) => {
+              if (err) {
+                resolve('unavailable');
+                return;
+              }
+              const firstLine = stdout.trim().split('\n')[0] ?? '';
+              resolve(firstLine.trim() || 'unavailable');
+            },
+          );
+        });
+
+      const serverVersion = await getServerVersion();
+
+      const diagnosticInfo = formatIssueDiagnosticInfo({
+        serverVersion,
+        extensionVersion,
+        editorVersion,
+        platform,
+        arch,
+        editorName,
       });
 
-    const serverVersion = await getServerVersion();
-
-    const diagnosticInfo = formatIssueDiagnosticInfo({
-      serverVersion,
-      extensionVersion,
-      editorVersion,
-      platform,
-      arch,
-      editorName,
-    });
-
-    const selection = await vscode.window.showInformationMessage(
-      'Open a GitHub issue to report a bug or request a feature.',
-      'Copy Diagnostic Info',
-      'Open Issue Form',
-    );
-
-    if (selection === 'Copy Diagnostic Info') {
-      try {
-        await vscode.env.clipboard.writeText(diagnosticInfo);
-        vscode.window.showInformationMessage(
-          'Diagnostic info copied. Paste it into the issue form.',
-        );
-      } catch {
-        // Clipboard unavailable — continue to open browser anyway
-      }
-    }
-
-    if (selection === 'Copy Diagnostic Info' || selection === 'Open Issue Form') {
-      const url = vscode.Uri.parse(
-        'https://github.com/EffortlessMetrics/perl-lsp/issues/new?template=bug_report.yml',
+      const selection = await vscode.window.showInformationMessage(
+        'Open a GitHub issue to report a bug or request a feature.',
+        'Copy Diagnostic Info',
+        'Open Issue Form',
       );
-      await vscode.env.openExternal(url);
-    }
+
+      if (selection === 'Copy Diagnostic Info') {
+        try {
+          await vscode.env.clipboard.writeText(diagnosticInfo);
+          vscode.window.showInformationMessage(
+            'Diagnostic info copied. Paste it into the issue form.',
+          );
+        } catch {
+          // Clipboard unavailable — continue to open browser anyway
+        }
+      }
+
+      if (selection === 'Copy Diagnostic Info' || selection === 'Open Issue Form') {
+        const url = vscode.Uri.parse(
+          'https://github.com/EffortlessMetrics/perl-lsp/issues/new?template=bug_report.yml',
+        );
+        await vscode.env.openExternal(url);
+      }
+    },
   });
 
   const formatOnSaveDisposable = vscode.workspace.onWillSaveTextDocument((event) => {
@@ -1661,7 +1664,7 @@ export async function activate(context: vscode.ExtensionContext) {
     ...diagnosticCommandDisposables,
     ...onboardingCommandDisposables,
     ...refactoringCommandDisposables,
-    reportIssueCommand,
+    ...supportCommandDisposables,
     formatOnSaveDisposable,
     configurationWatcher,
     fileCreationWatcher,
