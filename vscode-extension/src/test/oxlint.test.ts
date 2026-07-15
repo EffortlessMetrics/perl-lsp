@@ -142,6 +142,28 @@ describe('Oxlint configuration', () => {
     );
   });
 
+  test('warning ratchet rejects growth in rule-by-surface and file buckets', () => {
+    const baseline = {
+      warning_count: 2,
+      by_rule: { 'no-console': 2 },
+      by_surface: { scripts: 2 },
+      by_rule_and_surface: { 'no-console': { scripts: 2 } },
+      by_file: { 'scripts/build.js': 2 },
+    };
+    const current = {
+      warning_count: 2,
+      by_rule: { 'no-console': 2 },
+      by_surface: { scripts: 2 },
+      by_rule_and_surface: { 'no-console': { scripts: 1, tests: 1 } },
+      by_file: { 'scripts/build.js': 1, 'scripts/report.js': 1 },
+    };
+
+    expect(compareInventory(current, baseline)).toEqual([
+      'rule×surface no-console tests: 1 > 0',
+      'file scripts/report.js: 1 > 0',
+    ]);
+  });
+
   test('Oxlint errors always produce a failing process status', () => {
     expect(failureExitCode([{ severity: 'error' }], 0)).toBe(1);
     expect(failureExitCode([{ severity: 'error' }], 2)).toBe(2);
