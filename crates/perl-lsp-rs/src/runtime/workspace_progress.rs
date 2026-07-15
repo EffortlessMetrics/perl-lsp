@@ -18,6 +18,20 @@ pub(super) fn send_index_ready_notification(outbound: &OutboundSender, ready: bo
 }
 
 #[cfg(feature = "workspace")]
+pub(super) fn send_active_document_ready_notification(
+    outbound: &OutboundSender,
+    uri: &str,
+    generation: u64,
+) {
+    if let Err(e) = outbound.send_notification(
+        "perl-lsp/active-document-ready",
+        json!({ "uri": uri, "generation": generation }),
+    ) {
+        tracing::warn!(error = %e, "Failed to send active-document-ready notification");
+    }
+}
+
+#[cfg(feature = "workspace")]
 pub(super) fn send_progress_create(outbound: &OutboundSender, request_id: ServerRequestId) {
     if let Err(e) = outbound.send_request(
         request_id,

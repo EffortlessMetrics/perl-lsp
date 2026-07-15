@@ -304,6 +304,9 @@ impl LspServer {
                         let text_owned = text.to_string();
                         let uri_owned = uri.to_string();
                         let generation = Arc::clone(&generation);
+                        let active_document_readiness = self.runtime_tuning().runtime_mode
+                            == perl_lsp_rs_core::runtime::tuning::RuntimeMode::E2e;
+                        let outbound = self.outbound.clone();
                         let task_counter = Arc::clone(&self.pending_index_task_count);
                         task_counter.fetch_add(1, Ordering::SeqCst);
 
@@ -319,6 +322,11 @@ impl LspServer {
                             }
                             match workspace_index.index_file_with_generation(url, text_owned, 0) {
                                 Ok(()) => {
+                                    if active_document_readiness {
+                                        workspace_progress::send_active_document_ready_notification(
+                                            &outbound, &uri_owned, 0,
+                                        );
+                                    }
                                     if matches!(
                                         coordinator_clone.state(),
                                         IndexState::Building { phase: IndexPhase::Idle, .. }

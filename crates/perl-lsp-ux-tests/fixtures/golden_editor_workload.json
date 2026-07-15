@@ -1,0 +1,100 @@
+{
+  "kind": "golden_editor_workload",
+  "schema_version": 2,
+  "manifest_version": "2026-07-13",
+  "claim_boundary": "After active-document-ready transport and provider-receipt baseline only. This run starts journeys after the active document's E2E indexing pass, does not claim whole-workspace readiness, does not measure pre-index behavior or time to first useful answer, does not promote provider support tiers, and does not score exactness before a request class has a checked-in proof packet.",
+  "projects": [
+    {
+      "name": "mojolicious",
+      "fixture": "mojolicious",
+      "active_file": "lib/Mojolicious.pm",
+      "completion_needle": "$self->",
+      "definition_needle": "startup",
+      "reference_needle": "$plugins",
+      "safe_rename_needle": "$plugins"
+    },
+    {
+      "name": "dancer2",
+      "fixture": "dancer2",
+      "active_file": "lib/Dancer2/Core/Runner.pm",
+      "completion_needle": "$self->",
+      "definition_needle": "psgi_app",
+      "reference_needle": "$runner",
+      "safe_rename_needle": "$runner"
+    },
+    {
+      "name": "catalyst",
+      "fixture": "catalyst",
+      "active_file": "lib/Catalyst.pm",
+      "completion_needle": "$self->",
+      "definition_needle": "_setup",
+      "reference_needle": "$self",
+      "safe_rename_needle": "%args"
+    },
+    {
+      "name": "plain_modern_oo",
+      "fixture": "inline_plain_modern_oo",
+      "active_file": "lib/Plain/App.pm",
+      "completion_needle": "$self->",
+      "definition_needle": "run",
+      "reference_needle": "$value",
+      "safe_rename_needle": "$value"
+    }
+  ],
+  "journeys": [
+    { "id": "completion_after_ready", "provider": "completion", "request_shape": "active_document_ready", "expected_result_class": "bounded_or_exact" },
+    { "id": "hover_after_ready", "provider": "hover", "request_shape": "local_symbol", "expected_result_class": "bounded_or_exact" },
+    { "id": "definition_local_or_imported", "provider": "definition", "request_shape": "local_or_imported_symbol", "expected_result_class": "bounded_or_exact" },
+    { "id": "references_lexical", "provider": "references", "request_shape": "initialized_lexical", "expected_result_class": "bounded_or_exact" },
+    { "id": "rename_safe_lexical", "provider": "rename", "request_shape": "safe_initialized_lexical", "expected_result_class": "exact_or_refused" },
+    { "id": "diagnostics_present_import", "provider": "diagnostics", "request_shape": "present_import", "expected_result_class": "non_error" },
+    { "id": "workspace_symbols_after_ready", "provider": "workspace_symbols", "request_shape": "workspace_query", "expected_result_class": "bounded_or_exact" },
+    { "id": "edit_burst_completion", "provider": "completion", "request_shape": "twenty_edit_burst", "expected_result_class": "bounded_or_exact" },
+    { "id": "edit_burst_hover", "provider": "hover", "request_shape": "twenty_edit_burst", "expected_result_class": "bounded_or_exact" },
+    { "id": "close_reopen_pending", "provider": "lifecycle", "request_shape": "close_reopen_while_pending", "expected_result_class": "non_error" }
+  ],
+  "zero_budget_metrics": [
+    "exactness_state",
+    "unwaived_error_count",
+    "unsafe_external_edit_count",
+    "protocol_crash_count",
+    "unexplained_empty_count"
+  ],
+  "error_waivers": [
+    {
+      "project": "mojolicious",
+      "journey": "edit_burst_completion",
+      "expected_error_class": "request_superseded",
+      "issue": 4050,
+      "expires_after": "2026-08-01"
+    },
+    {
+      "project": "dancer2",
+      "journey": "edit_burst_completion",
+      "expected_error_class": "request_superseded",
+      "issue": 4050,
+      "expires_after": "2026-08-01"
+    },
+    {
+      "project": "catalyst",
+      "journey": "edit_burst_completion",
+      "expected_error_class": "request_superseded",
+      "issue": 4050,
+      "expires_after": "2026-08-01"
+    },
+    {
+      "project": "plain_modern_oo",
+      "journey": "edit_burst_completion",
+      "expected_error_class": "request_superseded",
+      "issue": 4050,
+      "expires_after": "2026-08-01"
+    },
+    {
+      "project": "plain_modern_oo",
+      "journey": "rename_safe_lexical",
+      "expected_error_class": "timeout",
+      "issue": 4050,
+      "expires_after": "2026-08-01"
+    }
+  ]
+}
