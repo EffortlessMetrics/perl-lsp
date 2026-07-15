@@ -52,6 +52,7 @@ import { registerServerCommandGroup } from './serverCommandGroup';
 import { registerCriticCommandGroup } from './criticCommandGroup';
 import { registerTestCommandGroup } from './testCommandGroup';
 import { registerOnboardingCommandGroup } from './onboardingCommandGroup';
+import { registerNavigationCommandGroup } from './navigationCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -1084,12 +1085,9 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   });
 
-  const openDemoProjectDisposable = vscode.commands.registerCommand(
-    'perl-lsp.openDemoProject',
-    async () => {
-      await openDemoProjectCommand(context);
-    },
-  );
+  const openDemoProject = async () => {
+    await openDemoProjectCommand(context);
+  };
 
   const criticCommandDisposables = registerCriticCommandGroup({
     runPerlCriticOnActiveFile: () => runPerlCriticOnActiveFile(),
@@ -1103,14 +1101,11 @@ export async function activate(context: vscode.ExtensionContext) {
     runAllTests: () => runAllTestsWithProve(),
   });
 
-  const organizeImportsCommand = vscode.commands.registerCommand(
-    'perl-lsp.organizeImports',
-    async () => {
-      await vscode.commands.executeCommand('editor.action.organizeImports');
-    },
-  );
+  const organizeImports = async () => {
+    await vscode.commands.executeCommand('editor.action.organizeImports');
+  };
 
-  const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
+  const showVersion = async () => {
     if (!currentServerPath) {
       vscode.window
         .showErrorMessage(
@@ -1157,9 +1152,9 @@ export async function activate(context: vscode.ExtensionContext) {
           }
         });
     });
-  });
+  };
 
-  const statusMenuCommand = vscode.commands.registerCommand('perl-lsp.showStatusMenu', async () => {
+  const showStatusMenu = async () => {
     const editor = vscode.window.activeTextEditor;
     const isPerl = editor ? editor.document.languageId === 'perl' : false;
     const filePath = editor ? editor.document.uri.fsPath : '';
@@ -1261,6 +1256,13 @@ export async function activate(context: vscode.ExtensionContext) {
     if (selection && selection.command && !selection.disabled) {
       vscode.commands.executeCommand(selection.command, ...(selection.args || []));
     }
+  };
+
+  const navigationCommandDisposables = registerNavigationCommandGroup({
+    openDemoProject,
+    organizeImports,
+    showVersion,
+    showStatusMenu,
   });
 
   const checkSyntaxCommand = vscode.commands.registerCommand('perl-lsp.checkSyntax', async () => {
@@ -1716,8 +1718,7 @@ export async function activate(context: vscode.ExtensionContext) {
     ...serverCommandDisposables,
     ...criticCommandDisposables,
     ...testCommandDisposables,
-    openDemoProjectDisposable,
-    organizeImportsCommand,
+    ...navigationCommandDisposables,
     checkSyntaxCommand,
     formatDocumentCommand,
     showIncPathsCommand,
@@ -1730,8 +1731,6 @@ export async function activate(context: vscode.ExtensionContext) {
     showWorkspaceTrustReportCommandDisposable,
     explainMissingModuleLookupCommandDisposable,
     explainDiagnosticCommandDisposable,
-    showVersionCommand,
-    statusMenuCommand,
     ...onboardingCommandDisposables,
     extractVariableCommand,
     extractMethodCommand,

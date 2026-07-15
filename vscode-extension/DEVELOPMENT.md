@@ -145,6 +145,7 @@ The main extension code lives in `src/extension.ts`. Key files:
 | `src/testCommandGroup.ts`       | Test and debugger command registration       |
 | `src/documentFeatureGroup.ts`   | POD and Gherkin provider composition         |
 | `src/onboardingCommandGroup.ts` | Onboarding and update command registration   |
+| `src/navigationCommandGroup.ts` | Navigation and presentation command wiring   |
 | `src/downloader.ts`             | Auto-download logic for the `perllsp` binary |
 | `src/healthWidget.ts`           | Status bar health indicator                  |
 | `src/onboarding.ts`             | First-run setup flow                         |
