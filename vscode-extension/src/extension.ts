@@ -54,6 +54,7 @@ import { registerTestCommandGroup } from './testCommandGroup';
 import { registerOnboardingCommandGroup } from './onboardingCommandGroup';
 import { registerNavigationCommandGroup } from './navigationCommandGroup';
 import { registerDiagnosticCommandGroup } from './diagnosticCommandGroup';
+import { registerDocumentCommandGroup } from './documentCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -1266,13 +1267,9 @@ export async function activate(context: vscode.ExtensionContext) {
     showStatusMenu,
   });
 
-  const checkSyntaxCommand = vscode.commands.registerCommand('perl-lsp.checkSyntax', async () => {
-    await runCheckSyntax();
-  });
-
-  const formatDocumentCommand = vscode.commands.registerCommand(
-    'perl-lsp.formatDocument',
-    async () => {
+  const documentCommandDisposables = registerDocumentCommandGroup({
+    checkSyntax: runCheckSyntax,
+    formatDocument: async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'perl') {
         vscode.window.showErrorMessage('No active Perl file to format');
@@ -1280,22 +1277,10 @@ export async function activate(context: vscode.ExtensionContext) {
       }
       await vscode.commands.executeCommand('editor.action.formatDocument');
     },
-  );
-
-  const showIncPathsCommand = vscode.commands.registerCommand('perl-lsp.showIncPaths', async () => {
-    await showIncPaths();
+    showIncPaths,
+    openModule: openPerlModule,
+    showParserAst,
   });
-
-  const openModuleCommand = vscode.commands.registerCommand('perl-lsp.openModule', async () => {
-    await openPerlModule();
-  });
-
-  const showParserAstCommand = vscode.commands.registerCommand(
-    'perl-lsp.showParserAst',
-    async () => {
-      await showParserAst();
-    },
-  );
 
   const diagnosticCommandDisposables = registerDiagnosticCommandGroup({
     explainProviderDecision: (provider) =>
@@ -1680,11 +1665,7 @@ export async function activate(context: vscode.ExtensionContext) {
     ...criticCommandDisposables,
     ...testCommandDisposables,
     ...navigationCommandDisposables,
-    checkSyntaxCommand,
-    formatDocumentCommand,
-    showIncPathsCommand,
-    openModuleCommand,
-    showParserAstCommand,
+    ...documentCommandDisposables,
     ...diagnosticCommandDisposables,
     ...onboardingCommandDisposables,
     extractVariableCommand,
