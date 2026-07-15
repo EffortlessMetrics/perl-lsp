@@ -5,16 +5,16 @@
     "oxlint": "1.73.0",
     "oxlint-tsgolint": "0.24.0"
   },
-  "warning_count": 429,
+  "warning_count": 375,
   "by_rule": {
     "eslint(no-console)": 18,
     "eslint(no-unused-vars)": 11,
     "typescript(consistent-type-imports)": 3,
-    "typescript(no-explicit-any)": 397
+    "typescript(no-explicit-any)": 343
   },
   "by_surface": {
     "scripts": 18,
-    "tests": 411
+    "tests": 357
   },
   "by_rule_and_surface": {
     "eslint(no-console)": {
@@ -27,7 +27,7 @@
       "tests": 3
     },
     "typescript(no-explicit-any)": {
-      "tests": 397
+      "tests": 343
     }
   },
   "by_file": {
@@ -35,7 +35,6 @@
     "scripts/lint-canary.js": 8,
     "scripts/toolchain-doctor.js": 2,
     "src/test/arrowCompletion.test.ts": 5,
-    "src/test/commands.test.ts": 54,
     "src/test/configuration.test.ts": 77,
     "src/test/debugAdapter.test.ts": 58,
     "src/test/downloader.test.ts": 71,

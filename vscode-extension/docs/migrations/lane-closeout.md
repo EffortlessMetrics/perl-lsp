@@ -53,6 +53,7 @@ below.
 | #4282 | Packaged smoke indexed-access hardening              | Merged |
 | #4284 | Blocking `noUncheckedIndexedAccess` promotion        | Merged |
 | #4285 | Complete Oxlint inventory enforcement                | Merged |
+| #4291 | Typed command manifest contract tests                | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -72,8 +73,8 @@ The rescue checkpoint was not merged wholesale.
   TypeScript authority configuration.
 - Oxlint warning debt is recorded and enforced by rule, surface, rule-by-surface,
   and file; new errors or warning growth are rejected rather than silently
-  baselined. The current inventory is 429 warnings after the typed VS Code
-  mock cleanup in #4285.
+  baselined. The current inventory is 375 warnings after the typed VS Code
+  mock and command manifest cleanups in #4285 and #4291.
 - Workspace guidance and the `perllsp --health` process boundary have separate
   owners and focused tests.
 - The exact-source VSIX/current-server harness is reused by hosted Linux smoke.
