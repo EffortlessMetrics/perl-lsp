@@ -44,6 +44,7 @@ import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
 import { registerGherkinProviders } from './gherkinProviders';
 import { registerGherkinStepDefinitionSupport } from './gherkinStepDefinitions';
+import { registerDocumentFeatureGroup } from './documentFeatureGroup';
 import { selectTestCommandAtPosition } from './runTestAtCursor';
 import { StreamingCompletionController } from './streamingCompletion';
 import { registerMcpSupport } from './mcpSupport';
@@ -1709,9 +1710,12 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   const providerDisposables = featureActivationMetrics.measure('providers', true, () => [
-    ...registerGherkinProviders(),
-    ...registerGherkinStepDefinitionSupport(),
-    ...registerPodPreview(context),
+    ...registerDocumentFeatureGroup({
+      extensionContext: context,
+      registerGherkinProviders,
+      registerGherkinStepDefinitionSupport,
+      registerPodPreview,
+    }),
   ]);
 
   context.subscriptions.push(
