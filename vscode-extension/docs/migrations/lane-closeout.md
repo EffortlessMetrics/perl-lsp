@@ -52,6 +52,7 @@ below.
 | #4281 | Lifecycle test indexed-access hardening              | Merged |
 | #4282 | Packaged smoke indexed-access hardening              | Merged |
 | #4284 | Blocking `noUncheckedIndexedAccess` promotion        | Merged |
+| #4285 | Complete Oxlint inventory enforcement                | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -69,8 +70,10 @@ The rescue checkpoint was not merged wholesale.
   authority configurations and the doctor check are explicit. `exactOptionalPropertyTypes`,
   `noImplicitOverride`, and `noUncheckedIndexedAccess` are blocking across every
   TypeScript authority configuration.
-- Oxlint warning debt is recorded by rule, surface, rule-by-surface, and file;
-  new errors or warning growth are rejected rather than silently baselined.
+- Oxlint warning debt is recorded and enforced by rule, surface, rule-by-surface,
+  and file; new errors or warning growth are rejected rather than silently
+  baselined. The current inventory is 429 warnings after the typed VS Code
+  mock cleanup in #4285.
 - Workspace guidance and the `perllsp --health` process boundary have separate
   owners and focused tests.
 - The exact-source VSIX/current-server harness is reused by hosted Linux smoke.
@@ -96,7 +99,7 @@ npm run test:ci
 
 The focused downloader run passed 113 tests; the full CI suite passed 735
 tests with one existing skip on the earlier closeout revision. The current
-canonical gate passes 753 tests with one documented packaged-server skip,
+canonical gate passes 757 tests with one documented packaged-server skip,
 including the workspace-guidance and lifecycle edge coverage added by #4265,
 #4266, the exact-optional contract coverage added by #4270, and the indexed-
 access cleanup slices #4272, #4274, #4275, #4276, #4278, #4279, #4280, #4281,
