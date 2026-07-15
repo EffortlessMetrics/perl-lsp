@@ -137,13 +137,19 @@ The `.vsix` file can be installed directly in VS Code via **Extensions → Insta
 
 The main extension code lives in `src/extension.ts`. Key files:
 
-| File                  | Purpose                                      |
-| --------------------- | -------------------------------------------- |
-| `src/extension.ts`    | Activation, server lifecycle                 |
-| `src/downloader.ts`   | Auto-download logic for the `perllsp` binary |
-| `src/healthWidget.ts` | Status bar health indicator                  |
-| `src/onboarding.ts`   | First-run setup flow                         |
-| `src/debugAdapter.ts` | DAP debug adapter                            |
+| File                        | Purpose                                      |
+| --------------------------- | -------------------------------------------- |
+| `src/extension.ts`          | Activation and feature composition           |
+| `src/serverCommandGroup.ts` | Server, install, and health command wiring   |
+| `src/downloader.ts`         | Auto-download logic for the `perllsp` binary |
+| `src/healthWidget.ts`       | Status bar health indicator                  |
+| `src/onboarding.ts`         | First-run setup flow                         |
+| `src/debugAdapter.ts`       | DAP debug adapter                            |
+
+Server-facing commands receive their read-only projections and lifecycle
+callbacks through `ServerCommandContext`. The language-client lifecycle
+controller remains the sole owner of start, restart, and stop transitions;
+command modules only register handlers and delegate those operations.
 
 ## Pointing the extension at a different server version
 

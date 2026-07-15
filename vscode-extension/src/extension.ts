@@ -23,7 +23,6 @@ import {
 import { BinaryDownloader, parseLocalVersion } from './downloader';
 import { runLanguageServerHealthCheck } from './languageServerHealth';
 import { OnboardingManager } from './onboarding';
-import type { HealthCheckResult } from './onboarding';
 import {
   openDemoProjectCommand,
   suggestAiCompletionIfSupported,
@@ -48,6 +47,7 @@ import { registerGherkinStepDefinitionSupport } from './gherkinStepDefinitions';
 import { selectTestCommandAtPosition } from './runTestAtCursor';
 import { StreamingCompletionController } from './streamingCompletion';
 import { registerMcpSupport } from './mcpSupport';
+import { registerServerCommandGroup } from './serverCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -77,12 +77,7 @@ import {
   StartupErrorKind,
 } from './startupDiagnosis';
 import type { StartupErrorDiagnosis } from './startupDiagnosis';
-import type {
-  HealthCheckCommandResult,
-  HealthCheckCommandStatus,
-  ManagedBinarySource,
-  ReinstallCommandResult,
-} from './commandResults';
+import type { ManagedBinarySource, ReinstallCommandResult } from './commandResults';
 
 // Compatibility projections for existing command/provider code. Lifecycle
 // ownership lives in `languageClientLifecycle`; these values are synchronized
@@ -1072,17 +1067,17 @@ export async function activate(context: vscode.ExtensionContext) {
   syncLifecycleProjection();
   context.subscriptions.push(statusBarItem);
 
-  // Register showOutput command early so it's available during binary download and initialization
-  const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
-    outputChannel.show();
-  });
-  const reinstallCommand = vscode.commands.registerCommand('perl-lsp.reinstall', async () => {
-    return reinstallServerBinary(context);
-  });
-
-  // Register commands
-  const restartCommand = vscode.commands.registerCommand('perl-lsp.restart', async () => {
-    await restartServer(context);
+  // Register server-facing commands through an explicit dependency context.
+  // Lifecycle transitions remain owned by the authoritative composition.
+  const serverCommandDisposables = registerServerCommandGroup({
+    outputChannel,
+    currentServerPath: () => currentServerPath,
+    reinstallServerBinary: () => reinstallServerBinary(context),
+    restartServer: () => restartServer(context),
+    runHealthCheck: async (serverPath) => {
+      const onboarding = new OnboardingManager(context, outputChannel);
+      return onboarding.runSetupHealthCheck(serverPath);
+    },
   });
 
   const openDemoProjectDisposable = vscode.commands.registerCommand(
@@ -1321,55 +1316,6 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.commands.executeCommand(selection.command, ...(selection.args || []));
     }
   });
-
-  const runHealthCheckCommand = vscode.commands.registerCommand(
-    'perl-lsp.runHealthCheck',
-    async (serverPath?: string | null) => {
-      const resolvedPath = serverPath !== undefined ? serverPath : currentServerPath;
-      const onboarding = new OnboardingManager(context, outputChannel);
-      const results = await onboarding.runSetupHealthCheck(resolvedPath ?? null);
-      const commandResult = toHealthCheckCommandResult(results);
-
-      const errors = results.filter((r) => !r.ok && r.status === 'error');
-      const warnings = results.filter((r) => !r.ok && r.status === 'warning');
-
-      const lines = results.map((r) => {
-        const icon = r.ok ? '$(check)' : r.status === 'warning' ? '$(warning)' : '$(error)';
-        return `${icon} ${r.label}: ${r.detail}`;
-      });
-
-      outputChannel.appendLine('[health-check] Results:');
-      for (const line of lines) {
-        outputChannel.appendLine(`  ${line.replace(/\$\(\w[^)]*\)/g, '')}`);
-      }
-
-      if (errors.length > 0) {
-        const msg = `Health check failed: ${errors.map((e) => e.label).join(', ')}`;
-        vscode.window.showErrorMessage(msg, 'Show Output').then((sel) => {
-          if (sel === 'Show Output') {
-            outputChannel.show();
-          }
-        });
-      } else if (warnings.length > 0) {
-        const msg = `Health check passed with warnings: ${warnings.map((w) => w.detail).join(' | ')}`;
-        vscode.window.showWarningMessage(msg, 'Show Output').then((sel) => {
-          if (sel === 'Show Output') {
-            outputChannel.show();
-          }
-        });
-      } else {
-        vscode.window
-          .showInformationMessage('Perl LSP health check passed.', 'Show Output')
-          .then((sel) => {
-            if (sel === 'Show Output') {
-              outputChannel.show();
-            }
-          });
-      }
-
-      return commandResult;
-    },
-  );
 
   const checkSyntaxCommand = vscode.commands.registerCommand('perl-lsp.checkSyntax', async () => {
     await runCheckSyntax();
@@ -1874,8 +1820,7 @@ export async function activate(context: vscode.ExtensionContext) {
   ]);
 
   context.subscriptions.push(
-    showOutputCommand,
-    restartCommand,
+    ...serverCommandDisposables,
     openDemoProjectDisposable,
     organizeImportsCommand,
     runTestsCommand,
@@ -1898,9 +1843,7 @@ export async function activate(context: vscode.ExtensionContext) {
     explainDiagnosticCommandDisposable,
     showVersionCommand,
     statusMenuCommand,
-    reinstallCommand,
     checkForUpdateCommand,
-    runHealthCheckCommand,
     showWhatsNewCommand,
     openConfigurationGuideCommand,
     extractVariableCommand,
@@ -2896,19 +2839,6 @@ function getManagedBinarySource(): ManagedBinarySource {
     .getConfiguration('perl-lsp')
     .get<string>('downloadBaseUrl', '');
   return downloadBaseUrl ? 'internal-base-url' : 'github-release';
-}
-
-function toHealthCheckCommandResult(results: HealthCheckResult[]): HealthCheckCommandResult {
-  const checks = results.map((result) => ({
-    label: result.label,
-    status: result.status as HealthCheckCommandStatus,
-    detail: result.detail,
-  }));
-
-  return {
-    ok: checks.every((check) => check.status !== 'error'),
-    checks,
-  };
 }
 
 async function readInstalledServerVersion(serverPath: string): Promise<string | undefined> {
