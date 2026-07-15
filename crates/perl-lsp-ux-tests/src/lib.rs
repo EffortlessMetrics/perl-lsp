@@ -128,6 +128,14 @@ fn is_index_ready_event(event: &LspEvent) -> bool {
     method == "perl-lsp/index-ready" && params.get("ready").and_then(Value::as_bool) == Some(true)
 }
 
+fn is_active_document_ready_event(event: &LspEvent, uri: &str) -> bool {
+    let LspEvent::Other { method, params } = event else {
+        return false;
+    };
+    method == "perl-lsp/active-document-ready"
+        && params.get("uri").and_then(Value::as_str) == Some(uri)
+}
+
 /// Configuration for a UX scenario.
 ///
 /// Centralises all the knobs that affect the test environment without
@@ -551,6 +559,26 @@ impl UxHarness {
     /// Count ready-index notifications already observed by the harness.
     pub fn index_ready_event_count(&self) -> usize {
         self.client.peek_events().iter().filter(|event| is_index_ready_event(event)).count()
+    }
+
+    /// Wait until the server confirms that a specific active document has
+    /// completed its E2E background indexing pass.
+    pub fn wait_for_active_document_ready(&self, uri: &str, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if self
+                .client
+                .peek_events()
+                .iter()
+                .any(|event| is_active_document_ready_event(event, uri))
+            {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 
     /// Wait until a ready-index notification arrives after `already_seen` events.
@@ -1322,8 +1350,9 @@ pub fn find_perlcritic() -> Option<String> {
 #[cfg(test)]
 mod normalize_tests {
     use super::{
-        document_symbol_names, find_binary_near_exe, is_index_ready_event, is_truthy_env_value,
-        normalize_lsp_payload, normalize_uri_for_expectations,
+        document_symbol_names, find_binary_near_exe, is_active_document_ready_event,
+        is_index_ready_event, is_truthy_env_value, normalize_lsp_payload,
+        normalize_uri_for_expectations,
     };
     use crate::LspEvent;
     use serde_json::{Value, json};
@@ -1369,6 +1398,24 @@ mod normalize_tests {
             message_type: 3,
             message: "perl-lsp/index-ready".to_string(),
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn active_document_ready_event_requires_matching_uri() -> anyhow::Result<()> {
+        let event = LspEvent::Other {
+            method: "perl-lsp/active-document-ready".to_string(),
+            params: json!({ "uri": "file:///active.pl", "generation": 0 }),
+        };
+        assert!(is_active_document_ready_event(&event, "file:///active.pl"));
+        assert!(!is_active_document_ready_event(&event, "file:///other.pl"));
+        assert!(!is_active_document_ready_event(
+            &LspEvent::Other {
+                method: "perl-lsp/index-ready".to_string(),
+                params: json!({ "uri": "file:///active.pl" }),
+            },
+            "file:///active.pl",
+        ));
         Ok(())
     }
 

@@ -1322,6 +1322,47 @@ fn test_did_close_preserves_workspace_index_for_existing_file()
     Ok(())
 }
 
+#[cfg(feature = "workspace")]
+#[test]
+fn e2e_did_open_publishes_active_document_ready_after_index_commit()
+-> Result<(), Box<dyn std::error::Error>> {
+    let buf = StdArc::new(parking_lot::Mutex::new(Vec::<u8>::new()));
+    let writer = SharedVecWriter { inner: StdArc::clone(&buf) };
+    let server = LspServer::with_io_feature_profile_and_tuning(
+        Box::new(std::io::Cursor::new(Vec::<u8>::new())),
+        Box::new(writer),
+        FeatureProfile::current(),
+        perl_lsp_rs_core::runtime::tuning::RuntimeTuning::e2e_defaults(),
+    );
+    let uri = "file:///test_active_document_ready.pl";
+
+    server.did_open(json!({
+        "textDocument": {
+            "uri": uri,
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Active::Ready;\nsub ready { 1 }\n1;\n"
+        }
+    }))?;
+    drop(server);
+    std::thread::sleep(Duration::from_millis(50));
+
+    let text = String::from_utf8(buf.lock().clone()).unwrap_or_default();
+    assert!(
+        text.contains(r#""method":"perl-lsp/active-document-ready""#),
+        "e2e didOpen must publish active-document readiness; got: {text:?}"
+    );
+    assert!(
+        text.contains(&format!(r#""uri":"{}""#, uri)),
+        "active-document readiness must identify the opened URI; got: {text:?}"
+    );
+    assert!(
+        text.contains(r#""generation":0"#),
+        "active-document readiness must identify the opened generation; got: {text:?}"
+    );
+    Ok(())
+}
+
 /// didClose must clear diagnostics using the client-provided URI string.
 ///
 /// This preserves exact URI identity for clients that key diagnostics by
