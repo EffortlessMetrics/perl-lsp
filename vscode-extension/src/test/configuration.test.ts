@@ -14,19 +14,166 @@ import * as path from 'path';
 
 const EXT_ROOT = path.resolve(__dirname, '..', '..');
 
-function readJson(relativePath: string): any {
+interface AutoClosingPair {
+  open: string;
+  close?: string;
+  notIn?: string[];
+}
+
+interface LanguageConfiguration {
+  comments: { lineComment: string };
+  brackets: [string, string][];
+  autoClosingPairs: AutoClosingPair[];
+  surroundingPairs: [string, string][];
+  indentationRules: {
+    increaseIndentPattern: string;
+    decreaseIndentPattern: string;
+  };
+  wordPattern: string;
+}
+
+interface SettingItems {
+  type: string;
+  enum: Array<string | number>;
+}
+
+interface SettingDefinition {
+  order: number;
+  description: string;
+  markdownDescription: string;
+  type: string;
+  default: unknown;
+  enum: Array<string | number>;
+  enumDescriptions: string[];
+  items: SettingItems;
+  scope: string;
+  deprecationMessage: string;
+  minimum: number;
+}
+
+interface LanguageContribution {
+  id: string;
+  aliases: string[];
+  extensions: string[];
+  configuration?: string;
+  firstLine: string;
+}
+
+interface CommandContribution {
+  command: string;
+  title: string;
+  category: string;
+}
+
+interface ConfigurationSection {
+  title: string;
+  properties: Record<string, SettingDefinition>;
+}
+
+interface MenuEntry {
+  command: string;
+  when?: string;
+}
+
+interface DebuggerContribution {
+  type: string;
+  configurationAttributes: { launch: { required: string[] } };
+  initialConfigurations: unknown[];
+}
+
+interface BreakpointContribution {
+  language: string;
+}
+
+interface KeybindingContribution {
+  command: string;
+  key: string;
+  when: string;
+}
+
+interface GrammarContribution {
+  language: string;
+  scopeName: string;
+  path: string;
+  embeddedLanguages: Record<string, string>;
+}
+
+interface GrammarPattern {
+  match: string;
+  name: string;
+}
+
+interface GrammarRepositoryEntry {
+  patterns: GrammarPattern[];
+}
+
+interface GrammarRepository {
+  keywords: GrammarRepositoryEntry;
+  swig: GrammarRepositoryEntry;
+  headers: GrammarRepositoryEntry;
+  steps: GrammarRepositoryEntry;
+  tags: GrammarRepositoryEntry;
+  tables: GrammarRepositoryEntry;
+}
+
+interface GrammarFile {
+  repository: GrammarRepository;
+}
+
+interface Snippet {
+  prefix: string | string[];
+  body: string | string[];
+  description: string;
+}
+
+interface PackageManifest {
+  name: string;
+  version: string;
+  main: string;
+  publisher: string;
+  activationEvents: string[];
+  engines: { vscode: string };
+  dependencies: Record<string, string>;
+  extensionKind: string[];
+  capabilities: { untrustedWorkspaces: { supported: boolean } };
+  contributes: {
+    languages: LanguageContribution[];
+    commands: CommandContribution[];
+    configuration: ConfigurationSection[];
+    menus: { commandPalette: MenuEntry[] };
+    debuggers: DebuggerContribution[];
+    breakpoints: BreakpointContribution[];
+    keybindings: KeybindingContribution[];
+    grammars: GrammarContribution[];
+  };
+}
+
+type SnippetCatalog = Record<string, Snippet>;
+
+function readJson<T>(relativePath: string): T {
   const fullPath = path.join(EXT_ROOT, relativePath);
-  return JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+  return JSON.parse(fs.readFileSync(fullPath, 'utf8')) as T;
+}
+
+function required<T>(value: T | undefined, label: string): T {
+  if (value === undefined) {
+    throw new Error(`Missing ${label}`);
+  }
+  return value;
+}
+
+function getSetting(properties: Record<string, SettingDefinition>, key: string): SettingDefinition {
+  return required(properties[key], key);
 }
 
 // ---------------------------------------------------------------------------
 // language-configuration.json
 // ---------------------------------------------------------------------------
 describe('language-configuration.json', () => {
-  let langConfig: any;
+  let langConfig: LanguageConfiguration;
 
   beforeAll(() => {
-    langConfig = readJson('language-configuration.json');
+    langConfig = readJson<LanguageConfiguration>('language-configuration.json');
   });
 
   test('has line comment set to #', () => {
@@ -42,7 +189,7 @@ describe('language-configuration.json', () => {
   });
 
   test('has auto-closing pairs for all bracket types', () => {
-    const opens = (langConfig.autoClosingPairs as any[]).map((p: any) => p.open);
+    const opens = langConfig.autoClosingPairs.map((pair) => pair.open);
     expect(opens).toContain('{');
     expect(opens).toContain('[');
     expect(opens).toContain('(');
@@ -51,7 +198,10 @@ describe('language-configuration.json', () => {
   });
 
   test('auto-closing single quotes are suppressed inside strings and comments', () => {
-    const singleQuote = (langConfig.autoClosingPairs as any[]).find((p: any) => p.open === "'");
+    const singleQuote = required(
+      langConfig.autoClosingPairs.find((pair) => pair.open === "'"),
+      'single-quote auto-closing pair',
+    );
     expect(singleQuote).toBeDefined();
     expect(singleQuote.notIn).toContain('string');
     expect(singleQuote.notIn).toContain('comment');
@@ -95,10 +245,10 @@ describe('language-configuration.json', () => {
 });
 
 describe('gherkin-language-configuration.json', () => {
-  let langConfig: any;
+  let langConfig: LanguageConfiguration;
 
   beforeAll(() => {
-    langConfig = readJson('gherkin-language-configuration.json');
+    langConfig = readJson<LanguageConfiguration>('gherkin-language-configuration.json');
   });
 
   test('has line comment set to #', () => {
@@ -114,7 +264,7 @@ describe('gherkin-language-configuration.json', () => {
   });
 
   test('has quote auto-closing pairs', () => {
-    const opens = (langConfig.autoClosingPairs as any[]).map((p: any) => p.open);
+    const opens = langConfig.autoClosingPairs.map((pair) => pair.open);
     expect(opens).toContain('"');
     expect(opens).toContain("'");
   });
@@ -124,23 +274,26 @@ describe('gherkin-language-configuration.json', () => {
 // package.json contributes
 // ---------------------------------------------------------------------------
 describe('package.json contributes', () => {
-  let pkg: any;
+  let pkg: PackageManifest;
 
   beforeAll(() => {
-    pkg = readJson('package.json');
+    pkg = readJson<PackageManifest>('package.json');
   });
 
   describe('language registration', () => {
     test('registers perl language', () => {
       const langs = pkg.contributes.languages;
       expect(langs).toBeDefined();
-      const perl = langs.find((l: any) => l.id === 'perl');
+      const perl = langs.find((language) => language.id === 'perl');
       expect(perl).toBeDefined();
     });
 
     test('registers gherkin language for feature files', () => {
       const langs = pkg.contributes.languages;
-      const gherkin = langs.find((l: any) => l.id === 'gherkin');
+      const gherkin = required(
+        langs.find((language) => language.id === 'gherkin'),
+        'gherkin language',
+      );
       expect(gherkin).toBeDefined();
       expect(gherkin.aliases).toContain('Gherkin');
       expect(gherkin.aliases).toContain('Cucumber');
@@ -149,7 +302,10 @@ describe('package.json contributes', () => {
     });
 
     test('perl language has expected file extensions', () => {
-      const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
+      const perl = required(
+        pkg.contributes.languages.find((language) => language.id === 'perl'),
+        'perl language',
+      );
       const exts: string[] = perl.extensions;
       expect(exts).toContain('.pl');
       expect(exts).toContain('.cgi');
@@ -171,13 +327,19 @@ describe('package.json contributes', () => {
     });
 
     test('perl language keeps XS interface files associated with perl', () => {
-      const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
+      const perl = required(
+        pkg.contributes.languages.find((language) => language.id === 'perl'),
+        'perl language',
+      );
       const exts: string[] = perl.extensions;
       expect(exts.filter((ext: string) => ext === '.xs' || ext === '.i')).toHaveLength(2);
     });
 
     test('perl language has shebang first-line detection', () => {
-      const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
+      const perl = required(
+        pkg.contributes.languages.find((language) => language.id === 'perl'),
+        'perl language',
+      );
       expect(perl.firstLine).toBeTruthy();
       const pattern = new RegExp(perl.firstLine);
       expect(pattern.test('#!/usr/bin/perl')).toBe(true);
@@ -185,7 +347,10 @@ describe('package.json contributes', () => {
     });
 
     test('perl language aliases include "Perl" and "Perl 5"', () => {
-      const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
+      const perl = required(
+        pkg.contributes.languages.find((language) => language.id === 'perl'),
+        'perl language',
+      );
       expect(perl.aliases).toContain('Perl');
       expect(perl.aliases).toContain('Perl 5');
     });
@@ -208,7 +373,7 @@ describe('package.json contributes', () => {
     });
 
     test('does not declare redundant command activation events', () => {
-      const commandActivationEvents = pkg.activationEvents.filter((event: string) =>
+      const commandActivationEvents = pkg.activationEvents.filter((event) =>
         event.startsWith('onCommand:'),
       );
 
@@ -218,7 +383,7 @@ describe('package.json contributes', () => {
 
   describe('commands', () => {
     test('registers expected commands', () => {
-      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      const commandIds = pkg.contributes.commands.map((command) => command.command);
       expect(commandIds).toContain('perl-lsp.restart');
       expect(commandIds).toContain('perl-lsp.showVersion');
       expect(commandIds).toContain('perl-lsp.showOutput');
@@ -230,18 +395,25 @@ describe('package.json contributes', () => {
     });
 
     test('registers refactoring commands', () => {
-      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      const commandIds = pkg.contributes.commands.map((command) => command.command);
       expect(commandIds).toContain('perl-lsp.extractVariable');
       expect(commandIds).toContain('perl-lsp.extractMethod');
       expect(commandIds).toContain('perl-lsp.showRefactoringOptions');
     });
 
     test('refactoring commands have descriptive titles', () => {
-      const cmds: any[] = pkg.contributes.commands;
-      const extractVar = cmds.find((c: any) => c.command === 'perl-lsp.extractVariable');
-      const extractMethod = cmds.find((c: any) => c.command === 'perl-lsp.extractMethod');
-      const showRefactoring = cmds.find(
-        (c: any) => c.command === 'perl-lsp.showRefactoringOptions',
+      const cmds = pkg.contributes.commands;
+      const extractVar = required(
+        cmds.find((command) => command.command === 'perl-lsp.extractVariable'),
+        'extractVariable command',
+      );
+      const extractMethod = required(
+        cmds.find((command) => command.command === 'perl-lsp.extractMethod'),
+        'extractMethod command',
+      );
+      const showRefactoring = required(
+        cmds.find((command) => command.command === 'perl-lsp.showRefactoringOptions'),
+        'showRefactoringOptions command',
       );
       expect(extractVar).toBeDefined();
       expect(extractVar.title).toBeTruthy();
@@ -267,28 +439,31 @@ describe('package.json contributes', () => {
   describe('configuration settings', () => {
     // The configuration is an array of grouped sections; merge all properties
     // into a single lookup map for backwards-compatible assertions.
-    let properties: Record<string, any>;
-    let configSections: any[];
+    let properties: Record<string, SettingDefinition>;
+    let configSections: ConfigurationSection[];
 
     beforeAll(() => {
       const configuration = pkg.contributes.configuration;
       // Support both array (grouped) and legacy single-object formats.
       configSections = Array.isArray(configuration) ? configuration : [configuration];
-      properties = Object.assign({}, ...configSections.map((s: any) => s.properties ?? {}));
+      properties = Object.assign({}, ...configSections.map((section) => section.properties ?? {}));
     });
 
     // --- Grouping structure ---
 
     test('configuration is an array with three named groups', () => {
       expect(Array.isArray(pkg.contributes.configuration)).toBe(true);
-      const titles: string[] = configSections.map((s: any) => s.title);
+      const titles: string[] = configSections.map((section) => section.title);
       expect(titles.some((t) => /core/i.test(t))).toBe(true);
       expect(titles.some((t) => /editor/i.test(t))).toBe(true);
       expect(titles.some((t) => /advanced/i.test(t))).toBe(true);
     });
 
     test('Core group contains serverPath, autoDownload, includePaths, enableSemanticTokens', () => {
-      const coreSection = configSections.find((s: any) => /core/i.test(s.title));
+      const coreSection = required(
+        configSections.find((section) => /core/i.test(section.title)),
+        'core configuration section',
+      );
       expect(coreSection).toBeDefined();
       const keys = Object.keys(coreSection.properties);
       expect(keys).toContain('perl-lsp.serverPath');
@@ -299,7 +474,10 @@ describe('package.json contributes', () => {
     });
 
     test('Editor group contains formatting and test integration settings (enableRefactoring removed)', () => {
-      const editorSection = configSections.find((s: any) => /editor/i.test(s.title));
+      const editorSection = required(
+        configSections.find((section) => /editor/i.test(section.title)),
+        'editor configuration section',
+      );
       expect(editorSection).toBeDefined();
       const keys = Object.keys(editorSection.properties);
       expect(keys).toContain('perl-lsp.enableFormatting');
@@ -319,7 +497,10 @@ describe('package.json contributes', () => {
     });
 
     test('Advanced group contains featureProfile, trace.server, channel, downloadBaseUrl', () => {
-      const advancedSection = configSections.find((s: any) => /advanced/i.test(s.title));
+      const advancedSection = required(
+        configSections.find((section) => /advanced/i.test(section.title)),
+        'advanced configuration section',
+      );
       expect(advancedSection).toBeDefined();
       const keys = Object.keys(advancedSection.properties);
       expect(keys).toContain('perl-lsp.featureProfile');
@@ -329,26 +510,26 @@ describe('package.json contributes', () => {
     });
 
     test('all settings have an order field', () => {
-      for (const [key, setting] of Object.entries<any>(properties)) {
+      for (const setting of Object.values(properties)) {
         expect(typeof setting.order).toBe('number');
       }
     });
 
     test('all settings have a description field (plain-text fallback for non-markdown contexts)', () => {
-      for (const [key, setting] of Object.entries<any>(properties)) {
+      for (const setting of Object.values(properties)) {
         expect(typeof setting.description).toBe('string');
         expect(setting.description.length).toBeGreaterThan(10);
       }
     });
 
     test('all settings have a type field', () => {
-      for (const [key, setting] of Object.entries<any>(properties)) {
+      for (const setting of Object.values(properties)) {
         expect(setting.type).toBeTruthy();
       }
     });
 
     test('all settings have a default value', () => {
-      for (const [key, setting] of Object.entries<any>(properties)) {
+      for (const setting of Object.values(properties)) {
         expect(setting).toHaveProperty('default');
       }
     });
@@ -356,17 +537,17 @@ describe('package.json contributes', () => {
     // --- Individual setting contracts ---
 
     test('defines serverPath setting', () => {
-      expect(properties['perl-lsp.serverPath']).toBeDefined();
-      expect(properties['perl-lsp.serverPath'].type).toBe('string');
+      expect(getSetting(properties, 'perl-lsp.serverPath')).toBeDefined();
+      expect(getSetting(properties, 'perl-lsp.serverPath').type).toBe('string');
     });
 
     test('defines autoDownload setting with default true', () => {
-      expect(properties['perl-lsp.autoDownload']).toBeDefined();
-      expect(properties['perl-lsp.autoDownload'].default).toBe(true);
+      expect(getSetting(properties, 'perl-lsp.autoDownload')).toBeDefined();
+      expect(getSetting(properties, 'perl-lsp.autoDownload').default).toBe(true);
     });
 
     test('defines trace.server with valid enum values', () => {
-      const trace = properties['perl-lsp.trace.server'];
+      const trace = getSetting(properties, 'perl-lsp.trace.server');
       expect(trace).toBeDefined();
       expect(trace.enum).toContain('off');
       expect(trace.enum).toContain('messages');
@@ -374,7 +555,7 @@ describe('package.json contributes', () => {
     });
 
     test('defines channel setting with valid enum', () => {
-      const channel = properties['perl-lsp.channel'];
+      const channel = getSetting(properties, 'perl-lsp.channel');
       expect(channel).toBeDefined();
       expect(channel.enum).toContain('latest');
       expect(channel.enum).toContain('stable');
@@ -382,7 +563,7 @@ describe('package.json contributes', () => {
     });
 
     test('defines featureProfile setting with valid enum', () => {
-      const profile = properties['perl-lsp.featureProfile'];
+      const profile = getSetting(properties, 'perl-lsp.featureProfile');
       expect(profile).toBeDefined();
       expect(profile.enum).toContain('auto');
       expect(profile.enum).toContain('ga');
@@ -390,7 +571,7 @@ describe('package.json contributes', () => {
     });
 
     test('featureProfile has enumDescriptions for every enum value', () => {
-      const profile = properties['perl-lsp.featureProfile'];
+      const profile = getSetting(properties, 'perl-lsp.featureProfile');
       expect(Array.isArray(profile.enumDescriptions)).toBe(true);
       expect(profile.enumDescriptions.length).toBe(profile.enum.length);
       for (const desc of profile.enumDescriptions) {
@@ -400,7 +581,7 @@ describe('package.json contributes', () => {
     });
 
     test('trace.server has enumDescriptions matching its enum values', () => {
-      const trace = properties['perl-lsp.trace.server'];
+      const trace = getSetting(properties, 'perl-lsp.trace.server');
       expect(Array.isArray(trace.enumDescriptions)).toBe(true);
       expect(trace.enumDescriptions.length).toBe(trace.enum.length);
       for (const desc of trace.enumDescriptions) {
@@ -410,7 +591,7 @@ describe('package.json contributes', () => {
     });
 
     test('channel has enumDescriptions matching its enum values', () => {
-      const channel = properties['perl-lsp.channel'];
+      const channel = getSetting(properties, 'perl-lsp.channel');
       expect(Array.isArray(channel.enumDescriptions)).toBe(true);
       expect(channel.enumDescriptions.length).toBe(channel.enum.length);
       for (const desc of channel.enumDescriptions) {
@@ -420,28 +601,28 @@ describe('package.json contributes', () => {
     });
 
     test('defines enableSemanticTokens with default true', () => {
-      expect(properties['perl-lsp.enableSemanticTokens'].default).toBe(true);
+      expect(getSetting(properties, 'perl-lsp.enableSemanticTokens').default).toBe(true);
     });
 
     test('defines formatOnSave with default false', () => {
-      expect(properties['perl-lsp.formatOnSave'].default).toBe(false);
+      expect(getSetting(properties, 'perl-lsp.formatOnSave').default).toBe(false);
     });
 
     test('defines includePaths with sensible defaults', () => {
-      const includePaths = properties['perl-lsp.includePaths'];
+      const includePaths = getSetting(properties, 'perl-lsp.includePaths');
       expect(includePaths.default).toContain('lib');
       expect(includePaths.default).toContain('local/lib/perl5');
     });
 
     test('defines critic.enabled with default true (native on by default)', () => {
-      const setting = properties['perl-lsp.critic.enabled'];
+      const setting = getSetting(properties, 'perl-lsp.critic.enabled');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('boolean');
       expect(setting.default).toBe(true);
     });
 
     test('defines critic.engine as a native/legacy picker defaulting to native', () => {
-      const setting = properties['perl-lsp.critic.engine'];
+      const setting = getSetting(properties, 'perl-lsp.critic.engine');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('string');
       expect(setting.enum).toEqual(['native', 'legacy']);
@@ -449,7 +630,7 @@ describe('package.json contributes', () => {
     });
 
     test('defines critic.profile as a recommended/strict picker defaulting to recommended', () => {
-      const setting = properties['perl-lsp.critic.profile'];
+      const setting = getSetting(properties, 'perl-lsp.critic.profile');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('string');
       expect(setting.enum).toEqual(['recommended', 'strict']);
@@ -457,7 +638,7 @@ describe('package.json contributes', () => {
     });
 
     test('defines critic.severity as a 1-5 picker with default 3', () => {
-      const setting = properties['perl-lsp.critic.severity'];
+      const setting = getSetting(properties, 'perl-lsp.critic.severity');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('number');
       expect(setting.enum).toEqual([1, 2, 3, 4, 5]);
@@ -466,7 +647,7 @@ describe('package.json contributes', () => {
 
     test('defines critic.include and critic.exclude as string arrays', () => {
       for (const key of ['perl-lsp.critic.include', 'perl-lsp.critic.exclude']) {
-        const setting = properties[key];
+        const setting = getSetting(properties, key);
         expect(setting).toBeDefined();
         expect(setting.type).toBe('array');
         expect(setting.items.type).toBe('string');
@@ -481,21 +662,21 @@ describe('package.json contributes', () => {
         'perl-lsp.perlcritic.profile',
         'perl-lsp.perlcritic.theme',
       ]) {
-        const setting = properties[key];
+        const setting = getSetting(properties, key);
         expect(setting).toBeDefined();
         expect(setting.deprecationMessage).toBeTruthy();
       }
     });
 
     test('defines perlcritic.enabled with default false', () => {
-      const setting = properties['perl-lsp.perlcritic.enabled'];
+      const setting = getSetting(properties, 'perl-lsp.perlcritic.enabled');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('boolean');
       expect(setting.default).toBe(false);
     });
 
     test('defines perlcritic.severity as a 1-5 picker with default 3', () => {
-      const setting = properties['perl-lsp.perlcritic.severity'];
+      const setting = getSetting(properties, 'perl-lsp.perlcritic.severity');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('number');
       expect(setting.enum).toEqual([1, 2, 3, 4, 5]);
@@ -504,47 +685,47 @@ describe('package.json contributes', () => {
     });
 
     test('defines perlcritic.profile as a string setting', () => {
-      const setting = properties['perl-lsp.perlcritic.profile'];
+      const setting = getSetting(properties, 'perl-lsp.perlcritic.profile');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('string');
       expect(setting.default).toBe('');
     });
 
     test('defines perlcritic.theme as a string setting', () => {
-      const setting = properties['perl-lsp.perlcritic.theme'];
+      const setting = getSetting(properties, 'perl-lsp.perlcritic.theme');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('string');
       expect(setting.default).toBe('');
     });
 
     test('includePaths markdownDescription mentions module-not-found guidance', () => {
-      const desc: string = properties['perl-lsp.includePaths'].markdownDescription;
+      const desc: string = getSetting(properties, 'perl-lsp.includePaths').markdownDescription;
       // Must mention the "Can't locate" symptom so users know what to search for
       expect(desc).toMatch(/can't locate/i);
     });
 
     test('includePaths has items schema typed as string', () => {
-      const includePaths = properties['perl-lsp.includePaths'];
+      const includePaths = getSetting(properties, 'perl-lsp.includePaths');
       expect(includePaths.items).toBeDefined();
       expect(includePaths.items.type).toBe('string');
     });
 
     test('defines downloadBaseUrl for internal hosting', () => {
-      const setting = properties['perl-lsp.downloadBaseUrl'];
+      const setting = getSetting(properties, 'perl-lsp.downloadBaseUrl');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('string');
       expect(setting.scope).toBe('machine');
     });
 
     test('defines autoPopulateNewFiles with default true', () => {
-      const setting = properties['perl-lsp.autoPopulateNewFiles'];
+      const setting = getSetting(properties, 'perl-lsp.autoPopulateNewFiles');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('boolean');
       expect(setting.default).toBe(true);
     });
 
     test('defines updateCheckInterval setting used by background update checker', () => {
-      const setting = properties['perl-lsp.updateCheckInterval'];
+      const setting = getSetting(properties, 'perl-lsp.updateCheckInterval');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('number');
       expect(setting.default).toBe(24);
@@ -553,7 +734,7 @@ describe('package.json contributes', () => {
     });
 
     test('defines autoUpdate setting used by silent updater', () => {
-      const setting = properties['perl-lsp.autoUpdate'];
+      const setting = getSetting(properties, 'perl-lsp.autoUpdate');
       expect(setting).toBeDefined();
       expect(setting.type).toBe('boolean');
       expect(setting.default).toBe(false);
@@ -572,7 +753,7 @@ describe('package.json contributes', () => {
         'perl-lsp.autoUpdate',
       ];
       for (const key of machineScoped) {
-        expect(properties[key]?.scope).toBe('machine');
+        expect(getSetting(properties, key).scope).toBe('machine');
       }
     });
 
@@ -599,12 +780,12 @@ describe('package.json contributes', () => {
         'perl-lsp.autoPopulateNewFiles',
       ];
       for (const key of resourceScoped) {
-        expect(properties[key]?.scope).toBe('resource');
+        expect(getSetting(properties, key).scope).toBe('resource');
       }
     });
 
     test('disabledFeatures items have an enum for VS Code settings UI picker', () => {
-      const setting = properties['perl-lsp.disabledFeatures'];
+      const setting = getSetting(properties, 'perl-lsp.disabledFeatures');
       expect(setting.items?.enum).toBeDefined();
       expect(Array.isArray(setting.items.enum)).toBe(true);
       expect(setting.items.enum.length).toBeGreaterThan(0);
@@ -613,20 +794,26 @@ describe('package.json contributes', () => {
 
   describe('openConfigurationGuide command', () => {
     test('registers perl-lsp.openConfigurationGuide command', () => {
-      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      const commandIds = pkg.contributes.commands.map((command) => command.command);
       expect(commandIds).toContain('perl-lsp.openConfigurationGuide');
     });
 
     test('openConfigurationGuide has Perl category', () => {
-      const cmd = pkg.contributes.commands.find(
-        (c: any) => c.command === 'perl-lsp.openConfigurationGuide',
+      const cmd = required(
+        pkg.contributes.commands.find(
+          (command) => command.command === 'perl-lsp.openConfigurationGuide',
+        ),
+        'openConfigurationGuide command',
       );
       expect(cmd.category).toBe('Perl');
     });
 
     test('openConfigurationGuide is listed in commandPalette without language restriction', () => {
       const palette = pkg.contributes.menus.commandPalette;
-      const entry = palette.find((e: any) => e.command === 'perl-lsp.openConfigurationGuide');
+      const entry = required(
+        palette.find((menuEntry) => menuEntry.command === 'perl-lsp.openConfigurationGuide'),
+        'openConfigurationGuide palette entry',
+      );
       expect(entry).toBeDefined();
       // Should be available globally (no when clause restricting to perl)
       expect(entry.when ?? '').not.toMatch(/editorLangId/);
@@ -637,17 +824,30 @@ describe('package.json contributes', () => {
     test('registers perl debugger type', () => {
       const debuggers = pkg.contributes.debuggers;
       expect(debuggers).toBeDefined();
-      const perlDebug = debuggers.find((d: any) => d.type === 'perl');
+      const perlDebug = required(
+        debuggers.find((debuggerContribution) => debuggerContribution.type === 'perl'),
+        'perl debugger contribution',
+      );
       expect(perlDebug).toBeDefined();
     });
 
     test('debugger launch requires program property', () => {
-      const perlDebug = pkg.contributes.debuggers.find((d: any) => d.type === 'perl');
+      const perlDebug = required(
+        pkg.contributes.debuggers.find(
+          (debuggerContribution) => debuggerContribution.type === 'perl',
+        ),
+        'perl debugger contribution',
+      );
       expect(perlDebug.configurationAttributes.launch.required).toContain('program');
     });
 
     test('debugger provides initial configurations', () => {
-      const perlDebug = pkg.contributes.debuggers.find((d: any) => d.type === 'perl');
+      const perlDebug = required(
+        pkg.contributes.debuggers.find(
+          (debuggerContribution) => debuggerContribution.type === 'perl',
+        ),
+        'perl debugger contribution',
+      );
       expect(perlDebug.initialConfigurations.length).toBeGreaterThanOrEqual(2);
     });
   });
@@ -656,7 +856,7 @@ describe('package.json contributes', () => {
     test('enables breakpoints for perl language', () => {
       const breakpoints = pkg.contributes.breakpoints;
       expect(breakpoints).toBeDefined();
-      const hasPerl = breakpoints.some((b: any) => b.language === 'perl');
+      const hasPerl = breakpoints.some((breakpoint) => breakpoint.language === 'perl');
       expect(hasPerl).toBe(true);
     });
   });
@@ -665,30 +865,42 @@ describe('package.json contributes', () => {
     test('defines keybindings for key commands', () => {
       const keybindings = pkg.contributes.keybindings;
       expect(keybindings).toBeDefined();
-      const commands = keybindings.map((k: any) => k.command);
+      const commands = keybindings.map((keybinding) => keybinding.command);
       expect(commands).toContain('perl-lsp.organizeImports');
       expect(commands).toContain('perl-lsp.runTests');
       expect(commands).toContain('perl-lsp.restart');
     });
 
     test('defines Shift+Alt+V keybinding for extractVariable', () => {
-      const keybindings: any[] = pkg.contributes.keybindings;
-      const kb = keybindings.find((k: any) => k.command === 'perl-lsp.extractVariable');
+      const keybindings = pkg.contributes.keybindings;
+      const kb = required(
+        keybindings.find((keybinding) => keybinding.command === 'perl-lsp.extractVariable'),
+        'extractVariable keybinding',
+      );
       expect(kb).toBeDefined();
       expect(kb.key.toLowerCase()).toBe('shift+alt+v');
     });
 
     test('defines Shift+Alt+M keybinding for extractMethod', () => {
-      const keybindings: any[] = pkg.contributes.keybindings;
-      const kb = keybindings.find((k: any) => k.command === 'perl-lsp.extractMethod');
+      const keybindings = pkg.contributes.keybindings;
+      const kb = required(
+        keybindings.find((keybinding) => keybinding.command === 'perl-lsp.extractMethod'),
+        'extractMethod keybinding',
+      );
       expect(kb).toBeDefined();
       expect(kb.key.toLowerCase()).toBe('shift+alt+m');
     });
 
     test('refactoring keybindings are scoped to perl with selection', () => {
-      const keybindings: any[] = pkg.contributes.keybindings;
-      const extractVarKb = keybindings.find((k: any) => k.command === 'perl-lsp.extractVariable');
-      const extractMethodKb = keybindings.find((k: any) => k.command === 'perl-lsp.extractMethod');
+      const keybindings = pkg.contributes.keybindings;
+      const extractVarKb = required(
+        keybindings.find((keybinding) => keybinding.command === 'perl-lsp.extractVariable'),
+        'extractVariable keybinding',
+      );
+      const extractMethodKb = required(
+        keybindings.find((keybinding) => keybinding.command === 'perl-lsp.extractMethod'),
+        'extractMethod keybinding',
+      );
       expect(extractVarKb.when).toContain('editorLangId == perl');
       expect(extractMethodKb.when).toContain('editorLangId == perl');
     });
@@ -702,25 +914,34 @@ describe('package.json contributes', () => {
 
   describe('reportIssue command', () => {
     test('registers perl-lsp.reportIssue command', () => {
-      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      const commandIds = pkg.contributes.commands.map((command) => command.command);
       expect(commandIds).toContain('perl-lsp.reportIssue');
     });
 
     test('reportIssue has Perl category', () => {
-      const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.reportIssue');
+      const cmd = required(
+        pkg.contributes.commands.find((command) => command.command === 'perl-lsp.reportIssue'),
+        'reportIssue command',
+      );
       expect(cmd).toBeDefined();
       expect(cmd.category).toBe('Perl');
     });
 
     test('reportIssue has the title "Report Issue"', () => {
-      const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.reportIssue');
+      const cmd = required(
+        pkg.contributes.commands.find((command) => command.command === 'perl-lsp.reportIssue'),
+        'reportIssue command',
+      );
       expect(cmd).toBeDefined();
       expect(cmd.title).toBe('Report Issue');
     });
 
     test('reportIssue is listed in commandPalette unconditionally (no when clause)', () => {
       const palette = pkg.contributes.menus.commandPalette;
-      const entry = palette.find((e: any) => e.command === 'perl-lsp.reportIssue');
+      const entry = required(
+        palette.find((menuEntry) => menuEntry.command === 'perl-lsp.reportIssue'),
+        'reportIssue palette entry',
+      );
       expect(entry).toBeDefined();
       // Must be unconditionally available — users need to report startup failures
       // even with no Perl file open. A missing/undefined 'when' means always-shown.
@@ -730,20 +951,26 @@ describe('package.json contributes', () => {
 
   describe('createDebugConfig command', () => {
     test('registers perl-lsp.createDebugConfig command', () => {
-      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      const commandIds = pkg.contributes.commands.map((command) => command.command);
       expect(commandIds).toContain('perl-lsp.createDebugConfig');
     });
 
     test('createDebugConfig has Perl category', () => {
-      const cmd = pkg.contributes.commands.find(
-        (c: any) => c.command === 'perl-lsp.createDebugConfig',
+      const cmd = required(
+        pkg.contributes.commands.find(
+          (command) => command.command === 'perl-lsp.createDebugConfig',
+        ),
+        'createDebugConfig command',
       );
       expect(cmd.category).toBe('Perl');
     });
 
     test('createDebugConfig is listed in commandPalette', () => {
       const palette = pkg.contributes.menus.commandPalette;
-      const entry = palette.find((e: any) => e.command === 'perl-lsp.createDebugConfig');
+      const entry = required(
+        palette.find((menuEntry) => menuEntry.command === 'perl-lsp.createDebugConfig'),
+        'createDebugConfig palette entry',
+      );
       expect(entry).toBeDefined();
     });
   });
@@ -751,36 +978,48 @@ describe('package.json contributes', () => {
   describe('grammar', () => {
     test('registers source.perl scope', () => {
       const grammars = pkg.contributes.grammars;
-      const perl = grammars.find((g: any) => g.language === 'perl');
+      const perl = required(
+        grammars.find((grammarContribution) => grammarContribution.language === 'perl'),
+        'perl grammar contribution',
+      );
       expect(perl).toBeDefined();
       expect(perl.scopeName).toBe('source.perl');
     });
 
     test('registers source.gherkin scope', () => {
       const grammars = pkg.contributes.grammars;
-      const gherkin = grammars.find((g: any) => g.language === 'gherkin');
+      const gherkin = required(
+        grammars.find((grammarContribution) => grammarContribution.language === 'gherkin'),
+        'gherkin grammar contribution',
+      );
       expect(gherkin).toBeDefined();
       expect(gherkin.scopeName).toBe('source.gherkin');
     });
 
     test('grammar file exists', () => {
       const grammars = pkg.contributes.grammars;
-      const perl = grammars.find((g: any) => g.language === 'perl');
+      const perl = required(
+        grammars.find((grammarContribution) => grammarContribution.language === 'perl'),
+        'perl grammar contribution',
+      );
       const grammarPath = path.join(EXT_ROOT, perl.path);
       expect(fs.existsSync(grammarPath)).toBe(true);
     });
 
     test('gherkin grammar file exists', () => {
       const grammars = pkg.contributes.grammars;
-      const gherkin = grammars.find((g: any) => g.language === 'gherkin');
+      const gherkin = required(
+        grammars.find((grammarContribution) => grammarContribution.language === 'gherkin'),
+        'gherkin grammar contribution',
+      );
       const grammarPath = path.join(EXT_ROOT, gherkin.path);
       expect(fs.existsSync(grammarPath)).toBe(true);
     });
 
     test('grammar includes common XS directives', () => {
-      const grammar = readJson('syntaxes/perl.tmLanguage.json');
+      const grammar = readJson<GrammarFile>('syntaxes/perl.tmLanguage.json');
       const keywordPattern = grammar.repository.keywords.patterns
-        .map((entry: any) => entry.match)
+        .map((entry) => entry.match)
         .find(
           (match: string) =>
             typeof match === 'string' &&
@@ -795,9 +1034,10 @@ describe('package.json contributes', () => {
     });
 
     test('grammar includes common SWIG directives', () => {
-      const grammar = readJson('syntaxes/perl.tmLanguage.json');
-      const swigPattern = grammar.repository.swig.patterns.find(
-        (entry: any) => entry.name === 'keyword.other.perl.swig',
+      const grammar = readJson<GrammarFile>('syntaxes/perl.tmLanguage.json');
+      const swigPattern = required(
+        grammar.repository.swig.patterns.find((entry) => entry.name === 'keyword.other.perl.swig'),
+        'SWIG grammar pattern',
       );
 
       expect(swigPattern).toBeDefined();
@@ -807,22 +1047,27 @@ describe('package.json contributes', () => {
     });
 
     test('grammar maps SWIG embedded blocks to C and Perl languages', () => {
-      const pkg = readJson('package.json');
-      const grammar = pkg.contributes.grammars.find((g: any) => g.language === 'perl');
+      const pkg = readJson<PackageManifest>('package.json');
+      const grammar = required(
+        pkg.contributes.grammars.find(
+          (grammarContribution) => grammarContribution.language === 'perl',
+        ),
+        'perl grammar contribution',
+      );
       expect(grammar.embeddedLanguages['meta.embedded.block.c.perl']).toBe('c');
       expect(grammar.embeddedLanguages['meta.embedded.block.perl.perl']).toBe('perl');
     });
 
     test('gherkin grammar highlights core keywords and step lines', () => {
-      const grammar = readJson('syntaxes/gherkin.tmLanguage.json');
+      const grammar = readJson<GrammarFile>('syntaxes/gherkin.tmLanguage.json');
       const headerPattern = grammar.repository.headers.patterns
-        .map((entry: any) => entry.match)
+        .map((entry) => entry.match)
         .find(
           (match: string) =>
             typeof match === 'string' && match.includes('Scenario') && match.includes('Outline'),
         );
       const stepPattern = grammar.repository.steps.patterns
-        .map((entry: any) => entry.match)
+        .map((entry) => entry.match)
         .find(
           (match: string) =>
             typeof match === 'string' &&
@@ -836,9 +1081,12 @@ describe('package.json contributes', () => {
     });
 
     test('gherkin grammar highlights tags and tables', () => {
-      const grammar = readJson('syntaxes/gherkin.tmLanguage.json');
-      const tagPattern = grammar.repository.tags.patterns[0]?.match;
-      const tablePattern = grammar.repository.tables.patterns[0]?.match;
+      const grammar = readJson<GrammarFile>('syntaxes/gherkin.tmLanguage.json');
+      const tagPattern = required(grammar.repository.tags.patterns[0], 'tag grammar pattern').match;
+      const tablePattern = required(
+        grammar.repository.tables.patterns[0],
+        'table grammar pattern',
+      ).match;
 
       expect(tagPattern).toContain('@');
       expect(tablePattern).toContain('\\|');
@@ -859,8 +1107,8 @@ describe('snippets', () => {
   });
 
   test('each perl snippet has prefix, body, and description', () => {
-    const snippets = readJson('snippets/perl.json');
-    for (const [name, snippet] of Object.entries<any>(snippets)) {
+    const snippets = readJson<SnippetCatalog>('snippets/perl.json');
+    for (const snippet of Object.values(snippets)) {
       expect(snippet.prefix).toBeTruthy();
       expect(snippet.body).toBeTruthy();
       expect(snippet.description).toBeTruthy();
@@ -868,8 +1116,8 @@ describe('snippets', () => {
   });
 
   test('each launch snippet has prefix, body, and description', () => {
-    const snippets = readJson('snippets/launch.json');
-    for (const [name, snippet] of Object.entries<any>(snippets)) {
+    const snippets = readJson<SnippetCatalog>('snippets/launch.json');
+    for (const snippet of Object.values(snippets)) {
       expect(snippet.prefix).toBeTruthy();
       expect(snippet.body).toBeTruthy();
       expect(snippet.description).toBeTruthy();
@@ -877,9 +1125,9 @@ describe('snippets', () => {
   });
 
   test('perl snippets cover fundamental constructs', () => {
-    const snippets = readJson('snippets/perl.json');
-    const allPrefixes = Object.values<any>(snippets).flatMap((s: any) =>
-      Array.isArray(s.prefix) ? s.prefix : [s.prefix],
+    const snippets = readJson<SnippetCatalog>('snippets/perl.json');
+    const allPrefixes = Object.values(snippets).flatMap((snippet) =>
+      Array.isArray(snippet.prefix) ? snippet.prefix : [snippet.prefix],
     );
     expect(allPrefixes).toContain('sub');
     expect(allPrefixes).toContain('if');
@@ -891,9 +1139,9 @@ describe('snippets', () => {
   });
 
   test('test snippets cover Test::More basics', () => {
-    const snippets = readJson('snippets/perl.json');
-    const allPrefixes = Object.values<any>(snippets).flatMap((s: any) =>
-      Array.isArray(s.prefix) ? s.prefix : [s.prefix],
+    const snippets = readJson<SnippetCatalog>('snippets/perl.json');
+    const allPrefixes = Object.values(snippets).flatMap((snippet) =>
+      Array.isArray(snippet.prefix) ? snippet.prefix : [snippet.prefix],
     );
     expect(allPrefixes).toContain('ok');
     expect(allPrefixes).toContain('is');
@@ -907,10 +1155,10 @@ describe('snippets', () => {
 // Package metadata
 // ---------------------------------------------------------------------------
 describe('package.json metadata', () => {
-  let pkg: any;
+  let pkg: PackageManifest;
 
   beforeAll(() => {
-    pkg = readJson('package.json');
+    pkg = readJson<PackageManifest>('package.json');
   });
 
   test('has a valid name', () => {

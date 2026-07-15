@@ -9,10 +9,10 @@ The machine-readable inventory is [`oxlint-warning-baseline.json`](./oxlint-warn
 - command: `npm run lint`
 - Oxlint: 1.73.0
 - oxlint-tsgolint: 0.24.0
-- result: 0 errors, 276 warnings
-- breakdown by rule: 267 `typescript/no-explicit-any`, 9 `no-unused-vars`, 0
+- result: 0 errors, 199 warnings
+- breakdown by rule: 196 `typescript/no-explicit-any`, 3 `no-unused-vars`, 0
   `typescript/consistent-type-imports`
-- breakdown by surface: 276 tests, 0 scripts, 0 production, 0 build-config
+- breakdown by surface: 199 tests, 0 scripts, 0 production, 0 build-config
 
 The Node/npm/TypeScript authority slice added `scripts/toolchain-doctor.js`;
 its two existing `no-console` warnings remain recorded explicitly rather than
@@ -53,6 +53,11 @@ health, guidance, and startup-diagnostic tests.
 The POD preview contract tests now use typed command and command-palette
 manifest entries, removing eight warnings while preserving their 22 static
 registration and conversion tests.
+
+The configuration contract tests now use typed JSON schemas for language
+configuration, package contributions, grammars, and snippets. A required-value
+helper keeps missing manifest entries as explicit test failures, removing 77
+warnings while preserving their 106 static configuration tests.
 
 `scripts/check-oxlint-warning-budget.js` consumes Oxlint JSON diagnostics and
 enforces a non-increasing total, per-rule, per-surface, rule-by-surface, and
