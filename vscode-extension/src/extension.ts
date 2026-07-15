@@ -1548,6 +1548,13 @@ export async function activate(context: vscode.ExtensionContext) {
       }
       const variableAction = actions.find((a) => a.title.toLowerCase().includes('variable'));
       const action = variableAction ?? actions[0];
+      if (!action) {
+        vscode.window.showInformationMessage(
+          'No extract variable action is available for the current selection',
+        );
+        return;
+      }
+
       if (action.edit) {
         const workspaceEdit = await client.protocol2CodeConverter.asWorkspaceEdit(
           action.edit as Parameters<typeof client.protocol2CodeConverter.asWorkspaceEdit>[0],
@@ -1611,6 +1618,13 @@ export async function activate(context: vscode.ExtensionContext) {
           a.title.toLowerCase().includes('function'),
       );
       const action = subroutineAction ?? actions[actions.length - 1];
+      if (!action) {
+        vscode.window.showInformationMessage(
+          'No extract method action is available for the current selection',
+        );
+        return;
+      }
+
       if (action.edit) {
         const workspaceEdit = await client.protocol2CodeConverter.asWorkspaceEdit(
           action.edit as Parameters<typeof client.protocol2CodeConverter.asWorkspaceEdit>[0],
@@ -2388,6 +2402,10 @@ export function maybeNudgeArrowCompletion(event: vscode.TextDocumentChangeEvent)
   }
 
   const change = event.contentChanges[0];
+  if (!change) {
+    return;
+  }
+
   if (change.rangeLength !== 0 || change.text !== '-') {
     return;
   }
@@ -2712,7 +2730,13 @@ async function runAllTestsWithProve(): Promise<void> {
     return;
   }
 
-  const cwd = workspaceFolders[0].uri.fsPath;
+  const firstFolder = workspaceFolders[0];
+  if (!firstFolder) {
+    vscode.window.showErrorMessage('No workspace folder open');
+    return;
+  }
+
+  const cwd = firstFolder.uri.fsPath;
   await runProveTask('Perl Tests: All', ['-r', 't/'], cwd);
 }
 
