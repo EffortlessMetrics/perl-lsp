@@ -40,6 +40,7 @@ below.
 | #4250 | Closeout formatting correction                       | Merged |
 | #4265 | Workspace guidance positive-path coverage            | Merged |
 | #4266 | Lifecycle failure-edge coverage                      | Merged |
+| #4270 | Blocking `exactOptionalPropertyTypes` contract       | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -54,7 +55,9 @@ The rescue checkpoint was not merged wholesale.
   deprecated critic settings remain compatibility inputs only.
 - npm and `package-lock.json` are the package authority. Node 26.x and npm
   11.18.0 are the supported toolchain; CI pins Node 26.5.0. All TypeScript
-  authority configurations and the doctor check are explicit.
+  authority configurations and the doctor check are explicit. `exactOptionalPropertyTypes`
+  and `noImplicitOverride` are blocking; `noUncheckedIndexedAccess` remains a
+  non-growing advisory baseline until its separate cleanup issue lands.
 - Oxlint warning debt is recorded by rule, surface, rule-by-surface, and file;
   new errors or warning growth are rejected rather than silently baselined.
 - Workspace guidance and the `perllsp --health` process boundary have separate
@@ -82,9 +85,10 @@ npm run test:ci
 
 The focused downloader run passed 113 tests; the full CI suite passed 735
 tests with one existing skip on the earlier closeout revision. The current
-canonical gate passes 747 tests with one documented packaged-server skip,
-including the workspace-guidance and lifecycle edge coverage added by #4265
-and #4266. The current-source Linux smoke passed on the
+canonical gate passes 750 tests with one documented packaged-server skip,
+including the workspace-guidance and lifecycle edge coverage added by #4265,
+#4266, and the exact-optional contract coverage added by #4270. The current-
+source Linux smoke passed on the
 package-baseline refresh and exercised the exact-source editor-host contract:
 activation, initialization, provider request, restart, shutdown, invalid-path
 health guidance, source identity, and VSIX identity. The package inventory
