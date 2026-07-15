@@ -36,6 +36,9 @@ The active development contract is maintained in
 - the exact-source Linux host matrix requests the declared VS Code 1.125.0
   floor and current stable, with receipts recording requested and actual host
   versions separately; and
+- the workspace capability classifier records topology, trust, URI schemes,
+  host kind, capability status, and limitations in the
+  [workspace capability matrix](workspace-capability-matrix.md); and
 - the current decisions to retain Jest and defer optional-feature loading until
   feature-attributable receipts exist.
 

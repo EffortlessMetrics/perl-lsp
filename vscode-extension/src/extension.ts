@@ -57,6 +57,7 @@ import type {
 } from './languageClientStartupMetrics';
 import { LanguageClientStartupMetrics } from './languageClientStartupMetrics';
 import { registerWorkspaceConfigurationEvents } from './extensionWorkspaceEvents';
+import { describeWorkspaceTopology } from './workspaceTopology';
 import {
   buildDisabledFeaturesFromConfig,
   buildPerlCriticConfiguration as buildPerlCriticConfigurationPayload,
@@ -595,6 +596,12 @@ export function workspaceTrustClientRuntimeState(
     hasLaunchJson(folder.uri.fsPath),
   ).length;
   const activeDebugSession = vscode.debug.activeDebugSession;
+  const topology = describeWorkspaceTopology({
+    folders: workspaceFolders,
+    documents: vscode.workspace.textDocuments,
+    isTrusted: vscode.workspace.isTrusted,
+    remoteName: vscode.env.remoteName,
+  });
 
   return {
     schema_version: 'workspace_trust_client_runtime.v1',
@@ -613,6 +620,7 @@ export function workspaceTrustClientRuntimeState(
       workspace_folder_count: workspaceFolders.length,
       launch_configuration: collectLaunchConfigurationState(workspaceFolders),
     },
+    topology,
     claim_boundary:
       'VS Code client runtime state reads extension/debugger state only. It does not start DAP, run perldoc, probe Perl, or change provider behavior.',
   };

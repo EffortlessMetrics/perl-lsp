@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { describeWorkspaceTopology } from '../../workspaceTopology';
 
 interface MomentResult {
   classification: 'cold' | 'warm' | 'post_restart';
@@ -381,6 +382,12 @@ suite('First-hour VS Code receipt', function () {
       },
       workspace: {
         path: workspacePath,
+        topology: describeWorkspaceTopology({
+          folders: vscode.workspace.workspaceFolders ?? [],
+          documents: vscode.workspace.textDocuments,
+          isTrusted: vscode.workspace.isTrusted,
+          remoteName: vscode.env.remoteName,
+        }),
         file_count_sampled: walkFiles(workspacePath, 10_000).length,
         perl_file_count_sampled: perlFiles.length,
         module_under_probe: moduleName,

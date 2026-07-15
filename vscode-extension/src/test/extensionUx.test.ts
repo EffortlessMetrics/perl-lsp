@@ -1068,6 +1068,12 @@ describe('extension UX warnings', () => {
     });
 
     const state = workspaceTrustClientRuntimeState();
+    expect(state.topology).toMatchObject({
+      schema_version: 'workspace_topology.v1',
+      mode: 'single-root',
+      host_kind: 'local',
+      folder_count: 1,
+    });
     const dap = state.dap as Record<string, unknown>;
     const launchConfiguration = dap.launch_configuration as Record<string, unknown>;
     const includePathCounts = launchConfiguration.include_path_kind_counts as Record<
