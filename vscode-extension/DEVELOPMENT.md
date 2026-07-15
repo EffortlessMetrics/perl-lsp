@@ -137,17 +137,18 @@ The `.vsix` file can be installed directly in VS Code via **Extensions → Insta
 
 The main extension code lives in `src/extension.ts`. Key files:
 
-| File                          | Purpose                                      |
-| ----------------------------- | -------------------------------------------- |
-| `src/extension.ts`            | Activation and feature composition           |
-| `src/serverCommandGroup.ts`   | Server, install, and health command wiring   |
-| `src/criticCommandGroup.ts`   | Critic command registration                  |
-| `src/testCommandGroup.ts`     | Test and debugger command registration       |
-| `src/documentFeatureGroup.ts` | POD and Gherkin provider composition         |
-| `src/downloader.ts`           | Auto-download logic for the `perllsp` binary |
-| `src/healthWidget.ts`         | Status bar health indicator                  |
-| `src/onboarding.ts`           | First-run setup flow                         |
-| `src/debugAdapter.ts`         | DAP debug adapter                            |
+| File                            | Purpose                                      |
+| ------------------------------- | -------------------------------------------- |
+| `src/extension.ts`              | Activation and feature composition           |
+| `src/serverCommandGroup.ts`     | Server, install, and health command wiring   |
+| `src/criticCommandGroup.ts`     | Critic command registration                  |
+| `src/testCommandGroup.ts`       | Test and debugger command registration       |
+| `src/documentFeatureGroup.ts`   | POD and Gherkin provider composition         |
+| `src/onboardingCommandGroup.ts` | Onboarding and update command registration   |
+| `src/downloader.ts`             | Auto-download logic for the `perllsp` binary |
+| `src/healthWidget.ts`           | Status bar health indicator                  |
+| `src/onboarding.ts`             | First-run setup flow                         |
+| `src/debugAdapter.ts`           | DAP debug adapter                            |
 
 Server-facing commands receive their read-only projections and lifecycle
 callbacks through `ServerCommandContext`. The language-client lifecycle

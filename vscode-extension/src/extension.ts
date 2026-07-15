@@ -51,6 +51,7 @@ import { registerMcpSupport } from './mcpSupport';
 import { registerServerCommandGroup } from './serverCommandGroup';
 import { registerCriticCommandGroup } from './criticCommandGroup';
 import { registerTestCommandGroup } from './testCommandGroup';
+import { registerOnboardingCommandGroup } from './onboardingCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -1358,20 +1359,23 @@ export async function activate(context: vscode.ExtensionContext) {
     true,
     () => new WhatsNewManager(context, outputChannel),
   );
-  const showWhatsNewCommand = vscode.commands.registerCommand('perl-lsp.showWhatsNew', async () => {
-    featureActivationMetrics.markFirstUse('whats_new');
-    await whatsNewManager.showWhatsNew();
-  });
-
-  const openConfigurationGuideCommand = vscode.commands.registerCommand(
-    'perl-lsp.openConfigurationGuide',
-    () => {
+  const onboardingCommandDisposables = registerOnboardingCommandGroup({
+    showWhatsNew: async () => {
+      featureActivationMetrics.markFirstUse('whats_new');
+      await whatsNewManager.showWhatsNew();
+    },
+    openConfigurationGuide: () => {
       void vscode.commands.executeCommand(
         'workbench.action.openSettings',
         '@ext:EffortlessMetrics.perl-lsp-rs',
       );
     },
-  );
+    checkForUpdate: async () => {
+      const downloader = new BinaryDownloader(context, outputChannel);
+      await context.globalState.update('perl-lsp.lastUpdateCheck', 0);
+      await downloader.checkForUpdateSilent();
+    },
+  });
 
   const extractVariableCommand = vscode.commands.registerCommand(
     'perl-lsp.extractVariable',
@@ -1695,16 +1699,6 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const checkForUpdateCommand = vscode.commands.registerCommand(
-    'perl-lsp.checkForUpdate',
-    async () => {
-      const downloader = new BinaryDownloader(context, outputChannel);
-      // Reset the lastUpdateCheck timestamp so the interval guard is bypassed
-      await context.globalState.update('perl-lsp.lastUpdateCheck', 0);
-      await downloader.checkForUpdateSilent();
-    },
-  );
-
   const arrowCompletionWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
     maybeNudgeArrowCompletion(event);
   });
@@ -1738,9 +1732,7 @@ export async function activate(context: vscode.ExtensionContext) {
     explainDiagnosticCommandDisposable,
     showVersionCommand,
     statusMenuCommand,
-    checkForUpdateCommand,
-    showWhatsNewCommand,
-    openConfigurationGuideCommand,
+    ...onboardingCommandDisposables,
     extractVariableCommand,
     extractMethodCommand,
     showRefactoringOptionsCommand,
