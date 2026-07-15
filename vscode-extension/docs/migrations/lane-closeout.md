@@ -76,6 +76,7 @@ repository; the two-parent history-preserving sync remains a later operation.
 | #4363 | Document command composition                         | Merged |
 | #4365 | Refactoring command composition                      | Merged |
 | #4366 | Final VSIX inventory baseline refresh                | Merged |
+| #4368 | Support/report issue command composition             | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -123,12 +124,12 @@ npm run test:ci
 ```
 
 The focused downloader run passed 113 tests; the latest full extension gate on
-the current hardening head passed 789 tests with one documented packaged-server
+the current hardening head passed 791 tests with one documented packaged-server
 skip. The focused command-composition slices add isolated delegation and
 disposal proof for the server, critic, test, onboarding, navigation,
-diagnostic, document, and refactoring groups. The final package evidence
-contains 28 inventoried files, 1,472,124 bytes total, and a 1,314,594-byte
-bundle; the inventory and source-map checks pass. These checks prove the
+diagnostic, document, refactoring, and support groups. The final package
+evidence contains 28 inventoried files, 1,472,417 bytes total, and a
+1,314,887-byte bundle; the inventory and source-map checks pass. These checks prove the
 exercised behavior and packaging paths; they do not establish a performance
 budget or prove every platform-specific release condition.
 
