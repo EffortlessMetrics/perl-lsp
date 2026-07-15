@@ -55,6 +55,7 @@ import { registerOnboardingCommandGroup } from './onboardingCommandGroup';
 import { registerNavigationCommandGroup } from './navigationCommandGroup';
 import { registerDiagnosticCommandGroup } from './diagnosticCommandGroup';
 import { registerDocumentCommandGroup } from './documentCommandGroup';
+import { registerRefactoringCommandGroup } from './refactoringCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -1325,9 +1326,8 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   });
 
-  const extractVariableCommand = vscode.commands.registerCommand(
-    'perl-lsp.extractVariable',
-    async () => {
+  const refactoringCommandDisposables = registerRefactoringCommandGroup({
+    extractVariable: async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'perl') {
         vscode.window.showErrorMessage(
@@ -1390,11 +1390,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
       }
     },
-  );
-
-  const extractMethodCommand = vscode.commands.registerCommand(
-    'perl-lsp.extractMethod',
-    async () => {
+    extractMethod: async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'perl') {
         vscode.window.showErrorMessage(
@@ -1460,11 +1456,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
       }
     },
-  );
-
-  const showRefactoringOptionsCommand = vscode.commands.registerCommand(
-    'perl-lsp.showRefactoringOptions',
-    async () => {
+    showRefactoringOptions: async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'perl') {
         vscode.window.showErrorMessage('Refactoring options require an active Perl file');
@@ -1509,7 +1501,7 @@ export async function activate(context: vscode.ExtensionContext) {
         await vscode.commands.executeCommand(selection.command, ...(selection.args ?? []));
       }
     },
-  );
+  });
 
   const reportIssueCommand = vscode.commands.registerCommand('perl-lsp.reportIssue', async () => {
     const extensionVersion = (context.extension.packageJSON.version as string) ?? 'unknown';
@@ -1668,9 +1660,7 @@ export async function activate(context: vscode.ExtensionContext) {
     ...documentCommandDisposables,
     ...diagnosticCommandDisposables,
     ...onboardingCommandDisposables,
-    extractVariableCommand,
-    extractMethodCommand,
-    showRefactoringOptionsCommand,
+    ...refactoringCommandDisposables,
     reportIssueCommand,
     formatOnSaveDisposable,
     configurationWatcher,
