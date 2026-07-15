@@ -74,6 +74,10 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
     }
 
     const firstMissing = missingPaths[0];
+    if (firstMissing === undefined) {
+      continue;
+    }
+
     const relativeNote = path.isAbsolute(firstMissing)
       ? 'absolute path'
       : 'relative to the workspace';
