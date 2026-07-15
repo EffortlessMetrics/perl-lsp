@@ -2008,6 +2008,35 @@
       ]
     },
     {
+      "id": "golden_editor_workload",
+      "scenario_file": "ux_scenario_67_golden_editor_workload.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "infra",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "run the after-active-document-ready daily-driver workload across representative real-workspace fixtures and record bounded provider behavior",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "the active document reaches the readiness event before the workload begins",
+        "the workload records first-useful provider timings without claiming whole-workspace readiness or exactness",
+        "fallback, request-superseded, and other bounded outcomes remain visible in the receipt",
+        "the server stays responsive and does not crash"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "strict_warnings_guided_edit",
       "scenario_file": "ux_scenario_68_strict_warnings_guided_edit.rs",
       "subsystem_owner": "editor_trust",

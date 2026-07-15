@@ -40,7 +40,10 @@ jobs:
   ux-regression-gate:
     name: UX Regression Gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # The active golden workload emits its structured receipt after the
+    # scenarios finish; keep the gate bounded while allowing that receipt to
+    # complete on a cold hosted runner.
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
