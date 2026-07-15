@@ -1,7 +1,7 @@
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use perl_parser::workspace_index::IndexCoordinator;
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -10,6 +10,8 @@ use std::time::{Duration, Instant};
 
 const INDEX_READY_WAIT_MS: u64 = 2_000;
 const INDEX_READY_POLL_MS: u64 = 1;
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+const INDEXING_START_GATE_WAIT_MS: u64 = 5_000;
 
 /// LSP-level milestones used to measure when startup indexing becomes useful.
 #[allow(dead_code)] // Provider readiness hooks land in the follow-up workload slice.
@@ -26,7 +28,7 @@ pub(crate) enum ReadinessMilestone {
 }
 
 impl ReadinessMilestone {
-    fn field_name(self) -> &'static str {
+    pub(crate) fn field_name(self) -> &'static str {
         match self {
             Self::WorkspaceStart => "workspace_start_us",
             Self::ActiveDocumentReady => "active_document_ready_us",
@@ -53,7 +55,20 @@ pub(crate) enum ReadinessAnswerKind {
 }
 
 impl ReadinessAnswerKind {
-    fn field_name(self) -> &'static str {
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn from_provider(provider: &str) -> Option<Self> {
+        match provider {
+            "completion" => Some(Self::Completion),
+            "hover" => Some(Self::Hover),
+            "definition" => Some(Self::Definition),
+            "references" => Some(Self::References),
+            "diagnostics" => Some(Self::Diagnostics),
+            _ => None,
+        }
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn field_name(self) -> &'static str {
         match self {
             Self::Completion => "completion",
             Self::Hover => "hover",
@@ -68,9 +83,39 @@ impl ReadinessAnswerKind {
 struct FirstCorrectAnswerReceipt {
     elapsed_us: u64,
     expected_result_class: String,
+    readiness_outcome: String,
     answering_tier: String,
     freshness: String,
     fallback_reason: Option<String>,
+}
+
+/// Provider observation validated against the provider response and receipt.
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+pub(crate) struct ValidatedReadinessObservation {
+    expected_result_class: String,
+    readiness_outcome: String,
+    answering_tier: String,
+    freshness: String,
+    fallback_reason: Option<String>,
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+impl ValidatedReadinessObservation {
+    pub(crate) fn new(
+        expected_result_class: &str,
+        readiness_outcome: &str,
+        answering_tier: &str,
+        freshness: &str,
+        fallback_reason: Option<&str>,
+    ) -> Self {
+        Self {
+            expected_result_class: expected_result_class.to_string(),
+            readiness_outcome: readiness_outcome.to_string(),
+            answering_tier: answering_tier.to_string(),
+            freshness: freshness.to_string(),
+            fallback_reason: fallback_reason.map(str::to_string),
+        }
+    }
 }
 
 /// LSP-owned receipt for startup usefulness, independent of index lifecycle state.
@@ -86,6 +131,9 @@ pub(crate) struct WorkspaceReadinessReceipt {
     first_correct_answers: BTreeMap<&'static str, FirstCorrectAnswerReceipt>,
     peak_queued_work: usize,
     memory_high_water_bytes: Option<u64>,
+    active_document_uri: Option<String>,
+    direct_dependency_uris: BTreeSet<String>,
+    indexed_uris: BTreeSet<String>,
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     test_observer_id: Option<u64>,
 }
@@ -104,6 +152,63 @@ impl WorkspaceReadinessReceipt {
         }
     }
 
+    /// Start a new workspace run while preserving its optional readiness target.
+    pub(crate) fn begin_workspace(&mut self, at: Instant) {
+        self.milestones.clear();
+        self.first_correct_answers.clear();
+        self.peak_queued_work = 0;
+        self.memory_high_water_bytes = None;
+        self.indexed_uris.clear();
+        self.workspace_start = None;
+        self.record_workspace_start(at);
+    }
+
+    /// Set the active document and direct-dependency target used by a readiness probe.
+    ///
+    /// Targets are retained only in memory and are intentionally excluded from the
+    /// path-free receipt summary.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn set_readiness_target(
+        &mut self,
+        active_document_uri: Option<String>,
+        direct_dependency_uris: impl IntoIterator<Item = String>,
+    ) {
+        self.active_document_uri = active_document_uri;
+        self.direct_dependency_uris = direct_dependency_uris.into_iter().collect();
+        self.indexed_uris.clear();
+    }
+
+    /// Return target and indexed-URI state for test-only lifecycle assertions.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    #[allow(dead_code)] // Used by workspace lifecycle integration tests.
+    pub(crate) fn test_target_state(&self) -> (Option<String>, BTreeSet<String>, BTreeSet<String>) {
+        (
+            self.active_document_uri.clone(),
+            self.direct_dependency_uris.clone(),
+            self.indexed_uris.clone(),
+        )
+    }
+
+    /// Record an indexed URI and derive target milestones from the observed set.
+    pub(crate) fn record_indexed_uri(&mut self, uri: &str, at: Instant) {
+        self.indexed_uris.insert(uri.to_owned());
+        if self.active_document_uri.as_deref() == Some(uri) {
+            self.record_milestone(ReadinessMilestone::ActiveDocumentReady, at);
+        }
+        let dependencies_ready = if self.direct_dependency_uris.is_empty() {
+            self.active_document_uri
+                .as_deref()
+                .is_some_and(|active| self.indexed_uris.contains(active))
+        } else {
+            self.direct_dependency_uris
+                .iter()
+                .all(|dependency| self.indexed_uris.contains(dependency))
+        };
+        if dependencies_ready {
+            self.record_milestone(ReadinessMilestone::DirectDependencySetReady, at);
+        }
+    }
+
     /// Record the first observation of a readiness milestone.
     pub(crate) fn record_milestone(&mut self, milestone: ReadinessMilestone, at: Instant) {
         let Some(start) = self.workspace_start else {
@@ -115,6 +220,7 @@ impl WorkspaceReadinessReceipt {
     }
 
     /// Record the first correct provider answer for a workload row.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
     #[allow(dead_code)] // Provider readiness hooks land in the follow-up workload slice.
     pub(crate) fn record_first_correct_answer(
         &mut self,
@@ -125,16 +231,38 @@ impl WorkspaceReadinessReceipt {
         freshness: &str,
         fallback_reason: Option<&str>,
     ) {
+        self.record_provider_observation(
+            kind,
+            at,
+            ValidatedReadinessObservation::new(
+                expected_result_class,
+                "not_observed",
+                answering_tier,
+                freshness,
+                fallback_reason,
+            ),
+        );
+    }
+
+    /// Record the first oracle-confirmed provider observation during startup.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn record_provider_observation(
+        &mut self,
+        kind: ReadinessAnswerKind,
+        at: Instant,
+        observation: ValidatedReadinessObservation,
+    ) {
         let Some(start) = self.workspace_start else {
             return;
         };
         self.first_correct_answers.entry(kind.field_name()).or_insert_with(|| {
             FirstCorrectAnswerReceipt {
                 elapsed_us: duration_us(at.saturating_duration_since(start)),
-                expected_result_class: expected_result_class.to_string(),
-                answering_tier: answering_tier.to_string(),
-                freshness: freshness.to_string(),
-                fallback_reason: fallback_reason.map(str::to_string),
+                expected_result_class: observation.expected_result_class,
+                readiness_outcome: observation.readiness_outcome,
+                answering_tier: observation.answering_tier,
+                freshness: observation.freshness,
+                fallback_reason: observation.fallback_reason,
             }
         });
     }
@@ -165,6 +293,7 @@ impl WorkspaceReadinessReceipt {
                     json!({
                         "elapsed_us": receipt.elapsed_us,
                         "expected_result_class": receipt.expected_result_class,
+                        "readiness_outcome": receipt.readiness_outcome,
                         "answering_tier": receipt.answering_tier,
                         "freshness": receipt.freshness,
                         "fallback_reason": receipt.fallback_reason,
@@ -382,6 +511,13 @@ static WORKSPACE_READINESS_RECEIPT_OBSERVERS: std::sync::Mutex<
 > = std::sync::Mutex::new(Vec::new());
 
 #[cfg(any(test, feature = "expose_lsp_test_api"))]
+pub(crate) struct WorkspaceIndexingStartGate {
+    pub(crate) started: std::sync::mpsc::Sender<()>,
+    pub(crate) release: std::sync::mpsc::Receiver<()>,
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+#[allow(dead_code)] // Test-only receipt observers are constructed by the test harness.
 static NEXT_WORKSPACE_READINESS_RECEIPT_OBSERVER_ID: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(1);
 
@@ -406,11 +542,13 @@ fn notify_index_ready_wait_entered() {}
 
 #[cfg(any(test, feature = "expose_lsp_test_api"))]
 /// Removes a test-only readiness receipt observer when dropped.
+#[allow(dead_code)] // Test-only receipt observers are used only by readiness probes.
 pub(crate) struct WorkspaceReadinessReceiptObserverGuard {
     id: u64,
 }
 
 #[cfg(any(test, feature = "expose_lsp_test_api"))]
+#[allow(dead_code)] // Test-only receipt observers are used only by readiness probes.
 impl WorkspaceReadinessReceiptObserverGuard {
     pub(crate) fn id(&self) -> u64 {
         self.id
@@ -427,6 +565,7 @@ impl Drop for WorkspaceReadinessReceiptObserverGuard {
 }
 
 #[cfg(any(test, feature = "expose_lsp_test_api"))]
+#[allow(dead_code)] // Test-only receipt observers are registered by readiness probes.
 pub(crate) fn set_workspace_readiness_receipt_observer(
     sender: std::sync::mpsc::Sender<Value>,
 ) -> WorkspaceReadinessReceiptObserverGuard {
@@ -436,6 +575,33 @@ pub(crate) fn set_workspace_readiness_receipt_observer(
         observers.push((id, sender));
     }
     WorkspaceReadinessReceiptObserverGuard { id }
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+pub(crate) fn set_workspace_indexing_start_gate(
+    gate: &std::sync::Mutex<Option<WorkspaceIndexingStartGate>>,
+    started: std::sync::mpsc::Sender<()>,
+    release: std::sync::mpsc::Receiver<()>,
+) {
+    if let Ok(mut gate) = gate.lock() {
+        *gate = Some(WorkspaceIndexingStartGate { started, release });
+    }
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+pub(crate) fn notify_workspace_indexing_started(
+    gate: &std::sync::Mutex<Option<WorkspaceIndexingStartGate>>,
+) {
+    let gate = gate.lock().ok().and_then(|mut gate| gate.take());
+    if let Some(gate) = gate {
+        let _ = gate.started.send(());
+        if gate.release.recv_timeout(Duration::from_millis(INDEXING_START_GATE_WAIT_MS)).is_err() {
+            tracing::warn!(
+                timeout_ms = INDEXING_START_GATE_WAIT_MS,
+                "readiness indexing start gate was not released before timeout"
+            );
+        }
+    }
 }
 
 #[cfg(any(test, feature = "expose_lsp_test_api"))]
@@ -466,8 +632,9 @@ mod tests {
         WorkspaceReadinessReceipt, check_readiness, check_readiness_with_budget,
         set_index_ready_wait_entered_observer,
     };
-    use anyhow::Result;
+    use anyhow::{Result, anyhow};
     use perl_parser::workspace_index::{DegradationReason, IndexCoordinator};
+    use serde_json::json;
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -518,6 +685,90 @@ mod tests {
         );
         assert_eq!(summary["peak_queued_work"], 4);
         assert_eq!(summary["memory_high_water_bytes"], 128);
+        Ok(())
+    }
+
+    #[test]
+    fn readiness_receipt_requires_active_document_for_empty_dependency_set() -> Result<()> {
+        let start = Instant::now();
+        let mut receipt = WorkspaceReadinessReceipt::default();
+        receipt.set_readiness_target(Some("file:///active.pl".to_string()), std::iter::empty());
+        receipt.record_workspace_start(start);
+        receipt.record_indexed_uri("file:///unrelated.pl", start + Duration::from_micros(5));
+        let unrelated_summary = receipt.summary_json();
+        if unrelated_summary["direct_dependency_set_ready_us"].is_number() {
+            return Err(anyhow!("unrelated URI marked empty dependency set ready"));
+        }
+
+        receipt.record_indexed_uri("file:///active.pl", start + Duration::from_micros(10));
+        let active_summary = receipt.summary_json();
+        if active_summary["active_document_ready_us"] != 10
+            || active_summary["direct_dependency_set_ready_us"] != 10
+        {
+            return Err(anyhow!("active-document readiness was not recorded: {active_summary}"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn readiness_receipt_begin_workspace_clears_previous_run_state() -> Result<()> {
+        let start = Instant::now();
+        let mut receipt = WorkspaceReadinessReceipt::default();
+        receipt.set_readiness_target(
+            Some("file:///active.pl".to_string()),
+            ["file:///dependency.pm".to_string()],
+        );
+        receipt.record_workspace_start(start);
+        receipt.record_indexed_uri("file:///active.pl", start + Duration::from_micros(10));
+        receipt.record_provider_observation(
+            ReadinessAnswerKind::Completion,
+            start + Duration::from_micros(20),
+            super::ValidatedReadinessObservation::new(
+                "explicit_partial_or_fallback",
+                "partial",
+                "fallback",
+                "current_generation",
+                Some("partial_index"),
+            ),
+        );
+        receipt.record_peak_queued_work(4);
+        receipt.record_memory_high_water(128);
+
+        let next_start = start + Duration::from_micros(100);
+        receipt.begin_workspace(next_start);
+        if receipt.active_document_uri.as_deref() != Some("file:///active.pl")
+            || receipt.direct_dependency_uris.len() != 1
+            || !receipt.first_correct_answers.is_empty()
+            || !receipt.indexed_uris.is_empty()
+            || receipt.peak_queued_work != 0
+            || receipt.memory_high_water_bytes.is_some()
+        {
+            return Err(anyhow!("workspace run state was not reset while preserving targets"));
+        }
+        let summary = receipt.summary_json();
+        if summary["first_correct_answers"] != json!({})
+            || summary["active_document_ready_us"].is_number()
+            || summary["whole_workspace_ready_us"].is_number()
+        {
+            return Err(anyhow!("stale readiness state leaked into next run: {summary}"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_indexing_start_gate_does_not_wait_for_dropped_release_sender() -> Result<()> {
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        drop(release_tx);
+        let gate = std::sync::Mutex::new(Some(super::WorkspaceIndexingStartGate {
+            started: started_tx,
+            release: release_rx,
+        }));
+        super::notify_workspace_indexing_started(&gate);
+        started_rx.recv_timeout(Duration::from_secs(1))?;
+        if gate.lock().map_err(|_| anyhow::anyhow!("gate lock poisoned"))?.is_some() {
+            return Err(anyhow!("start gate was not consumed"));
+        }
         Ok(())
     }
 
