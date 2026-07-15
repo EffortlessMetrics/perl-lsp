@@ -49,6 +49,7 @@ import { StreamingCompletionController } from './streamingCompletion';
 import { registerMcpSupport } from './mcpSupport';
 import { registerServerCommandGroup } from './serverCommandGroup';
 import { registerCriticCommandGroup } from './criticCommandGroup';
+import { registerTestCommandGroup } from './testCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -1093,66 +1094,17 @@ export async function activate(context: vscode.ExtensionContext) {
     setPerlCriticSeverity: () => setPerlCriticSeverity(),
   });
 
+  const testCommandDisposables = registerTestCommandGroup({
+    runTests: (test) => runTestsCommandImpl(test),
+    runCurrentTest: () => runCurrentTestWithProve(),
+    runTestAtCursor: () => runTestAtCursorCommandImpl(),
+    runAllTests: () => runAllTestsWithProve(),
+  });
+
   const organizeImportsCommand = vscode.commands.registerCommand(
     'perl-lsp.organizeImports',
     async () => {
       await vscode.commands.executeCommand('editor.action.organizeImports');
-    },
-  );
-
-  const runTestsCommand = vscode.commands.registerCommand(
-    'perl-lsp.runTests',
-    async (test?: unknown) => {
-      let targetUri: vscode.Uri | undefined;
-
-      if (test) {
-        const target = parseDebugTestLaunchTarget(test);
-        if (target && target.program) {
-          targetUri = vscode.Uri.file(target.program);
-        }
-      }
-
-      if (!targetUri) {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== 'perl') {
-          vscode.window.showErrorMessage('No active Perl file to test');
-          return;
-        }
-        targetUri = editor.document.uri;
-      }
-
-      // Restrict to test files (.t, .pl) - .pm files are modules, not test scripts
-      const filePath = targetUri.fsPath;
-      if (!filePath.endsWith('.t') && !filePath.endsWith('.pl')) {
-        vscode.window.showWarningMessage('Run Tests is only available for .t and .pl files');
-        return;
-      }
-
-      if (testAdapter) {
-        // Store original state
-        const originalText = statusBarItem?.text;
-        const originalTooltip = statusBarItem?.tooltip;
-
-        // Show running state
-        if (statusBarItem) {
-          statusBarItem.text = '$(beaker~spin) Running Tests...';
-          statusBarItem.tooltip = 'Executing Perl tests in current file';
-        }
-
-        try {
-          await testAdapter.runFileTests(targetUri);
-        } finally {
-          // Restore original state
-          if (statusBarItem && originalText) {
-            statusBarItem.text = originalText;
-            statusBarItem.tooltip = originalTooltip;
-          }
-        }
-      } else {
-        vscode.window.showWarningMessage(
-          'Test adapter is not available. It might still be initializing.',
-        );
-      }
     },
   );
 
@@ -1311,55 +1263,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const checkSyntaxCommand = vscode.commands.registerCommand('perl-lsp.checkSyntax', async () => {
     await runCheckSyntax();
-  });
-
-  const runCurrentTestCommand = vscode.commands.registerCommand(
-    'perl-lsp.runCurrentTest',
-    async () => {
-      await runCurrentTestWithProve();
-    },
-  );
-
-  const runTestAtCursorCommand = vscode.commands.registerCommand(
-    'perl-lsp.runTestAtCursor',
-    async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== 'perl') {
-        vscode.window.showErrorMessage('Run Test at Cursor requires an active Perl file');
-        return;
-      }
-
-      if (editor.document.isDirty) {
-        await editor.document.save();
-      }
-
-      if (!client) {
-        vscode.window.showWarningMessage(serverNotRunningMessage());
-        return;
-      }
-
-      const lenses = await client.sendRequest<Array<{
-        range?: {
-          start: { line: number; character: number };
-          end: { line: number; character: number };
-        };
-        command?: { command: string; arguments?: unknown[] };
-      }> | null>('textDocument/codeLens', {
-        textDocument: { uri: editor.document.uri.toString() },
-      });
-
-      const command = selectTestCommandAtPosition(lenses ?? [], editor.selection.active);
-      if (!command) {
-        vscode.window.showWarningMessage('No runnable test was found at the cursor position');
-        return;
-      }
-
-      await vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
-    },
-  );
-
-  const runAllTestsCommand = vscode.commands.registerCommand('perl-lsp.runAllTests', async () => {
-    await runAllTestsWithProve();
   });
 
   const formatDocumentCommand = vscode.commands.registerCommand(
@@ -1814,13 +1717,10 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     ...serverCommandDisposables,
     ...criticCommandDisposables,
+    ...testCommandDisposables,
     openDemoProjectDisposable,
     organizeImportsCommand,
-    runTestsCommand,
     checkSyntaxCommand,
-    runCurrentTestCommand,
-    runTestAtCursorCommand,
-    runAllTestsCommand,
     formatDocumentCommand,
     showIncPathsCommand,
     openModuleCommand,
@@ -1875,6 +1775,91 @@ export async function activate(context: vscode.ExtensionContext) {
     markLanguageClientStartupMilestone,
     stop: deactivate,
   };
+}
+
+async function runTestsCommandImpl(test?: unknown): Promise<void> {
+  let targetUri: vscode.Uri | undefined;
+
+  if (test) {
+    const target = parseDebugTestLaunchTarget(test);
+    if (target?.program) {
+      targetUri = vscode.Uri.file(target.program);
+    }
+  }
+
+  if (!targetUri) {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+      vscode.window.showErrorMessage('No active Perl file to test');
+      return;
+    }
+    targetUri = editor.document.uri;
+  }
+
+  // Restrict to test files (.t, .pl) - .pm files are modules, not test scripts
+  const filePath = targetUri.fsPath;
+  if (!filePath.endsWith('.t') && !filePath.endsWith('.pl')) {
+    vscode.window.showWarningMessage('Run Tests is only available for .t and .pl files');
+    return;
+  }
+
+  if (testAdapter) {
+    const originalText = statusBarItem?.text;
+    const originalTooltip = statusBarItem?.tooltip;
+
+    if (statusBarItem) {
+      statusBarItem.text = '$(beaker~spin) Running Tests...';
+      statusBarItem.tooltip = 'Executing Perl tests in current file';
+    }
+
+    try {
+      await testAdapter.runFileTests(targetUri);
+    } finally {
+      if (statusBarItem && originalText) {
+        statusBarItem.text = originalText;
+        statusBarItem.tooltip = originalTooltip;
+      }
+    }
+  } else {
+    vscode.window.showWarningMessage(
+      'Test adapter is not available. It might still be initializing.',
+    );
+  }
+}
+
+async function runTestAtCursorCommandImpl(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== 'perl') {
+    vscode.window.showErrorMessage('Run Test at Cursor requires an active Perl file');
+    return;
+  }
+
+  if (editor.document.isDirty) {
+    await editor.document.save();
+  }
+
+  if (!client) {
+    vscode.window.showWarningMessage(serverNotRunningMessage());
+    return;
+  }
+
+  const lenses = await client.sendRequest<Array<{
+    range?: {
+      start: { line: number; character: number };
+      end: { line: number; character: number };
+    };
+    command?: { command: string; arguments?: unknown[] };
+  }> | null>('textDocument/codeLens', {
+    textDocument: { uri: editor.document.uri.toString() },
+  });
+
+  const command = selectTestCommandAtPosition(lenses ?? [], editor.selection.active);
+  if (!command) {
+    vscode.window.showWarningMessage('No runnable test was found at the cursor position');
+    return;
+  }
+
+  await vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
 }
 
 export async function deactivate() {
