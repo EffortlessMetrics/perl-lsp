@@ -1335,6 +1335,7 @@
     "test:integration": "npm run typecheck && npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
     "test:published": "tsc -p ./tsconfig.published-smoke.json && node ./out/test/published/runPublishedSmoke.js",
     "test:published:local": "node ./scripts/run-local-vsix-smoke.js",
+    "test:workspace-capabilities": "node ./scripts/run-workspace-capability-smoke.js",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
     "check:publisher-tools": "node scripts/check-publisher-tools.js",
     "package": "npm exec --offline --no -- @vscode/vsce package && npm run check:package-inventory",
