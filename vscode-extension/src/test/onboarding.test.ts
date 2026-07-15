@@ -16,20 +16,20 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   OnboardingManager,
-  HealthCheckResult,
   HealthCheckStatus,
   selectWindowsCommandCandidate,
   resolveUnixShellInvocationFallback,
   toPosixShellCommand,
   classifyStartupFailure,
 } from '../onboarding';
+import type { HealthCheckResult } from '../onboarding';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeContext(opts?: { welcomed?: boolean; storagePath?: string }): any {
-  const store = new Map<string, any>();
+function makeContext(opts?: { welcomed?: boolean; storagePath?: string }): vscode.ExtensionContext {
+  const store = new Map<string, unknown>();
   if (opts?.welcomed) {
     store.set('perl-lsp.welcomed', true);
   }
@@ -39,23 +39,48 @@ function makeContext(opts?: { welcomed?: boolean; storagePath?: string }): any {
     extensionPath: dir,
     subscriptions: [],
     globalState: {
-      get: jest.fn((key: string, defaultValue?: any) => {
-        if (store.has(key)) return store.get(key);
-        return defaultValue;
-      }),
-      update: jest.fn(async (key: string, value: any) => {
+      get<T>(key: string, defaultValue?: T): T | undefined {
+        return (store.has(key) ? store.get(key) : defaultValue) as T | undefined;
+      },
+      update: jest.fn(async (key: string, value: unknown): Promise<void> => {
         store.set(key, value);
       }),
     },
-  };
+  } as unknown as vscode.ExtensionContext;
 }
 
-function makeOutputChannel(): any {
+function makeOutputChannel(): vscode.OutputChannel {
   return {
     appendLine: jest.fn(),
     show: jest.fn(),
     dispose: jest.fn(),
-  };
+  } as unknown as vscode.OutputChannel;
+}
+
+function mockExecCheck(
+  manager: OnboardingManager,
+  implementation: (cmd: string, args: string[]) => Promise<{ stdout: string; stderr: string }>,
+): void {
+  manager._execCheck = jest.fn(implementation);
+}
+
+function setWorkspaceFolders(folders: readonly vscode.WorkspaceFolder[] | undefined): void {
+  Object.defineProperty(vscode.workspace, 'workspaceFolders', {
+    configurable: true,
+    value: folders,
+  });
+}
+
+function findRequired<T>(
+  values: readonly T[],
+  predicate: (value: T) => boolean,
+  description: string,
+): T {
+  const value = values.find(predicate);
+  if (!value) {
+    throw new Error(`Expected ${description} in package manifest`);
+  }
+  return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -96,9 +121,9 @@ describe('OnboardingManager.markWelcomed', () => {
 
 describe('OnboardingManager.checkPerlInstalled', () => {
   test('returns ok status with version when perl is available', async () => {
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
     // Inject a mock that simulates `perl -e 'print $]'` returning a version
-    mgr._execCheck = jest.fn((_cmd: string, _args: string[]) =>
+    mockExecCheck(mgr, (_cmd: string, _args: string[]) =>
       Promise.resolve({ stdout: '5.036000', stderr: '' }),
     );
     const result = await mgr.checkPerlInstalled();
@@ -107,8 +132,8 @@ describe('OnboardingManager.checkPerlInstalled', () => {
   });
 
   test('returns error status when perl is not found', async () => {
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn(() => Promise.reject(new Error('perl: command not found')));
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, () => Promise.reject(new Error('perl: command not found')));
     const result = await mgr.checkPerlInstalled();
     expect(result.ok).toBe(false);
     expect(result.detail).toContain('strawberryperl.com');
@@ -124,8 +149,8 @@ describe('OnboardingManager.checkPerlInstalled', () => {
 
 describe('OnboardingManager.checkPerltidyInstalled', () => {
   test('returns ok status when perltidy is available', async () => {
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn((_cmd: string, _args: string[]) =>
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, (_cmd: string, _args: string[]) =>
       Promise.resolve({ stdout: 'perltidy, v20230309', stderr: '' }),
     );
     const result = await mgr.checkPerltidyInstalled();
@@ -134,8 +159,8 @@ describe('OnboardingManager.checkPerltidyInstalled', () => {
   });
 
   test('returns warning (not error) when perltidy is absent', async () => {
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn(() => Promise.reject(new Error('perltidy: command not found')));
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, () => Promise.reject(new Error('perltidy: command not found')));
     const result = await mgr.checkPerltidyInstalled();
     expect(result.ok).toBe(false);
     expect(result.status).toBe(HealthCheckStatus.Warning);
@@ -167,8 +192,8 @@ describe('OnboardingManager.checkPerlcriticSetup (tilde expansion)', () => {
         },
       }));
 
-      const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-      mgr._execCheck = jest.fn(() =>
+      const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+      mockExecCheck(mgr, () =>
         Promise.resolve({ stdout: 'Perl::Critic version 1.156', stderr: '' }),
       );
 
@@ -259,7 +284,7 @@ describe('OnboardingManager.checkPerlcriticSetup', () => {
   const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
 
   afterEach(() => {
-    (vscode.workspace as any).workspaceFolders = originalWorkspaceFolders;
+    setWorkspaceFolders(originalWorkspaceFolders);
     jest.restoreAllMocks();
   });
 
@@ -269,13 +294,13 @@ describe('OnboardingManager.checkPerlcriticSetup', () => {
     const profilePath = path.join(configDir, 'perlcriticrc');
     fs.mkdirSync(configDir, { recursive: true });
     fs.writeFileSync(profilePath, 'severity = 3\n');
-    (vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: workspaceRoot } }];
+    setWorkspaceFolders([{ uri: vscode.Uri.file(workspaceRoot), name: 'workspace', index: 0 }]);
     jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
       get: jest.fn(() => ({ enabled: true, profile: 'config/perlcriticrc' })),
-    } as any);
+    } as unknown as vscode.WorkspaceConfiguration);
 
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn(() => Promise.resolve({ stdout: 'perlcritic 1.148', stderr: '' }));
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, () => Promise.resolve({ stdout: 'perlcritic 1.148', stderr: '' }));
     const result = await mgr.checkPerlcriticSetup();
 
     expect(result.ok).toBe(true);
@@ -286,13 +311,13 @@ describe('OnboardingManager.checkPerlcriticSetup', () => {
     // When no workspace folder is open, a relative profile path cannot be resolved
     // to an absolute location.  The health check must skip the fs.existsSync probe
     // and proceed as if no profile is configured (i.e. not warn "profile not found").
-    (vscode.workspace as any).workspaceFolders = undefined;
+    setWorkspaceFolders(undefined);
     jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
       get: jest.fn(() => ({ enabled: true, profile: 'config/perlcriticrc' })),
-    } as any);
+    } as unknown as vscode.WorkspaceConfiguration);
 
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn(() => Promise.resolve({ stdout: 'perlcritic 1.148', stderr: '' }));
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, () => Promise.resolve({ stdout: 'perlcritic 1.148', stderr: '' }));
     const result = await mgr.checkPerlcriticSetup();
 
     // Must not return a "profile not found" warning — without a workspace root
@@ -359,8 +384,8 @@ describe('OnboardingManager.runSetupHealthCheck', () => {
     const binPath = path.join(tmpDir, 'perl-lsp');
     fs.writeFileSync(binPath, '#!/bin/sh\necho ok');
 
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn((_cmd: string, _args: string[]) =>
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, (_cmd: string, _args: string[]) =>
       Promise.resolve({ stdout: '5.036000', stderr: '' }),
     );
     const results: HealthCheckResult[] = await mgr.runSetupHealthCheck(binPath);
@@ -372,8 +397,8 @@ describe('OnboardingManager.runSetupHealthCheck', () => {
     const binPath = path.join(tmpDir, 'perl-lsp');
     fs.writeFileSync(binPath, '#!/bin/sh\necho ok');
 
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn((_cmd: string, _args: string[]) =>
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, (_cmd: string, _args: string[]) =>
       Promise.resolve({ stdout: '5.036000', stderr: '' }),
     );
     const results: HealthCheckResult[] = await mgr.runSetupHealthCheck(binPath);
@@ -386,8 +411,8 @@ describe('OnboardingManager.runSetupHealthCheck', () => {
   });
 
   test('binary check fails when server path is null', async () => {
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn((_cmd: string, _args: string[]) =>
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, (_cmd: string, _args: string[]) =>
       Promise.resolve({ stdout: '5.036000', stderr: '' }),
     );
     const results: HealthCheckResult[] = await mgr.runSetupHealthCheck(null);
@@ -400,9 +425,9 @@ describe('OnboardingManager.runSetupHealthCheck', () => {
     const binPath = path.join(tmpDir, 'perl-lsp');
     fs.writeFileSync(binPath, '#!/bin/sh\necho ok');
 
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
     // Simulate both perl and perltidy available
-    mgr._execCheck = jest.fn((cmd: string, _args: string[]) => {
+    mockExecCheck(mgr, (cmd: string, _args: string[]) => {
       if (cmd === 'perl') return Promise.resolve({ stdout: '5.036000', stderr: '' });
       if (cmd === 'perltidy') return Promise.resolve({ stdout: 'perltidy, v20230309', stderr: '' });
       return Promise.reject(new Error('unknown'));
@@ -419,25 +444,42 @@ describe('OnboardingManager.runSetupHealthCheck', () => {
 
 describe('package.json health check command', () => {
   const EXT_ROOT = path.resolve(__dirname, '..', '..');
-  let pkg: any;
+  type CommandContribution = { command: string; category: string; title: string };
+  type CommandPaletteEntry = { command: string; when?: string };
+  type PackageManifest = {
+    contributes: {
+      commands: CommandContribution[];
+      menus: { commandPalette: CommandPaletteEntry[] };
+    };
+  };
+  let pkg: PackageManifest;
 
   beforeAll(() => {
-    pkg = JSON.parse(fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'));
+    pkg = JSON.parse(
+      fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'),
+    ) as PackageManifest;
   });
 
   test('registers perl-lsp.runHealthCheck command', () => {
-    const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+    const commandIds = pkg.contributes.commands.map((c: CommandContribution) => c.command);
     expect(commandIds).toContain('perl-lsp.runHealthCheck');
   });
 
   test('health check command has Perl category', () => {
-    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.runHealthCheck');
-    expect(cmd).toBeDefined();
+    const cmd = findRequired(
+      pkg.contributes.commands,
+      (c: CommandContribution) => c.command === 'perl-lsp.runHealthCheck',
+      'perl-lsp.runHealthCheck command',
+    );
     expect(cmd.category).toBe('Perl');
   });
 
   test('health check command title is user-friendly', () => {
-    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.runHealthCheck');
+    const cmd = findRequired(
+      pkg.contributes.commands,
+      (c: CommandContribution) => c.command === 'perl-lsp.runHealthCheck',
+      'perl-lsp.runHealthCheck command',
+    );
     expect(cmd.title).toBeTruthy();
     expect(cmd.title.toLowerCase()).toContain('health');
   });
@@ -454,8 +496,11 @@ describe('package.json health check command', () => {
 
   test('runHealthCheck is listed in commandPalette without a language restriction', () => {
     const palette = pkg.contributes.menus.commandPalette;
-    const entry = palette.find((e: any) => e.command === 'perl-lsp.runHealthCheck');
-    expect(entry).toBeDefined();
+    const entry = findRequired(
+      palette,
+      (e: CommandPaletteEntry) => e.command === 'perl-lsp.runHealthCheck',
+      'perl-lsp.runHealthCheck command palette entry',
+    );
     // No editorLangId restriction — the health check must be reachable from any context.
     expect(entry.when ?? '').not.toMatch(/editorLangId/);
   });
@@ -532,8 +577,8 @@ describe('classifyStartupFailure', () => {
 
 describe('OnboardingManager.runStartupDiagnostics', () => {
   test('returns Perl-specific error when Perl is missing', async () => {
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn(() => Promise.reject(new Error('perl: command not found')));
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, () => Promise.reject(new Error('perl: command not found')));
     const msg = await mgr.runStartupDiagnostics(null);
     expect(msg).toContain('Perl');
     expect(msg).toMatch(/install|Install/);
@@ -541,8 +586,8 @@ describe('OnboardingManager.runStartupDiagnostics', () => {
   });
 
   test('returns binary-missing message when Perl is present but binary not found', async () => {
-    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    mgr._execCheck = jest.fn((_cmd: string) => Promise.resolve({ stdout: '5.036000', stderr: '' }));
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    mockExecCheck(mgr, (_cmd: string) => Promise.resolve({ stdout: '5.036000', stderr: '' }));
     // No binary path provided (null) — binary check will fail
     const msg = await mgr.runStartupDiagnostics(null);
     expect(msg).toMatch(/binary|perllsp/i);

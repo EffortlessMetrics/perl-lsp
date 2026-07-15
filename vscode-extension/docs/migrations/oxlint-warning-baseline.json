@@ -5,24 +5,24 @@
     "oxlint": "1.73.0",
     "oxlint-tsgolint": "0.24.0"
   },
-  "warning_count": 313,
+  "warning_count": 284,
   "by_rule": {
     "eslint(no-unused-vars)": 9,
-    "typescript(consistent-type-imports)": 1,
-    "typescript(no-explicit-any)": 303
+    "typescript(consistent-type-imports)": 0,
+    "typescript(no-explicit-any)": 275
   },
   "by_surface": {
-    "tests": 313
+    "tests": 284
   },
   "by_rule_and_surface": {
     "eslint(no-unused-vars)": {
       "tests": 9
     },
     "typescript(consistent-type-imports)": {
-      "tests": 1
+      "tests": 0
     },
     "typescript(no-explicit-any)": {
-      "tests": 303
+      "tests": 275
     }
   },
   "by_file": {
@@ -30,7 +30,6 @@
     "src/test/debugAdapter.test.ts": 58,
     "src/test/downloader.test.ts": 71,
     "src/test/extensionUx.test.ts": 70,
-    "src/test/onboarding.test.ts": 29,
     "src/test/podPreview.test.ts": 8
   }
 }
