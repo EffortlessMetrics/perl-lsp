@@ -175,20 +175,29 @@ impl LspServer {
         self.handle_declaration(params)
     }
 
-    pub(super) fn handle_references_dispatch(
+    pub(super) fn handle_references_cancellable_dispatch(
         &self,
         params: Option<Value>,
+        request_id: Option<&Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Use test fallback in test mode, production handler otherwise
         let use_fallback = std::env::var("LSP_TEST_FALLBACKS").is_ok();
         if use_fallback {
-            match self.on_references(params.clone().unwrap_or(json!({}))) {
+            match self.on_references(params.clone().unwrap_or(json!({})), request_id) {
                 Ok(res) => Ok(Some(res)),
-                Err(_) => self.handle_references(params),
+                Err(error) if error.code == crate::protocol::REQUEST_CANCELLED => Err(error),
+                Err(_) => self.handle_references_with_request_id(params, request_id),
             }
         } else {
             // Production: try real handler first, fall back if needed
-            self.handle_references(params).or_else(|_| self.on_references(json!({})).map(Some))
+            let fallback_params = params.clone().unwrap_or_else(|| json!({}));
+            self.handle_references_with_request_id(params, request_id).or_else(|error| {
+                if error.code == crate::protocol::REQUEST_CANCELLED {
+                    Err(error)
+                } else {
+                    self.on_references(fallback_params, request_id).map(Some)
+                }
+            })
         }
     }
 

@@ -6,7 +6,7 @@
 //! artifacts; this module provides the small stable report model needed by the
 //! installed `perllsp` binary.
 
-use super::perl_critic::{NativeCriticProfile, NativeCriticRegistry};
+use super::perl_critic::NativeCriticRegistry;
 use serde::Serialize;
 use std::collections::BTreeSet;
 
@@ -153,7 +153,7 @@ pub fn classify_perltidy_profile(raw: &str) -> PerltidyCompatReport {
 /// Classify a `.perlcriticrc`-style profile against native critic support.
 #[must_use]
 pub fn classify_perlcritic_profile(raw: &str) -> PerlcriticCompatReport {
-    let native_rules = NativeCriticRegistry::for_profile(NativeCriticProfile::Strict)
+    let native_rules = NativeCriticRegistry::recommended()
         .rule_ids()
         .into_iter()
         .map(ToOwned::to_owned)

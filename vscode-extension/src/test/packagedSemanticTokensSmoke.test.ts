@@ -130,7 +130,12 @@ class MinimalLspClient {
         this.buffer = this.buffer.subarray(headerEnd + 4);
         continue;
       }
-      const contentLength = parseInt(match[1], 10);
+      const contentLengthText = match[1];
+      if (contentLengthText === undefined) {
+        this.buffer = this.buffer.subarray(headerEnd + 4);
+        continue;
+      }
+      const contentLength = parseInt(contentLengthText, 10);
       const bodyStart = headerEnd + 4;
       const bodyEnd = bodyStart + contentLength;
       if (this.buffer.length < bodyEnd) {
@@ -225,6 +230,15 @@ function decodeSemanticTokens(data: number[], legend: { tokenTypes: string[] }):
     const length = data[i + 2];
     const typeIdx = data[i + 3];
     const modifiers = data[i + 4];
+    if (
+      deltaLine === undefined ||
+      deltaStart === undefined ||
+      length === undefined ||
+      typeIdx === undefined ||
+      modifiers === undefined
+    ) {
+      continue;
+    }
 
     line += deltaLine;
     char = deltaLine === 0 ? char + deltaStart : deltaStart;

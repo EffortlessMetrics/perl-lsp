@@ -9,7 +9,7 @@ import { spawn } from 'child_process';
  * and runs them via `prove -v`, mapping TAP output to VSCode test results.
  */
 
-interface SubtestInfo {
+export interface SubtestInfo {
   name: string;
   line: number;
 }
@@ -101,7 +101,10 @@ export class PerlTestAdapter implements vscode.Disposable {
         const line = doc.lineAt(i).text;
         const match = SUBTEST_RE.exec(line);
         if (match) {
-          subtests.push({ name: match[2], line: i });
+          const name = match[2];
+          if (name !== undefined) {
+            subtests.push({ name, line: i });
+          }
         }
       }
 
@@ -217,8 +220,8 @@ export class PerlTestAdapter implements vscode.Disposable {
         killOnCancel.dispose();
         const duration = Date.now() - startTime;
 
-        const tapResults = this.parseTapOutput(stdout);
-        const subtestResults = this.parseSubtestResults(stdout);
+        const tapResults = parseTapOutput(stdout);
+        const subtestResults = parseSubtestResults(stdout);
 
         // Map subtest results to test items
         for (const st of subtests) {
@@ -273,113 +276,6 @@ export class PerlTestAdapter implements vscode.Disposable {
     });
   }
 
-  // -- TAP output parsing ----------------------------------------------
-
-  /**
-   * Parse top-level TAP summary from prove output.
-   */
-  private parseTapOutput(output: string): {
-    total: number;
-    passed: number;
-    failed: number;
-    bailOut: string | null;
-  } {
-    const lines = output.split('\n');
-    let total = 0;
-    let passed = 0;
-    let failed = 0;
-    let bailOut: string | null = null;
-
-    for (const line of lines) {
-      // Only match top-level TAP lines (not indented subtest TAP)
-      if (/^ok \d+/.test(line)) {
-        total++;
-        passed++;
-      } else if (/^not ok \d+/.test(line)) {
-        total++;
-        failed++;
-      } else if (/^Bail out!\s*(.*)/.test(line)) {
-        const m = /^Bail out!\s*(.*)/.exec(line);
-        bailOut = m ? m[1] : '';
-      } else if (/^1\.\.(\d+)/.test(line)) {
-        const m = /^1\.\.(\d+)/.exec(line);
-        if (m) {
-          total = Math.max(total, parseInt(m[1], 10));
-        }
-      }
-    }
-
-    return { total, passed, failed, bailOut };
-  }
-
-  /**
-   * Parse subtest results from verbose prove TAP output.
-   *
-   * prove -v outputs subtests like:
-   *   # Subtest: constructor
-   *       ok 1 - new() returns object
-   *       1..1
-   *   ok 1 - constructor
-   *
-   * or on failure:
-   *   # Subtest: methods
-   *       not ok 1 - method works
-   *       #   Failed test 'method works'
-   *       1..1
-   *   not ok 2 - methods
-   */
-  private parseSubtestResults(
-    output: string,
-  ): Map<string, { ok: boolean; diagnostic: string; duration: number }> {
-    const results = new Map<string, { ok: boolean; diagnostic: string; duration: number }>();
-    const lines = output.split('\n');
-
-    let currentSubtest: string | null = null;
-    let diagnosticLines: string[] = [];
-
-    for (const line of lines) {
-      // Detect start of subtest
-      const subtestStart = /^\s*#\s*Subtest:\s*(.+)/.exec(line);
-      if (subtestStart) {
-        currentSubtest = subtestStart[1].trim();
-        diagnosticLines = [];
-        continue;
-      }
-
-      // Collect indented diagnostic lines within a subtest
-      if (currentSubtest && /^\s{4,}#/.test(line)) {
-        diagnosticLines.push(line.trim());
-        continue;
-      }
-
-      // Detect subtest result line (top-level ok/not ok with subtest name)
-      if (currentSubtest) {
-        const okMatch = /^ok \d+\s*-\s*(.*)/.exec(line);
-        const notOkMatch = /^not ok \d+\s*-\s*(.*)/.exec(line);
-
-        if (okMatch && okMatch[1].trim() === currentSubtest) {
-          results.set(currentSubtest, {
-            ok: true,
-            diagnostic: diagnosticLines.join('\n'),
-            duration: 0,
-          });
-          currentSubtest = null;
-          diagnosticLines = [];
-        } else if (notOkMatch && notOkMatch[1].trim() === currentSubtest) {
-          results.set(currentSubtest, {
-            ok: false,
-            diagnostic: diagnosticLines.join('\n') || `Subtest "${currentSubtest}" failed`,
-            duration: 0,
-          });
-          currentSubtest = null;
-          diagnosticLines = [];
-        }
-      }
-    }
-
-    return results;
-  }
-
   // -- Public API -------------------------------------------------------
 
   public async runFileTests(uri: vscode.Uri): Promise<void> {
@@ -407,4 +303,87 @@ export class PerlTestAdapter implements vscode.Disposable {
       d.dispose();
     }
   }
+}
+
+/** Parse the top-level TAP summary from prove output. */
+export function parseTapOutput(output: string): {
+  total: number;
+  passed: number;
+  failed: number;
+  bailOut: string | null;
+} {
+  const lines = output.split('\n');
+  let total = 0;
+  let passed = 0;
+  let failed = 0;
+  let bailOut: string | null = null;
+
+  for (const line of lines) {
+    if (/^ok \d+/.test(line)) {
+      total++;
+      passed++;
+    } else if (/^not ok \d+/.test(line)) {
+      total++;
+      failed++;
+    } else if (/^Bail out!\s*(.*)/.test(line)) {
+      bailOut = /^Bail out!\s*(.*)/.exec(line)?.[1] ?? '';
+    } else if (/^1\.\.(\d+)/.test(line)) {
+      const count = /^1\.\.(\d+)/.exec(line)?.[1];
+      if (count !== undefined) {
+        total = Math.max(total, parseInt(count, 10));
+      }
+    }
+  }
+
+  return { total, passed, failed, bailOut };
+}
+
+/** Parse subtest results from verbose prove TAP output. */
+export function parseSubtestResults(
+  output: string,
+): Map<string, { ok: boolean; diagnostic: string; duration: number }> {
+  const results = new Map<string, { ok: boolean; diagnostic: string; duration: number }>();
+  const lines = output.split('\n');
+
+  let currentSubtest: string | null = null;
+  let diagnosticLines: string[] = [];
+
+  for (const line of lines) {
+    const subtestName = /^\s*#\s*Subtest:\s*(.+)/.exec(line)?.[1];
+    if (subtestName !== undefined) {
+      currentSubtest = subtestName.trim();
+      diagnosticLines = [];
+      continue;
+    }
+
+    if (currentSubtest && /^\s{4,}#/.test(line)) {
+      diagnosticLines.push(line.trim());
+      continue;
+    }
+
+    if (currentSubtest) {
+      const okName = /^ok \d+\s*-\s*(.*)/.exec(line)?.[1];
+      const notOkName = /^not ok \d+\s*-\s*(.*)/.exec(line)?.[1];
+
+      if (okName?.trim() === currentSubtest) {
+        results.set(currentSubtest, {
+          ok: true,
+          diagnostic: diagnosticLines.join('\n'),
+          duration: 0,
+        });
+        currentSubtest = null;
+        diagnosticLines = [];
+      } else if (notOkName?.trim() === currentSubtest) {
+        results.set(currentSubtest, {
+          ok: false,
+          diagnostic: diagnosticLines.join('\n') || `Subtest "${currentSubtest}" failed`,
+          duration: 0,
+        });
+        currentSubtest = null;
+        diagnosticLines = [];
+      }
+    }
+  }
+
+  return results;
 }

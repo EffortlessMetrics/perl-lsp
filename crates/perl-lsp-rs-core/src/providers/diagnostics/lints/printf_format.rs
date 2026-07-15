@@ -106,7 +106,7 @@ fn check_format_args(name: &str, args: &[Node], node: &Node, diagnostics: &mut V
 /// - `%*d` counts as 2 specifiers: one for width (*), one for value (d).
 /// - `%.*f` counts as 2 specifiers: one for precision (*), one for value (f).
 /// - `%*.*s` counts as 3 specifiers: one for width (*), one for precision (*), one for value (s).
-pub(crate) fn count_format_specifiers(s: &str) -> usize {
+fn count_format_specifiers(s: &str) -> usize {
     let bytes = s.as_bytes();
     let mut count = 0;
     let mut i = 0;

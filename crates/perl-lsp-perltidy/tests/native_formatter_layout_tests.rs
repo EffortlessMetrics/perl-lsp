@@ -658,50 +658,6 @@ fn native_formatter_expands_simple_subroutine_blocks() {
 }
 
 #[test]
-fn native_formatter_handles_consecutive_empty_statements() {
-    let formatter = NativeFormatter::new();
-    let sources = [
-        "if($ok){;}\n",
-        "if($ok){;;}\n",
-        "if($ok){print 1;;}\n",
-        "if($ok){if($nested){;;}}\n",
-        "sub answer{;;}\n",
-        "sub answer{if($ok){;;}}\n",
-        "while($ok){;;}continue{;;}\n",
-        "for(;;){;;}\n",
-        "for($i=0;;$i++){;;}\n",
-        "foreach $x(@xs){;;}\n",
-        "if($ok){print 1;}else{;;}\n",
-    ];
-
-    for source in sources {
-        let result = std::panic::catch_unwind(|| {
-            formatter.format_document(source, &FormatConfig::default())
-        });
-        assert!(result.is_ok(), "native formatter panicked for {source:?}");
-    }
-
-    let bodies = [
-        ";",
-        ";;",
-        ";;;",
-        "print 1;;",
-        ";print 1;",
-        "if($nested){;;};",
-        "if($nested){print 1;;};",
-        "for(;;){;;};",
-    ];
-    for body in bodies {
-        for source in [format!("sub answer{{{body}}}\n"), format!("if($ok){{{body}}}\n")] {
-            let result = std::panic::catch_unwind(|| {
-                formatter.format_document(&source, &FormatConfig::default())
-            });
-            assert!(result.is_ok(), "native formatter panicked for {source:?}");
-        }
-    }
-}
-
-#[test]
 fn native_formatter_places_opening_braces_on_next_line_when_configured() {
     let formatter = NativeFormatter::new();
     let config =

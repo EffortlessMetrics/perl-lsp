@@ -238,6 +238,14 @@ pub struct LspServer {
     /// Test-only routing key for the workspace readiness receipt observer.
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub(crate) readiness_receipt_observer_id: AtomicU64,
+    /// Shared startup-readiness receipt updated by indexing and probe hooks.
+    #[cfg(feature = "workspace")]
+    pub(crate) workspace_readiness_receipt:
+        Arc<Mutex<crate::runtime::readiness::WorkspaceReadinessReceipt>>,
+    /// Test-only per-server barrier for deterministic pre-index probes.
+    #[cfg(all(feature = "workspace", any(test, feature = "expose_lsp_test_api")))]
+    pub(crate) workspace_indexing_start_gate:
+        Arc<std::sync::Mutex<Option<crate::runtime::readiness::WorkspaceIndexingStartGate>>>,
     /// Cache of extracted POD documentation keyed by resolved file path.
     pod_cache: Arc<Mutex<HashMap<PathBuf, PodCacheEntry>>>,
     /// Last provider-local decision receipt by provider name.

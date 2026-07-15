@@ -48,11 +48,13 @@ export function classifyStartupError(output: string): StartupErrorDiagnosis {
   );
   if (missingLibMatch) {
     const lib = missingLibMatch[1];
-    return {
-      kind: StartupErrorKind.MissingSharedLibrary,
-      hint: `Missing shared library: ${lib}. The pre-built binary depends on system libraries not present on your machine.`,
-      remediation: `Install the missing library (e.g. apt install ${lib.replace(/\.so.*/, '')} or equivalent), or install from source: cargo install perllsp`,
-    };
+    if (lib !== undefined) {
+      return {
+        kind: StartupErrorKind.MissingSharedLibrary,
+        hint: `Missing shared library: ${lib}. The pre-built binary depends on system libraries not present on your machine.`,
+        remediation: `Install the missing library (e.g. apt install ${lib.replace(/\.so.*/, '')} or equivalent), or install from source: cargo install perllsp`,
+      };
+    }
   }
 
   // wrong architecture / exec format error

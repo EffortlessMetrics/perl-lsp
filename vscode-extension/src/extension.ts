@@ -23,7 +23,6 @@ import {
 import { BinaryDownloader, parseLocalVersion } from './downloader';
 import { runLanguageServerHealthCheck } from './languageServerHealth';
 import { OnboardingManager } from './onboarding';
-import type { HealthCheckResult } from './onboarding';
 import {
   openDemoProjectCommand,
   suggestAiCompletionIfSupported,
@@ -45,9 +44,19 @@ import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
 import { registerGherkinProviders } from './gherkinProviders';
 import { registerGherkinStepDefinitionSupport } from './gherkinStepDefinitions';
+import { registerDocumentFeatureGroup } from './documentFeatureGroup';
 import { selectTestCommandAtPosition } from './runTestAtCursor';
 import { StreamingCompletionController } from './streamingCompletion';
 import { registerMcpSupport } from './mcpSupport';
+import { registerServerCommandGroup } from './serverCommandGroup';
+import { registerCriticCommandGroup } from './criticCommandGroup';
+import { registerTestCommandGroup } from './testCommandGroup';
+import { registerOnboardingCommandGroup } from './onboardingCommandGroup';
+import { registerNavigationCommandGroup } from './navigationCommandGroup';
+import { registerDiagnosticCommandGroup } from './diagnosticCommandGroup';
+import { registerDocumentCommandGroup } from './documentCommandGroup';
+import { registerRefactoringCommandGroup } from './refactoringCommandGroup';
+import { registerSupportCommandGroup } from './supportCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -56,7 +65,12 @@ import type {
   LanguageClientStartupMilestone,
 } from './languageClientStartupMetrics';
 import { LanguageClientStartupMetrics } from './languageClientStartupMetrics';
+import {
+  FeatureActivationMetrics,
+  type FeatureActivationMetricsSnapshot,
+} from './featureActivationMetrics';
 import { registerWorkspaceConfigurationEvents } from './extensionWorkspaceEvents';
+import { describeWorkspaceTopology } from './workspaceTopology';
 import {
   buildDisabledFeaturesFromConfig,
   buildPerlCriticConfiguration as buildPerlCriticConfigurationPayload,
@@ -72,12 +86,7 @@ import {
   StartupErrorKind,
 } from './startupDiagnosis';
 import type { StartupErrorDiagnosis } from './startupDiagnosis';
-import type {
-  HealthCheckCommandResult,
-  HealthCheckCommandStatus,
-  ManagedBinarySource,
-  ReinstallCommandResult,
-} from './commandResults';
+import type { ManagedBinarySource, ReinstallCommandResult } from './commandResults';
 
 // Compatibility projections for existing command/provider code. Lifecycle
 // ownership lives in `languageClientLifecycle`; these values are synchronized
@@ -97,9 +106,14 @@ let languageClientLifecycle:
   | ExtensionLanguageClientLifecycle<LanguageClient, StateChangeEvent>
   | undefined;
 const languageClientStartupMetrics = new LanguageClientStartupMetrics();
+const featureActivationMetrics = new FeatureActivationMetrics();
 
 export function getLanguageClientStartupMetrics(): LanguageClientStartupMetricsSnapshot {
   return languageClientStartupMetrics.snapshot();
+}
+
+export function getFeatureActivationMetrics(): FeatureActivationMetricsSnapshot {
+  return featureActivationMetrics.snapshot();
 }
 
 export function markLanguageClientStartupMilestone(
@@ -595,6 +609,12 @@ export function workspaceTrustClientRuntimeState(
     hasLaunchJson(folder.uri.fsPath),
   ).length;
   const activeDebugSession = vscode.debug.activeDebugSession;
+  const topology = describeWorkspaceTopology({
+    folders: workspaceFolders,
+    documents: vscode.workspace.textDocuments,
+    isTrusted: vscode.workspace.isTrusted,
+    remoteName: vscode.env.remoteName,
+  });
 
   return {
     schema_version: 'workspace_trust_client_runtime.v1',
@@ -613,6 +633,7 @@ export function workspaceTrustClientRuntimeState(
       workspace_folder_count: workspaceFolders.length,
       launch_configuration: collectLaunchConfigurationState(workspaceFolders),
     },
+    topology,
     claim_boundary:
       'VS Code client runtime state reads extension/debugger state only. It does not start DAP, run perldoc, probe Perl, or change provider behavior.',
   };
@@ -1041,8 +1062,11 @@ export async function copyProviderDecisionReceiptCommand(
 
 export async function activate(context: vscode.ExtensionContext) {
   languageClientStartupMetrics.markMilestone('activate_entered');
+  featureActivationMetrics.beginActivation();
   outputChannel = vscode.window.createOutputChannel('Perl Language Server', { log: true });
-  const mcpDisposable = registerMcpSupport(outputChannel);
+  const mcpDisposable = featureActivationMetrics.measure('mcp', true, () =>
+    registerMcpSupport(outputChannel),
+  );
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.command = 'perl-lsp.showStatusMenu';
   statusBarItem.show();
@@ -1052,104 +1076,40 @@ export async function activate(context: vscode.ExtensionContext) {
   syncLifecycleProjection();
   context.subscriptions.push(statusBarItem);
 
-  // Register showOutput command early so it's available during binary download and initialization
-  const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
-    outputChannel.show();
+  // Register server-facing commands through an explicit dependency context.
+  // Lifecycle transitions remain owned by the authoritative composition.
+  const serverCommandDisposables = registerServerCommandGroup({
+    outputChannel,
+    currentServerPath: () => currentServerPath,
+    reinstallServerBinary: () => reinstallServerBinary(context),
+    restartServer: () => restartServer(context),
+    runHealthCheck: async (serverPath) => {
+      const onboarding = new OnboardingManager(context, outputChannel);
+      return onboarding.runSetupHealthCheck(serverPath);
+    },
   });
-  const reinstallCommand = vscode.commands.registerCommand('perl-lsp.reinstall', async () => {
-    return reinstallServerBinary(context);
+
+  const openDemoProject = async () => {
+    await openDemoProjectCommand(context);
+  };
+
+  const criticCommandDisposables = registerCriticCommandGroup({
+    runPerlCriticOnActiveFile: () => runPerlCriticOnActiveFile(),
+    setPerlCriticSeverity: () => setPerlCriticSeverity(),
   });
 
-  // Register commands
-  const restartCommand = vscode.commands.registerCommand('perl-lsp.restart', async () => {
-    await restartServer(context);
+  const testCommandDisposables = registerTestCommandGroup({
+    runTests: (test) => runTestsCommandImpl(test),
+    runCurrentTest: () => runCurrentTestWithProve(),
+    runTestAtCursor: () => runTestAtCursorCommandImpl(),
+    runAllTests: () => runAllTestsWithProve(),
   });
 
-  const openDemoProjectDisposable = vscode.commands.registerCommand(
-    'perl-lsp.openDemoProject',
-    async () => {
-      await openDemoProjectCommand(context);
-    },
-  );
+  const organizeImports = async () => {
+    await vscode.commands.executeCommand('editor.action.organizeImports');
+  };
 
-  const organizeImportsCommand = vscode.commands.registerCommand(
-    'perl-lsp.organizeImports',
-    async () => {
-      await vscode.commands.executeCommand('editor.action.organizeImports');
-    },
-  );
-
-  const runTestsCommand = vscode.commands.registerCommand(
-    'perl-lsp.runTests',
-    async (test?: unknown) => {
-      let targetUri: vscode.Uri | undefined;
-
-      if (test) {
-        const target = parseDebugTestLaunchTarget(test);
-        if (target && target.program) {
-          targetUri = vscode.Uri.file(target.program);
-        }
-      }
-
-      if (!targetUri) {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== 'perl') {
-          vscode.window.showErrorMessage('No active Perl file to test');
-          return;
-        }
-        targetUri = editor.document.uri;
-      }
-
-      // Restrict to test files (.t, .pl) - .pm files are modules, not test scripts
-      const filePath = targetUri.fsPath;
-      if (!filePath.endsWith('.t') && !filePath.endsWith('.pl')) {
-        vscode.window.showWarningMessage('Run Tests is only available for .t and .pl files');
-        return;
-      }
-
-      if (testAdapter) {
-        // Store original state
-        const originalText = statusBarItem?.text;
-        const originalTooltip = statusBarItem?.tooltip;
-
-        // Show running state
-        if (statusBarItem) {
-          statusBarItem.text = '$(beaker~spin) Running Tests...';
-          statusBarItem.tooltip = 'Executing Perl tests in current file';
-        }
-
-        try {
-          await testAdapter.runFileTests(targetUri);
-        } finally {
-          // Restore original state
-          if (statusBarItem && originalText) {
-            statusBarItem.text = originalText;
-            statusBarItem.tooltip = originalTooltip;
-          }
-        }
-      } else {
-        vscode.window.showWarningMessage(
-          'Test adapter is not available. It might still be initializing.',
-        );
-      }
-    },
-  );
-
-  const runPerlCriticCommand = vscode.commands.registerCommand(
-    'perl-lsp.runPerlCritic',
-    async () => {
-      await runPerlCriticOnActiveFile();
-    },
-  );
-
-  const setPerlCriticSeverityCommand = vscode.commands.registerCommand(
-    'perl-lsp.setPerlCriticSeverity',
-    async () => {
-      await setPerlCriticSeverity();
-    },
-  );
-
-  const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
+  const showVersion = async () => {
     if (!currentServerPath) {
       vscode.window
         .showErrorMessage(
@@ -1196,9 +1156,9 @@ export async function activate(context: vscode.ExtensionContext) {
           }
         });
     });
-  });
+  };
 
-  const statusMenuCommand = vscode.commands.registerCommand('perl-lsp.showStatusMenu', async () => {
+  const showStatusMenu = async () => {
     const editor = vscode.window.activeTextEditor;
     const isPerl = editor ? editor.document.languageId === 'perl' : false;
     const filePath = editor ? editor.document.uri.fsPath : '';
@@ -1300,113 +1260,18 @@ export async function activate(context: vscode.ExtensionContext) {
     if (selection && selection.command && !selection.disabled) {
       vscode.commands.executeCommand(selection.command, ...(selection.args || []));
     }
+  };
+
+  const navigationCommandDisposables = registerNavigationCommandGroup({
+    openDemoProject,
+    organizeImports,
+    showVersion,
+    showStatusMenu,
   });
 
-  const runHealthCheckCommand = vscode.commands.registerCommand(
-    'perl-lsp.runHealthCheck',
-    async (serverPath?: string | null) => {
-      const resolvedPath = serverPath !== undefined ? serverPath : currentServerPath;
-      const onboarding = new OnboardingManager(context, outputChannel);
-      const results = await onboarding.runSetupHealthCheck(resolvedPath ?? null);
-      const commandResult = toHealthCheckCommandResult(results);
-
-      const errors = results.filter((r) => !r.ok && r.status === 'error');
-      const warnings = results.filter((r) => !r.ok && r.status === 'warning');
-
-      const lines = results.map((r) => {
-        const icon = r.ok ? '$(check)' : r.status === 'warning' ? '$(warning)' : '$(error)';
-        return `${icon} ${r.label}: ${r.detail}`;
-      });
-
-      outputChannel.appendLine('[health-check] Results:');
-      for (const line of lines) {
-        outputChannel.appendLine(`  ${line.replace(/\$\(\w[^)]*\)/g, '')}`);
-      }
-
-      if (errors.length > 0) {
-        const msg = `Health check failed: ${errors.map((e) => e.label).join(', ')}`;
-        vscode.window.showErrorMessage(msg, 'Show Output').then((sel) => {
-          if (sel === 'Show Output') {
-            outputChannel.show();
-          }
-        });
-      } else if (warnings.length > 0) {
-        const msg = `Health check passed with warnings: ${warnings.map((w) => w.detail).join(' | ')}`;
-        vscode.window.showWarningMessage(msg, 'Show Output').then((sel) => {
-          if (sel === 'Show Output') {
-            outputChannel.show();
-          }
-        });
-      } else {
-        vscode.window
-          .showInformationMessage('Perl LSP health check passed.', 'Show Output')
-          .then((sel) => {
-            if (sel === 'Show Output') {
-              outputChannel.show();
-            }
-          });
-      }
-
-      return commandResult;
-    },
-  );
-
-  const checkSyntaxCommand = vscode.commands.registerCommand('perl-lsp.checkSyntax', async () => {
-    await runCheckSyntax();
-  });
-
-  const runCurrentTestCommand = vscode.commands.registerCommand(
-    'perl-lsp.runCurrentTest',
-    async () => {
-      await runCurrentTestWithProve();
-    },
-  );
-
-  const runTestAtCursorCommand = vscode.commands.registerCommand(
-    'perl-lsp.runTestAtCursor',
-    async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== 'perl') {
-        vscode.window.showErrorMessage('Run Test at Cursor requires an active Perl file');
-        return;
-      }
-
-      if (editor.document.isDirty) {
-        await editor.document.save();
-      }
-
-      if (!client) {
-        vscode.window.showWarningMessage(serverNotRunningMessage());
-        return;
-      }
-
-      const lenses = await client.sendRequest<Array<{
-        range?: {
-          start: { line: number; character: number };
-          end: { line: number; character: number };
-        };
-        command?: { command: string; arguments?: unknown[] };
-      }> | null>('textDocument/codeLens', {
-        textDocument: { uri: editor.document.uri.toString() },
-      });
-
-      const command = selectTestCommandAtPosition(lenses ?? [], editor.selection.active);
-      if (!command) {
-        vscode.window.showWarningMessage('No runnable test was found at the cursor position');
-        return;
-      }
-
-      await vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
-    },
-  );
-
-  const runAllTestsCommand = vscode.commands.registerCommand('perl-lsp.runAllTests', async () => {
-    await runAllTestsWithProve();
-  });
-
-  const formatDocumentCommand = vscode.commands.registerCommand(
-    'perl-lsp.formatDocument',
-    async () => {
+  const documentCommandDisposables = registerDocumentCommandGroup({
+    checkSyntax: runCheckSyntax,
+    formatDocument: async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'perl') {
         vscode.window.showErrorMessage('No active Perl file to format');
@@ -1414,101 +1279,56 @@ export async function activate(context: vscode.ExtensionContext) {
       }
       await vscode.commands.executeCommand('editor.action.formatDocument');
     },
-  );
-
-  const showIncPathsCommand = vscode.commands.registerCommand('perl-lsp.showIncPaths', async () => {
-    await showIncPaths();
+    showIncPaths,
+    openModule: openPerlModule,
+    showParserAst,
   });
 
-  const openModuleCommand = vscode.commands.registerCommand('perl-lsp.openModule', async () => {
-    await openPerlModule();
-  });
-
-  const showParserAstCommand = vscode.commands.registerCommand(
-    'perl-lsp.showParserAst',
-    async () => {
-      await showParserAst();
-    },
-  );
-
-  const explainProviderDecisionCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.explainProviderDecision',
-    async (provider?: unknown) => {
-      await explainProviderDecisionCommand(
+  const diagnosticCommandDisposables = registerDiagnosticCommandGroup({
+    explainProviderDecision: (provider) =>
+      explainProviderDecisionCommand(client, typeof provider === 'string' ? provider : undefined),
+    previewSafeDelete: () => previewSafeDeleteCommand(client),
+    previewPackageRename: () => previewPackageRenameCommand(client),
+    copyProviderDecisionReceipt: (provider) =>
+      copyProviderDecisionReceiptCommand(
         client,
         typeof provider === 'string' ? provider : undefined,
-      );
-    },
-  );
-
-  const previewSafeDeleteCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.previewSafeDelete',
-    async () => {
-      await previewSafeDeleteCommand(client);
-    },
-  );
-
-  const previewPackageRenameCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.previewPackageRename',
-    async () => {
-      await previewPackageRenameCommand(client);
-    },
-  );
-
-  const copyProviderDecisionReceiptCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.copyProviderDecisionReceipt',
-    async (provider?: unknown) => {
-      await copyProviderDecisionReceiptCommand(
-        client,
-        typeof provider === 'string' ? provider : undefined,
-      );
-    },
-  );
-
-  const showWorkspaceTrustReportCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.showWorkspaceTrustReport',
-    async () => {
-      await showWorkspaceTrustReportCommand(client, () =>
-        workspaceTrustClientRuntimeState(context),
-      );
-    },
-  );
-
-  const explainMissingModuleLookupCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.explainMissingModuleLookup',
-    async (moduleName?: unknown) => {
-      await explainMissingModuleLookupCommand(
+      ),
+    showWorkspaceTrustReport: () =>
+      showWorkspaceTrustReportCommand(client, () => workspaceTrustClientRuntimeState(context)),
+    explainMissingModuleLookup: (moduleName) =>
+      explainMissingModuleLookupCommand(
         client,
         typeof moduleName === 'string' ? moduleName : undefined,
-      );
-    },
-  );
-
-  const explainDiagnosticCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.explainDiagnostic',
-    async (request?: unknown) => {
-      await explainDiagnosticCommand(client, request);
-    },
-  );
-
-  const whatsNewManager = new WhatsNewManager(context, outputChannel);
-  const showWhatsNewCommand = vscode.commands.registerCommand('perl-lsp.showWhatsNew', async () => {
-    await whatsNewManager.showWhatsNew();
+      ),
+    explainDiagnostic: (request) => explainDiagnosticCommand(client, request),
   });
 
-  const openConfigurationGuideCommand = vscode.commands.registerCommand(
-    'perl-lsp.openConfigurationGuide',
-    () => {
+  const whatsNewManager = featureActivationMetrics.measure(
+    'whats_new',
+    true,
+    () => new WhatsNewManager(context, outputChannel),
+  );
+  const onboardingCommandDisposables = registerOnboardingCommandGroup({
+    showWhatsNew: async () => {
+      featureActivationMetrics.markFirstUse('whats_new');
+      await whatsNewManager.showWhatsNew();
+    },
+    openConfigurationGuide: () => {
       void vscode.commands.executeCommand(
         'workbench.action.openSettings',
         '@ext:EffortlessMetrics.perl-lsp-rs',
       );
     },
-  );
+    checkForUpdate: async () => {
+      const downloader = new BinaryDownloader(context, outputChannel);
+      await context.globalState.update('perl-lsp.lastUpdateCheck', 0);
+      await downloader.checkForUpdateSilent();
+    },
+  });
 
-  const extractVariableCommand = vscode.commands.registerCommand(
-    'perl-lsp.extractVariable',
-    async () => {
+  const refactoringCommandDisposables = registerRefactoringCommandGroup({
+    extractVariable: async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'perl') {
         vscode.window.showErrorMessage(
@@ -1548,6 +1368,13 @@ export async function activate(context: vscode.ExtensionContext) {
       }
       const variableAction = actions.find((a) => a.title.toLowerCase().includes('variable'));
       const action = variableAction ?? actions[0];
+      if (!action) {
+        vscode.window.showInformationMessage(
+          'No extract variable action is available for the current selection',
+        );
+        return;
+      }
+
       if (action.edit) {
         const workspaceEdit = await client.protocol2CodeConverter.asWorkspaceEdit(
           action.edit as Parameters<typeof client.protocol2CodeConverter.asWorkspaceEdit>[0],
@@ -1564,11 +1391,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
       }
     },
-  );
-
-  const extractMethodCommand = vscode.commands.registerCommand(
-    'perl-lsp.extractMethod',
-    async () => {
+    extractMethod: async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'perl') {
         vscode.window.showErrorMessage(
@@ -1611,6 +1434,13 @@ export async function activate(context: vscode.ExtensionContext) {
           a.title.toLowerCase().includes('function'),
       );
       const action = subroutineAction ?? actions[actions.length - 1];
+      if (!action) {
+        vscode.window.showInformationMessage(
+          'No extract method action is available for the current selection',
+        );
+        return;
+      }
+
       if (action.edit) {
         const workspaceEdit = await client.protocol2CodeConverter.asWorkspaceEdit(
           action.edit as Parameters<typeof client.protocol2CodeConverter.asWorkspaceEdit>[0],
@@ -1627,11 +1457,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
       }
     },
-  );
-
-  const showRefactoringOptionsCommand = vscode.commands.registerCommand(
-    'perl-lsp.showRefactoringOptions',
-    async () => {
+    showRefactoringOptions: async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'perl') {
         vscode.window.showErrorMessage('Refactoring options require an active Perl file');
@@ -1676,70 +1502,72 @@ export async function activate(context: vscode.ExtensionContext) {
         await vscode.commands.executeCommand(selection.command, ...(selection.args ?? []));
       }
     },
-  );
+  });
 
-  const reportIssueCommand = vscode.commands.registerCommand('perl-lsp.reportIssue', async () => {
-    const extensionVersion = (context.extension.packageJSON.version as string) ?? 'unknown';
-    const editorVersion = vscode.version;
-    const editorName = (vscode.env as unknown as { appName?: string }).appName;
-    const platform = process.platform;
-    const arch = process.arch;
+  const supportCommandDisposables = registerSupportCommandGroup({
+    reportIssue: async () => {
+      const extensionVersion = (context.extension.packageJSON.version as string) ?? 'unknown';
+      const editorVersion = vscode.version;
+      const editorName = (vscode.env as unknown as { appName?: string }).appName;
+      const platform = process.platform;
+      const arch = process.arch;
 
-    const getServerVersion = (): Promise<string> =>
-      new Promise((resolve) => {
-        if (!currentServerPath) {
-          resolve('unavailable');
-          return;
-        }
-        execFile(
-          currentServerPath,
-          ['--version'],
-          { timeout: 3000 },
-          (err: Error | null, stdout: string) => {
-            if (err) {
-              resolve('unavailable');
-              return;
-            }
-            const firstLine = stdout.trim().split('\n')[0] ?? '';
-            resolve(firstLine.trim() || 'unavailable');
-          },
-        );
+      const getServerVersion = (): Promise<string> =>
+        new Promise((resolve) => {
+          if (!currentServerPath) {
+            resolve('unavailable');
+            return;
+          }
+          execFile(
+            currentServerPath,
+            ['--version'],
+            { timeout: 3000 },
+            (err: Error | null, stdout: string) => {
+              if (err) {
+                resolve('unavailable');
+                return;
+              }
+              const firstLine = stdout.trim().split('\n')[0] ?? '';
+              resolve(firstLine.trim() || 'unavailable');
+            },
+          );
+        });
+
+      const serverVersion = await getServerVersion();
+
+      const diagnosticInfo = formatIssueDiagnosticInfo({
+        serverVersion,
+        extensionVersion,
+        editorVersion,
+        platform,
+        arch,
+        editorName,
       });
 
-    const serverVersion = await getServerVersion();
-
-    const diagnosticInfo = formatIssueDiagnosticInfo({
-      serverVersion,
-      extensionVersion,
-      editorVersion,
-      platform,
-      arch,
-      editorName,
-    });
-
-    const selection = await vscode.window.showInformationMessage(
-      'Open a GitHub issue to report a bug or request a feature.',
-      'Copy Diagnostic Info',
-      'Open Issue Form',
-    );
-
-    if (selection === 'Copy Diagnostic Info') {
-      try {
-        await vscode.env.clipboard.writeText(diagnosticInfo);
-        vscode.window.showInformationMessage(
-          'Diagnostic info copied. Paste it into the issue form.',
-        );
-      } catch {
-        // Clipboard unavailable — continue to open browser anyway
-      }
-    }
-
-    if (selection === 'Copy Diagnostic Info' || selection === 'Open Issue Form') {
-      const url = vscode.Uri.parse(
-        'https://github.com/EffortlessMetrics/perl-lsp/issues/new?template=bug_report.yml',
+      const selection = await vscode.window.showInformationMessage(
+        'Open a GitHub issue to report a bug or request a feature.',
+        'Copy Diagnostic Info',
+        'Open Issue Form',
       );
-      await vscode.env.openExternal(url);
-    }
+
+      if (selection === 'Copy Diagnostic Info') {
+        try {
+          await vscode.env.clipboard.writeText(diagnosticInfo);
+          vscode.window.showInformationMessage(
+            'Diagnostic info copied. Paste it into the issue form.',
+          );
+        } catch {
+          // Clipboard unavailable — continue to open browser anyway
+        }
+      }
+
+      if (selection === 'Copy Diagnostic Info' || selection === 'Open Issue Form') {
+        const url = vscode.Uri.parse(
+          'https://github.com/EffortlessMetrics/perl-lsp/issues/new?template=bug_report.yml',
+        );
+        await vscode.env.openExternal(url);
+      }
+    },
   });
 
   const formatOnSaveDisposable = vscode.workspace.onWillSaveTextDocument((event) => {
@@ -1750,41 +1578,45 @@ export async function activate(context: vscode.ExtensionContext) {
     event.waitUntil(formatDocumentOnSave(event.document));
   });
 
-  const configurationWatcher = registerWorkspaceConfigurationEvents({
-    onLiveConfigurationChanged: async (event) => {
-      if (event.affectsConfiguration('perl-lsp.trace.server') && client) {
-        const newTrace = getTraceLevel();
-        await client.setTrace(newTrace);
-        outputChannel.appendLine(`Trace level changed to: ${newTrace}`);
-      }
+  const configurationWatcher = featureActivationMetrics.measure('configuration', true, () =>
+    registerWorkspaceConfigurationEvents({
+      onLiveConfigurationChanged: async (event) => {
+        if (event.affectsConfiguration('perl-lsp.trace.server') && client) {
+          const newTrace = getTraceLevel();
+          await client.setTrace(newTrace);
+          outputChannel.appendLine(`Trace level changed to: ${newTrace}`);
+        }
 
-      if (event.affectsConfiguration('perl-lsp.includePaths')) {
-        await validateIncludePaths(context);
-      }
+        if (event.affectsConfiguration('perl-lsp.includePaths')) {
+          await validateIncludePaths(context);
+        }
 
-      const criticChanged = CRITIC_SETTINGS.some((setting) => event.affectsConfiguration(setting));
-      if (event.affectsConfiguration('perl-lsp.includePaths') || criticChanged) {
-        await syncLanguageClientConfiguration(client);
-      }
-    },
-    onReconstructConfigurationChanged: async (event) => {
-      if (event.affectsConfiguration('perl-lsp.enableTestIntegration')) {
-        await refreshTestAdapter(context);
-      }
+        const criticChanged = CRITIC_SETTINGS.some((setting) =>
+          event.affectsConfiguration(setting),
+        );
+        if (event.affectsConfiguration('perl-lsp.includePaths') || criticChanged) {
+          await syncLanguageClientConfiguration(client);
+        }
+      },
+      onReconstructConfigurationChanged: async (event) => {
+        if (event.affectsConfiguration('perl-lsp.enableTestIntegration')) {
+          await refreshTestAdapter(context);
+        }
 
-      if (
-        event.affectsConfiguration('perl-lsp.aiCompletion.enabled') ||
-        event.affectsConfiguration('perl-lsp.aiCompletion.streaming.enabled')
-      ) {
-        refreshStreamingController(client);
-      }
-    },
-    onRestartRequired: () => promptForClientRefresh(context),
-    onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      outputChannel.appendLine(`[configuration] change handling failed: ${message}`);
-    },
-  });
+        if (
+          event.affectsConfiguration('perl-lsp.aiCompletion.enabled') ||
+          event.affectsConfiguration('perl-lsp.aiCompletion.streaming.enabled')
+        ) {
+          refreshStreamingController(client);
+        }
+      },
+      onRestartRequired: () => promptForClientRefresh(context),
+      onError: (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        outputChannel.appendLine(`[configuration] change handling failed: ${message}`);
+      },
+    }),
+  );
 
   const fileCreationWatcher = vscode.workspace.onDidCreateFiles(async (event) => {
     const config = vscode.workspace.getConfiguration('perl-lsp');
@@ -1810,67 +1642,40 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const checkForUpdateCommand = vscode.commands.registerCommand(
-    'perl-lsp.checkForUpdate',
-    async () => {
-      const downloader = new BinaryDownloader(context, outputChannel);
-      // Reset the lastUpdateCheck timestamp so the interval guard is bypassed
-      await context.globalState.update('perl-lsp.lastUpdateCheck', 0);
-      await downloader.checkForUpdateSilent();
-    },
-  );
-
   const arrowCompletionWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
     maybeNudgeArrowCompletion(event);
   });
 
+  const providerDisposables = featureActivationMetrics.measure('providers', true, () => [
+    ...registerDocumentFeatureGroup({
+      extensionContext: context,
+      registerGherkinProviders,
+      registerGherkinStepDefinitionSupport,
+      registerPodPreview,
+    }),
+  ]);
+
   context.subscriptions.push(
-    showOutputCommand,
-    restartCommand,
-    openDemoProjectDisposable,
-    organizeImportsCommand,
-    runTestsCommand,
-    runPerlCriticCommand,
-    setPerlCriticSeverityCommand,
-    checkSyntaxCommand,
-    runCurrentTestCommand,
-    runTestAtCursorCommand,
-    runAllTestsCommand,
-    formatDocumentCommand,
-    showIncPathsCommand,
-    openModuleCommand,
-    showParserAstCommand,
-    explainProviderDecisionCommandDisposable,
-    previewSafeDeleteCommandDisposable,
-    previewPackageRenameCommandDisposable,
-    copyProviderDecisionReceiptCommandDisposable,
-    showWorkspaceTrustReportCommandDisposable,
-    explainMissingModuleLookupCommandDisposable,
-    explainDiagnosticCommandDisposable,
-    showVersionCommand,
-    statusMenuCommand,
-    reinstallCommand,
-    checkForUpdateCommand,
-    runHealthCheckCommand,
-    showWhatsNewCommand,
-    openConfigurationGuideCommand,
-    extractVariableCommand,
-    extractMethodCommand,
-    showRefactoringOptionsCommand,
-    reportIssueCommand,
+    ...serverCommandDisposables,
+    ...criticCommandDisposables,
+    ...testCommandDisposables,
+    ...navigationCommandDisposables,
+    ...documentCommandDisposables,
+    ...diagnosticCommandDisposables,
+    ...onboardingCommandDisposables,
+    ...refactoringCommandDisposables,
+    ...supportCommandDisposables,
     formatOnSaveDisposable,
     configurationWatcher,
     fileCreationWatcher,
     arrowCompletionWatcher,
     ...(mcpDisposable ? [mcpDisposable] : []),
-    ...registerGherkinProviders(),
-    ...registerGherkinStepDefinitionSupport(),
-    ...registerPodPreview(context),
+    ...providerDisposables,
   );
   languageClientStartupMetrics.markMilestone('commands_registered');
 
   // Initialize debug adapter
-  activateDebugger(context);
+  featureActivationMetrics.measure('debugger', true, () => activateDebugger(context));
 
   if (
     context.extensionMode === vscode.ExtensionMode.Test &&
@@ -1880,6 +1685,7 @@ export async function activate(context: vscode.ExtensionContext) {
     languageClientStartupMetrics.markMilestone('activate_returned');
     return {
       getLanguageClientStartupMetrics,
+      getFeatureActivationMetrics,
       markLanguageClientStartupMilestone,
       stop: deactivate,
     };
@@ -1889,9 +1695,95 @@ export async function activate(context: vscode.ExtensionContext) {
   languageClientStartupMetrics.markMilestone('activate_returned');
   return {
     getLanguageClientStartupMetrics,
+    getFeatureActivationMetrics,
     markLanguageClientStartupMilestone,
     stop: deactivate,
   };
+}
+
+async function runTestsCommandImpl(test?: unknown): Promise<void> {
+  let targetUri: vscode.Uri | undefined;
+
+  if (test) {
+    const target = parseDebugTestLaunchTarget(test);
+    if (target?.program) {
+      targetUri = vscode.Uri.file(target.program);
+    }
+  }
+
+  if (!targetUri) {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+      vscode.window.showErrorMessage('No active Perl file to test');
+      return;
+    }
+    targetUri = editor.document.uri;
+  }
+
+  // Restrict to test files (.t, .pl) - .pm files are modules, not test scripts
+  const filePath = targetUri.fsPath;
+  if (!filePath.endsWith('.t') && !filePath.endsWith('.pl')) {
+    vscode.window.showWarningMessage('Run Tests is only available for .t and .pl files');
+    return;
+  }
+
+  if (testAdapter) {
+    const originalText = statusBarItem?.text;
+    const originalTooltip = statusBarItem?.tooltip;
+
+    if (statusBarItem) {
+      statusBarItem.text = '$(beaker~spin) Running Tests...';
+      statusBarItem.tooltip = 'Executing Perl tests in current file';
+    }
+
+    try {
+      await testAdapter.runFileTests(targetUri);
+    } finally {
+      if (statusBarItem && originalText) {
+        statusBarItem.text = originalText;
+        statusBarItem.tooltip = originalTooltip;
+      }
+    }
+  } else {
+    vscode.window.showWarningMessage(
+      'Test adapter is not available. It might still be initializing.',
+    );
+  }
+}
+
+async function runTestAtCursorCommandImpl(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== 'perl') {
+    vscode.window.showErrorMessage('Run Test at Cursor requires an active Perl file');
+    return;
+  }
+
+  if (editor.document.isDirty) {
+    await editor.document.save();
+  }
+
+  if (!client) {
+    vscode.window.showWarningMessage(serverNotRunningMessage());
+    return;
+  }
+
+  const lenses = await client.sendRequest<Array<{
+    range?: {
+      start: { line: number; character: number };
+      end: { line: number; character: number };
+    };
+    command?: { command: string; arguments?: unknown[] };
+  }> | null>('textDocument/codeLens', {
+    textDocument: { uri: editor.document.uri.toString() },
+  });
+
+  const command = selectTestCommandAtPosition(lenses ?? [], editor.selection.active);
+  if (!command) {
+    vscode.window.showWarningMessage('No runnable test was found at the cursor position');
+    return;
+  }
+
+  await vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
 }
 
 export async function deactivate() {
@@ -1935,8 +1827,13 @@ async function finishStartupAfterActivation(
   });
 
   // First-run onboarding: show welcome notification once per installation.
-  const onboarding = new OnboardingManager(context, outputChannel);
+  const onboarding = featureActivationMetrics.measure(
+    'onboarding',
+    false,
+    () => new OnboardingManager(context, outputChannel),
+  );
   if (onboarding.shouldShowWelcome()) {
+    featureActivationMetrics.markFirstUse('onboarding');
     // Fire-and-forget; failures must not block extension startup.
     onboarding.showWelcomeNotification(currentServerPath).catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
@@ -2388,6 +2285,10 @@ export function maybeNudgeArrowCompletion(event: vscode.TextDocumentChangeEvent)
   }
 
   const change = event.contentChanges[0];
+  if (!change) {
+    return;
+  }
+
   if (change.rangeLength !== 0 || change.text !== '-') {
     return;
   }
@@ -2489,7 +2390,7 @@ export function formatIssueDiagnosticInfo(params: {
   editorVersion: string;
   platform: string;
   arch: string;
-  editorName?: string;
+  editorName?: string | undefined;
 }): string {
   const editorName = (params.editorName ?? 'VS Code').trim() || 'VS Code';
   return [
@@ -2712,7 +2613,13 @@ async function runAllTestsWithProve(): Promise<void> {
     return;
   }
 
-  const cwd = workspaceFolders[0].uri.fsPath;
+  const firstFolder = workspaceFolders[0];
+  if (!firstFolder) {
+    vscode.window.showErrorMessage('No workspace folder open');
+    return;
+  }
+
+  const cwd = firstFolder.uri.fsPath;
   await runProveTask('Perl Tests: All', ['-r', 't/'], cwd);
 }
 
@@ -2832,19 +2739,6 @@ function getManagedBinarySource(): ManagedBinarySource {
     .getConfiguration('perl-lsp')
     .get<string>('downloadBaseUrl', '');
   return downloadBaseUrl ? 'internal-base-url' : 'github-release';
-}
-
-function toHealthCheckCommandResult(results: HealthCheckResult[]): HealthCheckCommandResult {
-  const checks = results.map((result) => ({
-    label: result.label,
-    status: result.status as HealthCheckCommandStatus,
-    detail: result.detail,
-  }));
-
-  return {
-    ok: checks.every((check) => check.status !== 'error'),
-    checks,
-  };
 }
 
 async function readInstalledServerVersion(serverPath: string): Promise<string | undefined> {

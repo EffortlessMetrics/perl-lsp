@@ -58,7 +58,6 @@ pub use lints::common_mistakes;
 pub use lints::deprecated;
 pub use lints::missing_module;
 pub use lints::package_subroutine;
-pub(crate) use lints::printf_format::count_format_specifiers;
 /// Same-file Moo/Moose role conflict detection.
 pub use lints::role_conflicts;
 pub use lints::security;

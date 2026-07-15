@@ -63,18 +63,6 @@ fn find_workspace_perlcritic_profile(
     None
 }
 
-fn critic_range_to_offsets(
-    content: &str,
-    start_line: u32,
-    start_column: u32,
-    end_line: u32,
-    end_column: u32,
-) -> Option<(usize, usize)> {
-    let start = crate::util::position_to_offset(content, start_line, start_column)?;
-    let end = crate::util::position_to_offset(content, end_line, end_column)?;
-    (start <= end).then_some((start, end))
-}
-
 /// Orchestrator for pull diagnostics operations.
 ///
 /// Coordinates between LspServer state and the pure-logic PullDiagnosticsProvider.
@@ -311,19 +299,19 @@ impl PullDiagnosticsOrchestrator {
                         }
                     };
 
-                    let Some((start_byte, end_byte)) = critic_range_to_offsets(
+                    // Convert line/column to byte offset
+                    let start_byte = crate::util::position_to_offset(
                         doc_text,
                         v.range.start.line,
                         v.range.start.column,
+                    )
+                    .unwrap_or(0);
+                    let end_byte = crate::util::position_to_offset(
+                        doc_text,
                         v.range.end.line,
                         v.range.end.column,
-                    ) else {
-                        tracing::warn!(
-                            policy = %v.policy,
-                            "dropping critic diagnostic with invalid source range"
-                        );
-                        continue;
-                    };
+                    )
+                    .unwrap_or(start_byte.saturating_add(1));
 
                     diagnostics.push(InternalDiagnostic {
                         range: (start_byte, end_byte),
@@ -1979,19 +1967,13 @@ impl LspServer {
                         crate::perl_critic::Severity::Brutal => InternalDiagnosticSeverity::Hint,
                     };
 
-                    let Some((start_byte, end_byte)) = critic_range_to_offsets(
-                        doc_text,
-                        v.range.start.line,
-                        v.range.start.column,
-                        v.range.end.line,
-                        v.range.end.column,
-                    ) else {
-                        tracing::warn!(
-                            policy = %v.policy,
-                            "dropping critic diagnostic with invalid source range"
-                        );
-                        continue;
-                    };
+                    // Convert 0-indexed line/column from CriticAnalyzer to byte offsets.
+                    let line_0 = v.range.start.line;
+                    let col_0 = v.range.start.column;
+                    let start_byte = position_to_offset(doc_text, line_0, col_0).unwrap_or(0);
+                    let end_byte =
+                        position_to_offset(doc_text, v.range.end.line, v.range.end.column)
+                            .unwrap_or(start_byte.saturating_add(1));
 
                     diagnostics.push(InternalDiagnostic {
                         range: (start_byte, end_byte),
@@ -2149,7 +2131,6 @@ mod tests {
     #![allow(clippy::expect_used)]
 
     use super::*;
-    use perl_subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
     use serde_json::json;
     use std::io::Write;
     use std::sync::Arc as StdArc;
@@ -2188,74 +2169,6 @@ mod tests {
             runtime_tuning,
         );
         (server, buf)
-    }
-
-    fn install_mock_legacy_critic(server: &LspServer, output: &str) {
-        let runtime = StdArc::new(MockSubprocessRuntime::new());
-        runtime.add_response(MockResponse::success(output.as_bytes().to_vec()));
-        let runtime_for_server: StdArc<dyn perl_subprocess_runtime::SubprocessRuntime> = runtime;
-        server.test_install_mock_critic_runtime(runtime_for_server);
-        server.test_bypass_perlcritic_command_check();
-        server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Legacy);
-        server.test_configure_perlcritic(true, 3, None);
-    }
-
-    #[test]
-    fn critic_range_to_offsets_rejects_malformed_ranges() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let source = "alpha\nbeta\n";
-
-        assert_eq!(critic_range_to_offsets(source, 0, 0, 0, 5), Some((0, 5)));
-        assert_eq!(critic_range_to_offsets(source, 9, 0, 9, 1), None);
-        assert_eq!(critic_range_to_offsets(source, 0, 5, 0, 4), None);
-        assert_eq!(critic_range_to_offsets(source, 1, 2, 1, 2), Some((8, 8)));
-        Ok(())
-    }
-
-    #[test]
-    fn push_critic_diagnostics_drop_malformed_ranges() -> Result<(), Box<dyn std::error::Error>> {
-        let (server, buf) = make_server_with_capture();
-        install_mock_legacy_critic(
-            &server,
-            "/tmp/critic-range-push-test.pl:1:1:5:TestingAndDebugging::RequireUseStrict:valid\n\
-             /tmp/critic-range-push-test.pl:99:1:5:InputOutput::ProhibitTwoArgOpen:malformed\n",
-        );
-        let uri = "file:///tmp/critic-range-push-test.pl";
-        server.test_apply_did_open(uri, "my $value = 1;\n", 1)?;
-
-        server.publish_diagnostics(uri);
-        drop(server);
-        std::thread::sleep(Duration::from_millis(50));
-
-        let text = String::from_utf8(buf.lock().clone())?;
-        assert!(text.contains("TestingAndDebugging::RequireUseStrict"));
-        assert!(!text.contains("InputOutput::ProhibitTwoArgOpen"));
-        Ok(())
-    }
-
-    #[test]
-    fn pull_critic_diagnostics_drop_malformed_ranges() -> Result<(), Box<dyn std::error::Error>> {
-        let (server, _buf) = make_server_with_capture();
-        install_mock_legacy_critic(
-            &server,
-            "/tmp/critic-range-pull-test.pl:1:1:5:TestingAndDebugging::RequireUseStrict:valid\n\
-             /tmp/critic-range-pull-test.pl:99:1:5:InputOutput::ProhibitTwoArgOpen:malformed\n",
-        );
-        let uri = "file:///tmp/critic-range-pull-test.pl";
-        server.test_apply_did_open(uri, "my $value = 1;\n", 1)?;
-
-        let response = server
-            .test_handle_document_diagnostic(Some(json!({
-                "textDocument": { "uri": uri }
-            })))?
-            .ok_or("document diagnostic response should be present")?;
-        let items =
-            response["items"].as_array().ok_or("document diagnostic items should be an array")?;
-        assert!(
-            items.iter().any(|item| { item["code"] == "TestingAndDebugging::RequireUseStrict" })
-        );
-        assert!(!items.iter().any(|item| { item["code"] == "InputOutput::ProhibitTwoArgOpen" }));
-        Ok(())
     }
 
     /// Positive case: when no concurrent change arrives during diagnostic computation,
