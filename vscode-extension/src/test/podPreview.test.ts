@@ -13,21 +13,43 @@ import { podToHtml } from '../podPreview';
 
 const EXT_ROOT = path.resolve(__dirname, '..', '..');
 
-function readPackageJson(): any {
-  return JSON.parse(fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'));
+type CommandContribution = {
+  command: string;
+  category?: string;
+  title?: string;
+};
+
+type PaletteEntry = {
+  command: string;
+  when?: string;
+};
+
+type PackageManifest = {
+  contributes: {
+    commands: CommandContribution[];
+    menus?: {
+      commandPalette?: PaletteEntry[];
+    };
+  };
+};
+
+function readPackageJson(): PackageManifest {
+  return JSON.parse(
+    fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'),
+  ) as PackageManifest;
 }
 
 // ---------------------------------------------------------------------------
 // package.json contract: command registration
 // ---------------------------------------------------------------------------
 describe('perl-lsp.previewPod command (issue #2062)', () => {
-  let pkg: any;
+  let pkg: PackageManifest;
   let commandIds: string[];
-  let paletteEntries: any[];
+  let paletteEntries: PaletteEntry[];
 
   beforeAll(() => {
     pkg = readPackageJson();
-    commandIds = pkg.contributes.commands.map((c: any) => c.command);
+    commandIds = pkg.contributes.commands.map((c: CommandContribution) => c.command);
     paletteEntries = pkg.contributes.menus?.commandPalette ?? [];
   });
 
@@ -36,22 +58,26 @@ describe('perl-lsp.previewPod command (issue #2062)', () => {
   });
 
   test('perl-lsp.previewPod has category Perl', () => {
-    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.previewPod');
+    const cmd = pkg.contributes.commands.find(
+      (c: CommandContribution) => c.command === 'perl-lsp.previewPod',
+    );
     expect(cmd?.category).toBe('Perl');
   });
 
   test('perl-lsp.previewPod has a non-empty title', () => {
-    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.previewPod');
+    const cmd = pkg.contributes.commands.find(
+      (c: CommandContribution) => c.command === 'perl-lsp.previewPod',
+    );
     expect(cmd?.title).toBeTruthy();
   });
 
   test('perl-lsp.previewPod appears in command palette', () => {
-    const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.previewPod');
+    const entry = paletteEntries.find((e: PaletteEntry) => e.command === 'perl-lsp.previewPod');
     expect(entry).toBeDefined();
   });
 
   test('perl-lsp.previewPod is guarded by editorLangId == perl', () => {
-    const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.previewPod');
+    const entry = paletteEntries.find((e: PaletteEntry) => e.command === 'perl-lsp.previewPod');
     expect(entry?.when).toContain('editorLangId == perl');
   });
 });
