@@ -5,27 +5,9 @@
     "oxlint": "1.73.0",
     "oxlint-tsgolint": "0.24.0"
   },
-  "warning_count": 70,
-  "by_rule": {
-    "eslint(no-unused-vars)": 1,
-    "typescript(consistent-type-imports)": 0,
-    "typescript(no-explicit-any)": 69
-  },
-  "by_surface": {
-    "tests": 70
-  },
-  "by_rule_and_surface": {
-    "eslint(no-unused-vars)": {
-      "tests": 1
-    },
-    "typescript(consistent-type-imports)": {
-      "tests": 0
-    },
-    "typescript(no-explicit-any)": {
-      "tests": 69
-    }
-  },
-  "by_file": {
-    "src/test/extensionUx.test.ts": 70
-  }
+  "warning_count": 0,
+  "by_rule": {},
+  "by_surface": {},
+  "by_rule_and_surface": {},
+  "by_file": {}
 }
