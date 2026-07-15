@@ -11,6 +11,9 @@
 | Target base SHA | `1240ccac4cd24aedef85bb03f76951b8cf72e46a` |
 | Target sync merge SHA | `496e8e6998c684156000f2e0f5b5ab13449de64c` |
 | Merge parents | `1240ccac4cd24aedef85bb03f76951b8cf72e46a`, `bdfde90d7e078f6e94d0acd946328c53fd55269b` |
+| Sync PR | [#10003](https://github.com/EffortlessMetrics/perl-lsp/pull/10003) |
+| Target final merge SHA | `3ad0ef92b3e6db63035a0eb108a180cf20c6aef6` |
+| Final merge parents | `1240ccac4cd24aedef85bb03f76951b8cf72e46a`, `7e4816bc6de7956bde627481f7042ef28d2f059c` |
 | Direction | swarm → target, history-preserving complete-tree merge |
 
 ## Scope and proof
@@ -30,3 +33,8 @@ The complete-tree difference from the pinned cut contains only the approved
 `.claude/`, swarm-only cleanup scripts, and target-owned sync-ledger paths.
 No per-file resolution was used for shared source files. This receipt does not
 authorize publishing, tagging, Docker publication, or release creation.
+
+Post-sync verification: the pinned cut is an ancestor of target `master`, and
+the final target tree differs from it only by the approved exclusions and sync
+ledgers. Target `master` retains both parent histories through final merge
+`3ad0ef92b3e6db63035a0eb108a180cf20c6aef6`.
