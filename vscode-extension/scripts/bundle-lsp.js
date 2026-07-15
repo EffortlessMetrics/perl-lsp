@@ -3,6 +3,9 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { createReporter } = require('./reporter');
+
+const reporter = createReporter('bundle-lsp');
 
 const PLATFORMS = [
   { platform: 'darwin', arch: 'x64', rustTarget: 'x86_64-apple-darwin' },
@@ -36,13 +39,13 @@ if (!fs.existsSync(binDir)) {
 const currentPlatform = process.platform;
 const currentArch = process.arch;
 
-console.log(`Building perllsp for ${currentPlatform}-${currentArch}...`);
+reporter.info(`Building perllsp for ${currentPlatform}-${currentArch}...`);
 
 // For development, just build for current platform
 const platform = PLATFORMS.find((p) => p.platform === currentPlatform && p.arch === currentArch);
 
 if (!platform) {
-  console.error(`Unsupported platform: ${currentPlatform}-${currentArch}`);
+  reporter.error(`Unsupported platform: ${currentPlatform}-${currentArch}`);
   process.exit(1);
 }
 
@@ -51,8 +54,8 @@ try {
   const releaseDir = path.join(targetDir, 'release');
 
   // Build the binary
-  console.log('Building perllsp binary...');
-  console.log(`Using Cargo target dir: ${targetDir}`);
+  reporter.info('Building perllsp binary...');
+  reporter.info(`Using Cargo target dir: ${targetDir}`);
   const buildCmd = `cargo build -p perllsp --release`;
   execSync(buildCmd, {
     cwd: projectRoot,
@@ -73,21 +76,21 @@ try {
     .find((candidate) => fs.existsSync(candidate.sourcePath));
 
   if (!sourcePath) {
-    console.error(`Binary not found at ${releaseDir}`);
+    reporter.error(`Binary not found at ${releaseDir}`);
     process.exit(1);
   }
 
   const destPath = path.join(platformDir, sourcePath.binaryName);
   fs.copyFileSync(sourcePath.sourcePath, destPath);
-  console.log(`Copied ${sourcePath.binaryName} to ${platformDir}`);
+  reporter.info(`Copied ${sourcePath.binaryName} to ${platformDir}`);
 
   if (platform.platform !== 'win32') {
     fs.chmodSync(destPath, 0o755);
   }
 
-  console.log('Bundle complete!');
+  reporter.info('Bundle complete!');
 } catch (error) {
-  console.error('Build failed:', error.message);
+  reporter.error(`Build failed: ${error.message}`);
   process.exit(1);
 }
 
