@@ -56,6 +56,7 @@ below.
 | #4291 | Typed command manifest contract tests                | Merged |
 | #4293 | Script output reporter seam                          | Merged |
 | #4294 | Typed arrow-completion tests                         | Merged |
+| #4296 | Typed walkthrough and What's New contract tests      | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -75,9 +76,9 @@ The rescue checkpoint was not merged wholesale.
   TypeScript authority configuration.
 - Oxlint warning debt is recorded and enforced by rule, surface, rule-by-surface,
   and file; new errors or warning growth are rejected rather than silently
-  baselined. The current inventory is 352 warnings after the typed VS Code
-  mock, command manifest, script reporter, and arrow-completion cleanups in
-  #4285, #4291, #4293, and #4294.
+  baselined. The current inventory is 333 warnings after the typed VS Code
+  mock, command manifest, script reporter, arrow-completion, walkthrough, and
+  What's New cleanups in #4285, #4291, #4293, #4294, and #4296.
 - Workspace guidance and the `perllsp --health` process boundary have separate
   owners and focused tests.
 - The exact-source VSIX/current-server harness is reused by hosted Linux smoke.

@@ -5,14 +5,14 @@
     "oxlint": "1.73.0",
     "oxlint-tsgolint": "0.24.0"
   },
-  "warning_count": 352,
+  "warning_count": 333,
   "by_rule": {
     "eslint(no-unused-vars)": 11,
     "typescript(consistent-type-imports)": 3,
-    "typescript(no-explicit-any)": 338
+    "typescript(no-explicit-any)": 319
   },
   "by_surface": {
-    "tests": 352
+    "tests": 333
   },
   "by_rule_and_surface": {
     "eslint(no-unused-vars)": {
@@ -22,7 +22,7 @@
       "tests": 3
     },
     "typescript(no-explicit-any)": {
-      "tests": 338
+      "tests": 319
     }
   },
   "by_file": {
@@ -35,8 +35,6 @@
     "src/test/onboarding.test.ts": 29,
     "src/test/podPreview.test.ts": 8,
     "src/test/runTestAtCursor.test.ts": 1,
-    "src/test/streamingCompletion.test.ts": 1,
-    "src/test/walkthrough.test.ts": 10,
-    "src/test/whatsNew.test.ts": 9
+    "src/test/streamingCompletion.test.ts": 1
   }
 }
