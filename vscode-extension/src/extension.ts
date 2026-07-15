@@ -2489,7 +2489,7 @@ export function formatIssueDiagnosticInfo(params: {
   editorVersion: string;
   platform: string;
   arch: string;
-  editorName?: string;
+  editorName?: string | undefined;
 }): string {
   const editorName = (params.editorName ?? 'VS Code').trim() || 'VS Code';
   return [

@@ -26,8 +26,9 @@ The active development contract is maintained in
 - Node 26.x, npm `11.18.0`, and the CI pin Node `26.5.0` as enforceable doctor
   and workflow authority;
 - source, test, integration, published-smoke, and script TypeScript checks;
-- non-growing `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
-  baselines, with `noImplicitOverride` blocking and clean;
+- non-growing `noUncheckedIndexedAccess` baseline and blocking
+  `exactOptionalPropertyTypes`, with `noImplicitOverride` also blocking and
+  clean;
 - type-aware Oxlint canary and warning-budget inventory;
 - exact-source VSIX/current-server smoke, repeated startup/request receipts,
   and package inventory/size ratchets; and

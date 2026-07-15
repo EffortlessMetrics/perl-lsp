@@ -265,7 +265,7 @@ export async function suggestDiscoveredIncludePaths(
 
 export async function suggestAiCompletionIfSupported(
   context: vscode.ExtensionContext,
-  client: { initializeResult?: { capabilities?: unknown } } | undefined,
+  client: { initializeResult?: { capabilities?: unknown | undefined } | undefined } | undefined,
 ): Promise<void> {
   if (!client) {
     return;

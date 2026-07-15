@@ -44,7 +44,7 @@ This bypasses the auto-download and uses your local build.
 ```bash
 npm run typecheck   # Type-check only (tsc --noEmit) — TypeScript 7 is the sole type-check authority
 npm run typecheck:all # Check source, unit tests, integration, published smoke, and scripts
-npm run typecheck:strictness # Advisory indexed-access and exact-optional baselines; rejects debt growth
+npm run typecheck:strictness # Advisory indexed-access baseline; exact-optional is blocking
 npm run compile     # Single build (Rolldown bundles out/extension.js — does NOT type-check)
 npm run sample:published:local # Repeat exact-source VSIX smoke and write p50/p95 receipt summary
 npm run watch       # Rebuild out/extension.js on every file change (use during active development)
@@ -52,11 +52,13 @@ npm run watch:types # Optional companion: live tsc --noEmit type-check loop in a
 ```
 
 The strictness command runs all TypeScript authority configurations with
-`noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` enabled while the
-existing debt is being burned down. Each committed baseline is countable by
-configuration, diagnostic code, and file; refreshes require the explicit
-option-specific `node scripts/check-typescript-strictness.js --update-baseline`
-command and must not silently absorb growth.
+`noUncheckedIndexedAccess` enabled while its existing debt is being burned down.
+`exactOptionalPropertyTypes` is a blocking compiler option in the shared
+configuration, so all authority configurations reject optional-property drift
+directly through `npm run typecheck:all`. The remaining indexed-access baseline
+is countable by configuration, diagnostic code, and file; refreshes require the
+explicit `node scripts/check-typescript-strictness.js --update-baseline` command
+and must not silently absorb growth.
 
 The shared TypeScript configuration also enables `noImplicitOverride` as a
 blocking check. All source, test, integration, published-smoke, and script

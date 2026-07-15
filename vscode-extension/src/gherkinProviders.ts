@@ -18,7 +18,7 @@ interface OutlineNode {
 
 interface GherkinStepReference {
   keyword: StepKeyword;
-  effectiveKeyword?: StepDefinitionKeyword;
+  effectiveKeyword?: StepDefinitionKeyword | undefined;
   text: string;
   originSelectionRange: vscode.Range;
 }

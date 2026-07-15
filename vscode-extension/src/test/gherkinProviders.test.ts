@@ -258,6 +258,32 @@ describe('gherkin outline providers', () => {
     expect(links[0].targetSelectionRange?.start.line).toBe(2);
   });
 
+  test('does not infer a definition keyword for an initial And step', () => {
+    const featureText = [
+      'Feature: Checkout',
+      '  Scenario: Purchase',
+      '    And the cart is empty',
+    ].join('\n');
+
+    const links = provideGherkinStepDefinitionLinks(
+      featureText,
+      { line: 2, character: 12 } as vscode.Position,
+      [
+        {
+          uri: vscode.Uri.file('/project/t/steps/cart_steps.pm'),
+          text: [
+            'use Test::BDD::Cucumber::StepFile;',
+            '',
+            'Given qr/the cart is empty/, sub {',
+            '};',
+          ].join('\n'),
+        },
+      ],
+    );
+
+    expect(links).toHaveLength(0);
+  });
+
   test('uses the registered definition provider to scan workspace step files', async () => {
     registerGherkinProviders();
 

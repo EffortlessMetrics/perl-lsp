@@ -6,10 +6,8 @@ const { spawnSync } = require('child_process');
 
 const EXTENSION_ROOT = path.resolve(__dirname, '..');
 const TYPESCRIPT_CLI = path.join(EXTENSION_ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
-const POLICIES = {
-  noUncheckedIndexedAccess: 'typescript-strictness-baseline.json',
-  exactOptionalPropertyTypes: 'typescript-exact-optional-baseline.json',
-};
+const BASELINE_FILE = 'typescript-strictness-baseline.json';
+const POLICY = 'noUncheckedIndexedAccess';
 const CONFIGS = [
   'tsconfig.json',
   'tsconfig.test.json',
@@ -89,8 +87,8 @@ function validateCompilerResult(result, diagnostics, config) {
 
 function getOption(args = process.argv) {
   const optionIndex = args.indexOf('--option');
-  const option = optionIndex === -1 ? 'noUncheckedIndexedAccess' : args[optionIndex + 1];
-  if (typeof option !== 'string' || !Object.hasOwn(POLICIES, option)) {
+  const option = optionIndex === -1 ? POLICY : args[optionIndex + 1];
+  if (option !== POLICY) {
     throw new Error(`Unsupported TypeScript strictness option: ${option ?? 'missing value'}`);
   }
   return option;
@@ -113,7 +111,7 @@ function runConfig(config, option) {
 
 function main() {
   const option = getOption();
-  const baselinePath = path.join(EXTENSION_ROOT, 'scripts', POLICIES[option]);
+  const baselinePath = path.join(EXTENSION_ROOT, 'scripts', BASELINE_FILE);
   const updateBaseline = process.argv.includes('--update-baseline');
   const baseline =
     updateBaseline && !fs.existsSync(baselinePath)

@@ -6,6 +6,7 @@
     "outDir": "./out",
     "rootDir": "./src",
     "strict": true,
+    "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

@@ -5,7 +5,9 @@ export interface ReinstallCommandResult {
   serverPath: string;
   target: string;
   source: ManagedBinarySource;
-  version?: string;
+  // Reinstall reads the installed version independently of the download
+  // result, so an explicit undefined is a valid unavailable-version value.
+  version?: string | undefined;
   checksumVerified?: boolean;
   error?: string;
 }

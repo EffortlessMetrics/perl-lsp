@@ -6763,7 +6763,6 @@
 | `vscode-extension/scripts/summarize-vscode-receipts.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/summarize-vscode-receipts.test.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/toolchain-doctor.js` | production | `non-rust-vscode-extension` | editor/vscode |
-| `vscode-extension/scripts/typescript-exact-optional-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/typescript-strictness-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/vsix-inventory-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/snippets/launch.json` | production | `non-rust-vscode-extension` | editor/vscode |

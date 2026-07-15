@@ -69,9 +69,9 @@ void test('rejects compiler failures without parseable diagnostics', () => {
 
 void test('selects only supported strictness policies', () => {
   assert.equal(getOption(['node', 'check.js']), 'noUncheckedIndexedAccess');
-  assert.equal(
-    getOption(['node', 'check.js', '--option', 'exactOptionalPropertyTypes']),
-    'exactOptionalPropertyTypes',
+  assert.throws(
+    () => getOption(['node', 'check.js', '--option', 'exactOptionalPropertyTypes']),
+    /Unsupported TypeScript strictness option: exactOptionalPropertyTypes/,
   );
   assert.throws(
     () => getOption(['node', 'check.js', '--option', 'unknownPolicy']),
