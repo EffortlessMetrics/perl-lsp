@@ -8,6 +8,7 @@ import {
   resolveCliArgsFromVSCodeExecutablePath,
   runTests,
 } from '@vscode/test-electron';
+import { resolveVSCodeTestVersion } from '../vscodeHostVersion';
 
 const EXTENSION_ID = 'EffortlessMetrics.perl-lsp-rs';
 
@@ -235,6 +236,7 @@ function configureCurrentSourceSmoke(userDataDir: string, extensionsDir: string)
 
 async function main(): Promise<void> {
   const source = publishedSource();
+  const vscodeVersion = resolveVSCodeTestVersion(process.env.PERL_LSP_VSCODE_VERSION);
   const toolchainNodeVersion = process.version;
   const toolchainNpmVersionValue = toolchainNpmVersion();
   const workspacePath = fs.mkdtempSync(
@@ -259,7 +261,7 @@ async function main(): Promise<void> {
   );
 
   try {
-    const vscodeExecutablePath = await downloadAndUnzipVSCode();
+    const vscodeExecutablePath = await downloadAndUnzipVSCode({ version: vscodeVersion });
     const installTarget = await resolveInstallTarget(source, downloadDir);
     configureCurrentSourceSmoke(userDataDir, extensionsDir);
     await installExtension(vscodeExecutablePath, installTarget, userDataDir, extensionsDir);
@@ -278,6 +280,7 @@ async function main(): Promise<void> {
         PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || source,
         PERL_LSP_TOOLCHAIN_NODE_VERSION: toolchainNodeVersion,
         PERL_LSP_TOOLCHAIN_NPM_VERSION: toolchainNpmVersionValue,
+        PERL_LSP_VSCODE_VERSION: vscodeVersion,
       },
       launchArgs: [
         workspacePath,

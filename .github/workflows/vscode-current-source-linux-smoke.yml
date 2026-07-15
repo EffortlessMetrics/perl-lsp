@@ -21,9 +21,13 @@ permissions:
 
 jobs:
   current-source-linux-smoke:
-    name: Current-source Linux smoke
+    name: Current-source Linux smoke (${{ matrix.vscode_version }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        vscode_version: ['1.125.0', 'stable']
 
     defaults:
       run:
@@ -32,6 +36,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       RUST_BACKTRACE: 1
+      PERL_LSP_VSCODE_VERSION: ${{ matrix.vscode_version }}
 
     steps:
       - name: Checkout
@@ -75,7 +80,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: vscode-current-source-linux-smoke-${{ github.sha }}
+          name: vscode-current-source-linux-smoke-${{ matrix.vscode_version }}-${{ github.sha }}
           path: target/receipts/vscode-smoke/**
           if-no-files-found: warn
           retention-days: 14

@@ -33,6 +33,9 @@ The active development contract is maintained in
   and package inventory/size ratchets; and
 - exact `@vscode/vsce` 3.9.2 and `ovsx` 1.0.2 publisher tooling resolved
   offline from `package-lock.json` through the shared workflow setup action; and
+- the exact-source Linux host matrix requests the declared VS Code 1.125.0
+  floor and current stable, with receipts recording requested and actual host
+  versions separately; and
 - the current decisions to retain Jest and defer optional-feature loading until
   feature-attributable receipts exist.
 

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { runTests } from '@vscode/test-electron';
+import { resolveVSCodeTestVersion } from '../vscodeHostVersion';
 
 function toolchainNpmVersion(): string {
   const npmUserAgent = process.env.npm_config_user_agent ?? '';
@@ -35,6 +36,7 @@ async function main(): Promise<void> {
   const extensionDevelopmentPath = path.resolve(__dirname, '../../..');
   const repoRoot = path.resolve(extensionDevelopmentPath, '..');
   const extensionTestsPath = path.resolve(__dirname, './suite');
+  const vscodeVersion = resolveVSCodeTestVersion(process.env.PERL_LSP_VSCODE_VERSION);
   const toolchainNodeVersion = process.version;
   const toolchainNpmVersionValue = toolchainNpmVersion();
   const configuredWorkspace = process.env.PERL_LSP_SMOKE_WORKSPACE;
@@ -75,6 +77,7 @@ async function main(): Promise<void> {
   }
 
   await runTests({
+    version: vscodeVersion,
     extensionDevelopmentPath,
     extensionTestsPath,
     extensionTestsEnv: {
@@ -84,6 +87,7 @@ async function main(): Promise<void> {
       PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || 'integration',
       PERL_LSP_TOOLCHAIN_NODE_VERSION: toolchainNodeVersion,
       PERL_LSP_TOOLCHAIN_NPM_VERSION: toolchainNpmVersionValue,
+      PERL_LSP_VSCODE_VERSION: vscodeVersion,
       VSCODE_TEST_GREP: grep ?? '',
     },
     launchArgs: [
