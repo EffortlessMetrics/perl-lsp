@@ -53,6 +53,7 @@ import { registerCriticCommandGroup } from './criticCommandGroup';
 import { registerTestCommandGroup } from './testCommandGroup';
 import { registerOnboardingCommandGroup } from './onboardingCommandGroup';
 import { registerNavigationCommandGroup } from './navigationCommandGroup';
+import { registerDiagnosticCommandGroup } from './diagnosticCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -1296,65 +1297,25 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  const explainProviderDecisionCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.explainProviderDecision',
-    async (provider?: unknown) => {
-      await explainProviderDecisionCommand(
+  const diagnosticCommandDisposables = registerDiagnosticCommandGroup({
+    explainProviderDecision: (provider) =>
+      explainProviderDecisionCommand(client, typeof provider === 'string' ? provider : undefined),
+    previewSafeDelete: () => previewSafeDeleteCommand(client),
+    previewPackageRename: () => previewPackageRenameCommand(client),
+    copyProviderDecisionReceipt: (provider) =>
+      copyProviderDecisionReceiptCommand(
         client,
         typeof provider === 'string' ? provider : undefined,
-      );
-    },
-  );
-
-  const previewSafeDeleteCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.previewSafeDelete',
-    async () => {
-      await previewSafeDeleteCommand(client);
-    },
-  );
-
-  const previewPackageRenameCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.previewPackageRename',
-    async () => {
-      await previewPackageRenameCommand(client);
-    },
-  );
-
-  const copyProviderDecisionReceiptCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.copyProviderDecisionReceipt',
-    async (provider?: unknown) => {
-      await copyProviderDecisionReceiptCommand(
-        client,
-        typeof provider === 'string' ? provider : undefined,
-      );
-    },
-  );
-
-  const showWorkspaceTrustReportCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.showWorkspaceTrustReport',
-    async () => {
-      await showWorkspaceTrustReportCommand(client, () =>
-        workspaceTrustClientRuntimeState(context),
-      );
-    },
-  );
-
-  const explainMissingModuleLookupCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.explainMissingModuleLookup',
-    async (moduleName?: unknown) => {
-      await explainMissingModuleLookupCommand(
+      ),
+    showWorkspaceTrustReport: () =>
+      showWorkspaceTrustReportCommand(client, () => workspaceTrustClientRuntimeState(context)),
+    explainMissingModuleLookup: (moduleName) =>
+      explainMissingModuleLookupCommand(
         client,
         typeof moduleName === 'string' ? moduleName : undefined,
-      );
-    },
-  );
-
-  const explainDiagnosticCommandDisposable = vscode.commands.registerCommand(
-    'perl-lsp.explainDiagnostic',
-    async (request?: unknown) => {
-      await explainDiagnosticCommand(client, request);
-    },
-  );
+      ),
+    explainDiagnostic: (request) => explainDiagnosticCommand(client, request),
+  });
 
   const whatsNewManager = featureActivationMetrics.measure(
     'whats_new',
@@ -1724,13 +1685,7 @@ export async function activate(context: vscode.ExtensionContext) {
     showIncPathsCommand,
     openModuleCommand,
     showParserAstCommand,
-    explainProviderDecisionCommandDisposable,
-    previewSafeDeleteCommandDisposable,
-    previewPackageRenameCommandDisposable,
-    copyProviderDecisionReceiptCommandDisposable,
-    showWorkspaceTrustReportCommandDisposable,
-    explainMissingModuleLookupCommandDisposable,
-    explainDiagnosticCommandDisposable,
+    ...diagnosticCommandDisposables,
     ...onboardingCommandDisposables,
     extractVariableCommand,
     extractMethodCommand,
