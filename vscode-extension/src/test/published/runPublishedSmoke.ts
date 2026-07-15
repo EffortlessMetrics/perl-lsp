@@ -9,6 +9,8 @@ import {
   runTests,
 } from '@vscode/test-electron';
 import { resolveVSCodeTestVersion } from '../vscodeHostVersion';
+import { runWithoutForcedWorkspaceTrust } from '../runVsCodeTests';
+import { workspaceSmokeLaunchArgs, workspaceSmokeTrustMode } from '../workspaceSmokeOptions';
 
 const EXTENSION_ID = 'EffortlessMetrics.perl-lsp-rs';
 
@@ -206,7 +208,11 @@ async function installExtension(
   throw new Error(`Failed to install published extension ${installTarget}\n${lastFailure}`);
 }
 
-function configureCurrentSourceSmoke(userDataDir: string, extensionsDir: string): void {
+function configureCurrentSourceSmoke(
+  userDataDir: string,
+  extensionsDir: string,
+  workspaceTrustMode: 'disabled' | 'untrusted',
+): void {
   const serverPath = envValue('PERL_LSP_FIRST_HOUR_SERVER_PATH');
   if (!serverPath) {
     return;
@@ -218,19 +224,17 @@ function configureCurrentSourceSmoke(userDataDir: string, extensionsDir: string)
 
   const settingsDir = path.join(userDataDir, 'User');
   fs.mkdirSync(settingsDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(settingsDir, 'settings.json'),
-    JSON.stringify(
-      {
-        'perl-lsp.autoDownload': false,
-        'perl-lsp.serverPath': path.resolve(serverPath),
-        'perl-lsp.includePaths': [],
-        'perl-lsp.critic.enabled': false,
-      },
-      null,
-      2,
-    ),
-  );
+  const settings: Record<string, unknown> = {
+    'perl-lsp.autoDownload': false,
+    'perl-lsp.serverPath': path.resolve(serverPath),
+    'perl-lsp.includePaths': [],
+    'perl-lsp.critic.enabled': false,
+  };
+  if (workspaceTrustMode === 'untrusted') {
+    settings['security.workspace.trust.enabled'] = true;
+    settings['security.workspace.trust.startupPrompt'] = 'never';
+  }
+  fs.writeFileSync(path.join(settingsDir, 'settings.json'), JSON.stringify(settings, null, 2));
   process.env.PERL_LSP_PUBLISHED_EXTENSIONS_DIR = extensionsDir;
 }
 
@@ -239,9 +243,17 @@ async function main(): Promise<void> {
   const vscodeVersion = resolveVSCodeTestVersion(process.env.PERL_LSP_VSCODE_VERSION);
   const toolchainNodeVersion = process.version;
   const toolchainNpmVersionValue = toolchainNpmVersion();
-  const workspacePath = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'perl-lsp-published-smoke-workspace-'),
-  );
+  const configuredWorkspace = envValue('PERL_LSP_SMOKE_WORKSPACE');
+  const workspaceTrustMode = workspaceSmokeTrustMode();
+  const generatedWorkspacePath = configuredWorkspace
+    ? undefined
+    : fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-published-smoke-workspace-'));
+  const workspacePath = configuredWorkspace
+    ? path.resolve(configuredWorkspace)
+    : generatedWorkspacePath!;
+  if (!fs.existsSync(workspacePath)) {
+    throw new Error(`Configured smoke workspace does not exist: ${workspacePath}`);
+  }
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-published-smoke-user-'));
   const extensionsDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'perl-lsp-published-smoke-extensions-'),
@@ -255,18 +267,20 @@ async function main(): Promise<void> {
     path.join(repoRoot, 'target', 'receipts', 'vscode-smoke');
   fs.mkdirSync(receiptsRoot, { recursive: true });
 
-  fs.writeFileSync(
-    path.join(workspacePath, 'smoke.pl'),
-    'use strict;\nuse warnings;\nprint "ok\\n";\n',
-  );
+  if (!configuredWorkspace) {
+    fs.writeFileSync(
+      path.join(workspacePath, 'smoke.pl'),
+      'use strict;\nuse warnings;\nprint "ok\\n";\n',
+    );
+  }
 
   try {
     const vscodeExecutablePath = await downloadAndUnzipVSCode({ version: vscodeVersion });
     const installTarget = await resolveInstallTarget(source, downloadDir);
-    configureCurrentSourceSmoke(userDataDir, extensionsDir);
+    configureCurrentSourceSmoke(userDataDir, extensionsDir, workspaceTrustMode);
     await installExtension(vscodeExecutablePath, installTarget, userDataDir, extensionsDir);
 
-    await runTests({
+    const testOptions = {
       vscodeExecutablePath,
       extensionDevelopmentPath: harnessExtensionPath,
       extensionTestsPath,
@@ -283,14 +297,21 @@ async function main(): Promise<void> {
         PERL_LSP_VSCODE_VERSION: vscodeVersion,
       },
       launchArgs: [
-        workspacePath,
-        '--disable-workspace-trust',
+        ...workspaceSmokeLaunchArgs(workspacePath),
         `--user-data-dir=${userDataDir}`,
         `--extensions-dir=${extensionsDir}`,
       ],
-    });
+    };
+    if (workspaceTrustMode === 'untrusted') {
+      await runWithoutForcedWorkspaceTrust(testOptions);
+    } else {
+      await runTests(testOptions);
+    }
   } finally {
-    for (const directory of [workspacePath, userDataDir, extensionsDir, downloadDir]) {
+    for (const directory of [generatedWorkspacePath, userDataDir, extensionsDir, downloadDir]) {
+      if (!directory) {
+        continue;
+      }
       try {
         fs.rmSync(directory, { recursive: true, force: true });
       } catch (error: unknown) {

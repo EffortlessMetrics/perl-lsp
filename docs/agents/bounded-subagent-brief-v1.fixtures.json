@@ -1,0 +1,216 @@
+{
+  "schema": "bounded-subagent-brief-v1-fixtures",
+  "contract": "docs/agents/bounded-subagent-brief-v1.schema.json",
+  "cases": [
+    {
+      "name": "valid-read-only-explorer",
+      "valid": true,
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234",
+        "basis": {"issue": 1234, "base_sha": "0123456789abcdef"},
+        "role": "explorer",
+        "lifecycle_action": "ResearchIssue",
+        "objective": "Find current ownership evidence for the named seam.",
+        "read_scope": ["issue:1234", "docs/reference/OWNERSHIP.md"],
+        "authorities": ["issue:1234", "repo:origin/main@0123456789abcdef"],
+        "proof_obligations": ["Cite each ownership claim."],
+        "non_goals": ["Do not edit files."],
+        "stop_when": ["The named seam is answered or the basis changes."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "valid-admitted-writer",
+      "valid": true,
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234",
+        "basis": {"issue": 1234, "pr": 5678, "base_sha": "0123456789abcdef", "head_sha": "89abcdef01234567"},
+        "role": "writer",
+        "lifecycle_action": "BuildIssue",
+        "objective": "Implement only the accepted change in the compiled builder view.",
+        "read_scope": ["issue:1234", ".spec/1234-example/context.md"],
+        "write_scope": {"spec": ".spec/1234-example", "branch": "impl/1234-example", "worktree": ".claude/worktrees/1234-example", "edit_cage": "crates/example/src/example.rs"},
+        "compiled_work_order": {"work_order_id": "work-order-1234-v2", "spec_ref": ".spec/1234-example/context.md", "basis_sha": "0123456789abcdef", "freshness": "current", "scope_ref": ".spec/1234-example/context.md#scope", "invariant_refs": [".spec/1234-example/acceptance.md#invariants"], "proof_obligation_refs": [".spec/1234-example/acceptance.md#proof"], "latitude_ref": ".spec/1234-example/context.md#latitude", "return_to_issue_refs": [".spec/1234-example/context.md#return-conditions"]},
+        "admission": {"admission_id": "admission-1234-v1", "outcome": "ADMIT", "ownership_ref": "github:issue/1234#writer-admission"},
+        "authorities": ["issue:1234", "spec:.spec/1234-example/context.md", "admission:admission-1234-v1"],
+        "proof_obligations": ["Run the focused proof and report the exact head."],
+        "non_goals": ["Do not widen the API."],
+        "stop_when": ["The accepted premise changes or the edit cage is insufficient."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "valid-exact-head-reviewer",
+      "valid": true,
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234-review",
+        "basis": {"issue": 1234, "pr": 5678, "base_sha": "0123456789abcdef", "head_sha": "89abcdef01234567"},
+        "role": "reviewer",
+        "lifecycle_action": "ReviewPr",
+        "objective": "Review the exact published head.",
+        "read_scope": ["PR:5678@89abcdef01234567", "required checks"],
+        "authorities": ["github:PR/5678@89abcdef01234567"],
+        "proof_obligations": ["Name the reviewed head in every conclusion."],
+        "non_goals": ["Do not edit the branch."],
+        "stop_when": ["The head changes."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "valid-external-oracle",
+      "valid": true,
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-4196-capability",
+        "basis": {"issue": 4196, "base_sha": "0123456789abcdef"},
+        "role": "oracle",
+        "lifecycle_action": "ResearchIssue",
+        "objective": "Verify the installed runtime capability before configuration.",
+        "read_scope": ["installed runtime help"],
+        "authorities": ["runtime:installed-supported-version"],
+        "proof_obligations": ["Record the supported capability or an explicit unavailable result."],
+        "non_goals": ["Do not edit repository configuration."],
+        "stop_when": ["The capability is verified or unsupported."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "valid-ci-triage",
+      "valid": true,
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234-ci",
+        "basis": {"issue": 1234, "pr": 5678, "base_sha": "0123456789abcdef", "head_sha": "89abcdef01234567"},
+        "role": "ci_triager",
+        "lifecycle_action": "VerifyCurrentHead",
+        "objective": "Classify the failing check against the current PR head.",
+        "read_scope": ["PR:5678@89abcdef01234567", "check logs"],
+        "authorities": ["github:check-run@89abcdef01234567"],
+        "proof_obligations": ["Distinguish product, test, policy, instrument, flaky, and stale-head failures."],
+        "non_goals": ["Do not repair production code."],
+        "stop_when": ["The failure class is evidenced or logs are unavailable."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "valid-cleanup-audit",
+      "valid": true,
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234-cleanup",
+        "basis": {"issue": 1234, "base_sha": "0123456789abcdef"},
+        "role": "cleanup_auditor",
+        "lifecycle_action": "Reconcile",
+        "objective": "Classify only artifacts created by the completed lane.",
+        "read_scope": ["worktree list", "issue:1234", "PR metadata"],
+        "authorities": ["git:worktree-list", "github:issue/1234"],
+        "proof_obligations": ["Preserve ambiguous or unpublished work."],
+        "non_goals": ["Do not remove unrelated worktrees or branches."],
+        "stop_when": ["Every lane-created artifact is KEEP, REMOVE, SALVAGE, or REVIEW."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "invalid-read-only-write-scope",
+      "valid": false,
+      "expected": "non-writer roles cannot carry write_scope",
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234",
+        "basis": {"issue": 1234, "base_sha": "0123456789abcdef"},
+        "role": "reviewer",
+        "lifecycle_action": "ReviewPr",
+        "objective": "Review the supplied head.",
+        "read_scope": ["PR:5678"],
+        "write_scope": {"spec": ".spec/1234-example", "branch": "impl/1234-example", "worktree": ".claude/worktrees/1234-example", "edit_cage": "crates/example/src/example.rs"},
+        "authorities": ["PR:5678"],
+        "proof_obligations": ["Report findings against the inspected head."],
+        "non_goals": ["Do not edit."],
+        "stop_when": ["The head changes."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "invalid-writer-without-admission",
+      "valid": false,
+      "expected": "writer requires compiled work-order, admission, and complete write cage",
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234",
+        "basis": {"issue": 1234, "base_sha": "0123456789abcdef"},
+        "role": "writer",
+        "lifecycle_action": "BuildIssue",
+        "objective": "Implement the requested change.",
+        "read_scope": ["issue:1234"],
+        "authorities": ["issue:1234"],
+        "proof_obligations": ["Run the focused proof."],
+        "non_goals": ["Do not widen scope."],
+        "stop_when": ["The issue changes."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "invalid-pr-without-exact-head",
+      "valid": false,
+      "expected": "a PR basis requires head_sha",
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234-review",
+        "basis": {"issue": 1234, "pr": 5678, "base_sha": "0123456789abcdef"},
+        "role": "reviewer",
+        "lifecycle_action": "ReviewPr",
+        "objective": "Review the exact published head.",
+        "read_scope": ["PR:5678"],
+        "authorities": ["PR:5678"],
+        "proof_obligations": ["Name the reviewed head."],
+        "non_goals": ["Do not edit."],
+        "stop_when": ["The head changes."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "invalid-review-without-pr",
+      "valid": false,
+      "expected": "reviewer roles require PR and exact head identity",
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234-review",
+        "basis": {"issue": 1234, "base_sha": "0123456789abcdef"},
+        "role": "reviewer",
+        "lifecycle_action": "ReviewPr",
+        "objective": "Review the exact published head.",
+        "read_scope": ["current PR metadata"],
+        "authorities": ["issue:1234"],
+        "proof_obligations": ["Name the reviewed PR head."],
+        "non_goals": ["Do not edit."],
+        "stop_when": ["The head changes."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    },
+    {
+      "name": "invalid-stale-writer-work-order",
+      "valid": false,
+      "expected": "writer admission requires a current compiled work order",
+      "packet": {
+        "schema": "bounded-subagent-brief-v1",
+        "work_item": "issue-1234",
+        "basis": {"issue": 1234, "base_sha": "0123456789abcdef"},
+        "role": "writer",
+        "lifecycle_action": "BuildIssue",
+        "objective": "Implement the accepted change.",
+        "read_scope": ["issue:1234", ".spec/1234-example/context.md"],
+        "write_scope": {"spec": ".spec/1234-example", "branch": "impl/1234-example", "worktree": ".claude/worktrees/1234-example", "edit_cage": "crates/example/src/example.rs"},
+        "compiled_work_order": {"work_order_id": "work-order-1234-v1", "spec_ref": ".spec/1234-example/context.md", "basis_sha": "0123456789abcdef", "freshness": "stale", "scope_ref": ".spec/1234-example/context.md#scope", "invariant_refs": [".spec/1234-example/acceptance.md#invariants"], "proof_obligation_refs": [".spec/1234-example/acceptance.md#proof"], "latitude_ref": ".spec/1234-example/context.md#latitude", "return_to_issue_refs": [".spec/1234-example/context.md#return-conditions"]},
+        "admission": {"admission_id": "admission-1234-v1", "outcome": "ADMIT", "ownership_ref": "github:issue/1234#writer-admission"},
+        "authorities": ["issue:1234", "spec:.spec/1234-example/context.md", "admission:admission-1234-v1"],
+        "proof_obligations": ["Run the focused proof."],
+        "non_goals": ["Do not widen scope."],
+        "stop_when": ["The basis changes."],
+        "return_schema": "bounded-subagent-result-v1"
+      }
+    }
+  ]
+}

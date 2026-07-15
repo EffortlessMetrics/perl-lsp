@@ -358,6 +358,34 @@ suite('First-hour VS Code receipt', function () {
         `extension must be loaded from the clean installed profile: ${extensionPath}`,
       );
     }
+    const topology = describeWorkspaceTopology({
+      folders: vscode.workspace.workspaceFolders ?? [],
+      documents: vscode.workspace.textDocuments,
+      isTrusted: vscode.workspace.isTrusted,
+      remoteName: vscode.env.remoteName,
+    });
+    const expectedMode = process.env.PERL_LSP_EXPECTED_WORKSPACE_MODE?.trim();
+    if (expectedMode) {
+      assert.equal(topology.mode, expectedMode, 'workspace smoke mode should match its claim');
+    }
+    const expectedTrust = process.env.PERL_LSP_EXPECTED_WORKSPACE_TRUST?.trim();
+    if (expectedTrust) {
+      assert.equal(topology.trust, expectedTrust, 'workspace smoke trust should match its claim');
+    }
+    const expectedFolderCount = process.env.PERL_LSP_EXPECTED_FOLDER_COUNT?.trim();
+    if (expectedFolderCount) {
+      const parsedFolderCount = Number(expectedFolderCount);
+      assert.ok(
+        Number.isSafeInteger(parsedFolderCount),
+        'workspace smoke folder count must be an integer',
+      );
+      assert.equal(
+        topology.folder_count,
+        parsedFolderCount,
+        'workspace smoke folder count should match its claim',
+      );
+    }
+
     const baseReceipt = {
       schema_version: 1,
       sample_count: 1,
@@ -378,16 +406,12 @@ suite('First-hour VS Code receipt', function () {
         server_path: serverPath,
         source_revision: process.env.PERL_LSP_CURRENT_SOURCE_SHA ?? null,
         server_source_revision: process.env.PERL_LSP_SERVER_SOURCE_SHA ?? null,
+        server_artifact_sha256: process.env.PERL_LSP_SERVER_ARTIFACT_SHA256 ?? null,
         vsix_sha256: process.env.PERL_LSP_VSIX_SHA256 ?? null,
       },
       workspace: {
         path: workspacePath,
-        topology: describeWorkspaceTopology({
-          folders: vscode.workspace.workspaceFolders ?? [],
-          documents: vscode.workspace.textDocuments,
-          isTrusted: vscode.workspace.isTrusted,
-          remoteName: vscode.env.remoteName,
-        }),
+        topology,
         file_count_sampled: walkFiles(workspacePath, 10_000).length,
         perl_file_count_sampled: perlFiles.length,
         module_under_probe: moduleName,

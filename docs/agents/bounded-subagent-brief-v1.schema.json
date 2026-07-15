@@ -1,0 +1,437 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp-swarm/blob/main/docs/agents/bounded-subagent-brief-v1.schema.json",
+  "title": "Bounded Subagent Brief v1",
+  "description": "A compact input packet for one bounded investigation, proof pass, review, or writer mutation. The packet references existing authorities and is not a work or claim database.",
+  "type": "object",
+  "required": [
+    "schema",
+    "work_item",
+    "basis",
+    "role",
+    "lifecycle_action",
+    "objective",
+    "read_scope",
+    "authorities",
+    "proof_obligations",
+    "non_goals",
+    "stop_when",
+    "return_schema"
+  ],
+  "properties": {
+    "schema": {
+      "const": "bounded-subagent-brief-v1"
+    },
+    "work_item": {
+      "type": "string",
+      "description": "Stable issue/spec/PR identity carried into the child result.",
+      "minLength": 1
+    },
+    "basis": {
+      "$ref": "#/definitions/basis"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "explorer",
+        "oracle",
+        "planner",
+        "writer",
+        "verifier",
+        "reviewer",
+        "ci_triager",
+        "cleanup_auditor"
+      ]
+    },
+    "lifecycle_action": {
+      "type": "string",
+      "description": "The root-selected transition this packet supports. This is descriptive, not a scheduler instruction.",
+      "enum": [
+        "EstablishIssue",
+        "ResearchIssue",
+        "SynthesizePlan",
+        "ReviewPlan",
+        "CompileSpec",
+        "PrepareBuild",
+        "WriteRedProof",
+        "BuildIssue",
+        "AddEdgeProof",
+        "ReviewPr",
+        "RepairReview",
+        "VerifyCurrentHead",
+        "Merge",
+        "Reconcile",
+        "Blocked",
+        "Complete"
+      ]
+    },
+    "objective": {
+      "type": "string",
+      "description": "One bounded question or mutation objective.",
+      "minLength": 1
+    },
+    "read_scope": {
+      "type": "array",
+      "description": "Files, symbols, issues, specs, PRs, or external authorities the child may read.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "write_scope": {
+      "$ref": "#/definitions/write_scope"
+    },
+    "compiled_work_order": {
+      "$ref": "#/definitions/compiled_work_order"
+    },
+    "admission": {
+      "$ref": "#/definitions/admission"
+    },
+    "authorities": {
+      "type": "array",
+      "description": "Accepted sources that govern the bounded work. Labels and private conversation are not authorities.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "proof_obligations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "non_goals": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "stop_when": {
+      "type": "array",
+      "description": "Conditions that return control to the root instead of widening the packet.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "return_schema": {
+      "const": "bounded-subagent-result-v1"
+    }
+  },
+  "definitions": {
+    "basis": {
+      "type": "object",
+      "required": [
+        "issue",
+        "base_sha"
+      ],
+      "properties": {
+        "issue": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pr": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "base_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,64}$"
+        },
+        "head_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,64}$"
+        }
+      },
+      "dependencies": {
+        "pr": ["head_sha"],
+        "head_sha": ["pr"]
+      },
+      "additionalProperties": false
+    },
+    "write_scope": {
+      "type": "object",
+      "description": "The explicit mutation cage. Read-only briefs omit this property entirely.",
+      "required": [
+        "spec",
+        "branch",
+        "worktree",
+        "edit_cage"
+      ],
+      "properties": {
+        "spec": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "worktree": {
+          "type": "string",
+          "minLength": 1
+        },
+        "edit_cage": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "compiled_work_order": {
+      "type": "object",
+      "description": "A reference to #3983's current builder projection. It carries identities and links, not a duplicate spec.",
+      "required": [
+        "work_order_id",
+        "spec_ref",
+        "basis_sha",
+        "freshness",
+        "scope_ref",
+        "invariant_refs",
+        "proof_obligation_refs",
+        "latitude_ref",
+        "return_to_issue_refs"
+      ],
+      "properties": {
+        "work_order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "spec_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "basis_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,64}$"
+        },
+        "freshness": {
+          "type": "string",
+          "enum": ["current", "stale", "not_proven"]
+        },
+        "scope_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "invariant_refs": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1
+        },
+        "proof_obligation_refs": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1
+        },
+        "latitude_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "return_to_issue_refs": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "admission": {
+      "type": "object",
+      "description": "The #3982 writer-admission identity. The branch/worktree/edit cage remain explicit in write_scope.",
+      "required": ["admission_id", "outcome", "ownership_ref"],
+      "properties": {
+        "admission_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["ADMIT", "RESUME", "REUSE"]
+        },
+        "ownership_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "writer"
+          }
+        },
+        "required": ["role"]
+      },
+      "then": {
+        "required": ["write_scope", "compiled_work_order", "admission"],
+        "properties": {
+          "compiled_work_order": {
+            "properties": {
+              "freshness": {
+                "const": "current"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "write_scope": false,
+          "admission": false
+        }
+      }
+    },
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {"role": {"const": "reviewer"}},
+            "required": ["role"]
+          },
+          {
+            "properties": {"lifecycle_action": {"const": "ReviewPr"}},
+            "required": ["lifecycle_action"]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "basis": {
+            "required": ["pr", "head_sha"]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema": "bounded-subagent-brief-v1",
+      "work_item": "issue-1234",
+      "basis": {
+        "issue": 1234,
+        "base_sha": "0123456789abcdef"
+      },
+      "role": "explorer",
+      "lifecycle_action": "ResearchIssue",
+      "objective": "Identify the named ownership and current-head evidence for the supplied seam.",
+      "read_scope": [
+        "issue 1234",
+        "docs/reference/OWNERSHIP.md",
+        "current PR metadata"
+      ],
+      "authorities": [
+        "issue 1234",
+        "live GitHub PR state"
+      ],
+      "proof_obligations": [
+        "Cite each ownership claim and distinguish missing evidence."
+      ],
+      "non_goals": [
+        "Do not edit files or choose another issue."
+      ],
+      "stop_when": [
+        "The named seam is answered or the current head changes."
+      ],
+      "return_schema": "bounded-subagent-result-v1"
+    },
+    {
+      "schema": "bounded-subagent-brief-v1",
+      "work_item": "issue-1234-review",
+      "basis": {
+        "issue": 1234,
+        "pr": 5678,
+        "base_sha": "0123456789abcdef",
+        "head_sha": "89abcdef01234567"
+      },
+      "role": "reviewer",
+      "lifecycle_action": "ReviewPr",
+      "objective": "Review the exact published head for correctness and integration hazards.",
+      "read_scope": [
+        "PR 5678 at 89abcdef01234567",
+        "linked issue and compiled builder view",
+        "required checks"
+      ],
+      "authorities": [
+        "github:PR/5678@89abcdef01234567",
+        "issue 1234"
+      ],
+      "proof_obligations": [
+        "Bind every finding and proof reference to the inspected head."
+      ],
+      "non_goals": [
+        "Do not edit the branch or review a later head."
+      ],
+      "stop_when": [
+        "The PR head changes or the exact-head review is complete."
+      ],
+      "return_schema": "bounded-subagent-result-v1"
+    },
+    {
+      "schema": "bounded-subagent-brief-v1",
+      "work_item": "issue-1234",
+      "basis": {
+        "issue": 1234,
+        "pr": 5678,
+        "base_sha": "0123456789abcdef",
+        "head_sha": "89abcdef01234567"
+      },
+      "role": "writer",
+      "lifecycle_action": "BuildIssue",
+      "objective": "Implement only the accepted change in the compiled builder view.",
+      "read_scope": [
+        "issue 1234",
+        ".spec/1234-example/context.md",
+        ".spec/1234-example/acceptance.md"
+      ],
+      "write_scope": {
+        "spec": ".spec/1234-example",
+        "branch": "impl/1234-example",
+        "worktree": ".claude/worktrees/1234-example",
+        "edit_cage": "crates/example/src/example.rs and its focused tests"
+      },
+      "compiled_work_order": {
+        "work_order_id": "work-order-1234-v2",
+        "spec_ref": ".spec/1234-example/context.md",
+        "basis_sha": "0123456789abcdef",
+        "freshness": "current",
+        "scope_ref": ".spec/1234-example/context.md#scope",
+        "invariant_refs": [".spec/1234-example/acceptance.md#invariants"],
+        "proof_obligation_refs": [".spec/1234-example/acceptance.md#proof"],
+        "latitude_ref": ".spec/1234-example/context.md#latitude",
+        "return_to_issue_refs": [".spec/1234-example/context.md#return-conditions"]
+      },
+      "admission": {
+        "admission_id": "admission-1234-v1",
+        "outcome": "ADMIT",
+        "ownership_ref": "github:issue/1234#writer-admission"
+      },
+      "authorities": [
+        ".spec/1234-example",
+        "issue 1234"
+      ],
+      "proof_obligations": [
+        "Run the named focused tests and report the exact head."
+      ],
+      "non_goals": [
+        "Do not widen the API or repair unrelated failures."
+      ],
+      "stop_when": [
+        "The accepted premise changes or the edit cage is insufficient."
+      ],
+      "return_schema": "bounded-subagent-result-v1"
+    }
+  ]
+}
