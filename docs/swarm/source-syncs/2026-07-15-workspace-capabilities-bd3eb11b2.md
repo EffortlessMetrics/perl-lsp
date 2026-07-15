@@ -36,7 +36,7 @@ documents remain governed by the target repository's sync protocol.
 
 ## Verification
 
-The following checks are run against this sync tree before opening the target
+The following checks passed against this sync tree before opening the target
 sync PR:
 
 ```text
@@ -49,13 +49,29 @@ npm run fmt:check
 npm run lint                             # Oxlint 0 errors / 0 warnings
 npm run typecheck:all
 npm run compile
-npm run test:ci                           # current count recorded below
+npm run test:ci                           # 794 passed, 1 documented skip
 npm run package
-npm run check:package-inventory
+npm run check:package-inventory           # 28 files, 1,472,504 bytes
 npm run check:source-map
 npm run test:workspace-capabilities      # exact-source trusted multi-root/untrusted
 ```
 
-The final target merge SHA and target-side receipt will be appended after the
-sync PR merges. This receipt does not authorize publishing, tagging,
+Observed results:
+
+- `cargo check --workspace --locked` passed.
+- Node 26.5.0/npm 11.18.0 doctor, Oxfmt, Oxlint (0 errors / 0 warnings), all
+  TS7 configurations, compile, test, package, inventory, and source-map checks
+  passed after clean `npm ci`.
+- Exact-source capability smoke passed in both modes on Windows with VS Code
+  1.128.1: trusted multi-root (2 folders) and genuinely untrusted single-root
+  (1 folder). Both receipts recorded initialize, provider requests, restart,
+  and shutdown as successful.
+- Target smoke source/server revision: `12bc6e16412dd73a10c109566b664bcae5b548f1`.
+- Target smoke server artifact SHA-256:
+  `2a08086218e81a52fdbd8c011972d416309e9cabd63fd7e323e5231cbe8b2074`.
+- Target smoke VSIX SHA-256:
+  `3df72e8e427fa690ac27b5b896a54098ea985cb3515c68b025d784f5f555bc9b`.
+
+The final target merge SHA will be appended after the sync PR merges. This
+receipt does not authorize publishing, tagging,
 Marketplace or Open VSX upload, Docker publication, or release creation.
