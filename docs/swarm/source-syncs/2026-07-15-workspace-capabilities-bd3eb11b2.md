@@ -11,6 +11,9 @@
 | Target base SHA | `2aefabe2d6c114864b5048fcb5d4c4302d3ddbf9` |
 | Target sync merge SHA | `fc6acaf513675042744c5de1066abc597d3aa79f` |
 | Merge parents | `2aefabe2d6c114864b5048fcb5d4c4302d3ddbf9`, `bd3eb11b221e18e9914c326326ee1515620bfae2` |
+| Sync PR | [#10001](https://github.com/EffortlessMetrics/perl-lsp/pull/10001) |
+| Target final merge SHA | `90d6fb5614841a621a5950e0f9b92044406320a8` |
+| Final merge parents | `2aefabe2d6c114864b5048fcb5d4c4302d3ddbf9`, `8856d140985077f4710b0c7c5030b73ad9f15895` |
 | Direction | swarm → target, history-preserving complete-tree merge |
 
 ## Modernization follow-up
@@ -72,6 +75,9 @@ Observed results:
 - Target smoke VSIX SHA-256:
   `3df72e8e427fa690ac27b5b896a54098ea985cb3515c68b025d784f5f555bc9b`.
 
-The final target merge SHA will be appended after the sync PR merges. This
-receipt does not authorize publishing, tagging,
+Post-sync verification passed: the pinned swarm cut is an ancestor of target
+`master`, and `git diff --name-only <swarm-cut> origin/master` contains only
+the approved `.claude/`, swarm-cleanup, and sync-ledger paths. Target hosted
+CI had broad queued/advisory shards at merge time; no release claim is made
+from those pending contexts. This receipt does not authorize publishing, tagging,
 Marketplace or Open VSX upload, Docker publication, or release creation.
