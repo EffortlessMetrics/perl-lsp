@@ -5,24 +5,24 @@
     "oxlint": "1.73.0",
     "oxlint-tsgolint": "0.24.0"
   },
-  "warning_count": 333,
+  "warning_count": 328,
   "by_rule": {
-    "eslint(no-unused-vars)": 11,
-    "typescript(consistent-type-imports)": 3,
-    "typescript(no-explicit-any)": 319
+    "eslint(no-unused-vars)": 9,
+    "typescript(consistent-type-imports)": 1,
+    "typescript(no-explicit-any)": 318
   },
   "by_surface": {
-    "tests": 333
+    "tests": 328
   },
   "by_rule_and_surface": {
     "eslint(no-unused-vars)": {
-      "tests": 11
+      "tests": 9
     },
     "typescript(consistent-type-imports)": {
-      "tests": 3
+      "tests": 1
     },
     "typescript(no-explicit-any)": {
-      "tests": 319
+      "tests": 318
     }
   },
   "by_file": {
@@ -31,10 +31,7 @@
     "src/test/downloader.test.ts": 71,
     "src/test/extensionUx.test.ts": 70,
     "src/test/formatting.test.ts": 15,
-    "src/test/healthWidget.test.ts": 3,
     "src/test/onboarding.test.ts": 29,
-    "src/test/podPreview.test.ts": 8,
-    "src/test/runTestAtCursor.test.ts": 1,
-    "src/test/streamingCompletion.test.ts": 1
+    "src/test/podPreview.test.ts": 8
   }
 }

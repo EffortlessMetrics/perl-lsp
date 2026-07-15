@@ -9,10 +9,10 @@ The machine-readable inventory is [`oxlint-warning-baseline.json`](./oxlint-warn
 - command: `npm run lint`
 - Oxlint: 1.73.0
 - oxlint-tsgolint: 0.24.0
-- result: 0 errors, 333 warnings
-- breakdown by rule: 319 `typescript/no-explicit-any`, 11 `no-unused-vars`, 3
+- result: 0 errors, 328 warnings
+- breakdown by rule: 318 `typescript/no-explicit-any`, 9 `no-unused-vars`, 1
   `typescript/consistent-type-imports`
-- breakdown by surface: 333 tests, 0 scripts, 0 production, 0 build-config
+- breakdown by surface: 328 tests, 0 scripts, 0 production, 0 build-config
 
 The Node/npm/TypeScript authority slice added `scripts/toolchain-doctor.js`;
 its two existing `no-console` warnings remain recorded explicitly rather than
@@ -37,6 +37,10 @@ preserving their four behavior tests.
 The walkthrough and “What’s New” contract tests now use typed manifest and
 VS Code context adapters, removing 19 warnings while preserving their static
 UX and lifecycle assertions.
+
+The health-widget, test-at-cursor, and streaming-completion tests now use
+typed VS Code and language-client seams, removing five warnings while
+preserving their 49 behavior tests.
 
 `scripts/check-oxlint-warning-budget.js` consumes Oxlint JSON diagnostics and
 enforces a non-increasing total, per-rule, per-surface, rule-by-surface, and

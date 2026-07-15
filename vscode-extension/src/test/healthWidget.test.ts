@@ -7,6 +7,7 @@
 
 import { HealthWidget, ClientState } from '../healthWidget';
 import { ThemeColor } from 'vscode';
+import type { StatusBarItem } from 'vscode';
 
 // ---------------------------------------------------------------------------
 // Minimal StatusBarItem stub
@@ -30,7 +31,7 @@ function makeStatusBarItem() {
 
 function makeWidget() {
   const item = makeStatusBarItem();
-  const widget = new HealthWidget(item as any);
+  const widget = new HealthWidget(item as unknown as StatusBarItem);
   return { item, widget };
 }
 
@@ -144,7 +145,7 @@ describe('HealthWidget — $/progress', () => {
   });
 
   test('overlapping tokens stay in indexing until all end', () => {
-    const { item, widget } = makeWidget();
+    const { widget } = makeWidget();
     widget.onProgress('token-1', { kind: 'begin', title: 'Task A' });
     widget.onProgress('token-2', { kind: 'begin', title: 'Task B' });
     widget.onProgress('token-1', { kind: 'end' });
@@ -154,7 +155,7 @@ describe('HealthWidget — $/progress', () => {
   });
 
   test('end for unknown token is a no-op', () => {
-    const { item, widget } = makeWidget();
+    const { widget } = makeWidget();
     widget.onStateChange(ClientState.Running);
     widget.onProgress('ghost-token', { kind: 'end' });
     expect(widget.mode).toBe('running');
