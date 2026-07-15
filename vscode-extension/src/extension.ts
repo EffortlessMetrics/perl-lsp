@@ -48,6 +48,7 @@ import { selectTestCommandAtPosition } from './runTestAtCursor';
 import { StreamingCompletionController } from './streamingCompletion';
 import { registerMcpSupport } from './mcpSupport';
 import { registerServerCommandGroup } from './serverCommandGroup';
+import { registerCriticCommandGroup } from './criticCommandGroup';
 import { ExtensionLanguageClientLifecycle } from './extensionComposition';
 import type { LifecycleState } from './languageClientLifecycle';
 import type {
@@ -1087,6 +1088,11 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  const criticCommandDisposables = registerCriticCommandGroup({
+    runPerlCriticOnActiveFile: () => runPerlCriticOnActiveFile(),
+    setPerlCriticSeverity: () => setPerlCriticSeverity(),
+  });
+
   const organizeImportsCommand = vscode.commands.registerCommand(
     'perl-lsp.organizeImports',
     async () => {
@@ -1147,20 +1153,6 @@ export async function activate(context: vscode.ExtensionContext) {
           'Test adapter is not available. It might still be initializing.',
         );
       }
-    },
-  );
-
-  const runPerlCriticCommand = vscode.commands.registerCommand(
-    'perl-lsp.runPerlCritic',
-    async () => {
-      await runPerlCriticOnActiveFile();
-    },
-  );
-
-  const setPerlCriticSeverityCommand = vscode.commands.registerCommand(
-    'perl-lsp.setPerlCriticSeverity',
-    async () => {
-      await setPerlCriticSeverity();
     },
   );
 
@@ -1821,11 +1813,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     ...serverCommandDisposables,
+    ...criticCommandDisposables,
     openDemoProjectDisposable,
     organizeImportsCommand,
     runTestsCommand,
-    runPerlCriticCommand,
-    setPerlCriticSeverityCommand,
     checkSyntaxCommand,
     runCurrentTestCommand,
     runTestAtCursorCommand,

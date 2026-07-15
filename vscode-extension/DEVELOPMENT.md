@@ -141,6 +141,7 @@ The main extension code lives in `src/extension.ts`. Key files:
 | --------------------------- | -------------------------------------------- |
 | `src/extension.ts`          | Activation and feature composition           |
 | `src/serverCommandGroup.ts` | Server, install, and health command wiring   |
+| `src/criticCommandGroup.ts` | Critic command registration                  |
 | `src/downloader.ts`         | Auto-download logic for the `perllsp` binary |
 | `src/healthWidget.ts`       | Status bar health indicator                  |
 | `src/onboarding.ts`         | First-run setup flow                         |
