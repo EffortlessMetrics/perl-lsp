@@ -79,6 +79,9 @@ export async function copyManagedFileWithRetry(
 
       const message = error instanceof Error ? error.message : String(error);
       const delayMs = retryDelaysMs[attempt];
+      if (delayMs === undefined) {
+        throw new Error('Managed install retry delay is missing for a retryable failure.');
+      }
       log(
         `Retrying ${label} install after transient file lock (${message}); waiting ${delayMs}ms.`,
       );
@@ -148,9 +151,9 @@ export function findReleaseAssetName(
  * Returns the semver string (e.g. "0.12.0") or null if the format is unexpected.
  */
 export function parseLocalVersion(versionOutput: string): string | null {
-  const firstLine = versionOutput.split('\n')[0].trim();
+  const firstLine = versionOutput.split('\n')[0]?.trim() ?? '';
   const match = /^(?:perllsp|perl-lsp)\s+(\S+)/.exec(firstLine);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 /**
@@ -291,7 +294,7 @@ export class BinaryDownloader {
       } else if (errorMsg.includes('No binary found for platform')) {
         // Architecture or OS not supported by the release
         const platformMatch = /platform:\s*([^\s.]+)/.exec(errorMsg);
-        const platformStr = platformMatch ? platformMatch[1] : 'your platform';
+        const platformStr = platformMatch?.[1] ?? 'your platform';
         if (this.isTermuxEnvironment() || platformStr.includes('linux-android')) {
           message =
             `perl-lsp: No pre-built binary for ${platformStr} (Termux/Android). ` +
@@ -433,7 +436,7 @@ export class BinaryDownloader {
           // Find the checksum line for our file
           const checksums = fs.readFileSync(checksumPath, 'utf8');
           const lines = checksums.split('\n');
-          const checksumLine = lines.find((line) => line.includes(assetName!));
+          const checksumLine = lines.find((line) => line.includes(assetName));
 
           if (!checksumLine) {
             throw new Error(
@@ -441,7 +444,12 @@ export class BinaryDownloader {
             );
           }
 
-          const expectedChecksum = checksumLine.split(/\s+/)[0].toLowerCase();
+          const expectedChecksum = checksumLine.split(/\s+/)[0]?.toLowerCase();
+          if (!expectedChecksum) {
+            throw new Error(
+              `Security check failed: Checksum for ${assetName} is malformed in SHA256SUMS.`,
+            );
+          }
           const actualChecksum = await this.calculateSHA256(archivePath);
 
           if (expectedChecksum !== actualChecksum) {
@@ -613,7 +621,12 @@ export class BinaryDownloader {
                 if (stableRelease) {
                   resolve(stableRelease);
                 } else {
-                  resolve(releases[0]); // Fall back to latest
+                  const fallbackRelease = releases[0];
+                  if (fallbackRelease) {
+                    resolve(fallbackRelease); // Fall back to latest
+                  } else {
+                    reject(new Error('No releases found'));
+                  }
                 }
               } else {
                 resolve(parsed as Release);
