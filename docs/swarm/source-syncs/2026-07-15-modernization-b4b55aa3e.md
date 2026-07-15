@@ -10,7 +10,7 @@
 | Target repository | `perl-lsp` |
 | Target base SHA | `c1f3747dcc5509adaf8021ba4ce5a1ba458d909e` |
 | Sync branch | `release/sync-modernization-b4b55aa3e` |
-| Sync PR | pending |
+| Sync PR | [#10000](https://github.com/EffortlessMetrics/perl-lsp/pull/10000) |
 | Target merge SHA | `9cb93de001f1c7c3dfdb43d5e47a14567b8c01b5` |
 | Merge parents | `c1f3747dcc5509adaf8021ba4ce5a1ba458d909e`, `b4b55aa3eb66bb836ec9da2c14bdb70215f3f303` |
 | Direction | swarm → target, history-preserving complete-tree merge |
@@ -33,8 +33,11 @@ target-owned or swarm-only exclusions:
 - `scripts/agent-preflight.ps1` removed;
 - `scripts/swarm-clean` removed.
 
-No per-file resolution was used for shared source files. Release-lineage
-documents remain governed by the target repository's sync protocol.
+No per-file resolution was used for shared source files. The prior target-owned
+sync receipt is retained at
+`docs/swarm/source-syncs/2026-07-14-node26-modernization-fc47f8117.md`.
+Release-lineage documents remain governed by the target repository's sync
+protocol.
 
 ## Verification
 
