@@ -60,9 +60,6 @@ jobs:
           cache-all-crates: true
           shared-key: vscode-current-source-smoke-${{ hashFiles('Cargo.lock') }}
 
-      - name: Install extension dependencies
-        run: npm ci
-
       - name: Build current Rust server
         working-directory: .
         env:
