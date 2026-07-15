@@ -8,6 +8,7 @@
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,

@@ -159,7 +159,12 @@ async function installExtension(
   userDataDir: string,
   extensionsDir: string,
 ): Promise<void> {
-  const [cliPath, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
+  const resolvedCliArgs = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
+  const cliPath = resolvedCliArgs[0];
+  if (cliPath === undefined) {
+    throw new Error(`Unable to resolve the VS Code CLI for ${vscodeExecutablePath}`);
+  }
+  const cliArgs = resolvedCliArgs.slice(1);
   const args = [
     ...cliArgs,
     `--user-data-dir=${userDataDir}`,
@@ -168,20 +173,12 @@ async function installExtension(
     installTarget,
     '--force',
   ];
-  const spawnTarget =
-    process.platform === 'win32'
-      ? {
-          command: process.env.ComSpec || 'cmd.exe',
-          args: ['/d', '/s', '/c', cliPath, ...args],
-        }
-      : {
-          command: cliPath,
-          args,
-        };
+  const command = process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : cliPath;
+  const commandArgs = process.platform === 'win32' ? ['/d', '/s', '/c', cliPath, ...args] : args;
   let lastFailure = '';
 
   for (let attempt = 1; attempt <= 12; attempt += 1) {
-    const result = spawnSync(spawnTarget.command, spawnTarget.args, {
+    const result = spawnSync(command, commandArgs, {
       encoding: 'utf8',
       windowsHide: true,
     });

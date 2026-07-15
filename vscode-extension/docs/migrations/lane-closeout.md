@@ -22,7 +22,7 @@ below.
 | #4072 | Language-server health boundary                      | Merged |
 | #4086 | Startup milestone receipts                           | Merged |
 | #4124 | Declaration compatibility and `skipLibCheck` removal | Merged |
-| #4125 | `noUncheckedIndexedAccess` advisory baseline         | Merged |
+| #4125 | `noUncheckedIndexedAccess` cleanup baseline          | Merged |
 | #4128 | Blocking `noImplicitOverride` check                  | Merged |
 | #4129 | `exactOptionalPropertyTypes` advisory baseline       | Merged |
 | #4132 | Repeated exact-source startup/request sampling       | Merged |
@@ -41,6 +41,17 @@ below.
 | #4265 | Workspace guidance positive-path coverage            | Merged |
 | #4266 | Lifecycle failure-edge coverage                      | Merged |
 | #4270 | Blocking `exactOptionalPropertyTypes` contract       | Merged |
+| #4271 | Strictness hardening closeout update                 | Merged |
+| #4272 | Downloader indexed-access hardening                  | Merged |
+| #4274 | Gherkin indexed-access hardening                     | Merged |
+| #4275 | POD preview indexed-access hardening                 | Merged |
+| #4276 | Test Adapter indexed-access hardening                | Merged |
+| #4278 | Debug Adapter indexed-access hardening               | Merged |
+| #4279 | Extension entrypoint indexed-access hardening        | Merged |
+| #4280 | Utility indexed-access hardening                     | Merged |
+| #4281 | Lifecycle test indexed-access hardening              | Merged |
+| #4282 | Packaged smoke indexed-access hardening              | Merged |
+| #4284 | Blocking `noUncheckedIndexedAccess` promotion        | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -55,9 +66,9 @@ The rescue checkpoint was not merged wholesale.
   deprecated critic settings remain compatibility inputs only.
 - npm and `package-lock.json` are the package authority. Node 26.x and npm
   11.18.0 are the supported toolchain; CI pins Node 26.5.0. All TypeScript
-  authority configurations and the doctor check are explicit. `exactOptionalPropertyTypes`
-  and `noImplicitOverride` are blocking; `noUncheckedIndexedAccess` remains a
-  non-growing advisory baseline until its separate cleanup issue lands.
+  authority configurations and the doctor check are explicit. `exactOptionalPropertyTypes`,
+  `noImplicitOverride`, and `noUncheckedIndexedAccess` are blocking across every
+  TypeScript authority configuration.
 - Oxlint warning debt is recorded by rule, surface, rule-by-surface, and file;
   new errors or warning growth are rejected rather than silently baselined.
 - Workspace guidance and the `perllsp --health` process boundary have separate
@@ -85,9 +96,11 @@ npm run test:ci
 
 The focused downloader run passed 113 tests; the full CI suite passed 735
 tests with one existing skip on the earlier closeout revision. The current
-canonical gate passes 750 tests with one documented packaged-server skip,
+canonical gate passes 753 tests with one documented packaged-server skip,
 including the workspace-guidance and lifecycle edge coverage added by #4265,
-#4266, and the exact-optional contract coverage added by #4270. The current-
+#4266, the exact-optional contract coverage added by #4270, and the indexed-
+access cleanup slices #4272, #4274, #4275, #4276, #4278, #4279, #4280, #4281,
+and #4282. The current-
 source Linux smoke passed on the
 package-baseline refresh and exercised the exact-source editor-host contract:
 activation, initialization, provider request, restart, shutdown, invalid-path

@@ -6751,8 +6751,6 @@
 | `vscode-extension/scripts/bundle-lsp.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/check-oxlint-warning-budget.d.ts` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/check-oxlint-warning-budget.js` | production | `non-rust-vscode-extension` | editor/vscode |
-| `vscode-extension/scripts/check-typescript-strictness.js` | production | `non-rust-vscode-extension` | editor/vscode |
-| `vscode-extension/scripts/check-typescript-strictness.test.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/check-vsix-inventory.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/check-vsix-inventory.test.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/lint-canary.js` | production | `non-rust-vscode-extension` | editor/vscode |
@@ -6763,7 +6761,6 @@
 | `vscode-extension/scripts/summarize-vscode-receipts.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/summarize-vscode-receipts.test.js` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/toolchain-doctor.js` | production | `non-rust-vscode-extension` | editor/vscode |
-| `vscode-extension/scripts/typescript-strictness-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/scripts/vsix-inventory-baseline.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/snippets/launch.json` | production | `non-rust-vscode-extension` | editor/vscode |
 | `vscode-extension/snippets/perl.json` | production | `non-rust-vscode-extension` | editor/vscode |
