@@ -5,14 +5,14 @@
     "oxlint": "1.73.0",
     "oxlint-tsgolint": "0.24.0"
   },
-  "warning_count": 199,
+  "warning_count": 141,
   "by_rule": {
     "eslint(no-unused-vars)": 3,
     "typescript(consistent-type-imports)": 0,
-    "typescript(no-explicit-any)": 196
+    "typescript(no-explicit-any)": 138
   },
   "by_surface": {
-    "tests": 199
+    "tests": 141
   },
   "by_rule_and_surface": {
     "eslint(no-unused-vars)": {
@@ -22,11 +22,10 @@
       "tests": 0
     },
     "typescript(no-explicit-any)": {
-      "tests": 196
+      "tests": 138
     }
   },
   "by_file": {
-    "src/test/debugAdapter.test.ts": 58,
     "src/test/downloader.test.ts": 71,
     "src/test/extensionUx.test.ts": 70
   }
