@@ -1327,8 +1327,9 @@
     "test:ci": "npm run compile:test && npm run test:receipt-summary && node scripts/run-jest.js --ci --coverage --verbose",
     "test:grammar": "vscode-tmgrammar-snap --config package.json \"test/grammar/fixtures/*.pl\"",
     "test:grammar:update": "vscode-tmgrammar-snap --config package.json -u \"test/grammar/fixtures/*.pl\"",
-    "test:receipt-summary": "node --test scripts/summarize-vscode-receipts.test.js && node --test scripts/sample-local-vsix-smoke.test.js && node --test scripts/check-vsix-inventory.test.js && node --test scripts/check-publisher-tools.test.js && node --test scripts/vscode-toolchain-workflows.test.js && node --test scripts/reporter.test.js",
+    "test:receipt-summary": "node --test scripts/summarize-vscode-receipts.test.js && node --test scripts/sample-local-vsix-smoke.test.js && node --test scripts/check-vsix-inventory.test.js && node --test scripts/check-publisher-tools.test.js && node --test scripts/vscode-toolchain-workflows.test.js && node --test scripts/check-source-map.test.js && node --test scripts/reporter.test.js",
     "check:package-inventory": "node scripts/check-vsix-inventory.js",
+    "check:source-map": "node scripts/check-source-map.js",
     "summarize:vscode": "node scripts/summarize-vscode-receipts.js",
     "sample:published:local": "node scripts/sample-local-vsix-smoke.js",
     "test:integration": "npm run typecheck && npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
@@ -1363,6 +1364,7 @@
     "oxlint": "1.73.0",
     "oxlint-tsgolint": "0.24.0",
     "rolldown": "1.1.5",
+    "source-map": "0.7.6",
     "typescript": "^7.0.2",
     "vscode-tmgrammar-test": "^0.1.3"
   }

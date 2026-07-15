@@ -94,11 +94,25 @@ jobs:
 
           echo "vsix_file=${vsix_files[0]}" >> "$GITHUB_OUTPUT"
 
+      - name: Archive exact source-map evidence
+        working-directory: vscode-extension
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: npm run check:source-map
+
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.version.outputs.artifact_name }}
           path: vscode-extension/${{ steps.package.outputs.vsix_file }}
+          retention-days: 30
+
+      - name: Upload source-map evidence artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.version.outputs.artifact_name }}-source-map
+          path: target/receipts/vscode-source-map/**
+          if-no-files-found: error
           retention-days: 30
 
   publish-vscode-marketplace:
