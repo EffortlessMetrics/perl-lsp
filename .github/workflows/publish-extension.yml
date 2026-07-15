@@ -34,22 +34,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      - name: Setup VS Code toolchain
+        uses: ./.github/actions/setup-vscode-toolchain
         with:
-          node-version: "26.5.0"
-          cache: npm
-          cache-dependency-path: vscode-extension/package-lock.json
-
-      - name: Select npm authority
-        run: npm install --global npm@11.18.0
-
-      - name: Install dependencies
-        working-directory: vscode-extension
-        run: |
-          npm ci
-          npm run doctor
-          npm install -g @vscode/vsce
+          verify-publisher-tools: 'true'
 
       - name: Set version
         working-directory: vscode-extension
@@ -124,22 +112,19 @@ jobs:
       VSIX_FILE: ${{ needs.prepare-vsix.outputs.vsix_file }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download VSIX artifact
         uses: actions/download-artifact@v8
         with:
           name: ${{ needs.prepare-vsix.outputs.artifact_name }}
           path: vscode-extension
 
-      - name: Setup Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      - name: Setup VS Code toolchain
+        uses: ./.github/actions/setup-vscode-toolchain
         with:
-          node-version: "26.5.0"
-
-      - name: Select npm authority
-        run: npm install --global npm@11.18.0
-
-      - name: Install Marketplace publisher
-        run: npm install -g @vscode/vsce
+          verify-publisher-tools: 'true'
 
       - name: Skip prerelease Marketplace publish
         if: ${{ needs.prepare-vsix.outputs.is_prerelease == 'true' }}
@@ -157,14 +142,14 @@ jobs:
         working-directory: vscode-extension
         run: |
           # Idempotency guard: skip if this version is already on the marketplace.
-          PUBLISHED_VERSION=$(vsce show EffortlessMetrics.perl-lsp-rs --json 2>/dev/null \
+          PUBLISHED_VERSION=$(npm exec --offline --no -- @vscode/vsce show EffortlessMetrics.perl-lsp-rs --json 2>/dev/null \
             | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['versions'][0]['version'])" \
             2>/dev/null || echo "")
           if [ "$PUBLISHED_VERSION" = "$VERSION" ]; then
             echo "::warning::VS Code Marketplace already has version $VERSION; skipping publish."
             exit 0
           fi
-          vsce publish --pat "$VSCE_PAT" --packagePath "$VSIX_FILE"
+          npm exec --offline --no -- @vscode/vsce publish --pat "$VSCE_PAT" --packagePath "$VSIX_FILE"
 
   publish-open-vsx:
     name: Publish Open VSX
@@ -177,25 +162,19 @@ jobs:
       VSIX_FILE: ${{ needs.prepare-vsix.outputs.vsix_file }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download VSIX artifact
         uses: actions/download-artifact@v8
         with:
           name: ${{ needs.prepare-vsix.outputs.artifact_name }}
           path: vscode-extension
 
-      - name: Setup Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      - name: Setup VS Code toolchain
+        uses: ./.github/actions/setup-vscode-toolchain
         with:
-          node-version: "26.5.0"
-
-      - name: Select npm authority
-        run: npm install --global npm@11.18.0
-
-      - name: Install Open VSX publisher
-        run: npm install -g ovsx
-
-      - name: Verify Open VSX CLI
-        run: ovsx --version
+          verify-publisher-tools: 'true'
 
       - name: Require Open VSX publish token
         if: ${{ env.OVSX_PAT == '' }}
@@ -208,7 +187,7 @@ jobs:
         working-directory: vscode-extension
         run: |
           # --skip-duplicate exits 0 with a notice if the version already exists.
-          ovsx publish "$VSIX_FILE" --pat "$OVSX_PAT" --skip-duplicate
+          npm exec --offline --no -- ovsx publish "$VSIX_FILE" --pat "$OVSX_PAT" --skip-duplicate
 
   github-release-asset:
     name: Attach VSIX to GitHub Release
@@ -271,21 +250,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: "26.5.0"
-          cache: npm
-          cache-dependency-path: vscode-extension/package-lock.json
-
-      - name: Select npm authority
-        run: npm install --global npm@11.18.0
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Verify Node and npm authority
-        run: npm run doctor
+      - name: Setup VS Code toolchain
+        uses: ./.github/actions/setup-vscode-toolchain
 
       - name: Smoke published Marketplace extension
         run: xvfb-run -a npm run test:published
@@ -314,21 +280,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: "26.5.0"
-          cache: npm
-          cache-dependency-path: vscode-extension/package-lock.json
-
-      - name: Select npm authority
-        run: npm install --global npm@11.18.0
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Verify Node and npm authority
-        run: npm run doctor
+      - name: Setup VS Code toolchain
+        uses: ./.github/actions/setup-vscode-toolchain
 
       - name: Smoke published Open VSX extension
         run: xvfb-run -a npm run test:published

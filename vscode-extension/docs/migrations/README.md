@@ -31,6 +31,8 @@ The active development contract is maintained in
 - type-aware Oxlint canary and warning-budget inventory;
 - exact-source VSIX/current-server smoke, repeated startup/request receipts,
   and package inventory/size ratchets; and
+- exact `@vscode/vsce` 3.9.2 and `ovsx` 1.0.2 publisher tooling resolved
+  offline from `package-lock.json` through the shared workflow setup action; and
 - the current decisions to retain Jest and defer optional-feature loading until
   feature-attributable receipts exist.
 
