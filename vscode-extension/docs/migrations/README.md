@@ -41,6 +41,9 @@ The active development contract is maintained in
   [workspace capability matrix](workspace-capability-matrix.md); and
 - development source maps are retained for symbolication, excluded from the
   VSIX, and archived with hash-keyed receipts by the publishing workflow; and
+- feature registration/construction timing is recorded by domain in
+  `feature_activation_metrics.v1`, while static module evaluation and missing
+  first-use evidence remain explicitly unobserved; and
 - the current decisions to retain Jest and defer optional-feature loading until
   feature-attributable receipts exist.
 

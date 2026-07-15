@@ -435,6 +435,7 @@ suite('First-hour VS Code receipt', function () {
     const extensionApi = (activationExports ?? extension.exports) as
       | {
           getLanguageClientStartupMetrics?: () => Record<string, unknown>;
+          getFeatureActivationMetrics?: () => Record<string, unknown>;
           markLanguageClientStartupMilestone?: (milestone: string) => void;
           stop?: () => Promise<void>;
         }
@@ -671,6 +672,10 @@ suite('First-hour VS Code receipt', function () {
         extension_activated_within_30s: activationMs <= 30_000,
         command_registration_ms: commandRegistrationMs,
         language_client: receiptLanguageClientMetrics,
+        feature_activation: extensionApi?.getFeatureActivationMetrics?.() ?? {
+          status: 'unavailable',
+          limitation: 'extension activation API did not expose feature metrics',
+        },
         health,
         indexing_announcement_observed: 'not_observable_from_extension_host_public_api',
         failure_guidance: failureGuidance,

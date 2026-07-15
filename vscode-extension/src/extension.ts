@@ -56,6 +56,10 @@ import type {
   LanguageClientStartupMilestone,
 } from './languageClientStartupMetrics';
 import { LanguageClientStartupMetrics } from './languageClientStartupMetrics';
+import {
+  FeatureActivationMetrics,
+  type FeatureActivationMetricsSnapshot,
+} from './featureActivationMetrics';
 import { registerWorkspaceConfigurationEvents } from './extensionWorkspaceEvents';
 import { describeWorkspaceTopology } from './workspaceTopology';
 import {
@@ -98,9 +102,14 @@ let languageClientLifecycle:
   | ExtensionLanguageClientLifecycle<LanguageClient, StateChangeEvent>
   | undefined;
 const languageClientStartupMetrics = new LanguageClientStartupMetrics();
+const featureActivationMetrics = new FeatureActivationMetrics();
 
 export function getLanguageClientStartupMetrics(): LanguageClientStartupMetricsSnapshot {
   return languageClientStartupMetrics.snapshot();
+}
+
+export function getFeatureActivationMetrics(): FeatureActivationMetricsSnapshot {
+  return featureActivationMetrics.snapshot();
 }
 
 export function markLanguageClientStartupMilestone(
@@ -1049,8 +1058,11 @@ export async function copyProviderDecisionReceiptCommand(
 
 export async function activate(context: vscode.ExtensionContext) {
   languageClientStartupMetrics.markMilestone('activate_entered');
+  featureActivationMetrics.beginActivation();
   outputChannel = vscode.window.createOutputChannel('Perl Language Server', { log: true });
-  const mcpDisposable = registerMcpSupport(outputChannel);
+  const mcpDisposable = featureActivationMetrics.measure('mcp', true, () =>
+    registerMcpSupport(outputChannel),
+  );
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.command = 'perl-lsp.showStatusMenu';
   statusBarItem.show();
@@ -1499,8 +1511,13 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  const whatsNewManager = new WhatsNewManager(context, outputChannel);
+  const whatsNewManager = featureActivationMetrics.measure(
+    'whats_new',
+    true,
+    () => new WhatsNewManager(context, outputChannel),
+  );
   const showWhatsNewCommand = vscode.commands.registerCommand('perl-lsp.showWhatsNew', async () => {
+    featureActivationMetrics.markFirstUse('whats_new');
     await whatsNewManager.showWhatsNew();
   });
 
@@ -1772,41 +1789,45 @@ export async function activate(context: vscode.ExtensionContext) {
     event.waitUntil(formatDocumentOnSave(event.document));
   });
 
-  const configurationWatcher = registerWorkspaceConfigurationEvents({
-    onLiveConfigurationChanged: async (event) => {
-      if (event.affectsConfiguration('perl-lsp.trace.server') && client) {
-        const newTrace = getTraceLevel();
-        await client.setTrace(newTrace);
-        outputChannel.appendLine(`Trace level changed to: ${newTrace}`);
-      }
+  const configurationWatcher = featureActivationMetrics.measure('configuration', true, () =>
+    registerWorkspaceConfigurationEvents({
+      onLiveConfigurationChanged: async (event) => {
+        if (event.affectsConfiguration('perl-lsp.trace.server') && client) {
+          const newTrace = getTraceLevel();
+          await client.setTrace(newTrace);
+          outputChannel.appendLine(`Trace level changed to: ${newTrace}`);
+        }
 
-      if (event.affectsConfiguration('perl-lsp.includePaths')) {
-        await validateIncludePaths(context);
-      }
+        if (event.affectsConfiguration('perl-lsp.includePaths')) {
+          await validateIncludePaths(context);
+        }
 
-      const criticChanged = CRITIC_SETTINGS.some((setting) => event.affectsConfiguration(setting));
-      if (event.affectsConfiguration('perl-lsp.includePaths') || criticChanged) {
-        await syncLanguageClientConfiguration(client);
-      }
-    },
-    onReconstructConfigurationChanged: async (event) => {
-      if (event.affectsConfiguration('perl-lsp.enableTestIntegration')) {
-        await refreshTestAdapter(context);
-      }
+        const criticChanged = CRITIC_SETTINGS.some((setting) =>
+          event.affectsConfiguration(setting),
+        );
+        if (event.affectsConfiguration('perl-lsp.includePaths') || criticChanged) {
+          await syncLanguageClientConfiguration(client);
+        }
+      },
+      onReconstructConfigurationChanged: async (event) => {
+        if (event.affectsConfiguration('perl-lsp.enableTestIntegration')) {
+          await refreshTestAdapter(context);
+        }
 
-      if (
-        event.affectsConfiguration('perl-lsp.aiCompletion.enabled') ||
-        event.affectsConfiguration('perl-lsp.aiCompletion.streaming.enabled')
-      ) {
-        refreshStreamingController(client);
-      }
-    },
-    onRestartRequired: () => promptForClientRefresh(context),
-    onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      outputChannel.appendLine(`[configuration] change handling failed: ${message}`);
-    },
-  });
+        if (
+          event.affectsConfiguration('perl-lsp.aiCompletion.enabled') ||
+          event.affectsConfiguration('perl-lsp.aiCompletion.streaming.enabled')
+        ) {
+          refreshStreamingController(client);
+        }
+      },
+      onRestartRequired: () => promptForClientRefresh(context),
+      onError: (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        outputChannel.appendLine(`[configuration] change handling failed: ${message}`);
+      },
+    }),
+  );
 
   const fileCreationWatcher = vscode.workspace.onDidCreateFiles(async (event) => {
     const config = vscode.workspace.getConfiguration('perl-lsp');
@@ -1845,6 +1866,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const arrowCompletionWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
     maybeNudgeArrowCompletion(event);
   });
+
+  const providerDisposables = featureActivationMetrics.measure('providers', true, () => [
+    ...registerGherkinProviders(),
+    ...registerGherkinStepDefinitionSupport(),
+    ...registerPodPreview(context),
+  ]);
 
   context.subscriptions.push(
     showOutputCommand,
@@ -1885,14 +1912,12 @@ export async function activate(context: vscode.ExtensionContext) {
     fileCreationWatcher,
     arrowCompletionWatcher,
     ...(mcpDisposable ? [mcpDisposable] : []),
-    ...registerGherkinProviders(),
-    ...registerGherkinStepDefinitionSupport(),
-    ...registerPodPreview(context),
+    ...providerDisposables,
   );
   languageClientStartupMetrics.markMilestone('commands_registered');
 
   // Initialize debug adapter
-  activateDebugger(context);
+  featureActivationMetrics.measure('debugger', true, () => activateDebugger(context));
 
   if (
     context.extensionMode === vscode.ExtensionMode.Test &&
@@ -1902,6 +1927,7 @@ export async function activate(context: vscode.ExtensionContext) {
     languageClientStartupMetrics.markMilestone('activate_returned');
     return {
       getLanguageClientStartupMetrics,
+      getFeatureActivationMetrics,
       markLanguageClientStartupMilestone,
       stop: deactivate,
     };
@@ -1911,6 +1937,7 @@ export async function activate(context: vscode.ExtensionContext) {
   languageClientStartupMetrics.markMilestone('activate_returned');
   return {
     getLanguageClientStartupMetrics,
+    getFeatureActivationMetrics,
     markLanguageClientStartupMilestone,
     stop: deactivate,
   };
@@ -1957,8 +1984,13 @@ async function finishStartupAfterActivation(
   });
 
   // First-run onboarding: show welcome notification once per installation.
-  const onboarding = new OnboardingManager(context, outputChannel);
+  const onboarding = featureActivationMetrics.measure(
+    'onboarding',
+    false,
+    () => new OnboardingManager(context, outputChannel),
+  );
   if (onboarding.shouldShowWelcome()) {
+    featureActivationMetrics.markFirstUse('onboarding');
     // Fire-and-forget; failures must not block extension startup.
     onboarding.showWelcomeNotification(currentServerPath).catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);

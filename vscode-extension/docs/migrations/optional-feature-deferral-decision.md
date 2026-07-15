@@ -37,6 +37,14 @@ activation and provider/restart/shutdown milestones, but did not attribute
 elapsed time to individual static imports. Its receipt therefore cannot prove
 that deferring any named feature would improve startup.
 
+The extension now records `feature_activation_metrics.v1` in first-hour
+receipts for explicit registration/construction boundaries: MCP, providers,
+configuration, debugger, What's New, and onboarding. Each entry records
+activation-criticality, registration status and duration, first-use status, and
+the fact that static module evaluation is not observable from the current
+single eager bundle. Missing first-use marks remain missing rather than being
+treated as zero cost.
+
 ## Decision
 
 Do not add dynamic imports, new chunks, or feature-registration deferrals in
