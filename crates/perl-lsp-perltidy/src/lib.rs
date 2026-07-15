@@ -370,7 +370,7 @@ impl BuiltInFormatter {
     #[must_use]
     pub fn format(&self, code: &str) -> String {
         let mut result = String::new();
-        let mut delimiter_stack = Vec::new();
+        let mut indent_level: i32 = 0;
         let lines: Vec<&str> = code.lines().collect();
         let had_trailing_newline = code.ends_with('\n');
         let indent_str = if self.config.tabs.unwrap_or(false) {
@@ -381,8 +381,8 @@ impl BuiltInFormatter {
 
         for (index, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            let leading_closers = count_matching_leading_closers(trimmed, &delimiter_stack);
-            let indent_level = delimiter_stack.len().saturating_sub(leading_closers);
+            let leading_closers = count_leading_closers(trimmed) as i32;
+            indent_level = indent_level.saturating_sub(leading_closers);
 
             if !trimmed.is_empty() {
                 for _ in 0..indent_level {
@@ -396,58 +396,23 @@ impl BuiltInFormatter {
                 result.push('\n');
             }
 
-            apply_delimiter_events(trimmed, &mut delimiter_stack);
+            // net_delimiter_delta counts all delimiters including leading closers.
+            // We already decremented by leading_closers before printing, so add them
+            // back to avoid double-counting: the net change for the *next* line is
+            // delta + leading_closers (leading closers cancel in the net formula).
+            indent_level = (indent_level + net_delimiter_delta(trimmed) + leading_closers).max(0);
         }
 
         result
     }
 }
 
-fn count_matching_leading_closers(line: &str, delimiter_stack: &[char]) -> usize {
-    let mut stack_index = delimiter_stack.len();
-    let mut matched = 0;
-
-    for closer in line.chars().take_while(|ch| matches!(ch, '}' | ')' | ']')) {
-        let Some(&opening) =
-            stack_index.checked_sub(1).and_then(|index| delimiter_stack.get(index))
-        else {
-            break;
-        };
-        if matching_closer(opening) != Some(closer) {
-            break;
-        }
-        matched += 1;
-        stack_index -= 1;
-    }
-
-    matched
+fn count_leading_closers(line: &str) -> usize {
+    line.chars().take_while(|ch| matches!(ch, '}' | ')' | ']')).count()
 }
 
-fn apply_delimiter_events(line: &str, delimiter_stack: &mut Vec<char>) {
-    for delimiter in significant_delimiters(line) {
-        match delimiter {
-            opening @ ('{' | '(' | '[') => delimiter_stack.push(opening),
-            closer @ ('}' | ')' | ']') => {
-                if delimiter_stack.last().copied().and_then(matching_closer) == Some(closer) {
-                    delimiter_stack.pop();
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-fn matching_closer(opening: char) -> Option<char> {
-    match opening {
-        '{' => Some('}'),
-        '(' => Some(')'),
-        '[' => Some(']'),
-        _ => None,
-    }
-}
-
-fn significant_delimiters(line: &str) -> Vec<char> {
-    let mut delimiters = Vec::new();
+fn net_delimiter_delta(line: &str) -> i32 {
+    let mut delta = 0_i32;
     let mut in_single = false;
     let mut in_double = false;
     let mut escaped = false;
@@ -491,10 +456,12 @@ fn significant_delimiters(line: &str) -> Vec<char> {
             break;
         }
 
-        if matches!(ch, '{' | '(' | '[' | '}' | ')' | ']') {
-            delimiters.push(ch);
+        match ch {
+            '{' | '(' | '[' => delta += 1,
+            '}' | ')' | ']' => delta -= 1,
+            _ => {}
         }
     }
 
-    delimiters
+    delta
 }

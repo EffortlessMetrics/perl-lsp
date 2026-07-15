@@ -65,4 +65,17 @@ describe('issue diagnostic formatting', () => {
 
     expect(info).toContain('VS Code: 1.99.0');
   });
+
+  test('accepts an explicitly unavailable editor name', () => {
+    const info = formatIssueDiagnosticInfo({
+      serverVersion: 'perllsp 0.12.4',
+      extensionVersion: '0.12.4',
+      editorVersion: '1.99.0',
+      platform: 'linux',
+      arch: 'x64',
+      editorName: undefined,
+    });
+
+    expect(info).toContain('VS Code: 1.99.0');
+  });
 });

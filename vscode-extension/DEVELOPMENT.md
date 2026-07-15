@@ -44,19 +44,17 @@ This bypasses the auto-download and uses your local build.
 ```bash
 npm run typecheck   # Type-check only (tsc --noEmit) — TypeScript 7 is the sole type-check authority
 npm run typecheck:all # Check source, unit tests, integration, published smoke, and scripts
-npm run typecheck:strictness # Advisory indexed-access and exact-optional baselines; rejects debt growth
 npm run compile     # Single build (Rolldown bundles out/extension.js — does NOT type-check)
 npm run sample:published:local # Repeat exact-source VSIX smoke and write p50/p95 receipt summary
 npm run watch       # Rebuild out/extension.js on every file change (use during active development)
 npm run watch:types # Optional companion: live tsc --noEmit type-check loop in a separate terminal
 ```
 
-The strictness command runs all TypeScript authority configurations with
-`noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` enabled while the
-existing debt is being burned down. Each committed baseline is countable by
-configuration, diagnostic code, and file; refreshes require the explicit
-option-specific `node scripts/check-typescript-strictness.js --update-baseline`
-command and must not silently absorb growth.
+The shared configuration enables `noUncheckedIndexedAccess`,
+`exactOptionalPropertyTypes`, and `noImplicitOverride` as blocking compiler
+options. All source, test, integration, published-smoke, and script authority
+configurations reject these forms of type drift directly through
+`npm run typecheck:all`.
 
 The shared TypeScript configuration also enables `noImplicitOverride` as a
 blocking check. All source, test, integration, published-smoke, and script
@@ -139,13 +137,24 @@ The `.vsix` file can be installed directly in VS Code via **Extensions → Insta
 
 The main extension code lives in `src/extension.ts`. Key files:
 
-| File                  | Purpose                                      |
-| --------------------- | -------------------------------------------- |
-| `src/extension.ts`    | Activation, server lifecycle                 |
-| `src/downloader.ts`   | Auto-download logic for the `perllsp` binary |
-| `src/healthWidget.ts` | Status bar health indicator                  |
-| `src/onboarding.ts`   | First-run setup flow                         |
-| `src/debugAdapter.ts` | DAP debug adapter                            |
+| File                            | Purpose                                      |
+| ------------------------------- | -------------------------------------------- |
+| `src/extension.ts`              | Activation and feature composition           |
+| `src/serverCommandGroup.ts`     | Server, install, and health command wiring   |
+| `src/criticCommandGroup.ts`     | Critic command registration                  |
+| `src/testCommandGroup.ts`       | Test and debugger command registration       |
+| `src/documentFeatureGroup.ts`   | POD and Gherkin provider composition         |
+| `src/onboardingCommandGroup.ts` | Onboarding and update command registration   |
+| `src/navigationCommandGroup.ts` | Navigation and presentation command wiring   |
+| `src/downloader.ts`             | Auto-download logic for the `perllsp` binary |
+| `src/healthWidget.ts`           | Status bar health indicator                  |
+| `src/onboarding.ts`             | First-run setup flow                         |
+| `src/debugAdapter.ts`           | DAP debug adapter                            |
+
+Server-facing commands receive their read-only projections and lifecycle
+callbacks through `ServerCommandContext`. The language-client lifecycle
+controller remains the sole owner of start, restart, and stop transitions;
+command modules only register handlers and delegate those operations.
 
 ## Pointing the extension at a different server version
 

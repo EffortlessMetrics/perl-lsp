@@ -5,10 +5,11 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import type * as vscode from 'vscode';
 import {
   PerlDebugAdapterDescriptorFactory,
   PerlDebugConfigurationProvider,
-  buildDapExecutableArgs,
+  buildDapExecutableArgs as productionBuildDapExecutableArgs,
   buildLaunchJsonContent,
   hasLaunchJson,
   offerDebugConfigOnFirstPerlOpen,
@@ -22,13 +23,43 @@ import {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function makeContext(storagePath?: string): any {
+interface LaunchConfiguration {
+  type: string;
+  request: string;
+  host?: string;
+  port?: number;
+  externalPeer?: string;
+}
+
+interface LaunchJson {
+  version: string;
+  configurations: LaunchConfiguration[];
+}
+
+function makeContext(storagePath?: string): vscode.ExtensionContext {
   const dir = storagePath ?? fs.mkdtempSync(path.join(os.tmpdir(), 'dap-test-'));
   return {
-    globalStorageUri: { fsPath: dir },
+    globalStorageUri: { fsPath: dir } as vscode.Uri,
     extensionPath: dir,
     subscriptions: [],
-  };
+  } as unknown as vscode.ExtensionContext;
+}
+
+function asDebugConfiguration(value: Record<string, unknown>): vscode.DebugConfiguration {
+  return value as unknown as vscode.DebugConfiguration;
+}
+
+function buildDapExecutableArgs(value: unknown): string[] {
+  return productionBuildDapExecutableArgs(
+    value as unknown as vscode.DebugConfiguration | undefined,
+  );
+}
+
+function required<T>(value: T | undefined, label: string): T {
+  if (value === undefined) {
+    throw new Error(`Missing ${label}`);
+  }
+  return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +79,7 @@ describe('PerlDebugConfigurationProvider', () => {
         document: { languageId: 'perl', uri: { fsPath: '/test.pl' } },
       };
 
-      const config: any = {};
+      const config = asDebugConfiguration({});
       provider.resolveDebugConfiguration(undefined, config);
 
       expect(config.type).toBe('perl');
@@ -60,65 +91,65 @@ describe('PerlDebugConfigurationProvider', () => {
     });
 
     test('does not modify config with existing type/request/name', () => {
-      const config: any = {
+      const config = asDebugConfiguration({
         type: 'perl',
         request: 'launch',
         name: 'Custom Debug',
         program: '/my/script.pl',
-      };
+      });
       const result = provider.resolveDebugConfiguration(undefined, config);
       expect(result).toBeDefined();
-      expect((result as any).program).toBe('/my/script.pl');
+      expect((result as vscode.DebugConfiguration).program).toBe('/my/script.pl');
     });
 
     test('sets attach defaults for TCP mode (no processId)', () => {
-      const config: any = {
+      const config = asDebugConfiguration({
         type: 'perl',
         request: 'attach',
         name: 'Attach',
-      };
+      });
       const result = provider.resolveDebugConfiguration(undefined, config);
 
-      expect((result as any).host).toBe('localhost');
-      expect((result as any).port).toBe(13603);
+      expect((result as vscode.DebugConfiguration).host).toBe('localhost');
+      expect((result as vscode.DebugConfiguration).port).toBe(13603);
     });
 
     test('preserves user-supplied attach host and port', () => {
-      const config: any = {
+      const config = asDebugConfiguration({
         type: 'perl',
         request: 'attach',
         name: 'Attach Custom',
         host: '10.0.0.1',
         port: 5000,
-      };
+      });
       const result = provider.resolveDebugConfiguration(undefined, config);
 
-      expect((result as any).host).toBe('10.0.0.1');
-      expect((result as any).port).toBe(5000);
+      expect((result as vscode.DebugConfiguration).host).toBe('10.0.0.1');
+      expect((result as vscode.DebugConfiguration).port).toBe(5000);
     });
 
     test('skips TCP defaults when processId is provided', () => {
-      const config: any = {
+      const config = asDebugConfiguration({
         type: 'perl',
         request: 'attach',
         name: 'Attach PID',
         processId: 42,
-      };
+      });
       const result = provider.resolveDebugConfiguration(undefined, config);
 
-      expect((result as any).host).toBeUndefined();
-      expect((result as any).port).toBeUndefined();
+      expect((result as vscode.DebugConfiguration).host).toBeUndefined();
+      expect((result as vscode.DebugConfiguration).port).toBeUndefined();
     });
 
     test('returns undefined when launch has no program', async () => {
-      const config: any = {
+      const config = asDebugConfiguration({
         type: 'perl',
         request: 'launch',
         name: 'No Program',
-      };
+      });
       const result = provider.resolveDebugConfiguration(undefined, config);
 
-      if (result && typeof (result as any).then === 'function') {
+      if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
         const resolved = await result;
         expect(resolved).toBeUndefined();
       }
@@ -129,11 +160,11 @@ describe('PerlDebugConfigurationProvider', () => {
     test('provides at least 3 default configurations', () => {
       const configs = provider.provideDebugConfigurations(undefined);
       expect(Array.isArray(configs)).toBe(true);
-      expect((configs as any[]).length).toBeGreaterThanOrEqual(3);
+      expect((configs as vscode.DebugConfiguration[]).length).toBeGreaterThanOrEqual(3);
     });
 
     test('includes launch, attach by TCP, and attach by PID templates', () => {
-      const configs = provider.provideDebugConfigurations(undefined) as any[];
+      const configs = provider.provideDebugConfigurations(undefined) as vscode.DebugConfiguration[];
 
       const hasLaunch = configs.some((c) => c.request === 'launch');
       const hasTCPAttach = configs.some((c) => c.request === 'attach' && c.port);
@@ -145,7 +176,7 @@ describe('PerlDebugConfigurationProvider', () => {
     });
 
     test('all configurations have type "perl"', () => {
-      const configs = provider.provideDebugConfigurations(undefined) as any[];
+      const configs = provider.provideDebugConfigurations(undefined) as vscode.DebugConfiguration[];
       for (const config of configs) {
         expect(config.type).toBe('perl');
       }
@@ -180,7 +211,10 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
     process.env.CARGO_HOME = tmpDir;
 
     try {
-      const result = factory.createDebugAdapterDescriptor({} as any, undefined);
+      const result = factory.createDebugAdapterDescriptor(
+        {} as unknown as vscode.DebugSession,
+        undefined,
+      );
       expect(result).toBeUndefined();
       expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
         expect.stringContaining('perl-dap'),
@@ -206,7 +240,10 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
 
     const ctx = makeContext(tmpDir);
     const factory = new PerlDebugAdapterDescriptorFactory(ctx);
-    const result = factory.createDebugAdapterDescriptor({} as any, undefined) as any;
+    const result = factory.createDebugAdapterDescriptor(
+      {} as unknown as vscode.DebugSession,
+      undefined,
+    ) as vscode.DebugAdapterExecutable;
 
     expect(result).toBeDefined();
     expect(result.command).toBe(dapPath);
@@ -224,9 +261,13 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
 
     const ctx = makeContext(tmpDir);
     const factory = new PerlDebugAdapterDescriptorFactory(ctx);
-    const result = factory.createDebugAdapterDescriptor({} as any, undefined) as any;
+    const result = factory.createDebugAdapterDescriptor(
+      {} as unknown as vscode.DebugSession,
+      undefined,
+    ) as vscode.DebugAdapterExecutable;
 
-    expect(result.options.env.RUST_LOG).toBe('debug');
+    const env = (result.options as { env?: NodeJS.ProcessEnv } | undefined)?.env;
+    expect(env?.RUST_LOG).toBe('debug');
   });
 
   test('passes --external-peer through to the descriptor when the session sets externalPeer', () => {
@@ -242,7 +283,10 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
     const ctx = makeContext(tmpDir);
     const factory = new PerlDebugAdapterDescriptorFactory(ctx);
     const session = { configuration: { externalPeer: 'localhost:9000' } };
-    const result = factory.createDebugAdapterDescriptor(session as any, undefined) as any;
+    const result = factory.createDebugAdapterDescriptor(
+      session as unknown as vscode.DebugSession,
+      undefined,
+    ) as vscode.DebugAdapterExecutable;
 
     expect(result.args).toEqual(['--external-peer', 'localhost:9000']);
   });
@@ -260,7 +304,10 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
     const ctx = makeContext(tmpDir);
     const factory = new PerlDebugAdapterDescriptorFactory(ctx);
     const session = { configuration: { request: 'launch', program: '/tmp/x.pl' } };
-    const result = factory.createDebugAdapterDescriptor(session as any, undefined) as any;
+    const result = factory.createDebugAdapterDescriptor(
+      session as unknown as vscode.DebugSession,
+      undefined,
+    ) as vscode.DebugAdapterExecutable;
 
     expect(result.args).toEqual([]);
   });
@@ -343,18 +390,18 @@ describe('debug test command helpers', () => {
 describe('buildLaunchJsonContent', () => {
   test('launch-script template produces valid JSON with perl type', () => {
     const content = buildLaunchJsonContent('launch-script');
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(content) as LaunchJson;
     expect(parsed.version).toBe('0.2.0');
     expect(Array.isArray(parsed.configurations)).toBe(true);
-    const cfg = parsed.configurations[0];
+    const cfg = required(parsed.configurations[0], 'launch-script configuration');
     expect(cfg.type).toBe('perl');
     expect(cfg.request).toBe('launch');
   });
 
   test('attach-process template produces attach config with host and port', () => {
     const content = buildLaunchJsonContent('attach-process');
-    const parsed = JSON.parse(content);
-    const cfg = parsed.configurations[0];
+    const parsed = JSON.parse(content) as LaunchJson;
+    const cfg = required(parsed.configurations[0], 'attach-process configuration');
     expect(cfg.type).toBe('perl');
     expect(cfg.request).toBe('attach');
     expect(cfg.host).toBe('localhost');
@@ -363,8 +410,8 @@ describe('buildLaunchJsonContent', () => {
 
   test('remote-ssh template produces attach config with configurable host', () => {
     const content = buildLaunchJsonContent('remote-ssh');
-    const parsed = JSON.parse(content);
-    const cfg = parsed.configurations[0];
+    const parsed = JSON.parse(content) as LaunchJson;
+    const cfg = required(parsed.configurations[0], 'remote-ssh configuration');
     expect(cfg.type).toBe('perl');
     expect(cfg.request).toBe('attach');
     expect(typeof cfg.host).toBe('string');
@@ -372,24 +419,24 @@ describe('buildLaunchJsonContent', () => {
 
   test('all template produces multiple configurations', () => {
     const content = buildLaunchJsonContent('all');
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(content) as LaunchJson;
     expect(parsed.configurations.length).toBeGreaterThanOrEqual(3);
-    const types = parsed.configurations.map((c: any) => c.type);
-    expect(types.every((t: string) => t === 'perl')).toBe(true);
+    const types = parsed.configurations.map((config) => config.type);
+    expect(types.every((type) => type === 'perl')).toBe(true);
   });
 
   test('unknown template falls back to launch-script', () => {
     const content = buildLaunchJsonContent('unknown-template');
-    const parsed = JSON.parse(content);
-    const cfg = parsed.configurations[0];
+    const parsed = JSON.parse(content) as LaunchJson;
+    const cfg = required(parsed.configurations[0], 'fallback configuration');
     expect(cfg.type).toBe('perl');
     expect(cfg.request).toBe('launch');
   });
 
   test('external-peer template carries the externalPeer field', () => {
     const content = buildLaunchJsonContent('external-peer');
-    const parsed = JSON.parse(content);
-    const cfg = parsed.configurations[0];
+    const parsed = JSON.parse(content) as LaunchJson;
+    const cfg = required(parsed.configurations[0], 'external-peer configuration');
     expect(cfg.type).toBe('perl');
     expect(cfg.request).toBe('attach');
     expect(typeof cfg.externalPeer).toBe('string');
@@ -398,8 +445,8 @@ describe('buildLaunchJsonContent', () => {
 
   test('all template includes the external-peer configuration', () => {
     const content = buildLaunchJsonContent('all');
-    const parsed = JSON.parse(content);
-    const hasPeer = parsed.configurations.some((c: any) => typeof c.externalPeer === 'string');
+    const parsed = JSON.parse(content) as LaunchJson;
+    const hasPeer = parsed.configurations.some((config) => typeof config.externalPeer === 'string');
     expect(hasPeer).toBe(true);
   });
 });
@@ -409,36 +456,36 @@ describe('buildLaunchJsonContent', () => {
 // ---------------------------------------------------------------------------
 describe('buildDapExecutableArgs', () => {
   test('passes --external-peer through for a valid host:port', () => {
-    expect(buildDapExecutableArgs({ externalPeer: 'localhost:9000' } as any)).toEqual([
+    expect(buildDapExecutableArgs({ externalPeer: 'localhost:9000' })).toEqual([
       '--external-peer',
       'localhost:9000',
     ]);
   });
 
   test('trims surrounding whitespace on the peer address', () => {
-    expect(buildDapExecutableArgs({ externalPeer: '  127.0.0.1:13700  ' } as any)).toEqual([
+    expect(buildDapExecutableArgs({ externalPeer: '  127.0.0.1:13700  ' })).toEqual([
       '--external-peer',
       '127.0.0.1:13700',
     ]);
   });
 
   test('returns no args when externalPeer is absent', () => {
-    expect(buildDapExecutableArgs({ request: 'launch' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ request: 'launch' })).toEqual([]);
     expect(buildDapExecutableArgs(undefined)).toEqual([]);
   });
 
   test('ignores a malformed peer address rather than passing it through', () => {
-    expect(buildDapExecutableArgs({ externalPeer: 'not-a-peer' } as any)).toEqual([]);
-    expect(buildDapExecutableArgs({ externalPeer: 'host:' } as any)).toEqual([]);
-    expect(buildDapExecutableArgs({ externalPeer: 42 } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 'not-a-peer' })).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 'host:' })).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 42 })).toEqual([]);
   });
 
   test('falls back to native for a non-connectable port in the flat shape', () => {
     // `host:0` (0 = "allocate", not connectable) and out-of-range ports must
     // fall back to the native adapter, consistent with the structured shape —
     // not spawn an unconnectable `--external-peer host:0`.
-    expect(buildDapExecutableArgs({ externalPeer: 'localhost:0' } as any)).toEqual([]);
-    expect(buildDapExecutableArgs({ externalPeer: 'localhost:70000' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 'localhost:0' })).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 'localhost:70000' })).toEqual([]);
   });
 
   test('falls back to the native adapter for a bracketed IPv6 peer address', () => {
@@ -447,16 +494,16 @@ describe('buildDapExecutableArgs', () => {
     // "[::1]:9000" does not match and the adapter falls back to native mode
     // rather than passing an unvalidated value through. This documents a
     // known scope limit, not a crash or injection risk.
-    expect(buildDapExecutableArgs({ externalPeer: '[::1]:9000' } as any)).toEqual([]);
-    expect(buildDapExecutableArgs({ externalPeer: '::1:9000' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: '[::1]:9000' })).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: '::1:9000' })).toEqual([]);
   });
 
   test('rejects a peer address with embedded whitespace instead of splitting on it', () => {
     // Guards against argv smuggling: a value like "host --some-flag:9000"
     // must not turn into a second, attacker-controlled CLI argument for the
     // spawned perl-dap process.
-    expect(buildDapExecutableArgs({ externalPeer: 'host --flag:9000' } as any)).toEqual([]);
-    expect(buildDapExecutableArgs({ externalPeer: 'host:9000 --flag' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 'host --flag:9000' })).toEqual([]);
+    expect(buildDapExecutableArgs({ externalPeer: 'host:9000 --flag' })).toEqual([]);
   });
 
   test('translates the shipped structured externalDebugger (connect) shape', () => {
@@ -470,7 +517,7 @@ describe('buildDapExecutableArgs', () => {
         port: 13604,
       },
     };
-    expect(buildDapExecutableArgs(config as any)).toEqual(['--external-peer', '127.0.0.1:13604']);
+    expect(buildDapExecutableArgs(config)).toEqual(['--external-peer', '127.0.0.1:13604']);
   });
 
   test('defaults host to 127.0.0.1 and mode to connect for the structured shape', () => {
@@ -478,7 +525,7 @@ describe('buildDapExecutableArgs', () => {
       buildDapExecutableArgs({
         debuggerBackend: 'external',
         externalDebugger: { port: 9001 },
-      } as any),
+      }),
     ).toEqual(['--external-peer', '127.0.0.1:9001']);
   });
 
@@ -489,20 +536,20 @@ describe('buildDapExecutableArgs', () => {
       buildDapExecutableArgs({
         debuggerBackend: 'external',
         externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 13604 },
-      } as any),
+      }),
     ).toEqual(['--external-peer-listen', '127.0.0.1:13604']);
     expect(
       buildDapExecutableArgs({
         debuggerBackend: 'external',
         externalDebugger: { mode: 'listen', control: 'mirror', host: '127.0.0.1', port: 0 },
-      } as any),
+      }),
     ).toEqual(['--external-peer-listen', '127.0.0.1']);
     // Defaults host to 127.0.0.1 when omitted.
     expect(
       buildDapExecutableArgs({
         debuggerBackend: 'external',
         externalDebugger: { mode: 'listen' },
-      } as any),
+      }),
     ).toEqual(['--external-peer-listen', '127.0.0.1']);
   });
 
@@ -512,13 +559,13 @@ describe('buildDapExecutableArgs', () => {
       buildDapExecutableArgs({
         debuggerBackend: 'external',
         externalDebugger: { mode: 'launchPeer', port: 13604 },
-      } as any),
+      }),
     ).toEqual([]);
     expect(
       buildDapExecutableArgs({
         debuggerBackend: 'external',
         externalDebugger: { mode: 'connect', port: 0 },
-      } as any),
+      }),
     ).toEqual([]);
   });
 
@@ -527,21 +574,19 @@ describe('buildDapExecutableArgs', () => {
       buildDapExecutableArgs({
         debuggerBackend: 'external',
         externalDebugger: { mode: 'listen', host: 'host --flag' },
-      } as any),
+      }),
     ).toEqual([]);
     expect(
       buildDapExecutableArgs({
         debuggerBackend: 'external',
         externalDebugger: { mode: 'listen', host: 'a:b' },
-      } as any),
+      }),
     ).toEqual([]);
   });
 
   test('the native backend (or absent debuggerBackend) yields no bridge args', () => {
-    expect(buildDapExecutableArgs({ debuggerBackend: 'native', program: '/x.pl' } as any)).toEqual(
-      [],
-    );
-    expect(buildDapExecutableArgs({ request: 'launch', program: '/x.pl' } as any)).toEqual([]);
+    expect(buildDapExecutableArgs({ debuggerBackend: 'native', program: '/x.pl' })).toEqual([]);
+    expect(buildDapExecutableArgs({ request: 'launch', program: '/x.pl' })).toEqual([]);
   });
 });
 
@@ -593,14 +638,14 @@ describe('offerDebugConfigOnFirstPerlOpen', () => {
 
   test('does nothing for non-perl documents', async () => {
     const doc = { languageId: 'javascript' };
-    await offerDebugConfigOnFirstPerlOpen(doc as any);
+    await offerDebugConfigOnFirstPerlOpen(doc as vscode.TextDocument);
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
 
   test('does nothing when no workspace folders are open', async () => {
     vscode.workspace.workspaceFolders = [];
     const doc = { languageId: 'perl' };
-    await offerDebugConfigOnFirstPerlOpen(doc as any);
+    await offerDebugConfigOnFirstPerlOpen(doc as vscode.TextDocument);
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
 
@@ -609,7 +654,7 @@ describe('offerDebugConfigOnFirstPerlOpen', () => {
     try {
       vscode.workspace.workspaceFolders = [{ uri: { fsPath: tmpDir }, name: 'test' }];
       const doc = { languageId: 'perl' };
-      await offerDebugConfigOnFirstPerlOpen(doc as any);
+      await offerDebugConfigOnFirstPerlOpen(doc as vscode.TextDocument);
       expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
         expect.stringContaining('debug configuration'),
         expect.any(String),
@@ -628,7 +673,7 @@ describe('offerDebugConfigOnFirstPerlOpen', () => {
       fs.writeFileSync(path.join(vscodDir, 'launch.json'), '{}');
       vscode.workspace.workspaceFolders = [{ uri: { fsPath: tmpDir }, name: 'test' }];
       const doc = { languageId: 'perl' };
-      await offerDebugConfigOnFirstPerlOpen(doc as any);
+      await offerDebugConfigOnFirstPerlOpen(doc as vscode.TextDocument);
       expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -640,8 +685,8 @@ describe('offerDebugConfigOnFirstPerlOpen', () => {
     try {
       vscode.workspace.workspaceFolders = [{ uri: { fsPath: tmpDir }, name: 'test' }];
       const doc = { languageId: 'perl' };
-      await offerDebugConfigOnFirstPerlOpen(doc as any);
-      await offerDebugConfigOnFirstPerlOpen(doc as any);
+      await offerDebugConfigOnFirstPerlOpen(doc as vscode.TextDocument);
+      await offerDebugConfigOnFirstPerlOpen(doc as vscode.TextDocument);
       expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });

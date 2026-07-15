@@ -36,8 +36,12 @@ export function inferPackageName(filePath: string): string | null {
 
   if (libIdx !== -1 && libIdx < parts.length - 1) {
     const relative = parts.slice(libIdx + 1);
-    const last = relative[relative.length - 1].replace(/\.pm$/, '');
-    relative[relative.length - 1] = last;
+    const lastIndex = relative.length - 1;
+    const lastPart = relative[lastIndex];
+    if (lastPart === undefined) {
+      return null;
+    }
+    relative[lastIndex] = lastPart.replace(/\.pm$/, '');
     return relative.join('::');
   }
 

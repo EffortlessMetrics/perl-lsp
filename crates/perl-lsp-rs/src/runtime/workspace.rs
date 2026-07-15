@@ -11,8 +11,7 @@
 use super::*;
 #[cfg(feature = "workspace")]
 use crate::runtime::readiness::{
-    IndexReadinessOutcome, IndexReadinessPolicy, ReadinessMilestone, WorkspaceReadinessReceipt,
-    check_readiness,
+    IndexReadinessOutcome, IndexReadinessPolicy, ReadinessMilestone, check_readiness,
 };
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
@@ -1920,6 +1919,9 @@ impl LspServer {
         // increment so it doesn't collide with IDs from other server-to-client requests.
         let progress_create_id = self.next_server_request_id();
         let permission_denied_shown = Arc::clone(&self.permission_denied_shown);
+        let readiness_receipt = Arc::clone(&self.workspace_readiness_receipt);
+        #[cfg(any(test, feature = "expose_lsp_test_api"))]
+        let readiness_start_gate = Arc::clone(&self.workspace_indexing_start_gate);
         #[cfg(any(test, feature = "expose_lsp_test_api"))]
         let readiness_observer_id =
             self.readiness_receipt_observer_id.load(std::sync::atomic::Ordering::Relaxed);
@@ -1927,11 +1929,15 @@ impl LspServer {
         std::thread::spawn(move || {
             let _guard = indexing_guard; // moved into closure, drops when closure exits
             let budget_start = Instant::now();
-            let mut readiness_receipt = WorkspaceReadinessReceipt::default();
-            #[cfg(any(test, feature = "expose_lsp_test_api"))]
-            readiness_receipt.set_test_observer_id(readiness_observer_id);
-            readiness_receipt.record_workspace_start(budget_start);
+            {
+                let mut receipt = readiness_receipt.lock();
+                receipt.begin_workspace(budget_start);
+                #[cfg(any(test, feature = "expose_lsp_test_api"))]
+                receipt.set_test_observer_id(readiness_observer_id);
+            }
             coordinator.transition_to_scanning();
+            #[cfg(any(test, feature = "expose_lsp_test_api"))]
+            crate::runtime::readiness::notify_workspace_indexing_started(&readiness_start_gate);
 
             // Send progress begin if client supports work done progress.
             if work_done_progress {
@@ -1983,7 +1989,7 @@ impl LspServer {
             }
 
             coordinator.update_scan_progress(files.len());
-            readiness_receipt.record_peak_queued_work(files.len());
+            readiness_receipt.lock().record_peak_queued_work(files.len());
             indexing_receipt.record_phase(IndexingPhase::Discovery, discovery_started.elapsed());
             indexing_receipt.record_discovery(files.len(), budget_start.elapsed());
             coordinator.transition_to_indexing(files.len());
@@ -2075,6 +2081,7 @@ impl LspServer {
                 };
                 let read_elapsed = read_started.elapsed();
                 let index_started = Instant::now();
+                let indexed_uri = url.to_string();
                 let index_result = coordinator.index().index_file(url, content);
                 let index_elapsed = index_started.elapsed();
                 indexing_receipt.record_phase(IndexingPhase::IndexFileOperation, index_elapsed);
@@ -2084,6 +2091,7 @@ impl LspServer {
                         read_elapsed,
                         index_started.elapsed(),
                     );
+                    readiness_receipt.lock().record_indexed_uri(&indexed_uri, Instant::now());
                     indexed_files += 1;
                     coordinator.update_building_progress(indexed_files);
 
@@ -2114,16 +2122,16 @@ impl LspServer {
                 if work_done_progress {
                     send_progress_end(&outbound, "Indexing stopped early");
                 }
-                readiness_receipt.log();
+                readiness_receipt.lock().log();
                 send_index_ready_notification(&outbound, false);
             } else {
                 indexing_receipt.log(budget_start.elapsed(), None);
                 let file_count = coordinator.index().file_count();
                 let symbol_count = coordinator.index().symbol_count();
                 coordinator.transition_to_ready(file_count, symbol_count);
-                readiness_receipt
-                    .record_milestone(ReadinessMilestone::WholeWorkspaceReady, Instant::now());
-                readiness_receipt.log();
+                let mut receipt = readiness_receipt.lock();
+                receipt.record_milestone(ReadinessMilestone::WholeWorkspaceReady, Instant::now());
+                receipt.log();
                 if work_done_progress {
                     send_progress_end(&outbound, "Indexing complete");
                 }
@@ -3086,6 +3094,227 @@ mod tests {
         assert_eq!(peak_queued_work, 1);
         let coordinator = server.coordinator().ok_or("missing workspace coordinator")?;
         assert_eq!(coordinator.index().file_count(), 1);
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn real_indexing_thread_resets_readiness_between_runs() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let dir = tempfile::tempdir()?;
+        let active_path = dir.path().join("main.pl");
+        let dependency_path = dir.path().join("Dep.pm");
+        let replacement_path = dir.path().join("Replacement.pm");
+        let active_uri = url::Url::from_file_path(&active_path)
+            .map_err(|_| "invalid active document path")?
+            .to_string();
+        let dependency_uri = url::Url::from_file_path(&dependency_path)
+            .map_err(|_| "invalid dependency path")?
+            .to_string();
+        let replacement_uri = url::Url::from_file_path(&replacement_path)
+            .map_err(|_| "invalid replacement path")?
+            .to_string();
+        let active_text = "package Main;\nuse Dep;\nmy $value = 1;\n$value;\n";
+        std::fs::write(&active_path, active_text)?;
+        std::fs::write(&dependency_path, "package Dep;\nsub value { 1 }\n1;\n")?;
+        let folder_uri = url::Url::from_directory_path(dir.path())
+            .map_err(|_| "invalid workspace folder path")?
+            .to_string();
+
+        let mut server = LspServer::new();
+        server.index_coordinator =
+            Some(std::sync::Arc::new(IndexCoordinator::with_limits_and_caps(
+                IndexResourceLimits::default(),
+                IndexPerformanceCaps { initial_scan_budget_ms: 30_000, ..Default::default() },
+            )));
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(folder_uri)
+                .with_path(dir.path().to_path_buf()),
+        );
+        server.test_set_readiness_target(Some(&active_uri), &[&dependency_uri]);
+
+        let (receipt_tx, receipt_rx) = std::sync::mpsc::channel();
+        let _receipt_observer_guard =
+            crate::runtime::readiness::set_workspace_readiness_receipt_observer(receipt_tx);
+        server
+            .readiness_receipt_observer_id
+            .store(_receipt_observer_guard.id(), std::sync::atomic::Ordering::Relaxed);
+
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        server.test_gate_workspace_indexing_start(started_tx, release_rx);
+        server.start_workspace_indexing();
+        started_rx.recv_timeout(std::time::Duration::from_secs(5))?;
+        server.test_apply_did_open(&active_uri, active_text, 1)?;
+
+        let provider_result = server.test_handle_completion(Some(json!({
+            "textDocument": {"uri": active_uri},
+            "position": {"line": 3, "character": 1},
+            "context": {"triggerKind": 1}
+        })));
+        let observation_result = server.test_record_readiness_provider_observation(
+            "completion",
+            &provider_result,
+            "explicit_partial_or_fallback",
+        );
+        release_tx.send(())?;
+        provider_result?;
+        observation_result.map_err(std::io::Error::other)?;
+
+        let first_receipt = receipt_rx.recv_timeout(std::time::Duration::from_secs(30))?;
+        if first_receipt["first_correct_answers"]["completion"].is_null() {
+            return Err("first indexing run did not record its provider observation".into());
+        }
+        if !first_receipt["active_document_ready_us"].is_u64()
+            || !first_receipt["direct_dependency_set_ready_us"].is_u64()
+        {
+            return Err("first indexing run did not record target milestones".into());
+        }
+
+        let wait_for_indexing = || -> Result<(), Box<dyn std::error::Error>> {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while server.indexing_in_progress.load(std::sync::atomic::Ordering::Acquire) {
+                if std::time::Instant::now() >= deadline {
+                    return Err("indexing thread did not finish before timeout".into());
+                }
+                std::thread::yield_now();
+            }
+            Ok(())
+        };
+        wait_for_indexing()?;
+
+        std::fs::remove_file(&active_path)?;
+        std::fs::remove_file(&dependency_path)?;
+        std::fs::write(&replacement_path, "package Replacement;\n1;\n")?;
+
+        server.start_workspace_indexing();
+        let second_receipt = receipt_rx.recv_timeout(std::time::Duration::from_secs(30))?;
+        wait_for_indexing()?;
+
+        if !second_receipt["workspace_start_us"].is_u64()
+            || !second_receipt["whole_workspace_ready_us"].is_u64()
+        {
+            return Err("second indexing run did not emit fresh workspace milestones".into());
+        }
+        if second_receipt["first_correct_answers"]["completion"].is_object()
+            || second_receipt["active_document_ready_us"].is_number()
+            || second_receipt["direct_dependency_set_ready_us"].is_number()
+        {
+            return Err("second indexing run retained stale readiness state".into());
+        }
+
+        let receipt = server.workspace_readiness_receipt.lock();
+        let (configured_active_uri, configured_dependencies, indexed_uris) =
+            receipt.test_target_state();
+        if configured_active_uri.as_deref() != Some(active_uri.as_str())
+            || !configured_dependencies.contains(&dependency_uri)
+            || indexed_uris.contains(&active_uri)
+            || indexed_uris.contains(&dependency_uri)
+            || !indexed_uris.contains(&replacement_uri)
+            || indexed_uris.len() != 1
+        {
+            return Err(
+                "second indexing run did not reset indexed state or preserve targets".into()
+            );
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn readiness_probe_records_pre_index_answer_and_index_milestones()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let active_path = dir.path().join("main.pl");
+        let dependency_path = dir.path().join("Dep.pm");
+        let active_uri = url::Url::from_file_path(&active_path)
+            .map_err(|_| "invalid active document path")?
+            .to_string();
+        let dependency_uri = url::Url::from_file_path(&dependency_path)
+            .map_err(|_| "invalid dependency path")?
+            .to_string();
+        let active_text = "package Main;\nuse Dep;\nmy $value = 1;\n$value;\n";
+        std::fs::write(&active_path, active_text)?;
+        std::fs::write(&dependency_path, "package Dep;\nsub value { 1 }\n1;\n")?;
+        let folder_uri = url::Url::from_directory_path(dir.path())
+            .map_err(|_| "invalid workspace folder path")?
+            .to_string();
+
+        let mut server = LspServer::new();
+        server.index_coordinator =
+            Some(std::sync::Arc::new(IndexCoordinator::with_limits_and_caps(
+                IndexResourceLimits::default(),
+                IndexPerformanceCaps { initial_scan_budget_ms: 30_000, ..Default::default() },
+            )));
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(folder_uri)
+                .with_path(dir.path().to_path_buf()),
+        );
+        server.test_set_readiness_target(Some(&active_uri), &[&dependency_uri]);
+
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        server.test_gate_workspace_indexing_start(started_tx, release_rx);
+        let (receipt_tx, receipt_rx) = std::sync::mpsc::channel();
+        let receipt_observer_guard =
+            crate::runtime::readiness::set_workspace_readiness_receipt_observer(receipt_tx);
+        server
+            .readiness_receipt_observer_id
+            .store(receipt_observer_guard.id(), std::sync::atomic::Ordering::Relaxed);
+
+        server.start_workspace_indexing();
+        started_rx.recv_timeout(std::time::Duration::from_secs(5))?;
+        server.test_apply_did_open(&active_uri, active_text, 1)?;
+
+        let provider_result = server.test_handle_completion(Some(json!({
+            "textDocument": {"uri": active_uri},
+            "position": {"line": 3, "character": 1},
+            "context": {"triggerKind": 1}
+        })));
+        let observation_result = server.test_record_readiness_provider_observation(
+            "completion",
+            &provider_result,
+            "explicit_partial_or_fallback",
+        );
+        let pre_index_receipt = server.test_readiness_receipt_snapshot();
+        release_tx.send(())?;
+
+        provider_result?;
+        observation_result.map_err(std::io::Error::other)?;
+        if pre_index_receipt["first_correct_answers"]["completion"].is_null() {
+            return Err("pre-index completion observation was not recorded".into());
+        }
+        if pre_index_receipt["whole_workspace_ready_us"].is_number() {
+            return Err("pre-index probe observed whole-workspace readiness too early".into());
+        }
+
+        let receipt = receipt_rx.recv_timeout(std::time::Duration::from_secs(30))?;
+        for field in [
+            "active_document_ready_us",
+            "direct_dependency_set_ready_us",
+            "whole_workspace_ready_us",
+        ] {
+            if !receipt[field].is_u64() {
+                return Err(format!("readiness receipt missing {field}: {receipt}").into());
+            }
+        }
+        let answer_elapsed = receipt["first_correct_answers"]["completion"]["elapsed_us"]
+            .as_u64()
+            .ok_or("missing completion answer elapsed time")?;
+        let whole_ready = receipt["whole_workspace_ready_us"]
+            .as_u64()
+            .ok_or("missing whole-workspace elapsed time")?;
+        if answer_elapsed > whole_ready {
+            return Err(format!(
+                "pre-index completion elapsed after whole-workspace readiness: {answer_elapsed} > {whole_ready}"
+            )
+            .into());
+        }
+        if receipt["first_correct_answers"]["completion"]["readiness_outcome"] != "partial" {
+            return Err("completion readiness outcome was not preserved".into());
+        }
+
         Ok(())
     }
 

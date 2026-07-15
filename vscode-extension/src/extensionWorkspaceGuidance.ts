@@ -74,6 +74,10 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
     }
 
     const firstMissing = missingPaths[0];
+    if (firstMissing === undefined) {
+      continue;
+    }
+
     const relativeNote = path.isAbsolute(firstMissing)
       ? 'absolute path'
       : 'relative to the workspace';
@@ -265,7 +269,7 @@ export async function suggestDiscoveredIncludePaths(
 
 export async function suggestAiCompletionIfSupported(
   context: vscode.ExtensionContext,
-  client: { initializeResult?: { capabilities?: unknown } } | undefined,
+  client: { initializeResult?: { capabilities?: unknown | undefined } | undefined } | undefined,
 ): Promise<void> {
   if (!client) {
     return;

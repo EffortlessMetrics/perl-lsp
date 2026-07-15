@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import type * as vscode from 'vscode';
 import { WhatsNewManager, extractVersionSection, markdownToHtml } from '../whatsNew';
 
 // ---------------------------------------------------------------------------
@@ -54,8 +55,11 @@ function makeTmpDir(): string {
   return dir;
 }
 
-function makeContext(opts?: { lastVersion?: string; extensionPath?: string }): any {
-  const store = new Map<string, any>();
+function makeContext(opts?: {
+  lastVersion?: string;
+  extensionPath?: string;
+}): vscode.ExtensionContext {
+  const store = new Map<string, unknown>();
   if (opts?.lastVersion !== undefined) {
     store.set('perl-lsp.lastVersion', opts.lastVersion);
   }
@@ -63,23 +67,34 @@ function makeContext(opts?: { lastVersion?: string; extensionPath?: string }): a
   return {
     extensionPath: dir,
     globalState: {
-      get: jest.fn((key: string, defaultValue?: any) => {
-        if (store.has(key)) return store.get(key);
-        return defaultValue;
-      }),
-      update: jest.fn(async (key: string, value: any) => {
+      get<T>(key: string, defaultValue?: T): T | undefined {
+        return (store.has(key) ? store.get(key) : defaultValue) as T | undefined;
+      },
+      update: jest.fn(async (key: string, value: unknown): Promise<void> => {
         store.set(key, value);
       }),
     },
-  };
+  } as unknown as vscode.ExtensionContext;
 }
 
-function makeOutputChannel(): any {
+function makeOutputChannel(): vscode.OutputChannel {
   return {
     appendLine: jest.fn(),
     show: jest.fn(),
     dispose: jest.fn(),
-  };
+  } as unknown as vscode.OutputChannel;
+}
+
+function findRequired<T>(
+  values: readonly T[],
+  predicate: (value: T) => boolean,
+  description: string,
+): T {
+  const value = values.find(predicate);
+  if (!value) {
+    throw new Error(`Expected ${description} in package manifest`);
+  }
+  return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -332,26 +347,44 @@ describe('WhatsNewManager.buildHtml', () => {
 
 describe('package.json showWhatsNew command', () => {
   const EXT_ROOT = path.resolve(__dirname, '..', '..');
-  let pkg: any;
+  type CommandContribution = {
+    command: string;
+    category: string;
+    title: string;
+  };
+  type PackageManifest = {
+    contributes: {
+      commands: CommandContribution[];
+    };
+  };
+  let pkg: PackageManifest;
 
   beforeAll(() => {
-    pkg = JSON.parse(fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'));
+    pkg = JSON.parse(
+      fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'),
+    ) as PackageManifest;
   });
 
   test('registers perl-lsp.showWhatsNew command', () => {
-    const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+    const commandIds = pkg.contributes.commands.map((c: CommandContribution) => c.command);
     expect(commandIds).toContain('perl-lsp.showWhatsNew');
   });
 
   test('showWhatsNew command has Perl category', () => {
-    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.showWhatsNew');
-    expect(cmd).toBeDefined();
+    const cmd = findRequired(
+      pkg.contributes.commands,
+      (c: CommandContribution) => c.command === 'perl-lsp.showWhatsNew',
+      'perl-lsp.showWhatsNew command',
+    );
     expect(cmd.category).toBe('Perl');
   });
 
   test('showWhatsNew command title is user-friendly', () => {
-    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.showWhatsNew');
-    expect(cmd).toBeDefined();
+    const cmd = findRequired(
+      pkg.contributes.commands,
+      (c: CommandContribution) => c.command === 'perl-lsp.showWhatsNew',
+      'perl-lsp.showWhatsNew command',
+    );
     expect(cmd.title).toBeTruthy();
     expect(cmd.title.toLowerCase()).toMatch(/what'?s new|release notes|changelog/i);
   });

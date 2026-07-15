@@ -18,20 +18,6 @@ pub struct QuickFixDiagnostic {
     /// The diagnostic code (e.g., "undefined-variable")
     #[allow(dead_code)]
     pub code: Option<String>,
-    /// Structured context produced by the diagnostic provider.
-    pub metadata: Option<QuickFixMetadata>,
-}
-
-/// Structured inputs used by quick fixes that must not parse diagnostic prose.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum QuickFixMetadata {
-    /// Missing arguments for a static `printf`/`sprintf` format string.
-    PrintfFormatArity {
-        /// Function name used by the call.
-        call_name: String,
-        /// Number of arguments that can be safely added.
-        missing_arguments: usize,
-    },
 }
 
 /// A code action that can be applied to fix an issue

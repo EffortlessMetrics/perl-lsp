@@ -18,7 +18,7 @@ jest.mock('vscode-jsonrpc', () => ({
 }));
 
 import { StreamingCompletionController } from '../streamingCompletion';
-import { LanguageClient } from 'vscode-languageclient/node';
+import type { LanguageClient } from 'vscode-languageclient/node';
 
 /** Create a mock LanguageClient with the methods needed by StreamingCompletionController. */
 function createMockClient(): LanguageClient {

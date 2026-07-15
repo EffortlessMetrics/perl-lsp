@@ -7,10 +7,10 @@ ownership does not roll up to "the swarm" as a whole. An agent acting on
 behalf of one lane has **no authority over PRs that belong to another
 lane**, regardless of how the orchestrator routes its own queue.
 
-This document is the canonical lane model. It complements `AGENTS.md`
-(which scopes a single agent's actions) and `CLAUDE.md` (which scopes the
-orchestrator's pipeline). The "Lane scope" section of `AGENTS.md`
-references this file.
+This document is the canonical lane model. It complements the root `AGENTS.md`
+(which routes parent and worker roles), the worker manual at
+`docs/agents/IMPLEMENTATION_WORKER.md` (which scopes bounded execution), and
+`CLAUDE.md` (which scopes the orchestrator's pipeline).
 
 ## Identifying a lane
 
@@ -153,7 +153,8 @@ Avoid:
 
 ## See also
 
-- `AGENTS.md` — the "Lane scope" section references this doc.
+- `AGENTS.md` — role routing and stable repository invariants.
+- `docs/agents/IMPLEMENTATION_WORKER.md` — bounded worker procedure.
 - `CLAUDE.md` — orchestrator routing model; the lane label is one of the
   state labels the orchestrator reads.
 - `docs/reference/ISSUE_DISCOVERY_DOCTRINE.md` — the Issue Discovery / Bug

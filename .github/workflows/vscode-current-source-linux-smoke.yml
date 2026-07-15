@@ -21,9 +21,13 @@ permissions:
 
 jobs:
   current-source-linux-smoke:
-    name: Current-source Linux smoke
+    name: Current-source Linux smoke (${{ matrix.vscode_version }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        vscode_version: ['1.125.0', 'stable']
 
     defaults:
       run:
@@ -32,6 +36,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       RUST_BACKTRACE: 1
+      PERL_LSP_VSCODE_VERSION: ${{ matrix.vscode_version }}
 
     steps:
       - name: Checkout
@@ -45,15 +50,8 @@ jobs:
         with:
           toolchain: 1.95.0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: '26.5.0'
-          cache: npm
-          cache-dependency-path: vscode-extension/package-lock.json
-
-      - name: Select npm authority
-        run: npm install --global npm@11.18.0
+      - name: Setup VS Code toolchain
+        uses: ./.github/actions/setup-vscode-toolchain
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
@@ -61,9 +59,6 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: vscode-current-source-smoke-${{ hashFiles('Cargo.lock') }}
-
-      - name: Install extension dependencies
-        run: npm ci
 
       - name: Build current Rust server
         working-directory: .
@@ -82,7 +77,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: vscode-current-source-linux-smoke-${{ github.sha }}
+          name: vscode-current-source-linux-smoke-${{ matrix.vscode_version }}-${{ github.sha }}
           path: target/receipts/vscode-smoke/**
           if-no-files-found: warn
           retention-days: 14

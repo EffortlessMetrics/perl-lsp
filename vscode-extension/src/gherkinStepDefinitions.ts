@@ -73,8 +73,8 @@ export function parseGherkinStepLine(lineText: string, line: number): GherkinSte
     return null;
   }
 
-  const text = match[2].trim();
-  if (text.length === 0) {
+  const text = match[2]?.trim();
+  if (!text) {
     return null;
   }
 
@@ -107,7 +107,12 @@ export function buildGeneratedStepPattern(stepText: string): string {
       continue;
     }
 
-    pattern += escapeRegexLiteral(stepText[cursor]);
+    const character = stepText[cursor];
+    if (character === undefined) {
+      break;
+    }
+
+    pattern += escapeRegexLiteral(character);
     cursor += 1;
   }
 

@@ -878,6 +878,132 @@ impl LspServer {
         super::readiness::set_index_ready_wait_entered_observer(sender);
     }
 
+    /// Configure the active-document and direct-dependency targets for a
+    /// deterministic startup-readiness probe.
+    #[cfg(feature = "workspace")]
+    pub fn test_set_readiness_target(
+        &self,
+        active_document_uri: Option<&str>,
+        direct_dependency_uris: &[&str],
+    ) {
+        self.workspace_readiness_receipt.lock().set_readiness_target(
+            active_document_uri.map(str::to_owned),
+            direct_dependency_uris.iter().map(|uri| (*uri).to_owned()),
+        );
+    }
+
+    /// Hold the real indexing thread after it enters `Building` until the
+    /// probe has issued its pre-index request.
+    #[cfg(feature = "workspace")]
+    pub fn test_gate_workspace_indexing_start(
+        &self,
+        started: std::sync::mpsc::Sender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+    ) {
+        super::readiness::set_workspace_indexing_start_gate(
+            &self.workspace_indexing_start_gate,
+            started,
+            release,
+        );
+    }
+
+    #[cfg(feature = "workspace")]
+    /// Validate a provider response against its readiness receipt trace.
+    fn validate_readiness_provider_observation(
+        provider: &str,
+        provider_result: &Result<Option<Value>, JsonRpcError>,
+        expected_result_class: &str,
+        trace: &Value,
+    ) -> Result<(String, String), String> {
+        let response = provider_result
+            .as_ref()
+            .map_err(|error| format!("{provider} returned an error: {}", error.message))?
+            .as_ref()
+            .ok_or_else(|| format!("{provider} returned no response"))?;
+        if provider != "completion" {
+            return Err(format!("readiness response validation is not implemented for {provider}"));
+        }
+        let items = response
+            .get("items")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "completion response did not contain an items array".to_string())?;
+        if items.is_empty() {
+            return Err("completion response contained no items".to_string());
+        }
+
+        let fallback_state =
+            trace.get("fallback_state").and_then(Value::as_str).unwrap_or("unknown");
+        let workspace_index_state =
+            trace.get("workspace_index_state").and_then(Value::as_str).unwrap_or("unknown");
+        let result_class = if trace.get("decision").and_then(Value::as_str) == Some("fallback")
+            || fallback_state != "none"
+            || matches!(workspace_index_state, "partial" | "none")
+        {
+            "explicit_partial_or_fallback"
+        } else {
+            "non_empty_exact"
+        };
+        if result_class != expected_result_class {
+            return Err(format!(
+                "{provider} result class mismatch: expected {expected_result_class}, observed {result_class}"
+            ));
+        }
+        let readiness_outcome =
+            if result_class == "explicit_partial_or_fallback" { "partial" } else { "ready" };
+        Ok((result_class.to_string(), readiness_outcome.to_string()))
+    }
+
+    #[cfg(feature = "workspace")]
+    /// Record an oracle-confirmed provider observation against the active
+    /// startup-readiness receipt. The expected class comes from the deterministic
+    /// workload oracle; the actual response and trace determine the stored
+    /// readiness outcome.
+    pub fn test_record_readiness_provider_observation(
+        &self,
+        provider: &str,
+        provider_result: &Result<Option<Value>, JsonRpcError>,
+        expected_result_class: &str,
+    ) -> Result<(), String> {
+        let kind = super::readiness::ReadinessAnswerKind::from_provider(provider)
+            .ok_or_else(|| format!("unsupported readiness provider: {provider}"))?;
+        let trace = self
+            .provider_decision_traces
+            .lock()
+            .get(provider)
+            .cloned()
+            .ok_or_else(|| format!("missing provider trace for {provider}"))?;
+        let (observed_result_class, readiness_outcome) =
+            Self::validate_readiness_provider_observation(
+                provider,
+                provider_result,
+                expected_result_class,
+                &trace,
+            )?;
+        let answering_tier =
+            trace.get("answering_tier").and_then(Value::as_str).unwrap_or("unknown");
+        let freshness = trace.get("freshness").and_then(Value::as_str).unwrap_or("unknown");
+        let fallback_reason = trace.get("fallback_reason").and_then(Value::as_str);
+
+        self.workspace_readiness_receipt.lock().record_provider_observation(
+            kind,
+            std::time::Instant::now(),
+            super::readiness::ValidatedReadinessObservation::new(
+                &observed_result_class,
+                &readiness_outcome,
+                answering_tier,
+                freshness,
+                fallback_reason,
+            ),
+        );
+        Ok(())
+    }
+
+    /// Return the current path-free startup-readiness receipt for a probe.
+    #[cfg(feature = "workspace")]
+    pub fn test_readiness_receipt_snapshot(&self) -> Value {
+        self.workspace_readiness_receipt.lock().summary_json()
+    }
+
     /// Enable `callHierarchy` in the server's advertised features.
     ///
     /// Test-only helper used by coverage tests that need to reach the
@@ -1097,8 +1223,79 @@ pub struct ParseWorkerMetricsSnapshot {
 mod tests {
     use super::LspServer;
     use crate::runtime::readiness::{IndexReadinessOutcome, IndexReadinessPolicy};
-    use anyhow::Result;
+    use anyhow::{Result, anyhow};
+    use serde_json::{Value, json};
     use std::time::Duration;
+
+    #[test]
+    fn readiness_observation_rejects_missing_error_empty_and_wrong_class() -> Result<()> {
+        let partial_trace = json!({
+            "decision": "acted",
+            "fallback_state": "legacy_provider",
+            "workspace_index_state": "partial"
+        });
+        let expected = "explicit_partial_or_fallback";
+        let missing: Result<Option<Value>, super::JsonRpcError> = Ok(None);
+        let missing_result = LspServer::validate_readiness_provider_observation(
+            "completion",
+            &missing,
+            expected,
+            &partial_trace,
+        );
+        assert_eq!(missing_result, Err("completion returned no response".to_string()));
+
+        let empty = Ok(Some(json!({"isIncomplete": true, "items": []})));
+        let empty_result = LspServer::validate_readiness_provider_observation(
+            "completion",
+            &empty,
+            expected,
+            &partial_trace,
+        );
+        assert_eq!(empty_result, Err("completion response contained no items".to_string()));
+
+        let error: Result<Option<Value>, super::JsonRpcError> = Err(super::JsonRpcError {
+            code: -32603,
+            message: "synthetic completion failure".to_string(),
+            data: None,
+        });
+        let error_result = LspServer::validate_readiness_provider_observation(
+            "completion",
+            &error,
+            expected,
+            &partial_trace,
+        );
+        assert_eq!(
+            error_result,
+            Err("completion returned an error: synthetic completion failure".to_string())
+        );
+
+        let full_trace = json!({
+            "decision": "acted",
+            "fallback_state": "none",
+            "workspace_index_state": "full"
+        });
+        let non_empty = Ok(Some(json!({"isIncomplete": false, "items": [{"label": "value"}]})));
+        let wrong_class_result = LspServer::validate_readiness_provider_observation(
+            "completion",
+            &non_empty,
+            expected,
+            &full_trace,
+        );
+        assert_eq!(
+            wrong_class_result,
+            Err("completion result class mismatch: expected explicit_partial_or_fallback, observed non_empty_exact".to_string())
+        );
+
+        let observed = LspServer::validate_readiness_provider_observation(
+            "completion",
+            &non_empty,
+            "non_empty_exact",
+            &full_trace,
+        )
+        .map_err(anyhow::Error::msg)?;
+        assert_eq!(observed, ("non_empty_exact".to_string(), "ready".to_string()));
+        Ok(())
+    }
 
     #[test]
     fn test_notify_index_ready_wait_entered_forwards_to_readiness_observer() -> Result<()> {

@@ -13,18 +13,22 @@ jest.mock('vscode-languageclient/node', () => ({
 
 import { maybeNudgeArrowCompletion, shouldNudgeArrowCompletion } from '../extension';
 
+const testWindow = vscode.window as unknown as {
+  activeTextEditor: vscode.TextEditor | undefined;
+};
+
 describe('arrow completion nudge', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (vscode.window as any).activeTextEditor = undefined;
+    testWindow.activeTextEditor = undefined;
   });
 
   test('nudges completion for variable arrow intent on dash', () => {
     const document = {
       languageId: 'perl',
       lineAt: jest.fn(() => ({ text: '$obj-' })),
-    };
-    (vscode.window as any).activeTextEditor = { document };
+    } as unknown as vscode.TextDocument;
+    testWindow.activeTextEditor = { document } as unknown as vscode.TextEditor;
 
     maybeNudgeArrowCompletion({
       document,
@@ -35,7 +39,7 @@ describe('arrow completion nudge', () => {
           range: { start: { line: 0, character: 4 } },
         },
       ],
-    } as any);
+    } as unknown as vscode.TextDocumentChangeEvent);
 
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('editor.action.triggerSuggest');
   });
@@ -44,8 +48,8 @@ describe('arrow completion nudge', () => {
     const document = {
       languageId: 'perl',
       lineAt: jest.fn(() => ({ text: '$value -' })),
-    };
-    (vscode.window as any).activeTextEditor = { document };
+    } as unknown as vscode.TextDocument;
+    testWindow.activeTextEditor = { document } as unknown as vscode.TextEditor;
 
     maybeNudgeArrowCompletion({
       document,
@@ -56,7 +60,7 @@ describe('arrow completion nudge', () => {
           range: { start: { line: 0, character: 7 } },
         },
       ],
-    } as any);
+    } as unknown as vscode.TextDocumentChangeEvent);
 
     expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
   });

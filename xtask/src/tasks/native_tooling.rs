@@ -9,7 +9,7 @@ use perl_lsp_rs_core::tooling::native_compat::{
     PerlcriticCompatItem, PerlcriticCompatReport, PerlcriticNativeConfigSuggestion,
     classify_perlcritic_profile, render_perlcritic_compat_markdown,
 };
-use perl_lsp_rs_core::tooling::perl_critic::{NativeCriticProfile, NativeCriticRegistry};
+use perl_lsp_rs_core::tooling::perl_critic::NativeCriticRegistry;
 use perl_lsp_rs_core::tooling::perltidy::FormatConfig;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -985,7 +985,7 @@ fn critic_status(
     critic_check_receipt: &Path,
     critic_false_positive_receipt: &Path,
 ) -> Result<CriticStatus> {
-    let registry = NativeCriticRegistry::for_profile(NativeCriticProfile::Strict);
+    let registry = NativeCriticRegistry::recommended();
     let native_rules = registry.rule_ids().into_iter().map(ToOwned::to_owned).collect::<Vec<_>>();
     let fixable = fixable_rule_ids();
     let missing_fix_rules = fixable

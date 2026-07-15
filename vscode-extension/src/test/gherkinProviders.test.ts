@@ -38,16 +38,24 @@ describe('gherkin outline providers', () => {
 
     const symbols = provideGherkinDocumentSymbols(text);
     expect(symbols).toHaveLength(1);
-    expect(symbols[0].name).toBe('Feature: Checkout flow');
-    expect(symbols[0].children.map((child) => child.name)).toEqual([
+    const feature = symbols[0];
+    if (!feature) return;
+
+    expect(feature.name).toBe('Feature: Checkout flow');
+    expect(feature.children).toHaveLength(2);
+    expect(feature.children.map((child) => child.name)).toEqual([
       'Background: signed-in user',
       'Scenario Outline: buying a product',
     ]);
 
-    const background = symbols[0].children[0];
+    const background = feature.children[0];
+    if (!background) return;
+
     expect(background.children.map((child) => child.name)).toEqual(['Given I am logged in']);
 
-    const outline = symbols[0].children[1];
+    const outline = feature.children[1];
+    if (!outline) return;
+
     expect(outline.children.map((child) => child.name)).toEqual([
       'When I add <item> to the cart',
       'Then the total should be <total>',
@@ -100,8 +108,11 @@ describe('gherkin outline providers', () => {
     );
 
     expect(links).toHaveLength(1);
-    expect(links[0].targetUri.fsPath).toBe('/project/features/step_definitions/user_steps.pm');
-    expect(links[0].targetSelectionRange?.start.line).toBe(2);
+    const link = links[0];
+    if (!link) return;
+
+    expect(link.targetUri.fsPath).toBe('/project/features/step_definitions/user_steps.pm');
+    expect(link.targetSelectionRange?.start.line).toBe(2);
   });
 
   test('skips potentially expensive regex step definitions', () => {
@@ -255,7 +266,36 @@ describe('gherkin outline providers', () => {
     );
 
     expect(links).toHaveLength(1);
-    expect(links[0].targetSelectionRange?.start.line).toBe(2);
+    const link = links[0];
+    if (!link) return;
+
+    expect(link.targetSelectionRange?.start.line).toBe(2);
+  });
+
+  test('does not infer a definition keyword for an initial And step', () => {
+    const featureText = [
+      'Feature: Checkout',
+      '  Scenario: Purchase',
+      '    And the cart is empty',
+    ].join('\n');
+
+    const links = provideGherkinStepDefinitionLinks(
+      featureText,
+      { line: 2, character: 12 } as vscode.Position,
+      [
+        {
+          uri: vscode.Uri.file('/project/t/steps/cart_steps.pm'),
+          text: [
+            'use Test::BDD::Cucumber::StepFile;',
+            '',
+            'Given qr/the cart is empty/, sub {',
+            '};',
+          ].join('\n'),
+        },
+      ],
+    );
+
+    expect(links).toHaveLength(0);
   });
 
   test('uses the registered definition provider to scan workspace step files', async () => {

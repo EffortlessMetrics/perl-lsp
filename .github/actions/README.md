@@ -4,6 +4,25 @@ This directory contains reusable composite actions for perl-lsp CI workflows.
 
 ## Composite Actions
 
+### `setup-vscode-toolchain/`
+
+Sets up the extension's Node 26/npm 11 authority, verifies it before
+installation, runs `npm ci` from `vscode-extension/package-lock.json`, and can
+run the lockfile-resolved publisher CLI contract.
+
+**Usage:**
+
+```yaml
+- uses: ./.github/actions/setup-vscode-toolchain
+  with:
+    verify-publisher-tools: 'true' # publishing jobs only
+```
+
+The action is the single workflow-owned setup path for extension CI, smoke,
+publishing preparation, and published-extension smoke. Publisher commands use
+`npm exec --offline --no` so a missing or drifting local dependency fails
+instead of being downloaded or selected globally.
+
 ### `setup-perl-lsp/`
 
 Installs `perllsp` for downstream GitHub Actions workflows.

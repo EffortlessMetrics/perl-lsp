@@ -37,6 +37,9 @@ const { spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { createReporter } = require('./reporter');
+
+const reporter = createReporter('lint-canary');
 
 const EXT_ROOT = path.resolve(__dirname, '..');
 
@@ -123,12 +126,12 @@ function runOxlint(tmpDir, file) {
 }
 
 function fail(message, detail) {
-  console.error(`\n[lint-canary] FAIL: ${message}`);
+  reporter.error(`FAIL: ${message}`);
   if (detail) {
-    console.error(detail);
+    reporter.error(detail);
   }
-  console.error(
-    '\n[lint-canary] A red result here means type-aware analysis either did not run, ' +
+  reporter.error(
+    'A red result here means type-aware analysis either did not run, ' +
       'crashed, or silently fell back to syntax-only linting — none of which may pass ' +
       'as a green lint check. See scripts/lint-canary.js for the invariant this proves.',
   );
@@ -143,9 +146,9 @@ function main() {
     path.join(EXT_ROOT, 'node_modules', 'oxlint-tsgolint', 'package.json'),
   ).version;
 
-  console.log(`[lint-canary] oxlint@${oxlintVersion}, oxlint-tsgolint@${tsgolintVersion}`);
-  console.log(
-    '[lint-canary] asserting type-aware mode is genuinely engaged (not a silent syntax-only fallback)...',
+  reporter.info(`oxlint@${oxlintVersion}, oxlint-tsgolint@${tsgolintVersion}`);
+  reporter.info(
+    'asserting type-aware mode is genuinely engaged (not a silent syntax-only fallback)...',
   );
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-oxlint-canary-'));
@@ -171,8 +174,8 @@ function main() {
         `exit=${badResult.status}\nstdout:\n${badResult.stdout}\nstderr:\n${badResult.stderr}`,
       );
     } else {
-      console.log(
-        '[lint-canary] OK  case (a): bad.ts flagged by typescript/no-floating-promises (type-aware engine ran).',
+      reporter.info(
+        'OK  case (a): bad.ts flagged by typescript/no-floating-promises (type-aware engine ran).',
       );
     }
 
@@ -190,16 +193,14 @@ function main() {
         `exit=${goodResult.status}\nstdout:\n${goodResult.stdout}\nstderr:\n${goodResult.stderr}`,
       );
     } else {
-      console.log('[lint-canary] OK  case (b): good.ts passes cleanly.');
+      reporter.info('OK  case (b): good.ts passes cleanly.');
     }
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 
   if (allPassed) {
-    console.log(
-      '[lint-canary] PASS — type-aware typescript/no-floating-promises genuinely executed.',
-    );
+    reporter.info('PASS — type-aware typescript/no-floating-promises genuinely executed.');
     process.exitCode = 0;
   }
 }

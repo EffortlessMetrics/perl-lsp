@@ -127,6 +127,18 @@ describe('LanguageClientLifecycle', () => {
     expect(harness.states).toEqual(['resolving', 'starting', 'running']);
   });
 
+  test('enters failed state when the server path cannot be resolved', async () => {
+    const harness = makeHarness(async () => null);
+
+    await expect(harness.controller.start()).rejects.toThrow(
+      'Language server path could not be resolved.',
+    );
+
+    expect(harness.clients).toHaveLength(0);
+    expect(harness.controller.snapshot.state).toBe('failed');
+    expect(harness.states).toEqual(['resolving', 'failed']);
+  });
+
   test('coalesces concurrent starts into one resolution and client start', async () => {
     const startDeferred = new Deferred<void>();
     const harness = makeHarness();
@@ -187,6 +199,39 @@ describe('LanguageClientLifecycle', () => {
       'starting',
       'running',
     ]);
+  });
+
+  test('coalesces concurrent stops while the client is shutting down', async () => {
+    const harness = makeHarness();
+    const client = await harness.controller.start();
+    const stopGate = new Deferred<void>();
+    jest.spyOn(client!, 'stop').mockReturnValue(stopGate.promise);
+
+    const first = harness.controller.stop();
+    const second = harness.controller.stop();
+
+    expect(second).toBe(first);
+    stopGate.resolve();
+    await expect(first).resolves.toBeUndefined();
+    expect(harness.controller.snapshot.state).toBe('stopped');
+  });
+
+  test('queues a new start behind an in-progress stop', async () => {
+    const harness = makeHarness();
+    const firstClient = await harness.controller.start();
+    const stopGate = new Deferred<void>();
+    jest.spyOn(firstClient!, 'stop').mockReturnValue(stopGate.promise);
+
+    const stop = harness.controller.stop();
+    const start = harness.controller.start();
+    expect(harness.clients).toHaveLength(1);
+
+    stopGate.resolve();
+    await expect(stop).resolves.toBeUndefined();
+    const secondClient = await start;
+
+    expect(secondClient).toBe(harness.clients[1]);
+    expect(harness.controller.snapshot.state).toBe('running');
   });
 
   test('invalidates a pending resolution without creating a stale client', async () => {
@@ -251,6 +296,7 @@ describe('LanguageClientLifecycle', () => {
     oldStart.resolve();
     await expect(start).resolves.toBeUndefined();
     await expect(restart).resolves.toBe(harness.clients[1]);
+    if (!oldClient) return;
     expect(oldClient.isDisposed()).toBe(true);
   });
 
@@ -272,7 +318,9 @@ describe('LanguageClientLifecycle', () => {
 
     await expect(first).rejects.toBe(firstStartError);
     expect(harness.controller.snapshot.state).toBe('failed');
-    expect(harness.clients[0].isDisposed()).toBe(true);
+    const failedClient = harness.clients[0];
+    if (!failedClient) return;
+    expect(failedClient.isDisposed()).toBe(true);
 
     const recovered = await harness.controller.start();
     expect(harness.clients).toHaveLength(2);
@@ -312,6 +360,7 @@ describe('LanguageClientLifecycle', () => {
 
     const stop = harness.controller.stop();
     await expect(stop).resolves.toBeUndefined();
+    if (!client) return;
     expect(client.isDisposed()).toBe(true);
     expect(harness.controller.snapshot.state).toBe('stopped');
 
@@ -331,7 +380,9 @@ describe('LanguageClientLifecycle', () => {
     };
 
     await expect(harness.controller.start()).rejects.toBe(startedError);
-    expect(harness.clients[0].isDisposed()).toBe(true);
+    const failedClient = harness.clients[0];
+    if (!failedClient) return;
+    expect(failedClient.isDisposed()).toBe(true);
     expect(harness.controller.snapshot.state).toBe('failed');
 
     await expect(harness.controller.stop()).resolves.toBeUndefined();
@@ -375,5 +426,67 @@ describe('LanguageClientLifecycle', () => {
     expect(harness.controller.snapshot.state).toBe('stopped');
     expect(harness.callbackErrors).toHaveLength(1);
     expect(harness.callbackErrors[0]?.phase).toBe('client-state');
+  });
+
+  test('ignores client state events when no presentation callback is installed', async () => {
+    const harness = makeHarness();
+    const client = await harness.controller.start();
+
+    client!.emit({ state: 'running' });
+
+    await expect(harness.controller.stop()).resolves.toBeUndefined();
+  });
+
+  test('does not require a callback-error reporter for presentation failures', async () => {
+    const harness = makeHarness();
+    harness.hooks.onStateChange = () => {
+      throw new Error('presentation failed');
+    };
+
+    const client = await harness.controller.start();
+    expect(client).toBe(harness.clients[0]);
+    await flush();
+    expect(harness.controller.snapshot.state).toBe('running');
+  });
+
+  test('contains callback-error reporter failures', async () => {
+    const harness = makeHarness();
+    harness.hooks.onStateChange = () => {
+      throw new Error('presentation failed');
+    };
+    harness.hooks.onCallbackError = () => {
+      throw new Error('logging failed');
+    };
+
+    const client = await harness.controller.start();
+    expect(client).toBe(harness.clients[0]);
+    await flush();
+    expect(harness.controller.snapshot.state).toBe('running');
+  });
+
+  test('continues cleanup when listener disposal and client disposal fail', async () => {
+    const listenerError = new Error('listener disposal failed');
+    const disposeError = new Error('client disposal failed');
+    const harness = makeHarness();
+    harness.hooks.createClient = () => {
+      const client = new FakeClient();
+      jest.spyOn(client, 'onDidChangeState').mockReturnValue({
+        dispose: () => {
+          throw listenerError;
+        },
+      });
+      jest.spyOn(client, 'dispose').mockImplementation(() => {
+        throw disposeError;
+      });
+      harness.clients.push(client);
+      return client;
+    };
+
+    const client = await harness.controller.start();
+    await expect(harness.controller.stop()).resolves.toBeUndefined();
+
+    expect(client).toBe(harness.clients[0]);
+    expect(harness.controller.snapshot.state).toBe('failed');
+    expect(harness.controller.snapshot.error).toBe(listenerError);
   });
 });

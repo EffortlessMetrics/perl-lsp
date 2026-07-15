@@ -982,13 +982,6 @@ fn format_simple_statement_block(
             continue;
         }
 
-        // Empty statements are valid Perl, but the safe subset has no layout
-        // representation for them. Fail closed before dispatching to a
-        // statement formatter that expects a non-empty token span.
-        if tokens[start].kind == TokenKind::Semicolon {
-            return None;
-        }
-
         let statement_tokens = &tokens[start..=idx];
         statements.push(format_simple_statement_tokens(statement_tokens, config)?);
         start = idx + 1;

@@ -11,15 +11,53 @@ import * as path from 'path';
 
 const EXT_ROOT = path.resolve(__dirname, '..', '..');
 
-function readPackageJson(): any {
-  return JSON.parse(fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'));
+type WalkthroughStep = {
+  id: string;
+  title: string;
+  description: string;
+  media: {
+    image?: string;
+    markdown?: string;
+  };
+};
+
+type Walkthrough = {
+  id: string;
+  title: string;
+  description: string;
+  steps: WalkthroughStep[];
+};
+
+type WalkthroughManifest = {
+  activationEvents: string[];
+  contributes: {
+    walkthroughs: Walkthrough[];
+  };
+};
+
+function findRequired<T>(
+  values: readonly T[],
+  predicate: (value: T) => boolean,
+  description: string,
+): T {
+  const value = values.find(predicate);
+  if (!value) {
+    throw new Error(`Expected ${description} in package manifest`);
+  }
+  return value;
+}
+
+function readPackageJson(): WalkthroughManifest {
+  return JSON.parse(
+    fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'),
+  ) as WalkthroughManifest;
 }
 
 // ---------------------------------------------------------------------------
 // Walkthrough presence and structure
 // ---------------------------------------------------------------------------
 describe('package.json walkthrough contribution', () => {
-  let pkg: any;
+  let pkg: WalkthroughManifest;
 
   beforeAll(() => {
     pkg = readPackageJson();
@@ -31,12 +69,12 @@ describe('package.json walkthrough contribution', () => {
   });
 
   test('exactly one walkthrough is contributed', () => {
-    const walkthroughs: any[] = pkg.contributes.walkthroughs;
+    const walkthroughs: Walkthrough[] = pkg.contributes.walkthroughs;
     expect(walkthroughs.length).toBeGreaterThanOrEqual(1);
   });
 
   test('walkthrough has id, title, description and steps', () => {
-    const wt = pkg.contributes.walkthroughs[0];
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
     expect(typeof wt.id).toBe('string');
     expect(wt.id.length).toBeGreaterThan(0);
     expect(typeof wt.title).toBe('string');
@@ -47,12 +85,12 @@ describe('package.json walkthrough contribution', () => {
   });
 
   test('walkthrough has all 8 required steps', () => {
-    const wt = pkg.contributes.walkthroughs[0];
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
     expect(wt.steps.length).toBe(8);
   });
 
   test('every step has id, title, description and media', () => {
-    const wt = pkg.contributes.walkthroughs[0];
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
     for (const step of wt.steps) {
       expect(typeof step.id).toBe('string');
       expect(step.id.length).toBeGreaterThan(0);
@@ -65,15 +103,15 @@ describe('package.json walkthrough contribution', () => {
   });
 
   test('step ids are unique', () => {
-    const wt = pkg.contributes.walkthroughs[0];
-    const ids: string[] = wt.steps.map((s: any) => s.id);
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
+    const ids: string[] = wt.steps.map((s: WalkthroughStep) => s.id);
     const unique = new Set(ids);
     expect(unique.size).toBe(ids.length);
   });
 
   test('step ids match the 8 required topics', () => {
-    const wt = pkg.contributes.walkthroughs[0];
-    const ids: string[] = wt.steps.map((s: any) => s.id);
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
+    const ids: string[] = wt.steps.map((s: WalkthroughStep) => s.id);
     const required = [
       'welcome',
       'verify-perl',
@@ -90,9 +128,12 @@ describe('package.json walkthrough contribution', () => {
   });
 
   test('verify-perl step is native-first: does not present perltidy/perlcritic as required tooling (#3276)', () => {
-    const wt = pkg.contributes.walkthroughs[0];
-    const step = wt.steps.find((s: any) => s.id === 'verify-perl');
-    expect(step).toBeDefined();
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
+    const step = findRequired(
+      wt.steps,
+      (s: WalkthroughStep) => s.id === 'verify-perl',
+      'verify-perl step',
+    );
     // The health check confirms the Perl interpreter; native formatting and
     // native critic are built in. External tools must be framed as optional,
     // never as core "Perl tooling" the product requires.
@@ -102,24 +143,33 @@ describe('package.json walkthrough contribution', () => {
   });
 
   test('open-project step offers the bundled demo project (#1635)', () => {
-    const wt = pkg.contributes.walkthroughs[0];
-    const step = wt.steps.find((s: any) => s.id === 'open-project');
-    expect(step).toBeDefined();
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
+    const step = findRequired(
+      wt.steps,
+      (s: WalkthroughStep) => s.id === 'open-project',
+      'open-project step',
+    );
     expect(step.description).toMatch(/command:perl-lsp\.openDemoProject/);
   });
 
   test('ai-completion step marks the feature optional and off by default (#1634)', () => {
-    const wt = pkg.contributes.walkthroughs[0];
-    const step = wt.steps.find((s: any) => s.id === 'ai-completion');
-    expect(step).toBeDefined();
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
+    const step = findRequired(
+      wt.steps,
+      (s: WalkthroughStep) => s.id === 'ai-completion',
+      'ai-completion step',
+    );
     expect(step.title).toMatch(/optional/i);
     expect(step.description).toMatch(/off by default/i);
   });
 
   test('debug step clearly marks debugging as optional and mentions perl-dap', () => {
-    const wt = pkg.contributes.walkthroughs[0];
-    const debugStep = wt.steps.find((step: any) => step.id === 'debug-first-script');
-    expect(debugStep).toBeDefined();
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
+    const debugStep = findRequired(
+      wt.steps,
+      (step: WalkthroughStep) => step.id === 'debug-first-script',
+      'debug-first-script step',
+    );
     expect(debugStep.title).toMatch(/optional/i);
     expect(debugStep.description).toMatch(/perl-dap/i);
   });
@@ -128,7 +178,7 @@ describe('package.json walkthrough contribution', () => {
     // VSCode requires walkthroughs to be listed in activationEvents
     // with onWalkthrough:<id> so that the extension activates when
     // the user opens the walkthrough panel.
-    const wt = pkg.contributes.walkthroughs[0];
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
     const expectedEvent = `onWalkthrough:${wt.id}`;
     expect(pkg.activationEvents).toContain(expectedEvent);
   });
@@ -138,19 +188,22 @@ describe('package.json walkthrough contribution', () => {
 // Walkthrough step media files
 // ---------------------------------------------------------------------------
 describe('walkthrough step media files', () => {
-  let pkg: any;
+  let pkg: WalkthroughManifest;
 
   beforeAll(() => {
     pkg = readPackageJson();
   });
 
   test('every step media image path exists on disk', () => {
-    const wt = pkg.contributes.walkthroughs[0];
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
     for (const step of wt.steps) {
       const media = step.media;
       // media can be { image: "path" } or { markdown: "path" }
-      const mediaPath: string = media.image ?? media.markdown;
+      const mediaPath = media.image ?? media.markdown;
       expect(typeof mediaPath).toBe('string');
+      if (typeof mediaPath !== 'string') {
+        return;
+      }
       const absPath = path.join(EXT_ROOT, mediaPath);
       expect(fs.existsSync(absPath)).toBe(true);
     }

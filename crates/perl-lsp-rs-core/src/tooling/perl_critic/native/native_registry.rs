@@ -70,17 +70,19 @@ impl NativeCriticRegistry {
 
     /// Create the default recommended native critic registry.
     ///
-    /// This is the lower-noise bundle intended for normal editor diagnostics.
-    /// Keep ordering stable so diagnostics and receipts are deterministic.
+    /// This is the opt-in bundle for callers migrating from ad hoc built-in
+    /// policy execution to the native rule contract. Keep ordering stable so
+    /// diagnostics and receipts are deterministic.
     #[must_use]
     pub fn recommended() -> Self {
-        Self::for_profile(NativeCriticProfile::Recommended)
+        Self::for_profile(NativeCriticProfile::Strict)
     }
 
     /// Create a native critic registry for a named profile.
     ///
-    /// The explicit profile entry point lets receipts and readiness checks
-    /// measure either the lower-noise default or the full strict rule set.
+    /// Runtime diagnostics still use `recommended()` for compatibility. The
+    /// explicit profile entry point lets receipts and readiness checks measure
+    /// lower-noise default candidates without changing the opt-in runtime path.
     #[must_use]
     pub fn for_profile(profile: NativeCriticProfile) -> Self {
         match profile {

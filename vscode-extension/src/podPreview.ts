@@ -82,12 +82,15 @@ function parseBlocks(lines: string[]): Block[] {
 
   while (i < lines.length) {
     const line = lines[i];
+    if (line === undefined) {
+      break;
+    }
 
     // Command paragraph: line starting with =
     if (/^=[a-zA-Z]/.test(line)) {
       const m = line.match(/^=(\S+)\s*(.*)/);
-      const cmd = m ? m[1] : '';
-      const text = m ? m[2].trim() : '';
+      const cmd = m?.[1] ?? '';
+      const text = m?.[2]?.trim() ?? '';
       blocks.push({ kind: 'command', cmd, text });
       i++;
       continue;
@@ -96,19 +99,25 @@ function parseBlocks(lines: string[]): Block[] {
     // Verbatim paragraph: indented line
     if (/^\s+\S/.test(line)) {
       const verbLines: string[] = [];
-      while (i < lines.length && (/^\s/.test(lines[i]) || lines[i] === '')) {
+      while (i < lines.length) {
+        const current = lines[i];
+        if (current === undefined || (!/^\s/.test(current) && current !== '')) {
+          break;
+        }
+
         // Stop collecting if we hit a blank line followed by non-indented
-        if (lines[i] === '') {
+        if (current === '') {
           // Peek: is the next non-empty line indented?
           let j = i + 1;
           while (j < lines.length && lines[j] === '') {
             j++;
           }
-          if (j >= lines.length || !/^\s/.test(lines[j])) {
+          const next = lines[j];
+          if (next === undefined || !/^\s/.test(next)) {
             break;
           }
         }
-        verbLines.push(lines[i]);
+        verbLines.push(current);
         i++;
       }
       // Skip trailing blank lines inside the verbatim block
@@ -129,13 +138,18 @@ function parseBlocks(lines: string[]): Block[] {
 
     // Ordinary paragraph: collect until blank line or command
     const paraLines: string[] = [];
-    while (
-      i < lines.length &&
-      lines[i].trim() !== '' &&
-      !/^=[a-zA-Z]/.test(lines[i]) &&
-      !/^\s+\S/.test(lines[i])
-    ) {
-      paraLines.push(lines[i]);
+    while (i < lines.length) {
+      const current = lines[i];
+      if (
+        current === undefined ||
+        current.trim() === '' ||
+        /^=[a-zA-Z]/.test(current) ||
+        /^\s+\S/.test(current)
+      ) {
+        break;
+      }
+
+      paraLines.push(current);
       i++;
     }
     if (paraLines.length > 0) {
@@ -348,7 +362,10 @@ function renderEscapeCode(name: string): string {
     quot: '&quot;',
   };
   if (name in namedEntities) {
-    return namedEntities[name];
+    const entity = namedEntities[name];
+    if (entity !== undefined) {
+      return entity;
+    }
   }
   if (/^\d+$/.test(name)) {
     return `&#${name};`;
@@ -358,8 +375,9 @@ function renderEscapeCode(name: string): string {
   }
   // Unicode name (U+xxxx) — best effort
   const unicodeMatch = name.match(/^U\+([0-9A-Fa-f]+)$/);
-  if (unicodeMatch) {
-    return `&#x${unicodeMatch[1]};`;
+  const codePoint = unicodeMatch?.[1];
+  if (codePoint) {
+    return `&#x${codePoint};`;
   }
   return `&amp;${escapeHtml(name)};`;
 }
@@ -392,7 +410,7 @@ function stripCommonIndent(lines: string[]): string[] {
 
   const minIndent = nonEmptyLines.reduce((min, l) => {
     const m = l.match(/^(\s*)/);
-    const indent = m ? m[1].length : 0;
+    const indent = m?.[1]?.length ?? 0;
     return Math.min(min, indent);
   }, Infinity);
 

@@ -1,11 +1,12 @@
 # VS Code client/toolchain modernization lane closeout
 
-Status: complete on `main`; this closeout is merged after the final runtime
-slice and records the handoff boundary for the resulting history.
+Status: implementation hardening is current on `main`; cross-repository sync is
+REMAINING. This reconciliation supersedes the earlier premature sync claim and
+records the remaining handoff boundary.
 
 This closeout records the reviewable PR trail and the evidence boundary for
-the modernization lane. It does not publish, tag, release, or synchronize
-this repository into `perl-lsp`.
+the modernization lane. It does not publish, tag, release, or synchronize this
+repository; the two-parent history-preserving sync remains a later operation.
 
 ## Delivered PR trail
 
@@ -21,7 +22,7 @@ this repository into `perl-lsp`.
 | #4072 | Language-server health boundary                      | Merged |
 | #4086 | Startup milestone receipts                           | Merged |
 | #4124 | Declaration compatibility and `skipLibCheck` removal | Merged |
-| #4125 | `noUncheckedIndexedAccess` advisory baseline         | Merged |
+| #4125 | `noUncheckedIndexedAccess` cleanup baseline          | Merged |
 | #4128 | Blocking `noImplicitOverride` check                  | Merged |
 | #4129 | `exactOptionalPropertyTypes` advisory baseline       | Merged |
 | #4132 | Repeated exact-source startup/request sampling       | Merged |
@@ -35,6 +36,47 @@ this repository into `perl-lsp`.
 | #4144 | VSIX package inventory baseline refresh              | Merged |
 | #4232 | Toolchain and extension-host receipt metadata        | Merged |
 | #4247 | Published-smoke runtime metadata propagation         | Merged |
+| #4249 | Runtime metadata closeout reconciliation             | Merged |
+| #4250 | Closeout formatting correction                       | Merged |
+| #4265 | Workspace guidance positive-path coverage            | Merged |
+| #4266 | Lifecycle failure-edge coverage                      | Merged |
+| #4270 | Blocking `exactOptionalPropertyTypes` contract       | Merged |
+| #4271 | Strictness hardening closeout update                 | Merged |
+| #4272 | Downloader indexed-access hardening                  | Merged |
+| #4274 | Gherkin indexed-access hardening                     | Merged |
+| #4275 | POD preview indexed-access hardening                 | Merged |
+| #4276 | Test Adapter indexed-access hardening                | Merged |
+| #4278 | Debug Adapter indexed-access hardening               | Merged |
+| #4279 | Extension entrypoint indexed-access hardening        | Merged |
+| #4280 | Utility indexed-access hardening                     | Merged |
+| #4281 | Lifecycle test indexed-access hardening              | Merged |
+| #4282 | Packaged smoke indexed-access hardening              | Merged |
+| #4284 | Blocking `noUncheckedIndexedAccess` promotion        | Merged |
+| #4285 | Complete Oxlint inventory enforcement                | Merged |
+| #4291 | Typed command manifest contract tests                | Merged |
+| #4293 | Script output reporter seam                          | Merged |
+| #4294 | Typed arrow-completion tests                         | Merged |
+| #4296 | Typed walkthrough and What's New contract tests      | Merged |
+| #4298 | Typed small client test seams                        | Merged |
+| #4299 | Typed formatting-error test fixture                  | Merged |
+| #4301 | Typed onboarding test seams                          | Merged |
+| #4302 | Typed POD preview contract                           | Merged |
+| #4333 | VS Code host-floor compatibility proof               | Merged |
+| #4335 | Workspace topology capability receipts               | Merged |
+| #4336 | Bundle source-map evidence archive                   | Merged |
+| #4338 | Feature activation timing attribution                | Merged |
+| #4339 | Server command composition                           | Merged |
+| #4341 | Critic command composition                           | Merged |
+| #4349 | Test command composition                             | Merged |
+| #4352 | Document feature composition                         | Merged |
+| #4354 | Onboarding command composition                       | Merged |
+| #4356 | Navigation command composition                       | Merged |
+| #4358 | Centralized VS Code toolchain setup                  | Merged |
+| #4362 | Provider-diagnostics command composition             | Merged |
+| #4363 | Document command composition                         | Merged |
+| #4365 | Refactoring command composition                      | Merged |
+| #4366 | Final VSIX inventory baseline refresh                | Merged |
+| #4368 | Support/report issue command composition             | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -49,9 +91,15 @@ The rescue checkpoint was not merged wholesale.
   deprecated critic settings remain compatibility inputs only.
 - npm and `package-lock.json` are the package authority. Node 26.x and npm
   11.18.0 are the supported toolchain; CI pins Node 26.5.0. All TypeScript
-  authority configurations and the doctor check are explicit.
-- Oxlint warning debt is recorded by rule, surface, rule-by-surface, and file;
-  new errors or warning growth are rejected rather than silently baselined.
+  authority configurations and the doctor check are explicit. `exactOptionalPropertyTypes`,
+  `noImplicitOverride`, and `noUncheckedIndexedAccess` are blocking across every
+  TypeScript authority configuration.
+- Oxlint warning debt is recorded and enforced by rule, surface, rule-by-surface,
+  and file; new errors or warning growth are rejected rather than silently
+  baselined. The current inventory is 0 errors and 0 warnings after the typed
+  VS Code mock, command manifest, script reporter, arrow-completion,
+  walkthrough, What's New, health-widget, test-at-cursor, streaming-completion,
+  formatting-error, onboarding, and command-composition cleanups.
 - Workspace guidance and the `perllsp --health` process boundary have separate
   owners and focused tests.
 - The exact-source VSIX/current-server harness is reused by hosted Linux smoke.
@@ -75,14 +123,15 @@ npm test -- --runInBand --runTestsByPath src/test/downloader.test.ts
 npm run test:ci
 ```
 
-The focused downloader run passed 113 tests; the full CI suite passed 735
-tests with one existing skip. The current-source Linux smoke passed on the
-package-baseline refresh and exercised the exact-source editor-host contract:
-activation, initialization, provider request, restart, shutdown, invalid-path
-health guidance, source identity, and VSIX identity. The package inventory
-check passed with 28 inventoried files and no allowlist violations. These
-checks prove the exercised behavior and packaging paths; they do not establish
-a performance budget or prove every platform-specific release condition.
+The focused downloader run passed 113 tests; the latest full extension gate on
+the current hardening head passed 791 tests with one documented packaged-server
+skip. The focused command-composition slices add isolated delegation and
+disposal proof for the server, critic, test, onboarding, navigation,
+diagnostic, document, refactoring, and support groups. The final package
+evidence contains 28 inventoried files, 1,472,417 bytes total, and a
+1,314,887-byte bundle; the inventory and source-map checks pass. These checks prove the
+exercised behavior and packaging paths; they do not establish a performance
+budget or prove every platform-specific release condition.
 
 PR #4042's required routed Rust result was merged through the maintainer
 override path because both routed attempts failed in the unchanged
@@ -92,11 +141,17 @@ command. PR #4070 subsequently repaired that quoting in the workflow. The
 downloader PR changed only its implementation and focused tests; the repair
 was kept as a separate workflow PR.
 
-## Remaining work and sync boundary
+## Handoff and release boundary
 
-The modernization lane is complete and ready for a history-preserving sync.
-Issue #4120 was closed by merged PR #4121. No publish, tag, release, or
-`perl-lsp` synchronization has been performed. The target checkout is
-available locally, and the next authorized operation is to pin and verify a
-swarm cut before merging this logical PR/commit history into it without
-replacing the trail with an opaque snapshot.
+The modernization implementation has not yet been synchronized into
+`perl-lsp`. No immutable sync cut, target synchronization merge, or target
+sync ledger exists for this current history. The next handoff must pin the
+tested `swarm/main` SHA, rerun the final extension/workspace proofs against
+that cut, and then use the documented two-parent complete-tree merge with the
+target-repository exclusions rather than an opaque content-state snapshot.
+Issue #4120 was closed by merged PR #4121; that historical issue state does not
+mean the current swarm history has already been synchronized.
+
+No publish, tag, or release operation has been performed. Historical receipts
+retain the toolchain versions they actually tested; current development and
+publishing authority is Node 26.x with npm 11.18.0.

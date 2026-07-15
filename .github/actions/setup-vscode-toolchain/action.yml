@@ -1,0 +1,42 @@
+name: Setup VS Code toolchain
+description: Set up the repository-owned Node/npm authority and install extension dependencies
+
+inputs:
+  working-directory:
+    description: Extension directory containing package.json and package-lock.json
+    required: false
+    default: vscode-extension
+  verify-publisher-tools:
+    description: Verify lockfile-resolved vsce and Open VSX CLI versions and paths
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      with:
+        node-version: '26.5.0'
+        cache: npm
+        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+    - name: Select npm authority
+      shell: bash
+      run: npm install --global npm@11.18.0
+
+    - name: Verify Node and npm authority before install
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm run doctor
+
+    - name: Install extension dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm ci
+
+    - name: Verify lockfile-resolved publisher tools
+      if: inputs.verify-publisher-tools == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm run check:publisher-tools

@@ -122,6 +122,20 @@ function countExceeds(current, baseline, label) {
   return failures;
 }
 
+/**
+ * @param {Record<string, CountMap>} current
+ * @param {Record<string, CountMap>} baseline
+ * @param {string} label
+ */
+function nestedCountsExceed(current, baseline, label) {
+  const failures = [];
+  const keys = new Set([...Object.keys(current ?? {}), ...Object.keys(baseline ?? {})]);
+  for (const key of [...keys].sort()) {
+    failures.push(...countExceeds(current?.[key] ?? {}, baseline?.[key] ?? {}, `${label} ${key}`));
+  }
+  return failures;
+}
+
 /** @param {Inventory} current @param {Inventory} baseline @returns {string[]} */
 function compareInventory(current, baseline) {
   return [
@@ -130,6 +144,12 @@ function compareInventory(current, baseline) {
       : []),
     ...countExceeds(current.by_rule, baseline.by_rule, 'rule'),
     ...countExceeds(current.by_surface, baseline.by_surface, 'surface'),
+    ...nestedCountsExceed(
+      current.by_rule_and_surface,
+      baseline.by_rule_and_surface,
+      'rule×surface',
+    ),
+    ...countExceeds(current.by_file, baseline.by_file, 'file'),
   ];
 }
 
