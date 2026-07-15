@@ -38,6 +38,8 @@ below.
 | #4247 | Published-smoke runtime metadata propagation         | Merged |
 | #4249 | Runtime metadata closeout reconciliation             | Merged |
 | #4250 | Closeout formatting correction                       | Merged |
+| #4265 | Workspace guidance positive-path coverage            | Merged |
+| #4266 | Lifecycle failure-edge coverage                      | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -80,8 +82,9 @@ npm run test:ci
 
 The focused downloader run passed 113 tests; the full CI suite passed 735
 tests with one existing skip on the earlier closeout revision. The current
-canonical gate passes 736 tests with one documented packaged-server skip. The
-current-source Linux smoke passed on the
+canonical gate passes 747 tests with one documented packaged-server skip,
+including the workspace-guidance and lifecycle edge coverage added by #4265
+and #4266. The current-source Linux smoke passed on the
 package-baseline refresh and exercised the exact-source editor-host contract:
 activation, initialization, provider request, restart, shutdown, invalid-path
 health guidance, source identity, and VSIX identity. The package inventory
