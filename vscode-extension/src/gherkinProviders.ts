@@ -189,26 +189,47 @@ function buildOutline(text: string): OutlineNode[] {
 
   for (let lineNumber = 0; lineNumber < lines.length; lineNumber += 1) {
     const line = lines[lineNumber];
+    if (line === undefined) {
+      continue;
+    }
+
     const headerMatch = line.match(HEADER_RE);
     const stepMatch = line.match(STEP_RE);
 
     let node: OutlineNode | null = null;
     if (headerMatch) {
-      node = createHeaderNode(line, lineNumber, headerMatch[1], headerMatch[2].trim());
+      const keyword = headerMatch[1];
+      const title = headerMatch[2];
+      if (keyword !== undefined && title !== undefined) {
+        node = createHeaderNode(line, lineNumber, keyword, title.trim());
+      }
     } else if (stepMatch) {
-      node = createStepNode(line, lineNumber, stepMatch[1], stepMatch[2].trim());
+      const keyword = stepMatch[1];
+      const text = stepMatch[2];
+      if (keyword !== undefined && text !== undefined) {
+        node = createStepNode(line, lineNumber, keyword, text.trim());
+      }
     }
 
     if (!node) {
       continue;
     }
 
-    while (stack.length > 0 && stack[stack.length - 1].level >= node.level) {
-      finalizeNode(stack.pop()!, lineNumber - 1);
+    while (true) {
+      const parent = stack.at(-1);
+      if (!parent || parent.level < node.level) {
+        break;
+      }
+
+      const completed = stack.pop();
+      if (completed) {
+        finalizeNode(completed, lineNumber - 1);
+      }
     }
 
-    if (stack.length > 0) {
-      stack[stack.length - 1].children.push(node);
+    const parent = stack.at(-1);
+    if (parent) {
+      parent.children.push(node);
     } else {
       roots.push(node);
     }
@@ -277,9 +298,9 @@ function extractStepReference(
     return null;
   }
 
-  const keyword = match[1] as StepKeyword;
-  const remainder = match[2].trim();
-  if (remainder.length === 0) {
+  const keyword = match[1] as StepKeyword | undefined;
+  const remainder = match[2]?.trim();
+  if (!keyword || !remainder) {
     return null;
   }
 
