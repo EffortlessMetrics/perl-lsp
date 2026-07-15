@@ -45,9 +45,13 @@ describe('LanguageClientStartupMetrics', function () {
       'shutdown',
     ] as const;
     for (let index = 1; index < ordered.length; index += 1) {
+      const current = ordered[index];
+      const previous = ordered[index - 1];
+      if (current === undefined || previous === undefined) continue;
+
       assert.ok(
-        (milestones[ordered[index]] ?? -1) >= (milestones[ordered[index - 1]] ?? -1),
-        `${ordered[index]} must not precede ${ordered[index - 1]}`,
+        (milestones[current] ?? -1) >= (milestones[previous] ?? -1),
+        `${current} must not precede ${previous}`,
       );
     }
   });

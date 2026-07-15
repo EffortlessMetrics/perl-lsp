@@ -296,6 +296,7 @@ describe('LanguageClientLifecycle', () => {
     oldStart.resolve();
     await expect(start).resolves.toBeUndefined();
     await expect(restart).resolves.toBe(harness.clients[1]);
+    if (!oldClient) return;
     expect(oldClient.isDisposed()).toBe(true);
   });
 
@@ -317,7 +318,9 @@ describe('LanguageClientLifecycle', () => {
 
     await expect(first).rejects.toBe(firstStartError);
     expect(harness.controller.snapshot.state).toBe('failed');
-    expect(harness.clients[0].isDisposed()).toBe(true);
+    const failedClient = harness.clients[0];
+    if (!failedClient) return;
+    expect(failedClient.isDisposed()).toBe(true);
 
     const recovered = await harness.controller.start();
     expect(harness.clients).toHaveLength(2);
@@ -357,6 +360,7 @@ describe('LanguageClientLifecycle', () => {
 
     const stop = harness.controller.stop();
     await expect(stop).resolves.toBeUndefined();
+    if (!client) return;
     expect(client.isDisposed()).toBe(true);
     expect(harness.controller.snapshot.state).toBe('stopped');
 
@@ -376,7 +380,9 @@ describe('LanguageClientLifecycle', () => {
     };
 
     await expect(harness.controller.start()).rejects.toBe(startedError);
-    expect(harness.clients[0].isDisposed()).toBe(true);
+    const failedClient = harness.clients[0];
+    if (!failedClient) return;
+    expect(failedClient.isDisposed()).toBe(true);
     expect(harness.controller.snapshot.state).toBe('failed');
 
     await expect(harness.controller.stop()).resolves.toBeUndefined();
