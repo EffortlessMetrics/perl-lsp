@@ -121,7 +121,11 @@ export async function createDebugConfigWizard(): Promise<void> {
   // If multiple workspace folders exist, let the user pick one.
   let workspaceRoot: string;
   if (workspaceFolders.length === 1) {
-    workspaceRoot = workspaceFolders[0].uri.fsPath;
+    const onlyFolder = workspaceFolders[0];
+    if (!onlyFolder) {
+      return;
+    }
+    workspaceRoot = onlyFolder.uri.fsPath;
   } else {
     interface WorkspaceFolderItem extends vscode.QuickPickItem {
       fsPath: string;
@@ -261,7 +265,12 @@ export async function offerDebugConfigOnFirstPerlOpen(
     return;
   }
 
-  const workspaceRoot = workspaceFolders[0].uri.fsPath;
+  const firstFolder = workspaceFolders[0];
+  if (!firstFolder) {
+    return;
+  }
+
+  const workspaceRoot = firstFolder.uri.fsPath;
   if (hasLaunchJson(workspaceRoot)) {
     return;
   }
