@@ -1,12 +1,12 @@
 # VS Code client/toolchain modernization lane closeout
 
-Status: complete on `main`; this closeout is merged after the final runtime
-slice and records the handoff boundary for the resulting history.
+Status: implementation hardening is current on `main`; cross-repository sync is
+REMAINING. This reconciliation supersedes the earlier premature sync claim and
+records the remaining handoff boundary.
 
 This closeout records the reviewable PR trail and the evidence boundary for
-the modernization lane. It does not publish, tag, or release this repository;
-the completed history-preserving synchronization into `perl-lsp` is recorded
-below.
+the modernization lane. It does not publish, tag, release, or synchronize this
+repository; the two-parent history-preserving sync remains a later operation.
 
 ## Delivered PR trail
 
@@ -61,6 +61,21 @@ below.
 | #4299 | Typed formatting-error test fixture                  | Merged |
 | #4301 | Typed onboarding test seams                          | Merged |
 | #4302 | Typed POD preview contract                           | Merged |
+| #4333 | VS Code host-floor compatibility proof               | Merged |
+| #4335 | Workspace topology capability receipts               | Merged |
+| #4336 | Bundle source-map evidence archive                   | Merged |
+| #4338 | Feature activation timing attribution                | Merged |
+| #4339 | Server command composition                           | Merged |
+| #4341 | Critic command composition                           | Merged |
+| #4349 | Test command composition                             | Merged |
+| #4352 | Document feature composition                         | Merged |
+| #4354 | Onboarding command composition                       | Merged |
+| #4356 | Navigation command composition                       | Merged |
+| #4358 | Centralized VS Code toolchain setup                  | Merged |
+| #4362 | Provider-diagnostics command composition             | Merged |
+| #4363 | Document command composition                         | Merged |
+| #4365 | Refactoring command composition                      | Merged |
+| #4366 | Final VSIX inventory baseline refresh                | Merged |
 
 Each slice was refreshed from current `origin/main` when necessary and kept
 to its owned production seam, direct proof, and required generated artifacts.
@@ -80,11 +95,10 @@ The rescue checkpoint was not merged wholesale.
   TypeScript authority configuration.
 - Oxlint warning debt is recorded and enforced by rule, surface, rule-by-surface,
   and file; new errors or warning growth are rejected rather than silently
-  baselined. The current inventory is 276 warnings after the typed VS Code
-  mock, command manifest, script reporter, arrow-completion, walkthrough,
-  What's New, health-widget, test-at-cursor, streaming-completion,
-  formatting-error, and onboarding cleanups in #4285, #4291, #4293, #4294,
-  #4296, #4298, #4299, #4301, and #4302.
+  baselined. The current inventory is 0 errors and 0 warnings after the typed
+  VS Code mock, command manifest, script reporter, arrow-completion,
+  walkthrough, What's New, health-widget, test-at-cursor, streaming-completion,
+  formatting-error, onboarding, and command-composition cleanups.
 - Workspace guidance and the `perllsp --health` process boundary have separate
   owners and focused tests.
 - The exact-source VSIX/current-server harness is reused by hosted Linux smoke.
@@ -108,20 +122,15 @@ npm test -- --runInBand --runTestsByPath src/test/downloader.test.ts
 npm run test:ci
 ```
 
-The focused downloader run passed 113 tests; the full CI suite passed 735
-tests with one existing skip on the earlier closeout revision. The current
-canonical gate passes 757 tests with one documented packaged-server skip,
-including the workspace-guidance and lifecycle edge coverage added by #4265,
-#4266, the exact-optional contract coverage added by #4270, and the indexed-
-access cleanup slices #4272, #4274, #4275, #4276, #4278, #4279, #4280, #4281,
-and #4282. The current-
-source Linux smoke passed on the
-package-baseline refresh and exercised the exact-source editor-host contract:
-activation, initialization, provider request, restart, shutdown, invalid-path
-health guidance, source identity, and VSIX identity. The package inventory
-check passed with 28 inventoried files and no allowlist violations. These
-checks prove the exercised behavior and packaging paths; they do not establish
-a performance budget or prove every platform-specific release condition.
+The focused downloader run passed 113 tests; the latest full extension gate on
+the current hardening head passed 789 tests with one documented packaged-server
+skip. The focused command-composition slices add isolated delegation and
+disposal proof for the server, critic, test, onboarding, navigation,
+diagnostic, document, and refactoring groups. The final package evidence
+contains 28 inventoried files, 1,472,124 bytes total, and a 1,314,594-byte
+bundle; the inventory and source-map checks pass. These checks prove the
+exercised behavior and packaging paths; they do not establish a performance
+budget or prove every platform-specific release condition.
 
 PR #4042's required routed Rust result was merged through the maintainer
 override path because both routed attempts failed in the unchanged
@@ -133,14 +142,14 @@ was kept as a separate workflow PR.
 
 ## Handoff and release boundary
 
-The modernization lane is complete and has been synchronized into `perl-lsp`
-with its history preserved. Issue #4120 was closed by merged PR #4121. The
-tested immutable swarm cut is `fc47f8117fa49bd45fde65be2f1cd8e1c625c78d`;
-the target synchronization merge is `c1e600d940a18035d3c32d81409bb33745f433fc`,
-and the target sync ledger is recorded by `EffortlessMetrics/perl-lsp#9988`.
-The sync used a two-parent
-complete-tree merge with the documented target-repository exclusions rather
-than an opaque content-state snapshot.
+The modernization implementation has not yet been synchronized into
+`perl-lsp`. No immutable sync cut, target synchronization merge, or target
+sync ledger exists for this current history. The next handoff must pin the
+tested `swarm/main` SHA, rerun the final extension/workspace proofs against
+that cut, and then use the documented two-parent complete-tree merge with the
+target-repository exclusions rather than an opaque content-state snapshot.
+Issue #4120 was closed by merged PR #4121; that historical issue state does not
+mean the current swarm history has already been synchronized.
 
 No publish, tag, or release operation has been performed. Historical receipts
 retain the toolchain versions they actually tested; current development and
