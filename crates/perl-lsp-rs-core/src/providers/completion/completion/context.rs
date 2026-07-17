@@ -28,6 +28,20 @@ pub struct CompletionContext {
 }
 
 impl CompletionContext {
+    /// Return the start of the method token for an arrow-form completion.
+    ///
+    /// Arrow receivers remain part of `prefix` for receiver classification, but
+    /// completion edits replace only the method token after `->`.
+    pub(crate) fn method_text_edit_start(&self, source: &str) -> usize {
+        if source.get(self.prefix_start..self.position) == Some(self.prefix.as_str())
+            && let Some(arrow_start) = self.prefix.rfind("->")
+        {
+            return self.prefix_start + arrow_start + 2;
+        }
+
+        self.prefix_start
+    }
+
     pub(crate) fn detect_current_package(symbol_table: &SymbolTable, position: usize) -> String {
         // First, check for innermost package scope containing the position
         let mut scope_start: Option<usize> = None;
