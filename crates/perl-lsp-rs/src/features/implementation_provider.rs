@@ -396,8 +396,15 @@ impl ImplementationProvider {
                         *current_package = Some(name.clone());
                     }
                     NodeKind::Subroutine { name: Some(sub_name), .. } => {
+                        // Compare bare names so a qualified declaration such as
+                        // `sub Foo::process` matches a lookup for `process`
+                        // (issue #6751), mirroring `find_method_in_ast`.
+                        let (_, sub_bare) =
+                            perl_parser::qualified_name::split_qualified_name(sub_name);
+                        let (_, method_bare) =
+                            perl_parser::qualified_name::split_qualified_name(method_name);
                         if current_package.as_deref() == Some(package_name)
-                            && *sub_name == method_name
+                            && sub_bare == method_bare
                         {
                             let target_uri = parse_uri(uri);
                             results.push(LocationLink {
@@ -570,4 +577,82 @@ enum ImplementationTarget {
     },
     #[allow(dead_code)]
     BlessedType(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(source: &str) -> Result<Node, Box<dyn std::error::Error>> {
+        let mut parser = crate::Parser::new(source);
+        Ok(parser.parse()?)
+    }
+
+    /// Regression test for issue #6751: `find_method_in_package` must match a
+    /// package-qualified declaration (`sub Foo::process`) when looking up the
+    /// bare method name `process`. Before the fix, `*sub_name == method_name`
+    /// compared "Foo::process" to "process" and the implementation was missed.
+    #[test]
+    fn find_method_in_package_matches_qualified_decl_by_bare_name()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "package Foo;\nsub Foo::process { return 1; }\n";
+        let ast = parse(source)?;
+        let provider = ImplementationProvider::new(None);
+        let mut results = Vec::new();
+        provider.find_method_in_package(
+            &ast,
+            "process",
+            "Foo",
+            "file:///test.pl",
+            source,
+            &mut results,
+        );
+        assert_eq!(
+            results.len(),
+            1,
+            "qualified `sub Foo::process` must be found when searching for bare 'process'"
+        );
+        Ok(())
+    }
+
+    /// Boundary discriminator (issue #6751): a declaration whose bare name
+    /// differs from the target must NOT match, even inside the right package.
+    #[test]
+    fn find_method_in_package_rejects_different_bare_name() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let source = "package Foo;\nsub Foo::process { return 1; }\n";
+        let ast = parse(source)?;
+        let provider = ImplementationProvider::new(None);
+        let mut results = Vec::new();
+        provider.find_method_in_package(
+            &ast,
+            "other",
+            "Foo",
+            "file:///test.pl",
+            source,
+            &mut results,
+        );
+        assert!(results.is_empty(), "must not match a different bare name");
+        Ok(())
+    }
+
+    /// Cross-package guard: a declaration inside a *different* package must
+    /// not be reported as an implementation of the target package's method.
+    #[test]
+    fn find_method_in_package_respects_package_scope() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "package Other;\nsub process { return 1; }\n";
+        let ast = parse(source)?;
+        let provider = ImplementationProvider::new(None);
+        let mut results = Vec::new();
+        provider.find_method_in_package(
+            &ast,
+            "process",
+            "Foo",
+            "file:///test.pl",
+            source,
+            &mut results,
+        );
+        assert!(results.is_empty(), "sub declared in package Other must not match package Foo");
+        Ok(())
+    }
 }

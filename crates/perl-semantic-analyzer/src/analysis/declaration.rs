@@ -6,6 +6,7 @@
 use crate::ast::{GotoTargetForm, Node, NodeKind};
 use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
+use perl_parser_core::qualified_name::split_qualified_name;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
@@ -879,7 +880,12 @@ impl<'a> DeclarationProvider<'a> {
         subs: &mut Vec<&'b Node>,
     ) {
         match &node.kind {
-            NodeKind::Subroutine { name: Some(name_str), .. } if name_str == sub_name => {
+            // Strip the package qualifier so a qualified declaration like
+            // `sub Foo::bar` matches a bare lookup for `bar` (issue #6751),
+            // mirroring the typeglob arm below.
+            NodeKind::Subroutine { name: Some(name_str), .. }
+                if split_qualified_name(name_str).1 == sub_name =>
+            {
                 subs.push(node);
             }
             // Method declarations (Perl 5.38+ native class / Object::Pad).
@@ -2565,6 +2571,42 @@ mod tests {
             packages.is_empty(),
             "collect_package_declarations must NOT collect Foo when searching for Bar; got {count} node(s)",
             count = packages.len()
+        );
+    }
+
+    /// Regression test for issue #6751: a package-qualified declaration
+    /// (`sub Foo::bar`) stores its name as "Foo::bar"; searching for the bare
+    /// name `bar` must still find it. Before the fix, `name_str == sub_name`
+    /// compared "Foo::bar" to "bar" and the declaration was silently missed.
+    #[test]
+    fn collect_subroutine_declarations_matches_qualified_decl_by_bare_name() {
+        let source = "sub Foo::bar { return 1; }";
+        let provider = make_provider(source);
+        let mut subs = Vec::new();
+        provider.collect_subroutine_declarations(&provider.ast, "bar", &mut subs);
+        assert!(
+            !subs.is_empty(),
+            "collect_subroutine_declarations must find qualified `sub Foo::bar` when searching for bare 'bar'; got empty vec"
+        );
+        assert!(
+            matches!(&subs[0].kind, NodeKind::Subroutine { name: Some(n), .. } if n == "Foo::bar"),
+            "collected declaration must be the Subroutine node named 'Foo::bar'"
+        );
+    }
+
+    /// Boundary discriminator for the qualified-name comparison (issue #6751):
+    /// a declaration whose bare name differs from the target must NOT match,
+    /// even when it carries a package qualifier.
+    #[test]
+    fn collect_subroutine_declarations_rejects_qualified_decl_with_different_bare_name() {
+        let source = "sub Foo::bar { return 1; }";
+        let provider = make_provider(source);
+        let mut subs = Vec::new();
+        provider.collect_subroutine_declarations(&provider.ast, "baz", &mut subs);
+        assert!(
+            subs.is_empty(),
+            "collect_subroutine_declarations must NOT collect `sub Foo::bar` when searching for 'baz'; got {count} node(s)",
+            count = subs.len()
         );
     }
 
