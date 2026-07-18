@@ -32,6 +32,11 @@ on:
         required: false
         type: boolean
         default: true
+      run_corpus_differential:
+        description: 'Run full parser corpus differential suite'
+        required: false
+        type: boolean
+        default: true
       run_coverage:
         description: 'Run test coverage'
         required: false
@@ -238,8 +243,7 @@ jobs:
     - name: Real-repo first-diagnostics perf gate (Catalyst 5000+ lines)
       run: |
         cargo test -p perl-lsp-rs --test real_project_latency \
-          real_project_first_diagnostics_catalyst_5000_lines_under_5s \
-          -- --include-ignored --nocapture
+          -- --ignored first_diagnostics_5000_line_catalyst --nocapture
 
     # Regression gating stays advisory (continue-on-error) until a real,
     # calibrated baseline exists: benchmarks/baselines/v0.9.0.json
@@ -352,11 +356,12 @@ jobs:
         key: ${{ runner.os }}-real-repo-latency-${{ hashFiles('Cargo.lock') }}
         cache-on-failure: true
 
-    - name: Run real project latency suite
+    - name: Run all ignored real-project latency tests
       env:
         PERL_LSP_FIRST_DIAGNOSTICS_BUDGET_MS: "5000"
       run: |
-        cargo test -p perl-lsp-rs --test real_project_latency full_suite -- --include-ignored --nocapture
+        cargo test -p perl-lsp-rs --test real_project_latency \
+          -- --ignored --nocapture --test-threads=1
 
     - name: Upload real-repo latency artifacts
       if: always()
@@ -365,6 +370,47 @@ jobs:
         name: real-project-latency-${{ github.sha }}
         path: |
           .ci/metrics/real_project_latency.json
+        retention-days: 30
+
+  corpus-differential:
+    name: Corpus Differential (Full)
+    timeout-minutes: 20
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_corpus_differential != 'false') ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:corpus-differential'))
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
+      with:
+        toolchain: stable
+
+    - name: Cache cargo dependencies
+      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+      with:
+        key: ${{ runner.os }}-corpus-differential-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
+
+    - name: Run full corpus differential suite
+      run: |
+        set -o pipefail
+        cargo test -p perl-parser-comparison --test corpus_differential \
+          -- --ignored corpus_differential_full --nocapture 2>&1 \
+          | tee corpus-differential-report.txt
+
+    - name: Upload corpus differential report
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: corpus-differential-${{ github.sha }}
+        path: corpus-differential-report.txt
+        if-no-files-found: warn
         retention-days: 30
 
   lsp-memory-plateau:
