@@ -49,16 +49,10 @@ jobs:
           echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build builder image (${{ matrix.platform }})
+    name: Build builder image (multi-arch)
     runs-on: ubuntu-24.04
     needs: init
     timeout-minutes: 150
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
 
     steps:
       - name: Checkout
@@ -95,7 +89,7 @@ jobs:
         with:
           context: .
           file: .docker/rust/Dockerfile
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event.inputs.push != 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -104,17 +98,29 @@ jobs:
           provenance: true
           sbom: true
 
+      - name: Verify GHCR builder manifest platforms
+        if: github.event.inputs.push != 'false'
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          VERSION: ${{ needs.init.outputs.version }}
+        run: |
+          set -euo pipefail
+          IMAGE="${IMAGE,,}"
+          manifest="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}")"
+          grep -q 'linux/amd64' <<<"${manifest}" || {
+            echo "GHCR builder manifest is missing linux/amd64" >&2
+            exit 1
+          }
+          grep -q 'linux/arm64' <<<"${manifest}" || {
+            echo "GHCR builder manifest is missing linux/arm64" >&2
+            exit 1
+          }
+
   build-perl-runtime:
-    name: Build perl-lsp runtime image (${{ matrix.platform }})
+    name: Build perl-lsp runtime image (multi-arch)
     runs-on: ubuntu-24.04
     needs: init
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
 
     steps:
       - name: Checkout
@@ -149,7 +155,7 @@ jobs:
         with:
           context: .
           file: .docker/perl-lsp/Dockerfile
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event.inputs.push != 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -157,6 +163,24 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+
+      - name: Verify GHCR runtime manifest platforms
+        if: github.event.inputs.push != 'false'
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}-perl
+          VERSION: ${{ needs.init.outputs.version }}
+        run: |
+          set -euo pipefail
+          IMAGE="${IMAGE,,}"
+          manifest="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}")"
+          grep -q 'linux/amd64' <<<"${manifest}" || {
+            echo "GHCR runtime manifest is missing linux/amd64" >&2
+            exit 1
+          }
+          grep -q 'linux/arm64' <<<"${manifest}" || {
+            echo "GHCR runtime manifest is missing linux/arm64" >&2
+            exit 1
+          }
 
   publish-dockerhub:
     name: Publish to Docker Hub
