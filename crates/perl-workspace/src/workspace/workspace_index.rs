@@ -3175,6 +3175,12 @@ impl WorkspaceIndex {
         self.fact_shards.read().get(&key).cloned()
     }
 
+    #[cfg(test)]
+    fn inject_test_fact_shard(&self, shard: FileFactShard) {
+        let key = DocumentStore::uri_key(&Self::normalize_uri(&shard.source_uri));
+        self.fact_shards.write().insert(key, shard);
+    }
+
     /// Resolve a semantic anchor to a source-backed LSP-wire location.
     ///
     /// Returns `None` for missing anchors, zero-width fallback anchors, or
@@ -10187,27 +10193,52 @@ mod entity_id_file_scoped_tests {
     }
 
     /// Test C: Defense-in-depth — manually injected colliding AnchorIds still fail closed.
-    /// This test verifies that the fail-closed guard at workspace_index.rs:2659 remains
+    /// This test verifies that the fail-closed guard in `semantic_anchor_wire_location` remains
     /// a valid defense mechanism even after the fix, in case a bug allows collisions.
-    /// Marked #[ignore] pending a synthetic anchor injection API (follow-up issue).
     #[test]
-    #[ignore]
     fn semantic_anchor_wire_location_fails_closed_for_manually_injected_duplicate()
     -> Result<(), Box<dyn std::error::Error>> {
-        // TODO: This test requires a way to manually inject FileFactShards with
-        // colliding AnchorIds, bypassing the normal stable_id() call path.
-        // Requires either:
-        // - A test-only inject API on WorkspaceIndex, or
-        // - Direct access to modify the internal shard map.
-        // For now, this is deferred as an enhancement to the test harness.
-        // The normal operation case (Test B) ensures collisions don't occur in production.
-        // The fail-closed path at line 2659 will be exercised only if a future bug
-        // creates a collision despite the file_id inclusion.
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "synthetic anchor injection API not yet available",
-        )
-        .into())
+        let index = WorkspaceIndex::new();
+        let uri_a = "file:///lib/InjectedDuplicateA.pm";
+        let uri_b = "file:///lib/InjectedDuplicateB.pm";
+        let code = "package InjectedDuplicate;\nsub target { 1 }\n1;\n";
+        let anchor_id = AnchorId(42);
+
+        index.document_store.open(uri_a.to_string(), 1, code.to_string());
+        index.document_store.open(uri_b.to_string(), 1, code.to_string());
+
+        for (uri, file_id, content_hash) in [(uri_a, FileId(1), 1), (uri_b, FileId(2), 2)] {
+            index.inject_test_fact_shard(FileFactShard {
+                source_uri: uri.to_string(),
+                file_id,
+                content_hash,
+                producer_schema_version: PRODUCER_SCHEMA_VERSION,
+                anchors_hash: Some(content_hash),
+                entities_hash: Some(content_hash),
+                occurrences_hash: Some(content_hash),
+                edges_hash: Some(content_hash),
+                anchors: vec![AnchorFact {
+                    id: anchor_id,
+                    file_id,
+                    span_start_byte: 0,
+                    span_end_byte: 7,
+                    scope_id: None,
+                    provenance: Provenance::ExactAst,
+                    confidence: Confidence::High,
+                }],
+                entities: Vec::new(),
+                occurrences: Vec::new(),
+                edges: Vec::new(),
+            });
+        }
+
+        assert_eq!(index.fact_shard_count(), 2);
+        assert!(
+            index.semantic_anchor_wire_location(anchor_id).is_none(),
+            "global lookup must fail closed when duplicate AnchorIds are injected"
+        );
+
+        Ok(())
     }
 
     // ── search_index correctness: issue #2994 ──
