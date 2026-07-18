@@ -931,7 +931,7 @@ fn test_real_project_resource_inventory_receipt() -> Result<(), Box<dyn std::err
 }
 
 #[test]
-#[ignore = "real-workspace memory lane - starts LSP and records best-effort process RSS"]
+#[ignore = "real-workspace memory lane - starts LSP and records best-effort process RSS; tracking #10015"]
 fn real_project_memory_resource_receipt() -> Result<(), Box<dyn std::error::Error>> {
     let fixtures = [&MOJOLICIOUS_FIXTURE, &DANCER2_FIXTURE, &CATALYST_FIXTURE];
     let mut projects = Map::new();
@@ -1054,7 +1054,7 @@ fn real_project_memory_resource_receipt() -> Result<(), Box<dyn std::error::Erro
 /// cargo test -p perl-lsp-rs --test real_project_latency mojolicious -- --include-ignored --nocapture
 /// ```
 #[test]
-#[ignore = "nightly only — requires fixtures and extended runtime"]
+#[ignore = "nightly only — requires fixtures and extended runtime; tracking #10015"]
 fn real_project_latency_mojolicious() {
     let metrics = measure_project(&MOJOLICIOUS_FIXTURE);
     print_metrics(&metrics);
@@ -1068,7 +1068,7 @@ fn real_project_latency_mojolicious() {
 /// cargo test -p perl-lsp-rs --test real_project_latency dancer2 -- --include-ignored --nocapture
 /// ```
 #[test]
-#[ignore = "nightly only — requires fixtures and extended runtime"]
+#[ignore = "nightly only — requires fixtures and extended runtime; tracking #10015"]
 fn real_project_latency_dancer2() {
     let metrics = measure_project(&DANCER2_FIXTURE);
     print_metrics(&metrics);
@@ -1082,7 +1082,7 @@ fn real_project_latency_dancer2() {
 /// cargo test -p perl-lsp-rs --test real_project_latency catalyst -- --include-ignored --nocapture
 /// ```
 #[test]
-#[ignore = "nightly only — requires fixtures and extended runtime"]
+#[ignore = "nightly only — requires fixtures and extended runtime; tracking #10015"]
 fn real_project_latency_catalyst() {
     let metrics = measure_project(&CATALYST_FIXTURE);
     print_metrics(&metrics);
@@ -1096,7 +1096,7 @@ fn real_project_latency_catalyst() {
 /// cargo test -p perl-lsp-rs --test real_project_latency full_suite -- --include-ignored --nocapture
 /// ```
 #[test]
-#[ignore = "nightly only — requires fixtures and extended runtime"]
+#[ignore = "nightly only — requires fixtures and extended runtime; tracking #10015"]
 fn real_project_latency_full_suite() {
     let fixtures = [&MOJOLICIOUS_FIXTURE, &DANCER2_FIXTURE, &CATALYST_FIXTURE];
     let mut results = Vec::new();
@@ -1117,7 +1117,7 @@ fn real_project_latency_full_suite() {
 /// cargo test -p perl-lsp-rs --test real_project_latency first_diagnostics_5000_line_catalyst -- --include-ignored --nocapture
 /// ```
 #[test]
-#[ignore = "nightly/perf lane — synthetic 5k-line fixture and wall-clock budget"]
+#[ignore = "nightly/perf lane — synthetic 5k-line fixture and wall-clock budget; tracking #10015"]
 fn first_diagnostics_5000_line_catalyst() -> Result<(), Box<dyn std::error::Error>> {
     let app = synthetic_catalyst_app(5000);
     let lines = app.lines().count();

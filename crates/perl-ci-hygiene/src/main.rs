@@ -5,9 +5,9 @@
 // CLI binary: println!/eprintln! are intentional user-facing output.
 #![allow(clippy::print_stderr, clippy::print_stdout)]
 
-use perl_ci_hygiene::categorize_ignore;
 use perl_ci_hygiene::version_sync;
 use perl_ci_hygiene::walk_rs_files;
+use perl_ci_hygiene::{categorize_ignore, extract_ignore_reason};
 
 use chrono::Utc;
 use clap::Parser;
@@ -2883,14 +2883,7 @@ fn collect_ignored_matches(crates_root: &Path, repo_root: &Path) -> Result<Vec<I
                 continue;
             }
 
-            let mut reason = String::new();
-            if let Some(caps) = ignore_attr_re.captures(line) {
-                if let Some(matched) = caps.name("d") {
-                    reason = matched.as_str().to_string();
-                } else if let Some(matched) = caps.name("s") {
-                    reason = matched.as_str().to_string();
-                }
-            }
+            let mut reason = extract_ignore_reason(&lines, i, &ignore_attr_re);
             let context_lines = {
                 let end = std::cmp::min(lines.len(), i + 4);
                 lines[i..end].join("\n")

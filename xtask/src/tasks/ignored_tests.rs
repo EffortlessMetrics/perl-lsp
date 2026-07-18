@@ -13,7 +13,7 @@ use color_eyre::eyre::{Context, Result, eyre};
 use regex::Regex;
 use walkdir::WalkDir;
 
-use perl_ci_hygiene::categorize_ignore;
+use perl_ci_hygiene::{categorize_ignore, extract_ignore_reason};
 
 use crate::utils::project_root;
 
@@ -50,9 +50,14 @@ pub fn compute_category_counts(root: &Path) -> Result<HashMap<String, usize>> {
     Ok(counts)
 }
 
-pub fn run(update: bool, check: bool, verbose: bool) -> Result<()> {
-    if update && check {
-        return Err(eyre!("choose exactly one of --update or --check for ignored-tests"));
+pub fn run(update: bool, check: bool, check_issue_refs: bool, verbose: bool) -> Result<()> {
+    if update && (check || check_issue_refs) {
+        return Err(eyre!(
+            "--update cannot be combined with --check or --check-issue-refs for ignored-tests"
+        ));
+    }
+    if check && check_issue_refs {
+        return Err(eyre!("choose exactly one of --check or --check-issue-refs for ignored-tests"));
     }
 
     let root = project_root()?;
@@ -72,6 +77,7 @@ pub fn run(update: bool, check: bool, verbose: bool) -> Result<()> {
         records.push(IgnoredDetail {
             category,
             location: detail.location,
+            context: detail.context,
             test_name: detail.test_name,
             reason: detail.reason,
         });
@@ -161,7 +167,27 @@ pub fn run(update: bool, check: bool, verbose: bool) -> Result<()> {
 
     // ── Mode dispatch ───────────────────────────────────────────────────
 
-    if update {
+    if check_issue_refs {
+        let missing_refs: Vec<&IgnoredDetail> = records
+            .iter()
+            .filter(|record| {
+                !has_issue_reference(&record.reason) && !has_issue_reference(&record.context)
+            })
+            .collect();
+        if missing_refs.is_empty() {
+            println!("{GREEN}OK: every ignored test cites an issue reference{NC}");
+        } else {
+            let missing_count = missing_refs.len();
+            println!("{RED}ERROR: ignored tests missing issue references:{NC}");
+            for record in missing_refs {
+                println!("  {}", record.location);
+                if !record.test_name.is_empty() {
+                    println!("    fn: {}", record.test_name);
+                }
+            }
+            return Err(eyre!("{missing_count} ignored tests lack issue references"));
+        }
+    } else if update {
         write_ignored_baseline(&baseline_path, &counts, total)?;
         println!("{GREEN}Baseline updated successfully.{NC}");
     } else if check {
@@ -263,6 +289,7 @@ struct IgnoreMatch {
 struct IgnoredDetail {
     category: String,
     location: String,
+    context: String,
     reason: String,
     test_name: String,
 }
@@ -300,14 +327,7 @@ fn collect_ignored_matches(crates_root: &Path, repo_root: &Path) -> Result<Vec<I
                 continue;
             }
 
-            let mut reason = String::new();
-            if let Some(caps) = ignore_attr_re.captures(line) {
-                if let Some(matched) = caps.name("d") {
-                    reason = matched.as_str().to_string();
-                } else if let Some(matched) = caps.name("s") {
-                    reason = matched.as_str().to_string();
-                }
-            }
+            let mut reason = extract_ignore_reason(&lines, i, &ignore_attr_re);
 
             let context_lines = {
                 let end = std::cmp::min(lines.len(), i + 4);
@@ -349,6 +369,14 @@ fn collect_ignored_matches(crates_root: &Path, repo_root: &Path) -> Result<Vec<I
         }
     }
     Ok(results)
+}
+
+fn has_issue_reference(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    bytes
+        .iter()
+        .enumerate()
+        .any(|(index, byte)| *byte == b'#' && bytes.get(index + 1).is_some_and(u8::is_ascii_digit))
 }
 
 // ── Categorisation ──────────────────────────────────────────────────────────
@@ -401,6 +429,27 @@ mod tests {
     #[test]
     fn categorize_other() {
         assert_eq!(categorize_ignore("some unique unmatched reason", ""), "other");
+    }
+
+    #[test]
+    fn issue_reference_detection_requires_digits_after_hash() {
+        assert!(has_issue_reference("tracking #4912"));
+        assert!(!has_issue_reference("tracking #NNNN"));
+        assert!(!has_issue_reference("hash in prose only"));
+    }
+
+    #[test]
+    fn extract_ignore_reason_handles_multiline_attributes() -> Result<()> {
+        let lines = vec![
+            r#"#[ignore = "requires the renamed package; see issue "#.to_string(),
+            r#"            #1226"]"#.to_string(),
+        ];
+        let regex = Regex::new(
+            r#"^\s*#\[ignore\b(?:(?:\s*=\s*)?\"(?P<d>[^\"]+)\"|\s*=\s*'(?P<s>[^']+)')?"#,
+        )?;
+        let reason = extract_ignore_reason(&lines, 0, &regex);
+        assert!(reason.contains("#1226"));
+        Ok(())
     }
 
     #[test]

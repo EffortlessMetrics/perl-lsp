@@ -1673,6 +1673,10 @@ ignored-tests-verbose:
 ignored-tests-update:
     cargo xtask ignored-tests --update
 
+# Fail when any ignored test lacks a numeric issue reference
+ignored-tests-check-refs:
+    cargo --locked xtask ignored-tests --check-issue-refs
+
 # ============================================================================
 # Milestone Verification
 # ============================================================================

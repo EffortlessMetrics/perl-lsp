@@ -101,7 +101,7 @@ fn full_corpus_roots() -> Vec<PathBuf> {
 ///
 /// Produces a human-readable report on stdout when run with `--nocapture`.
 #[test]
-#[ignore]
+#[ignore = "manual full-corpus differential lane; tracking #10015"]
 fn corpus_differential_full() {
     let roots = full_corpus_roots();
     assert!(!roots.is_empty(), "No corpus roots found - is the workspace root reachable?");
