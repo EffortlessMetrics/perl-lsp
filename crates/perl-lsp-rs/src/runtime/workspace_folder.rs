@@ -79,6 +79,7 @@ impl WorkspaceFolderState {
     pub fn refresh_workspace_metadata(&mut self) {
         if let Some(path) = self.path.as_deref() {
             self.effective_workspace_config.refresh_declared_dependencies(path);
+            self.effective_workspace_config.refresh_dependency_include_paths(path);
         }
     }
 
@@ -158,5 +159,43 @@ mod tests {
         assert!(!config.include_paths.is_empty());
         assert_eq!(config.resolution_timeout_ms, 50);
         assert!(!config.use_system_inc);
+    }
+
+    #[test]
+    fn refresh_workspace_metadata_adds_carton_include_path()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        std::fs::write(temp.path().join("cpanfile"), "requires 'JSON';\n")?;
+        std::fs::write(temp.path().join("carton.lock"), "snapshot\n")?;
+        let mut folder = WorkspaceFolderState::new("file:///workspace".to_string())
+            .with_path(temp.path().to_path_buf());
+
+        folder.refresh_workspace_metadata();
+
+        assert_eq!(
+            folder.effective_workspace_config.include_paths,
+            vec!["lib", ".", "local/lib/perl5"]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn refresh_workspace_metadata_adds_carmel_include_path()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        std::fs::write(temp.path().join("cpanfile"), "requires 'JSON';\n")?;
+        std::fs::create_dir_all(temp.path().join("vendor/lib/perl5"))?;
+        let mut folder = WorkspaceFolderState::new("file:///workspace".to_string())
+            .with_path(temp.path().to_path_buf());
+
+        folder.refresh_workspace_metadata();
+
+        assert!(
+            folder
+                .effective_workspace_config
+                .include_paths
+                .contains(&"vendor/lib/perl5".to_string())
+        );
+        Ok(())
     }
 }

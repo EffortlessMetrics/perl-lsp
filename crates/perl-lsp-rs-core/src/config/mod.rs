@@ -15,11 +15,13 @@ use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 use std::{fs::File, io::Read};
 
+mod dependency_detection;
 mod metadata_dependencies;
 mod native_build_hints;
 pub mod perl_oracle_env;
 pub mod toolchain_profile;
 
+pub use dependency_detection::detect_dependency_include_paths;
 pub use metadata_dependencies::{
     DeclaredDependency, DeclaredDependencySource, detect_declared_dependencies,
     extract_build_pl_requirements, extract_cpanfile_requirements, extract_dist_ini_requirements,
@@ -764,6 +766,28 @@ impl WorkspaceConfig {
     /// module-resolution include paths.
     pub fn refresh_declared_dependencies(&mut self, workspace_root: &Path) {
         self.declared_dependencies = detect_declared_dependencies(workspace_root);
+    }
+
+    /// Append marker-detected Carton/Carmel roots to module-resolution paths.
+    ///
+    /// Existing configured paths are preserved in order, and equivalent paths
+    /// are not added twice. `PERL5LIB` is merged later by
+    /// [`Self::effective_include_paths`], so its configured precedence remains
+    /// unchanged.
+    pub fn refresh_dependency_include_paths(&mut self, workspace_root: &Path) {
+        for detected in detect_dependency_include_paths(workspace_root) {
+            let Some(normalized_detected) = normalize_include_path(&detected) else {
+                continue;
+            };
+            let already_present = self
+                .include_paths
+                .iter()
+                .filter_map(|path| normalize_include_path(path))
+                .any(|path| path == normalized_detected);
+            if !already_present {
+                self.include_paths.push(detected);
+            }
+        }
     }
 
     /// Update workspace configuration from LSP settings.
