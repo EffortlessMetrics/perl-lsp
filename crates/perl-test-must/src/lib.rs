@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Safe unwrap replacements for tests.
 //!
 //! This crate provides panic-on-failure helpers that are safe to use in tests,

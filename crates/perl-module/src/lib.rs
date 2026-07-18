@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Unified Perl module facade.
 //!
 //! This crate absorbs 13 `perl-module-*` microcrates into a single published

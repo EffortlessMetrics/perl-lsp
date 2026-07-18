@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Batch exporter for the `ripr-perl-facts-v1` packet.
 //!
 //! This crate owns the `ripr-facts` unit that previously lived inside the LSP

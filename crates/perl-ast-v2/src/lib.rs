@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Enhanced AST with full position tracking for incremental parsing
 //!
 //! This module provides an updated AST that uses Range instead of SourceLocation

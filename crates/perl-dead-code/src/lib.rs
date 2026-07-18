@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Dead code detection for Perl codebases (stub implementation)
 //!
 //! This module identifies unused code including unreachable code and unused symbols.

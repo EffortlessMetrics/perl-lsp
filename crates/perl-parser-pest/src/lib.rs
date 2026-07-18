@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Legacy Pest-based Perl parser (v2).
 //!
 //! This crate provides a pure Rust Perl parser built with the Pest parser generator.

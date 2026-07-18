@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Perl AST library -- typed syntax tree for Perl source code.
 //!
 //! This crate defines the Abstract Syntax Tree used by `perl-parser-core` and
