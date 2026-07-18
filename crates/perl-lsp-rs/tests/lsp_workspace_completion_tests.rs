@@ -666,6 +666,91 @@ fn test_completion_inherited_method_from_parent() -> Result<(), Box<dyn std::err
     Ok(())
 }
 
+/// Verify that object method completion replaces the typed method prefix without losing the receiver.
+///
+/// CoC.nvim reported inserting `register_command()` after `$object->register` rather than
+/// replacing the typed method prefix. The server-side contract is an LSP `textEdit` whose range
+/// starts after the receiver, so clients do not need to reconstruct that replacement.
+#[test]
+fn test_object_method_completion_replaces_typed_method_prefix()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let module_uri = "file:///workspace/CompletionObject.pm";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": module_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package CompletionObject;\nsub new { bless {}, shift }\nsub register_command { }\n1;\n"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    let script_uri = "file:///workspace/object_completion.pl";
+    let source_line = "$object->register";
+    let source =
+        format!("use CompletionObject;\nmy $object = CompletionObject->new();\n{source_line}");
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": script_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": script_uri },
+                "position": { "line": 2, "character": source_line.len() }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let item = items
+        .iter()
+        .find(|item| item["label"].as_str() == Some("register_command"))
+        .ok_or_else(|| format!("register_command completion missing: {items:#?}"))?;
+    let text_edit = item.get("textEdit").ok_or("method completion must include textEdit")?;
+    assert_eq!(text_edit["range"]["start"]["line"], 2);
+    assert_eq!(text_edit["range"]["start"]["character"], 9);
+    assert_eq!(text_edit["range"]["end"]["line"], 2);
+    assert_eq!(
+        text_edit["range"]["end"]["character"],
+        source_line.len(),
+        "textEdit must cover the typed method prefix after the receiver"
+    );
+    assert_eq!(text_edit["newText"], "register_command()");
+
+    let mut completed_line = source_line.to_string();
+    completed_line.replace_range(9..source_line.len(), "register_command()");
+    assert_eq!(completed_line, "$object->register_command()");
+
+    Ok(())
+}
+
 /// Test that method completion detail includes medium-confidence receiver labels.
 ///
 /// Integration counterpart for the receiver-evidence detail format covered in

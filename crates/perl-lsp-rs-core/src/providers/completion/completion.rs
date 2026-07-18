@@ -776,7 +776,12 @@ impl CompletionProvider {
                 })
                 .map(|p| next_char_boundary_after(source, p))
                 .unwrap_or(0);
-            (source[word_start..position].to_string(), word_start)
+            if word_start >= 2 && source[..word_start].ends_with("->") {
+                let receiver_start = method_receiver_start(source, word_start.saturating_sub(2));
+                (source[receiver_start..position].to_string(), receiver_start)
+            } else {
+                (source[word_start..position].to_string(), word_start)
+            }
         };
 
         // Detect trigger character (trigger chars are ASCII, so byte access is safe)

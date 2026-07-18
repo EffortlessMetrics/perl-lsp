@@ -128,9 +128,7 @@ fn complete_use_or_structural_context(
 }
 
 fn is_method_arrow_context(context: &CompletionContext) -> bool {
-    (context.trigger_character == Some('>') || context.trigger_character == Some('-'))
-        && context.prefix.ends_with("->")
-        && context.prefix.len() > 2
+    context.prefix.contains("->") && context.prefix.len() > 2
 }
 
 /// Statement-level keywords and I/O builtins that look like a bareword method

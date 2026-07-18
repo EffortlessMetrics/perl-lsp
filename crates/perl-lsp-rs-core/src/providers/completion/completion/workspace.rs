@@ -1626,10 +1626,11 @@ pub fn add_workspace_method_completions(
     // Build an auto-import edit once for all methods from this package.
     let auto_import_edit = auto_import::build_auto_import_edit(source, &package_name);
     let method_symbols = workspace_method_symbols(&members, &existing_labels, method_prefix);
+    let method_text_edit_range = (context.method_text_edit_start(source), context.position);
 
     if add_semantic_method_completions(
         completions,
-        context,
+        method_text_edit_range,
         index,
         &package_name,
         method_prefix,
@@ -1672,7 +1673,7 @@ pub fn add_workspace_method_completions(
             sort_text: Some(format!("{method_tier}_{}", symbol.name)), // tier 2=own, 3=inherited, after local (tier 1)
             filter_text: Some(symbol.name.clone()),
             additional_edits,
-            text_edit_range: Some((context.prefix_start, context.position)),
+            text_edit_range: Some((context.method_text_edit_start(source), context.position)),
             commit_characters: None,
             label_details: None,
         });
@@ -1756,7 +1757,7 @@ fn add_unknown_receiver_fallback(
                     Some(defining_pkg),
                     &context.current_package,
                 ),
-                text_edit_range: Some((context.prefix_start, context.position)),
+                text_edit_range: Some((context.method_text_edit_start(source), context.position)),
                 commit_characters: None,
                 label_details: None,
             });
@@ -1779,7 +1780,7 @@ fn workspace_method_symbols<'a>(
 
 fn add_semantic_method_completions(
     completions: &mut Vec<CompletionItem>,
-    context: &CompletionContext,
+    method_text_edit_range: (usize, usize),
     index: &WorkspaceIndex,
     package_name: &str,
     method_prefix: &str,
@@ -1836,7 +1837,7 @@ fn add_semantic_method_completions(
             )),
             filter_text: Some(candidate.display_name.clone()),
             additional_edits,
-            text_edit_range: Some((context.prefix_start, context.position)),
+            text_edit_range: Some(method_text_edit_range),
             commit_characters: None,
             label_details: None,
         });
