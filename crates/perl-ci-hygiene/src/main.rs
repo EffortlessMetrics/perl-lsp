@@ -19,6 +19,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use toml::Value as TomlValue;
 use walkdir::{DirEntry, WalkDir};
 
@@ -45,6 +46,11 @@ const GREEN: &str = "\x1b[0;32m";
 const YELLOW: &str = "\x1b[0;33m";
 const BLUE: &str = "\x1b[0;34m";
 const NC: &str = "\x1b[0m";
+
+static PANIC_FAMILY_UNWRAP_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"\.unwrap\(|\.expect\("));
+static PANIC_FAMILY_MACRO_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"(?:panic!|todo!|unimplemented!|unreachable!|dbg!)\s*\("));
 
 fn main() -> std::process::ExitCode {
     if let Err(err) = color_eyre::install() {
@@ -111,6 +117,7 @@ fn run() -> Result<i32> {
         CliCommand::CheckUnsafeProd => cmd_check_unsafe_prod(&repo_root)?,
         CliCommand::CheckUnwrapsModules => cmd_check_unwraps_modules(&repo_root)?,
         CliCommand::CheckUnwrapsProd => cmd_check_unwraps_prod(&repo_root)?,
+        CliCommand::CheckUnwrapsTests => cmd_check_unwraps_tests(&repo_root)?,
         CliCommand::CheckPrintInLib => check_print_in_lib(&repo_root)?,
         CliCommand::QuickCheck => cmd_quick_check(&repo_root)?,
         CliCommand::TestHeredocs => cmd_test_heredocs(&repo_root)?,
@@ -152,6 +159,19 @@ fn is_excluded_test_path(path: &Path) -> bool {
     }
 
     false
+}
+
+fn is_test_source_path(path: &Path) -> bool {
+    if path.components().any(|component| {
+        let value = component.as_os_str();
+        value == OsStr::new("tests") || value == OsStr::new("benches")
+    }) {
+        return true;
+    }
+
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| CI_TEST_FILE_SUFFIXES.iter().any(|suffix| name.ends_with(suffix)))
 }
 
 pub(crate) fn first_cfg_test_line_number(path: &Path) -> Result<usize> {
@@ -2493,6 +2513,136 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
+fn cmd_check_unwraps_tests(repo_root: &Path) -> Result<i32> {
+    println!("test-source unwrap/panic-family ratchet");
+    println!("========================================");
+
+    let mut unwrap_offenders = Vec::new();
+    let mut panic_offenders = Vec::new();
+    for path in walk_rs_files(&repo_root.join("crates")) {
+        let lines = read_lines(&path)?;
+        let (unwraps, panics) = scan_test_source(&path, repo_root, &lines)?;
+        let (doctest_unwraps, doctest_panics) = scan_doctest_source(&path, repo_root, &lines)?;
+        unwrap_offenders.extend(unwraps);
+        panic_offenders.extend(panics);
+        unwrap_offenders.extend(doctest_unwraps);
+        panic_offenders.extend(doctest_panics);
+    }
+
+    let unwrap_baseline = read_usize_file(&repo_root.join("ci/unwrap_test_baseline.txt"), 0)?;
+    let panic_baseline = read_usize_file(&repo_root.join("ci/panic_test_baseline.txt"), 0)?;
+    println!("unwrap/expect: {} (baseline: {})", unwrap_offenders.len(), unwrap_baseline);
+    println!("panic-family macros: {} (baseline: {})", panic_offenders.len(), panic_baseline);
+
+    let mut failed = false;
+    if unwrap_offenders.len() > unwrap_baseline {
+        failed = true;
+        println!("FAIL: test unwrap/expect count exceeds baseline");
+        for line in unwrap_offenders.iter().take(10) {
+            println!("{line}");
+        }
+    }
+    if panic_offenders.len() > panic_baseline {
+        failed = true;
+        println!("FAIL: test panic-family count exceeds baseline");
+        for line in panic_offenders.iter().take(10) {
+            println!("{line}");
+        }
+    }
+
+    Ok(i32::from(failed))
+}
+
+fn scan_test_source(
+    path: &Path,
+    repo_root: &Path,
+    lines: &[String],
+) -> Result<(Vec<String>, Vec<String>)> {
+    let start = if is_test_source_path(path) {
+        0
+    } else {
+        match first_cfg_test_line_number(path)? {
+            usize::MAX => return Ok((Vec::new(), Vec::new())),
+            line => line.saturating_sub(1),
+        }
+    };
+    let unwrap_re = PANIC_FAMILY_UNWRAP_RE
+        .as_ref()
+        .map_err(|error| color_eyre::eyre::eyre!("compiling unwrap regex: {error}"))?;
+    let panic_re = PANIC_FAMILY_MACRO_RE
+        .as_ref()
+        .map_err(|error| color_eyre::eyre::eyre!("compiling panic-family regex: {error}"))?;
+    let rel = display_path(repo_root, path);
+    let mut unwrap_offenders = Vec::new();
+    let mut panic_offenders = Vec::new();
+
+    for (index, line) in lines.iter().enumerate().skip(start) {
+        if line.trim_start().starts_with("//") {
+            continue;
+        }
+        let line_no = index + 1;
+        if unwrap_re.is_match(line) {
+            unwrap_offenders.push(format!("{rel}:{line_no}:{line}"));
+        }
+        if panic_re.is_match(line) && !is_allowlisted_prod_panic_hit(&rel, line) {
+            panic_offenders.push(format!("{rel}:{line_no}:{line}"));
+        }
+    }
+
+    Ok((unwrap_offenders, panic_offenders))
+}
+
+fn scan_doctest_source(
+    path: &Path,
+    repo_root: &Path,
+    lines: &[String],
+) -> Result<(Vec<String>, Vec<String>)> {
+    let rel = display_path(repo_root, path);
+    let unwrap_re = PANIC_FAMILY_UNWRAP_RE
+        .as_ref()
+        .map_err(|error| color_eyre::eyre::eyre!("compiling unwrap regex: {error}"))?;
+    let panic_re = PANIC_FAMILY_MACRO_RE
+        .as_ref()
+        .map_err(|error| color_eyre::eyre::eyre!("compiling panic regex: {error}"))?;
+    let mut fence_kind = None;
+    let mut unwrap_offenders = Vec::new();
+    let mut panic_offenders = Vec::new();
+
+    for (index, line) in lines.iter().enumerate() {
+        let Some(doc_line) =
+            line.trim_start().strip_prefix("///").or_else(|| line.trim_start().strip_prefix("//!"))
+        else {
+            continue;
+        };
+        let doc_line = doc_line.trim_start();
+        if let Some(fence) = doc_line.strip_prefix("```") {
+            fence_kind =
+                if fence_kind.is_some() { None } else { Some(is_rust_doctest_fence(fence)) };
+            continue;
+        }
+        if fence_kind != Some(true) {
+            continue;
+        }
+        let line_no = index + 1;
+        if unwrap_re.is_match(doc_line) {
+            unwrap_offenders.push(format!("{rel}:{line_no}:{line}"));
+        }
+        if panic_re.is_match(doc_line) && !is_allowlisted_prod_panic_hit(&rel, doc_line) {
+            panic_offenders.push(format!("{rel}:{line_no}:{line}"));
+        }
+    }
+
+    Ok((unwrap_offenders, panic_offenders))
+}
+
+fn is_rust_doctest_fence(fence: &str) -> bool {
+    let Some(language) = fence.trim().split(',').next() else {
+        return true;
+    };
+    language.is_empty()
+        || matches!(language, "rust" | "no_run" | "compile_fail" | "should_panic" | "ignore")
+}
+
 fn is_allowlisted_prod_panic_hit(_rel_path: &str, line: &str) -> bool {
     // Static LazyLock<Regex> initializers that use unreachable!() for known-good patterns
     // are exempt regardless of which file they live in.  Two message conventions:
@@ -3369,6 +3519,56 @@ mod tests {
         assert!(is_excluded_test_path(Path::new(
             "crates/perl-workspace/src/bin/workspace_memory_profile.rs"
         )));
+    }
+
+    #[test]
+    fn test_source_path_includes_external_tests_and_benches() {
+        assert!(is_test_source_path(Path::new("crates/demo/tests/contract.rs")));
+        assert!(is_test_source_path(Path::new("crates/demo/benches/parse.rs")));
+        assert!(is_test_source_path(Path::new("crates/demo/src/parser_tests.rs")));
+        assert!(!is_test_source_path(Path::new("crates/demo/src/parser.rs")));
+    }
+
+    #[test]
+    fn test_source_scanner_reports_panic_family_without_matching_comments() -> Result<()> {
+        let unwrap_call = format!(".{}(", "unwrap");
+        let panic_call = format!("{}!(", "panic");
+        let dbg_call = format!("{}!(", "dbg");
+        let lines = vec![
+            "fn fixture() {".to_string(),
+            format!("    let _ = value{unwrap_call});"),
+            format!("    {panic_call}\"boom\");"),
+            format!("    {dbg_call}\"value\");"),
+            "    // value.unwrap(); panic!(\"comment\");".to_string(),
+            "}".to_string(),
+        ];
+        let path = Path::new("crates/demo/tests/ratchet_fixture.rs");
+        let (unwraps, panics) = scan_test_source(path, Path::new("/repo"), &lines)?;
+
+        assert_eq!(unwraps.len(), 1);
+        assert_eq!(panics.len(), 2);
+        assert!(unwraps[0].contains(":2:"));
+        assert!(panics.iter().all(|line| line.contains("ratchet_fixture.rs")));
+        Ok(())
+    }
+
+    #[test]
+    fn doctest_scanner_only_reports_rust_fences() -> Result<()> {
+        let lines = vec![
+            "//! ```rust".to_string(),
+            "//! let _ = value.unwrap();".to_string(),
+            "//! panic!(\"boom\");".to_string(),
+            "//! ```".to_string(),
+            "//! ```text".to_string(),
+            "//! panic!(\"not Rust\");".to_string(),
+            "//! ```".to_string(),
+        ];
+        let (unwraps, panics) =
+            scan_doctest_source(Path::new("crates/demo/src/lib.rs"), Path::new("/repo"), &lines)?;
+
+        assert_eq!(unwraps.len(), 1);
+        assert_eq!(panics.len(), 1);
+        Ok(())
     }
 
     #[test]
