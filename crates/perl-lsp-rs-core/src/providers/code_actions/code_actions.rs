@@ -93,7 +93,8 @@ impl CodeActionsProvider {
         range: (usize, usize),
         diagnostics: &[Diagnostic],
     ) -> Vec<CodeAction> {
-        let mut actions = diagnostic_routes::quick_fixes_for_diagnostics(&self.source, diagnostics);
+        let mut actions =
+            diagnostic_routes::quick_fixes_for_diagnostics(&self.source, Some(ast), diagnostics);
 
         actions.extend(source_actions::get_source_actions(&self.source, range));
         actions.extend(super::refactors::get_refactoring_actions(&self.source, ast, range));
@@ -1071,7 +1072,7 @@ mod tests {
             call_start,
             call_end,
             "native.common.printf_format_arity",
-            "`printf` format string has 2 specifiers but 1 argument supplied",
+            "format arity mismatch (structured metadata supplies the fix inputs)",
         )];
 
         let provider = CodeActionsProvider::new(source.to_string());
@@ -1096,12 +1097,8 @@ mod tests {
         let call_start = must_some(source.find("printf("));
         // Call node includes the closing ')'
         let call_end = call_start + "printf(\"%s %s %s\", $a)".len();
-        let diagnostics = vec![make_diagnostic(
-            call_start,
-            call_end,
-            "PL405",
-            "`printf` format string has 3 specifiers but 1 argument supplied",
-        )];
+        let diagnostics =
+            vec![make_diagnostic(call_start, call_end, "PL405", "wording is presentation-only")];
 
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
