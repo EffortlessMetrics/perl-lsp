@@ -345,6 +345,22 @@ fn builtin_formatter_multi_closer_line_does_not_over_decrement() {
     assert_eq!(lines[6], "print 3;"); // at level 0, not negative
 }
 
+#[test]
+fn builtin_formatter_ignores_unmatched_leading_closers_for_indentation() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("if ($ok) {\n)\nprint 1;\n}\n");
+
+    assert_eq!(formatted, "if ($ok) {\n    )\n    print 1;\n}\n");
+}
+
+#[test]
+fn builtin_formatter_matches_nested_mixed_delimiters() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("foo({\nbar();\n});\nprint 1;\n");
+
+    assert_eq!(formatted, "foo({\n        bar();\n});\nprint 1;\n");
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn with_os_runtime_clamps_zero_timeout() {
