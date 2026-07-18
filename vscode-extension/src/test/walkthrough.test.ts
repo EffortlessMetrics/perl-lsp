@@ -142,6 +142,16 @@ describe('package.json walkthrough contribution', () => {
     expect(step.description).not.toMatch(/Perl tooling \(perl, perltidy/i);
   });
 
+  test('verify-perl step exposes the extension health-check command', () => {
+    const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
+    const step = findRequired(
+      wt.steps,
+      (s: WalkthroughStep) => s.id === 'verify-perl',
+      'verify-perl step',
+    );
+    expect(step.description).toMatch(/command:perl-lsp\.runHealthCheck/);
+  });
+
   test('open-project step offers the bundled demo project (#1635)', () => {
     const wt = findRequired(pkg.contributes.walkthroughs, () => true, 'a walkthrough');
     const step = findRequired(
