@@ -89,6 +89,15 @@ jobs:
           git push origin --delete automation/badge-endpoints || echo "automation/badge-endpoints did not exist remotely (or delete failed); continuing -- create-pull-request will create it fresh if needed"
 
       - name: Open badge refresh PR
+        id: cpr
+        # The repository's Actions settings may disallow the default
+        # GITHUB_TOKEN from opening pull requests ("GitHub Actions is not
+        # permitted to create or approve pull requests"). Badge regeneration
+        # above is the payload that must keep failing loudly; opening the PR
+        # is best-effort delivery, so tolerate that permission denial here and
+        # surface it as a ::notice:: in the next step instead of turning the
+        # whole run red.
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v8
         with:
           branch: automation/badge-endpoints
@@ -103,3 +112,13 @@ jobs:
             ```bash
             cargo xtask badges
             ```
+
+      - name: Report badge PR creation failure
+        if: steps.cpr.outcome == 'failure'
+        shell: bash
+        run: |
+          {
+            echo "::notice title=Badge PR skipped::The badge refresh PR could not be opened."
+            echo "::notice::Likely cause: repository Actions settings disallow the GITHUB_TOKEN from creating pull requests ('GitHub Actions is not permitted to create or approve pull requests')."
+            echo "::notice::Badges were still regenerated successfully in this run. To restore automated badge PRs, a maintainer can enable 'Allow GitHub Actions to create and approve pull requests' under Settings > Actions > General, or open the PR manually from the badges/ diff."
+          }
