@@ -325,6 +325,23 @@ gates:
     planning:
       role: always_on
 
+  - name: ignored_tests_check_refs
+    tier: pr_fast
+    description: "Require every ignored test to cite a numeric tracking issue"
+    required: true
+    command: just ignored-tests-check-refs
+    timeout_seconds: 180
+    retry_count: 0
+    budgets:
+      max_duration_ms: 120000
+    quarantine: false
+    tags:
+      - hygiene
+      - tests
+      - issue-tracking
+    planning:
+      role: always_on
+
   - name: check_conflict_markers
     tier: pr_fast
     description: "Prevent committed merge conflict markers"
@@ -1519,6 +1536,7 @@ workflow_integration:
     ci-gate:
       gates:
         - fmt
+        - ignored_tests_check_refs
         - clippy_full
         - unit_foundation_full
         - unit_analysis_full

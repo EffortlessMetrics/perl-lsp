@@ -197,24 +197,30 @@ jobs:
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
           save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
+      - name: Select PR Smoke Cargo target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d /mnt ] && sudo mkdir -p /mnt/perl-lsp-swarm && sudo chown "$USER" /mnt/perl-lsp-swarm; then
+            target_dir="/mnt/perl-lsp-swarm/pr-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+          else
+            target_dir="${RUNNER_TEMP:-$PWD/target}/cargo-target/pr-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+          fi
+          mkdir -p "$target_dir"
+          echo "CARGO_TARGET_DIR=$target_dir" >> "$GITHUB_ENV"
+          echo "PR-fast CARGO_TARGET_DIR=$target_dir"
+          df -h . "$target_dir" || true
+
       - name: Warm xtask
         run: cargo build -p xtask --locked
 
       - name: Run PR-fast via shared xtask gate runner
         run: |
           set +e
-          # Keep the heavy Cargo test artifacts out of the checkout filesystem.
+          # The target directory is selected before Warm xtask so gate commands reuse that build.
           # Gate receipts intentionally stay at target/receipts for upload steps.
-          if [ -d /mnt ] && sudo mkdir -p /mnt/perl-lsp-swarm && sudo chown "$USER" /mnt/perl-lsp-swarm; then
-            export CARGO_TARGET_DIR="/mnt/perl-lsp-swarm/pr-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
-          else
-            export CARGO_TARGET_DIR="${RUNNER_TEMP:-$PWD/target}/cargo-target/pr-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
-          fi
-          mkdir -p "$CARGO_TARGET_DIR"
-          echo "PR-fast CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
-          df -h . "$CARGO_TARGET_DIR" || true
           echo "PR-fast timeout policy: GitHub job 50m, outer runner watchdog 45m, per-gate timeouts recorded in target/receipts/receipt.json"
-          timeout --signal=TERM --kill-after=60s 2700s ./target/debug/xtask gates --tier pr-fast --base origin/main --receipt
+          timeout --signal=TERM --kill-after=60s 2700s "$CARGO_TARGET_DIR/debug/xtask" gates --tier pr-fast --base origin/main --receipt
           status=$?
           case "$status" in
             124)
@@ -274,7 +280,7 @@ jobs:
       matrix:
         include:
           - name: meta
-            gates: fmt check_conflict_markers release_history readme_heading_check publish_closure publish_manifest_check layer_check published_crate_count_pr_fast release_history_check perl_token_leaf_contract compile_all_targets clippy_full
+            gates: fmt ignored_tests_check_refs check_conflict_markers release_history readme_heading_check publish_closure publish_manifest_check layer_check published_crate_count_pr_fast release_history_check perl_token_leaf_contract compile_all_targets clippy_full
           - name: foundation
             gates: unit_foundation_full
           - name: analysis

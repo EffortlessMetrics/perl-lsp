@@ -240,7 +240,7 @@ fn test_tag_lsp_values() {
 
 // Test 19: Workspace count verification (edge case: structural integrity)
 #[test]
-#[ignore] // This test requires external verification (workspace inspection)
+#[ignore = "This test requires external verification (workspace inspection); tracking #4912"]
 fn test_workspace_member_count_should_be_121() {
     // After Wave E: 123 - 3 (removed) + 1 (added) = 121
     // This test documents the expected final count
@@ -252,7 +252,7 @@ fn test_workspace_member_count_should_be_121() {
 
 // Test 20: Publish allowlist count verification (edge case: structural integrity)
 #[test]
-#[ignore] // This test requires external verification (Cargo.toml inspection)
+#[ignore = "This test requires external verification (Cargo.toml inspection); tracking #4912"]
 fn test_publish_allowlist_count_should_be_118() {
     // After Wave E: 120 - 3 (removed) + 1 (added) = 118
     // This test documents the expected final count
@@ -295,7 +295,7 @@ fn test_diagnostic_struct_fields_accessible() {
 
 // Test 23: Layer constraint verification (edge case: architectural integrity)
 #[test]
-#[ignore] // This test requires external verification (xtask layer-check)
+#[ignore = "This test requires external verification (xtask layer-check); tracking #4912"]
 fn test_perl_diagnostics_no_perl_lsp_dependencies() {
     // perl-diagnostics must NOT depend on any perl-lsp-* crate
     // This is enforced by xtask layer-check rule

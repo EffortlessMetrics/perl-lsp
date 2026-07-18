@@ -48,7 +48,7 @@ fn g3_baseline_file_matches_allowlist() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-#[ignore] // This test requires cargo metadata to be run in-process; skip in CI if slow
+#[ignore = "This test requires cargo metadata to be run in-process; skip in CI if slow; tracking #4912"]
 fn g3_baseline_matches_cargo_metadata() -> Result<(), Box<dyn std::error::Error>> {
     let root = workspace_root();
 

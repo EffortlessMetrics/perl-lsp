@@ -1564,6 +1564,9 @@ enum Commands {
         /// CI gate mode: fail when ignored count increases
         #[arg(long)]
         check: bool,
+        /// Fail when an ignored test lacks a numeric issue reference
+        #[arg(long)]
+        check_issue_refs: bool,
         /// Print detailed per-category breakdown
         #[arg(long, short)]
         verbose: bool,
@@ -4177,8 +4180,8 @@ fn run_cli(cli: Cli) -> Result<()> {
                 queue_reconciler::reconcile_queue(do_apply, pr, receipt)
             }
         },
-        Commands::IgnoredTests { update, check, verbose } => {
-            ignored_tests::run(update, check, verbose)
+        Commands::IgnoredTests { update, check, check_issue_refs, verbose } => {
+            ignored_tests::run(update, check, check_issue_refs, verbose)
         }
         Commands::DebtReport { check, json, summary, expired, ledger } => {
             debt_report::run(debt_report::DebtReportConfig {

@@ -5,6 +5,7 @@
 
 #![warn(missing_docs)]
 
+use regex::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -69,6 +70,40 @@ pub fn walk_rs_files(root: &Path) -> Vec<PathBuf> {
             }
         })
         .collect()
+}
+
+/// Extract the reason from an `#[ignore]` attribute, including split-line
+/// quoted attributes.
+pub fn extract_ignore_reason(lines: &[String], index: usize, ignore_attr_re: &Regex) -> String {
+    let Some(line) = lines.get(index) else {
+        return String::new();
+    };
+
+    let mut attribute = line.clone();
+    let split_quoted_attribute = attribute.contains("#[ignore")
+        && attribute.contains('=')
+        && !attribute.contains(']')
+        && !attribute.contains('"')
+        && !attribute.contains('\'');
+    let quoted_attribute = attribute.contains("#[ignore = \"")
+        || attribute.contains("#[ignore=\"")
+        || attribute.contains("#[ignore = '")
+        || attribute.contains("#[ignore='")
+        || split_quoted_attribute;
+    if quoted_attribute && !attribute.contains("\"]") && !attribute.contains("']") {
+        for continuation in lines.iter().skip(index + 1).take(8) {
+            attribute.push('\n');
+            attribute.push_str(continuation);
+            if continuation.contains("\"]") || continuation.contains("']") {
+                break;
+            }
+        }
+    }
+
+    ignore_attr_re
+        .captures(&attribute)
+        .and_then(|caps| caps.name("d").or_else(|| caps.name("s")))
+        .map_or_else(String::new, |matched| matched.as_str().to_string())
 }
 
 /// Collect the `Cargo.toml` plus every Rust source file shipped by this crate,
@@ -240,10 +275,22 @@ pub fn categorize_ignore(reason: &str, context: &str) -> String {
 mod tests {
     use super::{categorize_ignore, source_paths};
     use crate::version_sync::{is_pre_release, validate_version_format};
+    use regex::Regex;
     use std::error::Error;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn extract_ignore_reason_handles_split_multiline_attributes() -> Result<(), regex::Error> {
+        let lines = vec!["#[ignore =".to_string(), "    \"tracking #123\"]".to_string()];
+        let regex = Regex::new(
+            r#"^\s*#\[ignore\b(?:(?:\s*=\s*)?\"(?P<d>[^\"]+)\"|\s*=\s*'(?P<s>[^']+)')?"#,
+        )?;
+
+        assert_eq!(super::extract_ignore_reason(&lines, 0, &regex), "tracking #123");
+        Ok(())
+    }
 
     fn unique_temp_repo_dir(label: &str) -> Result<PathBuf, Box<dyn Error>> {
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();

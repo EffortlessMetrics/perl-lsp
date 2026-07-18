@@ -6,6 +6,52 @@ use assert_cmd::Command;
 use perl_tdd_support::{must, must_some};
 
 #[test]
+fn ignored_test_issue_reference_gate_is_required_on_prs() {
+    let root = repo_root();
+    let policy = must(fs::read_to_string(root.join(".ci/gate-policy.yaml")));
+    let gate_start = must_some(policy.find("  - name: ignored_tests_check_refs"));
+    let gate_tail = &policy[gate_start..];
+    let gate_end = gate_tail.find("\n  - name:").unwrap_or(gate_tail.len());
+    let gate = &gate_tail[..gate_end];
+    assert!(
+        gate.contains("tier: pr_fast")
+            && gate.contains("required: true")
+            && gate.contains("command: just ignored-tests-check-refs")
+            && gate.contains("timeout_seconds: 180")
+            && gate.contains("quarantine: false")
+            && gate.contains("role: always_on"),
+        "gate policy must keep the ignored-test issue-reference gate required on the PR fast lane"
+    );
+
+    let workflow = must(fs::read_to_string(root.join(".github/workflows/ci.yml")));
+    let shards_start = must_some(workflow.find("merge-gate-shards:"));
+    let shards = &workflow[shards_start..];
+    let next_job = shards.find("\nmerge-gate:").unwrap_or(shards.len());
+    assert!(
+        shards[..next_job].contains("ignored_tests_check_refs"),
+        "merge-gate-shards must execute the ignored-test issue-reference gate"
+    );
+
+    let smoke_start = must_some(workflow.find("  pr-smoke:"));
+    let smoke = &workflow[smoke_start..];
+    let target_start = must_some(smoke.find("- name: Select PR Smoke Cargo target"));
+    let warm_start = must_some(smoke.find("- name: Warm xtask"));
+    let target_step = must_some(workflow_step(smoke, "Select PR Smoke Cargo target"));
+    assert!(
+        target_start < warm_start,
+        "PR Smoke must select CARGO_TARGET_DIR before warming xtask"
+    );
+    assert!(
+        target_step.contains("CARGO_TARGET_DIR=$target_dir") && target_step.contains("GITHUB_ENV"),
+        "PR Smoke must persist its cargo target for the shared gate runner"
+    );
+    assert!(
+        smoke.contains("\"$CARGO_TARGET_DIR/debug/xtask\" gates --tier pr-fast"),
+        "PR Smoke must invoke the warmed xtask from its selected cargo target"
+    );
+}
+
+#[test]
 fn ripr_workflow_blocks_new_gaps_and_requires_receipts() {
     let root = repo_root();
     let workflow = must(fs::read_to_string(root.join(".github/workflows/ripr.yml")));
