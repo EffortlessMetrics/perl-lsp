@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Pragma tracker for Perl code analysis
 //!
 //! Tracks `use` and `no` pragmas throughout the codebase to determine

@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Comprehensive Perl test corpus and property-based testing infrastructure
 //!
 //! This crate provides a curated collection of Perl code samples for testing parser correctness,

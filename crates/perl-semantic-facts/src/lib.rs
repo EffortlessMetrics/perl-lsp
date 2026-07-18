@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Neutral semantic fact vocabulary for Perl analysis layers.
 //!
 //! This crate defines strongly-typed IDs and serializable fact records that can be shared

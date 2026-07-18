@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! UX regression test harness for perl-lsp.
 //!
 //! Provides a programmatic simulation of common first-5-minutes user experiences.

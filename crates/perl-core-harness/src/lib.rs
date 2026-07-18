@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Upstream Perl core harness integration scaffold.
 //!
 //! The scaffold can discover tests from a prepared Perl source tree and run the

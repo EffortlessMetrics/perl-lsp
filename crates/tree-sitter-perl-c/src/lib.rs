@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Tree-sitter Perl grammar binding (C FFI).
 //!
 //! This crate is the conventional C/tree-sitter reference implementation for

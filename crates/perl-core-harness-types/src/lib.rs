@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![cfg_attr(clippy, allow(missing_docs))]
+
 //! Shared receipt contracts for the upstream Perl core harness lane.
 
 use clap::ValueEnum;
