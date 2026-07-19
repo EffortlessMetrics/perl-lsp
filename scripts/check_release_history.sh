@@ -225,6 +225,16 @@ if ! python3 scripts/check_release_channel_actuals.py; then
     error "Release-channel actuals drift check failed"
 fi
 
+# ── Check 7: Audited container actuals must not regress ───────────────────────
+
+if ! python3 scripts/check_release_container_actuals.py; then
+    error "Release-container actuals drift check failed"
+fi
+
+if ! python3 scripts/tests/test_release_container_actuals.py; then
+    error "Release-container actuals validator tests failed"
+fi
+
 # ── Exit ──────────────────────────────────────────────────────────────────────
 
 if [[ "$DRIFT_FOUND" -eq 1 ]]; then
