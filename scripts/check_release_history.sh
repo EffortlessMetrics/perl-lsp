@@ -89,6 +89,12 @@ done < <(grep '(CL)' RELEASE_HISTORY.md 2>/dev/null || true)
 
 DRIFT_FOUND=0
 
+# Keep the tag-provenance manifest as a persistent release-history gate. This
+# uses the same full-history checkout and fetched tags as the checks below.
+if ! python3 scripts/check_release_tag_provenance.py --verify-git --repo-root "$REPO_ROOT"; then
+    error "Release-tag provenance drift check failed"
+fi
+
 for tag in "${ALL_TAGS[@]}"; do
     # Skip (CL) entries — they have no tag by definition
     if [[ -n "${CL_ONLY_VERSIONS[$tag]:-}" ]]; then

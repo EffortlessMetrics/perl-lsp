@@ -24,6 +24,10 @@ changed it. The archive therefore preserves both facts:
 A stale historical identifier is evidence. It is not an instruction to move the
 live tag or silently rewrite the original ledger row.
 
+`recorded_reachable` records whether the prior identifier is itself a reachable
+commit object. An annotated tag-object identifier remains false even when Git
+can dereference it to a commit.
+
 ## Audit result
 
 Three different conditions exist.
@@ -138,6 +142,10 @@ The second command fails when:
 
 It deliberately does not contact GitHub. The checkout and fetched refs are the
 operator-controlled input.
+
+The repository's `ci-release-history` gate runs the second command as part of
+its normal tag/history drift check, so provenance verification remains enforced
+after this audit rather than depending on a one-time operator run.
 
 ## Release control going forward
 

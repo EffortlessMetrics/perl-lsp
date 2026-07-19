@@ -6,6 +6,9 @@ audited_at = "2026-07-12"
 # `recorded_sha` preserves the identifier previously written in RELEASE_HISTORY
 # or a standalone release note. A stale record is evidence, not an instruction
 # to move the tag back.
+# `recorded_reachable` is true only when that identifier is itself a reachable
+# commit object; annotated tag-object identifiers remain false even if Git can
+# dereference them to a commit.
 #
 # record_status:
 #   match      - the historical record is a prefix of the live tag commit

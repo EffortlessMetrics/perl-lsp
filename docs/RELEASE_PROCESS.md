@@ -181,6 +181,9 @@ git rev-parse v<0.x.y>^{commit}
 python3 scripts/check_release_tag_provenance.py --verify-git
 ```
 
+The `ci-release-history` gate repeats this verification from the full-history
+checkout, keeping tag provenance as a persistent merge-time control.
+
 Add the new tag, exact 40-character SHA, predecessor, and expected lineage to
 `policy/release-tag-provenance.toml`. A release is not provenance-closed while
 the manifest still says `pending` or the local-git verification fails. See

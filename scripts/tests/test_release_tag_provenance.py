@@ -13,6 +13,7 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
 
 from check_release_tag_provenance import (  # noqa: E402
+    load_manifest,
     validate_manifest,
     verify_git_refs,
 )
@@ -83,6 +84,17 @@ class ManifestValidationTests(unittest.TestCase):
         errors = validate_manifest(manifest)
         self.assertTrue(any("marked stale" in error for error in errors))
 
+    def test_audited_at_must_be_a_calendar_date(self) -> None:
+        manifest = valid_manifest()
+        manifest["audited_at"] = "2026-02-30"
+        errors = validate_manifest(manifest)
+        self.assertTrue(any("audited_at" in error for error in errors))
+
+    def test_committed_manifest_matches_schema(self) -> None:
+        root = SCRIPTS.parent
+        manifest = load_manifest(root / "policy/release-tag-provenance.toml")
+        self.assertEqual([], validate_manifest(manifest))
+
 
 class GitAvailabilityTests(unittest.TestCase):
     @patch("check_release_tag_provenance.shutil.which", return_value=None)
@@ -143,6 +155,30 @@ class GitVerificationTests(unittest.TestCase):
             errors = verify_git_refs(manifest, root)
             self.assertTrue(any("v0.2.0 drifted" in error for error in errors))
             self.assertNotEqual(second, "f" * 40)
+
+    def test_recorded_reachability_claim_is_verified(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.init_repo(root)
+            first = self.write_commit(root, "first")
+            self.run_git(root, "tag", "v0.1.0")
+
+            manifest = {
+                "tag": [
+                    {
+                        "name": "v0.1.0",
+                        "current_sha": first,
+                        "record_status": "match",
+                        "recorded_sha": first[:8],
+                        "recorded_reachable": False,
+                        "lineage": "root",
+                    }
+                ]
+            }
+            errors = verify_git_refs(manifest, root)
+            self.assertTrue(
+                any("recorded_sha" in error and "claimed unreachable" in error for error in errors)
+            )
 
     def test_unlisted_local_release_tag_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

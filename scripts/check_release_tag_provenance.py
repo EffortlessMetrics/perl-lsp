@@ -10,6 +10,7 @@ fetch tags and full history first.
 from __future__ import annotations
 
 import argparse
+from datetime import date
 from pathlib import Path
 import re
 import shutil
@@ -34,6 +35,7 @@ TAG_RE = re.compile(r"^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RECORDED_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 RECORD_STATUSES = {"match", "stale", "unrecorded", "pending"}
 LINEAGE_STATUSES = {"root", "linear", "diverged"}
 
@@ -66,8 +68,17 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
         errors.append("schema_version must be 1")
     if not isinstance(data.get("repository"), str) or not data["repository"]:
         errors.append("repository must be a non-empty string")
-    if not isinstance(data.get("audited_at"), str) or not data["audited_at"]:
-        errors.append("audited_at must be a non-empty ISO date string")
+    audited_at = data.get("audited_at")
+    if (
+        not isinstance(audited_at, str)
+        or ISO_DATE_RE.fullmatch(audited_at) is None
+    ):
+        errors.append("audited_at must be a valid ISO date string (YYYY-MM-DD)")
+    else:
+        try:
+            date.fromisoformat(audited_at)
+        except ValueError:
+            errors.append("audited_at must be a valid ISO date string (YYYY-MM-DD)")
 
     tags = data.get("tag")
     if not isinstance(tags, list) or not tags:
@@ -247,6 +258,30 @@ def verify_git_refs(data: dict[str, Any], repo_root: Path) -> list[str]:
         resolved[name] = actual
         if actual != expected:
             errors.append(f"{name} drifted: manifest={expected} local={actual}")
+
+        recorded_sha = raw.get("recorded_sha")
+        recorded_reachable = raw.get("recorded_reachable")
+        if (
+            isinstance(recorded_sha, str)
+            and RECORDED_SHA_RE.fullmatch(recorded_sha) is not None
+            and isinstance(recorded_reachable, bool)
+        ):
+            recorded_result = _git(repo_root, "cat-file", "-t", recorded_sha)
+            actually_reachable = (
+                recorded_result.returncode == 0
+                and recorded_result.stdout.strip() == "commit"
+            )
+            if actually_reachable != recorded_reachable:
+                claim = "reachable" if recorded_reachable else "unreachable"
+                actual = (
+                    "a reachable commit object"
+                    if actually_reachable
+                    else "not a reachable commit object"
+                )
+                errors.append(
+                    f"{name} recorded_sha {recorded_sha} is claimed {claim}, "
+                    f"but local git says it is {actual}"
+                )
 
     for raw in tags:
         if not isinstance(raw, dict):
