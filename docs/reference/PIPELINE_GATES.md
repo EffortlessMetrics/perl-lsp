@@ -94,6 +94,16 @@ Agents produce learning artifacts as they work:
 
 **Within-gate ordering**: The verification agents (oppositional, diaboli, architecture, maintainer-issue) read the accuracy-corrected issue from Gate 1 and each other's comments. Each builds on the previous. Plan-reviewer synthesizes all prior verdicts. Spec-planner runs after plan-reviewer, creating the impl branch. See [Within-Gate Ordering](#within-gate-ordering) below for the full ordering.
 
+**Decision-shape requirement**: When the proposed work contains a non-trivial
+state machine, label arithmetic, or rule resolution, the spec-planner output
+must include type signatures, ordered pseudo-code for the decision function,
+five to ten worked examples, and an explicit list of genuine unknowns before
+the builder starts. The examples are the acceptance-fixture source for
+red-TDD. See [the spec-planner design contract](../../.claude/agents/spec-planner.md#design-shape-for-decision-heavy-work)
+and [the checklist format](../../.claude/commands/spec-planner-plan.md#design-shape).
+For simpler work, the checklist must state that the design shape is not
+applicable.
+
 **When to skip Gate 2 entirely**: Skip for trivially-mechanical PRs (fmt cascade fixes, version bumps) where the scope is definitionally unambiguous. The "plan" is "apply the formatter."
 
 **When to skip agents within Gate 2**:
