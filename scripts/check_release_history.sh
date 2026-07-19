@@ -219,6 +219,12 @@ if ! run_install_surface_check; then
     error "Install surface drift check failed"
 fi
 
+# ── Check 6: Verified channel actuals must not regress ─────────────────────────
+
+if ! python3 scripts/check_release_channel_actuals.py; then
+    error "Release-channel actuals drift check failed"
+fi
+
 # ── Exit ──────────────────────────────────────────────────────────────────────
 
 if [[ "$DRIFT_FOUND" -eq 1 ]]; then

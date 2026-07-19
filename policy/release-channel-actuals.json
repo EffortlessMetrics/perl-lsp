@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "audited_at": "2026-07-12",
+  "repository": "EffortlessMetrics/perl-lsp",
+  "github_releases": [
+    {
+      "version": "0.15.0",
+      "tag": "v0.15.0",
+      "tag_commit": "ac8e281e73c6e14ae9d94ddf010ae0d45d1187d2",
+      "published_date_utc": "2026-05-22",
+      "release_url": "https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.0"
+    },
+    {
+      "version": "0.15.1",
+      "tag": "v0.15.1",
+      "tag_commit": "15cbe7e6295a67ea0cba506c3cade628ee4847f6",
+      "published_date_utc": "2026-05-26",
+      "release_url": "https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.1"
+    },
+    {
+      "version": "0.15.2",
+      "tag": "v0.15.2",
+      "tag_commit": "746edcb78fe0fa8f48d87386fd4f110502588a87",
+      "published_date_utc": "2026-05-26",
+      "release_url": "https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.2",
+      "closeout_receipt": "docs/releases/0.15.2-closeout-audit.md"
+    },
+    {
+      "version": "0.16.0",
+      "tag": "v0.16.0",
+      "tag_commit": "b6d9f12b995ad8ad78ca641940bd73e4b1a3c26d",
+      "published_date_utc": "2026-06-06",
+      "release_url": "https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.16.0"
+    },
+    {
+      "version": "0.17.0",
+      "tag": "v0.17.0",
+      "tag_commit": "ffee2824938f415e54923112c7b79e3f22040699",
+      "published_date_utc": "2026-06-28",
+      "release_url": "https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.17.0"
+    }
+  ]
+}
