@@ -1344,7 +1344,6 @@ DAP debugging is configured separately via `launch.json` — see [DAP Settings](
 {
   "perl-lsp.includePaths": ["lib", ".", "local/lib/perl5"],
   "perl-lsp.useSystemInc": false,
-  "perl-lsp.enableDiagnostics": true,
   "perl-lsp.enableSemanticTokens": true,
   "perl-lsp.enableFormatting": true
 }

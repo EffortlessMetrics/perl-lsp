@@ -834,6 +834,7 @@ describe('package.json contributes', () => {
         readRepoText('docs/reference/CONFIGURATION.md'),
         readRepoText('docs/how-to/PERFORMANCE_TUNING.md'),
         readRepoText('book/src/getting-started/configuration.md'),
+        readRepoText('docs/reference/CONFIGURATION_SCHEMA.md'),
       ];
       const minimumVersion = pkg.engines.vscode.match(/(\d+\.\d+)/)?.[1];
 
