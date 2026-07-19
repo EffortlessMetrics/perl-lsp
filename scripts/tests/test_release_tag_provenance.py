@@ -180,6 +180,32 @@ class GitVerificationTests(unittest.TestCase):
                 any("recorded_sha" in error and "claimed unreachable" in error for error in errors)
             )
 
+    def test_annotated_tag_object_is_not_a_reachable_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.init_repo(root)
+            first = self.write_commit(root, "first")
+            self.run_git(root, "tag", "-a", "v0.1.0", "-m", "release")
+            tag_object = self.run_git(root, "rev-parse", "v0.1.0")
+
+            manifest = {
+                "tag": [
+                    {
+                        "name": "v0.1.0",
+                        "current_sha": first,
+                        "record_status": "stale",
+                        "recorded_sha": tag_object,
+                        "recorded_reachable": False,
+                        "lineage": "root",
+                    }
+                ]
+            }
+            self.assertEqual([], verify_git_refs(manifest, root))
+
+            manifest["tag"][0]["recorded_reachable"] = True
+            errors = verify_git_refs(manifest, root)
+            self.assertTrue(any("not a reachable commit object" in error for error in errors))
+
     def test_unlisted_local_release_tag_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

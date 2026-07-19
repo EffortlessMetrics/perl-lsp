@@ -175,6 +175,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+          # Release-history verification compares every fetched release tag.
+          fetch-depth: 0
           # Fetch full history so ci-scope can diff against the explicit PR-fast base.
           fetch-depth: 0
 
