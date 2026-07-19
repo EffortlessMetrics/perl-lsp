@@ -942,11 +942,9 @@ launch `perllsp --stdio`.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.enableDiagnostics` | `boolean` | `true` | Real-time syntax diagnostics. |
 | `perl-lsp.enableSemanticTokens` | `boolean` | `true` | Enhanced syntax highlighting. |
 | `perl-lsp.enableFormatting` | `boolean` | `true` | Document formatting. Native formatting is built in; external perltidy is compatibility mode. |
 | `perl-lsp.formatOnSave` | `boolean` | `false` | Auto-format on save. |
-| `perl-lsp.enableRefactoring` | `boolean` | `true` | Advanced refactoring features (rename, extract). |
 | `perl-lsp.enableTestIntegration` | `boolean` | `true` | Test::More and Test2 integration. |
 | `perl-lsp.autoPopulateNewFiles` | `boolean` | `true` | Insert package boilerplate into new `.pm` files and Test::More boilerplate into new `.t` files. Files with existing content are not modified. |
 
