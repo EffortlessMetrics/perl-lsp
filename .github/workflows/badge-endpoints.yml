@@ -89,6 +89,11 @@ jobs:
           git push origin --delete automation/badge-endpoints || echo "automation/badge-endpoints did not exist remotely (or delete failed); continuing -- create-pull-request will create it fresh if needed"
 
       - name: Open badge refresh PR
+        # Opt in only after the repository Actions setting allows the
+        # GITHUB_TOKEN to create pull requests. With the variable absent, the
+        # generated badges remain the successful payload and the PR step is
+        # reported as an intentional manual follow-up below.
+        if: vars.BADGE_ENDPOINTS_AUTO_PR == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           branch: automation/badge-endpoints
@@ -103,3 +108,13 @@ jobs:
             ```bash
             cargo xtask badges
             ```
+
+      - name: Report badge PR creation disabled
+        if: vars.BADGE_ENDPOINTS_AUTO_PR != 'true'
+        shell: bash
+        run: |
+          {
+            echo "::notice title=Badge PR skipped::Automatic badge PR creation is disabled."
+            echo "::notice::Badges were regenerated successfully. To restore automated badge PRs, set repository variable BADGE_ENDPOINTS_AUTO_PR=true after enabling 'Allow GitHub Actions to create and approve pull requests' under Settings > Actions > General."
+            echo "::notice::A maintainer can also open the PR manually from the badges/ diff."
+          }
