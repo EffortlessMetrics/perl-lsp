@@ -19,7 +19,7 @@ This guide helps you set up and configure the Perl Language Server in Visual Stu
 
 ### Required
 
-- **VS Code** version 1.116 or later
+- **VS Code** version 1.125 or later
 - **EffortlessMetrics.perl-lsp-rs** extension installed (see [Installation](#installation))
 
 The extension auto-downloads the matching `perllsp` server by default. Manual
@@ -135,11 +135,9 @@ Add to your workspace `.vscode/settings.json`:
   "perl-lsp.serverPath": "",
   "perl-lsp.autoDownload": true,
   "perl-lsp.trace.server": "off",
-  "perl-lsp.enableDiagnostics": true,
   "perl-lsp.enableSemanticTokens": true,
   "perl-lsp.enableFormatting": true,
   "perl-lsp.formatOnSave": false,
-  "perl-lsp.enableRefactoring": true,
   "perl-lsp.includePaths": ["lib", ".", "local/lib/perl5"],
   "perl-lsp.enableTestIntegration": true
 }
@@ -188,12 +186,10 @@ settings.
 | `perl-lsp.serverPath` | string | `""` | Absolute path to the `perllsp` binary. Leave empty to auto-download. |
 | `perl-lsp.autoDownload` | boolean | `true` | Auto-download `perllsp` binary if not found locally. |
 | `perl-lsp.includePaths` | array | `["lib", ".", "local/lib/perl5"]` | Additional library paths to search for Perl modules. |
-| `perl-lsp.enableDiagnostics` | boolean | `true` | Enable real-time syntax diagnostics. |
 | `perl-lsp.enableSemanticTokens` | boolean | `true` | Enable semantic syntax highlighting. |
 | `perl-lsp.perltidyConfig` | string | `""` | Path to `.perltidyrc` compatibility file. Native formatting is the default path. |
 | `perl-lsp.enableFormatting` | boolean | `true` | Enable native document formatting. |
 | `perl-lsp.formatOnSave` | boolean | `false` | Format document on save. |
-| `perl-lsp.enableRefactoring` | boolean | `true` | Enable refactoring-related code actions. |
 | `perl-lsp.enableTestIntegration` | boolean | `true` | Enable `Test::More` and `Test2` integration. |
 | `perl-lsp.autoPopulateNewFiles` | boolean | `true` | Auto-populate new `.pm` and `.t` files with boilerplate. |
 | `perl-lsp.perlcritic.enabled` | boolean | `true` | Enable native critic diagnostics. |
@@ -431,14 +427,8 @@ Example:
    - Ensure file has `.pl`, `.pm`, or `.t` extension
    - Check language mode: Click language indicator in status bar → select "Perl"
 
-2. **Verify diagnostics enabled**:
-   ```json
-   {
-     "perl-lsp.enableDiagnostics": true
-   }
-   ```
-
-3. **Check for syntax errors in configuration**:
+2. **Check the extension health check and output**:
+   - Press `Ctrl+Shift+P` → "Perl: Run Health Check"
    - Open Output panel → "Perl Language Server"
    - Look for configuration errors
 
@@ -645,11 +635,9 @@ Here is a typical `.vscode/settings.json` for a Perl project using only real ext
   "perl-lsp.serverPath": "",
   "perl-lsp.autoDownload": true,
   "perl-lsp.trace.server": "off",
-  "perl-lsp.enableDiagnostics": true,
   "perl-lsp.enableSemanticTokens": true,
   "perl-lsp.enableFormatting": true,
   "perl-lsp.formatOnSave": true,
-  "perl-lsp.enableRefactoring": true,
   "perl-lsp.enableTestIntegration": true,
   "perl-lsp.includePaths": [
     "lib",

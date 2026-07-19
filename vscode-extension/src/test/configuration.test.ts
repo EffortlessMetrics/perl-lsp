@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const EXT_ROOT = path.resolve(__dirname, '..', '..');
+const REPO_ROOT = path.resolve(EXT_ROOT, '..');
 
 interface AutoClosingPair {
   open: string;
@@ -153,6 +154,10 @@ type SnippetCatalog = Record<string, Snippet>;
 function readJson<T>(relativePath: string): T {
   const fullPath = path.join(EXT_ROOT, relativePath);
   return JSON.parse(fs.readFileSync(fullPath, 'utf8')) as T;
+}
+
+function readRepoText(relativePath: string): string {
+  return fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
 }
 
 function required<T>(value: T | undefined, label: string): T {
@@ -817,6 +822,22 @@ describe('package.json contributes', () => {
       expect(entry).toBeDefined();
       // Should be available globally (no when clause restricting to perl)
       expect(entry.when ?? '').not.toMatch(/editorLangId/);
+    });
+  });
+
+  describe('documentation parity', () => {
+    test('documents the manifest minimum VS Code version and only real settings', () => {
+      const setupGuide = readRepoText('docs/EDITORS/VS_CODE_SETUP.md');
+      const configReference = readRepoText('docs/reference/CONFIG.md');
+      const minimumVersion = pkg.engines.vscode.match(/(\d+\.\d+)/)?.[1];
+
+      expect(minimumVersion).toBeDefined();
+      expect(setupGuide).toContain(`VS Code** version ${minimumVersion} or later`);
+
+      for (const document of [setupGuide, configReference]) {
+        expect(document).not.toContain('perl-lsp.enableDiagnostics');
+        expect(document).not.toContain('perl-lsp.enableRefactoring');
+      }
     });
   });
 
