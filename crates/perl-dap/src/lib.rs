@@ -415,7 +415,9 @@ pub mod var_ref {
 // Re-export codec types at crate root for ergonomic use in tests and consumer crates.
 pub use debug_adapter::var_ref::{ScopeKind, VariableReference, VariableReferenceError};
 
-// Re-export Phase 1 public types
+// Re-export Phase 1 public types. The bridge symbols remain available for
+// compatibility, but their deprecation diagnostics should be visible to users.
+#[allow(deprecated)]
 pub use bridge_adapter::{BridgeAdapter, DapBridgeEnvConfig};
 pub use configuration::{
     AttachConfiguration, LaunchConfiguration, create_attach_json_snippet,
