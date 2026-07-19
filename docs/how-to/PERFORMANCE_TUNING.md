@@ -662,11 +662,9 @@ For maximum features with acceptable performance:
 ```json
 {
   "perl-lsp.trace.server": "off",
-  "perl-lsp.enableDiagnostics": true,
   "perl-lsp.enableSemanticTokens": true,
   "perl-lsp.enableFormatting": true,
   "perl-lsp.formatOnSave": false,
-  "perl-lsp.enableRefactoring": true,
   "perl-lsp.includePaths": ["lib", ".", "local/lib/perl5"],
   "perl-lsp.useSystemInc": false,
   "perl-lsp.resolutionTimeout": 50,
