@@ -508,11 +508,9 @@ Every `.perl-lsp.toml` setting has a VSCode `settings.json` counterpart. The tab
   "perl-lsp.autoDownload": true,
   "perl-lsp.channel": "latest",
   "perl-lsp.trace.server": "off",
-  "perl-lsp.enableDiagnostics": true,
   "perl-lsp.enableSemanticTokens": true,
   "perl-lsp.enableFormatting": true,
   "perl-lsp.formatOnSave": false,
-  "perl-lsp.enableRefactoring": true,
   "perl-lsp.enableTestIntegration": true,
   "perl-lsp.includePaths": ["lib", "local/lib/perl5"]
 }

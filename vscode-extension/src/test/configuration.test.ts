@@ -829,12 +829,18 @@ describe('package.json contributes', () => {
     test('documents the manifest minimum VS Code version and only real settings', () => {
       const setupGuide = readRepoText('docs/EDITORS/VS_CODE_SETUP.md');
       const configReference = readRepoText('docs/reference/CONFIG.md');
+      const canonicalReferences = [
+        readRepoText('docs/EXTENSION.md'),
+        readRepoText('docs/reference/CONFIGURATION.md'),
+        readRepoText('docs/how-to/PERFORMANCE_TUNING.md'),
+        readRepoText('book/src/getting-started/configuration.md'),
+      ];
       const minimumVersion = pkg.engines.vscode.match(/(\d+\.\d+)/)?.[1];
 
       expect(minimumVersion).toBeDefined();
       expect(setupGuide).toContain(`VS Code** version ${minimumVersion} or later`);
 
-      for (const document of [setupGuide, configReference]) {
+      for (const document of [setupGuide, configReference, ...canonicalReferences]) {
         expect(document).not.toContain('perl-lsp.enableDiagnostics');
         expect(document).not.toContain('perl-lsp.enableRefactoring');
       }

@@ -516,15 +516,6 @@ Specific release tag (e.g., `v0.8.3`) when channel is set to `tag`.
 
 Trace server communication for debugging.
 
-### `perl-lsp.enableDiagnostics`
-
-| Property | Value |
-|----------|-------|
-| Type | `boolean` |
-| Default | `true` |
-
-Enable real-time syntax diagnostics.
-
 ### `perl-lsp.enableSemanticTokens`
 
 | Property | Value |
@@ -551,15 +542,6 @@ Enable document formatting.
 | Default | `false` |
 
 Format document on save.
-
-### `perl-lsp.enableRefactoring`
-
-| Property | Value |
-|----------|-------|
-| Type | `boolean` |
-| Default | `true` |
-
-Enable advanced refactoring features.
 
 ### `perl-lsp.perltidyConfig`
 

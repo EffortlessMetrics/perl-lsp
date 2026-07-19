@@ -35,11 +35,9 @@ The Marketplace package is designed to work with `PATH`, `serverPath`, or runtim
 | `perl-lsp.autoDownload` | `true` | Download `perl-lsp` automatically when it is not bundled, configured, or on `PATH`. |
 | `perl-lsp.downloadBaseUrl` | `""` | Override the download host for internal mirrors. |
 | `perl-lsp.trace.server` | `"off"` | LSP trace level: `off`, `messages`, or `verbose`. |
-| `perl-lsp.enableDiagnostics` | `true` | Enable server diagnostics. |
 | `perl-lsp.enableSemanticTokens` | `true` | Enable semantic token highlighting. |
 | `perl-lsp.enableFormatting` | `true` | Enable formatting integration. |
 | `perl-lsp.formatOnSave` | `false` | Request formatting on save. |
-| `perl-lsp.enableRefactoring` | `true` | Enable server-supplied refactoring code actions where supported. |
 | `perl-lsp.perltidyConfig` | `""` | Path to a `.perltidyrc` compatibility file. Native formatting is the default path. |
 | `perl-lsp.includePaths` | `["lib", "local/lib/perl5"]` | Additional Perl include paths passed to the server. |
 | `perl-lsp.enableTestIntegration` | `true` | Enable test integration for `.t` and runnable `.pl` files. |
