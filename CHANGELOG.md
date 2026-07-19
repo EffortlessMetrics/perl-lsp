@@ -1139,7 +1139,8 @@ Release notes: [v0.13.0-rc1](docs/releases/v0.13.0-rc1.md)
 
 ### Migration
 
-- **Microcrate collapse complete — migration guide available** — v0.13.0 drops the
+- **Microcrate collapse complete — migration guide available** — The 0.13.0-rc1/0.13
+  train drops the
   published crate count from 132 to 32 across 10+ collapse waves. All ~100 retired
   crate names stop appearing on crates.io after this release; their code lives as
   subfolder modules inside the owning published crate. See
@@ -2348,7 +2349,7 @@ For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HIS
 
 <!-- Compare ranges -->
 [0.13.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.1...v0.13.2
-[0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0...v0.13.1
+[0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0-rc1...v0.13.1
 [0.12.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.3...v0.12.4
 [0.12.3]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.1...v0.12.2

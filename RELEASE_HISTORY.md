@@ -50,7 +50,9 @@ Tag commit timestamps may differ from release dates.
 ### 2026-07-12 — 0.13 release boundaries
 
 The ledger rows are append-only. The following corrections supersede the cited
-cells without erasing the original record:
+cells without erasing the original record. The rows above are retained as
+historical snapshots; use the corrected interpretations below for current
+lineage and publication claims.
 
 | Entry | Original ledger statement | Corrected interpretation |
 |---|---|---|
