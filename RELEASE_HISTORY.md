@@ -63,6 +63,33 @@ lineage and publication claims.
 The original `v0.13.4` asset count and channel cells are not evidence of a
 standalone 0.13.4 publication and should not be used as such.
 
+### 2026-07-12 — live tag SHA and branch-line audit
+
+The live ref audit found that several tag SHAs previously written in this ledger
+or standalone release notes no longer match the commit reached by the named tag.
+For multiple affected releases, the originally recorded full SHA no longer
+resolves in the repository.
+
+The complete immutable inventory is maintained in
+[`policy/release-tag-provenance.toml`](policy/release-tag-provenance.toml), with
+human guidance in [`docs/releases/TAG_PROVENANCE.md`](docs/releases/TAG_PROVENANCE.md).
+The original rows above remain unchanged as historical evidence.
+
+Key corrections:
+
+- the current tags from `v0.1.0-pest` through `v0.8.5` are linear even though
+  most of their recorded SHAs are stale;
+- `v0.8.5` and `v0.9.1` are divergent, so their GitHub comparison is not a
+  forward release range;
+- `v0.11.0` descends from `v0.9.1`, not from the divergent `v0.8.5` line;
+- the live refs for `v0.15.0`, `v0.16.0`, and `v0.17.0` are now pinned in the
+  provenance manifest instead of remaining `pending` only;
+- affected `Tag commit` cells in the original table are prior recorded values,
+  not current live-ref truth. Use the provenance manifest for current SHAs.
+
+No cause, actor, or rewrite date is inferred from the mismatch. The correction
+records observable repository state and installs a drift guard.
+
 ### Legend
 
 - **"—"** = does not exist / not applicable
@@ -173,7 +200,8 @@ standalone 0.13.4 publication and should not be used as such.
 [v0.12.1...v0.12.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.1...v0.12.2
 [v0.12.0...v0.12.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.0...v0.12.1
 [v0.11.0...v0.12.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.11.0...v0.12.0
-[v0.8.5...v0.11.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.11.0
+[v0.9.1...v0.11.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.9.1...v0.11.0
+[v0.8.5...v0.11.0]: docs/releases/TAG_PROVENANCE.md
 [v0.8.3...v0.8.5]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.3...v0.8.5
 
 <!-- Channels -->

@@ -1,0 +1,263 @@
+schema_version = 1
+repository = "EffortlessMetrics/perl-lsp"
+audited_at = "2026-07-12"
+
+# `current_sha` is the commit reached by the live tag ref at audit time.
+# `recorded_sha` preserves the identifier previously written in RELEASE_HISTORY
+# or a standalone release note. A stale record is evidence, not an instruction
+# to move the tag back.
+# `recorded_reachable` is true only when that identifier is itself a reachable
+# commit object; annotated tag-object identifiers remain false even if Git can
+# dereference them to a commit.
+#
+# record_status:
+#   match      - the historical record is a prefix of the live tag commit
+#   stale      - the historical record differs from the live tag commit
+#   unrecorded - the tag existed but no immutable SHA was in the prior ledger
+#   pending    - the prior ledger explicitly recorded the tag SHA as pending
+#
+# lineage:
+#   root       - no predecessor is asserted
+#   linear     - predecessor is an ancestor of this tag
+#   diverged   - neither tag is an ancestor of the other
+
+[[tag]]
+name = "v0.1.0-pest"
+current_sha = "4f92dc575418b5870f5d655ae0d63c4ff125627b"
+record_status = "match"
+recorded_sha = "4f92dc57"
+recorded_reachable = true
+lineage = "root"
+
+[[tag]]
+name = "v0.5.0"
+current_sha = "8ed7583658e588c1c42a23794951375e25884319"
+record_status = "stale"
+recorded_sha = "60190640"
+recorded_reachable = false
+predecessor = "v0.1.0-pest"
+lineage = "linear"
+
+[[tag]]
+name = "v0.7.2"
+current_sha = "79d372e9867ba4bc374ea0e535f29368f5896108"
+record_status = "stale"
+recorded_sha = "a19ba90b"
+recorded_reachable = false
+predecessor = "v0.5.0"
+lineage = "linear"
+
+[[tag]]
+name = "v0.7.3"
+current_sha = "4149fee1b20594d9412e1bec167facedcf301475"
+record_status = "stale"
+recorded_sha = "20751374"
+recorded_reachable = false
+predecessor = "v0.7.2"
+lineage = "linear"
+
+[[tag]]
+name = "v0.8.0"
+current_sha = "a9534827f975ffff358d23801a52d153684f2df4"
+record_status = "stale"
+recorded_sha = "2eeb06c5"
+recorded_reachable = false
+predecessor = "v0.7.3"
+lineage = "linear"
+
+[[tag]]
+name = "v0.8.2"
+current_sha = "9d7584d09d2120193a9cc0ac92618fc67939b473"
+record_status = "stale"
+recorded_sha = "0b962684"
+recorded_reachable = false
+predecessor = "v0.8.0"
+lineage = "linear"
+
+[[tag]]
+name = "v0.8.3-rc1"
+current_sha = "150a22b1eda3602b9f81ad1ee5640c50feafd9cb"
+record_status = "match"
+recorded_sha = "150a22b1"
+recorded_reachable = true
+predecessor = "v0.8.2"
+lineage = "linear"
+
+[[tag]]
+name = "v0.8.3"
+current_sha = "274005de298a02cfb8f56f534dde8e3a4b55b7a7"
+record_status = "stale"
+recorded_sha = "5331007a215cfc0cef4e41cee958d62b2504527a"
+recorded_reachable = false
+predecessor = "v0.8.3-rc1"
+lineage = "linear"
+
+[[tag]]
+name = "v0.8.5"
+current_sha = "a6ca88fb39bede9a8f0d244e0d5996a4dd9c8b3c"
+record_status = "stale"
+recorded_sha = "ae75da03226fa31c17e695b3c96fb0e4be687263"
+recorded_reachable = false
+predecessor = "v0.8.3"
+lineage = "linear"
+
+[[tag]]
+name = "v0.9.1"
+current_sha = "0e52877de7763d8654e0fb6d7afe6a257639e584"
+record_status = "stale"
+recorded_sha = "c82a1604987f315868973a4e5804112e031cec92"
+recorded_reachable = false
+predecessor = "v0.8.5"
+lineage = "diverged"
+note = "The current v0.9.1 ref is on a separate historical line from v0.8.5; neither is an ancestor of the other."
+
+[[tag]]
+name = "v0.11.0"
+current_sha = "8dfa68860cdf8fc220b1345d3b943668d1393ad2"
+record_status = "stale"
+recorded_sha = "d22ac7346c832db6b92c41d354eb90099f8b5d53"
+recorded_reachable = false
+predecessor = "v0.9.1"
+lineage = "linear"
+note = "0.10.0 is a changelog-only milestone, not a tag."
+
+[[tag]]
+name = "v0.12.0"
+current_sha = "68613d83c2055dc2d79ecab7f4f564832369f462"
+record_status = "stale"
+recorded_sha = "4c909c2dd782ab4afce1934c910ad9e7eec3c1d2"
+recorded_reachable = false
+predecessor = "v0.11.0"
+lineage = "linear"
+
+[[tag]]
+name = "v0.12.1"
+current_sha = "5ee16c2c7527830bf3f82ab9753f57a2252901ce"
+record_status = "stale"
+recorded_sha = "7e8984b5c24a1377fac8e4fcba7a4450eb674c14"
+recorded_reachable = false
+predecessor = "v0.12.0"
+lineage = "linear"
+
+[[tag]]
+name = "v0.12.2"
+current_sha = "6e4e622305a1cd885f8a2562b841c378930ceea5"
+record_status = "stale"
+recorded_sha = "1c0620d8ae6b0f09e7146cbd389a5d0619952b78"
+recorded_reachable = false
+predecessor = "v0.12.1"
+lineage = "linear"
+
+[[tag]]
+name = "v0.12.3"
+current_sha = "cc801735b004f89dc1c1b8789658f7abc73bf4aa"
+record_status = "stale"
+recorded_sha = "a86af2211169c2f7799f4b52256a3e34e576cbfd"
+recorded_reachable = false
+predecessor = "v0.12.2"
+lineage = "linear"
+
+[[tag]]
+name = "v0.12.4"
+current_sha = "181d2b2d2d8a5fc7e65fbceda648117eb04631a9"
+record_status = "stale"
+recorded_sha = "5ebb37aad3ebedec59fb8626a5d82f6878199f7b"
+recorded_reachable = false
+predecessor = "v0.12.3"
+lineage = "linear"
+
+[[tag]]
+name = "v0.13.0-rc1"
+current_sha = "4e4099cdd9f5e29f21412285224cfc95db4f9c53"
+record_status = "unrecorded"
+predecessor = "v0.12.4"
+lineage = "linear"
+note = "The tag was absent from the canonical ledger before the 2026-07-12 lineage correction."
+
+[[tag]]
+name = "v0.13.1"
+current_sha = "6ef20484183bbecada1a0db4b3c9f592df86c243"
+record_status = "match"
+recorded_sha = "6ef20484"
+recorded_reachable = true
+predecessor = "v0.13.0-rc1"
+lineage = "linear"
+
+[[tag]]
+name = "v0.13.2"
+current_sha = "0e9c5d789836938845dbe0921549cde881f47a21"
+record_status = "match"
+recorded_sha = "0e9c5d78"
+recorded_reachable = true
+predecessor = "v0.13.1"
+lineage = "linear"
+
+[[tag]]
+name = "v0.13.3"
+current_sha = "06fc1443dc7a38485f67b0b5a133b199e2aea6f6"
+record_status = "match"
+recorded_sha = "06fc1443"
+recorded_reachable = true
+predecessor = "v0.13.2"
+lineage = "linear"
+
+[[tag]]
+name = "v0.14.0"
+current_sha = "977709e0bd23fd13b1c3db309b7a925098226eaf"
+record_status = "stale"
+recorded_sha = "82e64200"
+recorded_reachable = false
+predecessor = "v0.13.3"
+lineage = "linear"
+note = "No v0.13.4 tag exists; the current v0.13.3...v0.14.0 range includes the untagged 0.13.4 milestone."
+
+[[tag]]
+name = "v0.15.0"
+current_sha = "ac8e281e73c6e14ae9d94ddf010ae0d45d1187d2"
+record_status = "pending"
+predecessor = "v0.14.0"
+lineage = "linear"
+
+[[tag]]
+name = "v0.15.1"
+current_sha = "15cbe7e6295a67ea0cba506c3cade628ee4847f6"
+record_status = "match"
+recorded_sha = "15cbe7e6"
+recorded_reachable = true
+predecessor = "v0.15.0"
+lineage = "linear"
+
+[[tag]]
+name = "v0.15.2"
+current_sha = "746edcb78fe0fa8f48d87386fd4f110502588a87"
+record_status = "match"
+recorded_sha = "746edcb7"
+recorded_reachable = true
+predecessor = "v0.15.1"
+lineage = "linear"
+
+[[tag]]
+name = "v0.16.0"
+current_sha = "b6d9f12b995ad8ad78ca641940bd73e4b1a3c26d"
+record_status = "pending"
+predecessor = "v0.15.2"
+lineage = "linear"
+note = "The source tag is linear from v0.15.2, but its logical swarm squash commits were connected only by the later v0.17.0 merge."
+
+[[tag]]
+name = "v0.17.0"
+current_sha = "ffee2824938f415e54923112c7b79e3f22040699"
+record_status = "pending"
+predecessor = "v0.16.0"
+lineage = "linear"
+note = "The source comparison imports delayed v0.16.0 logical history and is inflated for logical release accounting."
+
+[[missing_tag]]
+version = "0.13.0"
+status = "never-cut"
+note = "The tagged line moved from v0.13.0-rc1 directly to v0.13.1."
+
+[[missing_tag]]
+version = "0.13.4"
+status = "prepared-only"
+note = "The workspace carried 0.13.4, but the next actual tag after v0.13.3 was v0.14.0."
