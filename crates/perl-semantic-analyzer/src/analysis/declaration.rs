@@ -6,6 +6,7 @@
 use crate::ast::{GotoTargetForm, Node, NodeKind};
 use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
+use perl_parser_core::qualified_name::split_qualified_name;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
@@ -540,7 +541,7 @@ impl<'a> DeclarationProvider<'a> {
         // If we have a target package, find subs in that specific package
         if let Some(pkg_name) = target_package {
             if let Some(decl) =
-                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg_name))
+                declarations.iter().find(|d| self.declaration_matches_package(d, pkg_name))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -548,10 +549,8 @@ impl<'a> DeclarationProvider<'a> {
                     self.get_subroutine_name_range(decl),
                 )]);
             }
-        }
-
-        // Otherwise return the first match
-        if let Some(decl) = declarations.first() {
+        } else if let Some(decl) = declarations.first() {
+            // An unqualified call resolves against the surrounding package.
             return Some(vec![self.create_location_link(
                 node,
                 decl,
@@ -597,7 +596,7 @@ impl<'a> DeclarationProvider<'a> {
             self.collect_subroutine_declarations(&self.ast, method_name, &mut declarations);
 
             if let Some(decl) =
-                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg))
+                declarations.iter().find(|d| self.declaration_matches_package(d, pkg))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -842,6 +841,22 @@ impl<'a> DeclarationProvider<'a> {
         None
     }
 
+    /// Return whether a declaration belongs to a requested package.
+    ///
+    /// A qualified subroutine such as `sub Foo::bar` belongs to `Foo` even
+    /// when it appears inside a different enclosing package. Bare
+    /// declarations and other callable nodes continue to use their enclosing
+    /// package context.
+    fn declaration_matches_package(&self, node: &Node, package_name: &str) -> bool {
+        if let NodeKind::Subroutine { name: Some(name), .. } = &node.kind {
+            let (qualifier, _) = split_qualified_name(name);
+            return qualifier == Some(package_name)
+                || (qualifier.is_none() && self.find_current_package(node) == Some(package_name));
+        }
+
+        self.find_current_package(node) == Some(package_name)
+    }
+
     /// Create a location link
     fn create_location_link(
         &self,
@@ -879,7 +894,12 @@ impl<'a> DeclarationProvider<'a> {
         subs: &mut Vec<&'b Node>,
     ) {
         match &node.kind {
-            NodeKind::Subroutine { name: Some(name_str), .. } if name_str == sub_name => {
+            // Strip the package qualifier so a qualified declaration like
+            // `sub Foo::bar` matches a bare lookup for `bar` (issue #6751),
+            // mirroring the typeglob arm below.
+            NodeKind::Subroutine { name: Some(name_str), .. }
+                if split_qualified_name(name_str).1 == sub_name =>
+            {
                 subs.push(node);
             }
             // Method declarations (Perl 5.38+ native class / Object::Pad).
@@ -2565,6 +2585,59 @@ mod tests {
             packages.is_empty(),
             "collect_package_declarations must NOT collect Foo when searching for Bar; got {count} node(s)",
             count = packages.len()
+        );
+    }
+
+    /// Regression test for issue #6751: a package-qualified declaration
+    /// (`sub Foo::bar`) stores its name as "Foo::bar"; searching for the bare
+    /// name `bar` must still find it. Before the fix, `name_str == sub_name`
+    /// compared "Foo::bar" to "bar" and the declaration was silently missed.
+    #[test]
+    fn collect_subroutine_declarations_matches_qualified_decl_by_bare_name() {
+        let source = "sub Foo::bar { return 1; }";
+        let provider = make_provider(source);
+        let mut subs = Vec::new();
+        provider.collect_subroutine_declarations(&provider.ast, "bar", &mut subs);
+        assert!(
+            !subs.is_empty(),
+            "collect_subroutine_declarations must find qualified `sub Foo::bar` when searching for bare 'bar'; got empty vec"
+        );
+        assert!(
+            matches!(&subs[0].kind, NodeKind::Subroutine { name: Some(n), .. } if n == "Foo::bar"),
+            "collected declaration must be the Subroutine node named 'Foo::bar'"
+        );
+    }
+
+    /// Boundary discriminator for the qualified-name comparison (issue #6751):
+    /// a declaration whose bare name differs from the target must NOT match,
+    /// even when it carries a package qualifier.
+    #[test]
+    fn collect_subroutine_declarations_rejects_qualified_decl_with_different_bare_name() {
+        let source = "sub Foo::bar { return 1; }";
+        let provider = make_provider(source);
+        let mut subs = Vec::new();
+        provider.collect_subroutine_declarations(&provider.ast, "baz", &mut subs);
+        assert!(
+            subs.is_empty(),
+            "collect_subroutine_declarations must NOT collect `sub Foo::bar` when searching for 'baz'; got {count} node(s)",
+            count = subs.len()
+        );
+    }
+
+    /// A qualified declaration belongs to its explicit package, even when
+    /// the source is currently inside a different package.
+    #[test]
+    fn qualified_subroutine_resolution_uses_explicit_package() {
+        let source = "package Other;\nsub Foo::bar { return 1; }\n";
+        let provider = make_provider(source);
+
+        assert!(
+            provider.find_subroutine_declaration(&provider.ast, "Foo::bar").is_some(),
+            "qualified Foo::bar must resolve from its explicit package"
+        );
+        assert!(
+            provider.find_subroutine_declaration(&provider.ast, "Other::bar").is_none(),
+            "qualified Foo::bar must not resolve as an Other::bar declaration"
         );
     }
 
