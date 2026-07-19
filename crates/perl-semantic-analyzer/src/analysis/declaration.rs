@@ -541,7 +541,7 @@ impl<'a> DeclarationProvider<'a> {
         // If we have a target package, find subs in that specific package
         if let Some(pkg_name) = target_package {
             if let Some(decl) =
-                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg_name))
+                declarations.iter().find(|d| self.declaration_matches_package(d, pkg_name))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -549,10 +549,8 @@ impl<'a> DeclarationProvider<'a> {
                     self.get_subroutine_name_range(decl),
                 )]);
             }
-        }
-
-        // Otherwise return the first match
-        if let Some(decl) = declarations.first() {
+        } else if let Some(decl) = declarations.first() {
+            // An unqualified call resolves against the surrounding package.
             return Some(vec![self.create_location_link(
                 node,
                 decl,
@@ -598,7 +596,7 @@ impl<'a> DeclarationProvider<'a> {
             self.collect_subroutine_declarations(&self.ast, method_name, &mut declarations);
 
             if let Some(decl) =
-                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg))
+                declarations.iter().find(|d| self.declaration_matches_package(d, pkg))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -841,6 +839,22 @@ impl<'a> DeclarationProvider<'a> {
         }
 
         None
+    }
+
+    /// Return whether a declaration belongs to a requested package.
+    ///
+    /// A qualified subroutine such as `sub Foo::bar` belongs to `Foo` even
+    /// when it appears inside a different enclosing package. Bare
+    /// declarations and other callable nodes continue to use their enclosing
+    /// package context.
+    fn declaration_matches_package(&self, node: &Node, package_name: &str) -> bool {
+        if let NodeKind::Subroutine { name: Some(name), .. } = &node.kind {
+            let (qualifier, _) = split_qualified_name(name);
+            return qualifier == Some(package_name)
+                || (qualifier.is_none() && self.find_current_package(node) == Some(package_name));
+        }
+
+        self.find_current_package(node) == Some(package_name)
     }
 
     /// Create a location link
@@ -2607,6 +2621,23 @@ mod tests {
             subs.is_empty(),
             "collect_subroutine_declarations must NOT collect `sub Foo::bar` when searching for 'baz'; got {count} node(s)",
             count = subs.len()
+        );
+    }
+
+    /// A qualified declaration belongs to its explicit package, even when
+    /// the source is currently inside a different package.
+    #[test]
+    fn qualified_subroutine_resolution_uses_explicit_package() {
+        let source = "package Other;\nsub Foo::bar { return 1; }\n";
+        let provider = make_provider(source);
+
+        assert!(
+            provider.find_subroutine_declaration(&provider.ast, "Foo::bar").is_some(),
+            "qualified Foo::bar must resolve from its explicit package"
+        );
+        assert!(
+            provider.find_subroutine_declaration(&provider.ast, "Other::bar").is_none(),
+            "qualified Foo::bar must not resolve as an Other::bar declaration"
         );
     }
 

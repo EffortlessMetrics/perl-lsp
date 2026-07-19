@@ -399,13 +399,14 @@ impl ImplementationProvider {
                         // Compare bare names so a qualified declaration such as
                         // `sub Foo::process` matches a lookup for `process`
                         // (issue #6751), mirroring `find_method_in_ast`.
-                        let (_, sub_bare) =
+                        let (sub_package, sub_bare) =
                             perl_parser::qualified_name::split_qualified_name(sub_name);
                         let (_, method_bare) =
                             perl_parser::qualified_name::split_qualified_name(method_name);
-                        if current_package.as_deref() == Some(package_name)
-                            && sub_bare == method_bare
-                        {
+                        let package_matches = sub_package == Some(package_name)
+                            || (sub_package.is_none()
+                                && current_package.as_deref() == Some(package_name));
+                        if package_matches && sub_bare == method_bare {
                             let target_uri = parse_uri(uri);
                             results.push(LocationLink {
                                 origin_selection_range: None,
@@ -653,6 +654,41 @@ mod tests {
             &mut results,
         );
         assert!(results.is_empty(), "sub declared in package Other must not match package Foo");
+        Ok(())
+    }
+
+    /// A qualified declaration belongs to its explicit package, even when it
+    /// appears inside a different enclosing package.
+    #[test]
+    fn find_method_in_package_uses_explicit_qualified_package()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "package Other;\nsub Foo::process { return 1; }\n";
+        let ast = parse(source)?;
+        let provider = ImplementationProvider::new(None);
+        let mut foo_results = Vec::new();
+        provider.find_method_in_package(
+            &ast,
+            "process",
+            "Foo",
+            "file:///test.pl",
+            source,
+            &mut foo_results,
+        );
+        assert_eq!(foo_results.len(), 1, "Foo::process must resolve under Foo");
+
+        let mut other_results = Vec::new();
+        provider.find_method_in_package(
+            &ast,
+            "process",
+            "Other",
+            "file:///test.pl",
+            source,
+            &mut other_results,
+        );
+        assert!(
+            other_results.is_empty(),
+            "Foo::process must not resolve under its enclosing package Other"
+        );
         Ok(())
     }
 }
