@@ -369,7 +369,10 @@ pub mod engine;
 pub use engine::{error, parser, position};
 
 /// Recursive descent Perl parser with error recovery and AST generation.
-pub use core::{Node, NodeKind, ParseError, ParseOutput, ParseResult, Parser, SourceLocation};
+pub use core::{
+    ErrorCategory, ErrorClass, Node, NodeKind, ParseError, ParseOutput, ParseResult, Parser,
+    SourceLocation,
+};
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
