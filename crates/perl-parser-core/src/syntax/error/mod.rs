@@ -350,7 +350,7 @@ impl BudgetTracker {
 pub type ParseResult<T> = Result<T, ParseError>;
 
 /// Operational category used by agentic tooling to route parser failures.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ErrorCategory {
     /// The diagnostic is informational and does not describe invalid input.
@@ -1238,8 +1238,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_error_routing_distinguishes_operational_classes()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn parse_error_routing_distinguishes_operational_classes() {
         let cases = [
             (ParseError::UnexpectedEof, ErrorCategory::UserError),
             (
@@ -1262,11 +1261,10 @@ mod tests {
         for (error, expected) in cases {
             assert_eq!(error.error_class(), expected);
         }
-        Ok(())
     }
 
     #[test]
-    fn error_category_tokens_are_stable() -> Result<(), Box<dyn std::error::Error>> {
+    fn error_category_tokens_are_stable() {
         let cases = [
             (ErrorCategory::Advisory, "advisory"),
             (ErrorCategory::UserError, "user_error"),
@@ -1280,6 +1278,5 @@ mod tests {
         for (category, expected) in cases {
             assert_eq!(category.as_str(), expected);
         }
-        Ok(())
     }
 }
