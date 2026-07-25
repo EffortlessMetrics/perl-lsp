@@ -133,7 +133,7 @@ files = [
   "crates/perl-lsp-rs/src/",
 ]
 commands = [
-  "rtk cargo test -p perl-lsp-rs",
+  "cargo test -p perl-lsp-rs",
 ]
 
 [[work_item]]
@@ -145,7 +145,7 @@ files = [
   "crates/perl-lsp-rs/src/",
 ]
 commands = [
-  "rtk cargo test -p perl-lsp-rs",
+  "cargo test -p perl-lsp-rs",
 ]
 
 [[work_item]]
@@ -157,7 +157,7 @@ files = [
   "crates/perl-lsp-rs/src/",
 ]
 commands = [
-  "rtk cargo test -p perl-lsp-rs",
+  "cargo test -p perl-lsp-rs",
 ]
 
 [[work_item]]
@@ -169,7 +169,7 @@ files = [
   "crates/perl-lsp-rs/src/",
 ]
 commands = [
-  "rtk cargo test -p perl-lsp-rs",
+  "cargo test -p perl-lsp-rs",
 ]
 
 [[work_item]]
@@ -181,7 +181,7 @@ files = [
   "crates/perl-semantic-analyzer/src/",
 ]
 commands = [
-  "rtk cargo test -p perl-semantic-analyzer",
+  "cargo test -p perl-semantic-analyzer",
 ]
 
 [[work_item]]
@@ -193,7 +193,7 @@ files = [
   "crates/perl-semantic-analyzer/src/",
 ]
 commands = [
-  "rtk cargo test -p perl-semantic-analyzer",
+  "cargo test -p perl-semantic-analyzer",
 ]
 
 [[work_item]]
@@ -205,7 +205,7 @@ files = [
   "crates/perl-workspace/src/",
 ]
 commands = [
-  "rtk cargo test -p perl-workspace",
+  "cargo test -p perl-workspace",
 ]
 
 [[work_item]]
@@ -217,7 +217,7 @@ files = [
   "crates/perl-lsp-rs/src/",
 ]
 commands = [
-  "rtk cargo test -p perl-lsp-rs",
+  "cargo test -p perl-lsp-rs",
 ]
 
 [[work_item]]
@@ -229,7 +229,7 @@ files = [
   "crates/perl-workspace/src/",
 ]
 commands = [
-  "rtk cargo test -p perl-workspace",
+  "cargo test -p perl-workspace",
 ]
 
 [[work_item]]
@@ -242,5 +242,5 @@ files = [
   "plans/lsp-freshness/implementation-plan.md",
 ]
 commands = [
-  "rtk cargo xtask check-active-goal-manifest",
+  "cargo xtask check-active-goal-manifest",
 ]
