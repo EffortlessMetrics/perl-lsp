@@ -102,8 +102,8 @@ files = [
   ".perl-lsp/goals/compiler-program.toml",
 ]
 commands = [
-  "rtk git diff --check",
-  "rtk cargo xtask ci-hygiene check-doc-paths docs/proposals",
-  "rtk cargo xtask ci-hygiene check-doc-paths docs/adr",
-  "rtk cargo xtask ci-hygiene check-doc-paths plans/compiler-program",
+  "git diff --check",
+  "cargo xtask ci-hygiene check-doc-paths docs/proposals",
+  "cargo xtask ci-hygiene check-doc-paths docs/adr",
+  "cargo xtask ci-hygiene check-doc-paths plans/compiler-program",
 ]
