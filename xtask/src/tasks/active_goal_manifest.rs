@@ -1003,9 +1003,7 @@ fn validate_optional_command_array(
             continue;
         }
         if command.split_whitespace().next() == Some("rtk") {
-            violations.push(format!(
-                "{doc}: {field}[{index}] must be a direct repository command"
-            ));
+            violations.push(format!("{doc}: {field}[{index}] must be a direct repository command"));
         }
         stats.proof_commands += 1;
     }
