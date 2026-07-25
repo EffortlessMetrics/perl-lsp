@@ -349,6 +349,50 @@ impl BudgetTracker {
 /// strategies across all pipeline stages.
 pub type ParseResult<T> = Result<T, ParseError>;
 
+/// Operational category used by agentic tooling to route parser failures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ErrorCategory {
+    /// The diagnostic is informational and does not describe invalid input.
+    Advisory,
+    /// The input is invalid or needs a user-facing correction.
+    UserError,
+    /// The parser violated an internal invariant.
+    Bug,
+    /// An external dependency or service is unavailable.
+    Infra,
+    /// The operation may succeed if retried.
+    Transient,
+    /// The other side violated a protocol or format contract.
+    Protocol,
+    /// A configured parser safety limit was exceeded.
+    ResourceLimit,
+}
+
+impl ErrorCategory {
+    /// Returns the stable machine token for this category.
+    ///
+    /// The token is part of the public contract: receipt and log layers may
+    /// record it without depending on `Debug` formatting.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Advisory => "advisory",
+            Self::UserError => "user_error",
+            Self::Bug => "bug",
+            Self::Infra => "infra",
+            Self::Transient => "transient",
+            Self::Protocol => "protocol",
+            Self::ResourceLimit => "resource_limit",
+        }
+    }
+}
+
+/// Exposes an operational category for routing and retry decisions.
+pub trait ErrorClass {
+    /// Returns the category that should guide handling of this error.
+    fn error_class(&self) -> ErrorCategory;
+}
+
 /// Severity for a parser diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -509,6 +553,27 @@ pub enum ParseError {
         /// Byte offset of the recovery point in the source.
         location: usize,
     },
+}
+
+impl ErrorClass for ParseError {
+    fn error_class(&self) -> ErrorCategory {
+        // Keep this match exhaustive: adding a ParseError variant must also
+        // choose its routing category before the crate can compile.
+        match self {
+            Self::Advisory { .. } => ErrorCategory::Advisory,
+            Self::Cancelled => ErrorCategory::Transient,
+            Self::RecursionLimit | Self::NestingTooDeep { .. } => ErrorCategory::ResourceLimit,
+            Self::UnexpectedEof
+            | Self::UnexpectedToken { .. }
+            | Self::SyntaxError { .. }
+            | Self::LexerError { .. }
+            | Self::InvalidNumber { .. }
+            | Self::InvalidString
+            | Self::UnclosedDelimiter { .. }
+            | Self::InvalidRegex { .. }
+            | Self::Recovered { .. } => ErrorCategory::UserError,
+        }
+    }
 }
 
 /// Error classification and diagnostic generation for parsed Perl code.
@@ -1170,5 +1235,48 @@ mod tests {
 
         assert_eq!(output.recovered_count, 1);
         assert!(!output.terminated_early);
+    }
+
+    #[test]
+    fn parse_error_routing_distinguishes_operational_classes() {
+        let cases = [
+            (ParseError::UnexpectedEof, ErrorCategory::UserError),
+            (
+                ParseError::Advisory { message: "style".to_string(), location: 0 },
+                ErrorCategory::Advisory,
+            ),
+            (ParseError::RecursionLimit, ErrorCategory::ResourceLimit),
+            (ParseError::NestingTooDeep { depth: 10, max_depth: 5 }, ErrorCategory::ResourceLimit),
+            (ParseError::Cancelled, ErrorCategory::Transient),
+            (
+                ParseError::Recovered {
+                    site: RecoverySite::ArgList,
+                    kind: RecoveryKind::MissingOperand,
+                    location: 0,
+                },
+                ErrorCategory::UserError,
+            ),
+        ];
+
+        for (error, expected) in cases {
+            assert_eq!(error.error_class(), expected);
+        }
+    }
+
+    #[test]
+    fn error_category_tokens_are_stable() {
+        let cases = [
+            (ErrorCategory::Advisory, "advisory"),
+            (ErrorCategory::UserError, "user_error"),
+            (ErrorCategory::Bug, "bug"),
+            (ErrorCategory::Infra, "infra"),
+            (ErrorCategory::Transient, "transient"),
+            (ErrorCategory::Protocol, "protocol"),
+            (ErrorCategory::ResourceLimit, "resource_limit"),
+        ];
+
+        for (category, expected) in cases {
+            assert_eq!(category.as_str(), expected);
+        }
     }
 }

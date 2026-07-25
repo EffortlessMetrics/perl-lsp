@@ -159,8 +159,8 @@ pub use ast::{GotoTargetForm, Node, NodeKind, SourceLocation};
 pub use error::classifier::{RecoverySalvageMetrics, classify_recovery_salvage};
 /// Parse error, budget, and output types.
 pub use error::{
-    BudgetTracker, ParseBudget, ParseDiagnosticSeverity, ParseError, ParseOutput, ParseResult,
-    RecoverySalvageClass, RecoverySalvageProfile,
+    BudgetTracker, ErrorCategory, ErrorClass, ParseBudget, ParseDiagnosticSeverity, ParseError,
+    ParseOutput, ParseResult, RecoverySalvageClass, RecoverySalvageProfile,
 };
 
 /// Builtin function signature lookup tables.
