@@ -1002,8 +1002,10 @@ fn validate_optional_command_array(
             violations.push(format!("{doc}: {field}[{index}] must not be empty"));
             continue;
         }
-        if !command.starts_with("rtk ") {
-            violations.push(format!("{doc}: {field}[{index}] must start with \"rtk \""));
+        if command.split_whitespace().next() == Some("rtk") {
+            violations.push(format!(
+                "{doc}: {field}[{index}] must be a direct repository command"
+            ));
         }
         stats.proof_commands += 1;
     }
@@ -1833,7 +1835,7 @@ mod tests {
         command_table.insert(
             "commands".to_owned(),
             Value::Array(vec![
-                Value::String("rtk cargo test -p xtask".to_owned()),
+                Value::String("cargo test -p xtask".to_owned()),
                 Value::String(" ".to_owned()),
                 Value::Integer(5),
             ]),
@@ -2093,11 +2095,14 @@ mod tests {
     }
 
     #[test]
-    fn active_goal_manifest_reports_non_rtk_proof_commands() -> Result<()> {
+    fn active_goal_manifest_rejects_rtk_wrapped_proof_commands() -> Result<()> {
         let mut table = Table::new();
         table.insert(
             "commands".to_owned(),
-            Value::Array(vec![Value::String("cargo test -p xtask".to_owned())]),
+            Value::Array(vec![
+                Value::String("rtk cargo test -p xtask".to_owned()),
+                Value::String("rtk\tgit diff --check".to_owned()),
+            ]),
         );
         let mut stats = ManifestStats::default();
         let mut violations = Vec::new();
@@ -2110,10 +2115,15 @@ mod tests {
             &mut violations,
         );
 
-        assert_eq!(stats.proof_commands, 1);
+        assert_eq!(stats.proof_commands, 2);
         assert_eq!(
             violations,
-            vec!["program manifest: work_item[0]: commands[0] must start with \"rtk \"".to_owned()]
+            vec![
+                "program manifest: work_item[0]: commands[0] must be a direct repository command"
+                    .to_owned(),
+                "program manifest: work_item[0]: commands[1] must be a direct repository command"
+                    .to_owned(),
+            ]
         );
 
         Ok(())
