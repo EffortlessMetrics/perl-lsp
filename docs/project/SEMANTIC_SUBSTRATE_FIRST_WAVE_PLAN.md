@@ -103,6 +103,44 @@ safe_delete_plan(entity)
 5. Definition-candidate multimap behind compatibility APIs.
 6. Typed reference-edge global index behind compatibility APIs.
 
+### Wave 2 scope spine
+
+Wave 2 is the substrate convergence phase before any user-facing provider
+migration:
+
+- canonical anchors and occurrences
+- stable entities
+- typed edges
+- provenance/confidence
+- deterministic comparison of old vs new query answers
+
+#### In scope
+
+- `SymbolDecl -> EntityFact` adapter
+- `SymbolRef -> OccurrenceFact` adapter
+- `ExportInfo -> ExportSet` adapter
+- `FileFactShard` write-through in workspace store
+- definition-candidate multimap behind compatibility APIs
+- typed `ReferenceEdge` global index behind compatibility APIs
+- shadow-compare receipts for definition/reference/count-usage queries
+
+#### Out of scope
+
+- completion migration
+- undefined-symbol diagnostic migration
+- rename/safe-delete migration
+- full package graph
+- Moose/Moo generated-member support
+- external `@INC`/CPAN index
+
+#### Merge order preference
+
+- Boxes 1–3 first (`SymbolDecl` / `SymbolRef` / `ExportInfo` adapters).
+- Box 8 (scorecard v1) when adapters are clean.
+- Box 4 (fact shard write-through) next.
+- Boxes 5–6 one by one.
+- Box 7 (shadow receipts) last.
+
 ## Wave 2 Implementation Status
 
 This section is historical migration context. Current compiler-substrate state
