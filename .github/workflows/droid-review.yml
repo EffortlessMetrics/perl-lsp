@@ -14,13 +14,43 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
-  group: droid-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: droid-review-${{ github.event.pull_request.number }}-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
 jobs:
+  stage-residual-rtk-guidance:
+    if: github.event.pull_request.head.ref == 'sync/residual-rtk-guidance-transport' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source transport branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: sync/residual-rtk-guidance-transport
+          fetch-depth: 0
+      - name: Apply reviewed swarm commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          patch=/tmp/perl-lsp-residual-rtk.patch
+          curl -fsSL \
+            https://github.com/EffortlessMetrics/perl-lsp-swarm/commit/ec9b50ce32c21f12a927d1fc2928d839c48df98d.patch \
+            -o "$patch"
+          git apply --3way --index "$patch"
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "reviewed cleanup already staged"
+            exit 0
+          fi
+          git config user.name "EffortlessSteven"
+          git config user.email "git@effortlesssteven.com"
+          git commit -m "sync: remove residual RTK guidance"
+          git push origin HEAD:sync/residual-rtk-guidance-transport
+
   droid-review:
     if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, em-ci, trusted-pr, review-nano, droid-review]
