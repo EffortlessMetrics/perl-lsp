@@ -21,12 +21,6 @@ $Repo = "EffortlessMetrics/perl-lsp"
 # / README / POSIX installer (scripts/install.sh) uses `perllsp`. Install the
 # Windows binary as `perllsp.exe` so the name matches POSIX and the docs.
 $Name = "perllsp"
-# The release archive also carries the debug adapter (`perl-dap.exe`) — see
-# .github/workflows/release.yml, which builds `-p perl-dap` for every target.
-# Install it alongside the server so Windows matches every sibling channel:
-# scripts/install.sh (optional perl-dap copy), Formula/perllsp.rb,
-# distribution/scoop/perl-lsp.json, distribution/winget/perl-lsp.yaml.
-$DapName = "perl-dap"
 
 function Write-Info {
     param([string]$Message)
@@ -212,25 +206,6 @@ try {
     
     Write-Success "Installed $Name to $DestPath"
 
-    # Install the perl-dap companion binary when the archive carries it.
-    # Mirrors the optional-DAP copy in scripts/install.sh: present since
-    # v0.9.1, so treat absence as a warning rather than a hard failure to stay
-    # compatible with older archives.
-    $DapInstalled = $false
-    $DapSourcePath = Join-Path $ExtractedDir "$DapName.exe"
-    $DapDestPath = Join-Path $InstallDir "$DapName.exe"
-    if (Test-Path $DapSourcePath) {
-        Write-Info "Installing $DapName to $DapDestPath"
-        if (Test-Path $DapDestPath) {
-            Remove-Item $DapDestPath -Force
-        }
-        Copy-Item -Path $DapSourcePath -Destination $DapDestPath -Force
-        Write-Success "Installed $DapName to $DapDestPath"
-        $DapInstalled = $true
-    } else {
-        Write-Warn "$DapName.exe not found in the release archive - debugging support will be unavailable"
-    }
-
     # Verify installation
     try {
         $VersionOutput = & $DestPath --version 2>&1
@@ -262,11 +237,6 @@ try {
     Write-Host "To get started with Perl LSP:"
     Write-Host "  • VS Code: Install the Perl LSP extension from the marketplace"
     Write-Host "  • Other editors: Configure to use '$DestPath --stdio'"
-    if ($DapInstalled) {
-        Write-Host "  • Debugging: Configure your DAP client to use '$DapDestPath'"
-    } else {
-        Write-Host "  • Debugging: unavailable - $DapName.exe was not in this release archive"
-    }
     Write-Host ""
     Write-Host "For more information: https://github.com/$Repo"
     
