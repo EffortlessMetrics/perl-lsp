@@ -174,8 +174,15 @@ detect_platform() {
             _libc=""
             ;;
         MINGW*|MSYS*|CYGWIN*)
+            # The PowerShell installer lives at the repository root
+            # (install.ps1), not under scripts/. The scripts/install.ps1 path
+            # this message used to print does not exist and 404s.
             err "Windows is not supported by this script. Use the PowerShell installer instead:
-  irm https://raw.githubusercontent.com/$REPO/master/scripts/install.ps1 | iex"
+  irm https://raw.githubusercontent.com/$REPO/master/install.ps1 | iex
+
+Or download perllsp-<version>-x86_64-pc-windows-msvc.zip from
+https://github.com/$REPO/releases, extract it, and put the folder containing
+perllsp.exe on your PATH."
             ;;
         *)
             err "unsupported operating system: $_os"
@@ -354,7 +361,11 @@ build_from_source() {
         info "building from source for host target"
     fi
 
-    cargo install perllsp --locked "${_target_arg[@]}" --root "$TMPDIR/install-root"
+    # `${_target_arg[@]+"${_target_arg[@]}"}` — a bare `"${_target_arg[@]}"`
+    # would abort under `set -u` on bash < 4.4 (macOS /bin/bash 3.2) whenever
+    # TARGET is unset, which is the default host-target source build.
+    cargo install perllsp --locked ${_target_arg[@]+"${_target_arg[@]}"} \
+        --root "$TMPDIR/install-root"
 
     EXTRACT_DIR="${TMPDIR}/install-root/bin"
 }
