@@ -19,6 +19,12 @@ on:
       - 'scripts/install.sh'
       - 'scripts/publish-topo.py'
       - 'scripts/tests/test-install-target-selection.sh'
+      # The Windows install surface and the zero-argument bootstrap path. Both
+      # shipped broken to users because no gate ran on them: install.ps1 was
+      # not in this filter at all, and the documented `curl ... | bash`
+      # invocation was never executed by CI.
+      - 'install.ps1'
+      - 'scripts/tests/test-installer-zero-args.sh'
       - 'scripts/tests/test-publish-dry-run-gate.sh'
       - 'scripts/ci/check-pr-review-convergence'
       - 'scripts/ci/fixtures/convergence/**'
@@ -104,6 +110,31 @@ jobs:
             echo "## Installer target-selection self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "The installer target-selection contract regressed. Check the step output above for the failed case." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  installer-zero-args-self-test:
+    name: Installer zero-argument bootstrap self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run installer zero-argument self-test
+        run: bash scripts/tests/test-installer-zero-args.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Installer zero-argument self-test passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The documented \`curl -fsSL ... | bash\` bootstrap survives \`set -u\`: \`\${BASH_SOURCE[0]}\` is guarded for stdin invocation, empty array expansions use \`\${arr[@]+\"\${arr[@]}\"}\` so bash 3.2 (macOS system bash) does not abort, and positional/flag argument forwarding is unchanged. The bash 3.2 container case runs when Docker is available and SKIPs otherwise." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Installer zero-argument self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The zero-argument installer bootstrap regressed — the documented curl-pipe command may abort before installing anything. Check the step output above for the failed case." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   check-pr-review-convergence-self-test:
