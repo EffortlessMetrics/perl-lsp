@@ -69,13 +69,24 @@ skip() {
 WORKDIR="$(mktemp -d)"
 
 # A stub that stands in for scripts/install.sh. It reports how many arguments
-# the wrapper forwarded, so a zero-argument bootstrap is observable without
-# touching the network.
+# the wrapper forwarded AND each argument's value, so a zero-argument bootstrap
+# is observable without touching the network and so a wrapper that forwards the
+# wrong argument cannot pass an arity-only assertion.
+#
+# The argument loop is `while [ "$#" -gt 0 ]` + `shift`, not `for a in "$@"`:
+# this stub also runs inside the bash 3.2 container test, where `"$@"` under
+# `set -u` with no positional parameters is itself an unbound-variable error.
 STUB="$WORKDIR/stub-install.sh"
 cat > "$STUB" <<'STUB_EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'STUB argc=%s\n' "$#"
+stub_i=1
+while [ "$#" -gt 0 ]; do
+    printf 'STUB arg%s=%s\n' "$stub_i" "$1"
+    stub_i=$((stub_i + 1))
+    shift
+done
 printf 'STUB VERSION=%s INSTALL_DIR=%s\n' "${VERSION:-}" "${INSTALL_DIR:-}"
 STUB_EOF
 chmod +x "$STUB"
@@ -210,6 +221,126 @@ test_flag_args_forwarded() {
         return
     fi
 
+    # Assert the VALUE, not just the arity: forwarding one wrong argument is
+    # exactly the regression an argc-only assertion cannot see.
+    if ! grep -q 'STUB arg1=--print-target' "$out"; then
+        fail "$label" "expected --print-target to be forwarded verbatim; output: $(cat "$out")"
+        return
+    fi
+
+    pass "$label"
+}
+
+# ── 4b. stdin-mode argument forwarding (the curl-pipe path itself) ───────────
+#
+# Tests 3 and 4 invoke the wrapper as a FILE next to a sibling
+# scripts/install.sh, so they exec the local checkout and never reach the
+# download fallback that install.sh actually changed. The documented
+# argument-carrying bootstrap is
+#
+#     curl -fsSL .../install.sh | bash -s -- 0.17.0 "$HOME/.local/bin"
+#
+# which is stdin mode: BASH_SOURCE is empty, CANONICAL_INSTALLER stays empty,
+# and the wrapper must fetch the canonical installer and forward the remaining
+# arguments to it. `bash -s --` is required; a bare `bash arg < file` would
+# treat the first argument as a script path.
+
+# Deliberately does not touch `set -e`: errexit is a global shell option, so
+# toggling it here would re-enable it before the `return` and abort the whole
+# run on the first intended failure. Callers own the `set +e` / `set -e` pair.
+run_stdin_wrapper() {
+    # usage: run_stdin_wrapper <outfile> [args...]
+    local out="$1"
+    shift
+
+    env PATH="$FAKEBIN:$PATH" PERL_LSP_TEST_STUB_INSTALLER="$STUB" \
+        bash -s -- "$@" <"$ROOT_INSTALLER" >"$out" 2>&1
+}
+
+test_stdin_positional_args() {
+    local label="curl-pipe positional args map to VERSION / INSTALL_DIR"
+    local out="$WORKDIR/out-pipe-args.txt"
+    local status=0
+    local dir="$WORKDIR/pipe-install-dir"
+
+    set +e
+    run_stdin_wrapper "$out" 0.17.0 "$dir"
+    status=$?
+    set -e
+
+    if [[ "$status" -ne 0 ]]; then
+        fail "$label" "expected exit 0, got $status; output: $(cat "$out")"
+        return
+    fi
+
+    if ! grep -q "STUB VERSION=0.17.0 INSTALL_DIR=$dir" "$out"; then
+        fail "$label" "positional mapping regressed on the stdin path; output: $(cat "$out")"
+        return
+    fi
+
+    if ! grep -q 'STUB argc=0' "$out"; then
+        fail "$label" "consumed positionals must not also be forwarded; output: $(cat "$out")"
+        return
+    fi
+
+    pass "$label"
+}
+
+test_stdin_flag_args() {
+    local label="curl-pipe forwards flag args verbatim to the downloaded installer"
+    local out="$WORKDIR/out-pipe-flag.txt"
+    local status=0
+
+    set +e
+    run_stdin_wrapper "$out" --print-target --verbose
+    status=$?
+    set -e
+
+    if [[ "$status" -ne 0 ]]; then
+        fail "$label" "expected exit 0, got $status; output: $(cat "$out")"
+        return
+    fi
+
+    if ! grep -q 'STUB argc=2' "$out"; then
+        fail "$label" "expected argc=2 on the stdin path; output: $(cat "$out")"
+        return
+    fi
+
+    if ! grep -q 'STUB arg1=--print-target' "$out" \
+        || ! grep -q 'STUB arg2=--verbose' "$out"; then
+        fail "$label" "flags must be forwarded verbatim and in order; output: $(cat "$out")"
+        return
+    fi
+
+    pass "$label"
+}
+
+test_stdin_mixed_args() {
+    local label="curl-pipe maps positionals and still forwards trailing flags"
+    local out="$WORKDIR/out-pipe-mixed.txt"
+    local status=0
+    local dir="$WORKDIR/pipe-mixed-dir"
+
+    set +e
+    run_stdin_wrapper "$out" 0.17.0 "$dir" --print-target
+    status=$?
+    set -e
+
+    if [[ "$status" -ne 0 ]]; then
+        fail "$label" "expected exit 0, got $status; output: $(cat "$out")"
+        return
+    fi
+
+    if ! grep -q "STUB VERSION=0.17.0 INSTALL_DIR=$dir" "$out"; then
+        fail "$label" "positional mapping regressed; output: $(cat "$out")"
+        return
+    fi
+
+    if ! grep -q 'STUB argc=1' "$out" || ! grep -q 'STUB arg1=--print-target' "$out"; then
+        fail "$label" "expected only the trailing flag to be forwarded; output: $(cat "$out")"
+        return
+    fi
+
     pass "$label"
 }
 
@@ -321,6 +452,9 @@ else
     test_file_zero_args
     test_positional_args_still_work
     test_flag_args_forwarded
+    test_stdin_positional_args
+    test_stdin_flag_args
+    test_stdin_mixed_args
     test_no_unguarded_array_expansion
     test_bash_source_guarded
     test_legacy_bash_container
