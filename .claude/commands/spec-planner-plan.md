@@ -8,12 +8,48 @@ user-invocable: false
 Produce the implementation checklist. This is the primary artifact —
 the red TDD builder and builder both read this.
 
+For any plan involving a non-trivial state machine, label arithmetic, or rule
+resolution, write the **Design shape** section before `## Change order`. It
+must contain type signatures, ordered pseudo-code for the decision function,
+five to ten worked examples (including negative and ambiguous cases), and a
+short list of genuine unknowns. The worked examples are the acceptance-fixture
+source for the red-TDD builder; do not replace them with general prose.
+
+For plans without those decision surfaces, include the explicit line:
+`Design shape: not applicable — no state-machine, arithmetic, or rule-resolution decision surface.`
+
 ## Checklist format
 
 Write `.spec/<issue#>-<specslug>/checklist.md`:
 
-```markdown
+````markdown
 # Implementation Checklist: #<issue> — <title>
+
+## Design shape
+
+### Types
+
+```rust
+// Inputs, context, and result types used by the decision function.
+```
+
+### Decision pseudo-code
+
+```text
+// Ordered branches, precedence, and unknown-input fallback.
+```
+
+### Worked examples
+
+| Input | Expected result | Rationale |
+|---|---|---|
+| representative valid case | ... | ... |
+| negative case | ... | ... |
+| ambiguous or missing-data case | ... | ... |
+
+### Genuine unknowns
+
+- <unknown that may require a plan revision during implementation>
 
 ## Change order (compiles at each step)
 
@@ -48,7 +84,7 @@ Files OUT of scope: <everything else — be explicit>
 ## Flags for builder
 
 - <any ambiguities, missing details, or decisions the builder must make>
-```
+````
 
 Write `.spec/<issue#>-<specslug>/acceptance.md`:
 

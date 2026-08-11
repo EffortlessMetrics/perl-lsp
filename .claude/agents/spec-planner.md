@@ -34,6 +34,67 @@ implementation.
 
 ## What to produce
 
+### Design shape for decision-heavy work
+
+For work involving a non-trivial state machine, label arithmetic, or rule
+resolution, the checklist must also include a **Design shape** section before
+the change order. It is the builder's executable interpretation of the plan,
+not a second prose summary:
+
+1. **Type signatures first** — name the input, context, and result types. Use
+   Rust-like signatures when the implementation is Rust, or the target
+   language's equivalent when it is not.
+2. **Pseudo-code for the decision function** — show the ordered branches,
+   precedence rules, and explicit fallback for unknown or contradictory input.
+3. **Five to ten worked examples** — show representative, boundary, negative,
+   and ambiguous inputs with their expected result. Keep the examples close to
+   the function they exercise so the red-TDD builder can turn them into tests.
+4. **Unknowns and course-correction boundary** — list what is still genuinely
+   unknown. A builder may return to planning for a new fact discovered during
+   implementation, but may not silently redesign the decision function.
+
+For a simpler issue, write `Design shape: not applicable — the change has no
+state-machine, arithmetic, or rule-resolution decision surface.` This makes the
+skip explicit and keeps the checklist uniform.
+
+#### Worked example: #7071 reconciler resolution
+
+The reconciler's label cleanup should be specified as a typed decision rather
+than a sequence of ad-hoc string checks. The following is an illustrative
+shape; the planner must confirm the actual labels and live signals in the
+issue before handing it to a builder:
+
+```rust
+pub enum LabelClass {
+    LiveSignal(LiveQuery),
+    TimelineBased,
+}
+
+pub enum Resolution {
+    StripA,
+    StripB,
+    LeaveBoth,
+    BothInvalid(Reason),
+}
+
+pub fn resolve(pair: ContradictionPair, ctx: PRContext) -> Resolution;
+```
+
+```text
+if pair.names_are_equal: return BothInvalid(DuplicatePair)
+if either label has a current live-signal query:
+    query the current PR state before using label timestamps
+if both labels describe the same live state: return BothInvalid(ConflictingSignals)
+if exactly one label is contradicted by live state: strip that label
+if only timestamps distinguish the pair: apply the documented freshness rule
+otherwise: return LeaveBoth and emit an actionable unknown-state receipt
+```
+
+The worked-example table should then cover at least: a duplicate pair, each
+single-label contradiction, both labels still valid, simultaneous timestamps,
+missing timestamps, an unknown label, and a live signal that disagrees with
+stored labels. Each row must name the expected `Resolution` and rationale.
+
 For each change in the spec, produce:
 
 1. **File path** — exact path, verified to exist (or "CREATE" if new)
