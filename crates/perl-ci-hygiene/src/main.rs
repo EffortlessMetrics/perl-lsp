@@ -47,10 +47,10 @@ const YELLOW: &str = "\x1b[0;33m";
 const BLUE: &str = "\x1b[0;34m";
 const NC: &str = "\x1b[0m";
 
-static PANIC_FAMILY_UNWRAP_RE: LazyLock<Result<Regex, regex::Error>> =
-    LazyLock::new(|| Regex::new(r"\.unwrap\(|\.expect\("));
-static PANIC_FAMILY_MACRO_RE: LazyLock<Result<Regex, regex::Error>> =
-    LazyLock::new(|| Regex::new(r"(?:panic!|todo!|unimplemented!|unreachable!|dbg!)\s*\("));
+static PANIC_FAMILY_UNWRAP_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"\.unwrap\(|\.expect\(").ok());
+static PANIC_FAMILY_MACRO_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"(?:panic!|todo!|unimplemented!|unreachable!|dbg!)\s*\(").ok());
 
 fn main() -> std::process::ExitCode {
     if let Err(err) = color_eyre::install() {
@@ -183,6 +183,31 @@ pub(crate) fn first_cfg_test_line_number(path: &Path) -> Result<usize> {
         }
     }
     Ok(usize::MAX)
+}
+
+fn cfg_test_end_line_number(lines: &[String], start: usize) -> usize {
+    let mut depth = 0usize;
+    let mut saw_open = false;
+    let mut in_block_comment = false;
+    for (index, line) in lines.iter().enumerate().skip(start) {
+        let code = strip_rust_comments(line, &mut in_block_comment);
+        for character in code.chars() {
+            match character {
+                '{' => {
+                    saw_open = true;
+                    depth += 1;
+                }
+                '}' if saw_open => {
+                    depth = depth.saturating_sub(1);
+                }
+                _ => {}
+            }
+        }
+        if saw_open && depth == 0 {
+            return index + 1;
+        }
+    }
+    lines.len()
 }
 
 fn read_json_value(path: &Path) -> Result<Value> {
@@ -2558,33 +2583,38 @@ fn scan_test_source(
     repo_root: &Path,
     lines: &[String],
 ) -> Result<(Vec<String>, Vec<String>)> {
-    let start = if is_test_source_path(path) {
-        0
+    let (start, end) = if is_test_source_path(path) {
+        (0, lines.len())
     } else {
         match first_cfg_test_line_number(path)? {
             usize::MAX => return Ok((Vec::new(), Vec::new())),
-            line => line.saturating_sub(1),
+            line => {
+                let start = line.saturating_sub(1);
+                (start, cfg_test_end_line_number(lines, start))
+            }
         }
     };
     let unwrap_re = PANIC_FAMILY_UNWRAP_RE
         .as_ref()
-        .map_err(|error| color_eyre::eyre::eyre!("compiling unwrap regex: {error}"))?;
+        .ok_or_else(|| color_eyre::eyre::eyre!("compiling unwrap regex"))?;
     let panic_re = PANIC_FAMILY_MACRO_RE
         .as_ref()
-        .map_err(|error| color_eyre::eyre::eyre!("compiling panic-family regex: {error}"))?;
+        .ok_or_else(|| color_eyre::eyre::eyre!("compiling panic-family regex"))?;
     let rel = display_path(repo_root, path);
     let mut unwrap_offenders = Vec::new();
     let mut panic_offenders = Vec::new();
 
-    for (index, line) in lines.iter().enumerate().skip(start) {
-        if line.trim_start().starts_with("//") {
+    let mut in_block_comment = false;
+    for (index, line) in lines.iter().enumerate().skip(start).take(end.saturating_sub(start)) {
+        let code = strip_rust_comments(line, &mut in_block_comment);
+        if code.trim().is_empty() {
             continue;
         }
         let line_no = index + 1;
-        if unwrap_re.is_match(line) {
+        if unwrap_re.is_match(&code) {
             unwrap_offenders.push(format!("{rel}:{line_no}:{line}"));
         }
-        if panic_re.is_match(line) && !is_allowlisted_prod_panic_hit(&rel, line) {
+        if panic_re.is_match(&code) && !is_allowlisted_prod_panic_hit(&rel, &code) {
             panic_offenders.push(format!("{rel}:{line_no}:{line}"));
         }
     }
@@ -2600,11 +2630,12 @@ fn scan_doctest_source(
     let rel = display_path(repo_root, path);
     let unwrap_re = PANIC_FAMILY_UNWRAP_RE
         .as_ref()
-        .map_err(|error| color_eyre::eyre::eyre!("compiling unwrap regex: {error}"))?;
+        .ok_or_else(|| color_eyre::eyre::eyre!("compiling unwrap regex"))?;
     let panic_re = PANIC_FAMILY_MACRO_RE
         .as_ref()
-        .map_err(|error| color_eyre::eyre::eyre!("compiling panic regex: {error}"))?;
+        .ok_or_else(|| color_eyre::eyre::eyre!("compiling panic regex"))?;
     let mut fence_kind = None;
+    let mut in_block_comment = false;
     let mut unwrap_offenders = Vec::new();
     let mut panic_offenders = Vec::new();
 
@@ -2624,15 +2655,41 @@ fn scan_doctest_source(
             continue;
         }
         let line_no = index + 1;
-        if unwrap_re.is_match(doc_line) {
+        let code = strip_rust_comments(doc_line, &mut in_block_comment);
+        if unwrap_re.is_match(&code) {
             unwrap_offenders.push(format!("{rel}:{line_no}:{line}"));
         }
-        if panic_re.is_match(doc_line) && !is_allowlisted_prod_panic_hit(&rel, doc_line) {
+        if panic_re.is_match(&code) && !is_allowlisted_prod_panic_hit(&rel, &code) {
             panic_offenders.push(format!("{rel}:{line_no}:{line}"));
         }
     }
 
     Ok((unwrap_offenders, panic_offenders))
+}
+
+fn strip_rust_comments(line: &str, in_block_comment: &mut bool) -> String {
+    let mut output = String::with_capacity(line.len());
+    let bytes = line.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if *in_block_comment {
+            if index + 1 < bytes.len() && bytes[index] == b'*' && bytes[index + 1] == b'/' {
+                *in_block_comment = false;
+                index += 2;
+            } else {
+                index += 1;
+            }
+        } else if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
+            *in_block_comment = true;
+            index += 2;
+        } else if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'/' {
+            break;
+        } else {
+            output.push(bytes[index] as char);
+            index += 1;
+        }
+    }
+    output
 }
 
 fn is_rust_doctest_fence(fence: &str) -> bool {
