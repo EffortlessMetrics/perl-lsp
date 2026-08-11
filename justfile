@@ -1069,10 +1069,11 @@ ci-clippy-gate:
     cargo clippy --workspace --bins --locked -- -D clippy::unwrap_used -D clippy::expect_used
     @echo "✅ Clippy gate passed"
 
-# Unwrap/panic-family ratchet (production source only)
+# Unwrap/panic-family ratchets for production and test source
 ci-unwrap-panic-ratchet:
     @echo "🛡️  Checking unwrap/panic-family ratchet..."
     @cargo xtask ci-hygiene check-unwraps-prod
+    @cargo xtask ci-hygiene check-unwraps-tests
     @echo "✅ Unwrap/panic-family ratchet passed"
 
 # Unsafe syntax ratchet (production source only)

@@ -173,9 +173,9 @@ technical_debt:
     description: "Some unwrap() calls remain in test helper code"
     priority: "low"
     target: "v1.1"
-    issue: null
-    added: "2026-01-24"
-    notes: "Test code uses #[allow] attributes, but should migrate to proper error handling"
+    issue: "#4904"
+    added: "2026-07-18"
+    notes: "Test-source ratchet baseline: 1,528 unwrap/expect hits and 568 panic-family macro hits; burn down without allowing regressions"
 
   - area: "testing"
     description: "Ignored test baseline tracking via script"
