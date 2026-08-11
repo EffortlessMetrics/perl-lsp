@@ -2635,27 +2635,28 @@ fn scan_doctest_source(
         .as_ref()
         .ok_or_else(|| color_eyre::eyre::eyre!("compiling panic regex"))?;
     let mut fence_kind = None;
+    let mut in_doc_block = false;
     let mut in_block_comment = false;
     let mut unwrap_offenders = Vec::new();
     let mut panic_offenders = Vec::new();
 
     for (index, line) in lines.iter().enumerate() {
-        let Some(doc_line) =
-            line.trim_start().strip_prefix("///").or_else(|| line.trim_start().strip_prefix("//!"))
-        else {
+        let Some(doc_line) = rustdoc_line(line, &mut in_doc_block) else {
             continue;
         };
-        let doc_line = doc_line.trim_start();
         if let Some(fence) = doc_line.strip_prefix("```") {
-            fence_kind =
-                if fence_kind.is_some() { None } else { Some(is_rust_doctest_fence(fence)) };
+            fence_kind = if fence_kind.is_some() {
+                None
+            } else {
+                Some(is_rust_doctest_fence(fence))
+            };
             continue;
         }
         if fence_kind != Some(true) {
             continue;
         }
         let line_no = index + 1;
-        let code = strip_rust_comments(doc_line, &mut in_block_comment);
+        let code = strip_rust_comments(&doc_line, &mut in_block_comment);
         if unwrap_re.is_match(&code) {
             unwrap_offenders.push(format!("{rel}:{line_no}:{line}"));
         }
@@ -2667,6 +2668,35 @@ fn scan_doctest_source(
     Ok((unwrap_offenders, panic_offenders))
 }
 
+fn rustdoc_line(line: &str, in_doc_block: &mut bool) -> Option<String> {
+    let trimmed = line.trim_start();
+    if *in_doc_block {
+        let (content, closed) = trimmed.split_once("*/").map_or((trimmed, false), |(head, _)| (head, true));
+        *in_doc_block = !closed;
+        return Some(content.trim_start_matches('*').trim_start().to_string());
+    }
+    if let Some(content) = trimmed.strip_prefix("///").or_else(|| trimmed.strip_prefix("//!")) {
+        return Some(content.trim_start().to_string());
+    }
+    let Some(content) = trimmed.strip_prefix("/**").or_else(|| trimmed.strip_prefix("/*!")) else {
+        return None;
+    };
+    let (content, closed) = content.split_once("*/").map_or((content, false), |(head, _)| (head, true));
+    *in_doc_block = !closed;
+    Some(content.trim_start_matches('*').trim_start().to_string())
+}
+
+fn is_rust_doctest_fence(fence: &str) -> bool {
+    let first = fence.split_whitespace().next().unwrap_or_default();
+    first.is_empty()
+        || first == "rust"
+        || first == "no_run"
+        || first == "compile_fail"
+        || first == "should_panic"
+        || first == "standalone_crate"
+        || first.starts_with("edition")
+        || first.starts_with("ignore")
+}
 fn strip_rust_comments(line: &str, in_block_comment: &mut bool) -> String {
     let mut output = String::with_capacity(line.len());
     let bytes = line.as_bytes();
