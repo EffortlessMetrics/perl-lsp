@@ -22,7 +22,7 @@ For plans without those decision surfaces, include the explicit line:
 
 Write `.spec/<issue#>-<specslug>/checklist.md`:
 
-```markdown
+````markdown
 # Implementation Checklist: #<issue> — <title>
 
 ## Design shape
@@ -84,7 +84,7 @@ Files OUT of scope: <everything else — be explicit>
 ## Flags for builder
 
 - <any ambiguities, missing details, or decisions the builder must make>
-```
+````
 
 Write `.spec/<issue#>-<specslug>/acceptance.md`:
 
