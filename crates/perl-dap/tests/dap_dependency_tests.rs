@@ -134,4 +134,23 @@ mod dap_dependencies {
         assert!(guide.contains("launch.json"));
         Ok(())
     }
+
+    /// Legacy bridge symbols must advertise their transition status to API users.
+    #[test]
+    // AC:18
+    fn test_legacy_bridge_api_is_explicitly_deprecated() -> Result<()> {
+        let bridge_module = read(repo_root().join("crates/perl-dap/src/bridge_adapter.rs"))?;
+        assert!(bridge_module.contains(
+            "#[deprecated(\n    note = \"legacy Perl::LanguageServer compatibility; use native perl-dap configuration instead\"\n)]\npub struct DapBridgeEnvConfig"
+        ));
+        assert!(bridge_module.contains(
+            "#[deprecated(note = \"legacy Perl::LanguageServer compatibility; use native perl-dap instead\")]\npub struct BridgeAdapter"
+        ));
+
+        let mode_module = read(repo_root().join("crates/perl-dap/src/server/mode.rs"))?;
+        assert!(mode_module.contains(
+            "#[deprecated(note = \"legacy Perl::LanguageServer compatibility; use DapMode::Native instead\")]\n    Bridge,"
+        ));
+        Ok(())
+    }
 }

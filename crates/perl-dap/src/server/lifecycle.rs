@@ -1,3 +1,7 @@
+// The lifecycle dispatcher must keep the retained legacy mode reachable for
+// existing library integrations while the public mode is marked deprecated.
+#![allow(deprecated)]
+
 use crate::bridge_adapter::BridgeAdapter;
 use crate::debug_adapter::DebugAdapter;
 use crate::server::config::DapConfig;

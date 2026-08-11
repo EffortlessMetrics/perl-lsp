@@ -26,6 +26,10 @@
 //! # }
 //! ```
 
+// This module retains the compatibility implementation while its public types
+// guide new callers toward the native adapter through deprecation diagnostics.
+#![allow(deprecated)]
+
 use anyhow::{Context, Result};
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
@@ -49,6 +53,9 @@ const PLS_DAP_FLAG: &str = "-d:LanguageServer::DAP";
 /// Environment passthrough policy for the Perl::LanguageServer DAP bridge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
+#[deprecated(
+    note = "legacy Perl::LanguageServer compatibility; use native perl-dap configuration instead"
+)]
 pub struct DapBridgeEnvConfig {
     /// Pass parent `PERL5LIB` through to the bridged Perl process.
     pub perl5lib_passthrough: bool,
@@ -67,6 +74,7 @@ impl DapBridgeEnvConfig {
 ///
 /// This adapter spawns Perl::LanguageServer in DAP mode and forwards
 /// all DAP protocol messages bidirectionally via stdio.
+#[deprecated(note = "legacy Perl::LanguageServer compatibility; use native perl-dap instead")]
 pub struct BridgeAdapter {
     /// The spawned Perl::LanguageServer process
     child_process: Option<Child>,
