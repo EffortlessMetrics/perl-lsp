@@ -21,6 +21,7 @@ const ALLOWLIST_WORKFLOW_LANE_MISSING: &[&str] = &[
     "chocolatey-bump.yml",
     "docker-publish.yml",
     "docs-deploy.yml",
+    "post-merge-cache-warm.yml",
     "post-merge-corpus-ratchet.yml",
     "post-merge-status.yml",
     "post-publish-smoke.yml",

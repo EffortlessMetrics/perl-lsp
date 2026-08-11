@@ -1,0 +1,53 @@
+name: Post-Merge Cargo Cache Warm
+
+# Keep the first PR after a master merge from paying the full cold-build cost.
+# This uses the same cache namespace as the merge-gate jobs in ci.yml, so the
+# compiled workspace and test binaries are reusable by the next PR run.
+#
+# See issue #4827. This is intentionally independent of status regeneration and
+# other post-merge bookkeeping so cache warming can run in parallel with them.
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch: {}
+
+concurrency:
+  group: post-merge-cache-warm-${{ github.ref }}
+  # Let a warm-up finish: cancelling its save phase would recreate the cold-cache
+  # penalty this workflow exists to remove.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  warm-cargo-cache:
+    name: Warm workspace build and test cache
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88  # stable (master)
+        with:
+          toolchain: 1.95.0
+
+      - name: Restore and save merge-gate cargo cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build workspace
+        run: cargo build --workspace --locked
+
+      - name: Compile workspace tests
+        run: cargo test --workspace --no-run --locked
