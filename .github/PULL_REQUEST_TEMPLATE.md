@@ -40,6 +40,11 @@ like (#0000) or (#9999) will fail CI.
 - [ ] scoped pilot
 - [ ] live behavior change
 
+## Changelog
+<!-- Choose one. User-visible and protocol/config changes normally require a fragment. -->
+- [ ] Added a Changie fragment under `.changes/unreleased/`.
+- [ ] No fragment required. Reason:
+
 ## Risk Surfaces
 - [ ] edit-producing
 - [ ] provider behavior
