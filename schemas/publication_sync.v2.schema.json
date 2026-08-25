@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/schemas/publication_sync.v2.schema.json",
+  "title": "publication_sync.v2",
+  "description": "Publication Sync Contract for the audited 0.18.0-rc.1 join on perl-lsp/master (EffortlessMetrics/perl-lsp-swarm#12231). The packet is committed at .github/publication-sync/packet.yaml in the sync PR head J. Packet bytes must be JSON-parseable (JSON is valid YAML 1.2) so validation stays deterministic on the Python standard library. The reconciliation ledger and projection manifest live at the fixed sibling paths .github/publication-sync/reconciliation-ledger.json and .github/publication-sync/projection-manifest.json; the packet binds them by sha256 digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release",
+    "release_base_sha",
+    "prepared_swarm_sha",
+    "sync_join_sha",
+    "expected_join_parents",
+    "reconciliation_digest",
+    "publication_sync_manifest_digest",
+    "expected_projected_tree",
+    "published_channels",
+    "release_cut"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v0.18_publication_sync.v2"
+    },
+    "release": {
+      "const": "0.18.0-rc.1"
+    },
+    "release_base_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "R: exact publication base commit; must equal the PR base."
+    },
+    "prepared_swarm_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "S: exact prepared swarm commit; must be the second parent of J."
+    },
+    "sync_join_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "J: audited two-parent complete-tree join; must equal the PR head."
+    },
+    "expected_join_parents": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{40}$"
+      },
+      "description": "Ordered parents of J; must equal [release_base_sha, prepared_swarm_sha]."
+    },
+    "reconciliation_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "sha256 of the committed reconciliation ledger bytes at tree(J)."
+    },
+    "publication_sync_manifest_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "sha256 of the committed projection manifest bytes at tree(J)."
+    },
+    "expected_projected_tree": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "Expected tree object id of J (the reviewed projection)."
+    },
+    "published_channels": {
+      "type": "array",
+      "maxItems": 0,
+      "description": "No-publish contract: must be empty at sync time."
+    },
+    "release_cut": {
+      "const": false,
+      "description": "No-publish contract: the sync PR never cuts a release."
+    }
+  },
+  "$defs": {
+    "reconciliation_ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "release",
+        "decisions",
+        "blockers"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "v0.18_reconciliation.v1"
+        },
+        "release": {
+          "const": "0.18.0-rc.1"
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "status"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "const": "resolved",
+                "description": "Blocker-free contract: every decision must be resolved. blocked, not_proven, or any other status fails closed."
+              },
+              "summary": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 0
+        }
+      }
+    },
+    "projection_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "release",
+        "translations",
+        "exclusions",
+        "required_invariants"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "v0.18_publication_sync_manifest.v1"
+        },
+        "release": {
+          "const": "0.18.0-rc.1"
+        },
+        "translations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ],
+            "properties": {
+              "from": {
+                "$ref": "#/$defs/repo_path"
+              },
+              "to": {
+                "$ref": "#/$defs/repo_path"
+              }
+            }
+          }
+        },
+        "exclusions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/repo_path"
+          }
+        },
+        "required_invariants": {
+          "type": "array",
+          "minItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "status"
+            ],
+            "properties": {
+              "id": {
+                "enum": [
+                  "destination-context",
+                  "version",
+                  "topology",
+                  "artifact-reachability",
+                  "effective-identity"
+                ]
+              },
+              "status": {
+                "const": "pass",
+                "description": "Fail-closed contract: only an explicit pass is accepted; not_proven or any other status fails."
+              },
+              "evidence": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "One entry per named invariant class: destination-context, version, topology, artifact-reachability, effective-identity. The independent projection verifier that produces this evidence lands with the sibling producer issues; this contract consumes the recorded evidence and fails closed on anything but an explicit pass."
+        }
+      }
+    },
+    "repo_path": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.@+-][A-Za-z0-9_.@+/-]{0,255}$",
+      "not": {
+        "pattern": "(^|/)\\.\\.?(/|$)"
+      }
+    }
+  }
+}
