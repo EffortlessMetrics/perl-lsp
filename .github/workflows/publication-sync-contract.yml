@@ -9,10 +9,11 @@ name: Publication Sync Contract
 #                                   ancestry, tree, and no-publish contract
 #                                   pass (proofs 1-11 of the controlling issue)
 #
-# Sync mode requires BOTH repository-owned markers: the committed packet at
-# .github/publication-sync/packet.yaml in the PR head tree AND the dedicated
-# PR-template field `- Publication-sync PR (yes/no): yes`. A title substring
-# is not authority.
+# Sync mode requires BOTH repository-owned markers: a packet introduced or
+# changed by this PR at .github/publication-sync/packet.yaml AND the
+# dedicated PR-template field `- Publication-sync PR (yes/no): yes`. A title
+# substring is not authority; an unchanged inherited packet is not sync
+# content.
 #
 # Least privilege by construction: read-only repository permissions, no
 # secrets, no publication credential, and a validator that runs only git
@@ -26,6 +27,10 @@ name: Publication Sync Contract
 
 on:
   pull_request:
+    # `edited` is required: the PR body carries one of the two sync-mode
+    # authorities (the marker field), so a body edit must re-run the check
+    # rather than leave a stale success on an unchanged head.
+    types: [opened, edited, reopened, synchronize]
     branches: [master, main]
   workflow_dispatch:
     inputs:

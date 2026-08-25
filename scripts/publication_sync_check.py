@@ -10,14 +10,19 @@ Implements EffortlessMetrics/perl-lsp-swarm#12231 in perl-lsp. Two modes:
 
 Sync mode requires BOTH repository-owned markers:
 
-1. the committed packet at ``.github/publication-sync/packet.yaml`` in the
-   PR head tree, and
+1. a packet at ``.github/publication-sync/packet.yaml`` INTRODUCED OR CHANGED
+   by this PR relative to its base (an unchanged packet inherited from
+   master is not sync content — after a sync lands, master carries its
+   packet because post-merge requires ``tree(M) == tree(J)``, so mere
+   presence would fail every later ordinary PR closed forever), and
 2. the dedicated PR-template field ``- Publication-sync PR (yes/no): yes``
    in the PR body.
 
-A title substring is not authority. A packet without the field, or the field
-without a packet, fails closed: sync content may not slip through undeclared,
-and a declared sync may not arrive without its packet.
+A title substring is not authority. A fresh packet without the field, the
+field without a fresh packet, or the field with a stale (base-identical)
+packet all fail closed: sync content may not slip through undeclared, a
+declared sync may not arrive without its packet, and a stale packet cannot
+re-prove an old join.
 
 Commit-identity design (why ``sync_join_sha`` is the *core* join):
 
@@ -77,6 +82,9 @@ MANIFEST_PATH = ".github/publication-sync/projection-manifest.json"
 CONTROL_DIR = ".github/publication-sync/"
 CONTROL_DIR_PARENT = ".github"
 CONTROL_DIR_NAME = "publication-sync"
+# Exact inventory of the control directory: anything beyond these three
+# files is unreviewed content invisible to the tree/diff proofs.
+CONTROL_DIR_FILES = {"packet.yaml", "reconciliation-ledger.json", "projection-manifest.json"}
 
 SCHEMA_VERSION = "v0.18_publication_sync.v2"
 LEDGER_SCHEMA_VERSION = "v0.18_reconciliation.v1"
@@ -391,20 +399,35 @@ def check_pr(args: argparse.Namespace) -> int:
     marker = check_marker_field(body)
 
     packet_bytes = tree_file(repo, args.head_sha, PACKET_PATH)
+    base_packet_bytes = tree_file(repo, args.base_sha, PACKET_PATH)
 
     # Mode decision. Both markers are repository-owned; a title substring is
-    # never consulted.
-    if packet_bytes is None and marker is not True:
-        # Deterministic non-sync success (positive control 1).
-        print("not_applicable: no committed packet and marker field is not 'yes'")
+    # never consulted. The packet signal is relative to the PR base: once a
+    # sync lands, master carries its packet (post-merge requires
+    # tree(M) == tree(J)), so mere presence cannot mean sync mode — every
+    # later ordinary PR would otherwise fail closed forever. Only a packet
+    # INTRODUCED OR CHANGED by this PR is sync content.
+    packet_changed = packet_bytes is not None and packet_bytes != base_packet_bytes
+    if not packet_changed and marker is not True:
+        # Deterministic non-sync success (positive control 1). Covers no
+        # packet anywhere and an unchanged inherited packet alike.
+        print("not_applicable: no packet introduced or changed by this PR and "
+              "marker field is not 'yes'")
         print("publication-sync: not_applicable")
         return 0
     if packet_bytes is None:
         fail("declared publication-sync PR (marker field 'yes') without a committed packet")
+    if not packet_changed:
+        fail(
+            "declared publication-sync PR carries a packet identical to the PR "
+            "base; a sync declaration requires a fresh packet (stale packets "
+            "cannot re-prove an old join)"
+        )
     if marker is not True:
         fail(
-            "committed publication-sync packet present without the PR-template "
-            "marker field set to 'yes'; sync content may not arrive undeclared"
+            "publication-sync packet introduced or changed without the "
+            "PR-template marker field set to 'yes'; sync content may not "
+            "arrive undeclared"
         )
 
     packet = validate_packet_shape(load_json_bytes(packet_bytes, "publication-sync packet"))
@@ -415,6 +438,22 @@ def check_pr(args: argparse.Namespace) -> int:
     # Packet self-consistency: declared parents are exactly [R, S].
     if packet["expected_join_parents"] != [base_r, swarm_s]:
         fail("expected_join_parents must equal [release_base_sha, prepared_swarm_sha]")
+
+    # Control-directory inventory: exactly packet, ledger, manifest. Anything
+    # extra would be invisible to both the projection-tree identity and the
+    # S..J path-set comparison (the directory is excluded from both), so an
+    # unlisted file here would defeat the exact-tree guarantee.
+    control_entries = ls_tree(
+        repo, f"{args.head_sha}:{CONTROL_DIR_PARENT}/{CONTROL_DIR_NAME}"
+    )
+    control_names = {entry.partition("\t")[2] for entry in control_entries}
+    control_extra = sorted(control_names - CONTROL_DIR_FILES)
+    control_missing = sorted(CONTROL_DIR_FILES - control_names)
+    if control_extra:
+        fail(f"control directory carries unreviewed files: {control_extra}")
+    if control_missing:
+        fail(f"control directory is missing contract files: {control_missing}")
+    print("PASS control-dir: control directory holds exactly packet, ledger, manifest")
 
     # Proof 1: PR base equals declared R.
     if args.base_sha != base_r:

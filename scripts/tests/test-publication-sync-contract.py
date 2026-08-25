@@ -181,8 +181,8 @@ class SyncFixture:
       ledger / manifest — replace the artifact payloads;
       projection_extra  — extra files in the projection AND the packet's
                           expected tree (consistent producer change);
-      head_extra        — extra files only in J's tree, outside the control
-                          directory (post-packet tree drift);
+      head_extra        — extra files only in J's tree (post-packet tree
+                          drift; may target the control directory);
       head_parents      — actual parents of J (default [R, S]).
     """
 
@@ -499,6 +499,41 @@ class PublicationSyncContractTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("publication-sync: pass", proc.stdout)
 
+    def ordinary_commit_on(self, parent: str) -> str:
+        """Ordinary follow-up commit reusing the parent's exact tree."""
+        tree = self.repo.git("rev-parse", f"{parent}^{{tree}}")
+        return self.repo.git("commit-tree", tree, "-p", parent, input_bytes=b"ordinary\n")
+
+    def test_inherited_packet_is_not_applicable(self) -> None:
+        # After a sync lands, master carries its packet (tree(M) == tree(J)).
+        # An ordinary PR whose head inherits that packet unchanged must NOT
+        # enter sync mode, or every later PR would fail closed forever.
+        fixture = SyncFixture(self.repo)
+        head = self.ordinary_commit_on(fixture.j)
+        proc = self.run_pr(fixture, BODY_NO, base=fixture.j, head=head)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("publication-sync: not_applicable", proc.stdout)
+
+    def test_declared_sync_with_stale_packet_fails(self) -> None:
+        # Marker yes but the packet is byte-identical to the base: a stale
+        # packet cannot re-prove an old join.
+        fixture = SyncFixture(self.repo)
+        head = self.ordinary_commit_on(fixture.j)
+        proc = self.run_pr(fixture, BODY_YES, base=fixture.j, head=head)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("stale packet", proc.stdout)
+
+    def test_extra_control_dir_file_fails(self) -> None:
+        # Anything beyond packet/ledger/manifest in the control directory is
+        # invisible to the tree and diff proofs, so it must fail the gate.
+        fixture = SyncFixture(
+            self.repo,
+            head_extra={".github/publication-sync/unreviewed.txt": b"smuggled\n"},
+        )
+        proc = self.run_pr(fixture, BODY_YES)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("unreviewed files", proc.stdout)
+
 
 class ValidatorUnitTest(unittest.TestCase):
     """Pure-function guards that need no git fixture."""
@@ -557,6 +592,13 @@ class RatchetTest(unittest.TestCase):
         # drift silently.
         self.assertTrue(text.startswith("name: Publication Sync Contract\n"))
         self.assertIn("\n    name: Publication Sync Contract\n", text)
+
+    def test_workflow_reruns_on_body_edits(self) -> None:
+        # The PR body carries one sync-mode authority (the marker field), so
+        # the workflow must trigger on `edited` or a body flip would leave a
+        # stale success on an unchanged head.
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("types: [opened, edited, reopened, synchronize]", text)
 
     def test_schema_file_matches_validator(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
