@@ -1,0 +1,122 @@
+name: Publication Sync Contract
+
+# Enforcement check for the audited 0.18.0-rc.1 publication join on master
+# (EffortlessMetrics/perl-lsp-swarm#12231, tracked in perl-lsp as #10088).
+#
+# Two modes:
+#   ordinary PR                  -> deterministic `not_applicable` success
+#   explicit publication-sync PR -> fail closed unless the exact packet,
+#                                   ancestry, tree, and no-publish contract
+#                                   pass (proofs 1-11 of the controlling issue)
+#
+# Sync mode requires BOTH repository-owned markers: the committed packet at
+# .github/publication-sync/packet.yaml in the PR head tree AND the dedicated
+# PR-template field `- Publication-sync PR (yes/no): yes`. A title substring
+# is not authority.
+#
+# Least privilege by construction: read-only repository permissions, no
+# secrets, no publication credential, and a validator that runs only git
+# inspection plumbing. The permission/command ratchet lives in
+# scripts/tests/test-publication-sync-contract.py. The validator executed in
+# CI is taken from the trusted PR base, never from the untrusted head.
+#
+# Required status context: the job name below IS the check context; it must
+# stay exactly `Publication Sync Contract` (ratcheted by the test above and
+# required live on master by ruleset 8029855).
+
+on:
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+    inputs:
+      merge_sha:
+        description: "Wrapper merge commit M landing on master (post-merge verification)"
+        required: true
+
+concurrency:
+  group: publication-sync-contract-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Publication Sync Contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout PR head with full history
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Ensure the PR base commit is present
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || \
+            git fetch --no-tags origin "${BASE_SHA}"
+
+      - name: Run publication sync contract check
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # The validator comes from the trusted base ref so an untrusted PR
+          # head cannot weaken its own gate. Bootstrap exception: the PR that
+          # introduces the check has no validator at its base yet; only that
+          # PR may fall back to the head copy, and it is exactly the PR under
+          # review for introducing the gate.
+          if git show "${BASE_SHA}:scripts/publication_sync_check.py" \
+              > "${RUNNER_TEMP}/publication_sync_check.py" 2>/dev/null; then
+            echo "Validator source: PR base ${BASE_SHA}"
+          else
+            echo "::notice::Validator absent at base; bootstrap fallback to the PR head copy (valid only for the PR introducing this check)"
+            cp scripts/publication_sync_check.py "${RUNNER_TEMP}/publication_sync_check.py"
+          fi
+          printf '%s' "${PR_BODY}" > "${RUNNER_TEMP}/pr-body.txt"
+          python3 "${RUNNER_TEMP}/publication_sync_check.py" pr \
+            --repo . \
+            --base-sha "${BASE_SHA}" \
+            --head-sha "${HEAD_SHA}" \
+            --pr-body-file "${RUNNER_TEMP}/pr-body.txt"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "## Publication Sync Contract: passed"
+              echo ""
+              echo "Ordinary PRs report deterministic \`not_applicable\`; declared sync PRs proved the exact R/S/J packet, ancestry, tree, and no-publish contract."
+            else
+              echo "## Publication Sync Contract: FAILED"
+              echo ""
+              echo "The check fails closed. See the job log for the named failing proof (1-11)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  post-merge:
+    name: Publication Sync Post-Merge Verification
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout master with full history
+        uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Verify the wrapper merge preserved the audited join
+        env:
+          MERGE_SHA: ${{ inputs.merge_sha }}
+        run: |
+          python3 scripts/publication_sync_check.py post-merge \
+            --repo . \
+            --merge-sha "${MERGE_SHA}" \
+            --master-ref refs/heads/master

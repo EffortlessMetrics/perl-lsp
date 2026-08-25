@@ -66,3 +66,10 @@ workflow = ".github/workflows/ux-regression-gate.yml"
 [[checks]]
 name = "Merge Gate"
 workflow = ".github/workflows/ci.yml"
+
+[[checks]]
+name = "Publication Sync Contract"
+workflow = ".github/workflows/publication-sync-contract.yml"
+required = true
+enforcement = "github-ruleset"
+reason = "Audited 0.18.0-rc.1 publication join enforcement (perl-lsp#10088, perl-lsp-swarm#12231): fail closed on declared sync PRs; deterministic not_applicable on ordinary PRs. Required live on master via ruleset 8029855."

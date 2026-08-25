@@ -19,6 +19,17 @@ like (#0000) or (#9999) will fail CI.
 - [ ] substrate
 - [ ] reliability
 
+## Publication Sync
+<!--
+  Ordinary PRs: leave the marker below as `no`.
+  An explicit publication-sync PR for the audited 0.18.0-rc.1 join sets it to
+  `yes` AND commits the packet at .github/publication-sync/packet.yaml (see
+  schemas/publication_sync.v2.schema.json). Both markers together are the
+  authority that puts the `Publication Sync Contract` check into sync mode;
+  a title substring is not authority. Mismatched markers fail closed.
+-->
+- Publication-sync PR (yes/no): no
+
 ## Claim Boundary
 <!-- What changes, and what does this PR explicitly not claim? -->
 
