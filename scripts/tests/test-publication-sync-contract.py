@@ -585,6 +585,14 @@ class RatchetTest(unittest.TestCase):
         for token in forbidden_commands:
             self.assertNotIn(token, text, f"validator must not contain {token!r}")
 
+    def test_git_plumbing_preserves_commit_message_bytes(self) -> None:
+        text = CHECK.read_text(encoding="utf-8")
+        run_git = text[text.index("def run_git"):text.index("def git_ok")]
+        self.assertIn("input_bytes: Optional[bytes] = None", text)
+        self.assertIn("capture_output=True,\n        input=input_bytes", run_git)
+        self.assertIn("input_bytes=message.encode(\"utf-8\")", text)
+        self.assertNotIn("text=True", run_git)
+
     def test_exact_check_context_names(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
         # The required status context is the job name; both workflow and job
