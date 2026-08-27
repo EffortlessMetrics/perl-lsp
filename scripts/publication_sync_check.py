@@ -130,20 +130,21 @@ def fail(message: str) -> NoReturn:
     raise ContractFailure(message)
 
 
-def run_git(repo: Path, args: Sequence[str], *, input_text: Optional[str] = None,
+def run_git(repo: Path, args: Sequence[str], *, input_bytes: Optional[bytes] = None,
             env: Optional[Dict[str, str]] = None) -> str:
-    """Run a git command; instrument failure is not success."""
+    """Run a git command with byte-preserving stdin and UTF-8 output."""
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         capture_output=True,
-        text=True,
-        input=input_text,
+        input=input_bytes,
         env=env,
         check=False,
     )
     if proc.returncode != 0:
-        fail(f"git {' '.join(args)} failed: {proc.stderr.strip() or proc.stdout.strip()}")
-    return proc.stdout
+        stderr = proc.stderr.decode("utf-8", errors="replace").strip()
+        stdout = proc.stdout.decode("utf-8", errors="replace").strip()
+        fail(f"git {' '.join(args)} failed: {stderr or stdout}")
+    return proc.stdout.decode("utf-8", errors="replace")
 
 
 def git_ok(repo: Path, args: Sequence[str]) -> bool:
@@ -325,7 +326,8 @@ def ls_tree(repo: Path, treeish: str) -> List[str]:
 
 def mktree(repo: Path, entries: List[str]) -> str:
     """Build a tree object from ls-tree-format lines (git sorts them)."""
-    return run_git(repo, ["mktree"], input_text="\n".join(entries) + ("\n" if entries else "")).strip()
+    tree_input = "\n".join(entries) + ("\n" if entries else "")
+    return run_git(repo, ["mktree"], input_bytes=tree_input.encode("utf-8")).strip()
 
 
 def projected_tree(repo: Path, commit: str) -> str:
@@ -387,7 +389,7 @@ def derive_core_join(repo: Path, commit: str, parents: Sequence[str]) -> str:
     args = ["commit-tree", tree]
     for parent in parents:
         args += ["-p", parent]
-    return run_git(repo, args, input_text=message, env=env).strip()
+    return run_git(repo, args, input_bytes=message.encode("utf-8"), env=env).strip()
 
 
 def check_pr(args: argparse.Namespace) -> int:
