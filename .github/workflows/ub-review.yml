@@ -265,7 +265,7 @@ jobs:
           fi
       - name: Build UB review packet
         id: ub-review
-        uses: EffortlessMetrics/ub-review@7b112d9cebe989e1e9d4b693dfe5c743dc4a22df
+        uses: EffortlessMetrics/ub-review@274d62cf3362f3bfcb47034e6c7d6301efcc5912
         with:
           config: policy/ub-review.toml
           profile: gh-runner
@@ -367,7 +367,7 @@ jobs:
           fi
       - name: Build UB review packet
         id: ub-review
-        uses: EffortlessMetrics/ub-review@7b112d9cebe989e1e9d4b693dfe5c743dc4a22df
+        uses: EffortlessMetrics/ub-review@274d62cf3362f3bfcb47034e6c7d6301efcc5912
         with:
           config: policy/ub-review.toml
           profile: gh-runner
@@ -454,7 +454,7 @@ jobs:
           fi
       - name: Build UB review packet
         id: ub-review
-        uses: EffortlessMetrics/ub-review@7b112d9cebe989e1e9d4b693dfe5c743dc4a22df
+        uses: EffortlessMetrics/ub-review@274d62cf3362f3bfcb47034e6c7d6301efcc5912
         with:
           config: policy/ub-review.toml
           profile: gh-runner
