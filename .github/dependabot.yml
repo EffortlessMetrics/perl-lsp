@@ -8,6 +8,8 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "UTC"
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 10
     groups:
       # Group all serde-related crates together
@@ -98,6 +100,8 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "UTC"
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
     groups:
       # Group all actions/* updates together
@@ -137,6 +141,8 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "UTC"
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
     groups:
       # Group all vscode related packages
