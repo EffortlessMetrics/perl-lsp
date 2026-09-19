@@ -10,12 +10,12 @@
 > with the copy-safe release procedure in
 > [`docs/how-to/PUBLICATION_SYNC.md`](https://github.com/EffortlessMetrics/perl-lsp-swarm/blob/main/docs/how-to/PUBLICATION_SYNC.md).
 >
-> In particular, the **Hard Invariant** below (that `perl-lsp/master` may never
-> be ahead of swarm) and the hard-coded v0.17 exclusion examples are historical
-> transaction rules, not current policy. The current contract permits
-> release-lineage-only divergence and requires every release-specific
-> product/test difference and publication projection to be explicitly
-> reconciled and digest-bound before the protected join.
+> In particular, the former **Hard Invariant** and pre-merge rules below are
+> historical transaction guidance, not current policy. The current contract
+> permits release-lineage-only divergence and requires every release-specific
+> product/test difference and publication projection to be explicitly reconciled
+> and digest-bound before the protected join. Historical exclusion examples are
+> transaction-specific evidence, not a permanent exclude list.
 
 `perl-lsp-swarm` is the active development source of truth. `perl-lsp` is the
 release, history, and canonical package-lineage repo.
