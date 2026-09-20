@@ -2708,12 +2708,45 @@ fn strip_rust_comments(line: &str, in_block_comment: &mut bool) -> String {
     output
 }
 
+/// Whether a rustdoc fence info string marks a block rustdoc compiles as a doctest.
+///
+/// Rustdoc separates fence attributes with commas or whitespace and treats both
+/// forms alike, so the info string is split on either. A block stays a Rust
+/// doctest unless one of its attributes names something else: an unrecognized
+/// attribute (text, bash, perl, json) means rustdoc does not compile the block,
+/// so the scanner must not report hits inside it.
+///
+/// An empty info string is the bare fence, which rustdoc compiles as Rust —
+/// `Iterator::all` returns true on the resulting empty attribute list.
 fn is_rust_doctest_fence(fence: &str) -> bool {
-    let Some(language) = fence.trim().split(',').next() else {
-        return true;
-    };
-    language.is_empty()
-        || matches!(language, "rust" | "no_run" | "compile_fail" | "should_panic" | "ignore")
+    fence
+        .split(|character: char| character == ',' || character.is_whitespace())
+        .filter(|attribute| !attribute.is_empty())
+        .all(is_rust_fence_attribute)
+}
+
+/// Whether one rustdoc fence attribute leaves the block a compiled Rust doctest.
+///
+/// These are the attributes that qualify the doctest rather than replace its
+/// language: `ignore` and its `ignore-<target>` reason form, the run and outcome
+/// attributes, `test_harness`, `standalone_crate`, and any `edition####`.
+fn is_rust_fence_attribute(attribute: &str) -> bool {
+    matches!(
+        attribute,
+        "rust" | "no_run" | "compile_fail" | "should_panic" | "test_harness" | "standalone_crate"
+    ) || attribute == "ignore"
+        || attribute.starts_with("ignore-")
+        || is_edition_fence_attribute(attribute)
+}
+
+/// Whether an attribute is an `edition####` selector, such as `edition2021`.
+///
+/// The four-digit shape is required so that an unrelated attribute merely
+/// beginning with `edition` is not read as one.
+fn is_edition_fence_attribute(attribute: &str) -> bool {
+    attribute
+        .strip_prefix("edition")
+        .is_some_and(|year| year.len() == 4 && year.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
 fn is_allowlisted_prod_panic_hit(_rel_path: &str, line: &str) -> bool {
@@ -3622,6 +3655,66 @@ mod tests {
         assert_eq!(panics.len(), 2);
         assert!(unwraps[0].contains(":2:"));
         assert!(panics.iter().all(|line| line.contains("ratchet_fixture.rs")));
+        Ok(())
+    }
+
+    #[test]
+    fn rust_fences_cover_rustdoc_attribute_forms() {
+        // Bare fences are the tree's most common form and compile as Rust.
+        assert!(is_rust_doctest_fence(""));
+        assert!(is_rust_doctest_fence("rust"));
+
+        // Comma- and whitespace-separated attributes are both rustdoc syntax.
+        assert!(is_rust_doctest_fence("rust,ignore"));
+        assert!(is_rust_doctest_fence("rust,no_run"));
+        assert!(is_rust_doctest_fence("rust ignore"));
+        assert!(is_rust_doctest_fence("rust, no_run"));
+
+        // Attributes that qualify the doctest without replacing its language.
+        assert!(is_rust_doctest_fence("ignore"));
+        assert!(is_rust_doctest_fence("ignore-x86_64"));
+        assert!(is_rust_doctest_fence("no_run"));
+        assert!(is_rust_doctest_fence("compile_fail"));
+        assert!(is_rust_doctest_fence("should_panic"));
+        assert!(is_rust_doctest_fence("test_harness"));
+        assert!(is_rust_doctest_fence("standalone_crate"));
+        assert!(is_rust_doctest_fence("edition2021"));
+        assert!(is_rust_doctest_fence("edition2024"));
+        assert!(is_rust_doctest_fence("rust,edition2018,no_run"));
+
+        // Other languages are not compiled, so their contents must not be scanned.
+        for other in ["text", "bash", "perl", "json", "lua", "console"] {
+            assert!(!is_rust_doctest_fence(other), "{other} is not a Rust doctest");
+        }
+
+        // One foreign attribute disqualifies the whole fence.
+        assert!(!is_rust_doctest_fence("rust,text"));
+
+        // `edition` needs its four digits; a lookalike attribute is not an edition.
+        assert!(!is_rust_doctest_fence("editionfoo"));
+        assert!(!is_rust_doctest_fence("edition"));
+    }
+
+    #[test]
+    fn doctest_scanner_reports_hits_in_comma_form_rust_fences() -> Result<()> {
+        // The tree's 165 `rust,ignore` fences are the form the dropped
+        // whitespace-splitting implementation skipped entirely.
+        let lines = vec![
+            "//! ```rust,ignore".to_string(),
+            "//! let _ = value.unwrap();".to_string(),
+            "//! ```".to_string(),
+            "//! ```rust no_run".to_string(),
+            "//! panic!(\"boom\");".to_string(),
+            "//! ```".to_string(),
+            "//! ```json".to_string(),
+            "//! panic!(\"not Rust\");".to_string(),
+            "//! ```".to_string(),
+        ];
+        let (unwraps, panics) =
+            scan_doctest_source(Path::new("crates/demo/src/lib.rs"), Path::new("/repo"), &lines)?;
+
+        assert_eq!(unwraps.len(), 1);
+        assert_eq!(panics.len(), 1);
         Ok(())
     }
 
