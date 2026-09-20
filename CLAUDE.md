@@ -85,13 +85,13 @@ Reachable/Promoted/Consolidated is **inventory, not product**. Background:
 OR bounce back (`needs-*`) — never both in the same pass. Per the 2026-04-26 #6780
 incident, applying both confused the merge gate and let unfixed bugs ride to main.
 
-**No GitHub-enforced merge check depends on label state**: the two required checks
-(`Perl LSP Rust Small Result`, `ripr+ New Gap Gate` — classic branch-protection status
-checks) green on the exact head, plus 0 unresolved conversation threads (this repo's
-conversation-resolution convention — enforced by the `main` branch ruleset's
-`required_review_thread_resolution` rule; classic branch protection's own
-`required_conversation_resolution` setting is off) is what gates a merge
-attempt — not `needs-*`/`merge-ready`. The mechanical `needs-label-gate` that once
+**No GitHub-enforced merge check depends on label state**: the checks the **Merge and
+CI** section below names green on the exact head, plus 0 unresolved conversation threads
+(this repo's conversation-resolution convention — enforced by ruleset `8029855`'s
+`required_review_thread_resolution` rule) is what gates a merge attempt — not
+`needs-*`/`merge-ready`. Which checks those are is stated once, there; read it before
+acting on a red or missing one, because the answer differs between GitHub's own
+enforcement and this repository's merge tooling. The mechanical `needs-label-gate` that once
 blocked a GitHub merge on `needs-*` presence was retired (#4005). That doesn't make
 `needs-*` inert: the `queue_reconciler` cron strips the `merge-ready` navigation
 label when a non-CI `needs-*` label is present or live CI is red, and the ops merge
@@ -132,13 +132,51 @@ for worktree mechanics.
 
 ## Merge and CI
 
-Exactly two branch-protection required checks (authoritative:
-[.ci/policies/required-checks.toml](.ci/policies/required-checks.toml)):
-- `Perl LSP Rust Small Result`
-- `ripr+ New Gap Gate`
+**Two different gates carry the same word "required" here, and they do not agree.** This
+section used to name only the first pair and read as though that settled both. It does
+not. Say which gate you mean.
 
-(`Codecov / Patch 95`, `CI Gate (Merge-Blocking)`, `PR Smoke` are advisory — not
-required.) Merge in batches of 3 (CI cancellation cascade); run
+**1. The GitHub ruleset** — ruleset `8029855` on the default branch (`master`) requires
+exactly one status context, plus review-thread resolution:
+- `Publication Sync Contract`
+
+Verify with `GET /repos/{owner}/{repo}/rulesets`. This is the live, readable authority
+and it outranks every document, this file included.
+
+**2. This repository's merge tooling** — [`.ci/policies/required-checks.toml`](.ci/policies/required-checks.toml)
+carries `required = true` on **three** `[[checks]]` entries, not one:
+`Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, and `Publication Sync Contract`.
+`required_check_names_from_policy` in [`xtask/src/tasks/merge_ready.rs`](xtask/src/tasks/merge_ready.rs)
+reads every `required = true` entry, and `queue_reconciler` consumes the same list. So
+`cargo xtask merge-ready` and the reconciler cron hold a PR on all three. That is real
+process discipline; it is simply not the ruleset.
+
+**`required = true` there is partly an intent, not a live gate.** The inventory's own
+`reason` for `Perl LSP Rust Small Result` says so: "Master protection *should* require
+the routed Rust aggregate before merge. Ruleset 8029855 does not carry this context
+today ... adding the context is a repository-settings change." So that entry records
+where the repository wants to get to, and the tooling enforces it locally in the
+meantime.
+
+Both of the first two are marked `enforcement = "github-branch-protection"` — *classic*
+protection rather than the ruleset — and `GET /repos/{owner}/{repo}/branches/master/protection`
+returns `Resource not accessible by integration` for the token agents run with. An agent
+cannot read that setting and must not assert it either way. The indirect evidence points
+at "not enforced": measured 2026-09-20 across the twelve most recently merged PRs,
+`ripr+ New Gap Gate` concluded `failure` on eight of them and blocked none, and
+`Perl LSP Rust Small Result` posted on one of fifteen. That is inference from merge
+history, not the setting.
+
+Practical rule until an admin reads classic protection: a red `ripr+ New Gap Gate` here
+blocks your `merge-ready` run and is unproven as a GitHub gate. Do not route around the
+first by citing the second.
+
+**Do not carry either answer across repositories.** Both of those contexts **are**
+ruleset-required in `perl-lsp-swarm`, where development happens, and the swarm's live
+ruleset requires five contexts: `Compile All Targets (bit-rot guard)`, `Conflict marker
+check`, `validate-title`, `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`.
+
+Merge in batches of 3 (CI cancellation cascade); run
 `just cpan-corpus-ratchet` after parser merges — batch-of-3 mechanics:
 [.claude/agents/ops.md](.claude/agents/ops.md) and
 [PROCESS_LESSONS.md §3](docs/reference/PROCESS_LESSONS.md). **Before merging a batch,
