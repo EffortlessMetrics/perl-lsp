@@ -15,13 +15,22 @@ const REQUIRED_CANCEL_IN_PROGRESS: &str =
 
 #[derive(Debug, Clone, Deserialize)]
 struct RequiredChecksPolicy {
+    /// Required-shape workflows: the full trigger/concurrency contract below.
     check: Vec<PolicyCheck>,
+    /// Branch-protection status-context inventory. These workflows are
+    /// deliberately different shapes, so only the default-branch rule applies.
+    #[serde(default)]
+    checks: Vec<PolicyCheck>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct PolicyCheck {
     name: String,
     workflow: String,
+    /// Absent means advisory. Several `[[checks]]` inventory entries omit the
+    /// field entirely, and `cargo xtask merge-ready` reads them the same way:
+    /// only an explicit `required = true` is required.
+    #[serde(default)]
     required: bool,
 }
 
@@ -95,12 +104,33 @@ fn evaluate_policy(root: &Path, policy_path: &Path) -> Result<Vec<WorkflowEvalua
     let policy: RequiredChecksPolicy = toml::from_str(&raw)
         .with_context(|| format!("parsing policy file {}", policy_path.display()))?;
 
-    policy
+    let shape = policy
         .check
         .into_iter()
         .filter(|entry| entry.required)
-        .map(|entry| evaluate_required_workflow(root, entry))
-        .collect()
+        .map(|entry| evaluate_required_workflow(root, entry, RuleSet::RequiredShape));
+    let inventory = policy
+        .checks
+        .into_iter()
+        .filter(|entry| entry.required)
+        .map(|entry| evaluate_required_workflow(root, entry, RuleSet::DefaultBranchOnly));
+
+    shape.chain(inventory).collect()
+}
+
+/// Which rules apply to one policy entry.
+///
+/// `Perl LSP Rust Small Result` owned a workflow whose `pull_request` filter
+/// named `main`, a branch this repository does not have, so it never ran once
+/// in the repository's history (#10109). It went uncaught because the lint read
+/// only `[[check]]` entries, and because no rule looked at `pull_request`
+/// branches at all — `push_targets_master` looked only at `push`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RuleSet {
+    /// The `ci.yml`-shaped contract: triggers, concurrency, no path filters.
+    RequiredShape,
+    /// Only: the workflow exists and can fire on pull requests into `master`.
+    DefaultBranchOnly,
 }
 
 fn evaluate_fixture(fixture_path: &Path) -> Result<WorkflowEvaluation> {
@@ -111,10 +141,15 @@ fn evaluate_fixture(fixture_path: &Path) -> Result<WorkflowEvaluation> {
         true,
         fixture_path.exists(),
         Some(&workflow),
+        RuleSet::RequiredShape,
     ))
 }
 
-fn evaluate_required_workflow(root: &Path, check: PolicyCheck) -> Result<WorkflowEvaluation> {
+fn evaluate_required_workflow(
+    root: &Path,
+    check: PolicyCheck,
+    rules: RuleSet,
+) -> Result<WorkflowEvaluation> {
     let workflow_path = root.join(&check.workflow);
     let workflow =
         if workflow_path.exists() { Some(read_workflow_yaml(&workflow_path)?) } else { None };
@@ -125,6 +160,7 @@ fn evaluate_required_workflow(root: &Path, check: PolicyCheck) -> Result<Workflo
         check.required,
         workflow_path.exists(),
         workflow.as_ref(),
+        rules,
     ))
 }
 
@@ -134,6 +170,7 @@ fn evaluate_required_entry(
     required: bool,
     workflow_exists: bool,
     workflow_yaml: Option<&Value>,
+    rules: RuleSet,
 ) -> WorkflowEvaluation {
     let mut violations = Vec::new();
 
@@ -143,28 +180,37 @@ fn evaluate_required_entry(
         }
 
         if let Some(yaml) = workflow_yaml {
+            // Both rule sets: a required context that cannot fire on a pull
+            // request into this repository's default branch reports nothing,
+            // and a check that never reports proves nothing.
             if !has_trigger(yaml, "pull_request") {
                 violations.push("missing pull_request trigger".to_string());
+            } else if !pull_request_targets_master(yaml) {
+                violations.push("pull_request trigger must target master branch".to_string());
             }
-            if !has_trigger(yaml, "merge_group") {
-                violations.push("missing merge_group trigger".to_string());
-            }
-            if !push_targets_master(yaml) {
-                violations.push("push trigger must target master branch".to_string());
-            }
-            if has_path_filters(yaml) {
-                violations.push("path filters are not allowed on required workflows".to_string());
-            }
-            if !has_event_aware_concurrency(yaml) {
-                violations.push(format!(
-                    "concurrency.cancel-in-progress must be `{REQUIRED_CANCEL_IN_PROGRESS}`"
-                ));
-            }
-            if pull_request_has_label_triggers(yaml) {
-                violations.push(
-                    "required CI workflows must not trigger on pull_request labeled/unlabeled"
-                        .to_string(),
-                );
+
+            if rules == RuleSet::RequiredShape {
+                if !has_trigger(yaml, "merge_group") {
+                    violations.push("missing merge_group trigger".to_string());
+                }
+                if !push_targets_master(yaml) {
+                    violations.push("push trigger must target master branch".to_string());
+                }
+                if has_path_filters(yaml) {
+                    violations
+                        .push("path filters are not allowed on required workflows".to_string());
+                }
+                if !has_event_aware_concurrency(yaml) {
+                    violations.push(format!(
+                        "concurrency.cancel-in-progress must be `{REQUIRED_CANCEL_IN_PROGRESS}`"
+                    ));
+                }
+                if pull_request_has_label_triggers(yaml) {
+                    violations.push(
+                        "required CI workflows must not trigger on pull_request labeled/unlabeled"
+                            .to_string(),
+                    );
+                }
             }
         }
     }
@@ -180,9 +226,14 @@ fn evaluate_required_entry(
 
 fn read_workflow_yaml(path: &Path) -> Result<Value> {
     let raw = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-    let parsed = serde_yaml_ng::from_str(&raw)
-        .with_context(|| format!("parsing workflow YAML {}", path.display()))?;
-    Ok(parsed)
+    read_workflow_yaml_str(&raw)
+        .with_context(|| format!("parsing workflow YAML {}", path.display()))
+}
+
+/// Parse workflow YAML already in memory. Fallible so callers propagate the
+/// error with `?` instead of aborting on malformed input.
+fn read_workflow_yaml_str(raw: &str) -> Result<Value> {
+    serde_yaml_ng::from_str(raw).context("parsing workflow YAML")
 }
 
 fn has_trigger(workflow: &Value, trigger_name: &str) -> bool {
@@ -199,6 +250,112 @@ fn has_trigger(workflow: &Value, trigger_name: &str) -> bool {
             mapping.iter().any(|(key, _)| key.as_str().is_some_and(|item| item == trigger_name))
         }
         _ => false,
+    }
+}
+
+/// The repository's default branch, the base a required check must be able to
+/// report on. `branch_targets_master` above is the older exact-match helper the
+/// `push` rule still uses; the `pull_request` rule below models GitHub's actual
+/// filter-pattern semantics instead.
+const DEFAULT_BRANCH: &str = "master";
+
+/// Whether a `pull_request` trigger can fire on pull requests into `master`.
+///
+/// An absent filter matches every base branch, which is why it passes. Only a
+/// filter that excludes `master` is a violation: that is the shape which
+/// silenced `Perl LSP Rust Small Result` for its whole lifetime by naming
+/// `main`, which this repository does not have (#10109).
+///
+/// `branches` and `branches-ignore` are mutually exclusive for one event in
+/// GitHub's schema, so they are read independently rather than combined.
+fn pull_request_targets_master(workflow: &Value) -> bool {
+    let Some(Value::Mapping(on)) = get_on(workflow) else {
+        // List form (`on: [pull_request]`) carries no branch filter.
+        return true;
+    };
+
+    let Some(Value::Mapping(pull_request)) = on.get(Value::String("pull_request".to_string()))
+    else {
+        // `pull_request:` with a null or scalar body carries no filter.
+        return true;
+    };
+
+    if let Some(ignore) = pull_request.get(Value::String("branches-ignore".to_string())) {
+        // Any match excludes the branch; `branches-ignore` takes no negations.
+        return !filter_patterns(ignore)
+            .iter()
+            .any(|pattern| branch_pattern_matches(pattern, DEFAULT_BRANCH));
+    }
+
+    match pull_request.get(Value::String("branches".to_string())) {
+        Some(branches) => branch_filter_includes_master(branches),
+        None => true,
+    }
+}
+
+/// Whether a `branches:` filter admits `master`.
+///
+/// GitHub evaluates the list in order and the last matching pattern wins, so a
+/// trailing `'!master'` excludes a branch an earlier `'*'` admitted.
+fn branch_filter_includes_master(branches: &Value) -> bool {
+    let mut included = false;
+
+    for pattern in filter_patterns(branches) {
+        match pattern.strip_prefix('!') {
+            Some(negated) => {
+                if branch_pattern_matches(negated, DEFAULT_BRANCH) {
+                    included = false;
+                }
+            }
+            None => {
+                if branch_pattern_matches(&pattern, DEFAULT_BRANCH) {
+                    included = true;
+                }
+            }
+        }
+    }
+
+    included
+}
+
+/// The patterns of a `branches`/`branches-ignore` value, in order.
+fn filter_patterns(value: &Value) -> Vec<String> {
+    match value {
+        Value::String(single) => vec![single.clone()],
+        Value::Sequence(items) => {
+            items.iter().filter_map(Value::as_str).map(str::to_string).collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// GitHub's branch filter-pattern match, for the subset a branch name can use.
+///
+/// `*` matches any run of characters except `/`, `**` matches any run including
+/// `/`, and `?` matches one character. `refs/heads/` is accepted as a prefix
+/// because workflows in this tree spell branches both ways.
+fn branch_pattern_matches(pattern: &str, branch: &str) -> bool {
+    let pattern = pattern.strip_prefix("refs/heads/").unwrap_or(pattern);
+    glob_matches(pattern.as_bytes(), branch.as_bytes())
+}
+
+/// Backtracking glob match. `**` crosses `/`; a single `*` does not.
+fn glob_matches(pattern: &[u8], text: &[u8]) -> bool {
+    let Some((head, rest)) = pattern.split_first() else {
+        return text.is_empty();
+    };
+
+    match head {
+        b'*' if rest.first() == Some(&b'*') => {
+            let tail = &rest[1..];
+            // `**` consumes any prefix of the remaining text, separators included.
+            (0..=text.len()).any(|split| glob_matches(tail, &text[split..]))
+        }
+        b'*' => (0..=text.len())
+            .take_while(|split| !text[..*split].contains(&b'/'))
+            .any(|split| glob_matches(rest, &text[split..])),
+        b'?' => !text.is_empty() && text[0] != b'/' && glob_matches(rest, &text[1..]),
+        literal => text.first() == Some(literal) && glob_matches(rest, &text[1..]),
     }
 }
 
@@ -364,8 +521,9 @@ mod tests {
             true,
             true,
             Some(&fixture),
+            RuleSet::RequiredShape,
         );
-        assert!(eval.ok);
+        assert!(eval.ok, "violations were {:?}", eval.violations);
         Ok(())
     }
 
@@ -378,6 +536,7 @@ mod tests {
             true,
             true,
             Some(&fixture),
+            RuleSet::RequiredShape,
         );
         assert!(!eval.ok);
         assert!(eval.violations.iter().any(|item| item.contains("labeled/unlabeled")));
@@ -393,9 +552,106 @@ mod tests {
             true,
             true,
             Some(&fixture),
+            RuleSet::RequiredShape,
         );
         assert!(!eval.ok);
         assert!(eval.violations.iter().any(|item| item.contains("merge_group")));
         Ok(())
+    }
+
+    /// The #10109 shape: every other required rule satisfied, wrong base branch.
+    #[test]
+    fn pull_request_naming_only_main_fails_under_both_rule_sets() -> Result<()> {
+        let fixture = load_fixture("pull-request-wrong-branch.yml")?;
+        for rules in [RuleSet::RequiredShape, RuleSet::DefaultBranchOnly] {
+            let eval = evaluate_required_entry(
+                "fixture",
+                "fixture.yml".to_string(),
+                true,
+                true,
+                Some(&fixture),
+                rules,
+            );
+            assert!(!eval.ok, "{rules:?} must reject a pull_request filter naming only main");
+            assert!(
+                eval.violations
+                    .iter()
+                    .any(|item| item == "pull_request trigger must target master branch"),
+                "{rules:?} violations were {:?}",
+                eval.violations
+            );
+        }
+        Ok(())
+    }
+
+    /// The inventory rule set carries only the default-branch rule, so a
+    /// workflow that is a different shape on purpose must still pass it.
+    #[test]
+    fn inventory_rule_set_ignores_the_required_shape_contract() -> Result<()> {
+        let fixture = load_fixture("missing-merge-group.yml")?;
+        let eval = evaluate_required_entry(
+            "fixture",
+            "fixture.yml".to_string(),
+            true,
+            true,
+            Some(&fixture),
+            RuleSet::DefaultBranchOnly,
+        );
+        assert!(eval.ok, "violations were {:?}", eval.violations);
+        Ok(())
+    }
+
+    fn parse(yaml: &str) -> Result<Value> {
+        read_workflow_yaml_str(yaml)
+    }
+
+    /// Each case is `(yaml, can this fire on a pull request into master)`.
+    #[test]
+    fn pull_request_branch_filter_boundary() -> Result<()> {
+        let cases: [(&str, bool); 20] = [
+            // Explicit `branches`, master present, in either position and form.
+            ("on:\n  pull_request:\n    branches: [master]", true),
+            ("on:\n  pull_request:\n    branches: [master, main]", true),
+            ("on:\n  pull_request:\n    branches: [main, master]", true),
+            ("on:\n  pull_request:\n    branches:\n      - main\n      - master", true),
+            ("on:\n  pull_request:\n    branches: refs/heads/master", true),
+            // Explicit `branches` that omit master.
+            ("on:\n  pull_request:\n    branches: [main]", false),
+            ("on:\n  pull_request:\n    branches: [main, develop]", false),
+            ("on:\n  pull_request:\n    branches: main", false),
+            // No filter matches every base branch.
+            ("on: [pull_request]", true),
+            ("on:\n  pull_request:\n    types: [opened]", true),
+            ("on:\n  pull_request:", true),
+            // Wildcards. `*` stops at `/`, `**` crosses it, `?` is one character.
+            ("on:\n  pull_request:\n    branches: ['*']", true),
+            ("on:\n  pull_request:\n    branches: ['**']", true),
+            ("on:\n  pull_request:\n    branches: ['mast*']", true),
+            ("on:\n  pull_request:\n    branches: ['maste?']", true),
+            ("on:\n  pull_request:\n    branches: ['releases/*']", false),
+            // Negation, evaluated in order, last match wins.
+            ("on:\n  pull_request:\n    branches: ['*', '!master']", false),
+            ("on:\n  pull_request:\n    branches: ['!master', '*']", true),
+            // `branches-ignore`: any match excludes the branch.
+            ("on:\n  pull_request:\n    branches-ignore: [master]", false),
+            ("on:\n  pull_request:\n    branches-ignore: [gh-pages]", true),
+        ];
+
+        for (yaml, expected) in cases {
+            let actual = pull_request_targets_master(&parse(yaml)?);
+            assert_eq!(actual, expected, "for {yaml:?}");
+        }
+        Ok(())
+    }
+
+    /// `*` must not cross a path separator, or `releases/*` would admit
+    /// anything and the filter rule would stop meaning what it says.
+    #[test]
+    fn single_star_does_not_cross_a_separator() {
+        assert!(branch_pattern_matches("releases/*", "releases/v1"));
+        assert!(!branch_pattern_matches("releases/*", "releases/v1/hotfix"));
+        assert!(branch_pattern_matches("releases/**", "releases/v1/hotfix"));
+        assert!(!branch_pattern_matches("*", "releases/v1"));
+        assert!(branch_pattern_matches("**", "releases/v1"));
     }
 }

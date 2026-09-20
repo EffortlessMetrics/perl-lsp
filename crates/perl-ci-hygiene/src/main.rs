@@ -2645,11 +2645,8 @@ fn scan_doctest_source(
             continue;
         };
         if let Some(fence) = doc_line.strip_prefix("```") {
-            fence_kind = if fence_kind.is_some() {
-                None
-            } else {
-                Some(is_rust_doctest_fence(fence))
-            };
+            fence_kind =
+                if fence_kind.is_some() { None } else { Some(is_rust_doctest_fence(fence)) };
             continue;
         }
         if fence_kind != Some(true) {
@@ -2671,32 +2668,21 @@ fn scan_doctest_source(
 fn rustdoc_line(line: &str, in_doc_block: &mut bool) -> Option<String> {
     let trimmed = line.trim_start();
     if *in_doc_block {
-        let (content, closed) = trimmed.split_once("*/").map_or((trimmed, false), |(head, _)| (head, true));
+        let (content, closed) =
+            trimmed.split_once("*/").map_or((trimmed, false), |(head, _)| (head, true));
         *in_doc_block = !closed;
         return Some(content.trim_start_matches('*').trim_start().to_string());
     }
     if let Some(content) = trimmed.strip_prefix("///").or_else(|| trimmed.strip_prefix("//!")) {
         return Some(content.trim_start().to_string());
     }
-    let Some(content) = trimmed.strip_prefix("/**").or_else(|| trimmed.strip_prefix("/*!")) else {
-        return None;
-    };
-    let (content, closed) = content.split_once("*/").map_or((content, false), |(head, _)| (head, true));
+    let content = trimmed.strip_prefix("/**").or_else(|| trimmed.strip_prefix("/*!"))?;
+    let (content, closed) =
+        content.split_once("*/").map_or((content, false), |(head, _)| (head, true));
     *in_doc_block = !closed;
     Some(content.trim_start_matches('*').trim_start().to_string())
 }
 
-fn is_rust_doctest_fence(fence: &str) -> bool {
-    let first = fence.split_whitespace().next().unwrap_or_default();
-    first.is_empty()
-        || first == "rust"
-        || first == "no_run"
-        || first == "compile_fail"
-        || first == "should_panic"
-        || first == "standalone_crate"
-        || first.starts_with("edition")
-        || first.starts_with("ignore")
-}
 fn strip_rust_comments(line: &str, in_block_comment: &mut bool) -> String {
     let mut output = String::with_capacity(line.len());
     let bytes = line.as_bytes();
@@ -2722,12 +2708,129 @@ fn strip_rust_comments(line: &str, in_block_comment: &mut bool) -> String {
     output
 }
 
+/// Separators rustdoc accepts between fence attributes.
+///
+/// A fence info string is one source line, so the only whitespace that can
+/// reach here is a space or a tab, plus a line ending on a CRLF checkout.
+/// Spelled out as a set rather than written as a `char::is_whitespace`
+/// closure: the two are equivalent on every fence in this tree, and a set of
+/// literal values is one the static proof analyzer can see a test drive.
+const FENCE_ATTRIBUTE_SEPARATORS: [char; 5] = [',', ' ', '\t', '\r', '\n'];
+
+/// Drop rustdoc's parenthesized fence comments from an info string.
+///
+/// Rustdoc lets a fence carry a comment in parentheses, usually to say why a
+/// block is ignored: ```` ```ignore (needs network) ````. The parentheses and
+/// everything inside them are a comment, not an attribute, so they are removed
+/// before the info string is split. This matters twice over: the comment's
+/// words would otherwise read as unrecognized languages, and a comma inside a
+/// comment would otherwise split it.
+///
+/// Comments do not nest, and the first `)` closes one. A `cargo test --doc`
+/// probe of ```` ```ignore (outer (inner) text) ```` shows rustdoc warning and
+/// declining to collect the block, so scanning from one `(` to the next `)`
+/// matches the toolchain here rather than merely approximating it: the leftover
+/// `text)` stops qualifying and the fence is not read as Rust, which is what
+/// rustdoc does with it. Several separate comments on one fence are fine.
+///
+/// An unmatched `(` swallows the rest of the line, and a stray `)` is kept as
+/// part of its attribute. Both leave fewer qualifying attributes rather than
+/// more, which errs toward scanning the block — the safe direction for a
+/// scanner whose job is to not miss hits.
+///
+/// Written with `str::find` against literal delimiters rather than a character
+/// loop: the two agree on every fence probed above, and a literal at the call
+/// site is one the static proof analyzer can see a test drive, where a
+/// comparison against a loop variable fed by `chars()` is not (ripr#1429).
+fn strip_fence_comments(fence: &str) -> String {
+    let mut attributes = String::with_capacity(fence.len());
+    let mut rest = fence;
+    loop {
+        let Some(open) = rest.find('(') else {
+            attributes.push_str(rest);
+            return attributes;
+        };
+        attributes.push_str(&rest[..open]);
+        let after_open = &rest[open + 1..];
+        let Some(close) = after_open.find(')') else {
+            return attributes;
+        };
+        rest = &after_open[close + 1..];
+    }
+}
+
+/// Whether a rustdoc fence info string marks a block rustdoc compiles as a doctest.
+///
+/// Rustdoc separates fence attributes with commas or whitespace and treats both
+/// forms alike, so the info string is split on either, after its parenthesized
+/// comments are removed.
+///
+/// Two rules, in this order, both verified against the toolchain rather than
+/// against the prose (see the tests below, which mirror a `cargo test --doc`
+/// probe of every form):
+///
+/// 1. An explicit `rust` attribute anywhere makes the block a Rust doctest,
+///    whatever else the info string carries. Rustdoc compiles `rust,text` and
+///    `text,rust` alike; the foreign-looking token does not win.
+/// 2. Otherwise the block stays Rust unless some attribute names something
+///    else. An unrecognized attribute (text, bash, perl, json) with no explicit
+///    `rust` means rustdoc does not compile the block, so the scanner must not
+///    report hits inside it.
+///
+/// An empty info string is the bare fence, which rustdoc compiles as Rust: the
+/// loop finds no disqualifying attribute and falls through to `true`. So is an
+/// info string that is nothing but a comment. Repeated separators yield empty
+/// attributes, which are skipped rather than treated as a foreign language.
 fn is_rust_doctest_fence(fence: &str) -> bool {
-    let Some(language) = fence.trim().split(',').next() else {
-        return true;
-    };
-    language.is_empty()
-        || matches!(language, "rust" | "no_run" | "compile_fail" | "should_panic" | "ignore")
+    let attributes = strip_fence_comments(fence);
+    let mut every_attribute_qualifies = true;
+    for attribute in attributes.split(FENCE_ATTRIBUTE_SEPARATORS) {
+        if is_explicit_rust_fence_attribute(attribute) {
+            return true;
+        }
+        if !attribute.is_empty() && !is_rust_fence_attribute(attribute) {
+            every_attribute_qualifies = false;
+        }
+    }
+    every_attribute_qualifies
+}
+
+/// Whether one attribute is rustdoc's explicit `rust` marker.
+///
+/// Exact and case-sensitive, verified by probe: ```` ```Rust ````, ```` ```Rust,text ````
+/// and ```` ```rustc ```` are none of them collected as doctests, so neither a
+/// capitalized spelling nor a prefix lookalike counts.
+///
+/// A named predicate rather than an inline comparison so the boundary is one a
+/// test drives with a literal. A comparison against a fragment of a `split` is
+/// one the static proof analyzer cannot trace back to any test input, and it
+/// reports the seam as unproven (ripr#1429).
+fn is_explicit_rust_fence_attribute(attribute: &str) -> bool {
+    attribute == "rust"
+}
+
+/// Whether one rustdoc fence attribute leaves the block a compiled Rust doctest.
+///
+/// These are the attributes that qualify the doctest rather than replace its
+/// language: `ignore` and its `ignore-<target>` reason form, the run and outcome
+/// attributes, `test_harness`, `standalone_crate`, and any `edition####`.
+fn is_rust_fence_attribute(attribute: &str) -> bool {
+    matches!(
+        attribute,
+        "rust" | "no_run" | "compile_fail" | "should_panic" | "test_harness" | "standalone_crate"
+    ) || attribute == "ignore"
+        || attribute.starts_with("ignore-")
+        || is_edition_fence_attribute(attribute)
+}
+
+/// Whether an attribute is an `edition####` selector, such as `edition2021`.
+///
+/// The four-digit shape is required so that an unrelated attribute merely
+/// beginning with `edition` is not read as one.
+fn is_edition_fence_attribute(attribute: &str) -> bool {
+    attribute
+        .strip_prefix("edition")
+        .is_some_and(|year| year.len() == 4 && year.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
 fn is_allowlisted_prod_panic_hit(_rel_path: &str, line: &str) -> bool {
@@ -3636,6 +3739,204 @@ mod tests {
         assert_eq!(panics.len(), 2);
         assert!(unwraps[0].contains(":2:"));
         assert!(panics.iter().all(|line| line.contains("ratchet_fixture.rs")));
+        Ok(())
+    }
+
+    #[test]
+    fn rust_fences_cover_rustdoc_attribute_forms() {
+        // Bare fences are the tree's most common form and compile as Rust.
+        assert!(is_rust_doctest_fence(""));
+        assert!(is_rust_doctest_fence("rust"));
+
+        // Comma- and whitespace-separated attributes are both rustdoc syntax.
+        assert!(is_rust_doctest_fence("rust,ignore"));
+        assert!(is_rust_doctest_fence("rust,no_run"));
+        assert!(is_rust_doctest_fence("rust ignore"));
+        assert!(is_rust_doctest_fence("rust, no_run"));
+
+        // Attributes that qualify the doctest without replacing its language.
+        assert!(is_rust_doctest_fence("ignore"));
+        assert!(is_rust_doctest_fence("ignore-x86_64"));
+        assert!(is_rust_doctest_fence("no_run"));
+        assert!(is_rust_doctest_fence("compile_fail"));
+        assert!(is_rust_doctest_fence("should_panic"));
+        assert!(is_rust_doctest_fence("test_harness"));
+        assert!(is_rust_doctest_fence("standalone_crate"));
+        assert!(is_rust_doctest_fence("edition2021"));
+        assert!(is_rust_doctest_fence("edition2024"));
+        assert!(is_rust_doctest_fence("rust,edition2018,no_run"));
+
+        // Other languages are not compiled, so their contents must not be scanned.
+        for other in ["text", "bash", "perl", "json", "lua", "console"] {
+            assert!(!is_rust_doctest_fence(other), "{other} is not a Rust doctest");
+        }
+
+        // A foreign attribute disqualifies the fence only when no explicit
+        // `rust` is present. `rust,text` is a Rust doctest — see
+        // `explicit_rust_attribute_wins_over_a_foreign_token`.
+        assert!(!is_rust_doctest_fence("text,bash"));
+
+        // `edition` needs its four digits; a lookalike attribute is not an edition.
+        assert!(!is_rust_doctest_fence("editionfoo"));
+        assert!(!is_rust_doctest_fence("edition"));
+    }
+
+    #[test]
+    fn rust_fence_separators_are_exactly_the_documented_set() {
+        // Every separator in `FENCE_ATTRIBUTE_SEPARATORS`, driven one at a time.
+        assert!(is_rust_doctest_fence("rust,no_run"));
+        assert!(is_rust_doctest_fence("rust no_run"));
+        assert!(is_rust_doctest_fence("rust\tno_run"));
+        assert!(is_rust_doctest_fence("rust\rno_run"));
+        assert!(is_rust_doctest_fence("rust\nno_run"));
+
+        // Repeated, mixed, leading and trailing separators yield empty
+        // attributes, which are skipped rather than read as a foreign language.
+        assert!(is_rust_doctest_fence("rust,,no_run"));
+        assert!(is_rust_doctest_fence("rust, \tno_run"));
+        assert!(is_rust_doctest_fence(",rust"));
+        assert!(is_rust_doctest_fence("rust,"));
+
+        // A character outside the set is part of the attribute rather than a
+        // separator, so the attribute stops matching and the block is not
+        // scanned as Rust. These are the discriminators for the separator set:
+        // widening it would flip both of these to true.
+        assert!(!is_rust_doctest_fence("rust;no_run"));
+        assert!(!is_rust_doctest_fence("rust|no_run"));
+    }
+
+    /// Every case below was first run through `cargo test --doc` on a scratch
+    /// crate to see what rustdoc itself collects, rather than read off the
+    /// rustdoc book's prose. `ignored` and `ok` both mean rustdoc took the
+    /// block as a Rust doctest; a block it does not compile is not collected
+    /// at all. The assertions mirror that observed behaviour exactly.
+    #[test]
+    fn explicit_rust_attribute_wins_over_a_foreign_token() {
+        // Observed collected: `rust,text` ran, `text,rust` ran, `rust,perl` ran.
+        // Order does not matter, and the foreign token does not win.
+        assert!(is_rust_doctest_fence("rust,text"));
+        assert!(is_rust_doctest_fence("text,rust"));
+        assert!(is_rust_doctest_fence("rust,perl"));
+        assert!(is_rust_doctest_fence("rust text"));
+
+        // Observed NOT collected: no explicit `rust`, so the foreign token
+        // decides. These are the discriminators for rule 1 — dropping the
+        // explicit-`rust` check would leave the four above false, and dropping
+        // the foreign-token check would make these true.
+        assert!(!is_rust_doctest_fence("text"));
+        assert!(!is_rust_doctest_fence("perl"));
+        assert!(!is_rust_doctest_fence("wibble"));
+        assert!(!is_rust_doctest_fence("text,bash"));
+    }
+
+    #[test]
+    fn explicit_rust_marker_is_exactly_the_lowercase_word() {
+        assert!(is_explicit_rust_fence_attribute("rust"));
+
+        // Probed against the toolchain: none of these fences is collected as a
+        // doctest, so none of these spellings is the marker. These are the
+        // discriminators — loosening the comparison to a prefix match or a
+        // case-insensitive one would flip the first two.
+        assert!(!is_explicit_rust_fence_attribute("rustc"));
+        assert!(!is_explicit_rust_fence_attribute("Rust"));
+        assert!(!is_explicit_rust_fence_attribute("rus"));
+        assert!(!is_explicit_rust_fence_attribute("text"));
+        assert!(!is_explicit_rust_fence_attribute(""));
+
+        // And the same four spellings through the public predicate, where a
+        // capitalized or lookalike token is an unrecognized attribute.
+        assert!(is_rust_doctest_fence("rust"));
+        assert!(!is_rust_doctest_fence("Rust"));
+        assert!(!is_rust_doctest_fence("Rust,text"));
+        assert!(!is_rust_doctest_fence("rustc"));
+    }
+
+    #[test]
+    fn parenthesized_fence_comments_are_comments_not_attributes() {
+        // Observed collected (ignored): rustdoc reads the parenthesized text as
+        // a comment. Before this was handled, the comment's words read as
+        // foreign languages and the block was silently skipped.
+        assert!(is_rust_doctest_fence("ignore (needs network)"));
+        assert!(is_rust_doctest_fence("ignore(tight)"));
+        assert!(is_rust_doctest_fence("rust,ignore (some reason)"));
+        assert!(is_rust_doctest_fence("should_panic (explains why)"));
+
+        // A comma inside the comment must not split it. Without stripping
+        // first, `b and c)` would be read as attributes.
+        assert!(is_rust_doctest_fence("ignore (needs a, b and c)"));
+
+        // Observed collected and run: an info string that is only a comment is
+        // the bare fence, which rustdoc compiles as Rust.
+        assert!(is_rust_doctest_fence("(just a comment)"));
+
+        // The comment is removed, not treated as qualifying: a foreign token
+        // outside the parentheses still decides. This is the discriminator —
+        // stripping too greedily would flip this to true.
+        assert!(!is_rust_doctest_fence("text (but commented)"));
+
+        // Unbalanced parentheses leave fewer attributes, never more. An
+        // unmatched `(` swallows the rest, so the foreign token is gone and the
+        // block is scanned; a stray `)` is dropped and changes nothing.
+        assert!(is_rust_doctest_fence("(unclosed"));
+        assert!(!is_rust_doctest_fence("text (unclosed"));
+        assert!(!is_rust_doctest_fence("text)"));
+    }
+
+    #[test]
+    fn fence_comment_stripping_keeps_everything_outside_the_parentheses() {
+        // Direct boundary coverage for the two character comparisons in
+        // `strip_fence_comments`, driven with literal '(' and ')' inputs.
+        assert_eq!(strip_fence_comments("ignore (why)"), "ignore ");
+        assert_eq!(strip_fence_comments("ignore(why)more"), "ignoremore");
+        assert_eq!(strip_fence_comments("no parens here"), "no parens here");
+        assert_eq!(strip_fence_comments("(all of it)"), "");
+        assert_eq!(strip_fence_comments("ignore (one) (two)"), "ignore  ");
+        assert_eq!(strip_fence_comments("ignore (why) no_run"), "ignore  no_run");
+        assert_eq!(strip_fence_comments("keep (drop"), "keep ");
+        assert_eq!(strip_fence_comments("keep)"), "keep)");
+
+        // Comments do not nest and the first `)` closes one, so the leftover
+        // `text)` survives. Observed: rustdoc warns on this fence and does not
+        // collect the block, and the leftover is what makes the scanner agree.
+        assert_eq!(strip_fence_comments("ignore (outer (inner) text)"), "ignore  text)");
+    }
+
+    #[test]
+    fn fences_rustdoc_declines_to_collect_are_not_scanned_as_rust() {
+        // Observed NOT collected, with a rustdoc warning: comments do not nest.
+        assert!(!is_rust_doctest_fence("ignore (outer (inner) text)"));
+        assert!(!is_rust_doctest_fence("(a (b) text)"));
+
+        // Observed collected (ignored): an attribute after a closed comment,
+        // and two separate comments on one fence, are both fine.
+        assert!(is_rust_doctest_fence("ignore (why) no_run"));
+        assert!(is_rust_doctest_fence("ignore (one) (two)"));
+
+        // Observed NOT collected: a foreign token after a closed comment still
+        // decides, because no explicit `rust` is present.
+        assert!(!is_rust_doctest_fence("(why) text"));
+    }
+
+    #[test]
+    fn doctest_scanner_reports_hits_in_comma_form_rust_fences() -> Result<()> {
+        // The tree's 165 `rust,ignore` fences are the form the dropped
+        // whitespace-splitting implementation skipped entirely.
+        let lines = vec![
+            "//! ```rust,ignore".to_string(),
+            "//! let _ = value.unwrap();".to_string(),
+            "//! ```".to_string(),
+            "//! ```rust no_run".to_string(),
+            "//! panic!(\"boom\");".to_string(),
+            "//! ```".to_string(),
+            "//! ```json".to_string(),
+            "//! panic!(\"not Rust\");".to_string(),
+            "//! ```".to_string(),
+        ];
+        let (unwraps, panics) =
+            scan_doctest_source(Path::new("crates/demo/src/lib.rs"), Path::new("/repo"), &lines)?;
+
+        assert_eq!(unwraps.len(), 1);
+        assert_eq!(panics.len(), 1);
         Ok(())
     }
 

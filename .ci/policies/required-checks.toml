@@ -5,6 +5,11 @@ source = "ruleset-conventional"
 # workflow shape. `[[checks]]` entries are the merge-ready / branch-protection
 # status context inventory; only entries with `required = true` are treated as
 # required by `cargo xtask merge-ready`.
+#
+# workflow-trigger-lint additionally checks one rule against every required
+# `[[checks]]` entry: the workflow's `pull_request` filter must include this
+# repository's default branch. The full required-shape contract above is not
+# applied to them, because they are deliberately different shapes.
 
 [[check]]
 name = "CI Gate"
@@ -26,7 +31,7 @@ name = "Perl LSP Rust Small Result"
 workflow = ".github/workflows/em-ci-routed-rust.yml"
 required = true
 enforcement = "github-branch-protection"
-reason = "Live main protection requires the routed Rust aggregate before merge."
+reason = "Master protection should require the routed Rust aggregate before merge. Ruleset 8029855 does not carry this context today, and the workflow could not report at all until #10109 fixed its branch filter; adding the context is a repository-settings change."
 
 [[checks]]
 name = "ripr+ New Gap Gate"
