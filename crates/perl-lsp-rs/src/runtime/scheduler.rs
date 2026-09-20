@@ -1682,9 +1682,16 @@ mod tests {
         )
         .await;
 
+        // Capture the count, then drain, and only then assert. A regression
+        // here spawns a worker that reaches `spawn_blocking(handle_request)`,
+        // and panicking with that task live deadlocks the runtime at teardown:
+        // the failure prints its backtrace and then the process never exits,
+        // so CI would record a job timeout instead of this assertion. Aborting
+        // before the task is first polled keeps the regression legible.
+        let dispatched = in_flight.len();
+        in_flight.shutdown().await;
         assert_eq!(
-            in_flight.len(),
-            0,
+            dispatched, 0,
             "a stale completion with nothing pending must cancel before taking a permit"
         );
 
