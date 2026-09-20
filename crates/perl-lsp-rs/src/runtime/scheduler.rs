@@ -669,6 +669,29 @@ impl Scheduler {
         Some(StaleReason::DocumentGenerationAdvanced { captured, current })
     }
 
+    /// Re-capture completion freshness after its ordered mutation barrier.
+    ///
+    /// A completion request intentionally describes the document produced by
+    /// every `didChange` that arrived before it. While those mutations are
+    /// still queued its ingress snapshot is stale *by construction*, so the
+    /// barrier result — not ingress — is the correct baseline for the
+    /// staleness check that guards dispatch.
+    ///
+    /// Returns `None` only when there was no ingress snapshot to refresh, or
+    /// when the document is no longer open. Both leave freshness unenforced,
+    /// exactly as an absent ingress snapshot already does.
+    fn refresh_read_freshness(
+        server: &LspServer,
+        freshness: Option<&ReadFreshness>,
+    ) -> Option<ReadFreshness> {
+        let freshness = freshness?;
+        Some(ReadFreshness {
+            document_generation: server.document_generation(&freshness.uri),
+            document_version: server.document_version(&freshness.uri),
+            uri: freshness.uri.clone(),
+        })
+    }
+
     /// Why a stale read was cancelled. Used only for log/error messages.
     fn send_cancellation(
         server: &Arc<LspServer>,
@@ -704,6 +727,12 @@ impl Scheduler {
         mutation_seq_done: &Arc<AtomicU64>,
         mutation_notify: &Arc<Notify>,
     ) {
+        // A completion that waits on a mutation barrier is answered against
+        // the document those mutations produce, so its ingress snapshot is
+        // not the subject of the pre-dispatch staleness check.
+        let refresh_after_barrier =
+            queued.request.method == "textDocument/completion" && queued.wait_for_seq > 0;
+
         // Stale check 1: position dedupe — newer same-position request supersedes.
         if let Some(ref key) = queued.dedup_key {
             if let Some(&latest) = latest_seq.get(key) {
@@ -722,9 +751,11 @@ impl Scheduler {
         // Stale check 2: generation freshness — document moved on between
         // ingress and dispatch. This catches the typing-storm case where
         // every keystroke produces a unique position dedup key.
-        if let Some(reason) = Self::stale_read_reason(server, queued.freshness.as_ref()) {
-            Self::send_cancellation(server, queued.request.id, &queued.request.method, reason);
-            return;
+        if !refresh_after_barrier {
+            if let Some(reason) = Self::stale_read_reason(server, queued.freshness.as_ref()) {
+                Self::send_cancellation(server, queued.request.id, &queued.request.method, reason);
+                return;
+            }
         }
 
         let permit = match Arc::clone(permits).acquire_owned().await {
@@ -741,7 +772,7 @@ impl Scheduler {
         // we can attribute the mutation-barrier wait to a concrete read request.
         let read_wait_method =
             crate::runtime::timing::is_enabled().then(|| queued.request.method.clone());
-        let freshness = queued.freshness.clone();
+        let mut freshness = queued.freshness.clone();
         let method = queued.request.method.clone();
         let id = queued.request.id.clone();
 
@@ -761,6 +792,13 @@ impl Scheduler {
                     crate::runtime::timing::elapsed_ms(t_read_wait),
                     method,
                 ));
+            }
+
+            // The ordered mutations this completion waited for are now
+            // applied; re-baseline onto them so only a mutation that lands
+            // *after* the barrier counts as staleness.
+            if refresh_after_barrier {
+                freshness = Self::refresh_read_freshness(&srv, freshness.as_ref());
             }
 
             if let Some(reason) = Self::stale_read_reason(&srv, freshness.as_ref()) {
@@ -1166,16 +1204,35 @@ mod tests {
         arrival_seq: u64,
         id: i64,
     ) -> QueuedRead {
+        queued_position_read(
+            server,
+            "textDocument/completion",
+            uri,
+            line,
+            character,
+            arrival_seq,
+            id,
+        )
+    }
+
+    fn queued_position_read(
+        server: &crate::LspServer,
+        method: &str,
+        uri: &str,
+        line: u64,
+        character: u64,
+        arrival_seq: u64,
+        id: i64,
+    ) -> QueuedRead {
         let params = position_params_at(uri, line, character);
-        let priority = request_priority("textDocument/completion");
-        let dedup_key = extract_dedup_key("textDocument/completion", Some(&params), priority);
-        let freshness =
-            extract_freshness(server, "textDocument/completion", Some(&params), priority);
+        let priority = request_priority(method);
+        let dedup_key = extract_dedup_key(method, Some(&params), priority);
+        let freshness = extract_freshness(server, method, Some(&params), priority);
         QueuedRead {
             request: JsonRpcRequest {
                 _jsonrpc: "2.0".to_string(),
                 id: Some(JsonRpcId::Integer(id)),
-                method: "textDocument/completion".to_string(),
+                method: method.to_string(),
                 params: Some(params),
             },
             wait_for_seq: 0,
@@ -1430,9 +1487,18 @@ mod tests {
         Ok(())
     }
 
+    /// A completion that waited on a mutation barrier must be answered
+    /// against the document those mutations produced.
+    ///
+    /// This replaces an earlier test that asserted the opposite. That
+    /// assertion encoded a real defect: a completion's ingress snapshot is
+    /// stale by construction during an edit burst, so cancelling on it made
+    /// every burst-tail completion answer `-32800 Request superseded`. The
+    /// staleness guard is not removed — it is re-baselined onto the barrier
+    /// result, which the two tests below pin.
     #[tokio::test(flavor = "current_thread")]
-    async fn stale_read_cancelled_after_mutation_wait_before_handle_request()
-    -> Result<(), JsonRpcError> {
+    async fn completion_refreshes_freshness_after_ordered_mutation_wait() -> Result<(), JsonRpcError>
+    {
         let (server, output) = server_with_captured_output();
         let uri = "file:///mutation-wait-race.pl";
         server.test_apply_did_open(uri, &rapid_typing_source(1), 1)?;
@@ -1465,18 +1531,102 @@ mod tests {
         let completed =
             tokio::time::timeout(std::time::Duration::from_millis(500), in_flight.join_next())
                 .await;
-        assert!(completed.is_ok(), "read should cancel promptly after mutation barrier opens");
+        assert!(completed.is_ok(), "completion should run promptly after the barrier opens");
+
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        let bytes = output.lock().clone();
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            !text.contains("document moved from generation 0 to 1"),
+            "ordered mutations must become the completion freshness baseline; output={text}"
+        );
+        assert!(
+            text.contains("\"id\":77"),
+            "completion handler must answer after the ordered mutation barrier; output={text}"
+        );
+
+        Ok(())
+    }
+
+    /// The refresh re-baselines; it does not disable the staleness guard. A
+    /// mutation landing *after* the barrier must still read as stale.
+    #[test]
+    fn refreshed_completion_still_stale_on_a_later_mutation() -> Result<(), JsonRpcError> {
+        let server = crate::LspServer::new();
+        let uri = "file:///completion-refresh-race.pl";
+        server.test_apply_did_open(uri, "my $value;\n", 1)?;
+        let ingress = make_freshness(uri, Some(0), Some(1));
+
+        // A mutation the completion was ordered behind: refreshing onto it
+        // clears the staleness that ingress alone would have reported.
+        server.test_apply_did_change(uri, "my $value = 1;\n", 2)?;
+        assert_eq!(
+            Scheduler::stale_read_reason(&server, Some(&ingress)),
+            Some(StaleReason::DocumentGenerationAdvanced { captured: 0, current: 1 }),
+            "ingress snapshot is stale by construction after an ordered mutation"
+        );
+        let refreshed = must_some(Scheduler::refresh_read_freshness(&server, Some(&ingress)));
+        assert_eq!(
+            Scheduler::stale_read_reason(&server, Some(&refreshed)),
+            None,
+            "the barrier result must become the baseline"
+        );
+
+        // A mutation arriving after the refresh is genuine staleness.
+        server.test_apply_did_change(uri, "my $value = 12;\n", 3)?;
+        assert_eq!(
+            Scheduler::stale_read_reason(&server, Some(&refreshed)),
+            Some(StaleReason::DocumentGenerationAdvanced { captured: 1, current: 2 }),
+            "a mutation after the barrier must still cancel the completion"
+        );
+        Ok(())
+    }
+
+    /// The exemption is scoped to completion. A hover ordered behind the same
+    /// barrier still answers about the document the user pointed at, so it
+    /// must still cancel.
+    #[tokio::test(flavor = "current_thread")]
+    async fn non_completion_read_still_cancels_after_mutation_wait() -> Result<(), JsonRpcError> {
+        let (server, output) = server_with_captured_output();
+        let uri = "file:///hover-mutation-wait.pl";
+        server.test_apply_did_open(uri, &rapid_typing_source(1), 1)?;
+
+        let mut queued = queued_position_read(&server, "textDocument/hover", uri, 4, 14, 1, 78);
+        queued.wait_for_seq = 1;
+
+        let one_permit = Arc::new(Semaphore::new(1));
+        let mut in_flight = JoinSet::new();
+        let mutation_seq_done = Arc::new(AtomicU64::new(0));
+        let mutation_notify = Arc::new(Notify::new());
+        let latest_seq = HashMap::new();
+
+        Scheduler::dispatch_one(
+            queued,
+            &latest_seq,
+            &one_permit,
+            &mut in_flight,
+            &server,
+            &mutation_seq_done,
+            &mutation_notify,
+        )
+        .await;
+        assert_eq!(in_flight.len(), 1, "fresh hover should wait behind mutation barrier");
+
+        server.test_apply_did_change(uri, &rapid_typing_source(2), 2)?;
+        mutation_seq_done.store(1, Ordering::SeqCst);
+        mutation_notify.notify_waiters();
+
+        let completed =
+            tokio::time::timeout(std::time::Duration::from_millis(500), in_flight.join_next())
+                .await;
+        assert!(completed.is_ok(), "hover should resolve promptly after the barrier opens");
 
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         let bytes = output.lock().clone();
         let text = String::from_utf8_lossy(&bytes);
         assert!(
             text.contains("document moved from generation 0 to 1"),
-            "post-wait stale read must send cancellation before handle_request; output={text}"
-        );
-        assert!(
-            !text.contains("result"),
-            "cancelled stale read must not run handle_request; output={text}"
+            "a non-completion post-wait stale read must still cancel; output={text}"
         );
 
         Ok(())
