@@ -2708,6 +2708,15 @@ fn strip_rust_comments(line: &str, in_block_comment: &mut bool) -> String {
     output
 }
 
+/// Separators rustdoc accepts between fence attributes.
+///
+/// A fence info string is one source line, so the only whitespace that can
+/// reach here is a space or a tab, plus a line ending on a CRLF checkout.
+/// Spelled out as a set rather than written as a `char::is_whitespace`
+/// closure: the two are equivalent on every fence in this tree, and a set of
+/// literal values is one the static proof analyzer can see a test drive.
+const FENCE_ATTRIBUTE_SEPARATORS: [char; 5] = [',', ' ', '\t', '\r', '\n'];
+
 /// Whether a rustdoc fence info string marks a block rustdoc compiles as a doctest.
 ///
 /// Rustdoc separates fence attributes with commas or whitespace and treats both
@@ -2716,13 +2725,17 @@ fn strip_rust_comments(line: &str, in_block_comment: &mut bool) -> String {
 /// attribute (text, bash, perl, json) means rustdoc does not compile the block,
 /// so the scanner must not report hits inside it.
 ///
-/// An empty info string is the bare fence, which rustdoc compiles as Rust —
-/// `Iterator::all` returns true on the resulting empty attribute list.
+/// An empty info string is the bare fence, which rustdoc compiles as Rust: the
+/// loop below finds no disqualifying attribute and falls through to `true`.
+/// Repeated separators yield empty attributes, which are skipped rather than
+/// treated as an unrecognized language.
 fn is_rust_doctest_fence(fence: &str) -> bool {
-    fence
-        .split(|character: char| character == ',' || character.is_whitespace())
-        .filter(|attribute| !attribute.is_empty())
-        .all(is_rust_fence_attribute)
+    for attribute in fence.split(FENCE_ATTRIBUTE_SEPARATORS) {
+        if !attribute.is_empty() && !is_rust_fence_attribute(attribute) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Whether one rustdoc fence attribute leaves the block a compiled Rust doctest.
@@ -3693,6 +3706,30 @@ mod tests {
         // `edition` needs its four digits; a lookalike attribute is not an edition.
         assert!(!is_rust_doctest_fence("editionfoo"));
         assert!(!is_rust_doctest_fence("edition"));
+    }
+
+    #[test]
+    fn rust_fence_separators_are_exactly_the_documented_set() {
+        // Every separator in `FENCE_ATTRIBUTE_SEPARATORS`, driven one at a time.
+        assert!(is_rust_doctest_fence("rust,no_run"));
+        assert!(is_rust_doctest_fence("rust no_run"));
+        assert!(is_rust_doctest_fence("rust\tno_run"));
+        assert!(is_rust_doctest_fence("rust\rno_run"));
+        assert!(is_rust_doctest_fence("rust\nno_run"));
+
+        // Repeated, mixed, leading and trailing separators yield empty
+        // attributes, which are skipped rather than read as a foreign language.
+        assert!(is_rust_doctest_fence("rust,,no_run"));
+        assert!(is_rust_doctest_fence("rust, \tno_run"));
+        assert!(is_rust_doctest_fence(",rust"));
+        assert!(is_rust_doctest_fence("rust,"));
+
+        // A character outside the set is part of the attribute rather than a
+        // separator, so the attribute stops matching and the block is not
+        // scanned as Rust. These are the discriminators for the separator set:
+        // widening it would flip both of these to true.
+        assert!(!is_rust_doctest_fence("rust;no_run"));
+        assert!(!is_rust_doctest_fence("rust|no_run"));
     }
 
     #[test]
