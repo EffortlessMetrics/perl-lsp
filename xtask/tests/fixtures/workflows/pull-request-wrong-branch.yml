@@ -1,0 +1,22 @@
+# The shape that silenced `Perl LSP Rust Small Result` for its whole lifetime
+# (#10109): every other rule satisfied, but the pull_request filter names a
+# branch this repository does not have, so the workflow never fires.
+name: Wrong Pull Request Branch
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches: [master]
+
+concurrency:
+  group: required-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
