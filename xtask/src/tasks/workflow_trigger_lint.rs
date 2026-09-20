@@ -226,9 +226,14 @@ fn evaluate_required_entry(
 
 fn read_workflow_yaml(path: &Path) -> Result<Value> {
     let raw = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-    let parsed = serde_yaml_ng::from_str(&raw)
-        .with_context(|| format!("parsing workflow YAML {}", path.display()))?;
-    Ok(parsed)
+    read_workflow_yaml_str(&raw)
+        .with_context(|| format!("parsing workflow YAML {}", path.display()))
+}
+
+/// Parse workflow YAML already in memory. Fallible so callers propagate the
+/// error with `?` instead of aborting on malformed input.
+fn read_workflow_yaml_str(raw: &str) -> Result<Value> {
+    serde_yaml_ng::from_str(raw).context("parsing workflow YAML")
 }
 
 fn has_trigger(workflow: &Value, trigger_name: &str) -> bool {
@@ -248,12 +253,21 @@ fn has_trigger(workflow: &Value, trigger_name: &str) -> bool {
     }
 }
 
+/// The repository's default branch, the base a required check must be able to
+/// report on. `branch_targets_master` above is the older exact-match helper the
+/// `push` rule still uses; the `pull_request` rule below models GitHub's actual
+/// filter-pattern semantics instead.
+const DEFAULT_BRANCH: &str = "master";
+
 /// Whether a `pull_request` trigger can fire on pull requests into `master`.
 ///
-/// An absent `branches:` filter matches every base branch, which is why it
-/// passes. Only an explicit filter that omits `master` is a violation: that is
-/// the shape that silenced `Perl LSP Rust Small Result` for its whole lifetime
-/// by naming `main`, which this repository does not have (#10109).
+/// An absent filter matches every base branch, which is why it passes. Only a
+/// filter that excludes `master` is a violation: that is the shape which
+/// silenced `Perl LSP Rust Small Result` for its whole lifetime by naming
+/// `main`, which this repository does not have (#10109).
+///
+/// `branches` and `branches-ignore` are mutually exclusive for one event in
+/// GitHub's schema, so they are read independently rather than combined.
 fn pull_request_targets_master(workflow: &Value) -> bool {
     let Some(Value::Mapping(on)) = get_on(workflow) else {
         // List form (`on: [pull_request]`) carries no branch filter.
@@ -266,9 +280,82 @@ fn pull_request_targets_master(workflow: &Value) -> bool {
         return true;
     };
 
+    if let Some(ignore) = pull_request.get(Value::String("branches-ignore".to_string())) {
+        // Any match excludes the branch; `branches-ignore` takes no negations.
+        return !filter_patterns(ignore)
+            .iter()
+            .any(|pattern| branch_pattern_matches(pattern, DEFAULT_BRANCH));
+    }
+
     match pull_request.get(Value::String("branches".to_string())) {
-        Some(branches) => branch_targets_master(branches),
+        Some(branches) => branch_filter_includes_master(branches),
         None => true,
+    }
+}
+
+/// Whether a `branches:` filter admits `master`.
+///
+/// GitHub evaluates the list in order and the last matching pattern wins, so a
+/// trailing `'!master'` excludes a branch an earlier `'*'` admitted.
+fn branch_filter_includes_master(branches: &Value) -> bool {
+    let mut included = false;
+
+    for pattern in filter_patterns(branches) {
+        match pattern.strip_prefix('!') {
+            Some(negated) => {
+                if branch_pattern_matches(negated, DEFAULT_BRANCH) {
+                    included = false;
+                }
+            }
+            None => {
+                if branch_pattern_matches(&pattern, DEFAULT_BRANCH) {
+                    included = true;
+                }
+            }
+        }
+    }
+
+    included
+}
+
+/// The patterns of a `branches`/`branches-ignore` value, in order.
+fn filter_patterns(value: &Value) -> Vec<String> {
+    match value {
+        Value::String(single) => vec![single.clone()],
+        Value::Sequence(items) => {
+            items.iter().filter_map(Value::as_str).map(str::to_string).collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// GitHub's branch filter-pattern match, for the subset a branch name can use.
+///
+/// `*` matches any run of characters except `/`, `**` matches any run including
+/// `/`, and `?` matches one character. `refs/heads/` is accepted as a prefix
+/// because workflows in this tree spell branches both ways.
+fn branch_pattern_matches(pattern: &str, branch: &str) -> bool {
+    let pattern = pattern.strip_prefix("refs/heads/").unwrap_or(pattern);
+    glob_matches(pattern.as_bytes(), branch.as_bytes())
+}
+
+/// Backtracking glob match. `**` crosses `/`; a single `*` does not.
+fn glob_matches(pattern: &[u8], text: &[u8]) -> bool {
+    let Some((head, rest)) = pattern.split_first() else {
+        return text.is_empty();
+    };
+
+    match head {
+        b'*' if rest.first() == Some(&b'*') => {
+            let tail = &rest[1..];
+            // `**` consumes any prefix of the remaining text, separators included.
+            (0..=text.len()).any(|split| glob_matches(tail, &text[split..]))
+        }
+        b'*' => (0..=text.len())
+            .take_while(|split| !text[..*split].contains(&b'/'))
+            .any(|split| glob_matches(rest, &text[split..])),
+        b'?' => !text.is_empty() && text[0] != b'/' && glob_matches(rest, &text[1..]),
+        literal => text.first() == Some(literal) && glob_matches(rest, &text[1..]),
     }
 }
 
@@ -514,39 +601,57 @@ mod tests {
         Ok(())
     }
 
-    fn parse(yaml: &str) -> Value {
-        serde_yaml_ng::from_str(yaml).expect("fixture yaml parses")
+    fn parse(yaml: &str) -> Result<Value> {
+        read_workflow_yaml_str(yaml)
     }
 
+    /// Each case is `(yaml, can this fire on a pull request into master)`.
     #[test]
-    fn pull_request_branch_filter_boundary() {
-        // Explicit filters: master present, in either position and either form.
-        assert!(pull_request_targets_master(&parse(
-            "on:\n  pull_request:\n    branches: [master]"
-        )));
-        assert!(pull_request_targets_master(&parse(
-            "on:\n  pull_request:\n    branches: [master, main]"
-        )));
-        assert!(pull_request_targets_master(&parse(
-            "on:\n  pull_request:\n    branches: [main, master]"
-        )));
-        assert!(pull_request_targets_master(&parse(
-            "on:\n  pull_request:\n    branches:\n      - main\n      - master"
-        )));
-        assert!(pull_request_targets_master(&parse(
-            "on:\n  pull_request:\n    branches: refs/heads/master"
-        )));
+    fn pull_request_branch_filter_boundary() -> Result<()> {
+        let cases: [(&str, bool); 20] = [
+            // Explicit `branches`, master present, in either position and form.
+            ("on:\n  pull_request:\n    branches: [master]", true),
+            ("on:\n  pull_request:\n    branches: [master, main]", true),
+            ("on:\n  pull_request:\n    branches: [main, master]", true),
+            ("on:\n  pull_request:\n    branches:\n      - main\n      - master", true),
+            ("on:\n  pull_request:\n    branches: refs/heads/master", true),
+            // Explicit `branches` that omit master.
+            ("on:\n  pull_request:\n    branches: [main]", false),
+            ("on:\n  pull_request:\n    branches: [main, develop]", false),
+            ("on:\n  pull_request:\n    branches: main", false),
+            // No filter matches every base branch.
+            ("on: [pull_request]", true),
+            ("on:\n  pull_request:\n    types: [opened]", true),
+            ("on:\n  pull_request:", true),
+            // Wildcards. `*` stops at `/`, `**` crosses it, `?` is one character.
+            ("on:\n  pull_request:\n    branches: ['*']", true),
+            ("on:\n  pull_request:\n    branches: ['**']", true),
+            ("on:\n  pull_request:\n    branches: ['mast*']", true),
+            ("on:\n  pull_request:\n    branches: ['maste?']", true),
+            ("on:\n  pull_request:\n    branches: ['releases/*']", false),
+            // Negation, evaluated in order, last match wins.
+            ("on:\n  pull_request:\n    branches: ['*', '!master']", false),
+            ("on:\n  pull_request:\n    branches: ['!master', '*']", true),
+            // `branches-ignore`: any match excludes the branch.
+            ("on:\n  pull_request:\n    branches-ignore: [master]", false),
+            ("on:\n  pull_request:\n    branches-ignore: [gh-pages]", true),
+        ];
 
-        // Explicit filters that omit master.
-        assert!(!pull_request_targets_master(&parse("on:\n  pull_request:\n    branches: [main]")));
-        assert!(!pull_request_targets_master(&parse(
-            "on:\n  pull_request:\n    branches: [main, develop]"
-        )));
-        assert!(!pull_request_targets_master(&parse("on:\n  pull_request:\n    branches: main")));
+        for (yaml, expected) in cases {
+            let actual = pull_request_targets_master(&parse(yaml)?);
+            assert_eq!(actual, expected, "for {yaml:?}");
+        }
+        Ok(())
+    }
 
-        // No filter at all matches every base branch, so it passes.
-        assert!(pull_request_targets_master(&parse("on: [pull_request]")));
-        assert!(pull_request_targets_master(&parse("on:\n  pull_request:\n    types: [opened]")));
-        assert!(pull_request_targets_master(&parse("on:\n  pull_request:")));
+    /// `*` must not cross a path separator, or `releases/*` would admit
+    /// anything and the filter rule would stop meaning what it says.
+    #[test]
+    fn single_star_does_not_cross_a_separator() {
+        assert!(branch_pattern_matches("releases/*", "releases/v1"));
+        assert!(!branch_pattern_matches("releases/*", "releases/v1/hotfix"));
+        assert!(branch_pattern_matches("releases/**", "releases/v1/hotfix"));
+        assert!(!branch_pattern_matches("*", "releases/v1"));
+        assert!(branch_pattern_matches("**", "releases/v1"));
     }
 }

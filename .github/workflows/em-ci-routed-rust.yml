@@ -555,6 +555,14 @@ jobs:
           set -euo pipefail
           cargo fetch --locked
           cargo check --workspace --locked
+          # Parser smoke and LSP smoke are this lane's stated proof obligation
+          # in policy/ci-lane-whitelist.toml (lane `swarm_rust_small_github`),
+          # and both self-hosted lanes run them. This lane had drifted to
+          # check-plus-scorecard only, which mattered little while it was a rare
+          # fallback and matters a lot now that the runner inventory lookup
+          # 401s and every routed run lands here (#10109).
+          cargo test --locked -p perl-parser --test semantic_smoke_tests
+          cargo test --locked -p perl-lsp-rs --test lsp_smoke -- --test-threads=1
           scorecard_tests=$(cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --list | grep -c -F ": test" || true)
           test "$scorecard_tests" -gt 0
           INSTA_UPDATE=no cargo test -p perl-lsp-rs --lib --features workspace --profile agent --locked references_tier_scorecard_tests -- --test-threads=1
