@@ -132,13 +132,28 @@ for worktree mechanics.
 
 ## Merge and CI
 
-Exactly two branch-protection required checks (authoritative:
-[.ci/policies/required-checks.toml](.ci/policies/required-checks.toml)):
-- `Perl LSP Rust Small Result`
-- `ripr+ New Gap Gate`
+**This repository enforces exactly one required check**, via ruleset `8029855` on the
+default branch (`master`), and it is not one of the two this section used to name:
+- `Publication Sync Contract`
 
-(`Codecov / Patch 95`, `CI Gate (Merge-Blocking)`, `PR Smoke` are advisory — not
-required.) Merge in batches of 3 (CI cancellation cascade); run
+Everything else that runs here is advisory, `ripr+ New Gap Gate` and
+`Perl LSP Rust Small Result` included. Measured 2026-09-20 on the twelve most recently
+merged PRs: `ripr+ New Gap Gate` concluded `failure` on eight of them and blocked none,
+and `Perl LSP Rust Small Result` posted on one of fifteen. Treating either as a merge
+gate here waits on a verdict nothing reads.
+
+The two named above **are** required in `perl-lsp-swarm`, which is where development
+happens; the swarm's live ruleset requires five contexts, not two (`Compile All Targets
+(bit-rot guard)`, `Conflict marker check`, `validate-title`, `Perl LSP Rust Small
+Result`, `ripr+ New Gap Gate`). Do not carry this repository's required set across to
+that one, or the reverse.
+
+The inventory in [.ci/policies/required-checks.toml](.ci/policies/required-checks.toml)
+is current and already records `Publication Sync Contract` with its ruleset id; this
+section had drifted from it. The live ruleset outranks both — check it when the answer
+matters (`GET /repos/{owner}/{repo}/rulesets`), per the truth hierarchy above.
+
+Merge in batches of 3 (CI cancellation cascade); run
 `just cpan-corpus-ratchet` after parser merges — batch-of-3 mechanics:
 [.claude/agents/ops.md](.claude/agents/ops.md) and
 [PROCESS_LESSONS.md §3](docs/reference/PROCESS_LESSONS.md). **Before merging a batch,
