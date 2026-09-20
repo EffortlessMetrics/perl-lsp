@@ -151,18 +151,25 @@ reads every `required = true` entry, and `queue_reconciler` consumes the same li
 `cargo xtask merge-ready` and the reconciler cron hold a PR on all three. That is real
 process discipline; it is simply not the ruleset.
 
-**What is not established here.** The inventory records the first two as
-`enforcement = "github-branch-protection"`, meaning *classic* branch protection rather
-than the ruleset. `GET /repos/{owner}/{repo}/branches/master/protection` returns
-`Resource not accessible by integration` for the token agents run with, so an agent
-cannot read that setting and must not assert it either way. The available evidence is
-indirect and points at "not enforced": measured 2026-09-20 across the twelve most
-recently merged PRs, `ripr+ New Gap Gate` concluded `failure` on eight of them and
-blocked none, and `Perl LSP Rust Small Result` posted on one of fifteen. Eight merges
-over a red context is hard to explain by routine admin bypass, but it is inference from
-merge history, not the setting. Settling it needs an admin read of classic protection;
-until then, treat a red `ripr+ New Gap Gate` here as blocking your `merge-ready` run and
-unproven as a GitHub gate.
+**`required = true` there is partly an intent, not a live gate.** The inventory's own
+`reason` for `Perl LSP Rust Small Result` says so: "Master protection *should* require
+the routed Rust aggregate before merge. Ruleset 8029855 does not carry this context
+today ... adding the context is a repository-settings change." So that entry records
+where the repository wants to get to, and the tooling enforces it locally in the
+meantime.
+
+Both of the first two are marked `enforcement = "github-branch-protection"` — *classic*
+protection rather than the ruleset — and `GET /repos/{owner}/{repo}/branches/master/protection`
+returns `Resource not accessible by integration` for the token agents run with. An agent
+cannot read that setting and must not assert it either way. The indirect evidence points
+at "not enforced": measured 2026-09-20 across the twelve most recently merged PRs,
+`ripr+ New Gap Gate` concluded `failure` on eight of them and blocked none, and
+`Perl LSP Rust Small Result` posted on one of fifteen. That is inference from merge
+history, not the setting.
+
+Practical rule until an admin reads classic protection: a red `ripr+ New Gap Gate` here
+blocks your `merge-ready` run and is unproven as a GitHub gate. Do not route around the
+first by citing the second.
 
 **Do not carry either answer across repositories.** Both of those contexts **are**
 ruleset-required in `perl-lsp-swarm`, where development happens, and the swarm's live
