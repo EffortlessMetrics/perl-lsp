@@ -347,6 +347,16 @@ struct QueuedRead {
     priority: RequestPriority,
     /// Monotonic ingress counter (used for tie-breaking and stale detection).
     arrival_seq: u64,
+    /// Whether mutations enqueued before this read were still unapplied when
+    /// its freshness snapshot was taken at ingress. When true the snapshot is
+    /// stale *by construction* and is not the subject of the pre-dispatch
+    /// staleness check.
+    ///
+    /// Captured at ingress rather than compared at dispatch: if those mutations
+    /// complete in between, a dispatch-time comparison reads false while the
+    /// ingress snapshot is still stale, which cancels the very read this
+    /// exemption exists to protect.
+    ordered_behind_mutations: bool,
     /// Dedup key for stale-request cancellation (None for non-position requests).
     dedup_key: Option<RequestDedupKey>,
     /// Document freshness snapshot for generation-based stale cancellation.
@@ -481,13 +491,22 @@ impl Scheduler {
     /// Returns `Err(())` if all read workers have exited (channel closed).
     pub async fn send_read(&self, request: JsonRpcRequest) -> Result<(), ()> {
         let wait_for_seq = self.mutation_seq_next.load(Ordering::SeqCst);
+        let ordered_behind_mutations = wait_for_seq > self.mutation_seq_done.load(Ordering::SeqCst);
         let priority = request_priority(&request.method);
         let dedup_key = extract_dedup_key(&request.method, request.params.as_ref(), priority);
         let freshness =
             extract_freshness(&self.server, &request.method, request.params.as_ref(), priority);
         let arrival_seq = READ_ARRIVAL_SEQ.fetch_add(1, Ordering::Relaxed);
         self.read_tx
-            .send(QueuedRead { request, wait_for_seq, priority, arrival_seq, dedup_key, freshness })
+            .send(QueuedRead {
+                request,
+                wait_for_seq,
+                ordered_behind_mutations,
+                priority,
+                arrival_seq,
+                dedup_key,
+                freshness,
+            })
             .await
             .map_err(|_| ())
     }
@@ -677,9 +696,16 @@ impl Scheduler {
     /// barrier result — not ingress — is the correct baseline for the
     /// staleness check that guards dispatch.
     ///
-    /// Returns `None` only when there was no ingress snapshot to refresh, or
-    /// when the document is no longer open. Both leave freshness unenforced,
-    /// exactly as an absent ingress snapshot already does.
+    /// Returns `None` only when there was no ingress snapshot to refresh. A
+    /// document closed since ingress yields `Some` carrying a `None`
+    /// generation, which `is_read_stale` already treats as unenforced — the
+    /// provider surfaces the missing-document error itself.
+    ///
+    /// This re-baseline guards the barrier window only. It is consumed by the
+    /// staleness check immediately below it, where its effect is to let a
+    /// completion through instead of cancelling it against a snapshot that the
+    /// barrier has already superseded. It does not guard delivery: a mutation
+    /// landing while the handler runs is not caught here.
     fn refresh_read_freshness(
         server: &LspServer,
         freshness: Option<&ReadFreshness>,
@@ -730,8 +756,14 @@ impl Scheduler {
         // A completion that waits on a mutation barrier is answered against
         // the document those mutations produce, so its ingress snapshot is
         // not the subject of the pre-dispatch staleness check.
+        //
+        // `ordered_behind_mutations` is the condition that makes the snapshot
+        // stale by construction, captured at ingress. `wait_for_seq > 0` is not:
+        // `mutation_seq_next` is monotonic and never reset, so it is true for
+        // every read after the session's first mutation and would exempt every
+        // completion for the life of the process.
         let refresh_after_barrier =
-            queued.request.method == "textDocument/completion" && queued.wait_for_seq > 0;
+            queued.request.method == "textDocument/completion" && queued.ordered_behind_mutations;
 
         // Stale check 1: position dedupe — newer same-position request supersedes.
         if let Some(ref key) = queued.dedup_key {
@@ -1147,6 +1179,7 @@ mod tests {
                 params: None,
             },
             wait_for_seq,
+            ordered_behind_mutations: wait_for_seq > 0,
             priority,
             arrival_seq,
             dedup_key: None,
@@ -1236,6 +1269,7 @@ mod tests {
                 params: Some(params),
             },
             wait_for_seq: 0,
+            ordered_behind_mutations: false,
             priority,
             arrival_seq,
             dedup_key,
@@ -1500,11 +1534,20 @@ mod tests {
     async fn completion_refreshes_freshness_after_ordered_mutation_wait() -> Result<(), JsonRpcError>
     {
         let (server, output) = server_with_captured_output();
+        // Without `initialize` the router short-circuits every request with
+        // -32002 before the completion handler runs, so the test would assert
+        // against an error response rather than an answer.
+        server.test_handle_initialize_dispatch(Some(serde_json::json!({
+            "capabilities": {},
+            "processId": serde_json::Value::Null,
+            "rootUri": serde_json::Value::Null
+        })))?;
         let uri = "file:///mutation-wait-race.pl";
         server.test_apply_did_open(uri, &rapid_typing_source(1), 1)?;
 
         let mut queued = queued_completion_read(&server, uri, 4, 14, 1, 77);
         queued.wait_for_seq = 1;
+        queued.ordered_behind_mutations = true;
 
         let one_permit = Arc::new(Semaphore::new(1));
         let mut in_flight = JoinSet::new();
@@ -1540,16 +1583,31 @@ mod tests {
             !text.contains("document moved from generation 0 to 1"),
             "ordered mutations must become the completion freshness baseline; output={text}"
         );
+        // `id` carries no `skip_serializing_if`, so a cancellation response also
+        // contains `"id":77`. `result` is skipped when absent, so it — and only
+        // it — discriminates an answer from a cancellation.
         assert!(
-            text.contains("\"id\":77"),
+            text.contains("\"result\""),
             "completion handler must answer after the ordered mutation barrier; output={text}"
+        );
+        assert!(
+            !text.contains("Request superseded"),
+            "the completion must not be cancelled; output={text}"
         );
 
         Ok(())
     }
 
-    /// The refresh re-baselines; it does not disable the staleness guard. A
-    /// mutation landing *after* the barrier must still read as stale.
+    /// The refresh re-baselines onto the barrier result rather than clearing
+    /// freshness outright: a later generation still compares as stale against
+    /// it.
+    ///
+    /// This pins the composition of `refresh_read_freshness` and
+    /// `stale_read_reason`, not a production guarantee. In `dispatch_one` the
+    /// refresh is followed immediately by the staleness check, so production
+    /// has no window between them; a mutation landing while the handler runs is
+    /// caught by neither. Closing that needs a delivery-point check, which this
+    /// change does not add.
     #[test]
     fn refreshed_completion_still_stale_on_a_later_mutation() -> Result<(), JsonRpcError> {
         let server = crate::LspServer::new();
@@ -1577,8 +1635,67 @@ mod tests {
         assert_eq!(
             Scheduler::stale_read_reason(&server, Some(&refreshed)),
             Some(StaleReason::DocumentGenerationAdvanced { captured: 1, current: 2 }),
-            "a mutation after the barrier must still cancel the completion"
+            "a later generation must still compare as stale against the refreshed baseline"
         );
+        Ok(())
+    }
+
+    /// The exemption covers only a completion the barrier will actually hold.
+    ///
+    /// `mutation_seq_next` is monotonic and never reset, so `wait_for_seq` is
+    /// non-zero for every read after the session's first mutation. Keying the
+    /// exemption on `wait_for_seq > 0` would therefore exempt every completion
+    /// for the life of the process and disable the typing-storm guard
+    /// entirely; it must compare against `mutation_seq_done`.
+    #[tokio::test(flavor = "current_thread")]
+    async fn completion_with_settled_mutations_still_takes_stale_check() -> Result<(), JsonRpcError>
+    {
+        let (server, output) = server_with_captured_output();
+        let uri = "file:///completion-settled-mutations.pl";
+        server.test_apply_did_open(uri, &rapid_typing_source(1), 1)?;
+
+        // A non-zero `wait_for_seq` the barrier has already satisfied: the
+        // steady state after any earlier edit in the session.
+        let mut queued = queued_completion_read(&server, uri, 4, 14, 1, 79);
+        queued.wait_for_seq = 5;
+        // Non-zero wait_for_seq, but nothing was pending at ingress.
+        queued.ordered_behind_mutations = false;
+        let mutation_seq_done = Arc::new(AtomicU64::new(5));
+
+        // The document moves on after ingress. Nothing ordered this completion
+        // behind that edit, so its snapshot is genuinely stale.
+        server.test_apply_did_change(uri, &rapid_typing_source(2), 2)?;
+
+        let one_permit = Arc::new(Semaphore::new(1));
+        let mut in_flight = JoinSet::new();
+        let mutation_notify = Arc::new(Notify::new());
+        let latest_seq = HashMap::new();
+
+        Scheduler::dispatch_one(
+            queued,
+            &latest_seq,
+            &one_permit,
+            &mut in_flight,
+            &server,
+            &mutation_seq_done,
+            &mutation_notify,
+        )
+        .await;
+
+        assert_eq!(
+            in_flight.len(),
+            0,
+            "a stale completion with nothing pending must cancel before taking a permit"
+        );
+
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        let bytes = output.lock().clone();
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            text.contains("document moved from generation 0 to 1"),
+            "a completion with no pending mutations must still take the pre-dispatch stale check; output={text}"
+        );
+
         Ok(())
     }
 
@@ -1593,6 +1710,7 @@ mod tests {
 
         let mut queued = queued_position_read(&server, "textDocument/hover", uri, 4, 14, 1, 78);
         queued.wait_for_seq = 1;
+        queued.ordered_behind_mutations = true;
 
         let one_permit = Arc::new(Semaphore::new(1));
         let mut in_flight = JoinSet::new();
