@@ -14,7 +14,12 @@ on:
           - cx43
           - github
   pull_request:
-    branches: [main]
+    # This repository's default branch is `master`. The file arrived from
+    # perl-lsp-swarm, whose default branch is `main`, so the filter named a
+    # branch that does not exist here and the workflow never fired (#10109).
+    # `main` is kept alongside it so the file stays correct if the publication
+    # join ever renames the default branch.
+    branches: [master, main]
     types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
 
@@ -118,8 +123,14 @@ jobs:
               ;;
           esac
 
+          # Degrade to GitHub-hosted rather than to no route at all. `none`
+          # fails the aggregate below, so a routing problem would red the
+          # required check on every pull request without saying anything about
+          # the diff. perl-lsp-swarm already made this change; this is its
+          # behaviour ported verbatim (#10109).
           if [ -z "${GH_TOKEN:-}" ]; then
-            emit "none" "runner_token_missing" "true" "false"
+            echo "::warning::runner inventory token is unavailable; routing the full Rust Small contract to GitHub-hosted"
+            emit "github" "runner_token_missing_github_hosted" "false" "true"
             exit 0
           fi
 
@@ -130,9 +141,16 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/orgs/$ORG/actions/runners?per_page=100" || true)"
 
+          # EM_RUNNER_READ_TOKEN is a runner registration credential, not a REST
+          # bearer token, so this call answers HTTP 401 today. Measured on
+          # perl-lsp-swarm run 35487560396 (2026-09-20): "runner inventory API
+          # returned HTTP 401". The whole contract then runs on GitHub-hosted,
+          # which is the same proof on a slower machine, so the aggregate stays
+          # honest. Restoring self-hosted routing needs an org-read credential
+          # and is not this change's subject.
           if [ "$status" != "200" ]; then
-            echo "::error::runner API returned HTTP $status; refusing implicit GitHub-hosted fallback"
-            emit "none" "runner_api_failed" "true" "false"
+            echo "::warning::runner inventory API returned HTTP $status; routing the full Rust Small contract to GitHub-hosted"
+            emit "github" "runner_api_unavailable_github_hosted" "false" "true"
             exit 0
           fi
 
