@@ -22,7 +22,8 @@ A title substring is not authority. A fresh packet without the field, the
 field without a fresh packet, or the field with a stale (base-identical)
 packet all fail closed: sync content may not slip through undeclared, a
 declared sync may not arrive without its packet, and a stale packet cannot
-re-prove an old join.
+re-prove an old join. Any control-directory mutation, including deletion,
+mode changes or altered sibling evidence, requires a fresh declared transaction.
 
 Commit-identity design (why ``sync_join_sha`` is the *core* join):
 
@@ -58,7 +59,8 @@ Subcommands:
                 controlling issue).
     post-merge  Bounded verifier for the wrapper merge M: J is an ancestor
                 of M, tree(M) == tree(J), R and S are ancestors of M, and
-                current master == M. A squash/rebase landing fails.
+                current master == M. The ordered parents must be [R,J],
+                and J is revalidated in full. A squash/rebase landing fails.
 """
 
 from __future__ import annotations
@@ -144,7 +146,8 @@ def run_git(repo: Path, args: Sequence[str], *, input_bytes: Optional[bytes] = N
         stderr = proc.stderr.decode("utf-8", errors="replace").strip()
         stdout = proc.stdout.decode("utf-8", errors="replace").strip()
         fail(f"git {' '.join(args)} failed: {stderr or stdout}")
-    return proc.stdout.decode("utf-8", errors="replace")
+    # Preserve undecodable filename bytes for NUL-delimited tree round trips.
+    return proc.stdout.decode("utf-8", errors="surrogateescape")
 
 
 def git_ok(repo: Path, args: Sequence[str]) -> bool:
@@ -157,15 +160,47 @@ def git_ok(repo: Path, args: Sequence[str]) -> bool:
     return proc.returncode == 0
 
 
-def tree_file(repo: Path, commit: str, path: str) -> Optional[bytes]:
-    """Bytes of ``path`` at ``commit``; None when absent."""
+def tree_entry(repo: Path, commit: str, path: str) -> Optional[Tuple[str, str, str]]:
+    """Literal tree entry, or proven absence; Git failure is never absence."""
+    require_hex40(commit, "tree entry commit")
+    if run_git(repo, ["cat-file", "-t", commit]).strip() != "commit":
+        fail(f"{commit} is not a commit object")
+    output = run_git(repo, ["--literal-pathspecs", "ls-tree", "-z", commit, "--", path])
+    entries = [entry for entry in output.split("\0") if entry]
+    if not entries:
+        return None
+    if len(entries) != 1:
+        fail(f"literal tree query for {path!r} returned multiple entries")
+    metadata, separator, name = entries[0].partition("\t")
+    fields = metadata.split()
+    if not separator or name != path or len(fields) != 3:
+        fail(f"literal tree query for {path!r} returned an unexpected entry")
+    mode, kind, oid = fields
+    require_hex40(oid, "tree entry object")
+    return mode, kind, oid
+
+
+def tree_file(repo: Path, commit: str, path: str, *, historical: bool = False) -> Optional[bytes]:
+    """Read control bytes; historical base modes are not new admissions.
+
+    Historical bytes are used only for freshness comparison, never followed
+    as filesystem links. New transaction control files must be regular 100644.
+    Only a successful absent query returns None.
+    """
+    entry = tree_entry(repo, commit, path)
+    if entry is None:
+        return None
+    mode, kind, oid = entry
+    if kind != "blob" or (not historical and mode != "100644"):
+        fail(f"control file {path!r} must be a regular 100644 blob, got {mode} {kind}")
     proc = subprocess.run(
-        ["git", "-C", str(repo), "show", f"{commit}:{path}"],
+        ["git", "-C", str(repo), "cat-file", "blob", oid],
         capture_output=True,
         check=False,
     )
     if proc.returncode != 0:
-        return None
+        fail(f"control file {path!r} at {commit} is unreadable: "
+             f"{proc.stderr.decode('utf-8', errors='replace').strip()}")
     return proc.stdout
 
 
@@ -312,22 +347,14 @@ def validate_manifest(manifest: Any) -> dict:
 
 
 def ls_tree(repo: Path, treeish: str) -> List[str]:
-    """Non-recursive ls-tree lines (``mode type sha\\tname``), or [] if absent."""
-    proc = subprocess.run(
-        ["git", "-C", str(repo), "ls-tree", treeish],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode != 0:
-        return []
-    return [line for line in proc.stdout.splitlines() if line]
+    """NUL-delimited tree entries; unreadable trees fail instead of becoming empty."""
+    return [entry for entry in run_git(repo, ["ls-tree", "-z", treeish]).split("\0") if entry]
 
 
 def mktree(repo: Path, entries: List[str]) -> str:
-    """Build a tree object from ls-tree-format lines (git sorts them)."""
-    tree_input = "\n".join(entries) + ("\n" if entries else "")
-    return run_git(repo, ["mktree"], input_bytes=tree_input.encode("utf-8")).strip()
+    """Build a tree without interpreting quoting or newlines inside names."""
+    tree_input = "\0".join(entries) + ("\0" if entries else "")
+    return run_git(repo, ["mktree", "-z"], input_bytes=tree_input.encode("utf-8", errors="surrogateescape")).strip()
 
 
 def projected_tree(repo: Path, commit: str) -> str:
@@ -400,23 +427,28 @@ def check_pr(args: argparse.Namespace) -> int:
     body = body.replace("\r\n", "\n").replace("\r", "\n")  # GitHub bodies may be CRLF
     marker = check_marker_field(body)
 
-    packet_bytes = tree_file(repo, args.head_sha, PACKET_PATH)
-    base_packet_bytes = tree_file(repo, args.base_sha, PACKET_PATH)
-
-    # Mode decision. Both markers are repository-owned; a title substring is
-    # never consulted. The packet signal is relative to the PR base: once a
-    # sync lands, master carries its packet (post-merge requires
-    # tree(M) == tree(J)), so mere presence cannot mean sync mode — every
-    # later ordinary PR would otherwise fail closed forever. Only a packet
-    # INTRODUCED OR CHANGED by this PR is sync content.
-    packet_changed = packet_bytes is not None and packet_bytes != base_packet_bytes
-    if not packet_changed and marker is not True:
-        # Deterministic non-sync success (positive control 1). Covers no
-        # packet anywhere and an unchanged inherited packet alike.
-        print("not_applicable: no packet introduced or changed by this PR and "
-              "marker field is not 'yes'")
+    # The complete control tree is the mode signal. Packet-only comparison
+    # misses deletion, changed sibling evidence, extra files and mode changes.
+    # An unchanged inherited tree remains ordinary historical state.
+    head_control = tree_entry(repo, args.head_sha, CONTROL_DIR.rstrip("/"))
+    base_control = tree_entry(repo, args.base_sha, CONTROL_DIR.rstrip("/"))
+    control_changed = head_control != base_control
+    if not control_changed and marker is not True:
+        # An old admitted packet can have modes no longer allowed for new
+        # transactions. Unchanged history is not re-admitted on an ordinary
+        # PR, but the control object itself must still be readable.
+        if head_control is not None:
+            if head_control[1] == "tree":
+                ls_tree(repo, head_control[2])
+            else:
+                run_git(repo, ["cat-file", "-e", head_control[2]])
+        print("not_applicable: control tree unchanged and marker field is not 'yes'")
         print("publication-sync: not_applicable")
         return 0
+
+    packet_bytes = tree_file(repo, args.head_sha, PACKET_PATH)
+    base_packet_bytes = tree_file(repo, args.base_sha, PACKET_PATH, historical=True)
+    packet_changed = packet_bytes is not None and packet_bytes != base_packet_bytes
     if packet_bytes is None:
         fail("declared publication-sync PR (marker field 'yes') without a committed packet")
     if not packet_changed:
@@ -432,6 +464,15 @@ def check_pr(args: argparse.Namespace) -> int:
             "arrive undeclared"
         )
 
+    return validate_join(repo, args.base_sha, args.head_sha, packet_bytes)
+
+
+def validate_join(repo: Path, base_sha: str, head_sha: str, packet_bytes: bytes) -> int:
+    """Validate the same immutable join in PR and post-merge modes.
+
+    This proves the committed transaction, not PR-body declaration or live
+    protection. Those are separate pre-merge admission responsibilities.
+    """
     packet = validate_packet_shape(load_json_bytes(packet_bytes, "publication-sync packet"))
     base_r = packet["release_base_sha"]
     swarm_s = packet["prepared_swarm_sha"]
@@ -446,7 +487,7 @@ def check_pr(args: argparse.Namespace) -> int:
     # S..J path-set comparison (the directory is excluded from both), so an
     # unlisted file here would defeat the exact-tree guarantee.
     control_entries = ls_tree(
-        repo, f"{args.head_sha}:{CONTROL_DIR_PARENT}/{CONTROL_DIR_NAME}"
+        repo, f"{head_sha}:{CONTROL_DIR_PARENT}/{CONTROL_DIR_NAME}"
     )
     control_names = {entry.partition("\t")[2] for entry in control_entries}
     control_extra = sorted(control_names - CONTROL_DIR_FILES)
@@ -458,15 +499,15 @@ def check_pr(args: argparse.Namespace) -> int:
     print("PASS control-dir: control directory holds exactly packet, ledger, manifest")
 
     # Proof 1: PR base equals declared R.
-    if args.base_sha != base_r:
-        fail(f"proof 1: PR base {args.base_sha} != declared release_base_sha {base_r}")
+    if base_sha != base_r:
+        fail(f"proof 1: PR base {base_sha} != declared release_base_sha {base_r}")
     print(f"PASS proof 1: PR base == R ({base_r})")
 
     # Proof 2: PR head re-derives exactly the declared core join J0 (same
     # parents, message, and identity; tree = projection without control
     # files). See the module docstring for why J0 is the core join.
     try:
-        derived = derive_core_join(repo, args.head_sha, [base_r, swarm_s])
+        derived = derive_core_join(repo, head_sha, [base_r, swarm_s])
     except ContractFailure as exc:
         fail(f"proof 2: {exc}")
     if derived != core_join:
@@ -477,20 +518,20 @@ def check_pr(args: argparse.Namespace) -> int:
     print(f"PASS proof 2: PR head is exactly declared join {core_join} plus control files")
 
     # Proof 3: J has exactly two ordered parents [R, S].
-    parents_line = run_git(repo, ["rev-list", "--parents", "-n", "1", args.head_sha]).split()
-    if parents_line != [args.head_sha, base_r, swarm_s]:
+    parents_line = run_git(repo, ["rev-list", "--parents", "-n", "1", head_sha]).split()
+    if parents_line != [head_sha, base_r, swarm_s]:
         fail(f"proof 3: J parents are {parents_line[1:]}, expected [{base_r}, {swarm_s}]")
     print("PASS proof 3: J has exactly two ordered parents [R, S]")
 
     # Proof 4: S resolves to the exact prepared swarm commit and is reachable from J.
     if not git_ok(repo, ["cat-file", "-e", f"{swarm_s}^{{commit}}"]):
         fail(f"proof 4: prepared swarm commit {swarm_s} does not resolve")
-    if not git_ok(repo, ["merge-base", "--is-ancestor", swarm_s, args.head_sha]):
-        fail(f"proof 4: S {swarm_s} is not reachable from J {args.head_sha}")
+    if not git_ok(repo, ["merge-base", "--is-ancestor", swarm_s, head_sha]):
+        fail(f"proof 4: S {swarm_s} is not reachable from J {head_sha}")
     print("PASS proof 4: S resolves and is reachable from J")
 
     # Proof 5: final reconciliation ledger is valid, blocker-free, digest-matched.
-    ledger_bytes = tree_file(repo, args.head_sha, LEDGER_PATH)
+    ledger_bytes = tree_file(repo, head_sha, LEDGER_PATH)
     if ledger_bytes is None:
         fail(f"proof 5: reconciliation ledger missing at {LEDGER_PATH} in tree(J)")
     if sha256_prefixed(ledger_bytes) != packet["reconciliation_digest"]:
@@ -502,7 +543,7 @@ def check_pr(args: argparse.Namespace) -> int:
     print("PASS proof 5: reconciliation ledger valid, blocker-free, digest-matched")
 
     # Proof 6: publication projection manifest is valid and digest-matched.
-    manifest_bytes = tree_file(repo, args.head_sha, MANIFEST_PATH)
+    manifest_bytes = tree_file(repo, head_sha, MANIFEST_PATH)
     if manifest_bytes is None:
         fail(f"proof 6: projection manifest missing at {MANIFEST_PATH} in tree(J)")
     if sha256_prefixed(manifest_bytes) != packet["publication_sync_manifest_digest"]:
@@ -515,7 +556,7 @@ def check_pr(args: argparse.Namespace) -> int:
 
     # Proof 7: tree(J) with the control directory excluded equals
     # expected_projected_tree.
-    actual_tree = projected_tree(repo, args.head_sha)
+    actual_tree = projected_tree(repo, head_sha)
     if actual_tree != packet["expected_projected_tree"]:
         fail(
             f"proof 7: projected tree(J) {actual_tree} != expected_projected_tree "
@@ -525,11 +566,11 @@ def check_pr(args: argparse.Namespace) -> int:
 
     # Proof 8: git diff S..J contains exactly manifest-listed
     # translations/exclusions (control-plane directory excluded).
-    diff_output = run_git(repo, ["diff", "--name-only", swarm_s, args.head_sha])
+    diff_output = run_git(repo, ["diff", "--no-renames", "--name-only", "-z", swarm_s, head_sha])
     changed = {
-        line.strip()
-        for line in diff_output.splitlines()
-        if line.strip() and not line.strip().startswith(CONTROL_DIR)
+        path
+        for path in diff_output.split("\0")
+        if path and not path.startswith(CONTROL_DIR)
     }
     listed = manifest["listed_paths"]
     unlisted = sorted(changed - listed)
@@ -583,17 +624,9 @@ def check_post_merge(args: argparse.Namespace) -> int:
             "expected exactly two (master tip, PR head J) — squash/rebase landing?"
         )
 
-    # J is an ancestor of M (direct second parent here) and must re-derive
-    # the declared core join, binding M to the audited packet.
-    derived = derive_core_join(repo, join_j, [base_r, swarm_s])
-    if derived != packet["sync_join_sha"]:
-        fail(
-            f"post-merge: second parent of M re-derives {derived}, "
-            f"declared sync_join_sha is {packet['sync_join_sha']}"
-        )
-    if not git_ok(repo, ["merge-base", "--is-ancestor", join_j, merge_m]):
-        fail(f"post-merge: J {join_j} is not an ancestor of M {merge_m} (squash/rebase landing?)")
-    print(f"PASS post-merge: J ({join_j}) is an ancestor of M ({merge_m})")
+    if parents_line[1] != base_r:
+        fail(f"post-merge: M first parent {parents_line[1]} != declared R {base_r}")
+    print("PASS post-merge: M has exactly ordered parents [R, J]")
 
     # tree(M) == tree(J): the wrapper added nothing.
     tree_m = run_git(repo, ["rev-parse", f"{merge_m}^{{tree}}"]).strip()
@@ -601,6 +634,12 @@ def check_post_merge(args: argparse.Namespace) -> int:
     if tree_m != tree_j:
         fail(f"post-merge: tree(M) {tree_m} != tree(J) {tree_j}")
     print(f"PASS post-merge: tree(M) == tree(J) ({tree_j})")
+
+    # Tree equality binds these packet bytes to J. Recheck actual J parents,
+    # J0/P, control inventory, artifact digests, decisions and path denominator;
+    # constructing a hypothetical J0 with packet-supplied parents is not enough.
+    validate_join(repo, base_r, join_j, packet_bytes)
+    print(f"PASS post-merge: J ({join_j}) is an ancestor of M ({merge_m})")
 
     for name, sha in (("R", base_r), ("S", swarm_s)):
         if not git_ok(repo, ["merge-base", "--is-ancestor", sha, merge_m]):
