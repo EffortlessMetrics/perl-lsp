@@ -134,11 +134,13 @@ class SourceDispatchTest(unittest.TestCase):
                 self.reject(self.pr(self.head(dict(self.packet, **{key: value}))), 'unknown')
 
     def test_every_required_source_binding_is_mandatory(self):
-        for key in check.SOURCE_PACKET_KEYS - {'schema_version'}:
+        for key in check.SOURCE_PACKET_KEYS:
             with self.subTest(key=key):
                 packet = dict(self.packet)
                 del packet[key]
-                with self.assertRaises(check.ContractFailure):
+                reason = ('unsupported packet schema_version' if key == 'schema_version'
+                          else 'source packet keys: missing')
+                with self.assertRaisesRegex(check.ContractFailure, reason):
                     check.validate_packet_shape(packet)
 
     def test_cross_repository_subjects_and_publication_claims_reject(self):
