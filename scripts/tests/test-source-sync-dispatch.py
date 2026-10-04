@@ -137,6 +137,24 @@ class SourceDispatchTest(unittest.TestCase):
         proc = legacy.run_check(['post-merge', '--repo', str(self.repo.path), '--merge-sha', merge])
         self.reject(proc, 'not authorized by trusted-base policy')
 
+    def test_wrapper_cannot_borrow_authorization_from_wrong_first_parent(self):
+        # The extra parent X grants the very same S and retains R ancestry.
+        # J/M trees still match, so policy/base identity is the discriminator.
+        policy = {'schema_version': 'publication_sync_admission_policy.v1',
+                  'historical_release_subjects': [self.fixture.s]}
+        parent = self.repo.make_commit({
+            '.ci/policies/publication-sync-admission.v1.json': legacy.json_bytes(policy),
+        }, [self.fixture.r], 'different authorized public X\n')
+        tree = self.repo.git('rev-parse', self.fixture.j + '^{tree}')
+        merge = self.repo.git('commit-tree', tree, '-p', parent, '-p', self.fixture.j,
+                              input_bytes=b'wrong first parent but same tree\n')
+        self.assertNotEqual(parent, self.fixture.r)
+        self.assertEqual(self.repo.git('rev-parse', merge + '^{tree}'), tree)
+        self.repo.git('merge-base', '--is-ancestor', self.fixture.r, merge)
+        self.repo.git('update-ref', 'refs/heads/master', merge)
+        proc = legacy.run_check(['post-merge', '--repo', str(self.repo.path), '--merge-sha', merge])
+        self.reject(proc, 'first parent')
+
     def test_source_shape_needs_no_release_inputs_but_admission_is_not_proven(self):
         self.assertEqual(check.validate_packet_shape(self.packet), self.packet)
         head = self.head(self.packet)

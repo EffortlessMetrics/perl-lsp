@@ -308,6 +308,8 @@ def authorize_historical_release(repo: Path, trusted_base: str, packet: dict) ->
     the trusted PR base (or wrapper's actual first parent), never from J/M.
     Historical packet validation itself retains its existing interpretation.
     """
+    if trusted_base != packet["release_base_sha"]:
+        fail("historical release NOT_PROVEN: wrapper first parent / trusted authorization base differs from release_base_sha")
     data = tree_file(repo, trusted_base, ADMISSION_POLICY_PATH)
     if data is None:
         fail("historical release NOT_PROVEN: trusted-base admission policy missing or unreadable")
