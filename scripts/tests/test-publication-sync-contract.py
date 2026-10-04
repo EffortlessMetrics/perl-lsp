@@ -335,7 +335,7 @@ class PublicationSyncContractTest(unittest.TestCase):
         fixture = SyncFixture(self.repo)
         for body in (BODY_NO, BODY_ABSENT):
             proc = self.run_pr(fixture, body)
-            self.assertEqual(proc.returncode, 1, body)
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
             self.assertIn("may not arrive undeclared", proc.stdout)
 
     def test_wrong_pr_base_fails(self) -> None:
@@ -630,6 +630,84 @@ class RatchetTest(unittest.TestCase):
         matches = list(check.MARKER_FIELD.finditer(template))
         self.assertEqual(len(matches), 1, "template must carry exactly one marker field line")
         self.assertEqual(matches[0].group(1).lower(), "no", "template default must be 'no'")
+
+
+class ValidatorSourceWorkflowTest(unittest.TestCase):
+    """Execute the real workflow shell block against disposable Git objects."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="pubsync-source-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.repo = Repo(self.root / "repo")
+        self.runner_temp = self.root / "runner"
+        self.runner_temp.mkdir()
+        self.spy = self.root / "head-validator-executed"
+        candidate = self.repo.path / "scripts" / "publication_sync_check.py"
+        candidate.parent.mkdir(parents=True)
+        candidate.write_text(
+            "from pathlib import Path\n"
+            f"Path({str(self.spy)!r}).write_text('untrusted head ran')\n",
+            encoding="utf-8",
+        )
+
+    def source_block(self) -> str:
+        lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+        step = lines.index("      - name: Run publication sync contract check")
+        start = lines.index("        run: |", step) + 1
+        block = []
+        for line in lines[start:]:
+            if line and not line.startswith("          "):
+                break
+            block.append(line[10:] if line else "")
+        self.assertTrue(block, "the tested workflow selection step must exist")
+        return "\n".join(block) + "\n"
+
+    def run_source(self, base: str) -> subprocess.CompletedProcess:
+        env = dict(os.environ)
+        env.update({"BASE_SHA": base, "HEAD_SHA": base,
+                    "RUNNER_TEMP": str(self.runner_temp), "PR_BODY": BODY_NO})
+        return subprocess.run(
+            ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c",
+             self.source_block()],
+            cwd=self.repo.path, env=env, capture_output=True, text=True, check=False,
+        )
+
+    def make_base(self, validator: bytes | None = None) -> str:
+        files = {"README.md": b"source selection fixture\n"}
+        if validator is not None:
+            files["scripts/publication_sync_check.py"] = validator
+        return self.repo.make_commit(files, [], "trusted base\n")
+
+    def assert_source_rejected(self, proc: subprocess.CompletedProcess) -> None:
+        self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(self.spy.exists(), "candidate validator must not execute")
+
+    def test_trusted_base_wins_over_candidate_validator(self) -> None:
+        base = self.make_base(b"print('TRUSTED_BASE_VALIDATOR')\n")
+        proc = self.run_source(base)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("TRUSTED_BASE_VALIDATOR", proc.stdout)
+        self.assertFalse(self.spy.exists())
+
+    def test_absent_base_validator_never_falls_back_to_head(self) -> None:
+        self.assert_source_rejected(self.run_source(self.make_base()))
+
+    def test_missing_base_commit_never_falls_back_to_head(self) -> None:
+        self.assert_source_rejected(self.run_source("0" * 40))
+
+    def test_unreadable_base_validator_never_falls_back_to_head(self) -> None:
+        base = self.make_base(b"print('TRUSTED_BASE_VALIDATOR')\n")
+        blob = self.repo.git("rev-parse", f"{base}:scripts/publication_sync_check.py")
+        (self.repo.path / ".git" / "objects" / blob[:2] / blob[2:]).unlink()
+        self.assertEqual(self.repo.git("cat-file", "-t", base), "commit")
+        self.assert_source_rejected(self.run_source(base))
+
+    def test_trusted_validator_failure_stays_failure(self) -> None:
+        base = self.make_base(b"raise SystemExit(42)\n")
+        proc = self.run_source(base)
+        self.assertEqual(proc.returncode, 42, proc.stdout + proc.stderr)
+        self.assertFalse(self.spy.exists())
 
 
 if __name__ == "__main__":
