@@ -731,6 +731,87 @@ class PublicationSyncContractTest(unittest.TestCase):
 
 
 
+    # --- review regressions: byte names and historical mode compatibility ---
+
+    def fixture_with_byte_names(self, *, source_has_names=True) -> SyncFixture:
+        fixture = SyncFixture(self.repo)
+        # Git names are raw bytes, not necessarily valid UTF-8. Include the
+        # replacement-character spelling too so decoding loss cannot alias it.
+        names = [b"raw-\xff", "raw-\ufffd".encode(), b".github/raw-\xfe"]
+        blob = self.repo.git("hash-object", "-w", "--stdin", input_bytes=b"retained\n")
+
+        def add_names(treeish):
+            self.repo.git("read-tree", treeish)
+            records = b"".join(b"100644 " + blob.encode() + b"\t" + name + b"\0"
+                               for name in names)
+            self.repo.git("update-index", "-z", "--index-info", input_bytes=records)
+            return self.repo.git("write-tree")
+
+        if source_has_names:
+            source_tree = add_names(fixture.s)
+            fixture.s = self.repo.git("commit-tree", source_tree, "-p", fixture.s,
+                                     input_bytes=b"prepared with byte names\n")
+        projection_tree = add_names(fixture.core_join)
+        fixture.core_join = self.repo.git(
+            "commit-tree", projection_tree, "-p", fixture.r, "-p", fixture.s,
+            input_bytes=JOIN_MESSAGE.encode(),
+        )
+        packet = json.loads(self.repo.git("show", f"{fixture.j}:{PACKET_PATH}"))
+        packet.update(prepared_swarm_sha=fixture.s,
+                      expected_join_parents=[fixture.r, fixture.s],
+                      sync_join_sha=fixture.core_join,
+                      expected_projected_tree=projection_tree)
+        add_names(fixture.j)
+        packet_blob = self.repo.git("hash-object", "-w", "--stdin", input_bytes=json_bytes(packet))
+        self.repo.git("update-index", "--cacheinfo", f"100644,{packet_blob},{PACKET_PATH}")
+        fixture.j = self.repo.git("commit-tree", self.repo.git("write-tree"),
+                                 "-p", fixture.r, "-p", fixture.s,
+                                 input_bytes=JOIN_MESSAGE.encode())
+        return fixture
+
+    def test_non_utf8_names_round_trip_without_replacement_aliasing(self) -> None:
+        fixture = self.fixture_with_byte_names()
+        proc = self.run_pr(fixture, BODY_YES)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        merge_m = fixture.wrapper_merge()
+        proc = self.run_post_merge(merge_m, master_at=merge_m)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_unlisted_non_utf8_names_still_fail_path_denominator(self) -> None:
+        fixture = self.fixture_with_byte_names(source_has_names=False)
+        self.assert_rejected(self.run_pr(fixture, BODY_YES), "proof 8")
+
+    def test_unchanged_historical_executable_packet_remains_ordinary(self) -> None:
+        fixture = SyncFixture(self.repo)
+        legacy = self.mutate_head(fixture, modes={PACKET_PATH: "100755"},
+                                  parents=[fixture.r, fixture.s], message=JOIN_MESSAGE.encode())
+        head = self.ordinary_commit_on(legacy)
+        proc = self.run_pr(fixture, BODY_NO, base=legacy, head=head)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("publication-sync: not_applicable", proc.stdout)
+
+    def test_fresh_transaction_can_replace_historical_packet_mode(self) -> None:
+        fixture = SyncFixture(self.repo)
+        legacy = self.mutate_head(fixture, modes={PACKET_PATH: "100755"},
+                                  parents=[fixture.r, fixture.s], message=JOIN_MESSAGE.encode())
+        projection = self.repo.git("rev-parse", f"{fixture.core_join}^{{tree}}")
+        core = self.repo.git("commit-tree", projection, "-p", legacy, "-p", fixture.s,
+                             input_bytes=JOIN_MESSAGE.encode())
+        current = SyncFixture(self.repo, packet_override={
+            "release_base_sha": legacy, "expected_join_parents": [legacy, fixture.s],
+            "sync_join_sha": core,
+        }, head_parents=[legacy, fixture.s])
+        proc = self.run_pr(current, BODY_YES, base=legacy)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_unchanged_unreadable_control_tree_is_not_ordinary(self) -> None:
+        fixture = SyncFixture(self.repo)
+        head = self.ordinary_commit_on(fixture.j)
+        tree = self.repo.git("rev-parse", f"{fixture.j}:.github/publication-sync")
+        (self.repo.path / ".git" / "objects" / tree[:2] / tree[2:]).unlink()
+        self.assert_rejected(self.run_pr(fixture, BODY_NO, base=fixture.j, head=head))
+
+
 class ValidatorUnitTest(unittest.TestCase):
     """Pure-function guards that need no git fixture."""
 

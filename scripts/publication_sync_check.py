@@ -146,7 +146,8 @@ def run_git(repo: Path, args: Sequence[str], *, input_bytes: Optional[bytes] = N
         stderr = proc.stderr.decode("utf-8", errors="replace").strip()
         stdout = proc.stdout.decode("utf-8", errors="replace").strip()
         fail(f"git {' '.join(args)} failed: {stderr or stdout}")
-    return proc.stdout.decode("utf-8", errors="replace")
+    # Preserve undecodable filename bytes for NUL-delimited tree round trips.
+    return proc.stdout.decode("utf-8", errors="surrogateescape")
 
 
 def git_ok(repo: Path, args: Sequence[str]) -> bool:
@@ -179,13 +180,18 @@ def tree_entry(repo: Path, commit: str, path: str) -> Optional[Tuple[str, str, s
     return mode, kind, oid
 
 
-def tree_file(repo: Path, commit: str, path: str) -> Optional[bytes]:
-    """Read a regular control file; only a successful absent query returns None."""
+def tree_file(repo: Path, commit: str, path: str, *, historical: bool = False) -> Optional[bytes]:
+    """Read control bytes; historical base modes are not new admissions.
+
+    Historical bytes are used only for freshness comparison, never followed
+    as filesystem links. New transaction control files must be regular 100644.
+    Only a successful absent query returns None.
+    """
     entry = tree_entry(repo, commit, path)
     if entry is None:
         return None
     mode, kind, oid = entry
-    if mode != "100644" or kind != "blob":
+    if kind != "blob" or (not historical and mode != "100644"):
         fail(f"control file {path!r} must be a regular 100644 blob, got {mode} {kind}")
     proc = subprocess.run(
         ["git", "-C", str(repo), "cat-file", "blob", oid],
@@ -348,7 +354,7 @@ def ls_tree(repo: Path, treeish: str) -> List[str]:
 def mktree(repo: Path, entries: List[str]) -> str:
     """Build a tree without interpreting quoting or newlines inside names."""
     tree_input = "\0".join(entries) + ("\0" if entries else "")
-    return run_git(repo, ["mktree", "-z"], input_bytes=tree_input.encode("utf-8")).strip()
+    return run_git(repo, ["mktree", "-z"], input_bytes=tree_input.encode("utf-8", errors="surrogateescape")).strip()
 
 
 def projected_tree(repo: Path, commit: str) -> str:
@@ -421,20 +427,28 @@ def check_pr(args: argparse.Namespace) -> int:
     body = body.replace("\r\n", "\n").replace("\r", "\n")  # GitHub bodies may be CRLF
     marker = check_marker_field(body)
 
-    packet_bytes = tree_file(repo, args.head_sha, PACKET_PATH)
-    base_packet_bytes = tree_file(repo, args.base_sha, PACKET_PATH)
-
     # The complete control tree is the mode signal. Packet-only comparison
     # misses deletion, changed sibling evidence, extra files and mode changes.
     # An unchanged inherited tree remains ordinary historical state.
     head_control = tree_entry(repo, args.head_sha, CONTROL_DIR.rstrip("/"))
     base_control = tree_entry(repo, args.base_sha, CONTROL_DIR.rstrip("/"))
     control_changed = head_control != base_control
-    packet_changed = packet_bytes is not None and packet_bytes != base_packet_bytes
     if not control_changed and marker is not True:
+        # An old admitted packet can have modes no longer allowed for new
+        # transactions. Unchanged history is not re-admitted on an ordinary
+        # PR, but the control object itself must still be readable.
+        if head_control is not None:
+            if head_control[1] == "tree":
+                ls_tree(repo, head_control[2])
+            else:
+                run_git(repo, ["cat-file", "-e", head_control[2]])
         print("not_applicable: control tree unchanged and marker field is not 'yes'")
         print("publication-sync: not_applicable")
         return 0
+
+    packet_bytes = tree_file(repo, args.head_sha, PACKET_PATH)
+    base_packet_bytes = tree_file(repo, args.base_sha, PACKET_PATH, historical=True)
+    packet_changed = packet_bytes is not None and packet_bytes != base_packet_bytes
     if packet_bytes is None:
         fail("declared publication-sync PR (marker field 'yes') without a committed packet")
     if not packet_changed:
