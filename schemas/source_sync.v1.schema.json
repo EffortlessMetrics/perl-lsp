@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/blob/master/schemas/source_sync.v1.schema.json",
+  "title": "Non-release source-sync packet envelope v1",
+  "description": "Closed envelope for engineering source convergence. This schema certifies shape only. The trusted dispatcher returns NOT_PROVEN until real evidence producers and admission validation land. No publication authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "direction",
+    "source_repository",
+    "source_ref",
+    "destination_repository",
+    "destination_ref",
+    "reconciliation_base_sha",
+    "destination_base_sha",
+    "swarm_source_sha",
+    "sync_join_sha",
+    "expected_projected_tree",
+    "projection_policy_digest",
+    "reconciliation_digest",
+    "publication_sync_manifest_digest",
+    "product_proof_digest",
+    "expected_join_parents",
+    "published_channels",
+    "release_cut"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "source_sync.v1"
+    },
+    "direction": {
+      "const": "swarm_to_public"
+    },
+    "source_repository": {
+      "const": "EffortlessMetrics/perl-lsp-swarm"
+    },
+    "source_ref": {
+      "const": "refs/heads/main"
+    },
+    "destination_repository": {
+      "const": "EffortlessMetrics/perl-lsp"
+    },
+    "destination_ref": {
+      "const": "refs/heads/master"
+    },
+    "reconciliation_base_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "B: verified semantic reconciliation boundary, not inferred from a date or current merge base.",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "destination_base_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "swarm_source_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "S: exact qualified engineering product subject. Does not claim release preparation or freeze.",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "sync_join_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "Core join J0 with ordered parents [R,S] and tree P. Re-derived from packet-carrying head J; J0 is not an ancestor claim.",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "expected_projected_tree": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "P: projection tree excluding .github/publication-sync/. Not the complete packet-carrying tree(J).",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "projection_policy_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "reconciliation_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "publication_sync_manifest_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "product_proof_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "expected_join_parents": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "$ref": "#/$defs/sha"
+      },
+      "description": "Exactly [destination_base_sha,swarm_source_sha], checked by executable validation."
+    },
+    "published_channels": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "release_cut": {
+      "const": false
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    }
+  }
+}

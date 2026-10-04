@@ -25,6 +25,19 @@ new_non_rust_requires_review = true
 broad_globs_require_reason = true
 coverage_required_for_production_surfaces = true
 
+[[allow]]
+id = "non-rust-source-sync-packet-schema-v1"
+path = "schemas/source_sync.v1.schema.json"
+kind = "ci_policy_config"
+language = "json"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "Closed non-release source-sync packet envelope shared with trusted-base admission."
+covered_by = ["python3 scripts/tests/test-source-sync-dispatch.py"]
+created = "2026-10-04"
+review_after = "2026-11-03"
+
 # =============================================================================
 # Documentation
 # =============================================================================

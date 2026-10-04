@@ -1,0 +1,29 @@
+name: Source Sync Dispatcher Tests
+
+on:
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'scripts/publication_sync_check.py'
+      - 'scripts/tests/test-publication-sync-contract.py'
+      - 'scripts/tests/test-source-sync-dispatch.py'
+      - 'schemas/source_sync.v1.schema.json'
+      - 'schemas/publication_sync.v2.schema.json'
+      - '.github/workflows/source-sync-dispatch-tests.yml'
+      - '.github/workflows/publication-sync-contract.yml'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Source Sync Dispatcher Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Historical admission controls
+        run: python3 -B scripts/tests/test-publication-sync-contract.py
+      - name: Non-release dispatcher controls
+        run: python3 -B scripts/tests/test-source-sync-dispatch.py
