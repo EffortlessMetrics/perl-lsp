@@ -38,7 +38,7 @@
     "sync_join_sha": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$",
-      "description": "J: audited two-parent complete-tree join; must equal the PR head."
+      "description": "J0: core two-parent join, not the PR head J. Re-derived from J using the same parents, message, author/committer identity and timestamps, with the control directory removed."
     },
     "expected_join_parents": {
       "type": "array",
@@ -63,7 +63,7 @@
     "expected_projected_tree": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$",
-      "description": "Expected tree object id of J (the reviewed projection)."
+      "description": "P: reviewed projected tree object id, equal to tree(J0) and to tree(J) after removing .github/publication-sync/. The full PR-head tree also contains the three control files."
     },
     "published_channels": {
       "type": "array",
