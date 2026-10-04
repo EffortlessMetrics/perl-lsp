@@ -138,19 +138,33 @@ class SourceDispatchTest(unittest.TestCase):
         self.reject(proc, 'not authorized by trusted-base policy')
 
     def test_wrapper_cannot_borrow_authorization_from_wrong_first_parent(self):
-        # The extra parent X grants the very same S and retains R ancestry.
-        # J/M trees still match, so policy/base identity is the discriminator.
+        # R denies S; X grants it. R ancestry and J/M tree equality still hold.
+        denied = {'schema_version': 'publication_sync_admission_policy.v1',
+                  'historical_release_subjects': []}
+        base, head = self.legacy_candidate(denied)
         policy = {'schema_version': 'publication_sync_admission_policy.v1',
                   'historical_release_subjects': [self.fixture.s]}
         parent = self.repo.make_commit({
             '.ci/policies/publication-sync-admission.v1.json': legacy.json_bytes(policy),
-        }, [self.fixture.r], 'different authorized public X\n')
+        }, [base], 'different authorized public X\n')
+        tree = self.repo.git('rev-parse', head + '^{tree}')
+        merge = self.repo.git('commit-tree', tree, '-p', parent, '-p', head,
+                              input_bytes=b'wrong first parent but same tree\n')
+        self.assertNotEqual(parent, base)
+        self.assertEqual(self.repo.git('rev-parse', merge + '^{tree}'), tree)
+        self.repo.git('merge-base', '--is-ancestor', base, merge)
+        self.repo.git('update-ref', 'refs/heads/master', merge)
+        proc = legacy.run_check(['post-merge', '--repo', str(self.repo.path), '--merge-sha', merge])
+        self.reject(proc, 'first parent')
+
+    def test_wrong_wrapper_base_rejects_before_policy_parse(self):
+        # Malformed X bytes would produce a JSON failure if read before identity.
+        parent = self.repo.make_commit({
+            '.ci/policies/publication-sync-admission.v1.json': b'not JSON\n',
+        }, [self.fixture.r], 'unreadable policy on wrong public X\n')
         tree = self.repo.git('rev-parse', self.fixture.j + '^{tree}')
         merge = self.repo.git('commit-tree', tree, '-p', parent, '-p', self.fixture.j,
-                              input_bytes=b'wrong first parent but same tree\n')
-        self.assertNotEqual(parent, self.fixture.r)
-        self.assertEqual(self.repo.git('rev-parse', merge + '^{tree}'), tree)
-        self.repo.git('merge-base', '--is-ancestor', self.fixture.r, merge)
+                              input_bytes=b'wrong base with malformed policy\n')
         self.repo.git('update-ref', 'refs/heads/master', merge)
         proc = legacy.run_check(['post-merge', '--repo', str(self.repo.path), '--merge-sha', merge])
         self.reject(proc, 'first parent')
