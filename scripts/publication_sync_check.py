@@ -95,6 +95,7 @@ RELEASE = "0.18.0-rc.1"
 # exact trusted base. Packet fields cannot add profiles or choose proof sets.
 # Source admission is deliberately NOT_PROVEN until its real producers land.
 SOURCE_SCHEMA_VERSION = "source_sync.v1"
+ADMISSION_POLICY_PATH = ".ci/policies/publication-sync-admission.v1.json"
 SOURCE_IDENTITIES = {
     "direction": "swarm_to_public",
     "source_repository": "EffortlessMetrics/perl-lsp-swarm",
@@ -298,6 +299,31 @@ def source_admission_not_proven() -> NoReturn:
         "protected-source observations. Release freeze/publication qualification "
         "is not a source prerequisite"
     )
+
+
+def authorize_historical_release(repo: Path, trusted_base: str, packet: dict) -> None:
+    """Candidate schema strings cannot authorize the legacy release proof set.
+
+    Authorization comes only from exact prepared subjects named by policy in
+    the trusted PR base (or wrapper's actual first parent), never from J/M.
+    Historical packet validation itself retains its existing interpretation.
+    """
+    data = tree_file(repo, trusted_base, ADMISSION_POLICY_PATH)
+    if data is None:
+        fail("historical release NOT_PROVEN: trusted-base admission policy missing or unreadable")
+    policy = load_json_bytes(data, "trusted-base admission policy")
+    if not isinstance(policy, dict) or set(policy) != {
+        "schema_version", "historical_release_subjects",
+    } or policy.get("schema_version") != "publication_sync_admission_policy.v1":
+        fail("historical release NOT_PROVEN: invalid trusted-base admission policy")
+    subjects = policy["historical_release_subjects"]
+    if not isinstance(subjects, list):
+        fail("trusted historical_release_subjects must be an array")
+    for subject in subjects:
+        if not isinstance(subject, str) or not HEX40.fullmatch(subject):
+            fail("trusted historical release subject must be an exact commit SHA")
+    if packet["prepared_swarm_sha"] not in subjects:
+        fail("historical release NOT_PROVEN: prepared subject is not authorized by trusted-base policy")
 
 
 def validate_ledger(ledger: Any) -> None:
@@ -527,6 +553,7 @@ def check_pr(args: argparse.Namespace) -> int:
     if args.base_sha != base_r:
         fail(f"proof 1: PR base {args.base_sha} != declared release_base_sha {base_r}")
     print(f"PASS proof 1: PR base == R ({base_r})")
+    authorize_historical_release(repo, args.base_sha, packet)
 
     # Proof 2: PR head re-derives exactly the declared core join J0 (same
     # parents, message, and identity; tree = projection without control
@@ -650,6 +677,8 @@ def check_post_merge(args: argparse.Namespace) -> int:
             f"post-merge: M {merge_m} has parents {parents_line[1:]}; "
             "expected exactly two (master tip, PR head J) — squash/rebase landing?"
         )
+
+    authorize_historical_release(repo, parents_line[1], packet)
 
     # J is an ancestor of M (direct second parent here) and must re-derive
     # the declared core join, binding M to the audited packet.

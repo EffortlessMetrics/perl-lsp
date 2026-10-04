@@ -73,6 +73,70 @@ class SourceDispatchTest(unittest.TestCase):
         self.assertNotIn('publication-sync: not_applicable', proc.stdout)
         self.assertNotIn('instrument failure', proc.stdout)
 
+    def legacy_candidate(self, policy, *, head_policy=None):
+        policy_path = '.ci/policies/publication-sync-admission.v1.json'
+        base_files = {'README.md': b'engineering base\n'}
+        if policy is not None:
+            base_files[policy_path] = legacy.json_bytes(policy)
+        base = self.repo.make_commit(base_files, [], 'trusted engineering R\n')
+        packet = json.loads(self.repo.git('show', f'{self.fixture.j}:{legacy.PACKET_PATH}'))
+        projection = dict(legacy.PROJECTION_CONTENT)
+        manifest = legacy.manifest_payload()
+        if head_policy is not None:
+            projection[policy_path] = legacy.json_bytes(head_policy)
+            manifest['translations'].append({'from': policy_path, 'to': policy_path})
+        ledger_bytes = legacy.json_bytes(legacy.ledger_payload())
+        manifest_bytes = legacy.json_bytes(manifest)
+        tree = self.repo.make_tree(projection)
+        core = self.repo.git('commit-tree', tree, '-p', base, '-p', self.fixture.s,
+                             input_bytes=legacy.JOIN_MESSAGE.encode())
+        packet.update(release_base_sha=base, sync_join_sha=core,
+                      expected_join_parents=[base, self.fixture.s], expected_projected_tree=tree,
+                      publication_sync_manifest_digest=legacy.hashlib.sha256(manifest_bytes).hexdigest())
+        packet['publication_sync_manifest_digest'] = 'sha256:' + packet['publication_sync_manifest_digest']
+        files = dict(projection)
+        files[legacy.PACKET_PATH] = legacy.json_bytes(packet)
+        files[legacy.LEDGER_PATH] = ledger_bytes
+        files[legacy.MANIFEST_PATH] = manifest_bytes
+        head = self.repo.make_commit(files, [base, self.fixture.s], legacy.JOIN_MESSAGE)
+        return base, head
+
+    def test_legacy_envelope_cannot_substitute_for_unapproved_source(self):
+        policy = {'schema_version': 'publication_sync_admission_policy.v1',
+                  'historical_release_subjects': []}
+        base, head = self.legacy_candidate(policy)
+        self.reject(self.pr(head, base), 'not authorized by trusted-base policy')
+
+    def test_candidate_policy_cannot_authorize_legacy_envelope(self):
+        policy = {'schema_version': 'publication_sync_admission_policy.v1',
+                  'historical_release_subjects': []}
+        forged = dict(policy, historical_release_subjects=[self.fixture.s])
+        base, head = self.legacy_candidate(policy, head_policy=forged)
+        self.reject(self.pr(head, base), 'not authorized by trusted-base policy')
+
+    def test_missing_trusted_policy_cannot_authorize_legacy_envelope(self):
+        base, head = self.legacy_candidate(None)
+        self.reject(self.pr(head, base), 'trusted-base admission policy missing or unreadable')
+
+    def test_cross_subject_trusted_authorization_does_not_reuse(self):
+        other = self.repo.make_commit(dict(legacy.S_CONTENT), [], 'different exact subject\n')
+        policy = {'schema_version': 'publication_sync_admission_policy.v1',
+                  'historical_release_subjects': [other]}
+        base, head = self.legacy_candidate(policy)
+        self.reject(self.pr(head, base), 'not authorized by trusted-base policy')
+
+    def test_landed_wrapper_cannot_read_candidate_policy_as_authority(self):
+        policy = {'schema_version': 'publication_sync_admission_policy.v1',
+                  'historical_release_subjects': []}
+        forged = dict(policy, historical_release_subjects=[self.fixture.s])
+        base, head = self.legacy_candidate(policy, head_policy=forged)
+        tree = self.repo.git('rev-parse', head + '^{tree}')
+        merge = self.repo.git('commit-tree', tree, '-p', base, '-p', head,
+                              input_bytes=b'wrapper with candidate policy\n')
+        self.repo.git('update-ref', 'refs/heads/master', merge)
+        proc = legacy.run_check(['post-merge', '--repo', str(self.repo.path), '--merge-sha', merge])
+        self.reject(proc, 'not authorized by trusted-base policy')
+
     def test_source_shape_needs_no_release_inputs_but_admission_is_not_proven(self):
         self.assertEqual(check.validate_packet_shape(self.packet), self.packet)
         head = self.head(self.packet)

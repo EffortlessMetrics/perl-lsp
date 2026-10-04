@@ -9,6 +9,15 @@ and the non-release `source_sync.v1` envelope. Candidate packet fields cannot ad
 profiles, choose invariant sets, or change that policy. Unsupported and missing
 profiles reject a declared transaction.
 
+A legacy schema string alone also cannot select the historical release success
+path. `.ci/policies/publication-sync-admission.v1.json` in the trusted R tree must
+authorize the exact prepared release subject S. Post-merge reads that policy from
+the wrapper's actual first parent, never from the candidate tree. The initial
+policy authorizes no new historical release transaction. A candidate-authored
+policy, another subject's authorization, or absent/unreadable policy cannot grant
+admission. Historical packet/schema/proof interpretation remains intact after
+this explicit authorization; unchanged inherited packets remain ordinary.
+
 The source envelope binds semantic boundary B, public base R, exact swarm product
 subject S, core join J0, projection P, ordered join parents [R,S], source and
 destination identities, and policy/reconciliation/manifest/product-proof digests.
