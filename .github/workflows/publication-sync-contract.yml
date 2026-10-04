@@ -71,17 +71,15 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          # The validator comes from the trusted base ref so an untrusted PR
-          # head cannot weaken its own gate. Bootstrap exception: the PR that
-          # introduces the check has no validator at its base yet; only that
-          # PR may fall back to the head copy, and it is exactly the PR under
-          # review for introducing the gate.
+          # Bootstrap is complete. Only the exact trusted base may supply
+          # the validator; a missing or unreadable base copy is an instrument
+          # failure, never permission to execute a PR-head replacement.
           if git show "${BASE_SHA}:scripts/publication_sync_check.py" \
               > "${RUNNER_TEMP}/publication_sync_check.py" 2>/dev/null; then
             echo "Validator source: PR base ${BASE_SHA}"
           else
-            echo "::notice::Validator absent at base; bootstrap fallback to the PR head copy (valid only for the PR introducing this check)"
-            cp scripts/publication_sync_check.py "${RUNNER_TEMP}/publication_sync_check.py"
+            echo "::error::Cannot read publication-sync validator from trusted base ${BASE_SHA}; refusing PR-head fallback"
+            exit 1
           fi
           printf '%s' "${PR_BODY}" > "${RUNNER_TEMP}/pr-body.txt"
           python3 "${RUNNER_TEMP}/publication_sync_check.py" pr \
