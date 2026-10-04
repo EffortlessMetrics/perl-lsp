@@ -91,6 +91,31 @@ LEDGER_SCHEMA_VERSION = "v0.18_reconciliation.v1"
 MANIFEST_SCHEMA_VERSION = "v0.18_publication_sync_manifest.v1"
 RELEASE = "0.18.0-rc.1"
 
+# Reviewed dispatch policy lives in this validator, which CI loads from the
+# exact trusted base. Packet fields cannot add profiles or choose proof sets.
+# Source admission is deliberately NOT_PROVEN until its real producers land.
+SOURCE_SCHEMA_VERSION = "source_sync.v1"
+ADMISSION_POLICY_PATH = ".ci/policies/publication-sync-admission.v1.json"
+SOURCE_IDENTITIES = {
+    "direction": "swarm_to_public",
+    "source_repository": "EffortlessMetrics/perl-lsp-swarm",
+    "source_ref": "refs/heads/main",
+    "destination_repository": "EffortlessMetrics/perl-lsp",
+    "destination_ref": "refs/heads/master",
+}
+SOURCE_SHA_KEYS = (
+    "reconciliation_base_sha", "destination_base_sha", "swarm_source_sha",
+    "sync_join_sha", "expected_projected_tree",
+)
+SOURCE_DIGEST_KEYS = (
+    "projection_policy_digest", "reconciliation_digest",
+    "publication_sync_manifest_digest", "product_proof_digest",
+)
+SOURCE_PACKET_KEYS = {
+    "schema_version", "expected_join_parents", "published_channels", "release_cut",
+    *SOURCE_IDENTITIES, *SOURCE_SHA_KEYS, *SOURCE_DIGEST_KEYS,
+}
+
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 REPO_PATH = re.compile(r"^[A-Za-z0-9_.@+-][A-Za-z0-9_.@+/-]{0,255}$")
@@ -201,9 +226,14 @@ def check_marker_field(body: str) -> Optional[bool]:
 
 
 def validate_packet_shape(packet: Any) -> dict:
-    """Hand-rolled strict validation against schemas/publication_sync.v2.schema.json."""
+    """Strict trusted dispatch to historical release or source envelope validation."""
     if not isinstance(packet, dict):
         fail("packet must be a JSON object")
+    profile = packet.get("schema_version")
+    if profile == SOURCE_SCHEMA_VERSION:
+        return validate_source_packet_shape(packet)
+    if profile != SCHEMA_VERSION:
+        fail(f"unsupported packet schema_version: {profile!r}")
     keys = set(packet)
     missing = PACKET_KEYS - keys
     extra = keys - PACKET_KEYS
@@ -234,6 +264,68 @@ def validate_packet_shape(packet: Any) -> dict:
     if packet["release_cut"] is not False:
         fail(f"no-publish contract: release_cut must be false, got {packet['release_cut']!r}")
     return packet
+
+
+def validate_source_packet_shape(packet: dict) -> dict:
+    """Closed non-release packet envelope; shape is not evidence admission."""
+    missing = SOURCE_PACKET_KEYS - set(packet)
+    extra = set(packet) - SOURCE_PACKET_KEYS
+    if missing or extra:
+        fail(f"source packet keys: missing {sorted(missing)}, unknown {sorted(extra)}")
+    for key, expected in SOURCE_IDENTITIES.items():
+        if packet[key] != expected:
+            fail(f"source packet {key} must be {expected!r}")
+    for key in SOURCE_SHA_KEYS:
+        if not isinstance(packet[key], str) or not HEX40.fullmatch(packet[key]):
+            fail(f"source packet {key} must be a 40-char lowercase hex sha")
+    for key in SOURCE_DIGEST_KEYS:
+        if not isinstance(packet[key], str) or not DIGEST.fullmatch(packet[key]):
+            fail(f"source packet {key} must match sha256:<64 hex>")
+    if packet["expected_join_parents"] != [
+        packet["destination_base_sha"], packet["swarm_source_sha"],
+    ]:
+        fail("source expected_join_parents must equal [destination_base_sha, swarm_source_sha]")
+    if packet["published_channels"] != [] or packet["release_cut"] is not False:
+        fail("source no-publish contract requires published_channels [] and release_cut false")
+    return packet
+
+
+def source_admission_not_proven() -> NoReturn:
+    """No claimed JSON verdict can substitute for unlanded evidence producers."""
+    fail(
+        "source_sync.v1 NOT_PROVEN: producer-backed admission is not implemented; "
+        "requires landed swarm #14570/#17225 model, #17226 reconciliation, "
+        "#7973/#7976 projection/product qualification and applicable authentic "
+        "protected-source observations. Release freeze/publication qualification "
+        "is not a source prerequisite"
+    )
+
+
+def authorize_historical_release(repo: Path, trusted_base: str, packet: dict) -> None:
+    """Candidate schema strings cannot authorize the legacy release proof set.
+
+    Authorization comes only from exact prepared subjects named by policy in
+    the trusted PR base (or wrapper's actual first parent), never from J/M.
+    Historical packet validation itself retains its existing interpretation.
+    """
+    if trusted_base != packet["release_base_sha"]:
+        fail("historical release NOT_PROVEN: wrapper first parent / trusted authorization base differs from release_base_sha")
+    data = tree_file(repo, trusted_base, ADMISSION_POLICY_PATH)
+    if data is None:
+        fail("historical release NOT_PROVEN: trusted-base admission policy missing or unreadable")
+    policy = load_json_bytes(data, "trusted-base admission policy")
+    if not isinstance(policy, dict) or set(policy) != {
+        "schema_version", "historical_release_subjects",
+    } or policy.get("schema_version") != "publication_sync_admission_policy.v1":
+        fail("historical release NOT_PROVEN: invalid trusted-base admission policy")
+    subjects = policy["historical_release_subjects"]
+    if not isinstance(subjects, list):
+        fail("trusted historical_release_subjects must be an array")
+    for subject in subjects:
+        if not isinstance(subject, str) or not HEX40.fullmatch(subject):
+            fail("trusted historical release subject must be an exact commit SHA")
+    if packet["prepared_swarm_sha"] not in subjects:
+        fail("historical release NOT_PROVEN: prepared subject is not authorized by trusted-base policy")
 
 
 def validate_ledger(ledger: Any) -> None:
@@ -433,6 +525,8 @@ def check_pr(args: argparse.Namespace) -> int:
         )
 
     packet = validate_packet_shape(load_json_bytes(packet_bytes, "publication-sync packet"))
+    if packet["schema_version"] == SOURCE_SCHEMA_VERSION:
+        source_admission_not_proven()
     base_r = packet["release_base_sha"]
     swarm_s = packet["prepared_swarm_sha"]
     core_join = packet["sync_join_sha"]
@@ -461,6 +555,7 @@ def check_pr(args: argparse.Namespace) -> int:
     if args.base_sha != base_r:
         fail(f"proof 1: PR base {args.base_sha} != declared release_base_sha {base_r}")
     print(f"PASS proof 1: PR base == R ({base_r})")
+    authorize_historical_release(repo, args.base_sha, packet)
 
     # Proof 2: PR head re-derives exactly the declared core join J0 (same
     # parents, message, and identity; tree = projection without control
@@ -565,6 +660,8 @@ def check_post_merge(args: argparse.Namespace) -> int:
     if packet_bytes is None:
         fail(f"no publication-sync packet at {PACKET_PATH} in tree(M); nothing to verify")
     packet = validate_packet_shape(load_json_bytes(packet_bytes, "publication-sync packet"))
+    if packet["schema_version"] == SOURCE_SCHEMA_VERSION:
+        source_admission_not_proven()
     base_r = packet["release_base_sha"]
     swarm_s = packet["prepared_swarm_sha"]
 
@@ -582,6 +679,8 @@ def check_post_merge(args: argparse.Namespace) -> int:
             f"post-merge: M {merge_m} has parents {parents_line[1:]}; "
             "expected exactly two (master tip, PR head J) — squash/rebase landing?"
         )
+
+    authorize_historical_release(repo, parents_line[1], packet)
 
     # J is an ancestor of M (direct second parent here) and must re-derive
     # the declared core join, binding M to the audited packet.

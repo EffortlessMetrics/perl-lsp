@@ -38,7 +38,7 @@
     "sync_join_sha": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$",
-      "description": "J: audited two-parent complete-tree join; must equal the PR head."
+      "description": "J0: core complete-tree join with projection P and ordered parents [R,S]. Admission derives J0 from packet-carrying PR head J by removing the closed control directory while preserving parents, message, and author/committer metadata."
     },
     "expected_join_parents": {
       "type": "array",
@@ -63,7 +63,7 @@
     "expected_projected_tree": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$",
-      "description": "Expected tree object id of J (the reviewed projection)."
+      "description": "P: reviewed complete projection tree, equal to tree(J0); tree(J) additionally contains the closed control directory."
     },
     "published_channels": {
       "type": "array",

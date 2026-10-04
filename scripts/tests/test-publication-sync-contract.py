@@ -191,8 +191,16 @@ class SyncFixture:
                  head_extra: dict[str, bytes] | None = None,
                  head_parents: list[str] | None = None):
         self.repo = repo
-        self.r = repo.make_commit({"README.md": b"perl-lsp base\n"}, [], "R: base\n")
         self.s = repo.make_commit(dict(S_CONTENT), [], "S: prepared swarm\n")
+        # Release proof selection needs authorization in the trusted R tree.
+        # Candidate control files cannot authorize arbitrary engineering S.
+        self.r = repo.make_commit({
+            "README.md": b"perl-lsp base\n",
+            ".ci/policies/publication-sync-admission.v1.json": json_bytes({
+                "schema_version": "publication_sync_admission_policy.v1",
+                "historical_release_subjects": [self.s],
+            }),
+        }, [], "R: base\n")
 
         ledger_bytes = json_bytes(ledger if ledger is not None else ledger_payload())
         manifest_bytes = json_bytes(manifest if manifest is not None else manifest_payload())
