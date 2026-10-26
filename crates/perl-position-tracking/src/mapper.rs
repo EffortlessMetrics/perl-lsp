@@ -81,7 +81,10 @@ impl PositionMapper {
         self.line_ending = detect_line_ending(text);
     }
 
-    /// Apply an incremental edit
+    /// Apply an incremental edit.
+    ///
+    /// Byte offsets are clamped to the document bounds. If either clamped
+    /// endpoint falls inside a UTF-8 character, the edit is ignored.
     pub fn apply_edit(&mut self, start_byte: usize, end_byte: usize, new_text: &str) {
         // Clamp to valid range
         let start_byte = start_byte.min(self.rope.len_bytes());
@@ -90,6 +93,15 @@ impl PositionMapper {
         // Convert byte offsets to char indices (rope uses chars!)
         let start_char = self.rope.byte_to_char(start_byte);
         let end_char = self.rope.byte_to_char(end_byte);
+
+        // byte_to_char rounds interior bytes down to the containing character.
+        // Check both endpoints before mutating so an invalid range cannot edit
+        // a neighboring character or insert at a different position.
+        if self.rope.char_to_byte(start_char) != start_byte
+            || self.rope.char_to_byte(end_char) != end_byte
+        {
+            return;
+        }
 
         // Remove old text
         if end_char > start_char {
