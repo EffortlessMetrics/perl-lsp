@@ -1,5 +1,8 @@
 //! BDD-style behavior tests for workspace discovery.
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use perl_workspace::discovery::{DiscoveryMethod, discover_perl_files};
 use std::fs;
 use std::path::Path;
@@ -37,6 +40,14 @@ fn run_git(root: &Path, args: &[&str]) -> TestResult {
 
 #[test]
 fn given_non_git_workspace_when_discovering_then_walk_fallback_finds_perl_sources() -> TestResult {
+    git_fixture::run_isolated_test(
+        "given_non_git_workspace_when_discovering_then_walk_fallback_finds_perl_sources",
+        given_non_git_workspace_when_discovering_then_walk_fallback_finds_perl_sources_fixture_body,
+    )
+}
+
+fn given_non_git_workspace_when_discovering_then_walk_fallback_finds_perl_sources_fixture_body()
+-> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -58,6 +69,14 @@ fn given_non_git_workspace_when_discovering_then_walk_fallback_finds_perl_source
 
 #[test]
 fn given_git_workspace_when_discovering_then_git_strategy_respects_gitignore() -> TestResult {
+    git_fixture::run_isolated_test(
+        "given_git_workspace_when_discovering_then_git_strategy_respects_gitignore",
+        given_git_workspace_when_discovering_then_git_strategy_respects_gitignore_fixture_body,
+    )
+}
+
+fn given_git_workspace_when_discovering_then_git_strategy_respects_gitignore_fixture_body()
+-> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -86,6 +105,11 @@ fn given_git_workspace_when_discovering_then_git_strategy_respects_gitignore() -
 #[test]
 fn given_git_workspace_with_untracked_sources_when_discovering_then_git_strategy_includes_them()
 -> TestResult {
+    git_fixture::run_isolated_test("given_git_workspace_with_untracked_sources_when_discovering_then_git_strategy_includes_them", given_git_workspace_with_untracked_sources_when_discovering_then_git_strategy_includes_them_fixture_body)
+}
+
+fn given_git_workspace_with_untracked_sources_when_discovering_then_git_strategy_includes_them_fixture_body()
+-> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -111,6 +135,11 @@ fn given_git_workspace_with_untracked_sources_when_discovering_then_git_strategy
 
 #[test]
 fn given_git_workspace_with_tracked_noise_inside_skipped_dir_when_discovering_then_skip_rules_still_win()
+-> TestResult {
+    git_fixture::run_isolated_test("given_git_workspace_with_tracked_noise_inside_skipped_dir_when_discovering_then_skip_rules_still_win", given_git_workspace_with_tracked_noise_inside_skipped_dir_when_discovering_then_skip_rules_still_win_fixture_body)
+}
+
+fn given_git_workspace_with_tracked_noise_inside_skipped_dir_when_discovering_then_skip_rules_still_win_fixture_body()
 -> TestResult {
     if !git_available() {
         return Ok(());
@@ -142,6 +171,11 @@ fn given_git_workspace_with_tracked_noise_inside_skipped_dir_when_discovering_th
 #[test]
 fn given_git_workspace_with_only_ignored_or_non_perl_files_when_discovering_then_result_is_empty_but_git_strategy_is_used()
 -> TestResult {
+    git_fixture::run_isolated_test("given_git_workspace_with_only_ignored_or_non_perl_files_when_discovering_then_result_is_empty_but_git_strategy_is_used", given_git_workspace_with_only_ignored_or_non_perl_files_when_discovering_then_result_is_empty_but_git_strategy_is_used_fixture_body)
+}
+
+fn given_git_workspace_with_only_ignored_or_non_perl_files_when_discovering_then_result_is_empty_but_git_strategy_is_used_fixture_body()
+-> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -165,6 +199,11 @@ fn given_git_workspace_with_only_ignored_or_non_perl_files_when_discovering_then
 
 #[test]
 fn given_non_git_workspace_with_perl_adjacent_extensions_when_discovering_then_walk_strategy_includes_them()
+-> TestResult {
+    git_fixture::run_isolated_test("given_non_git_workspace_with_perl_adjacent_extensions_when_discovering_then_walk_strategy_includes_them", given_non_git_workspace_with_perl_adjacent_extensions_when_discovering_then_walk_strategy_includes_them_fixture_body)
+}
+
+fn given_non_git_workspace_with_perl_adjacent_extensions_when_discovering_then_walk_strategy_includes_them_fixture_body()
 -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
@@ -192,6 +231,11 @@ fn given_non_git_workspace_with_perl_adjacent_extensions_when_discovering_then_w
 
 #[test]
 fn given_git_workspace_with_perl_adjacent_extensions_when_discovering_then_git_strategy_includes_them()
+-> TestResult {
+    git_fixture::run_isolated_test("given_git_workspace_with_perl_adjacent_extensions_when_discovering_then_git_strategy_includes_them", given_git_workspace_with_perl_adjacent_extensions_when_discovering_then_git_strategy_includes_them_fixture_body)
+}
+
+fn given_git_workspace_with_perl_adjacent_extensions_when_discovering_then_git_strategy_includes_them_fixture_body()
 -> TestResult {
     if !git_available() {
         return Ok(());
@@ -225,6 +269,11 @@ fn given_git_workspace_with_perl_adjacent_extensions_when_discovering_then_git_s
 #[test]
 fn given_walk_discovery_with_only_skipped_dirs_when_discovering_then_sources_are_excluded()
 -> TestResult {
+    git_fixture::run_isolated_test("given_walk_discovery_with_only_skipped_dirs_when_discovering_then_sources_are_excluded", given_walk_discovery_with_only_skipped_dirs_when_discovering_then_sources_are_excluded_fixture_body)
+}
+
+fn given_walk_discovery_with_only_skipped_dirs_when_discovering_then_sources_are_excluded_fixture_body()
+-> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -246,6 +295,11 @@ fn given_walk_discovery_with_only_skipped_dirs_when_discovering_then_sources_are
 
 #[test]
 fn given_git_workspace_with_mixed_case_extensions_when_discovering_then_git_strategy_keeps_them()
+-> TestResult {
+    git_fixture::run_isolated_test("given_git_workspace_with_mixed_case_extensions_when_discovering_then_git_strategy_keeps_them", given_git_workspace_with_mixed_case_extensions_when_discovering_then_git_strategy_keeps_them_fixture_body)
+}
+
+fn given_git_workspace_with_mixed_case_extensions_when_discovering_then_git_strategy_keeps_them_fixture_body()
 -> TestResult {
     if !git_available() {
         return Ok(());

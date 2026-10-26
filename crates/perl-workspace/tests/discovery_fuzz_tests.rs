@@ -1,5 +1,8 @@
 //! Fuzz-style randomized stress tests for workspace discovery.
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use perl_workspace::discovery::{discover_perl_files, is_perl_discovery_path};
 use std::collections::HashSet;
 use std::fs;
@@ -47,6 +50,13 @@ fn create_file(root: &Path, relative: &str) -> TestResult {
 
 #[test]
 fn fuzz_randomized_workspace_layouts_preserve_discovery_invariants() -> TestResult {
+    git_fixture::run_isolated_test(
+        "fuzz_randomized_workspace_layouts_preserve_discovery_invariants",
+        fuzz_randomized_workspace_layouts_preserve_discovery_invariants_fixture_body,
+    )
+}
+
+fn fuzz_randomized_workspace_layouts_preserve_discovery_invariants_fixture_body() -> TestResult {
     let directories = [
         "src",
         "lib",

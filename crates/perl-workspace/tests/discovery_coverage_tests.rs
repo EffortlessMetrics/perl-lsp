@@ -4,6 +4,9 @@
 //! large directory handling, and git/walk strategy selection edge cases that are
 //! not exercised by the existing test suites.
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use perl_workspace::discovery::{DiscoveryMethod, discover_perl_files};
 use perl_workspace::ignore::path_contains_skipped_component;
 use std::collections::HashSet;
@@ -46,6 +49,13 @@ fn run_git(root: &Path, args: &[&str]) -> TestResult {
 
 #[test]
 fn git_discovery_finds_committed_and_untracked_perl_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "git_discovery_finds_committed_and_untracked_perl_files",
+        git_discovery_finds_committed_and_untracked_perl_files_fixture_body,
+    )
+}
+
+fn git_discovery_finds_committed_and_untracked_perl_files_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -78,6 +88,13 @@ fn git_discovery_finds_committed_and_untracked_perl_files() -> TestResult {
 
 #[test]
 fn git_discovery_excludes_gitignored_perl_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "git_discovery_excludes_gitignored_perl_files",
+        git_discovery_excludes_gitignored_perl_files_fixture_body,
+    )
+}
+
+fn git_discovery_excludes_gitignored_perl_files_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -105,6 +122,13 @@ fn git_discovery_excludes_gitignored_perl_files() -> TestResult {
 
 #[test]
 fn git_discovery_finds_root_level_perl_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "git_discovery_finds_root_level_perl_files",
+        git_discovery_finds_root_level_perl_files_fixture_body,
+    )
+}
+
+fn git_discovery_finds_root_level_perl_files_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -128,6 +152,13 @@ fn git_discovery_finds_root_level_perl_files() -> TestResult {
 
 #[test]
 fn git_discovery_returns_absolute_paths() -> TestResult {
+    git_fixture::run_isolated_test(
+        "git_discovery_returns_absolute_paths",
+        git_discovery_returns_absolute_paths_fixture_body,
+    )
+}
+
+fn git_discovery_returns_absolute_paths_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -150,6 +181,13 @@ fn git_discovery_returns_absolute_paths() -> TestResult {
 
 #[test]
 fn git_discovery_with_gitignore_glob_patterns() -> TestResult {
+    git_fixture::run_isolated_test(
+        "git_discovery_with_gitignore_glob_patterns",
+        git_discovery_with_gitignore_glob_patterns_fixture_body,
+    )
+}
+
+fn git_discovery_with_gitignore_glob_patterns_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -176,6 +214,13 @@ fn git_discovery_with_gitignore_glob_patterns() -> TestResult {
 
 #[test]
 fn git_discovery_with_nested_gitignore() -> TestResult {
+    git_fixture::run_isolated_test(
+        "git_discovery_with_nested_gitignore",
+        git_discovery_with_nested_gitignore_fixture_body,
+    )
+}
+
+fn git_discovery_with_nested_gitignore_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -209,6 +254,13 @@ fn git_discovery_with_nested_gitignore() -> TestResult {
 
 #[test]
 fn walk_fallback_when_no_git_repo_exists() -> TestResult {
+    git_fixture::run_isolated_test(
+        "walk_fallback_when_no_git_repo_exists",
+        walk_fallback_when_no_git_repo_exists_fixture_body,
+    )
+}
+
+fn walk_fallback_when_no_git_repo_exists_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -225,6 +277,13 @@ fn walk_fallback_when_no_git_repo_exists() -> TestResult {
 
 #[test]
 fn walk_fallback_finds_files_in_nested_subdirectories() -> TestResult {
+    git_fixture::run_isolated_test(
+        "walk_fallback_finds_files_in_nested_subdirectories",
+        walk_fallback_finds_files_in_nested_subdirectories_fixture_body,
+    )
+}
+
+fn walk_fallback_finds_files_in_nested_subdirectories_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -245,6 +304,13 @@ fn walk_fallback_finds_files_in_nested_subdirectories() -> TestResult {
 
 #[test]
 fn walk_fallback_excluded_count_tracks_non_perl_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "walk_fallback_excluded_count_tracks_non_perl_files",
+        walk_fallback_excluded_count_tracks_non_perl_files_fixture_body,
+    )
+}
+
+fn walk_fallback_excluded_count_tracks_non_perl_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -268,6 +334,13 @@ fn walk_fallback_excluded_count_tracks_non_perl_files() -> TestResult {
 
 #[test]
 fn gitignore_directory_pattern_excludes_entire_subtree() -> TestResult {
+    git_fixture::run_isolated_test(
+        "gitignore_directory_pattern_excludes_entire_subtree",
+        gitignore_directory_pattern_excludes_entire_subtree_fixture_body,
+    )
+}
+
+fn gitignore_directory_pattern_excludes_entire_subtree_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -293,6 +366,13 @@ fn gitignore_directory_pattern_excludes_entire_subtree() -> TestResult {
 
 #[test]
 fn gitignore_negation_pattern_re_includes_file_level() -> TestResult {
+    git_fixture::run_isolated_test(
+        "gitignore_negation_pattern_re_includes_file_level",
+        gitignore_negation_pattern_re_includes_file_level_fixture_body,
+    )
+}
+
+fn gitignore_negation_pattern_re_includes_file_level_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -324,6 +404,13 @@ fn gitignore_negation_pattern_re_includes_file_level() -> TestResult {
 
 #[test]
 fn extension_filtering_accepts_all_nine_perl_extensions() -> TestResult {
+    git_fixture::run_isolated_test(
+        "extension_filtering_accepts_all_nine_perl_extensions",
+        extension_filtering_accepts_all_nine_perl_extensions_fixture_body,
+    )
+}
+
+fn extension_filtering_accepts_all_nine_perl_extensions_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -361,6 +448,13 @@ fn extension_filtering_accepts_all_nine_perl_extensions() -> TestResult {
 
 #[test]
 fn extension_filtering_rejects_non_perl_extensions() -> TestResult {
+    git_fixture::run_isolated_test(
+        "extension_filtering_rejects_non_perl_extensions",
+        extension_filtering_rejects_non_perl_extensions_fixture_body,
+    )
+}
+
+fn extension_filtering_rejects_non_perl_extensions_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -393,6 +487,13 @@ fn extension_filtering_rejects_non_perl_extensions() -> TestResult {
 
 #[test]
 fn extension_filtering_rejects_extensionless_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "extension_filtering_rejects_extensionless_files",
+        extension_filtering_rejects_extensionless_files_fixture_body,
+    )
+}
+
+fn extension_filtering_rejects_extensionless_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -411,6 +512,13 @@ fn extension_filtering_rejects_extensionless_files() -> TestResult {
 
 #[test]
 fn extension_filtering_rejects_double_extensions() -> TestResult {
+    git_fixture::run_isolated_test(
+        "extension_filtering_rejects_double_extensions",
+        extension_filtering_rejects_double_extensions_fixture_body,
+    )
+}
+
+fn extension_filtering_rejects_double_extensions_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -435,6 +543,14 @@ fn extension_filtering_rejects_double_extensions() -> TestResult {
 #[cfg(unix)]
 #[test]
 fn symlink_to_directory_is_not_followed() -> TestResult {
+    git_fixture::run_isolated_test(
+        "symlink_to_directory_is_not_followed",
+        symlink_to_directory_is_not_followed_fixture_body,
+    )
+}
+
+#[cfg(unix)]
+fn symlink_to_directory_is_not_followed_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -459,6 +575,14 @@ fn symlink_to_directory_is_not_followed() -> TestResult {
 #[cfg(unix)]
 #[test]
 fn symlink_to_file_is_not_counted_as_regular_file() -> TestResult {
+    git_fixture::run_isolated_test(
+        "symlink_to_file_is_not_counted_as_regular_file",
+        symlink_to_file_is_not_counted_as_regular_file_fixture_body,
+    )
+}
+
+#[cfg(unix)]
+fn symlink_to_file_is_not_counted_as_regular_file_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -482,6 +606,14 @@ fn symlink_to_file_is_not_counted_as_regular_file() -> TestResult {
 #[cfg(unix)]
 #[test]
 fn dangling_symlink_does_not_crash_discovery() -> TestResult {
+    git_fixture::run_isolated_test(
+        "dangling_symlink_does_not_crash_discovery",
+        dangling_symlink_does_not_crash_discovery_fixture_body,
+    )
+}
+
+#[cfg(unix)]
+fn dangling_symlink_does_not_crash_discovery_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -503,6 +635,14 @@ fn dangling_symlink_does_not_crash_discovery() -> TestResult {
 #[cfg(unix)]
 #[test]
 fn symlink_cycle_does_not_cause_infinite_loop() -> TestResult {
+    git_fixture::run_isolated_test(
+        "symlink_cycle_does_not_cause_infinite_loop",
+        symlink_cycle_does_not_cause_infinite_loop_fixture_body,
+    )
+}
+
+#[cfg(unix)]
+fn symlink_cycle_does_not_cause_infinite_loop_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -528,6 +668,13 @@ fn symlink_cycle_does_not_cause_infinite_loop() -> TestResult {
 
 #[test]
 fn hidden_directories_in_skip_list_are_skipped() -> TestResult {
+    git_fixture::run_isolated_test(
+        "hidden_directories_in_skip_list_are_skipped",
+        hidden_directories_in_skip_list_are_skipped_fixture_body,
+    )
+}
+
+fn hidden_directories_in_skip_list_are_skipped_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -548,6 +695,13 @@ fn hidden_directories_in_skip_list_are_skipped() -> TestResult {
 
 #[test]
 fn hidden_directories_not_in_skip_list_are_traversed() -> TestResult {
+    git_fixture::run_isolated_test(
+        "hidden_directories_not_in_skip_list_are_traversed",
+        hidden_directories_not_in_skip_list_are_traversed_fixture_body,
+    )
+}
+
+fn hidden_directories_not_in_skip_list_are_traversed_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -566,6 +720,13 @@ fn hidden_directories_not_in_skip_list_are_traversed() -> TestResult {
 
 #[test]
 fn hidden_perl_files_at_root_are_discovered() -> TestResult {
+    git_fixture::run_isolated_test(
+        "hidden_perl_files_at_root_are_discovered",
+        hidden_perl_files_at_root_are_discovered_fixture_body,
+    )
+}
+
+fn hidden_perl_files_at_root_are_discovered_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -583,6 +744,13 @@ fn hidden_perl_files_at_root_are_discovered() -> TestResult {
 
 #[test]
 fn all_canonical_skipped_directories_are_excluded_from_walk() -> TestResult {
+    git_fixture::run_isolated_test(
+        "all_canonical_skipped_directories_are_excluded_from_walk",
+        all_canonical_skipped_directories_are_excluded_from_walk_fixture_body,
+    )
+}
+
+fn all_canonical_skipped_directories_are_excluded_from_walk_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -616,6 +784,13 @@ fn all_canonical_skipped_directories_are_excluded_from_walk() -> TestResult {
 
 #[test]
 fn directories_with_similar_names_to_skipped_dirs_are_not_skipped() -> TestResult {
+    git_fixture::run_isolated_test(
+        "directories_with_similar_names_to_skipped_dirs_are_not_skipped",
+        directories_with_similar_names_to_skipped_dirs_are_not_skipped_fixture_body,
+    )
+}
+
+fn directories_with_similar_names_to_skipped_dirs_are_not_skipped_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -658,6 +833,13 @@ fn directories_with_similar_names_to_skipped_dirs_are_not_skipped() -> TestResul
 
 #[test]
 fn large_directory_with_many_perl_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "large_directory_with_many_perl_files",
+        large_directory_with_many_perl_files_fixture_body,
+    )
+}
+
+fn large_directory_with_many_perl_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -679,6 +861,13 @@ fn large_directory_with_many_perl_files() -> TestResult {
 
 #[test]
 fn large_directory_with_mixed_perl_and_non_perl() -> TestResult {
+    git_fixture::run_isolated_test(
+        "large_directory_with_mixed_perl_and_non_perl",
+        large_directory_with_mixed_perl_and_non_perl_fixture_body,
+    )
+}
+
+fn large_directory_with_mixed_perl_and_non_perl_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -708,6 +897,13 @@ fn large_directory_with_mixed_perl_and_non_perl() -> TestResult {
 
 #[test]
 fn large_directory_with_many_subdirectories_some_skipped() -> TestResult {
+    git_fixture::run_isolated_test(
+        "large_directory_with_many_subdirectories_some_skipped",
+        large_directory_with_many_subdirectories_some_skipped_fixture_body,
+    )
+}
+
+fn large_directory_with_many_subdirectories_some_skipped_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -739,6 +935,13 @@ fn large_directory_with_many_subdirectories_some_skipped() -> TestResult {
 
 #[test]
 fn empty_workspace_returns_zero_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "empty_workspace_returns_zero_files",
+        empty_workspace_returns_zero_files_fixture_body,
+    )
+}
+
+fn empty_workspace_returns_zero_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let result = discover_perl_files(tmp.path());
 
@@ -750,6 +953,13 @@ fn empty_workspace_returns_zero_files() -> TestResult {
 
 #[test]
 fn workspace_with_only_empty_subdirectories() -> TestResult {
+    git_fixture::run_isolated_test(
+        "workspace_with_only_empty_subdirectories",
+        workspace_with_only_empty_subdirectories_fixture_body,
+    )
+}
+
+fn workspace_with_only_empty_subdirectories_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -771,6 +981,13 @@ fn workspace_with_only_empty_subdirectories() -> TestResult {
 
 #[test]
 fn discovery_files_plus_excluded_equals_total_visible_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovery_files_plus_excluded_equals_total_visible_files",
+        discovery_files_plus_excluded_equals_total_visible_files_fixture_body,
+    )
+}
+
+fn discovery_files_plus_excluded_equals_total_visible_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -796,6 +1013,13 @@ fn discovery_files_plus_excluded_equals_total_visible_files() -> TestResult {
 
 #[test]
 fn discovery_duration_is_finite() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovery_duration_is_finite",
+        discovery_duration_is_finite_fixture_body,
+    )
+}
+
+fn discovery_duration_is_finite_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -814,6 +1038,13 @@ fn discovery_duration_is_finite() -> TestResult {
 
 #[test]
 fn discovery_method_is_walk_for_tempdir() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovery_method_is_walk_for_tempdir",
+        discovery_method_is_walk_for_tempdir_fixture_body,
+    )
+}
+
+fn discovery_method_is_walk_for_tempdir_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -829,6 +1060,13 @@ fn discovery_method_is_walk_for_tempdir() -> TestResult {
 
 #[test]
 fn discovery_method_is_git_for_initialized_repo() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovery_method_is_git_for_initialized_repo",
+        discovery_method_is_git_for_initialized_repo_fixture_body,
+    )
+}
+
+fn discovery_method_is_git_for_initialized_repo_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -852,6 +1090,13 @@ fn discovery_method_is_git_for_initialized_repo() -> TestResult {
 
 #[test]
 fn paths_with_spaces_are_discovered() -> TestResult {
+    git_fixture::run_isolated_test(
+        "paths_with_spaces_are_discovered",
+        paths_with_spaces_are_discovered_fixture_body,
+    )
+}
+
+fn paths_with_spaces_are_discovered_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -867,6 +1112,13 @@ fn paths_with_spaces_are_discovered() -> TestResult {
 
 #[test]
 fn paths_with_hyphens_and_underscores_are_discovered() -> TestResult {
+    git_fixture::run_isolated_test(
+        "paths_with_hyphens_and_underscores_are_discovered",
+        paths_with_hyphens_and_underscores_are_discovered_fixture_body,
+    )
+}
+
+fn paths_with_hyphens_and_underscores_are_discovered_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -886,6 +1138,13 @@ fn paths_with_hyphens_and_underscores_are_discovered() -> TestResult {
 
 #[test]
 fn git_discovery_still_applies_skip_rules_even_if_tracked() -> TestResult {
+    git_fixture::run_isolated_test(
+        "git_discovery_still_applies_skip_rules_even_if_tracked",
+        git_discovery_still_applies_skip_rules_even_if_tracked_fixture_body,
+    )
+}
+
+fn git_discovery_still_applies_skip_rules_even_if_tracked_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -919,6 +1178,13 @@ fn git_discovery_still_applies_skip_rules_even_if_tracked() -> TestResult {
 
 #[test]
 fn repeated_discovery_yields_same_result() -> TestResult {
+    git_fixture::run_isolated_test(
+        "repeated_discovery_yields_same_result",
+        repeated_discovery_yields_same_result_fixture_body,
+    )
+}
+
+fn repeated_discovery_yields_same_result_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 

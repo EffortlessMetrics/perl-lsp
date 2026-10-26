@@ -1,5 +1,8 @@
 //! End-to-end integration tests for workspace discovery.
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use perl_workspace::discovery::{
     DiscoveryMethod, discover_perl_files, discover_perl_files_with_include_paths,
 };
@@ -44,6 +47,13 @@ fn run_git(root: &Path, args: &[&str]) -> TestResult {
 
 #[test]
 fn discovers_files_via_walkdir_when_root_is_not_git_repo() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovers_files_via_walkdir_when_root_is_not_git_repo",
+        discovers_files_via_walkdir_when_root_is_not_git_repo_fixture_body,
+    )
+}
+
+fn discovers_files_via_walkdir_when_root_is_not_git_repo_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -63,6 +73,13 @@ fn discovers_files_via_walkdir_when_root_is_not_git_repo() -> TestResult {
 
 #[test]
 fn discovers_files_via_git_and_honors_gitignore() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovers_files_via_git_and_honors_gitignore",
+        discovers_files_via_git_and_honors_gitignore_fixture_body,
+    )
+}
+
+fn discovers_files_via_git_and_honors_gitignore_fixture_body() -> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -87,6 +104,14 @@ fn discovers_files_via_git_and_honors_gitignore() -> TestResult {
 
 #[test]
 fn discovers_git_files_when_repo_root_path_contains_skipped_component_name() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovers_git_files_when_repo_root_path_contains_skipped_component_name",
+        discovers_git_files_when_repo_root_path_contains_skipped_component_name_fixture_body,
+    )
+}
+
+fn discovers_git_files_when_repo_root_path_contains_skipped_component_name_fixture_body()
+-> TestResult {
     if !git_available() {
         return Ok(());
     }
@@ -109,6 +134,13 @@ fn discovers_git_files_when_repo_root_path_contains_skipped_component_name() -> 
 
 #[test]
 fn include_paths_allow_normally_skipped_local_lib_perl5() -> TestResult {
+    git_fixture::run_isolated_test(
+        "include_paths_allow_normally_skipped_local_lib_perl5",
+        include_paths_allow_normally_skipped_local_lib_perl5_fixture_body,
+    )
+}
+
+fn include_paths_allow_normally_skipped_local_lib_perl5_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 

@@ -4,6 +4,9 @@
 //! root-level files, large workspaces, and discovery result invariants
 //! not exercised by the existing test suites.
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use perl_workspace::discovery::{DiscoveryMethod, DiscoveryResult, discover_perl_files};
 use std::collections::HashSet;
 use std::fs;
@@ -26,6 +29,13 @@ fn create_file(root: &Path, relative: &str) -> TestResult {
 
 #[test]
 fn discover_perl_files_returns_non_negative_duration() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_returns_non_negative_duration",
+        discover_perl_files_returns_non_negative_duration_fixture_body,
+    )
+}
+
+fn discover_perl_files_returns_non_negative_duration_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let result = discover_perl_files(tmp.path());
     // Duration should be representable and not absurd
@@ -35,6 +45,13 @@ fn discover_perl_files_returns_non_negative_duration() -> TestResult {
 
 #[test]
 fn discover_perl_files_empty_dir_returns_zero_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_empty_dir_returns_zero_files",
+        discover_perl_files_empty_dir_returns_zero_files_fixture_body,
+    )
+}
+
+fn discover_perl_files_empty_dir_returns_zero_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let result = discover_perl_files(tmp.path());
     assert!(result.files.is_empty());
@@ -44,6 +61,13 @@ fn discover_perl_files_empty_dir_returns_zero_files() -> TestResult {
 
 #[test]
 fn discover_perl_files_finds_root_level_perl_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_finds_root_level_perl_files",
+        discover_perl_files_finds_root_level_perl_files_fixture_body,
+    )
+}
+
+fn discover_perl_files_finds_root_level_perl_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -59,6 +83,13 @@ fn discover_perl_files_finds_root_level_perl_files() -> TestResult {
 
 #[test]
 fn discover_perl_files_returns_absolute_paths() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_returns_absolute_paths",
+        discover_perl_files_returns_absolute_paths_fixture_body,
+    )
+}
+
+fn discover_perl_files_returns_absolute_paths_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -73,6 +104,13 @@ fn discover_perl_files_returns_absolute_paths() -> TestResult {
 
 #[test]
 fn discover_perl_files_no_duplicates() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_no_duplicates",
+        discover_perl_files_no_duplicates_fixture_body,
+    )
+}
+
+fn discover_perl_files_no_duplicates_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -90,6 +128,13 @@ fn discover_perl_files_no_duplicates() -> TestResult {
 
 #[test]
 fn discover_perl_files_all_returned_paths_are_perl_sources() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_all_returned_paths_are_perl_sources",
+        discover_perl_files_all_returned_paths_are_perl_sources_fixture_body,
+    )
+}
+
+fn discover_perl_files_all_returned_paths_are_perl_sources_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -118,6 +163,13 @@ fn discover_perl_files_all_returned_paths_are_perl_sources() -> TestResult {
 
 #[test]
 fn discover_perl_files_excluded_count_matches_non_perl_visible_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_excluded_count_matches_non_perl_visible_files",
+        discover_perl_files_excluded_count_matches_non_perl_visible_files_fixture_body,
+    )
+}
+
+fn discover_perl_files_excluded_count_matches_non_perl_visible_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -141,6 +193,14 @@ fn discover_perl_files_excluded_count_matches_non_perl_visible_files() -> TestRe
 #[cfg(unix)]
 #[test]
 fn discover_perl_files_does_not_follow_symlinks() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_does_not_follow_symlinks",
+        discover_perl_files_does_not_follow_symlinks_fixture_body,
+    )
+}
+
+#[cfg(unix)]
+fn discover_perl_files_does_not_follow_symlinks_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -159,6 +219,14 @@ fn discover_perl_files_does_not_follow_symlinks() -> TestResult {
 #[cfg(unix)]
 #[test]
 fn discover_perl_files_handles_dangling_symlinks_gracefully() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_handles_dangling_symlinks_gracefully",
+        discover_perl_files_handles_dangling_symlinks_gracefully_fixture_body,
+    )
+}
+
+#[cfg(unix)]
+fn discover_perl_files_handles_dangling_symlinks_gracefully_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -175,6 +243,13 @@ fn discover_perl_files_handles_dangling_symlinks_gracefully() -> TestResult {
 
 #[test]
 fn discover_perl_files_handles_unicode_directory_names() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_handles_unicode_directory_names",
+        discover_perl_files_handles_unicode_directory_names_fixture_body,
+    )
+}
+
+fn discover_perl_files_handles_unicode_directory_names_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -188,6 +263,13 @@ fn discover_perl_files_handles_unicode_directory_names() -> TestResult {
 
 #[test]
 fn discover_perl_files_handles_unicode_filenames() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_handles_unicode_filenames",
+        discover_perl_files_handles_unicode_filenames_fixture_body,
+    )
+}
+
+fn discover_perl_files_handles_unicode_filenames_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -203,6 +285,13 @@ fn discover_perl_files_handles_unicode_filenames() -> TestResult {
 
 #[test]
 fn discover_perl_files_handles_deeply_nested_structures() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_handles_deeply_nested_structures",
+        discover_perl_files_handles_deeply_nested_structures_fixture_body,
+    )
+}
+
+fn discover_perl_files_handles_deeply_nested_structures_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -219,6 +308,13 @@ fn discover_perl_files_handles_deeply_nested_structures() -> TestResult {
 
 #[test]
 fn discover_perl_files_handles_many_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_handles_many_files",
+        discover_perl_files_handles_many_files_fixture_body,
+    )
+}
+
+fn discover_perl_files_handles_many_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -235,6 +331,13 @@ fn discover_perl_files_handles_many_files() -> TestResult {
 
 #[test]
 fn discover_perl_files_does_not_skip_files_named_like_skipped_dirs() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_does_not_skip_files_named_like_skipped_dirs",
+        discover_perl_files_does_not_skip_files_named_like_skipped_dirs_fixture_body,
+    )
+}
+
+fn discover_perl_files_does_not_skip_files_named_like_skipped_dirs_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -251,6 +354,13 @@ fn discover_perl_files_does_not_skip_files_named_like_skipped_dirs() -> TestResu
 
 #[test]
 fn discover_perl_files_excludes_extensionless_files() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_excludes_extensionless_files",
+        discover_perl_files_excludes_extensionless_files_fixture_body,
+    )
+}
+
+fn discover_perl_files_excludes_extensionless_files_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -268,6 +378,13 @@ fn discover_perl_files_excludes_extensionless_files() -> TestResult {
 
 #[test]
 fn discover_perl_files_finds_hidden_perl_files_outside_skipped_dirs() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_finds_hidden_perl_files_outside_skipped_dirs",
+        discover_perl_files_finds_hidden_perl_files_outside_skipped_dirs_fixture_body,
+    )
+}
+
+fn discover_perl_files_finds_hidden_perl_files_outside_skipped_dirs_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -285,6 +402,13 @@ fn discover_perl_files_finds_hidden_perl_files_outside_skipped_dirs() -> TestRes
 
 #[test]
 fn discovery_result_files_start_with_root() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovery_result_files_start_with_root",
+        discovery_result_files_start_with_root_fixture_body,
+    )
+}
+
+fn discovery_result_files_start_with_root_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -300,6 +424,13 @@ fn discovery_result_files_start_with_root() -> TestResult {
 
 #[test]
 fn discovery_result_method_is_walk_for_non_git_dir() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovery_result_method_is_walk_for_non_git_dir",
+        discovery_result_method_is_walk_for_non_git_dir_fixture_body,
+    )
+}
+
+fn discovery_result_method_is_walk_for_non_git_dir_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -312,6 +443,13 @@ fn discovery_result_method_is_walk_for_non_git_dir() -> TestResult {
 
 #[test]
 fn discovery_result_is_clonable() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovery_result_is_clonable",
+        discovery_result_is_clonable_fixture_body,
+    )
+}
+
+fn discovery_result_is_clonable_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -327,6 +465,13 @@ fn discovery_result_is_clonable() -> TestResult {
 
 #[test]
 fn discovery_result_debug_format_is_not_empty() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discovery_result_debug_format_is_not_empty",
+        discovery_result_debug_format_is_not_empty_fixture_body,
+    )
+}
+
+fn discovery_result_debug_format_is_not_empty_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let result = discover_perl_files(tmp.path());
     let debug_str = format!("{result:?}");
@@ -359,6 +504,13 @@ fn discovery_method_copy_semantics() {
 
 #[test]
 fn discover_perl_files_is_deterministic_across_calls() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_is_deterministic_across_calls",
+        discover_perl_files_is_deterministic_across_calls_fixture_body,
+    )
+}
+
+fn discover_perl_files_is_deterministic_across_calls_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -384,6 +536,14 @@ fn discover_perl_files_is_deterministic_across_calls() -> TestResult {
 
 #[test]
 fn discover_perl_files_distinguishes_skipped_from_non_skipped_siblings() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_distinguishes_skipped_from_non_skipped_siblings",
+        discover_perl_files_distinguishes_skipped_from_non_skipped_siblings_fixture_body,
+    )
+}
+
+fn discover_perl_files_distinguishes_skipped_from_non_skipped_siblings_fixture_body() -> TestResult
+{
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -412,6 +572,13 @@ fn discover_perl_files_distinguishes_skipped_from_non_skipped_siblings() -> Test
 
 #[test]
 fn discover_perl_files_workspace_with_only_skipped_dirs() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_workspace_with_only_skipped_dirs",
+        discover_perl_files_workspace_with_only_skipped_dirs_fixture_body,
+    )
+}
+
+fn discover_perl_files_workspace_with_only_skipped_dirs_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -428,6 +595,13 @@ fn discover_perl_files_workspace_with_only_skipped_dirs() -> TestResult {
 
 #[test]
 fn discover_perl_files_mixed_extensions_same_dir() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_mixed_extensions_same_dir",
+        discover_perl_files_mixed_extensions_same_dir_fixture_body,
+    )
+}
+
+fn discover_perl_files_mixed_extensions_same_dir_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -456,6 +630,13 @@ fn discover_perl_files_mixed_extensions_same_dir() -> TestResult {
 
 #[test]
 fn discover_perl_files_handles_spaces_in_paths() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_handles_spaces_in_paths",
+        discover_perl_files_handles_spaces_in_paths_fixture_body,
+    )
+}
+
+fn discover_perl_files_handles_spaces_in_paths_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -471,6 +652,13 @@ fn discover_perl_files_handles_spaces_in_paths() -> TestResult {
 
 #[test]
 fn discover_perl_files_finds_all_eight_perl_extensions() -> TestResult {
+    git_fixture::run_isolated_test(
+        "discover_perl_files_finds_all_eight_perl_extensions",
+        discover_perl_files_finds_all_eight_perl_extensions_fixture_body,
+    )
+}
+
+fn discover_perl_files_finds_all_eight_perl_extensions_fixture_body() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
