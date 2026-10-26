@@ -231,6 +231,15 @@ fn walk_discovery_with_allowlist(
             continue;
         }
 
+        let allowed_path = entry
+            .path()
+            .strip_prefix(root)
+            .is_ok_and(|relative_path| !allowlist.has_unallowed_skipped_component(relative_path));
+        if !allowed_path {
+            excluded_count += 1;
+            continue;
+        }
+
         if is_perl_discovery_path(entry.path()) {
             files.push(entry.path().to_path_buf());
         } else {
@@ -385,10 +394,10 @@ mod tests {
     use super::{
         DiscoveryIncludeAllowlist, DiscoveryMethod, parse_git_ls_files_output,
         parse_git_ls_files_output_with_allowlist, path_contains_skipped_component, should_skip_dir,
-        walk_discovery,
+        walk_discovery, walk_discovery_with_allowlist,
     };
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::time::Instant;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -585,6 +594,80 @@ mod tests {
             vec![root.join("lib/Foo.pm"), root.join("local/lib/perl5/Remote/Module.pm")]
         );
         assert_eq!(excluded_count, 2);
+    }
+
+    #[test]
+    fn walk_include_allowlist_excludes_ancestor_and_sibling_files() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        // Names outside the workspace must not participate in its skip policy.
+        let root = tmp.path().join("target/local");
+        let fixture_paths = [
+            "lib/App.pm",
+            "local/Other.pm",
+            "local/lib/Other.pm",
+            "local/share/Other.pm",
+            "local/lib/perl5/Remote.pm",
+            "local/lib/perl5/.cache/Skipped.pm",
+            "local/lib/perl5/vendor/Skipped.pm",
+            "local/lib/perl5/vendor/explicit/Nested.pm",
+            "target/Skipped.pm",
+        ];
+        for relative in fixture_paths {
+            create_file(&root, relative)?;
+        }
+        let payload = fixture_paths.join("\0");
+        let mut include_paths = vec![
+            root.join("local/lib/perl5"),
+            PathBuf::from("local/lib/perl5"),
+            PathBuf::from("./local/lib/perl5"),
+        ];
+
+        for allow_nested in [false, true] {
+            let mut expected =
+                vec![root.join("lib/App.pm"), root.join("local/lib/perl5/Remote.pm")];
+            if allow_nested {
+                include_paths.push(PathBuf::from("local/lib/perl5/vendor/explicit"));
+                expected.push(root.join("local/lib/perl5/vendor/explicit/Nested.pm"));
+            }
+            let allowlist = DiscoveryIncludeAllowlist::from_include_paths(&root, &include_paths);
+            let (git_files, _) =
+                parse_git_ls_files_output_with_allowlist(&root, payload.as_bytes(), &allowlist);
+            assert_eq!(git_files, expected, "Git filtering is the negative control");
+
+            let result = walk_discovery_with_allowlist(&root, Instant::now(), &allowlist);
+            assert_eq!(result.method, DiscoveryMethod::Walk);
+            assert_eq!(
+                result.files, expected,
+                "walk filtering must honor the same include boundary"
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn walk_include_allowlist_does_not_follow_cycles_or_duplicate_aliases() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+        create_file(root, "lib/App.pm")?;
+        create_file(root, "local/lib/perl5/Remote.pm")?;
+        create_file(root, "local/share/Other.pm")?;
+        std::os::unix::fs::symlink(root, root.join("local/lib/perl5/cycle"))?;
+        std::os::unix::fs::symlink(root.join("local/lib/perl5"), root.join("local/share/alias"))?;
+        std::os::unix::fs::symlink(
+            root.join("local/lib/perl5/Remote.pm"),
+            root.join("local/lib/perl5/Alias.pm"),
+        )?;
+        let include_paths = [root.join("local/lib/perl5"), root.join("local/./lib/perl5")];
+        let allowlist = DiscoveryIncludeAllowlist::from_include_paths(root, &include_paths);
+
+        let result = walk_discovery_with_allowlist(root, Instant::now(), &allowlist);
+        assert_eq!(result.method, DiscoveryMethod::Walk);
+        assert_eq!(
+            result.files,
+            vec![root.join("lib/App.pm"), root.join("local/lib/perl5/Remote.pm")]
+        );
+        Ok(())
     }
 
     #[test]
