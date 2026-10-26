@@ -114,8 +114,13 @@ fn parse_just_recipes(justfile: &str) -> BTreeSet<String> {
             if line.starts_with(char::is_whitespace) || line.starts_with('#') {
                 return None;
             }
-            let (name, _) = line.split_once(':')?;
-            let name = name.split_whitespace().next()?;
+            let (header, tail) = line.split_once(':')?;
+            // A parameter default can contain ":="; only declaration-level
+            // assignments must be excluded from the recipe names.
+            if tail.starts_with('=') && !header.contains('=') {
+                return None;
+            }
+            let name = header.split_whitespace().next()?;
             if name.contains('=') || name.is_empty() {
                 return None;
             }
@@ -203,6 +208,50 @@ status-update subsystem="":
         );
         assert!(recipes.contains("default"));
         assert!(recipes.contains("status-update"));
+    }
+
+    #[test]
+    fn parse_just_recipes_excludes_assignments_and_preserves_recipe_defaults() {
+        let recipes = parse_just_recipes(
+            r#"
+cargo_safe := "./scripts/cargo-safe"
+compact:="value"
+export CARGO_TERM_COLOR := "always"
+default:
+status-update subsystem="": default
+literal value=":=literal": default
+"#,
+        );
+        assert_eq!(
+            recipes,
+            BTreeSet::from([
+                "default".to_string(),
+                "literal".to_string(),
+                "status-update".to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn check_documented_commands_rejects_variable_names_as_recipes() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        fs::create_dir_all(root.path().join("docs/reference"))?;
+        fs::create_dir_all(root.path().join("docs/contributing"))?;
+        fs::write(
+            root.path().join("justfile"),
+            "cargo_safe := \"./scripts/cargo-safe\"\npr-fast:\n    {{cargo_safe}} check\n",
+        )?;
+        fs::write(root.path().join("CONTRIBUTING.md"), "Use `just cargo_safe` or `just pr-fast`.")?;
+        fs::write(root.path().join("docs/reference/COMMANDS_REFERENCE.md"), "")?;
+        fs::write(root.path().join("docs/contributing/FIRST_PR.md"), "")?;
+
+        let mut report = DevexDocsReport::default();
+        check_documented_commands(root.path(), &mut report)?;
+        assert_eq!(
+            report.errors,
+            vec!["CONTRIBUTING.md: `just cargo_safe` references missing just recipe `cargo_safe`"]
+        );
+        Ok(())
     }
 
     #[test]
