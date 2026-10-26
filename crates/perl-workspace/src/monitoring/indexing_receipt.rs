@@ -244,7 +244,7 @@ mod tests {
 
         assert_eq!(receipt.slowest_files.len(), SLOWEST_FILE_LIMIT);
         assert!(
-            receipt.slowest_files.iter().all(|file| file.path != PathBuf::from("lib/Boundary0.pm")),
+            receipt.slowest_files.iter().all(|file| file.path != Path::new("lib/Boundary0.pm")),
             "the fastest timing should be trimmed when the limit is exceeded"
         );
 

@@ -8037,8 +8037,8 @@ sub hello {
     /// task (`LspServer::run_post_parse_side_effects`'s `spawn_blocking`)
     /// completing after a later generation was merely attempted, not
     /// after it committed. Without rollback, the early guard's high-water
-    /// check (`existing.generation.max(existing.pending_generation) = 10
-    /// > 7`) rejects generation 7 outright -- `index_file_with_generation`
+    /// check (`existing.generation.max(existing.pending_generation) = 10 > 7`)
+    /// rejects generation 7 outright -- `index_file_with_generation`
     /// returns `Ok(())` but SILENTLY skips indexing it, permanently
     /// stranding the index at generation 3 even though generation 7's
     /// content was never anything but valid. With the rollback (this PR's
