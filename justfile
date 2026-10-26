@@ -20,21 +20,22 @@ storage-doctor:
 agent-preflight: storage-doctor
     @echo "agent preflight ok"
 
-# Agent-safe check: routed target/build dirs, incremental off, bounded sccache, build lock.
+# PLSP-SPEC-0013 agent defaults; explicit caller thresholds take precedence.
+# cargo-safe keeps routed storage, incremental off, bounded sccache, and build lock.
 agent-check:
-    {{cargo_safe}} check --workspace --all-targets --profile agent --locked
+    MIN_FREE_GB="${MIN_FREE_GB:-20}" MAX_USED_PCT="${MAX_USED_PCT:-95}" {{cargo_safe}} check --workspace --all-targets --profile agent --locked
 
 agent-test:
-    {{cargo_safe}} test --workspace --all-targets --profile agent --locked
+    MIN_FREE_GB="${MIN_FREE_GB:-20}" MAX_USED_PCT="${MAX_USED_PCT:-95}" {{cargo_safe}} test --workspace --all-targets --profile agent --locked
 
 agent-clippy:
-    {{cargo_safe}} clippy --workspace --all-targets --profile agent --locked -- -D warnings -A missing_docs
+    MIN_FREE_GB="${MIN_FREE_GB:-20}" MAX_USED_PCT="${MAX_USED_PCT:-95}" {{cargo_safe}} clippy --workspace --all-targets --profile agent --locked -- -D warnings -A missing_docs
 
 agent-nextest:
-    {{cargo_safe}} nextest run --workspace --profile agent
+    MIN_FREE_GB="${MIN_FREE_GB:-20}" MAX_USED_PCT="${MAX_USED_PCT:-95}" {{cargo_safe}} nextest run --workspace --profile agent
 
 agent-pr-fast:
-    {{cargo_safe}} xtask gates --tier pr-fast --receipt
+    MIN_FREE_GB="${MIN_FREE_GB:-20}" MAX_USED_PCT="${MAX_USED_PCT:-95}" {{cargo_safe}} xtask gates --tier pr-fast --receipt
 
 # M4b (#3763): assert review/audit agents are mechanically read-only
 # (no Edit/Write/NotebookEdit/Agent in their tools: allowlist).

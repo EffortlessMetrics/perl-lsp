@@ -101,6 +101,20 @@ perl-dap --stdio  # Standard DAP transport
 | DevEx docs touched | `cargo xtask check-devex-docs` | Verifies toolchain wording and documented command references stay current. |
 | Need a terminal summary | `just quick-ref` | Prints the short command decision tree. |
 
+The Cargo-backed `agent-*` recipes in `justfile` use the accepted
+[PLSP-SPEC-0013](../specs/PLSP-SPEC-0013-agent-build-storage-and-gates.md)
+defaults, `MIN_FREE_GB=20` and `MAX_USED_PCT=95`. An explicit caller value for
+either variable takes precedence. Direct non-agent `scripts/cargo-safe` calls
+retain the 40 GiB / 85% fallback. Storage routing, build locking, and
+`storage-doctor` still apply; these thresholds do not authorize workspace proof
+outside an agent's assigned scope.
+
+For assigned single-crate proof, use the accepted configuration explicitly:
+
+```bash
+MIN_FREE_GB=20 MAX_USED_PCT=95 ./scripts/cargo-safe check -p <crate> --profile agent --locked
+```
+
 ### Common Commands
 
 ```bash

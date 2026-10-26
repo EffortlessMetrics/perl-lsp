@@ -92,7 +92,20 @@ just agent-clippy
 just agent-pr-fast
 ```
 
-For a single crate, use `scripts/cargo-safe` with the `agent` profile and `--locked`.
+The Cargo-backed `agent-*` recipes in `justfile` apply the accepted
+[PLSP-SPEC-0013](../specs/PLSP-SPEC-0013-agent-build-storage-and-gates.md)
+defaults, `MIN_FREE_GB=20` and `MAX_USED_PCT=95`; explicit caller values take
+precedence. These thresholds do not authorize broader workloads. Select only the
+proof assigned by the packet; the workspace recipes above require workspace scope.
+
+For a single crate, use the accepted configuration with the `agent` profile and
+`--locked`, for example:
+
+```bash
+MIN_FREE_GB=20 MAX_USED_PCT=95 ./scripts/cargo-safe check -p <crate> --profile agent --locked
+```
+
+Direct non-agent `cargo-safe` calls retain their 40 GiB / 85% fallback.
 Avoid workspace-wide builds unless the packet explicitly assigns that proof. Run:
 
 ```bash
