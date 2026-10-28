@@ -3250,6 +3250,7 @@ mod tests {
                 "patch-coverage-xtask-inline-quality",
                 "patch-coverage-xtask-native-tooling",
                 "patch-coverage-xtask-gates",
+                "patch-coverage-xtask-ci-explain",
                 "patch-coverage-xtask-file-policy",
                 "patch-coverage-completion-core",
                 "patch-coverage-ux-scenario",

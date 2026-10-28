@@ -53,8 +53,11 @@ pub struct CorpusFile {
     pub path: PathBuf,
     /// Corpus layer this file belongs to
     pub layer: CorpusLayer,
-    /// File content
+    /// UTF-8 file content, empty when decoding failed
     pub content: String,
+    /// Decoding failure retained as a per-file audit error
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoding_error: Option<String>,
     /// File size in bytes
     pub size_bytes: usize,
     /// Number of lines in the file
@@ -142,17 +145,27 @@ fn parse_corpus_layer(layer_path: &Path, layer: CorpusLayer) -> Result<Vec<Corpu
             continue;
         }
 
-        // Read file content
-        let content = std::fs::read_to_string(path)
+        // Keep unsupported encodings in the inventory without inventing source text.
+        let bytes = std::fs::read(path)
             .with_context(|| format!("Failed to read corpus file: {}", path.display()))?;
+        let size_bytes = bytes.len();
+        let line_count = bytes.split_inclusive(|byte| *byte == b'\n').count();
+        let (content, encoding_error) = match String::from_utf8(bytes) {
+            Ok(content) => (content, None),
+            Err(error) => (
+                String::new(),
+                Some(format!("Corpus input is not valid UTF-8: {}", error.utf8_error())),
+            ),
+        };
 
         // Create corpus file entry
         files.push(CorpusFile {
             path: path.to_path_buf(),
             layer,
-            size_bytes: content.len(),
-            line_count: content.lines().count(),
+            size_bytes,
+            line_count,
             content,
+            encoding_error,
         });
     }
 

@@ -2,6 +2,7 @@
 name: scout-find-lsp-gaps
 description: LSP discovery scout (Issue Discovery / Bug Scout Desk). Sweeps document-state, URI isolation, completion, hover, code-action, and semantic-token surfaces for evidence-backed candidate issues. Read-only except filing candidate packets.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: blue
 isolation: worktree
 ---

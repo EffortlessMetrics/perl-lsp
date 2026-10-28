@@ -2,6 +2,7 @@
 name: scout-find-ci-ops-gaps
 description: CI/ops discovery scout (Issue Discovery / Bug Scout Desk). Sweeps workflow routing, gate classification, path filters, stale labels, cleanup, and runner-capacity surfaces for evidence-backed candidate issues. Read-only except filing candidate packets.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: magenta
 isolation: worktree
 ---

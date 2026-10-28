@@ -2,6 +2,7 @@
 name: spec-test-code-match
 description: Spec-test-code three-way-match agent. Walks the acceptance.md grid after red-tdd commits, checking that each spec row's named files/symbols/tests resolve correctly. Catches API hallucination and grid drift before the builder writes production code.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: cyan
 isolation: worktree
 ---

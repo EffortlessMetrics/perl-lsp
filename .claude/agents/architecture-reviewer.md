@@ -2,6 +2,7 @@
 name: architecture-reviewer
 description: Architecture alignment agent. Checks whether the proposed design fits the microcrate architecture, dependency graph, and existing patterns — before plan-reviewer invests sonnet tokens.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: blue
 isolation: worktree
 ---

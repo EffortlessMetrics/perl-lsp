@@ -2,6 +2,7 @@
 name: accuracy-scout
 description: Accuracy verification agent. Verifies mechanical facts in scout issues before plan-review.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: orange
 isolation: worktree
 ---

@@ -2,6 +2,7 @@
 name: scout-find-robustness-gaps
 description: Robustness discovery scout (Issue Discovery / Bug Scout Desk). Sweeps parser/lexer/LSP/DAP/transport surfaces for panic, DoS, unsafe indexing, byte-boundary slicing, and unbounded-growth candidates. Read-only except filing candidate packets.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: red
 isolation: worktree
 ---

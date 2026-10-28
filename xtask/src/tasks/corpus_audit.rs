@@ -238,7 +238,10 @@ fn parse_corpus_with_timeout(
     for file in corpus_files {
         spinner.set_message(format!("Parsing {}", file.path.display()));
 
-        let outcome = parse_with_timeout(&file.path, &file.content, timeout);
+        let outcome = match &file.encoding_error {
+            Some(message) => ParseOutcome::Error { message: message.clone() },
+            None => parse_with_timeout(&file.path, &file.content, timeout),
+        };
 
         results.insert(file.path.clone(), outcome);
 
@@ -458,6 +461,84 @@ fn load_parser_floor_metrics_from(
 mod tests {
     use super::*;
     use std::io::Write as _;
+
+    #[test]
+    fn discovery_preserves_unicode_and_non_utf8_inventory() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let corpus = root.path().join("test_corpus");
+        fs::create_dir(&corpus)?;
+        let valid = "my $text = \"café\";\n";
+        let invalid = b"my $text = \"caf\xe9\";\n";
+        let valid_path = corpus.join("unicode.pl");
+        let invalid_path = corpus.join("legacy.pl");
+        fs::write(&valid_path, valid)?;
+        fs::write(&invalid_path, invalid)?;
+
+        let files = parse_corpus_files(root.path())?;
+        assert_eq!(files.len(), 2, "encoding errors must not remove inventory entries");
+        let unicode = files
+            .iter()
+            .find(|file| file.path == valid_path)
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing Unicode fixture"))?;
+        assert_eq!(unicode.content, valid);
+        assert_eq!(unicode.size_bytes, valid.len());
+        let legacy = files
+            .iter()
+            .find(|file| file.path == invalid_path)
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing legacy fixture"))?;
+        assert_eq!(legacy.size_bytes, invalid.len());
+        assert_eq!(legacy.line_count, 1);
+        assert!(legacy.content.is_empty(), "invalid bytes must not become lossy source text");
+        Ok(())
+    }
+
+    #[test]
+    fn status_summary_counts_non_utf8_file_as_error() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let corpus = root.path().join("test_corpus");
+        fs::create_dir(&corpus)?;
+        let path = corpus.join("legacy.pl");
+        fs::write(&path, b"my $text = \"caf\xe9\";\n")?;
+
+        let summary = compute_status_summary(root.path(), Duration::from_secs(5))?;
+        assert_eq!(summary.total_files, 1);
+        assert_eq!(summary.test_corpus_files, 1);
+        assert_eq!(summary.error_files, 1, "unsupported encoding must be an explicit error");
+        assert_eq!(summary.ok_files, 0, "unsupported bytes must not be parsed after substitution");
+        assert_eq!(summary.panic_files, 0, "decoding failure must not invoke the parser child");
+        assert_eq!(summary.timeout_files, 0);
+
+        let files = parse_corpus_files(root.path())?;
+        let outcomes = parse_corpus_with_timeout(&files, Duration::from_secs(5))?;
+        match outcomes.get(&path) {
+            Some(ParseOutcome::Error { message }) => {
+                assert!(message.contains("UTF-8"), "expected an encoding diagnostic: {message}");
+            }
+            other => color_eyre::eyre::bail!("expected encoding error, got {other:?}"),
+        }
+        let nodekind_stats = analyze_nodekind_coverage(&outcomes);
+        let ga_coverage = check_ga_feature_alignment(&files)?;
+        let timeout_risks = detect_timeout_risks(&files);
+        let report = generate_report(
+            files,
+            outcomes,
+            nodekind_stats,
+            ga_coverage,
+            timeout_risks,
+            Duration::ZERO,
+        );
+        let failure = report
+            .parse_outcomes
+            .failing_files
+            .first()
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing encoding failure in report"))?;
+        assert_eq!(failure.path, path.display().to_string());
+        assert!(failure.error_message.contains("UTF-8"), "expected encoding diagnostic");
+        assert_eq!(failure.line_number, None);
+        assert_eq!(failure.column, None);
+        assert_eq!(failure.code_snippet, None);
+        Ok(())
+    }
 
     #[test]
     fn test_default_config() {

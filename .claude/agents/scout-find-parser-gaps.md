@@ -2,6 +2,7 @@
 name: scout-find-parser-gaps
 description: Parser/AST discovery scout (Issue Discovery / Bug Scout Desk). Sweeps parser, AST, NodeKind, recovery, and fixture surfaces for evidence-backed candidate issues. Read-only except filing candidate packets.
 model: haiku
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, TodoWrite
 color: yellow
 isolation: worktree
 ---
