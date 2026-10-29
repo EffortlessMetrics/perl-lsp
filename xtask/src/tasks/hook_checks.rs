@@ -766,7 +766,7 @@ mod tests {
         // The git log must contain exactly one commit: "seed temp repo".
         // If git operated against the triggering worktree, the log would
         // include that worktree's full commit history.
-        let log_out = Command::new("git")
+        let log_out = crate::git_fixture::clear_git_context(&mut Command::new("git"))
             .current_dir(&task_repo)
             .args(["log", "--oneline"])
             .output()
@@ -846,7 +846,9 @@ mod tests {
         // override wins. We test this by calling the same code path the
         // wrapper uses but injecting GIT_CONFIG_* env vars.
         let hooks_override = format!("core.hooksPath={}", isolated_hooks_dir.display());
-        let status = Command::new("git")
+        // Isolate the fixture command before injecting the hostile configuration;
+        // the production run_git calls above still see the caller's context.
+        let status = crate::git_fixture::clear_git_context(&mut Command::new("git"))
             .current_dir(&repo)
             .env("GIT_CONFIG_COUNT", "1")
             .env("GIT_CONFIG_KEY_0", "core.hooksPath")
@@ -857,7 +859,7 @@ mod tests {
             .expect("git add");
         assert!(status.success(), "git add must succeed");
 
-        let status = Command::new("git")
+        let status = crate::git_fixture::clear_git_context(&mut Command::new("git"))
             .current_dir(&repo)
             .env("GIT_CONFIG_COUNT", "1")
             .env("GIT_CONFIG_KEY_0", "core.hooksPath")
