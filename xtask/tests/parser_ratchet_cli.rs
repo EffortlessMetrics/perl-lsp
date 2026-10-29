@@ -1,3 +1,6 @@
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use anyhow::{Context, Result};
 use assert_cmd::cargo::cargo_bin_cmd;
 use serde_json::Value;
@@ -8,6 +11,14 @@ use tempfile::TempDir;
 
 #[test]
 fn parser_ratchet_run_writes_valid_scaffold_receipt() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "parser_ratchet_run_writes_valid_scaffold_receipt",
+        parser_ratchet_run_writes_valid_scaffold_receipt_fixture,
+    )
+}
+
+fn parser_ratchet_run_writes_valid_scaffold_receipt_fixture() -> Result<()> {
     let temp = TempDir::new()?;
     let repo = temp.path();
     init_repo_with_two_commits(repo)?;
@@ -51,6 +62,14 @@ fn parser_ratchet_run_writes_valid_scaffold_receipt() -> Result<()> {
 
 #[test]
 fn parser_ratchet_run_works_in_detached_head_with_explicit_shas() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "parser_ratchet_run_works_in_detached_head_with_explicit_shas",
+        parser_ratchet_run_works_in_detached_head_with_explicit_shas_fixture,
+    )
+}
+
+fn parser_ratchet_run_works_in_detached_head_with_explicit_shas_fixture() -> Result<()> {
     let temp = TempDir::new()?;
     let repo = temp.path();
     init_repo_with_two_commits(repo)?;

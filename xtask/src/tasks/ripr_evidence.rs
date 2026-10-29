@@ -2538,6 +2538,14 @@ mod tests {
 
     #[test]
     fn ripr_plus_packet_invokes_badge_counts_and_seam_inventory_sources() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "ripr_plus_packet_invokes_badge_counts_and_seam_inventory_sources",
+            ripr_plus_packet_invokes_badge_counts_and_seam_inventory_sources_fixture,
+        )
+    }
+
+    fn ripr_plus_packet_invokes_badge_counts_and_seam_inventory_sources_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -2759,6 +2767,14 @@ paths = ["archive/["]
 
     #[test]
     fn revision_sha_reads_current_head() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "revision_sha_reads_current_head",
+            revision_sha_reads_current_head_fixture,
+        )
+    }
+
+    fn revision_sha_reads_current_head_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -2772,6 +2788,14 @@ paths = ["archive/["]
 
     #[test]
     fn revision_sha_rejects_missing_revision() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "revision_sha_rejects_missing_revision",
+            revision_sha_rejects_missing_revision_fixture,
+        )
+    }
+
+    fn revision_sha_rejects_missing_revision_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -3047,6 +3071,15 @@ paths = ["archive/["]
     #[test]
     fn write_review_comments_skips_ripr_when_current_pr_evidence_has_no_severe_gaps() -> Result<()>
     {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "write_review_comments_skips_ripr_when_current_pr_evidence_has_no_severe_gaps",
+            write_review_comments_skips_ripr_when_current_pr_evidence_has_no_severe_gaps_fixture,
+        )
+    }
+
+    fn write_review_comments_skips_ripr_when_current_pr_evidence_has_no_severe_gaps_fixture()
+    -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -3101,6 +3134,14 @@ paths = ["archive/["]
 
     #[test]
     fn current_pr_evidence_has_no_severe_gaps_rejects_stale_receipt() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "current_pr_evidence_has_no_severe_gaps_rejects_stale_receipt",
+            current_pr_evidence_has_no_severe_gaps_rejects_stale_receipt_fixture,
+        )
+    }
+
+    fn current_pr_evidence_has_no_severe_gaps_rejects_stale_receipt_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -3130,6 +3171,14 @@ paths = ["archive/["]
 
     #[test]
     fn stamp_review_comments_receipt_records_current_revisions() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "stamp_review_comments_receipt_records_current_revisions",
+            stamp_review_comments_receipt_records_current_revisions_fixture,
+        )
+    }
+
+    fn stamp_review_comments_receipt_records_current_revisions_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -3172,6 +3221,14 @@ paths = ["archive/["]
 
     #[test]
     fn stamp_review_comments_receipt_rejects_non_object() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "stamp_review_comments_receipt_rejects_non_object",
+            stamp_review_comments_receipt_rejects_non_object_fixture,
+        )
+    }
+
+    fn stamp_review_comments_receipt_rejects_non_object_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -3190,6 +3247,14 @@ paths = ["archive/["]
 
     #[test]
     fn validate_review_comments_rejects_stale_revision_receipt() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "validate_review_comments_rejects_stale_revision_receipt",
+            validate_review_comments_rejects_stale_revision_receipt_fixture,
+        )
+    }
+
+    fn validate_review_comments_rejects_stale_revision_receipt_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -3227,6 +3292,14 @@ paths = ["archive/["]
 
     #[test]
     fn write_error_review_comments_writes_stamped_error_receipts() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "write_error_review_comments_writes_stamped_error_receipts",
+            write_error_review_comments_writes_stamped_error_receipts_fixture,
+        )
+    }
+
+    fn write_error_review_comments_writes_stamped_error_receipts_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -3304,6 +3377,14 @@ paths = ["archive/["]
 
     #[test]
     fn render_pr_evidence_summary_surfaces_error_review_guidance() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "render_pr_evidence_summary_surfaces_error_review_guidance",
+            render_pr_evidence_summary_surfaces_error_review_guidance_fixture,
+        )
+    }
+
+    fn render_pr_evidence_summary_surfaces_error_review_guidance_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;
@@ -3749,6 +3830,14 @@ paths = ["archive/["]
 
     #[test]
     fn validate_review_comments_reports_contract_violations() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "validate_review_comments_reports_contract_violations",
+            validate_review_comments_reports_contract_violations_fixture,
+        )
+    }
+
+    fn validate_review_comments_reports_contract_violations_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         init_git_repo(repo)?;

@@ -494,6 +494,14 @@ mod tests {
 
     #[test]
     fn read_staged_path_text_ignores_unstaged_working_tree_edits() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "read_staged_path_text_ignores_unstaged_working_tree_edits",
+            read_staged_path_text_ignores_unstaged_working_tree_edits_fixture,
+        )
+    }
+
+    fn read_staged_path_text_ignores_unstaged_working_tree_edits_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("foo.rs", "fn main() {}\n")?;
         repo.add("foo.rs")?;
@@ -514,6 +522,15 @@ mod tests {
 
     #[test]
     fn read_staged_path_text_sees_staged_content_the_working_tree_no_longer_has() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "read_staged_path_text_sees_staged_content_the_working_tree_no_longer_has",
+            read_staged_path_text_sees_staged_content_the_working_tree_no_longer_has_fixture,
+        )
+    }
+
+    fn read_staged_path_text_sees_staged_content_the_working_tree_no_longer_has_fixture()
+    -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("foo.rs", "fn main() {}\n")?;
         repo.add("foo.rs")?;
@@ -538,6 +555,15 @@ mod tests {
 
     #[test]
     fn read_staged_path_text_reports_absent_for_a_path_that_was_never_staged() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "read_staged_path_text_reports_absent_for_a_path_that_was_never_staged",
+            read_staged_path_text_reports_absent_for_a_path_that_was_never_staged_fixture,
+        )
+    }
+
+    fn read_staged_path_text_reports_absent_for_a_path_that_was_never_staged_fixture() -> Result<()>
+    {
         // Issue #4031 item 6: a path that genuinely isn't in the tree/index
         // — never staged, or staged for deletion — must be a clean, legitimate
         // `StagedPathText::Absent`, NOT conflated with a real git invocation
@@ -563,6 +589,14 @@ mod tests {
 
     #[test]
     fn read_staged_path_text_errors_on_a_genuinely_invalid_tree_oid() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "read_staged_path_text_errors_on_a_genuinely_invalid_tree_oid",
+            read_staged_path_text_errors_on_a_genuinely_invalid_tree_oid_fixture,
+        )
+    }
+
+    fn read_staged_path_text_errors_on_a_genuinely_invalid_tree_oid_fixture() -> Result<()> {
         // The other half of item 6's distinction: a MALFORMED ref (not a
         // legitimate absence) must still surface as a real `Err`, so
         // read_staged_path_text can't be "fixed" for the Absent case by
@@ -590,6 +624,14 @@ mod tests {
 
     #[test]
     fn read_staged_path_text_distinguishes_binary_from_absent() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "read_staged_path_text_distinguishes_binary_from_absent",
+            read_staged_path_text_distinguishes_binary_from_absent_fixture,
+        )
+    }
+
+    fn read_staged_path_text_distinguishes_binary_from_absent_fixture() -> Result<()> {
         // The third leg of item 6/item 1: Binary and Absent must not
         // collapse into the same outcome, because callers treat them
         // differently (a deleted path has nothing to check; a binary file
@@ -614,6 +656,14 @@ mod tests {
 
     #[test]
     fn staged_diff_paths_reflects_the_index_not_the_working_tree() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_diff_paths_reflects_the_index_not_the_working_tree",
+            staged_diff_paths_reflects_the_index_not_the_working_tree_fixture,
+        )
+    }
+
+    fn staged_diff_paths_reflects_the_index_not_the_working_tree_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("committed.rs", "fn main() {}\n")?;
         repo.add("committed.rs")?;
@@ -639,6 +689,14 @@ mod tests {
 
     #[test]
     fn staged_tree_oid_changes_with_the_index_not_the_working_tree() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_tree_oid_changes_with_the_index_not_the_working_tree",
+            staged_tree_oid_changes_with_the_index_not_the_working_tree_fixture,
+        )
+    }
+
+    fn staged_tree_oid_changes_with_the_index_not_the_working_tree_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("foo.rs", "fn main() {}\n")?;
         repo.add("foo.rs")?;
@@ -666,6 +724,14 @@ mod tests {
 
     #[test]
     fn list_staged_entries_reads_git_mode_not_filesystem_mode() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "list_staged_entries_reads_git_mode_not_filesystem_mode",
+            list_staged_entries_reads_git_mode_not_filesystem_mode_fixture,
+        )
+    }
+
+    fn list_staged_entries_reads_git_mode_not_filesystem_mode_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("crates/foo/src/lib.rs", "fn main() {}\n")?;
         repo.add("crates/foo/src/lib.rs")?;
@@ -708,6 +774,14 @@ mod tests {
 
     #[test]
     fn read_staged_path_text_with_pinned_oid_ignores_a_later_git_add() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "read_staged_path_text_with_pinned_oid_ignores_a_later_git_add",
+            read_staged_path_text_with_pinned_oid_ignores_a_later_git_add_fixture,
+        )
+    }
+
+    fn read_staged_path_text_with_pinned_oid_ignores_a_later_git_add_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("foo.rs", "fn main() {}\n")?;
         repo.add("foo.rs")?;
@@ -752,6 +826,14 @@ mod tests {
 
     #[test]
     fn staged_diff_paths_with_pinned_oid_ignores_a_later_git_add() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_diff_paths_with_pinned_oid_ignores_a_later_git_add",
+            staged_diff_paths_with_pinned_oid_ignores_a_later_git_add_fixture,
+        )
+    }
+
+    fn staged_diff_paths_with_pinned_oid_ignores_a_later_git_add_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("committed.rs", "fn main() {}\n")?;
         repo.add("committed.rs")?;
@@ -793,6 +875,14 @@ mod tests {
 
     #[test]
     fn staged_diff_paths_includes_a_staged_deletion() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_diff_paths_includes_a_staged_deletion",
+            staged_diff_paths_includes_a_staged_deletion_fixture,
+        )
+    }
+
+    fn staged_diff_paths_includes_a_staged_deletion_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("keep.rs", "fn main() {}\n")?;
         repo.write("doomed.rs", "fn main() {}\n")?;
@@ -820,6 +910,14 @@ mod tests {
 
     #[test]
     fn read_staged_path_text_reports_absent_for_a_staged_deletion() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "read_staged_path_text_reports_absent_for_a_staged_deletion",
+            read_staged_path_text_reports_absent_for_a_staged_deletion_fixture,
+        )
+    }
+
+    fn read_staged_path_text_reports_absent_for_a_staged_deletion_fixture() -> Result<()> {
         // The item 5 / item 6 interaction: once a deleted path shows up in
         // staged_diff_paths, a check that reads its content via the pinned
         // tree OID must get a clean Absent, not an Err — the path really
@@ -849,6 +947,14 @@ mod tests {
 
     #[test]
     fn diff_base_derives_the_sha1_empty_tree_oid_on_unborn_head() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "diff_base_derives_the_sha1_empty_tree_oid_on_unborn_head",
+            diff_base_derives_the_sha1_empty_tree_oid_on_unborn_head_fixture,
+        )
+    }
+
+    fn diff_base_derives_the_sha1_empty_tree_oid_on_unborn_head_fixture() -> Result<()> {
         let repo = TempRepo::init_with_object_format("sha1")?;
         let base = diff_base(repo.root())?;
         assert_eq!(
@@ -860,6 +966,14 @@ mod tests {
 
     #[test]
     fn diff_base_derives_the_sha256_empty_tree_oid_on_unborn_head() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "diff_base_derives_the_sha256_empty_tree_oid_on_unborn_head",
+            diff_base_derives_the_sha256_empty_tree_oid_on_unborn_head_fixture,
+        )
+    }
+
+    fn diff_base_derives_the_sha256_empty_tree_oid_on_unborn_head_fixture() -> Result<()> {
         // Decisive fixture for item 7: this is the exact case the prior
         // hardcoded `EMPTY_TREE_OID` constant got wrong. A SHA-256 repo's
         // empty-tree object hash is a DIFFERENT string from SHA-1's; a
@@ -882,6 +996,14 @@ mod tests {
 
     #[test]
     fn staged_diff_paths_works_against_an_unborn_sha256_head() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_diff_paths_works_against_an_unborn_sha256_head",
+            staged_diff_paths_works_against_an_unborn_sha256_head_fixture,
+        )
+    }
+
+    fn staged_diff_paths_works_against_an_unborn_sha256_head_fixture() -> Result<()> {
         // End-to-end proof that the derived empty-tree OID actually feeds
         // a working `git diff` call, not just that the string itself looks
         // right in isolation.

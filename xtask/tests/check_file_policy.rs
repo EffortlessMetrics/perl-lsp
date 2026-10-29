@@ -9,6 +9,9 @@
 // calls keep fixture setup and JSON assertions readable.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
@@ -115,6 +118,14 @@ fn run_non_rust_check(root: &Path, extra_args: &[&str]) -> Result<std::process::
 /// Advisory mode must never exit with code 1, even if there are unallowlisted files.
 #[test]
 fn advisory_mode_never_fails_on_unallowlisted() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "advisory_mode_never_fails_on_unallowlisted",
+        advisory_mode_never_fails_on_unallowlisted_fixture,
+    )
+}
+
+fn advisory_mode_never_fails_on_unallowlisted_fixture() -> Result<()> {
     // An allowlist with no entries — everything will be "unclassified".
     let allowlist = minimal_allowlist("");
     let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
@@ -131,6 +142,14 @@ fn advisory_mode_never_fails_on_unallowlisted() -> Result<()> {
 /// `--mode advisory` is the default — no explicit flag needed.
 #[test]
 fn advisory_mode_is_default() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "advisory_mode_is_default",
+        advisory_mode_is_default_fixture,
+    )
+}
+
+fn advisory_mode_is_default_fixture() -> Result<()> {
     let allowlist = minimal_allowlist("");
     let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
 
@@ -147,6 +166,14 @@ fn advisory_mode_is_default() -> Result<()> {
 /// blocking-allowlist must fail when a non-Rust file has no allowlist entry.
 #[test]
 fn blocking_allowlist_fails_on_unallowlisted() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_allowlist_fails_on_unallowlisted",
+        blocking_allowlist_fails_on_unallowlisted_fixture,
+    )
+}
+
+fn blocking_allowlist_fails_on_unallowlisted_fixture() -> Result<()> {
     // Allowlist has no entries for README.md.
     let allowlist = minimal_allowlist("");
     let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
@@ -164,6 +191,14 @@ fn blocking_allowlist_fails_on_unallowlisted() -> Result<()> {
 /// blocking-allowlist must exit 0 when all non-Rust files are allowlisted.
 #[test]
 fn blocking_allowlist_ok_when_all_allowlisted() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_allowlist_ok_when_all_allowlisted",
+        blocking_allowlist_ok_when_all_allowlisted_fixture,
+    )
+}
+
+fn blocking_allowlist_ok_when_all_allowlisted_fixture() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]
@@ -195,6 +230,14 @@ review_after = "2027-01-01"
 /// blocking-allowlist must fail when an entry is missing `owner`.
 #[test]
 fn blocking_allowlist_fails_on_missing_owner() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_allowlist_fails_on_missing_owner",
+        blocking_allowlist_fails_on_missing_owner_fixture,
+    )
+}
+
+fn blocking_allowlist_fails_on_missing_owner_fixture() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]
@@ -226,6 +269,14 @@ review_after = "2027-01-01"
 /// blocking-allowlist must fail when an entry has malformed matcher fields.
 #[test]
 fn blocking_allowlist_fails_on_invalid_glob() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_allowlist_fails_on_invalid_glob",
+        blocking_allowlist_fails_on_invalid_glob_fixture,
+    )
+}
+
+fn blocking_allowlist_fails_on_invalid_glob_fixture() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]
@@ -257,6 +308,14 @@ review_after = "2027-01-01"
 /// blocking-strict must fail when an entry has a past `review_after` date.
 #[test]
 fn blocking_strict_fails_on_expired_review_after() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_strict_fails_on_expired_review_after",
+        blocking_strict_fails_on_expired_review_after_fixture,
+    )
+}
+
+fn blocking_strict_fails_on_expired_review_after_fixture() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]
@@ -288,6 +347,14 @@ review_after = "2020-06-01"
 /// blocking-strict must fail when two entries share the same id.
 #[test]
 fn blocking_strict_fails_on_duplicate_ids() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_strict_fails_on_duplicate_ids",
+        blocking_strict_fails_on_duplicate_ids_fixture,
+    )
+}
+
+fn blocking_strict_fails_on_duplicate_ids_fixture() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]
@@ -335,6 +402,14 @@ review_after = "2027-01-01"
 /// blocking-strict must fail when an entry has an absolute path.
 #[test]
 fn blocking_strict_fails_on_absolute_path() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_strict_fails_on_absolute_path",
+        blocking_strict_fails_on_absolute_path_fixture,
+    )
+}
+
+fn blocking_strict_fails_on_absolute_path_fixture() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]
@@ -367,6 +442,14 @@ review_after = "2027-01-01"
 /// `broad_glob_reason`.
 #[test]
 fn blocking_strict_fails_on_broad_glob_no_reason() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_strict_fails_on_broad_glob_no_reason",
+        blocking_strict_fails_on_broad_glob_no_reason_fixture,
+    )
+}
+
+fn blocking_strict_fails_on_broad_glob_no_reason_fixture() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]
@@ -398,6 +481,14 @@ review_after = "2027-01-01"
 /// blocking-strict must fail when a non-retired entry matches no tracked file.
 #[test]
 fn blocking_strict_fails_on_unused_entry() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_strict_fails_on_unused_entry",
+        blocking_strict_fails_on_unused_entry_fixture,
+    )
+}
+
+fn blocking_strict_fails_on_unused_entry_fixture() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]
@@ -430,6 +521,14 @@ review_after = "2027-01-01"
 /// expected schema (schema_version 1, required top-level keys).
 #[test]
 fn json_output_schema_v1_valid() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "json_output_schema_v1_valid",
+        json_output_schema_v1_valid_fixture,
+    )
+}
+
+fn json_output_schema_v1_valid_fixture() -> Result<()> {
     let allowlist = minimal_allowlist("");
     let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
 
@@ -478,6 +577,14 @@ fn json_output_schema_v1_valid() -> Result<()> {
 /// Without `--json`, the checker writes the default JSON and Markdown receipts.
 #[test]
 fn default_receipts_are_written() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "default_receipts_are_written",
+        default_receipts_are_written_fixture,
+    )
+}
+
+fn default_receipts_are_written_fixture() -> Result<()> {
     let allowlist = minimal_allowlist("");
     let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
 
@@ -502,6 +609,14 @@ fn default_receipts_are_written() -> Result<()> {
 /// `cargo xtask non-rust check` subcommand is also wired and works.
 #[test]
 fn non_rust_check_subcommand_exits_zero_advisory() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "non_rust_check_subcommand_exits_zero_advisory",
+        non_rust_check_subcommand_exits_zero_advisory_fixture,
+    )
+}
+
+fn non_rust_check_subcommand_exits_zero_advisory_fixture() -> Result<()> {
     let allowlist = minimal_allowlist("");
     let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
 
@@ -525,6 +640,14 @@ fn check_file_policy_help_exits_zero() -> Result<()> {
 /// blocking-allowlist must fail on an expired `expires` date.
 #[test]
 fn blocking_allowlist_fails_on_expired_expires() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "blocking_allowlist_fails_on_expired_expires",
+        blocking_allowlist_fails_on_expired_expires_fixture,
+    )
+}
+
+fn blocking_allowlist_fails_on_expired_expires_fixture() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]

@@ -234,6 +234,15 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn git_stdout_fallback_handles_windows_gitdir_with_mount_root() -> TestResult {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "git_stdout_fallback_handles_windows_gitdir_with_mount_root",
+            git_stdout_fallback_handles_windows_gitdir_with_mount_root_fixture,
+        )
+    }
+
+    #[cfg(unix)]
+    fn git_stdout_fallback_handles_windows_gitdir_with_mount_root_fixture() -> TestResult {
         let temp = tempfile::tempdir()?;
         let repo = temp.path().join("repo");
         let mount_root = temp.path().join("mnt");

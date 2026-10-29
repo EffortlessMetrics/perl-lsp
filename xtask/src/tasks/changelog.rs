@@ -1450,6 +1450,19 @@ body:
     #[test]
     fn check_missing_disposition_during_soak_is_advisory_finding_exit0()
     -> std::result::Result<(), String> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "check_missing_disposition_during_soak_is_advisory_finding_exit0",
+            || {
+                check_missing_disposition_during_soak_is_advisory_finding_exit0_fixture()
+                    .map_err(std::io::Error::other)
+            },
+        )
+        .map_err(|error| error.to_string())
+    }
+
+    fn check_missing_disposition_during_soak_is_advisory_finding_exit0_fixture()
+    -> std::result::Result<(), String> {
         let tmp = tempfile::tempdir().map_err(|e| e.to_string())?;
         let dir = tmp.path();
         // Make this dir a tiny git repo with one commit, then set
@@ -1503,6 +1516,15 @@ changelog = "vscode-extension/CHANGELOG.md"
 
     #[test]
     fn check_missing_disposition_after_blocking_boundary_is_blocking_violation_exit1()
+    -> std::result::Result<(), String> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "check_missing_disposition_after_blocking_boundary_is_blocking_violation_exit1",
+            || check_missing_disposition_after_blocking_boundary_is_blocking_violation_exit1_fixture().map_err(std::io::Error::other),
+        ).map_err(|error| error.to_string())
+    }
+
+    fn check_missing_disposition_after_blocking_boundary_is_blocking_violation_exit1_fixture()
     -> std::result::Result<(), String> {
         let tmp = tempfile::tempdir().map_err(|e| e.to_string())?;
         let dir = tmp.path();

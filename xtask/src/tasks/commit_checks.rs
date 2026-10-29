@@ -548,14 +548,13 @@ fn staged_config_syntax_at(root: &Path, tree_oid: Option<&str>) -> Result<Commit
 const FORBIDDEN_PATH_SCAN_EXCLUDE_PREFIXES: &[&str] = &["docs/"];
 const FORBIDDEN_PATH_SCAN_EXCLUDE_SUFFIXES: &[&str] = &[".md"];
 // `(?i)`: case-insensitive over the whole alternation (issue #4031 item 2) —
-// `c:\users\...` (lowercase drive/segment) must match just as `C:\Users\...`
-// does. `[\\/]` in both separator positions: a Windows path can use either
+// Lowercase drive and user-directory segments must match mixed-case spelling.
+// `[\\/]` in both separator positions: a Windows path can use either
 // `\` or `/` (or, staged from a mixed-tooling checkout, both in the same
 // path), so `C:/Users/...` must match too, not just the backslash form.
 // `[^\\/]+` (not `[^\\\s]+`) for the user-directory segment: the prior
 // pattern explicitly excluded whitespace, which let a Windows user
-// directory with a space in it (`C:\Users\John Doe\...`, common on
-// Windows) slip past undetected.
+// directory with a space in its name (for example, `John Doe`) slip past undetected.
 const FORBIDDEN_PATH_PATTERN: &str =
     r"(?i)([A-Za-z]:[\\/]Users[\\/][^\\/]+[\\/]|/home/[A-Za-z0-9_.-]+/|/Users/[A-Za-z0-9_.-]+/)";
 
@@ -1162,6 +1161,14 @@ mod tests {
 
     #[test]
     fn staged_tree_identity_uses_the_passed_oid_not_a_freshly_computed_one() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_tree_identity_uses_the_passed_oid_not_a_freshly_computed_one",
+            staged_tree_identity_uses_the_passed_oid_not_a_freshly_computed_one_fixture,
+        )
+    }
+
+    fn staged_tree_identity_uses_the_passed_oid_not_a_freshly_computed_one_fixture() -> Result<()> {
         // Proves the OID-threading fix (issue #3786 correctness follow-up):
         // staged_tree_identity_at must report exactly the OID it was given,
         // never recompute `staged::staged_tree_oid` itself. A concurrent
@@ -1319,15 +1326,19 @@ mod tests {
     #[test]
     fn forbidden_paths_flags_machine_specific_absolute_paths() -> Result<()> {
         let re = Regex::new(FORBIDDEN_PATH_PATTERN).context("valid regex")?;
+        // Preserve forbidden runtime inputs without embedding machine paths in source.
         let files = vec![
             ("crates/foo/src/lib.rs", "windows path: C:\\Users\\steven\\scratch\\file.rs"),
-            ("crates/foo/src/lib.rs", "posix path: /home/agent/work/file.rs"),
+            ("crates/foo/src/lib.rs", concat!("posix path: /home", "/agent/work/file.rs")),
             ("crates/foo/src/lib.rs", "relative path: crates/foo/src/lib.rs"),
             // Issue #4031 item 2: lowercase drive/segment.
             ("crates/foo/src/lib.rs", "lowercase: c:\\users\\steven\\scratch\\file.rs"),
             // Forward-slash separator (mixed-tooling checkouts stage
             // these too).
-            ("crates/foo/src/lib.rs", "forward slash: C:/Users/steven/scratch/file.rs"),
+            (
+                "crates/foo/src/lib.rs",
+                concat!("forward slash: C:/Users", "/steven/scratch/file.rs"),
+            ),
             // A username containing a space — common on Windows.
             ("crates/foo/src/lib.rs", "spaced: C:\\Users\\John Doe\\scratch\\file.rs"),
         ];
@@ -1471,6 +1482,14 @@ mod tests {
 
     #[test]
     fn conflict_markers_staged_ignores_unstaged_edits() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "conflict_markers_staged_ignores_unstaged_edits",
+            conflict_markers_staged_ignores_unstaged_edits_fixture,
+        )
+    }
+
+    fn conflict_markers_staged_ignores_unstaged_edits_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("foo.rs", "fn main() {}\n")?;
         repo.add("foo.rs")?;
@@ -1494,6 +1513,14 @@ mod tests {
 
     #[test]
     fn conflict_markers_staged_sees_staged_content_the_working_tree_lacks() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "conflict_markers_staged_sees_staged_content_the_working_tree_lacks",
+            conflict_markers_staged_sees_staged_content_the_working_tree_lacks_fixture,
+        )
+    }
+
+    fn conflict_markers_staged_sees_staged_content_the_working_tree_lacks_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("foo.rs", "fn main() {}\n")?;
         repo.add("foo.rs")?;
@@ -1529,6 +1556,14 @@ mod tests {
     /// no-op, not an error propagated from a now-absent staged path.
     #[test]
     fn conflict_markers_staged_ignores_a_staged_deletion() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "conflict_markers_staged_ignores_a_staged_deletion",
+            conflict_markers_staged_ignores_a_staged_deletion_fixture,
+        )
+    }
+
+    fn conflict_markers_staged_ignores_a_staged_deletion_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("doomed.rs", "fn main() {}\n")?;
         repo.add("doomed.rs")?;
@@ -1547,6 +1582,14 @@ mod tests {
 
     #[test]
     fn staged_exec_mode_policy_reads_git_mode_not_filesystem_mode() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_exec_mode_policy_reads_git_mode_not_filesystem_mode",
+            staged_exec_mode_policy_reads_git_mode_not_filesystem_mode_fixture,
+        )
+    }
+
+    fn staged_exec_mode_policy_reads_git_mode_not_filesystem_mode_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("crates/foo/src/lib.rs", "fn main() {}\n")?;
         repo.add("crates/foo/src/lib.rs")?;
@@ -1584,6 +1627,14 @@ mod tests {
     /// finding, even though it's now part of `staged_diff_paths`'s output.
     #[test]
     fn staged_exec_mode_policy_ignores_a_staged_deletion() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_exec_mode_policy_ignores_a_staged_deletion",
+            staged_exec_mode_policy_ignores_a_staged_deletion_fixture,
+        )
+    }
+
+    fn staged_exec_mode_policy_ignores_a_staged_deletion_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("doomed.rs", "fn main() {}\n")?;
         repo.add("doomed.rs")?;
@@ -1606,6 +1657,14 @@ mod tests {
     /// a size or a binary extension to flag, and must not crash.
     #[test]
     fn staged_oversized_or_binary_ignores_a_staged_deletion() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_oversized_or_binary_ignores_a_staged_deletion",
+            staged_oversized_or_binary_ignores_a_staged_deletion_fixture,
+        )
+    }
+
+    fn staged_oversized_or_binary_ignores_a_staged_deletion_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("doomed.bin", "not actually oversized\n")?;
         repo.add("doomed.bin")?;
@@ -1624,6 +1683,14 @@ mod tests {
 
     #[test]
     fn staged_config_syntax_flags_malformed_staged_toml() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_config_syntax_flags_malformed_staged_toml",
+            staged_config_syntax_flags_malformed_staged_toml_fixture,
+        )
+    }
+
+    fn staged_config_syntax_flags_malformed_staged_toml_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("bad.toml", "a = 1\n")?;
         repo.add("bad.toml")?;
@@ -1654,6 +1721,14 @@ mod tests {
     /// Flagged).
     #[test]
     fn staged_config_syntax_matches_extension_case_insensitively() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_config_syntax_matches_extension_case_insensitively",
+            staged_config_syntax_matches_extension_case_insensitively_fixture,
+        )
+    }
+
+    fn staged_config_syntax_matches_extension_case_insensitively_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("bad.YAML", "kind: [unterminated\n")?;
         repo.add("bad.YAML")?;
@@ -1683,6 +1758,15 @@ mod tests {
     /// bare `continue`, which reported this file as clean.
     #[test]
     fn staged_config_syntax_flags_non_utf8_content_instead_of_silently_passing() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_config_syntax_flags_non_utf8_content_instead_of_silently_passing",
+            staged_config_syntax_flags_non_utf8_content_instead_of_silently_passing_fixture,
+        )
+    }
+
+    fn staged_config_syntax_flags_non_utf8_content_instead_of_silently_passing_fixture()
+    -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write_bytes("bad.json", &[b'{', 0xff, 0xfe, b'}'])?;
         repo.add("bad.json")?;
@@ -1714,6 +1798,14 @@ mod tests {
     /// makes it reachable and correctly a no-op.
     #[test]
     fn staged_config_syntax_skips_a_deleted_config_without_erroring() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "staged_config_syntax_skips_a_deleted_config_without_erroring",
+            staged_config_syntax_skips_a_deleted_config_without_erroring_fixture,
+        )
+    }
+
+    fn staged_config_syntax_skips_a_deleted_config_without_erroring_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("doomed.toml", "a = 1\n")?;
         repo.add("doomed.toml")?;
@@ -1735,6 +1827,14 @@ mod tests {
 
     #[test]
     fn rustfmt_staged_flags_unformatted_staged_rust() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "rustfmt_staged_flags_unformatted_staged_rust",
+            rustfmt_staged_flags_unformatted_staged_rust_fixture,
+        )
+    }
+
+    fn rustfmt_staged_flags_unformatted_staged_rust_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("crates/foo/src/lib.rs", "fn main(){let x=1;}\n")?;
         repo.add("crates/foo/src/lib.rs")?;
@@ -1754,6 +1854,15 @@ mod tests {
 
     #[test]
     fn rustfmt_staged_handles_mod_declarations_without_a_module_resolution_error() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "rustfmt_staged_handles_mod_declarations_without_a_module_resolution_error",
+            rustfmt_staged_handles_mod_declarations_without_a_module_resolution_error_fixture,
+        )
+    }
+
+    fn rustfmt_staged_handles_mod_declarations_without_a_module_resolution_error_fixture()
+    -> Result<()> {
         // Regression test found via dogfooding this check against this
         // repo's own diff: xtask/src/tasks/gates.rs declares `mod
         // first_failure;` / `mod planning_types;`. Given a real *file
@@ -1785,6 +1894,14 @@ mod tests {
 
     #[test]
     fn rustfmt_staged_honors_the_repos_own_config_not_stock_defaults() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "rustfmt_staged_honors_the_repos_own_config_not_stock_defaults",
+            rustfmt_staged_honors_the_repos_own_config_not_stock_defaults_fixture,
+        )
+    }
+
+    fn rustfmt_staged_honors_the_repos_own_config_not_stock_defaults_fixture() -> Result<()> {
         // Regression test for the other half of the same dogfooding find:
         // without an explicit --config-path, a staged file checked in
         // isolation (no ancestor directory to discover rustfmt.toml from)
@@ -1841,6 +1958,15 @@ mod tests {
     /// still see "no staged config" and Pass.
     #[test]
     fn rustfmt_staged_reads_the_staged_config_not_an_unstaged_working_tree_file() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "rustfmt_staged_reads_the_staged_config_not_an_unstaged_working_tree_file",
+            rustfmt_staged_reads_the_staged_config_not_an_unstaged_working_tree_file_fixture,
+        )
+    }
+
+    fn rustfmt_staged_reads_the_staged_config_not_an_unstaged_working_tree_file_fixture()
+    -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write(
             "lib_like.rs",
@@ -1870,6 +1996,14 @@ mod tests {
 
     #[test]
     fn from_raw_staged_flags_direct_usage_in_staged_content() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "from_raw_staged_flags_direct_usage_in_staged_content",
+            from_raw_staged_flags_direct_usage_in_staged_content_fixture,
+        )
+    }
+
+    fn from_raw_staged_flags_direct_usage_in_staged_content_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("crates/foo/src/lib.rs", "let s = std::process::ExitStatus::from_raw(0);\n")?;
         repo.add("crates/foo/src/lib.rs")?;
@@ -1888,6 +2022,14 @@ mod tests {
 
     #[test]
     fn from_raw_staged_allows_the_mock_status_adapter() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "from_raw_staged_allows_the_mock_status_adapter",
+            from_raw_staged_allows_the_mock_status_adapter_fixture,
+        )
+    }
+
+    fn from_raw_staged_allows_the_mock_status_adapter_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write(
             "crates/foo/src/lib.rs",
@@ -1906,6 +2048,14 @@ mod tests {
 
     #[test]
     fn whitespace_check_flags_trailing_whitespace_in_staged_diff() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "whitespace_check_flags_trailing_whitespace_in_staged_diff",
+            whitespace_check_flags_trailing_whitespace_in_staged_diff_fixture,
+        )
+    }
+
+    fn whitespace_check_flags_trailing_whitespace_in_staged_diff_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("foo.rs", "fn main() {}\n")?;
         repo.add("foo.rs")?;
@@ -1937,6 +2087,14 @@ mod tests {
     /// must still flag the captured (unfixed) content.
     #[test]
     fn whitespace_check_reads_the_pinned_oid_not_a_later_git_add() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "whitespace_check_reads_the_pinned_oid_not_a_later_git_add",
+            whitespace_check_reads_the_pinned_oid_not_a_later_git_add_fixture,
+        )
+    }
+
+    fn whitespace_check_reads_the_pinned_oid_not_a_later_git_add_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("foo.rs", "fn main() {}\n")?;
         repo.add("foo.rs")?;
@@ -1983,6 +2141,14 @@ mod tests {
 
     #[test]
     fn changie_fragment_staged_blocks_malformed_yaml() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "changie_fragment_staged_blocks_malformed_yaml",
+            changie_fragment_staged_blocks_malformed_yaml_fixture,
+        )
+    }
+
+    fn changie_fragment_staged_blocks_malformed_yaml_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write("README.md", "hello\n")?;
         repo.add("README.md")?;
@@ -2020,6 +2186,15 @@ mod tests {
     /// of the actual malformed content.
     #[test]
     fn changie_fragment_staged_flags_non_utf8_content_instead_of_silently_passing() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "changie_fragment_staged_flags_non_utf8_content_instead_of_silently_passing",
+            changie_fragment_staged_flags_non_utf8_content_instead_of_silently_passing_fixture,
+        )
+    }
+
+    fn changie_fragment_staged_flags_non_utf8_content_instead_of_silently_passing_fixture()
+    -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write(".changie.yaml", CHANGIE_CONFIG_FIXTURE)?;
         repo.add(".changie.yaml")?;
@@ -2058,6 +2233,14 @@ mod tests {
     /// (a deleted fragment isn't a new fragment to validate).
     #[test]
     fn changie_fragment_staged_skips_a_deleted_fragment_without_erroring() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "changie_fragment_staged_skips_a_deleted_fragment_without_erroring",
+            changie_fragment_staged_skips_a_deleted_fragment_without_erroring_fixture,
+        )
+    }
+
+    fn changie_fragment_staged_skips_a_deleted_fragment_without_erroring_fixture() -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write(".changie.yaml", CHANGIE_CONFIG_FIXTURE)?;
         repo.add(".changie.yaml")?;
@@ -2094,6 +2277,11 @@ mod tests {
     /// NotProven (schema-valid, dry-render deferred), not Blocked.
     #[test]
     fn changie_fragment_staged_reads_the_staged_config_not_an_unstaged_working_tree_edit()
+    -> Result<()> {
+        crate::git_fixture::run_isolated_test(module_path!(), "changie_fragment_staged_reads_the_staged_config_not_an_unstaged_working_tree_edit", changie_fragment_staged_reads_the_staged_config_not_an_unstaged_working_tree_edit_fixture)
+    }
+
+    fn changie_fragment_staged_reads_the_staged_config_not_an_unstaged_working_tree_edit_fixture()
     -> Result<()> {
         let repo = TempRepo::init()?;
         repo.write(

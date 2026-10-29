@@ -1952,6 +1952,14 @@ mod tests {
 
     #[test]
     fn current_head_reads_repository_head() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "current_head_reads_repository_head",
+            current_head_reads_repository_head_fixture,
+        )
+    }
+
+    fn current_head_reads_repository_head_fixture() -> Result<()> {
         let dir = tempdir()?;
         run_git(dir.path(), &["init"])?;
         run_git(dir.path(), &["config", "user.email", "agent@example.invalid"])?;

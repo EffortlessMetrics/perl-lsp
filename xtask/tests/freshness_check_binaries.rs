@@ -10,6 +10,9 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use anyhow::Result;
 use assert_cmd::{Command as AssertCommand, cargo::cargo_bin_cmd};
 use serde_json::Value;
@@ -113,6 +116,14 @@ fn write_fake_binary(repo: &Path, profile: &str, offset_secs: i64) -> Result<()>
 /// `binary_freshness_safe: true` (missing binaries are not stale).
 #[test]
 fn missing_binaries_are_not_stale() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "missing_binaries_are_not_stale",
+        missing_binaries_are_not_stale_fixture,
+    )
+}
+
+fn missing_binaries_are_not_stale_fixture() -> Result<()> {
     let work_dir = init_standalone_repo()?;
 
     let mut cmd = xtask_cmd();
@@ -146,6 +157,14 @@ fn missing_binaries_are_not_stale() -> Result<()> {
 /// `--binaries` exits 0 and reports `binary_freshness_safe: true`.
 #[test]
 fn fresh_debug_binary_exits_zero() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "fresh_debug_binary_exits_zero",
+        fresh_debug_binary_exits_zero_fixture,
+    )
+}
+
+fn fresh_debug_binary_exits_zero_fixture() -> Result<()> {
     let work_dir = init_standalone_repo()?;
     // mtime is 60 seconds after the commit → fresh
     write_fake_binary(work_dir.path(), "debug", 60)?;
@@ -178,6 +197,14 @@ fn fresh_debug_binary_exits_zero() -> Result<()> {
 /// `--binaries` exits non-zero.
 #[test]
 fn stale_debug_binary_exits_nonzero() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "stale_debug_binary_exits_nonzero",
+        stale_debug_binary_exits_nonzero_fixture,
+    )
+}
+
+fn stale_debug_binary_exits_nonzero_fixture() -> Result<()> {
     let work_dir = init_standalone_repo()?;
     // mtime is 60 seconds before the commit → stale
     write_fake_binary(work_dir.path(), "debug", -60)?;
@@ -209,6 +236,14 @@ fn stale_debug_binary_exits_nonzero() -> Result<()> {
 /// `--binaries` exits non-zero.
 #[test]
 fn stale_release_binary_exits_nonzero() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "stale_release_binary_exits_nonzero",
+        stale_release_binary_exits_nonzero_fixture,
+    )
+}
+
+fn stale_release_binary_exits_nonzero_fixture() -> Result<()> {
     let work_dir = init_standalone_repo()?;
     write_fake_binary(work_dir.path(), "release", -120)?;
 
@@ -224,6 +259,14 @@ fn stale_release_binary_exits_nonzero() -> Result<()> {
 /// check fails (`binary_freshness_safe: false`).
 #[test]
 fn mixed_fresh_and_stale_fails() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "mixed_fresh_and_stale_fails",
+        mixed_fresh_and_stale_fails_fixture,
+    )
+}
+
+fn mixed_fresh_and_stale_fails_fixture() -> Result<()> {
     let work_dir = init_standalone_repo()?;
     write_fake_binary(work_dir.path(), "debug", 60)?; // fresh
     write_fake_binary(work_dir.path(), "release", -60)?; // stale
@@ -255,6 +298,14 @@ fn mixed_fresh_and_stale_fails() -> Result<()> {
 /// `binary_freshness_safe` (they are omitted via serde skip_serializing_if).
 #[test]
 fn without_flag_receipt_omits_binary_fields() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "without_flag_receipt_omits_binary_fields",
+        without_flag_receipt_omits_binary_fields_fixture,
+    )
+}
+
+fn without_flag_receipt_omits_binary_fields_fixture() -> Result<()> {
     let work_dir = init_standalone_repo()?;
 
     let mut cmd = xtask_cmd();
@@ -283,6 +334,14 @@ fn without_flag_receipt_omits_binary_fields() -> Result<()> {
 /// under that directory rather than `target/`.
 #[test]
 fn cargo_target_dir_override_is_honoured() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "cargo_target_dir_override_is_honoured",
+        cargo_target_dir_override_is_honoured_fixture,
+    )
+}
+
+fn cargo_target_dir_override_is_honoured_fixture() -> Result<()> {
     let work_dir = init_standalone_repo()?;
     let custom_target = work_dir.path().join("custom_target");
     let debug_dir = custom_target.join("debug");
@@ -328,6 +387,14 @@ fn cargo_target_dir_override_is_honoured() -> Result<()> {
 /// This test uses the default target dir (no CARGO_TARGET_DIR) with a fresh binary.
 #[test]
 fn json_output_includes_binary_fields_when_flag_set() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "json_output_includes_binary_fields_when_flag_set",
+        json_output_includes_binary_fields_when_flag_set_fixture,
+    )
+}
+
+fn json_output_includes_binary_fields_when_flag_set_fixture() -> Result<()> {
     let work_dir = init_standalone_repo()?;
     write_fake_binary(work_dir.path(), "debug", 60)?;
 

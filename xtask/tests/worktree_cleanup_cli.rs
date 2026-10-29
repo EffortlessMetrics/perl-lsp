@@ -11,6 +11,9 @@
 // (see xtask/src/tasks/worktrees.rs) rather than PATH manipulation, so the
 // exact stub binary (with the correct platform extension) is resolved
 // deterministically regardless of PATH/PATHEXT search order.
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use anyhow::{Result, bail};
 use assert_cmd::cargo::cargo_bin_cmd;
 use std::fs;
@@ -299,6 +302,14 @@ fn run_xtask_cleanup(root: &Path, force: bool, gh_bin: Option<&Path>) -> Result<
 
 #[test]
 fn dry_run_keeps_dirty_and_flags_clean_for_removal_without_deleting_either() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "dry_run_keeps_dirty_and_flags_clean_for_removal_without_deleting_either",
+        dry_run_keeps_dirty_and_flags_clean_for_removal_without_deleting_either_fixture,
+    )
+}
+
+fn dry_run_keeps_dirty_and_flags_clean_for_removal_without_deleting_either_fixture() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     let dirty_wt = add_agent_worktree(&repo, "wt-dirty")?;
@@ -329,6 +340,14 @@ fn dry_run_keeps_dirty_and_flags_clean_for_removal_without_deleting_either() -> 
 
 #[test]
 fn force_removes_only_the_clean_worktree_and_never_the_dirty_one() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "force_removes_only_the_clean_worktree_and_never_the_dirty_one",
+        force_removes_only_the_clean_worktree_and_never_the_dirty_one_fixture,
+    )
+}
+
+fn force_removes_only_the_clean_worktree_and_never_the_dirty_one_fixture() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     let dirty_wt = add_agent_worktree(&repo, "wt-dirty-force")?;
@@ -363,6 +382,14 @@ fn force_removes_only_the_clean_worktree_and_never_the_dirty_one() -> Result<()>
 
 #[test]
 fn clean_worktree_with_unpushed_commits_and_no_open_pr_is_kept_not_removed() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "clean_worktree_with_unpushed_commits_and_no_open_pr_is_kept_not_removed",
+        clean_worktree_with_unpushed_commits_and_no_open_pr_is_kept_not_removed_fixture,
+    )
+}
+
+fn clean_worktree_with_unpushed_commits_and_no_open_pr_is_kept_not_removed_fixture() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     let wt = add_agent_worktree(&repo, "wt-unpushed")?;
@@ -413,6 +440,15 @@ fn clean_worktree_with_unpushed_commits_and_no_open_pr_is_kept_not_removed() -> 
 
 #[test]
 fn squash_merged_branch_at_merged_head_is_removed_despite_ahead_by_ancestry() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "squash_merged_branch_at_merged_head_is_removed_despite_ahead_by_ancestry",
+        squash_merged_branch_at_merged_head_is_removed_despite_ahead_by_ancestry_fixture,
+    )
+}
+
+fn squash_merged_branch_at_merged_head_is_removed_despite_ahead_by_ancestry_fixture() -> Result<()>
+{
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     // Deliberately does NOT contain the substring "merged" — the branch
@@ -472,6 +508,14 @@ fn squash_merged_branch_at_merged_head_is_removed_despite_ahead_by_ancestry() ->
 
 #[test]
 fn branch_with_merged_pr_but_post_merge_commits_is_kept_not_removed() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "branch_with_merged_pr_but_post_merge_commits_is_kept_not_removed",
+        branch_with_merged_pr_but_post_merge_commits_is_kept_not_removed_fixture,
+    )
+}
+
+fn branch_with_merged_pr_but_post_merge_commits_is_kept_not_removed_fixture() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     let wt = add_agent_worktree(&repo, "wt-post-merge-work")?;
@@ -521,6 +565,14 @@ fn branch_with_merged_pr_but_post_merge_commits_is_kept_not_removed() -> Result<
 // short-circuits `classify()` before `branch_merge_status` is ever called.
 #[test]
 fn merged_pr_query_failure_yields_unknown_status_and_keeps_the_worktree() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "merged_pr_query_failure_yields_unknown_status_and_keeps_the_worktree",
+        merged_pr_query_failure_yields_unknown_status_and_keeps_the_worktree_fixture,
+    )
+}
+
+fn merged_pr_query_failure_yields_unknown_status_and_keeps_the_worktree_fixture() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     let wt = add_agent_worktree(&repo, "wt-merged-query-fails")?;
@@ -567,6 +619,15 @@ fn merged_pr_query_failure_yields_unknown_status_and_keeps_the_worktree() -> Res
 
 #[test]
 fn worktree_dirtied_after_classification_survives_force_cleanup_and_is_skipped() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "worktree_dirtied_after_classification_survives_force_cleanup_and_is_skipped",
+        worktree_dirtied_after_classification_survives_force_cleanup_and_is_skipped_fixture,
+    )
+}
+
+fn worktree_dirtied_after_classification_survives_force_cleanup_and_is_skipped_fixture()
+-> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     // `git worktree list --porcelain` returns entries in lexicographic path
@@ -663,6 +724,14 @@ fn worktree_dirtied_after_classification_survives_force_cleanup_and_is_skipped()
 
 #[test]
 fn open_pr_worktree_is_never_removed_even_under_force() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "open_pr_worktree_is_never_removed_even_under_force",
+        open_pr_worktree_is_never_removed_even_under_force_fixture,
+    )
+}
+
+fn open_pr_worktree_is_never_removed_even_under_force_fixture() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     let pr_wt = add_agent_worktree(&repo, "wt-open-pr")?;
@@ -694,6 +763,15 @@ fn open_pr_worktree_is_never_removed_even_under_force() -> Result<()> {
 
 #[test]
 fn gh_is_invoked_with_the_classified_root_as_cwd_not_the_ambient_process_cwd() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "gh_is_invoked_with_the_classified_root_as_cwd_not_the_ambient_process_cwd",
+        gh_is_invoked_with_the_classified_root_as_cwd_not_the_ambient_process_cwd_fixture,
+    )
+}
+
+fn gh_is_invoked_with_the_classified_root_as_cwd_not_the_ambient_process_cwd_fixture() -> Result<()>
+{
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     let wt = add_agent_worktree(&repo, "wt-cwd-probe")?;
@@ -753,6 +831,14 @@ fn gh_is_invoked_with_the_classified_root_as_cwd_not_the_ambient_process_cwd() -
 
 #[test]
 fn locked_worktree_is_never_removed_even_under_force() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "locked_worktree_is_never_removed_even_under_force",
+        locked_worktree_is_never_removed_even_under_force_fixture,
+    )
+}
+
+fn locked_worktree_is_never_removed_even_under_force_fixture() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     let locked_wt = add_agent_worktree(&repo, "wt-locked")?;
@@ -784,6 +870,14 @@ fn locked_worktree_is_never_removed_even_under_force() -> Result<()> {
 
 #[test]
 fn gh_failure_yields_unknown_pr_status_and_keeps_the_worktree() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "gh_failure_yields_unknown_pr_status_and_keeps_the_worktree",
+        gh_failure_yields_unknown_pr_status_and_keeps_the_worktree_fixture,
+    )
+}
+
+fn gh_failure_yields_unknown_pr_status_and_keeps_the_worktree_fixture() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
     let wt = add_agent_worktree(&repo, "wt-gh-unknown")?;
@@ -809,6 +903,14 @@ fn gh_failure_yields_unknown_pr_status_and_keeps_the_worktree() -> Result<()> {
 
 #[test]
 fn no_agent_worktrees_reports_nothing_to_clean() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "no_agent_worktrees_reports_nothing_to_clean",
+        no_agent_worktrees_reports_nothing_to_clean_fixture,
+    )
+}
+
+fn no_agent_worktrees_reports_nothing_to_clean_fixture() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let repo = init_fixture_repo(tmp.path())?;
 

@@ -531,6 +531,14 @@ mod tests {
 
     #[test]
     fn current_git_ref_returns_unknown_outside_a_git_repo() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "current_git_ref_returns_unknown_outside_a_git_repo",
+            current_git_ref_returns_unknown_outside_a_git_repo_fixture,
+        )
+    }
+
+    fn current_git_ref_returns_unknown_outside_a_git_repo_fixture() -> Result<()> {
         // Both `git rev-parse` invocations fail (not a git repo at all),
         // so the function must fall back to "unknown" rather than
         // propagating an `Err` — this value is best-effort provenance
@@ -543,6 +551,14 @@ mod tests {
 
     #[test]
     fn current_git_ref_names_the_actual_branch_in_a_real_repo() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "current_git_ref_names_the_actual_branch_in_a_real_repo",
+            current_git_ref_names_the_actual_branch_in_a_real_repo_fixture,
+        )
+    }
+
+    fn current_git_ref_names_the_actual_branch_in_a_real_repo_fixture() -> Result<()> {
         // Pinned against a throwaway repo (rather than this crate's own
         // checkout, whose branch/detached state varies across local runs
         // and CI's frequently-detached PR checkouts) so the assertion is
@@ -557,6 +573,14 @@ mod tests {
 
     #[test]
     fn current_git_ref_names_the_short_sha_when_detached() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "current_git_ref_names_the_short_sha_when_detached",
+            current_git_ref_names_the_short_sha_when_detached_fixture,
+        )
+    }
+
+    fn current_git_ref_names_the_short_sha_when_detached_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
         init_throwaway_repo(root)?;

@@ -404,6 +404,15 @@ mod tests {
 
     #[test]
     fn test_resolve_base_ref_auto_resolves_origin_main_when_origin_master_absent() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_resolve_base_ref_auto_resolves_origin_main_when_origin_master_absent",
+            test_resolve_base_ref_auto_resolves_origin_main_when_origin_master_absent_fixture,
+        )
+    }
+
+    fn test_resolve_base_ref_auto_resolves_origin_main_when_origin_master_absent_fixture()
+    -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
 
@@ -420,6 +429,14 @@ mod tests {
 
     #[test]
     fn test_resolve_base_ref_explicit_base_honored() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_resolve_base_ref_explicit_base_honored",
+            test_resolve_base_ref_explicit_base_honored_fixture,
+        )
+    }
+
+    fn test_resolve_base_ref_explicit_base_honored_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
         commit_file(&repo, "second.txt", "two\n", "second commit")?;
@@ -432,6 +449,14 @@ mod tests {
 
     #[test]
     fn test_resolve_base_ref_shallow_clone_falls_back_to_head_tilde_1() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_resolve_base_ref_shallow_clone_falls_back_to_head_tilde_1",
+            test_resolve_base_ref_shallow_clone_falls_back_to_head_tilde_1_fixture,
+        )
+    }
+
+    fn test_resolve_base_ref_shallow_clone_falls_back_to_head_tilde_1_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = tmp.path().join("repo");
         // No remote at all, and the branch is deliberately not named
@@ -451,6 +476,14 @@ mod tests {
 
     #[test]
     fn test_resolve_base_ref_loud_error_when_nothing_resolves() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_resolve_base_ref_loud_error_when_nothing_resolves",
+            test_resolve_base_ref_loud_error_when_nothing_resolves_fixture,
+        )
+    }
+
+    fn test_resolve_base_ref_loud_error_when_nothing_resolves_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = tmp.path().join("repo");
         // No remote, branch not named main/master, and only ONE commit —
@@ -477,6 +510,14 @@ mod tests {
 
     #[test]
     fn test_resolve_change_set_commit_range_extracts_changed_paths() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_resolve_change_set_commit_range_extracts_changed_paths",
+            test_resolve_change_set_commit_range_extracts_changed_paths_fixture,
+        )
+    }
+
+    fn test_resolve_change_set_commit_range_extracts_changed_paths_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
 
@@ -505,6 +546,14 @@ mod tests {
 
     #[test]
     fn test_resolve_change_set_commit_range_explicit_base() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_resolve_change_set_commit_range_explicit_base",
+            test_resolve_change_set_commit_range_explicit_base_fixture,
+        )
+    }
+
+    fn test_resolve_change_set_commit_range_explicit_base_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
         run_git(&repo, &["branch", "known-base"])?;
@@ -526,6 +575,14 @@ mod tests {
 
     #[test]
     fn test_resolve_change_set_staged_tree_composes_staged_diff_paths() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_resolve_change_set_staged_tree_composes_staged_diff_paths",
+            test_resolve_change_set_staged_tree_composes_staged_diff_paths_fixture,
+        )
+    }
+
+    fn test_resolve_change_set_staged_tree_composes_staged_diff_paths_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
 
@@ -559,6 +616,14 @@ mod tests {
 
     #[test]
     fn test_resolve_change_set_staged_tree_empty_when_nothing_staged() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_resolve_change_set_staged_tree_empty_when_nothing_staged",
+            test_resolve_change_set_staged_tree_empty_when_nothing_staged_fixture,
+        )
+    }
+
+    fn test_resolve_change_set_staged_tree_empty_when_nothing_staged_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
 
@@ -586,6 +651,14 @@ mod tests {
     /// test in this file.
     #[test]
     fn test_diff_paths_falls_back_to_two_dot_on_unrelated_histories() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_diff_paths_falls_back_to_two_dot_on_unrelated_histories",
+            test_diff_paths_falls_back_to_two_dot_on_unrelated_histories_fixture,
+        )
+    }
+
+    fn test_diff_paths_falls_back_to_two_dot_on_unrelated_histories_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
 
@@ -785,6 +858,14 @@ mod tests {
 
     #[test]
     fn test_parity_doc_only_change() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_parity_doc_only_change",
+            test_parity_doc_only_change_fixture,
+        )
+    }
+
+    fn test_parity_doc_only_change_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
         run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
@@ -794,6 +875,14 @@ mod tests {
 
     #[test]
     fn test_parity_single_crate_change() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_parity_single_crate_change",
+            test_parity_single_crate_change_fixture,
+        )
+    }
+
+    fn test_parity_single_crate_change_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
         run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
@@ -803,6 +892,14 @@ mod tests {
 
     #[test]
     fn test_parity_multi_crate_change() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_parity_multi_crate_change",
+            test_parity_multi_crate_change_fixture,
+        )
+    }
+
+    fn test_parity_multi_crate_change_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
         run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
@@ -813,6 +910,14 @@ mod tests {
 
     #[test]
     fn test_parity_mixed_change() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_parity_mixed_change",
+            test_parity_mixed_change_fixture,
+        )
+    }
+
+    fn test_parity_mixed_change_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
         run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
@@ -824,6 +929,14 @@ mod tests {
 
     #[test]
     fn test_parity_ci_config_only_change() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_parity_ci_config_only_change",
+            test_parity_ci_config_only_change_fixture,
+        )
+    }
+
+    fn test_parity_ci_config_only_change_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
         run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
@@ -834,6 +947,14 @@ mod tests {
 
     #[test]
     fn test_parity_deletion_is_visible() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_parity_deletion_is_visible",
+            test_parity_deletion_is_visible_fixture,
+        )
+    }
+
+    fn test_parity_deletion_is_visible_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
         commit_file(&repo, "crates/perl-parser/src/legacy.rs", "pub fn old() {}\n", "add legacy")?;
@@ -846,6 +967,14 @@ mod tests {
 
     #[test]
     fn test_parity_rename_is_visible() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "test_parity_rename_is_visible",
+            test_parity_rename_is_visible_fixture,
+        )
+    }
+
+    fn test_parity_rename_is_visible_fixture() -> Result<()> {
         let tmp = tempfile::tempdir().context("failed to create tempdir")?;
         let repo = init_repo_with_origin_main(tmp.path())?;
         commit_file(

@@ -5000,6 +5000,14 @@ printf 'gate-context-preserved\n'"#,
 
     #[test]
     fn is_latest_commit_compares_configured_upstream() -> color_eyre::eyre::Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "is_latest_commit_compares_configured_upstream",
+            is_latest_commit_compares_configured_upstream_fixture,
+        )
+    }
+
+    fn is_latest_commit_compares_configured_upstream_fixture() -> color_eyre::eyre::Result<()> {
         let temp = tempdir()?;
         let upstream = temp.path().join("upstream.git");
         let repo = temp.path().join("repo");

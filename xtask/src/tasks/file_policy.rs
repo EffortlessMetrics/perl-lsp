@@ -2235,6 +2235,14 @@ mod tests {
 
     #[test]
     fn build_inventory_reads_git_tracked_files_and_workspace_allowlist() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "build_inventory_reads_git_tracked_files_and_workspace_allowlist",
+            build_inventory_reads_git_tracked_files_and_workspace_allowlist_fixture,
+        )
+    }
+
+    fn build_inventory_reads_git_tracked_files_and_workspace_allowlist_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let tracked = init_tracked_fixture(
             temp.path(),
@@ -2273,6 +2281,14 @@ mod tests {
 
     #[test]
     fn non_rust_inventory_writes_json_markdown_and_docs_outputs() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "non_rust_inventory_writes_json_markdown_and_docs_outputs",
+            non_rust_inventory_writes_json_markdown_and_docs_outputs_fixture,
+        )
+    }
+
+    fn non_rust_inventory_writes_json_markdown_and_docs_outputs_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let tracked = init_tracked_fixture(temp.path(), &[("README.md", "# Fixture\n")])?;
         assert_eq!(tracked, vec!["README.md".to_string()]);
@@ -2299,6 +2315,14 @@ mod tests {
 
     #[test]
     fn check_file_policy_advisory_writes_receipt_and_markdown_report() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "check_file_policy_advisory_writes_receipt_and_markdown_report",
+            check_file_policy_advisory_writes_receipt_and_markdown_report_fixture,
+        )
+    }
+
+    fn check_file_policy_advisory_writes_receipt_and_markdown_report_fixture() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let tracked = init_tracked_fixture(
             temp.path(),

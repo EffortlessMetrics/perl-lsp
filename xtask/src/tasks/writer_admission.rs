@@ -1660,6 +1660,15 @@ mod tests {
 
     #[test]
     fn gather_remote_branch_info_on_a_nonexistent_branch_is_none_not_an_error() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "gather_remote_branch_info_on_a_nonexistent_branch_is_none_not_an_error",
+            gather_remote_branch_info_on_a_nonexistent_branch_is_none_not_an_error_fixture,
+        )
+    }
+
+    fn gather_remote_branch_info_on_a_nonexistent_branch_is_none_not_an_error_fixture() -> Result<()>
+    {
         // `-q --verify` exiting non-zero for a branch that simply doesn't
         // exist on the remote yet is a legitimate absence (brand-new
         // branch case), not an instrument failure — mirrors
@@ -1679,6 +1688,14 @@ mod tests {
 
     #[test]
     fn gather_remote_branch_info_on_a_genuine_spawn_failure_reports_error() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "gather_remote_branch_info_on_a_genuine_spawn_failure_reports_error",
+            gather_remote_branch_info_on_a_genuine_spawn_failure_reports_error_fixture,
+        )
+    }
+
+    fn gather_remote_branch_info_on_a_genuine_spawn_failure_reports_error_fixture() -> Result<()> {
         // Not a git repository at all: `git rev-parse` itself cannot run
         // meaningfully here — this must surface as `error`, not silently
         // fold into "branch doesn't exist" (the same instrument-failure-

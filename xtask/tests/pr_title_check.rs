@@ -3,6 +3,9 @@
 //! Each test invokes the xtask binary and asserts on exit codes and output.
 //! Tests that require a git repo use `tempfile` + a minimal init sequence.
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use anyhow::Result;
 use assert_cmd::cargo::cargo_bin_cmd;
 use serde_json::Value;
@@ -250,6 +253,14 @@ fn no_gh_skips_issue_check() -> Result<()> {
 /// The HEAD commit has a valid title, so the command should exit 0.
 #[test]
 fn reads_head_commit_when_no_title_arg() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "reads_head_commit_when_no_title_arg",
+        reads_head_commit_when_no_title_arg_fixture,
+    )
+}
+
+fn reads_head_commit_when_no_title_arg_fixture() -> Result<()> {
     let repo = init_git_repo()?;
 
     let mut cmd = cargo_bin_cmd!("xtask");
@@ -260,6 +271,14 @@ fn reads_head_commit_when_no_title_arg() -> Result<()> {
 /// When no title arg is provided and HEAD commit lacks an issue ref, it exits 1.
 #[test]
 fn reads_head_commit_fails_when_missing_issue_ref() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "reads_head_commit_fails_when_missing_issue_ref",
+        reads_head_commit_fails_when_missing_issue_ref_fixture,
+    )
+}
+
+fn reads_head_commit_fails_when_missing_issue_ref_fixture() -> Result<()> {
     let dir = TempDir::new()?;
     git_cmd(&["init", "-b", "master"], dir.path()).or_else(|_| git_cmd(&["init"], dir.path()))?;
     git_cmd(&["config", "user.email", "test@test.com"], dir.path())?;

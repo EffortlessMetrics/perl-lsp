@@ -29,6 +29,9 @@
 // `change-set` subcommand accepts `--root` for exactly this reason (the
 // same convention `worktree-cleanup --root` established for #4097).
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use anyhow::{Context, Result, bail};
 use assert_cmd::cargo::cargo_bin_cmd;
 use std::fs;
@@ -180,6 +183,14 @@ fn test_change_set_help_shows_expected_flags() -> Result<()> {
 
 #[test]
 fn test_fixture_has_no_origin_master() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "test_fixture_has_no_origin_master",
+        test_fixture_has_no_origin_master_fixture,
+    )
+}
+
+fn test_fixture_has_no_origin_master_fixture() -> Result<()> {
     let tmp = tempfile::tempdir().context("failed to create tempdir")?;
     let repo = init_fixture_repo(tmp.path())?;
     assert!(
@@ -196,6 +207,14 @@ fn test_fixture_has_no_origin_master() -> Result<()> {
 
 #[test]
 fn test_change_set_json_output_has_bounded_shape() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "test_change_set_json_output_has_bounded_shape",
+        test_change_set_json_output_has_bounded_shape_fixture,
+    )
+}
+
+fn test_change_set_json_output_has_bounded_shape_fixture() -> Result<()> {
     let tmp = tempfile::tempdir().context("failed to create tempdir")?;
     let repo = init_fixture_repo(tmp.path())?;
     run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
@@ -240,6 +259,15 @@ fn test_change_set_json_output_has_bounded_shape() -> Result<()> {
 // `assert_ne!` inline comment below for the exact swap performed.
 #[test]
 fn test_regression_old_shell_algorithm_self_diffs_new_branch_new_resolver_does_not() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "test_regression_old_shell_algorithm_self_diffs_new_branch_new_resolver_does_not",
+        test_regression_old_shell_algorithm_self_diffs_new_branch_new_resolver_does_not_fixture,
+    )
+}
+
+fn test_regression_old_shell_algorithm_self_diffs_new_branch_new_resolver_does_not_fixture()
+-> Result<()> {
     let tmp = tempfile::tempdir().context("failed to create tempdir")?;
     let repo = init_fixture_repo(tmp.path())?;
 
@@ -292,6 +320,15 @@ fn test_regression_old_shell_algorithm_self_diffs_new_branch_new_resolver_does_n
 
 #[test]
 fn test_change_set_unresolvable_explicit_base_fails_loudly_not_empty_success() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "test_change_set_unresolvable_explicit_base_fails_loudly_not_empty_success",
+        test_change_set_unresolvable_explicit_base_fails_loudly_not_empty_success_fixture,
+    )
+}
+
+fn test_change_set_unresolvable_explicit_base_fails_loudly_not_empty_success_fixture() -> Result<()>
+{
     let tmp = tempfile::tempdir().context("failed to create tempdir")?;
     let repo = init_fixture_repo(tmp.path())?;
     run_git(&repo, &["checkout", "-q", "-b", "feature"])?;
@@ -319,6 +356,14 @@ fn test_change_set_unresolvable_explicit_base_fails_loudly_not_empty_success() -
 
 #[test]
 fn test_change_set_auto_base_resolves_to_origin_main_sha() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "test_change_set_auto_base_resolves_to_origin_main_sha",
+        test_change_set_auto_base_resolves_to_origin_main_sha_fixture,
+    )
+}
+
+fn test_change_set_auto_base_resolves_to_origin_main_sha_fixture() -> Result<()> {
     let tmp = tempfile::tempdir().context("failed to create tempdir")?;
     let repo = init_fixture_repo(tmp.path())?;
     let expected_base_sha = head_sha(&repo)?;
@@ -354,6 +399,14 @@ fn test_change_set_auto_base_resolves_to_origin_main_sha() -> Result<()> {
 
 #[test]
 fn test_change_set_unknown_format_fails_loudly_not_silent_json() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "test_change_set_unknown_format_fails_loudly_not_silent_json",
+        test_change_set_unknown_format_fails_loudly_not_silent_json_fixture,
+    )
+}
+
+fn test_change_set_unknown_format_fails_loudly_not_silent_json_fixture() -> Result<()> {
     let tmp = tempfile::tempdir().context("failed to create tempdir")?;
     let repo = init_fixture_repo(tmp.path())?;
     run_git(&repo, &["checkout", "-q", "-b", "feature"])?;

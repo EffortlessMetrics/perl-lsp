@@ -13,6 +13,9 @@ use std::path::PathBuf;
 
 mod allocation_tracker;
 mod cli;
+#[cfg(test)]
+#[path = "../tests/common/git_fixture.rs"]
+mod git_fixture;
 mod tasks;
 #[cfg(test)]
 mod test_support;

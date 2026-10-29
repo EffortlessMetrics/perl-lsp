@@ -1132,6 +1132,14 @@ index 3333333..4444444 100644
 
     #[test]
     fn changed_lines_since_reports_bad_base() -> TestResult {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "changed_lines_since_reports_bad_base",
+            changed_lines_since_reports_bad_base_fixture,
+        )
+    }
+
+    fn changed_lines_since_reports_bad_base_fixture() -> TestResult {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         fs::write(repo.join("tracked.rs"), "fn tracked() {}\n")?;
@@ -1391,6 +1399,14 @@ coverage:
 
     #[test]
     fn build_receipt_derives_patch_coverage_from_git_diff() -> TestResult {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "build_receipt_derives_patch_coverage_from_git_diff",
+            build_receipt_derives_patch_coverage_from_git_diff_fixture,
+        )
+    }
+
+    fn build_receipt_derives_patch_coverage_from_git_diff_fixture() -> TestResult {
         let temp = tempfile::tempdir()?;
         let repo_root = temp.path().join("perl-lsp-swarm-coverage-target");
         let repo = repo_root.as_path();
@@ -1451,6 +1467,14 @@ coverage:
 
     #[test]
     fn build_receipt_clusters_all_project_files_below_target() -> TestResult {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "build_receipt_clusters_all_project_files_below_target",
+            build_receipt_clusters_all_project_files_below_target_fixture,
+        )
+    }
+
+    fn build_receipt_clusters_all_project_files_below_target_fixture() -> TestResult {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         run_git(repo, &["init"])?;
@@ -1523,6 +1547,14 @@ coverage:
 
     #[test]
     fn build_receipt_allows_missing_patch_source() -> TestResult {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "build_receipt_allows_missing_patch_source",
+            build_receipt_allows_missing_patch_source_fixture,
+        )
+    }
+
+    fn build_receipt_allows_missing_patch_source_fixture() -> TestResult {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
         run_git(repo, &["init"])?;
@@ -1580,6 +1612,14 @@ coverage:
 
     #[test]
     fn git_context_fallback_reports_invalid_fallback_gitdir() -> TestResult {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "git_context_fallback_reports_invalid_fallback_gitdir",
+            git_context_fallback_reports_invalid_fallback_gitdir_fixture,
+        )
+    }
+
+    fn git_context_fallback_reports_invalid_fallback_gitdir_fixture() -> TestResult {
         let temp = tempfile::tempdir()?;
         let repo = temp.path().join("repo");
         fs::create_dir_all(&repo)?;
@@ -1596,6 +1636,15 @@ coverage:
     #[cfg(unix)]
     #[test]
     fn git_context_fallback_handles_windows_gitdir_with_mount_root() -> TestResult {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "git_context_fallback_handles_windows_gitdir_with_mount_root",
+            git_context_fallback_handles_windows_gitdir_with_mount_root_fixture,
+        )
+    }
+
+    #[cfg(unix)]
+    fn git_context_fallback_handles_windows_gitdir_with_mount_root_fixture() -> TestResult {
         let temp = tempfile::tempdir()?;
         let repo = temp.path().join("repo");
         let mount_root = temp.path().join("mnt");

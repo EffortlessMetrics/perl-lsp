@@ -8,6 +8,9 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use anyhow::Result;
 use assert_cmd::cargo::cargo_bin_cmd;
 use std::{
@@ -96,6 +99,14 @@ fn git_cmd_in(args: &[&str], cwd: &Path) -> Result<()> {
 /// Basic test: `--dry-run` outputs markdown with all required sections.
 #[test]
 fn dry_run_outputs_markdown_with_required_sections() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "dry_run_outputs_markdown_with_required_sections",
+        dry_run_outputs_markdown_with_required_sections_fixture,
+    )
+}
+
+fn dry_run_outputs_markdown_with_required_sections_fixture() -> Result<()> {
     let work_dir = init_repo_with_commit(false)?;
 
     // Add a change so the diff is non-empty
@@ -135,6 +146,14 @@ fn dry_run_outputs_markdown_with_required_sections() -> Result<()> {
 /// With no changes vs base (empty diff), the output must gracefully show an empty changeset.
 #[test]
 fn dry_run_with_no_changes_outputs_empty_changeset_section() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "dry_run_with_no_changes_outputs_empty_changeset_section",
+        dry_run_with_no_changes_outputs_empty_changeset_section_fixture,
+    )
+}
+
+fn dry_run_with_no_changes_outputs_empty_changeset_section_fixture() -> Result<()> {
     let work_dir = init_repo_with_commit(false)?;
 
     // No new commits — diff against HEAD itself produces empty output
@@ -170,6 +189,14 @@ fn dry_run_with_no_changes_outputs_empty_changeset_section() -> Result<()> {
 /// When a policy file is present, the output includes a policy note.
 #[test]
 fn dry_run_reads_policy_files_when_present() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "dry_run_reads_policy_files_when_present",
+        dry_run_reads_policy_files_when_present_fixture,
+    )
+}
+
+fn dry_run_reads_policy_files_when_present_fixture() -> Result<()> {
     let work_dir = init_repo_with_commit(false)?;
     add_change_commit(work_dir.path(), "README.md", "# changed\n")?;
 
@@ -209,6 +236,14 @@ fn dry_run_reads_policy_files_when_present() -> Result<()> {
 /// When no policy file exists, the command must not crash; no Policy section expected.
 #[test]
 fn dry_run_handles_missing_policy_gracefully() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "dry_run_handles_missing_policy_gracefully",
+        dry_run_handles_missing_policy_gracefully_fixture,
+    )
+}
+
+fn dry_run_handles_missing_policy_gracefully_fixture() -> Result<()> {
     let work_dir = init_repo_with_commit(false)?;
     add_change_commit(work_dir.path(), "src/lib.rs", "// no policy here\n")?;
 
@@ -243,6 +278,14 @@ fn dry_run_handles_missing_policy_gracefully() -> Result<()> {
 
 #[test]
 fn dry_run_degrades_without_cargo_metadata() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "dry_run_degrades_without_cargo_metadata",
+        dry_run_degrades_without_cargo_metadata_fixture,
+    )
+}
+
+fn dry_run_degrades_without_cargo_metadata_fixture() -> Result<()> {
     let work_dir = init_repo_with_commit(false)?;
     add_change_commit(work_dir.path(), "notes.md", "changed\n")?;
 
@@ -291,6 +334,14 @@ fn dry_run_degrades_without_cargo_metadata() -> Result<()> {
 
 #[test]
 fn dry_run_maps_minimal_workspace_metadata() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "dry_run_maps_minimal_workspace_metadata",
+        dry_run_maps_minimal_workspace_metadata_fixture,
+    )
+}
+
+fn dry_run_maps_minimal_workspace_metadata_fixture() -> Result<()> {
     let work_dir = init_repo_with_commit(false)?;
     fs::create_dir_all(work_dir.path().join("crates/demo/src"))?;
     fs::create_dir_all(work_dir.path().join("docs/ci"))?;

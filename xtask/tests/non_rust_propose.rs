@@ -5,6 +5,9 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use anyhow::Result;
 use assert_cmd::Command;
 use std::{
@@ -85,6 +88,14 @@ fn run_propose(root: &Path, extra_args: &[&str]) -> Result<std::process::Output>
 /// running `propose`.
 #[test]
 fn propose_writes_only_target_dir() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "propose_writes_only_target_dir",
+        propose_writes_only_target_dir_fixture,
+    )
+}
+
+fn propose_writes_only_target_dir_fixture() -> Result<()> {
     let (_tmp, root) =
         setup_repo(&[("book/ch01.md", "# Chapter 1"), ("docs/guide.md", "# Guide")])?;
 
@@ -120,6 +131,14 @@ fn propose_writes_only_target_dir() -> Result<()> {
 /// directory-glob entries, not one entry per file.
 #[test]
 fn propose_groups_by_directory_by_default() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "propose_groups_by_directory_by_default",
+        propose_groups_by_directory_by_default_fixture,
+    )
+}
+
+fn propose_groups_by_directory_by_default_fixture() -> Result<()> {
     // Create many files across two directories.
     let files: Vec<(&str, &str)> = vec![
         ("book/ch01.md", "# ch1"),
@@ -163,6 +182,14 @@ fn propose_groups_by_directory_by_default() -> Result<()> {
 /// `--group-by extension` produces extension-glob entries instead of directory entries.
 #[test]
 fn propose_groups_by_extension_with_flag() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "propose_groups_by_extension_with_flag",
+        propose_groups_by_extension_with_flag_fixture,
+    )
+}
+
+fn propose_groups_by_extension_with_flag_fixture() -> Result<()> {
     let files: Vec<(&str, &str)> = vec![
         ("book/ch01.md", "# ch1"),
         ("docs/api.md", "# api"),
@@ -204,6 +231,14 @@ fn propose_groups_by_extension_with_flag() -> Result<()> {
 /// Generated entries must have `review_after` approximately 30 days from today.
 #[test]
 fn propose_emits_review_after_30_days() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "propose_emits_review_after_30_days",
+        propose_emits_review_after_30_days_fixture,
+    )
+}
+
+fn propose_emits_review_after_30_days_fixture() -> Result<()> {
     let (_tmp, root) = setup_repo(&[("docs/readme.md", "# Readme")])?;
 
     let output = run_propose(&root, &[])?;
@@ -239,6 +274,14 @@ fn propose_emits_review_after_30_days() -> Result<()> {
 /// Generated entries must have `owner = "TBD"` — never a real owner.
 #[test]
 fn propose_emits_owner_tbd_placeholder() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "propose_emits_owner_tbd_placeholder",
+        propose_emits_owner_tbd_placeholder_fixture,
+    )
+}
+
+fn propose_emits_owner_tbd_placeholder_fixture() -> Result<()> {
     let (_tmp, root) = setup_repo(&[("book/ch01.md", "# ch1")])?;
 
     let output = run_propose(&root, &[])?;
@@ -275,6 +318,14 @@ fn propose_emits_owner_tbd_placeholder() -> Result<()> {
 /// `propose` emits a human-readable markdown summary with group sections.
 #[test]
 fn propose_emits_human_markdown() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "propose_emits_human_markdown",
+        propose_emits_human_markdown_fixture,
+    )
+}
+
+fn propose_emits_human_markdown_fixture() -> Result<()> {
     let (_tmp, root) = setup_repo(&[("book/ch01.md", "# ch1"), ("docs/guide.md", "# guide")])?;
 
     let output = run_propose(&root, &[])?;
@@ -309,6 +360,14 @@ fn propose_emits_human_markdown() -> Result<()> {
 /// tooling instead of being blindly accepted as long-lived non-Rust surfaces.
 #[test]
 fn propose_highlights_rust_migration_candidates() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "propose_highlights_rust_migration_candidates",
+        propose_highlights_rust_migration_candidates_fixture,
+    )
+}
+
+fn propose_highlights_rust_migration_candidates_fixture() -> Result<()> {
     let files: Vec<(&str, &str)> = vec![
         ("scripts/build.sh", "#!/bin/bash"),
         ("scripts/release.py", "print('release')"),
@@ -344,6 +403,14 @@ fn propose_highlights_rust_migration_candidates() -> Result<()> {
 /// exit 0 — the proposed allowlist actually covers the files it claims to.
 #[test]
 fn propose_round_trips_via_advisory_checker() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "propose_round_trips_via_advisory_checker",
+        propose_round_trips_via_advisory_checker_fixture,
+    )
+}
+
+fn propose_round_trips_via_advisory_checker_fixture() -> Result<()> {
     let files: Vec<(&str, &str)> =
         vec![("book/ch01.md", "# ch1"), ("book/ch02.md", "# ch2"), ("docs/guide.md", "# guide")];
     let (_tmp, root) = setup_repo(&files)?;

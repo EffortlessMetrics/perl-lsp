@@ -6,6 +6,9 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use anyhow::Result;
 use assert_cmd::cargo::cargo_bin_cmd;
 use serde_json::Value;
@@ -122,6 +125,14 @@ fn parse_receipt(stdout: &[u8]) -> Result<Value> {
 /// safe_for_code_state_claims=true, and exits 0.
 #[test]
 fn reports_zero_behind_when_synced() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "reports_zero_behind_when_synced",
+        reports_zero_behind_when_synced_fixture,
+    )
+}
+
+fn reports_zero_behind_when_synced_fixture() -> Result<()> {
     let (_remote, work_dir) = init_synced_repo()?;
 
     let mut cmd = cargo_bin_cmd!("xtask");
@@ -147,6 +158,14 @@ fn reports_zero_behind_when_synced() -> Result<()> {
 /// safe_for_code_state_claims=false.
 #[test]
 fn reports_nonzero_behind_when_stale() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "reports_nonzero_behind_when_stale",
+        reports_nonzero_behind_when_stale_fixture,
+    )
+}
+
+fn reports_nonzero_behind_when_stale_fixture() -> Result<()> {
     let (remote_dir, work_dir) = init_synced_repo()?;
 
     // Add a commit to remote (simulating another push we haven't pulled).
@@ -189,6 +208,14 @@ fn reports_nonzero_behind_when_stale() -> Result<()> {
 /// `--mode warn` exits 0 even when stale.
 #[test]
 fn warn_mode_returns_zero_even_when_stale() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "warn_mode_returns_zero_even_when_stale",
+        warn_mode_returns_zero_even_when_stale_fixture,
+    )
+}
+
+fn warn_mode_returns_zero_even_when_stale_fixture() -> Result<()> {
     let (remote_dir, work_dir) = init_synced_repo()?;
 
     let source2 = TempDir::new()?;
@@ -219,6 +246,14 @@ fn warn_mode_returns_zero_even_when_stale() -> Result<()> {
 /// `--mode block` exits 1 when stale.
 #[test]
 fn block_mode_returns_one_when_stale() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "block_mode_returns_one_when_stale",
+        block_mode_returns_one_when_stale_fixture,
+    )
+}
+
+fn block_mode_returns_one_when_stale_fixture() -> Result<()> {
     let (remote_dir, work_dir) = init_synced_repo()?;
 
     let source2 = TempDir::new()?;
@@ -250,6 +285,14 @@ fn block_mode_returns_one_when_stale() -> Result<()> {
 /// `--allow-historical --reason "bisect"` on a stale repo exits 0 in block mode.
 #[test]
 fn allow_historical_bypasses_block_with_reason() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "allow_historical_bypasses_block_with_reason",
+        allow_historical_bypasses_block_with_reason_fixture,
+    )
+}
+
+fn allow_historical_bypasses_block_with_reason_fixture() -> Result<()> {
     let (remote_dir, work_dir) = init_synced_repo()?;
 
     let source2 = TempDir::new()?;
@@ -298,6 +341,14 @@ fn allow_historical_bypasses_block_with_reason() -> Result<()> {
 /// `--allow-historical` without `--reason` must exit with a non-zero usage error.
 #[test]
 fn allow_historical_without_reason_errors() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "allow_historical_without_reason_errors",
+        allow_historical_without_reason_errors_fixture,
+    )
+}
+
+fn allow_historical_without_reason_errors_fixture() -> Result<()> {
     let (_remote, work_dir) = init_synced_repo()?;
 
     let mut cmd = cargo_bin_cmd!("xtask");
@@ -313,6 +364,14 @@ fn allow_historical_without_reason_errors() -> Result<()> {
 /// `--json <path>` writes a valid schema-1 JSON receipt file.
 #[test]
 fn json_output_path_writes_receipt_file() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "json_output_path_writes_receipt_file",
+        json_output_path_writes_receipt_file_fixture,
+    )
+}
+
+fn json_output_path_writes_receipt_file_fixture() -> Result<()> {
     let (_remote, work_dir) = init_synced_repo()?;
     let receipt_path = work_dir.path().join("target").join("devex").join("freshness.json");
 
@@ -347,6 +406,14 @@ fn json_output_path_writes_receipt_file() -> Result<()> {
 /// behind_by is computed correctly from cached data.
 #[test]
 fn no_fetch_skips_fetch_step() -> Result<()> {
+    crate::git_fixture::run_isolated_test(
+        module_path!(),
+        "no_fetch_skips_fetch_step",
+        no_fetch_skips_fetch_step_fixture,
+    )
+}
+
+fn no_fetch_skips_fetch_step_fixture() -> Result<()> {
     let (_remote, work_dir) = init_synced_repo()?;
 
     // The command should complete without error even with --no-fetch.
