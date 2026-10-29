@@ -104,22 +104,73 @@ fn ripr_self_hosted_preflight_falls_back_when_required_image_is_missing()
     let root = project_root()?;
     let workflow = fs::read_to_string(root.join(".github/workflows/ripr.yml"))?;
 
-    assert_eq!(
-        workflow.matches("docker image inspect em-ci-rust:1.95").count(),
-        2,
-        "CX53 and CX43 preflight must both check the required Docker image before running ripr"
-    );
-    assert!(
-        workflow.contains("Required Docker image em-ci-rust:1.95 is missing on CX53")
-            && workflow.contains("Required Docker image em-ci-rust:1.95 is missing on CX43"),
-        "missing self-hosted Rust image must be reported as preflight failure"
-    );
+    let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(&workflow)?;
+    verify_ripr_image_guards(&parsed)?;
     assert!(
         workflow.contains("needs.ripr-cx53.outputs.preflight_ok == 'false'")
             && workflow.contains("needs.ripr-cx43.outputs.preflight_ok == 'false'"),
         "preflight_ok=false must route the run to the GitHub-hosted fallback"
     );
 
+    Ok(())
+}
+
+const IMAGE_GUARD: &str = "if ! docker image inspect em-ci-rust:1.95 >/dev/null 2>&1; then";
+
+fn verify_ripr_image_guards(
+    workflow: &serde_yaml_ng::Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (job, host) in [("ripr-cx53", "CX53"), ("ripr-cx43", "CX43")] {
+        let steps = workflow["jobs"][job]["steps"].as_sequence().ok_or("missing job steps")?;
+        let body = steps
+            .iter()
+            .find(|step| step["id"].as_str() == Some("preflight"))
+            .and_then(|step| step["run"].as_str())
+            .ok_or("missing preflight run body")?;
+        if body.lines().filter(|line| line.trim() == IMAGE_GUARD).count() != 1 {
+            return Err(format!("{job} must have one executable required-image guard").into());
+        }
+        let guard_body = body
+            .lines()
+            .skip_while(|line| line.trim() != IMAGE_GUARD)
+            .skip(1)
+            .take_while(|line| line.trim() != "fi")
+            .collect::<Vec<_>>()
+            .join("\n");
+        if !guard_body
+            .contains(&format!("Required Docker image em-ci-rust:1.95 is missing on {host}"))
+            || !guard_body.lines().any(|line| line.trim() == "disk_ok=false")
+            || !body.contains(r#"echo "preflight_ok=${disk_ok}" >> "$GITHUB_OUTPUT""#)
+        {
+            return Err(format!("{job} must report missing image and failed preflight").into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn ripr_image_guard_contract_rejects_each_missing_host_guard()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root()?;
+    let content = fs::read_to_string(root.join(".github/workflows/ripr.yml"))?;
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&content)?;
+    verify_ripr_image_guards(&workflow)?;
+    for job in ["ripr-cx53", "ripr-cx43"] {
+        let mut mutated = workflow.clone();
+        let steps =
+            mutated["jobs"][job]["steps"].as_sequence_mut().ok_or("missing fixture job steps")?;
+        let preflight = steps
+            .iter_mut()
+            .find(|step| step["id"].as_str() == Some("preflight"))
+            .ok_or("missing fixture preflight")?;
+        let body = preflight["run"].as_str().ok_or("missing fixture run body")?;
+        preflight["run"] =
+            serde_yaml_ng::Value::String(body.replace(IMAGE_GUARD, &format!("# {IMAGE_GUARD}")));
+        let error = verify_ripr_image_guards(&mutated)
+            .err()
+            .ok_or("commented-out image guard must be rejected")?;
+        assert!(error.to_string().contains(job), "wrong host diagnosed: {error}");
+    }
     Ok(())
 }
 

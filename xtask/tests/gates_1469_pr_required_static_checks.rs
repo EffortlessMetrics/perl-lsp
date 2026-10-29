@@ -311,7 +311,7 @@ fn ci_workflow_runs_unit_routed_full_in_pr_smoke() -> Result<(), Box<dyn std::er
     );
     assert!(
         workflow.contains(
-            "timeout --signal=TERM --kill-after=60s 2700s ./target/debug/xtask gates --tier pr-fast --base origin/main --receipt"
+            r#"timeout --signal=TERM --kill-after=60s 2700s "$CARGO_TARGET_DIR/debug/xtask" gates --tier pr-fast --base origin/main --receipt"#
         ),
         "pr-smoke inner watchdog must leave enough room for unit_routed_full receipt output"
     );
