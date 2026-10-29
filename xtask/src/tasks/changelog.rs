@@ -181,8 +181,43 @@ pub(crate) struct Fragment {
     kind: String,
     #[serde(default)]
     body: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_custom_metadata")]
     custom: BTreeMap<String, String>,
+}
+
+/// Reject ambiguous metadata instead of silently retaining the last duplicate value.
+fn deserialize_custom_metadata<'de, D>(
+    deserializer: D,
+) -> std::result::Result<BTreeMap<String, String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{Error, MapAccess, Visitor};
+
+    struct CustomMetadataVisitor;
+
+    impl<'de> Visitor<'de> for CustomMetadataVisitor {
+        type Value = BTreeMap<String, String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("custom metadata with unique keys")
+        }
+
+        fn visit_map<A>(self, mut map: A) -> std::result::Result<Self::Value, A::Error>
+        where
+            A: MapAccess<'de>,
+        {
+            let mut custom = BTreeMap::new();
+            while let Some((key, value)) = map.next_entry::<String, String>()? {
+                if custom.insert(key.clone(), value).is_some() {
+                    return Err(A::Error::custom(format!("duplicate custom key `{key}`")));
+                }
+            }
+            Ok(custom)
+        }
+    }
+
+    deserializer.deserialize_map(CustomMetadataVisitor)
 }
 
 /// Validate one fragment against the config; return human-readable findings
@@ -1038,6 +1073,52 @@ custom:
     fn valid_fragment_has_no_findings() {
         let cfg = test_config();
         assert!(validate_fragment(&good_fragment(), &cfg).is_empty());
+    }
+
+    #[test]
+    fn fragment_rejects_duplicate_custom_keys() -> Result<()> {
+        for (key, first, second) in [
+            ("PR", "3768", "9999"),
+            ("PR", "9999", "3768"),
+            ("PR", "3768", "3768"),
+            ("Breaking", "yes", "no"),
+            ("Breaking", "no", "yes"),
+            ("Slug", "first", "second"),
+        ] {
+            let yaml = format!("custom:\n  {key}: \"{first}\"\n  \"{key}\": \"{second}\"\n");
+            let err = serde_yaml_ng::from_str::<Fragment>(&yaml)
+                .err()
+                .ok_or_else(|| eyre!("duplicate custom key {key} was accepted: {yaml}"))?;
+            let message = err.to_string();
+            assert!(message.contains("duplicate"), "{message}");
+            assert!(message.contains(key), "{message}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn fragment_preserves_unique_custom_metadata_and_scalar_strings() -> Result<()> {
+        let fragment: Fragment = serde_yaml_ng::from_str(
+            "custom:\n  PR: 3768\n  Breaking: no\n  Slug: optional-metadata\n",
+        )?;
+        assert_eq!(fragment.custom.get("PR").map(String::as_str), Some("3768"));
+        assert_eq!(fragment.custom.get("Breaking").map(String::as_str), Some("no"));
+        assert_eq!(fragment.custom.get("Slug").map(String::as_str), Some("optional-metadata"));
+        Ok(())
+    }
+
+    #[test]
+    fn fragment_without_custom_keeps_missing_pr_finding() -> Result<()> {
+        for yaml in ["project: product\n", "project: product\ncustom: {}\n"] {
+            let fragment: Fragment = serde_yaml_ng::from_str(yaml)?;
+            assert!(fragment.custom.is_empty());
+            assert!(
+                validate_fragment(&fragment, &test_config())
+                    .iter()
+                    .any(|finding| finding == "missing custom `PR` metadata")
+            );
+        }
+        Ok(())
     }
 
     #[test]
