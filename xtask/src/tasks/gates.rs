@@ -2047,6 +2047,12 @@ struct ShellExecutionResult {
 
 const MAX_GATE_OUTPUT_BYTES: u64 = 4 * 1024 * 1024;
 
+fn is_cargo_package_context_variable(name: &std::ffi::OsStr, case_insensitive: bool) -> bool {
+    let name = name.to_string_lossy();
+    let name = if case_insensitive { name.to_ascii_uppercase() } else { name.into_owned() };
+    name == "CARGO_MANIFEST_DIR" || name == "CARGO_MANIFEST_PATH" || name.starts_with("CARGO_PKG_")
+}
+
 fn run_shell_command_with_timeout(
     command: &str,
     log_path: &Path,
@@ -2058,7 +2064,18 @@ fn run_shell_command_with_timeout(
         .try_clone()
         .with_context(|| format!("Failed to clone log file handle: {}", log_path.display()))?;
 
-    let mut child = shell_command_process(command, timeout_secs)
+    let mut command_process = shell_command_process(command, timeout_secs);
+    // Cargo injects the runner's package metadata when launching `cargo run`.
+    // Passing it into nested Cargo changes build-script fingerprints (notably
+    // ring's), rebuilding tooling inside the gate's unchanged timeout. These
+    // are package outputs, not build configuration: keep routing, flags, aliases
+    // and all other caller settings. Shell startup files can still set variables.
+    for (key, _) in std::env::vars_os() {
+        if is_cargo_package_context_variable(&key, cfg!(windows)) {
+            command_process.env_remove(key);
+        }
+    }
+    let mut child = command_process
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_file_err))
         .spawn()
@@ -2915,11 +2932,11 @@ mod tests {
         build_pr_fast_plan_from_scope_with_targets, commit_advisories, compare_receipts,
         determine_overall_status, extend_plan_with_non_pr_fast_static_gates,
         extend_plan_with_static_tiers, extract_output_summary, failure_guidance, filter_gates,
-        is_blocking_gate_status, is_cargo_test_command, is_latest_commit,
-        load_policy_for_inspection, load_receipt, output_diff, parse_first_failure,
-        parse_test_metrics, plan_gates, read_gate_output, run_internal_commit_check,
-        run_shell_command_with_timeout, run_single_gate, selects_commit_tier_gate,
-        staged_guard_violation, static_gate_plan, write_receipt,
+        is_blocking_gate_status, is_cargo_package_context_variable, is_cargo_test_command,
+        is_latest_commit, load_policy_for_inspection, load_receipt, output_diff,
+        parse_first_failure, parse_test_metrics, plan_gates, read_gate_output,
+        run_internal_commit_check, run_shell_command_with_timeout, run_single_gate,
+        selects_commit_tier_gate, staged_guard_violation, static_gate_plan, write_receipt,
     };
     use crate::tasks::ci_scope::{
         ArchWidener, DirectCrate, HeavyLaneEntry, LaneDecisions, LaneEntry, PlatformOverrides,
@@ -4195,6 +4212,120 @@ gates:
         assert_eq!(
             selected_gate_names(&plan),
             vec!["fmt", "clippy_full", "nightly_corpus", "release_build"]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn shell_command_package_context_matching_respects_platform_case_rules() {
+        use std::ffi::OsStr;
+
+        for name in ["CARGO_MANIFEST_DIR", "CARGO_MANIFEST_PATH", "CARGO_PKG_FUTURE_METADATA"] {
+            assert!(is_cargo_package_context_variable(OsStr::new(name), false));
+            assert!(is_cargo_package_context_variable(OsStr::new(name), true));
+            let lowercase = name.to_ascii_lowercase();
+            assert!(!is_cargo_package_context_variable(OsStr::new(&lowercase), false));
+            assert!(is_cargo_package_context_variable(OsStr::new(&lowercase), true));
+        }
+        for name in [
+            "CARGO_HOME",
+            "CARGO_TARGET_DIR",
+            "CARGO_BUILD_BUILD_DIR",
+            "CARGO_ALIAS_XTASK",
+            "CARGO_PROFILE_AGENT_DEBUG",
+            "PATH",
+            "BASH_ENV",
+            "CUSTOM_CARGO_PKG_NAME",
+        ] {
+            assert!(!is_cargo_package_context_variable(OsStr::new(name), false));
+            assert!(!is_cargo_package_context_variable(OsStr::new(name), true));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shell_command_does_not_inherit_cargo_package_context() -> color_eyre::eyre::Result<()> {
+        use std::os::unix::ffi::OsStringExt;
+
+        const CHILD: &str = "XTASK_GATE_PACKAGE_CONTEXT_TEST_CHILD";
+        if std::env::var_os(CHILD).as_deref() == Some(std::ffi::OsStr::new("1")) {
+            let tmp = tempdir()?;
+            let context_names = [
+                "CARGO_MANIFEST_DIR",
+                "CARGO_MANIFEST_PATH",
+                "CARGO_PKG_NAME",
+                "CARGO_PKG_VERSION",
+                "CARGO_PKG_FUTURE_METADATA",
+            ];
+            let original_context = context_names.map(std::env::var_os);
+            let execution = run_shell_command_with_timeout(
+                r#"test "${CARGO_MANIFEST_DIR+set}" != set &&
+test "${CARGO_MANIFEST_PATH+set}" != set &&
+test "${CARGO_PKG_NAME+set}" != set &&
+test "${CARGO_PKG_VERSION+set}" != set &&
+test "${CARGO_PKG_FUTURE_METADATA+set}" != set &&
+test "$CARGO_TARGET_DIR" = gate-target &&
+test "$CARGO_BUILD_BUILD_DIR" = gate-build &&
+test "$CARGO_BUILD_JOBS" = 2 &&
+test "$CARGO_INCREMENTAL" = 0 &&
+test "$CARGO_ALIAS_XTASK" = 'run --package xtask --profile agent --locked --' &&
+test "$PATH" = "$XTASK_GATE_EXPECTED_PATH" &&
+test "$XTASK_GATE_CUSTOM" = preserved &&
+test "$XTASK_GATE_NONUNICODE" = "$(printf '\377')" &&
+printf 'gate-context-preserved\n'"#,
+                &tmp.path().join("package-context.log"),
+                30,
+            )?;
+            assert_eq!(
+                context_names.map(std::env::var_os),
+                original_context,
+                "sanitizing a subprocess must not mutate the runner's environment"
+            );
+            assert!(!execution.timed_out);
+            assert_eq!(execution.exit_code, 0, "gate output: {}", execution.stdout);
+            assert!(execution.stdout.contains("gate-context-preserved"));
+            return Ok(());
+        }
+
+        // Seed a separate process rather than racing process-global environment
+        // mutations with the other gate tests. Login shells can replace PATH;
+        // use a controlled startup file to restore the caller's tool activation.
+        let tmp = tempdir()?;
+        let startup = tmp.path().join("gate-startup.sh");
+        fs::write(&startup, "export PATH=\"$XTASK_GATE_EXPECTED_PATH\"\n")?;
+        let path =
+            std::env::var_os("PATH").ok_or_else(|| color_eyre::eyre::eyre!("PATH is missing"))?;
+        let output = Command::new(std::env::current_exe()?)
+            .args([
+                "--exact",
+                "tasks::gates::tests::shell_command_does_not_inherit_cargo_package_context",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .env("CARGO_MANIFEST_DIR", "outer-manifest")
+            .env("CARGO_MANIFEST_PATH", "outer-manifest/Cargo.toml")
+            .env("CARGO_PKG_NAME", "outer-xtask")
+            .env("CARGO_PKG_VERSION", "9.9.9")
+            .env("CARGO_PKG_FUTURE_METADATA", "outer-metadata")
+            .env("CARGO_TARGET_DIR", "gate-target")
+            .env("CARGO_BUILD_BUILD_DIR", "gate-build")
+            .env("CARGO_BUILD_JOBS", "2")
+            .env("CARGO_INCREMENTAL", "0")
+            .env("CARGO_ALIAS_XTASK", "run --package xtask --profile agent --locked --")
+            .env("XTASK_GATE_EXPECTED_PATH", path)
+            .env("XTASK_GATE_CUSTOM", "preserved")
+            .env("XTASK_GATE_NONUNICODE", std::ffi::OsString::from_vec(vec![0xff]))
+            .env("BASH_ENV", startup)
+            .output()?;
+        assert!(
+            output.status.success(),
+            "isolated gate probe failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("test result: ok. 1 passed;"),
+            "the child must execute the selected probe, not pass with zero tests"
         );
         Ok(())
     }
