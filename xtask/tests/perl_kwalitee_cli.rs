@@ -8,6 +8,9 @@
 //! workspace gates, no `update-status`).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+#[path = "common/git_fixture.rs"]
+mod git_fixture;
+
 use assert_cmd::Command;
 use color_eyre::eyre::Result;
 use serde_json::Value;
@@ -50,10 +53,14 @@ fn write(root: &Path, rel: &str, contents: &str) -> Result<()> {
 /// evaluated tree is never polluted — this lets `root` point at a real
 /// subdirectory of the live repo without dirtying tracked files.
 fn report_json(root: &Path, profile: &str) -> Result<Value> {
+    report_json_with_command(root, profile, Command::cargo_bin("xtask")?)
+}
+
+fn report_json_with_command(root: &Path, profile: &str, mut command: Command) -> Result<Value> {
     let out_dir = tempfile::tempdir()?;
     let out = out_dir.path().join("kwalitee.json");
     let md = out_dir.path().join("kwalitee.md");
-    let output = Command::cargo_bin("xtask")?
+    let output = command
         .args(["perl-kwalitee", "report", "--profile", profile, "--repo-root"])
         .arg(root)
         .args(["--json"])
@@ -284,5 +291,162 @@ fn check_fails_on_broken_manifest() -> Result<()> {
         combined.contains("FAIL") || combined.contains("check failed"),
         "reports failure: {combined}"
     );
+    Ok(())
+}
+
+#[test]
+fn report_commit_uses_evaluated_tree_under_foreign_git_context() -> Result<()> {
+    git_fixture::run_isolated_test(
+        module_path!(),
+        "report_commit_uses_evaluated_tree_under_foreign_git_context",
+        report_commit_uses_evaluated_tree_under_foreign_git_context_fixture,
+    )
+}
+
+fn report_commit_uses_evaluated_tree_under_foreign_git_context_fixture() -> Result<()> {
+    use color_eyre::eyre::ensure;
+    use std::collections::BTreeMap;
+
+    let sandbox = tempfile::tempdir()?;
+    let config = sandbox.path().join("empty-config");
+    let templates = sandbox.path().join("empty-templates");
+    std::fs::write(&config, "")?;
+    std::fs::create_dir(&templates)?;
+    let git = |root: &Path, args: &[&std::ffi::OsStr]| -> Result<String> {
+        let output = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", &config)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_TEMPLATE_DIR", &templates)
+            .output()?;
+        ensure!(
+            output.status.success(),
+            "fixture git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+    };
+    let git_text = |root: &Path, args: &[&str]| -> Result<String> {
+        git(root, &args.iter().map(std::ffi::OsStr::new).collect::<Vec<_>>())
+    };
+    let init = |root: &Path, marker: &str| -> Result<String> {
+        git_text(root, &["init", "-q", "-b", "main"])?;
+        git_text(root, &["config", "user.name", "Kwalitee fixture"])?;
+        git_text(root, &["config", "user.email", "kwalitee@example.invalid"])?;
+        git_text(root, &["config", "commit.gpgsign", "false"])?;
+        std::fs::write(root.join("marker"), marker)?;
+        git_text(root, &["add", "."])?;
+        git_text(root, &["commit", "-qm", marker])?;
+        git_text(root, &["rev-parse", "HEAD"])
+    };
+    let caller = clean_fixture()?;
+    let evaluated = clean_fixture()?;
+    let non_repo = clean_fixture()?;
+    let caller_sha = init(caller.path(), "caller")?;
+    let evaluated_sha = init(evaluated.path(), "evaluated")?;
+    ensure!(caller_sha != evaluated_sha, "the caller and evaluated commits must differ");
+
+    let caller_linked = sandbox.path().join("caller-linked");
+    let evaluated_linked = sandbox.path().join("evaluated-linked");
+    for (root, linked) in [(caller.path(), &caller_linked), (evaluated.path(), &evaluated_linked)] {
+        git(
+            root,
+            &[
+                "worktree".as_ref(),
+                "add".as_ref(),
+                "-qb".as_ref(),
+                "linked".as_ref(),
+                linked.as_os_str(),
+            ],
+        )?;
+        std::fs::write(linked.join("marker"), "linked worktree commit")?;
+        git_text(linked, &["add", "marker"])?;
+        git_text(linked, &["commit", "-qm", "linked worktree commit"])?;
+    }
+    let evaluated_linked_sha = git_text(&evaluated_linked, &["rev-parse", "HEAD"])?;
+    ensure!(evaluated_sha != evaluated_linked_sha, "linked target must have its own HEAD");
+    let subdir = evaluated.path().join("crates/perl-kwalitee");
+    let roots = [caller.path(), evaluated.path(), non_repo.path(), sandbox.path()];
+    let mut before = BTreeMap::new();
+    for root in roots {
+        snapshot_provenance_fixture(root, &mut before)?;
+    }
+    let parent_context: Vec<_> = git_fixture::LOCAL_GIT_ENV.iter().map(std::env::var_os).collect();
+    let mut mismatches = Vec::new();
+
+    for foreign in [caller.path(), caller_linked.as_path()] {
+        let foreign_dir = git_text(foreign, &["rev-parse", "--absolute-git-dir"])?;
+        let alternate_index = sandbox.path().join("alternate-index");
+        std::fs::copy(Path::new(&foreign_dir).join("index"), &alternate_index)?;
+        let alternate_before = std::fs::read(&alternate_index)?;
+        for full_context in [false, true] {
+            for (root, expected) in [
+                (non_repo.path(), "unknown"),
+                (subdir.as_path(), "unknown"),
+                (evaluated.path(), evaluated_sha.as_str()),
+                (evaluated_linked.as_path(), evaluated_linked_sha.as_str()),
+            ] {
+                let mut command = Command::cargo_bin("xtask")?;
+                command
+                    .env("GIT_CONFIG_GLOBAL", &config)
+                    .env("GIT_CONFIG_NOSYSTEM", "1")
+                    .env("GIT_DIR", &foreign_dir);
+                if full_context {
+                    command
+                        .env("GIT_WORK_TREE", foreign)
+                        .env("GIT_COMMON_DIR", caller.path().join(".git"))
+                        .env("GIT_INDEX_FILE", &alternate_index)
+                        .env("GIT_OBJECT_DIRECTORY", caller.path().join(".git/objects"))
+                        .env("GIT_ALTERNATE_OBJECT_DIRECTORIES", caller.path().join(".git/objects"))
+                        .env("GIT_PREFIX", "caller-prefix/")
+                        .env("GIT_CONFIG_COUNT", "1")
+                        .env("GIT_CONFIG_KEY_0", "core.worktree")
+                        .env("GIT_CONFIG_VALUE_0", foreign)
+                        .env("GIT_CONFIG_PARAMETERS", "'core.bare'='true'");
+                }
+                let receipt = report_json_with_command(root, "pr", command)?;
+                if receipt["commit"] != expected {
+                    mismatches.push(format!(
+                        "foreign={foreign:?}, full_context={full_context}, root={root:?}: expected {expected}, got {}",
+                        receipt["commit"]
+                    ));
+                }
+            }
+        }
+        ensure!(
+            std::fs::read(&alternate_index)? == alternate_before,
+            "caller alternate index changed"
+        );
+        std::fs::remove_file(alternate_index)?;
+    }
+    let mut after = BTreeMap::new();
+    for root in roots {
+        snapshot_provenance_fixture(root, &mut after)?;
+    }
+    ensure!(before == after, "Git config/index/refs/objects or fixture content changed");
+    ensure!(
+        git_fixture::LOCAL_GIT_ENV.iter().map(std::env::var_os).collect::<Vec<_>>()
+            == parent_context,
+        "parent Git environment changed"
+    );
+    ensure!(mismatches.is_empty(), "wrong evaluated-tree provenance:\n{}", mismatches.join("\n"));
+    Ok(())
+}
+
+fn snapshot_provenance_fixture(
+    root: &Path,
+    files: &mut std::collections::BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<()> {
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            snapshot_provenance_fixture(&entry.path(), files)?;
+        } else if entry.file_type()?.is_file() {
+            files.insert(entry.path(), std::fs::read(entry.path())?);
+        } else {
+            color_eyre::eyre::bail!("unexpected fixture entry: {}", entry.path().display());
+        }
+    }
     Ok(())
 }

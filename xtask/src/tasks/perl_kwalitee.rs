@@ -357,10 +357,42 @@ fn write_file(path: &Path, contents: &str) -> Result<()> {
 /// top level; otherwise the receipt records `"unknown"` rather than leaking an
 /// unrelated commit.
 fn current_commit(root: &Path) -> String {
+    let Ok(root) = std::fs::canonicalize(root) else {
+        return "unknown".to_string();
+    };
     let git = |args: &[&str]| -> Option<String> {
-        Command::new("git")
-            .current_dir(root)
-            .args(args)
+        let mut command = Command::new("git");
+        command.current_dir(&root).args(args);
+        // Resolve the evaluated tree even inside a hook for another repository.
+        // These are Git's repository-local variables (`rev-parse --local-env-vars`);
+        // global/system configuration and the caller's environment stay intact.
+        for key in [
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+            "GIT_CONFIG",
+            "GIT_CONFIG_PARAMETERS",
+            "GIT_CONFIG_COUNT",
+            "GIT_OBJECT_DIRECTORY",
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_IMPLICIT_WORK_TREE",
+            "GIT_GRAFT_FILE",
+            "GIT_INDEX_FILE",
+            "GIT_NO_REPLACE_OBJECTS",
+            "GIT_REPLACE_REF_BASE",
+            "GIT_PREFIX",
+            "GIT_SHALLOW_FILE",
+            "GIT_COMMON_DIR",
+        ] {
+            command.env_remove(key);
+        }
+        for (key, _) in std::env::vars_os() {
+            let name = key.to_string_lossy();
+            let name = if cfg!(windows) { name.to_ascii_uppercase() } else { name.into_owned() };
+            if name.starts_with("GIT_CONFIG_KEY_") || name.starts_with("GIT_CONFIG_VALUE_") {
+                command.env_remove(key);
+            }
+        }
+        command
             .output()
             .ok()
             .filter(|o| o.status.success())
@@ -370,7 +402,8 @@ fn current_commit(root: &Path) -> String {
     };
 
     let is_own_toplevel = git(&["rev-parse", "--show-toplevel"])
-        .is_some_and(|top| std::fs::canonicalize(&top).ok() == std::fs::canonicalize(root).ok());
+        .and_then(|top| std::fs::canonicalize(top).ok())
+        .is_some_and(|top| top == root);
     if !is_own_toplevel {
         return "unknown".to_string();
     }
