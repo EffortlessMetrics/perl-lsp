@@ -1025,6 +1025,13 @@ pub struct ProjectPerlConfig {
     /// Perl version string (e.g. "5.38") — parsed but not yet wired to diagnostics.
     /// Reserved for future use; ignored in this implementation.
     pub version: Option<String>,
+    /// Whether to include interpreter startup `@INC` paths in module resolution.
+    ///
+    /// Enabling this may start a Perl subprocess to probe startup `@INC`. The
+    /// project cannot choose the interpreter or its arguments; those remain
+    /// controlled by user-level settings. Unset means "leave the server default
+    /// unchanged" (the default is `false`).
+    pub use_system_inc: Option<bool>,
     /// Whether to read `PERL5LIB` from the environment and include it in the
     /// module search path.  Unset means "leave the server default unchanged".
     pub use_perl5lib: Option<bool>,
@@ -1412,6 +1419,9 @@ impl ProjectConfig {
         if !self.perl.include_paths.is_empty() {
             config.include_paths = self.perl.include_paths.clone();
         }
+        if let Some(use_system_inc) = self.perl.use_system_inc {
+            config.use_system_inc = use_system_inc;
+        }
         if let Some(use_p5l) = self.perl.use_perl5lib {
             config.use_perl5lib = use_p5l;
         }
@@ -1622,6 +1632,7 @@ mod tests {
             r#"
 [perl]
 include_paths = ["lib", "t/lib"]
+use_system_inc = true
 use_perl5lib = true
 perl5lib_precedence = "prepend"
 
@@ -1651,6 +1662,7 @@ profile = "recommended"
         let config = load_project_config(temp.path())?.ok_or("expected parsed project config")?;
 
         assert_eq!(config.perl.include_paths, vec!["lib", "t/lib"]);
+        assert_eq!(config.perl.use_system_inc, Some(true));
         assert_eq!(config.perl.use_perl5lib, Some(true));
         assert!(matches!(config.perl.perl5lib_precedence, Some(Perl5LibPrecedence::Prepend)));
         assert_eq!(config.diagnostics.perlcritic, Some(true));
@@ -2275,6 +2287,91 @@ profile = "recommended"
 
         assert!(!workspace.use_perl5lib);
         assert!(matches!(workspace.perl5lib_precedence, Perl5LibPrecedence::Append));
+    }
+
+    #[test]
+    fn apply_to_workspace_config_sets_system_inc_when_configured() {
+        let mut workspace = WorkspaceConfig::default();
+        let mut project = ProjectConfig::default();
+
+        project.apply_to_workspace_config(&mut workspace);
+        assert!(!workspace.use_system_inc, "unset project config must leave the default");
+
+        project.perl.use_system_inc = Some(true);
+        project.apply_to_workspace_config(&mut workspace);
+        assert!(workspace.use_system_inc);
+
+        project.perl.use_system_inc = Some(false);
+        project.apply_to_workspace_config(&mut workspace);
+        assert!(!workspace.use_system_inc);
+    }
+
+    #[test]
+    fn workspace_settings_override_project_system_inc_opt_in() {
+        let mut project = ProjectConfig::default();
+        project.perl.use_system_inc = Some(true);
+        let mut workspace = WorkspaceConfig::default();
+
+        project.apply_to_workspace_config(&mut workspace);
+        assert!(workspace.use_system_inc);
+
+        workspace.update_from_value(&serde_json::json!({
+            "workspace": {
+                "useSystemInc": false
+            }
+        }));
+
+        assert!(
+            !workspace.use_system_inc,
+            "editor settings must remain the highest-precedence layer"
+        );
+    }
+
+    /// Regression: project-level `use_system_inc = true` must actually opt the
+    /// lazy startup-`@INC` probe in, but must not let the project choose the
+    /// interpreter or its arguments (the #3729 boundary).
+    #[cfg(unix)]
+    #[test]
+    fn project_config_system_inc_opt_in_probes_inc_without_choosing_interpreter() -> TestResult {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(&workspace)?;
+        let system_inc = temp.path().join("perlbrew-site");
+        std::fs::create_dir_all(&system_inc)?;
+        std::fs::write(
+            workspace.join(".perl-lsp.toml"),
+            r#"
+[perl]
+use_system_inc = true
+perl_path = "/tmp/evil-perl"
+perl_args = ["-e", "exit 1"]
+"#,
+        )?;
+
+        let fake_perl = temp.path().join("fake-perl");
+        std::fs::write(
+            &fake_perl,
+            format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", system_inc.display()),
+        )?;
+        let mut permissions = std::fs::metadata(&fake_perl)?.permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_perl, permissions)?;
+
+        let project = load_project_config(&workspace)?.ok_or("expected project config")?;
+        let mut config = WorkspaceConfig::default();
+        project.apply_to_workspace_config(&mut config);
+
+        assert!(config.use_system_inc);
+        assert!(config.perl_path.is_none(), "project config must not choose the probe interpreter");
+        assert!(config.perl_args.is_empty(), "project config must not choose the probe arguments");
+
+        // Simulate the user-level interpreter setting, then verify the probe
+        // actually runs and uses the project's opt-in.
+        config.perl_path = Some(fake_perl.to_string_lossy().into_owned());
+        assert_eq!(config.get_system_inc().to_vec(), vec![system_inc]);
+        Ok(())
     }
 
     #[test]

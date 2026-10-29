@@ -38,6 +38,16 @@ version = "5.38"
 # Leave empty (or remove this line) to keep built-in defaults: lib, ., local/lib/perl5
 include_paths = ["lib", "local/lib/perl5"]
 
+# Optional: also search the selected interpreter's startup @INC. This is where
+# perlbrew, plenv, and distro-installed non-core modules usually live.
+# Leave unset/false to keep the current include_paths + PERL5LIB behavior.
+# use_system_inc = true
+
+# Optional: read PERL5LIB (default true) and choose whether it is searched
+# before or after include_paths (default "prepend").
+# use_perl5lib = true
+# perl5lib_precedence = "append"
+
 [diagnostics]
 # Critic diagnostics default to the native recommended profile.
 # Set perlcritic = false to disable them.
@@ -444,6 +454,9 @@ Every `.perl-lsp.toml` setting has a VSCode `settings.json` counterpart. The tab
 | `.perl-lsp.toml` | `settings.json` (under `"perl"`) | Notes |
 |---|---|---|
 | `[perl] include_paths = [...]` | `"workspace": {"includePaths": [...]}` | TOML key is `include_paths`, LSP key is `includePaths` |
+| `[perl] use_system_inc = true` | `"workspace": {"useSystemInc": true}` | Opt into interpreter startup `@INC`; editor settings override TOML |
+| `[perl] use_perl5lib = true` | `"workspace": {"usePerl5lib": true}` | TOML key is `use_perl5lib` |
+| `[perl] perl5lib_precedence = "append"` | `"workspace": {"perl5libPrecedence": "append"}` | `prepend` (default) or `append` |
 | `[perl] version = "5.38"` | — | No LSP equivalent yet; TOML only |
 | `[diagnostics] perlcritic = true` | `"perlcritic": {"enabled": true}` | |
 | `[diagnostics] perlcritic_severity = 3` | `"perlcritic": {"severity": 3}` | Note: LSP key is `severity`, not `perlcritic_severity` |
@@ -462,6 +475,8 @@ Every `.perl-lsp.toml` setting has a VSCode `settings.json` counterpart. The tab
     "workspace": {
       "includePaths": ["lib", ".", "local/lib/perl5"],
       "useSystemInc": false,
+      "usePerl5lib": true,
+      "perl5libPrecedence": "prepend",
       "resolutionTimeout": 50
     },
     "inlayHints": {

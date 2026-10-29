@@ -88,6 +88,9 @@ your-project/
 |-----|------|---------|-------------|
 | `include_paths` | `string[]` | `[]` | Additional include paths for module resolution, relative to workspace root. An empty list leaves the built-in defaults (`lib`, `.`, `local/lib/perl5`) unchanged. |
 | `version` | `string` | (none) | Perl version hint, e.g. `"5.38"`. Parsed but not yet wired to diagnostics; reserved for future use. |
+| `use_system_inc` | `boolean` | (unset) | Include the selected interpreter's startup `@INC` paths in module resolution. When unset, the server default (`false`) applies. Enabling this may start a Perl subprocess to probe startup `@INC`; the project cannot choose the interpreter or its arguments. |
+| `use_perl5lib` | `boolean` | (unset) | Read `PERL5LIB` from the environment and merge it into the module search path. When unset, the server default (`true`) applies. |
+| `perl5lib_precedence` | `"prepend"` or `"append"` | (unset) | Place `PERL5LIB` entries before or after `include_paths`. When unset, the server default (`"prepend"`) applies. |
 
 #### `[diagnostics]` — Linting
 
@@ -147,6 +150,16 @@ version = "5.38"
 # Leave empty (or omit this key) to keep the built-in defaults:
 #   lib, ., local/lib/perl5
 include_paths = ["lib", "local/lib/perl5"]
+
+# Include the interpreter's startup @INC in module lookup (default: false).
+# Enabling this may start a Perl subprocess; the interpreter and its arguments
+# remain controlled by user-level settings, not this file.
+# use_system_inc = true
+
+# Read PERL5LIB from the environment (default: true) and choose whether those
+# entries come before or after include_paths (default: "prepend").
+# use_perl5lib = true
+# perl5lib_precedence = "append"
 
 [diagnostics]
 # Critic diagnostics default to native Rust rules. Set false to disable them.

@@ -539,6 +539,8 @@ only, while `usePerl5lib` controls `PERL5LIB`.
 
 **Security Note:** The current directory (`.`) is filtered from system `@INC` to prevent injection attacks. When `usePerl5lib` is `false`, `PERL5LIB` is also stripped from the probe subprocess environment, so disabling `usePerl5lib` truly disables PERL5LIB even when `useSystemInc=true`.
 
+**Project configuration:** `.perl-lsp.toml` can set `use_system_inc`, `use_perl5lib`, and `perl5lib_precedence` under `[perl]`. Editor settings override the project layer.
+
 **Example:**
 
 ```json

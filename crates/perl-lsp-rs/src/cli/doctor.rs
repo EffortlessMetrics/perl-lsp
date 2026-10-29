@@ -1057,6 +1057,18 @@ mod tests {
     }
 
     #[test]
+    fn load_workspace_config_applies_project_system_inc_opt_in() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        std::fs::write(temp.path().join(".perl-lsp.toml"), "[perl]\nuse_system_inc = true\n")?;
+        let mut workspace_config = WorkspaceConfig::default();
+
+        load_workspace_config(temp.path(), &mut workspace_config)?;
+
+        assert!(workspace_config.use_system_inc);
+        Ok(())
+    }
+
+    #[test]
     fn doctor_report_rejects_invalid_project_config() -> TestResult {
         let temp = tempfile::tempdir()?;
         std::fs::write(temp.path().join(".perl-lsp.toml"), "[perl\ninclude_paths = [\"lib\"]")?;

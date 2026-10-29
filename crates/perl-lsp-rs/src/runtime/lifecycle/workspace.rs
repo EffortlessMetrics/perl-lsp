@@ -365,6 +365,54 @@ include_paths = ["other_lib"]
     }
 
     #[test]
+    fn load_and_apply_project_config_applies_system_inc_opt_in_per_folder()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir()?;
+        let opted_in = temp.path().join("opted-in");
+        let opted_out = temp.path().join("opted-out");
+        std::fs::create_dir_all(&opted_in)?;
+        std::fs::create_dir_all(&opted_out)?;
+
+        std::fs::write(opted_in.join(".perl-lsp.toml"), "[perl]\nuse_system_inc = true\n")?;
+
+        let opted_in_uri = url::Url::from_directory_path(&opted_in)
+            .map_err(|()| "failed to create opted-in uri")?
+            .to_string();
+        let opted_out_uri = url::Url::from_directory_path(&opted_out)
+            .map_err(|()| "failed to create opted-out uri")?
+            .to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(opted_in_uri.clone())
+                .with_path(opted_in),
+        );
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(opted_out_uri.clone())
+                .with_path(opted_out),
+        );
+
+        server.load_and_apply_project_config();
+
+        let folders = server.workspace_folders.lock();
+        let opted_in_state =
+            folders.iter().find(|f| f.uri == opted_in_uri).ok_or("missing opted-in folder")?;
+        assert!(
+            opted_in_state.effective_workspace_config.use_system_inc,
+            "project-level use_system_inc must reach the folder's effective config"
+        );
+
+        let opted_out_state =
+            folders.iter().find(|f| f.uri == opted_out_uri).ok_or("missing opted-out folder")?;
+        assert!(
+            !opted_out_state.effective_workspace_config.use_system_inc,
+            "a folder without the key must keep the system @INC default"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn load_and_apply_project_config_handles_missing_config() {
         let server = LspServer::new();
         let temp = tempfile::tempdir().expect("failed to create temp dir");
