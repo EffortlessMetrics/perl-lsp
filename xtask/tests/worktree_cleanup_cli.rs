@@ -192,9 +192,9 @@ fn write_gh_stub_by_state(dir: &Path, open: (i32, &str), merged: (i32, &str)) ->
     let (merged_exit, merged_stdout) = merged;
     let mut body = String::from("#!/bin/sh\ncase \"$*\" in\n  *\"--state merged\"*)\n");
     if !merged_stdout.is_empty() {
-        // Double-quoted: the JSON stub text contains `[`/`{` which a POSIX
-        // shell would otherwise be free to glob-expand or word-split.
-        body.push_str(&format!("    echo \"{merged_stdout}\"\n"));
+        // Preserve JSON quotes and shell metacharacters as literal fixture data.
+        let quoted = merged_stdout.replace('\'', "'\\''");
+        body.push_str(&format!("    printf '%s\\n' '{quoted}'\n"));
     }
     body.push_str(&format!("    exit {merged_exit}\n    ;;\n  *)\n"));
     if !open_stdout.is_empty() {
@@ -206,6 +206,21 @@ fn write_gh_stub_by_state(dir: &Path, open: (i32, &str), merged: (i32, &str)) ->
     perms.set_mode(0o755);
     fs::set_permissions(&path, perms)?;
     Ok(path)
+}
+
+#[cfg(unix)]
+#[test]
+fn merged_pr_stub_preserves_literal_json() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let payload = r#"{"number":99,"headRefOid":"0123456789abcdef","note":"owner's $literal `printf fixture-marker`"}"#;
+    let stub = write_gh_stub_by_state(tmp.path(), (0, ""), (0, payload))?;
+    let output = Command::new(&stub).args(["pr", "list", "--state", "merged"]).output()?;
+    assert!(output.status.success(), "merged fixture query failed");
+    assert_eq!(String::from_utf8(output.stdout)?, format!("{payload}\n"));
+    let open = Command::new(&stub).args(["pr", "list", "--state", "open"]).output()?;
+    assert!(open.status.success());
+    assert!(open.stdout.is_empty(), "open query must keep its separate empty response");
+    Ok(())
 }
 
 /// A `gh` stub that sleeps for `sleep_secs` seconds when invoked with
