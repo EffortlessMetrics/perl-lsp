@@ -29,18 +29,8 @@ fn ci_doctor_exits_zero_in_normal_env() {
     assert!(stdout.contains("ci doctor:"), "expected summary line:\n{stdout}");
 }
 
-/// Verify `cargo xtask ci` (without sub-command) still runs the CI suite.
-/// We just check it emits CI-suite output (format/clippy/tests steps),
-/// not that it passes — that depends on the environment.
-#[test]
-fn ci_subcommand_bare_still_runs_ci_suite() {
-    let mut cmd = cargo_bin_cmd!("xtask");
-    cmd.arg("ci");
-    // Just check it starts and produces output; don't assert success
-    // because the CI suite may take a long time or fail in isolation.
-    let output = cmd.output().expect("failed to spawn xtask ci");
-    let _ = output; // invocation must not panic
-}
+// Bare-ci dispatch is covered in main.rs with an injected suite runner,
+// so these CLI tests never recursively execute the repository's CI suite.
 
 /// Verify `cargo xtask ci doctor --help` shows the doctor description.
 #[test]

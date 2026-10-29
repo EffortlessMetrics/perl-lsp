@@ -3476,13 +3476,17 @@ fn main() -> Result<()> {
 }
 
 fn run_cli(cli: Cli) -> Result<()> {
+    run_cli_with_ci_runner(cli, &mut ci::run)
+}
+
+fn run_cli_with_ci_runner(cli: Cli, run_ci: &mut dyn FnMut() -> Result<()>) -> Result<()> {
     match cli.command {
         Commands::List => {
             print_top_level_commands();
             Ok(())
         }
         Commands::Ci { command } => match command {
-            None => ci::run(),
+            None => run_ci(),
             Some(CiSubcommand::Doctor) => ci_doctor::run(),
             Some(CiSubcommand::Route { base, head, receipt, summary, changed_file }) => {
                 ci_route::run(ci_route::CiRouteArgs {
@@ -4718,6 +4722,31 @@ mod tests {
     use super::*;
 
     type TestResult<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    #[test]
+    fn bare_ci_dispatches_to_suite_once() -> Result<()> {
+        let mut calls = 0;
+        run_cli_with_ci_runner(Cli::try_parse_from(["xtask", "ci"])?, &mut || {
+            calls += 1;
+            Ok(())
+        })?;
+        assert_eq!(calls, 1, "bare ci must invoke the CI suite exactly once");
+        Ok(())
+    }
+
+    #[test]
+    fn bare_ci_propagates_suite_failure() -> Result<()> {
+        let mut calls = 0;
+        let error = run_cli_with_ci_runner(Cli::try_parse_from(["xtask", "ci"])?, &mut || {
+            calls += 1;
+            Err(eyre!("ci-suite-failure-sentinel"))
+        })
+        .err()
+        .ok_or_else(|| eyre!("bare ci must return the suite failure"))?;
+        assert_eq!(calls, 1, "bare ci must invoke the failing CI suite exactly once");
+        assert_eq!(error.to_string(), "ci-suite-failure-sentinel");
+        Ok(())
+    }
 
     fn parse_devex_command(args: &[&str]) -> TestResult<DevexCommand> {
         match Cli::try_parse_from(args)?.command {
