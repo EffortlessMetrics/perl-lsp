@@ -58,12 +58,13 @@ case "$heavy" in
     check_disk "$devplane"
 
     if command -v flock >/dev/null 2>&1; then
-      exec flock -w "${CARGO_LOCK_WAIT:-180}" \
-        "$lock_root/cargo-build.lock" \
-        cargo "$@"
-    else
-      exec cargo "$@"
+      exec {build_lock}>>"$lock_root/cargo-build.lock"
+      flock -w "${CARGO_LOCK_WAIT:-180}" "$build_lock"
+      # Space may have been consumed while this command waited for the lock.
+      # Keep the descriptor open across exec so admission and Cargo stay serialized.
+      check_disk "$devplane"
     fi
+    exec cargo "$@"
     ;;
   *)
     exec cargo "$@"
