@@ -30,6 +30,20 @@
 #
 # include_paths = ["lib", "local/lib/perl5"]
 
+# Include the selected interpreter's startup @INC paths in module lookup
+# (default: false). Enabling this may start a Perl subprocess to probe @INC.
+# The project cannot choose the interpreter or its arguments; those remain
+# controlled by user-level settings.
+#
+# use_system_inc = true
+
+# Read PERL5LIB from the environment and merge it into the module search path
+# (default: true). perl5lib_precedence selects whether those entries come
+# before or after include_paths (default: "prepend").
+#
+# use_perl5lib = true
+# perl5lib_precedence = "append"
+
 # ── [diagnostics] ────────────────────────────────────────────────────────────
 # Linting settings. Critic diagnostics are opt-in. With the default legacy
 # engine they require perlcritic installed; with [critic].engine = "native"

@@ -1478,4 +1478,70 @@ use Overlay::OpenDoc;
 
         Ok(())
     }
+
+    /// End-to-end regression for the `.perl-lsp.toml` opt-in: project config is
+    /// loaded into the folder's effective config, and the resolver then searches
+    /// the interpreter startup `@INC` it opts into.
+    #[cfg(unix)]
+    #[test]
+    fn project_config_system_inc_opt_in_resolves_module_from_startup_inc() -> TestResult {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        fs::create_dir_all(&workspace)?;
+
+        let external_inc = temp.path().join("perlbrew-site");
+        let module_file = external_inc.join("From").join("SystemInc.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing module parent")?)?;
+        fs::write(&module_file, "package From::SystemInc; 1;")?;
+        fs::write(workspace.join(".perl-lsp.toml"), "[perl]\nuse_system_inc = true\n")?;
+
+        let fake_perl = temp.path().join("fake-perl");
+        fs::write(&fake_perl, format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", external_inc.display()))?;
+        let mut permissions = fs::metadata(&fake_perl)?.permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&fake_perl, permissions)?;
+
+        let workspace_uri = Url::from_directory_path(&workspace)
+            .map_err(|()| "failed to create workspace uri")?
+            .to_string();
+        let doc_uri = Url::from_file_path(workspace.join("main.pl"))
+            .map_err(|()| "failed to create doc uri")?
+            .to_string();
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        server
+            .workspace_folders
+            .lock()
+            .push(WorkspaceFolderState::new(workspace_uri).with_path(workspace));
+
+        server.load_and_apply_project_config();
+        {
+            let mut folders = server.workspace_folders.lock();
+            let folder = folders.first_mut().ok_or("expected workspace folder")?;
+            assert!(
+                folder.effective_workspace_config.use_system_inc,
+                "project TOML opt-in must reach the folder's effective config"
+            );
+            // Simulate the user-level interpreter setting; project config must
+            // not be able to choose this itself.
+            folder.effective_workspace_config.perl_path =
+                Some(fake_perl.to_string_lossy().into_owned());
+        }
+
+        let resolved = server.resolve_module_path_with_uri(
+            "From::SystemInc",
+            Some("use From::SystemInc;\n"),
+            Some(&doc_uri),
+        );
+        assert_eq!(
+            resolved,
+            Some(module_file),
+            "project-level use_system_inc should resolve modules from startup @INC"
+        );
+
+        Ok(())
+    }
 }
