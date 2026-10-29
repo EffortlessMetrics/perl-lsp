@@ -1450,6 +1450,14 @@ mod tests {
 
     #[test]
     fn gather_shadow_refs_on_a_genuine_git_failure_reports_error_not_empty() -> Result<()> {
+        crate::git_fixture::run_isolated_test(
+            module_path!(),
+            "gather_shadow_refs_on_a_genuine_git_failure_reports_error_not_empty",
+            gather_shadow_refs_on_a_genuine_git_failure_reports_error_not_empty_fixture,
+        )
+    }
+
+    fn gather_shadow_refs_on_a_genuine_git_failure_reports_error_not_empty_fixture() -> Result<()> {
         // The actual live-gathering bug: `git for-each-ref` exits 0 with
         // empty stdout when nothing matches (a legitimate absence), so a
         // NON-zero exit means something is genuinely wrong (here: not a
