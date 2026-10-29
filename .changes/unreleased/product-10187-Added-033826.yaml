@@ -1,0 +1,13 @@
+project: product
+component: Developer experience
+kind: Added
+body: >-
+  `.perl-lsp.toml` now supports `[perl] use_system_inc = true` to opt into
+  interpreter startup `@INC` for module resolution without hardcoding
+  perlbrew/plenv/distro module paths. Editor settings still override the
+  project layer, and project config still cannot choose the Perl interpreter.
+time: 2026-10-29T03:38:26Z
+custom:
+  PR: "10187"
+  Slug: project-config-use-system-inc
+  Breaking: "no"
