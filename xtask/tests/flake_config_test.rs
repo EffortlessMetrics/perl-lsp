@@ -1,10 +1,10 @@
 //! Tests to verify flake.nix configuration is correct.
 //!
 //! These tests verify the acceptance criteria from work-24c7cfb5:
-//! - AC-1: Version field matches CLAUDE.md (should be 0.12.4)
+//! - AC-1: Version field matches the workspace package version
 //! - AC-2: Perl is available in nix develop shells
 //!
-//! These tests are designed to FAIL until the flake.nix is fixed.
+//! The workspace manifest is the version authority for the packaged source.
 
 use std::fs;
 use std::path::Path;
@@ -12,7 +12,7 @@ use std::path::Path;
 /// Extracts the version from packages.perl-lsp derivation in flake.nix.
 ///
 /// The version field is on a line like:
-///   version = "0.12.3";  # Keep in sync with CLAUDE.md
+///   version = "0.17.0";
 fn extract_perl_lsp_version(flake_content: &str) -> Option<String> {
     // Find the packages.perl-lsp section and then the version line
     // Look for the pattern: version = "X.Y.Z";
@@ -82,60 +82,72 @@ fn check_perl_in_build_inputs(flake_content: &str) -> bool {
     false
 }
 
-/// Extracts the Latest Release version from CLAUDE.md.
-///
-/// The version is on a line like:
-///   **Latest Release**: 0.12.4 | **Metrics**: ...
-fn extract_latest_release_from_claude_md(claude_content: &str) -> Option<String> {
-    for line in claude_content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("**Latest Release**:") {
-            // Extract version from "**Latest Release**: 0.12.4 | ..."
-            if let Some(start) = trimmed.find("**Latest Release**:") {
-                let after_label = &trimmed[start + 19..].trim();
-                if let Some(end) = after_label.find('|') {
-                    let version = after_label[..end].trim().to_string();
-                    return Some(version);
-                } else if let Some(end) = after_label.find(' ') {
-                    let version = after_label[..end].trim().to_string();
-                    return Some(version);
-                } else {
-                    return Some(after_label.to_string());
-                }
-            }
-        }
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+fn verify_flake_workspace_version(flake: &str, manifest: &str) -> TestResult {
+    let flake_version = extract_perl_lsp_version(flake)
+        .filter(|version| !version.is_empty())
+        .ok_or("packages.perl-lsp.version should be found in flake.nix")?;
+    let manifest: toml::Value = toml::from_str(manifest)?;
+    let workspace_version = manifest
+        .get("workspace")
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(|package| package.get("version"))
+        .and_then(toml::Value::as_str)
+        .filter(|version| !version.is_empty())
+        .ok_or("workspace.package.version must be a nonempty string")?;
+    if flake_version != workspace_version {
+        return Err(format!(
+            "flake package version {flake_version} differs from workspace version {workspace_version}"
+        )
+        .into());
     }
-    None
+    Ok(())
 }
 
 #[test]
-fn test_flake_version_matches_claude_md() {
-    // AC-1: Version field matches CLAUDE.md
-    //
-    // This test verifies that packages.perl-lsp.version in flake.nix
-    // matches the "Latest Release" declared in CLAUDE.md.
+fn test_flake_version_matches_workspace_manifest() -> TestResult {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("xtask manifest must be nested under the repository root")?;
+    verify_flake_workspace_version(
+        &fs::read_to_string(repo_root.join("flake.nix"))?,
+        &fs::read_to_string(repo_root.join("Cargo.toml"))?,
+    )
+}
 
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let flake_path = repo_root.join("flake.nix");
-    let claude_path = repo_root.join("CLAUDE.md");
+#[test]
+fn flake_version_comparison_uses_workspace_authority_and_rejects_mismatch() -> TestResult {
+    let manifest = "version = \"9.9.9\"\n[workspace.package]\nversion = \"1.2.3\"\n";
+    verify_flake_workspace_version("version = \"1.2.3\";", manifest)?;
+    let error = verify_flake_workspace_version("version = \"9.9.9\";", manifest)
+        .err()
+        .ok_or("mismatching flake version must be rejected")?;
+    assert!(error.to_string().contains("9.9.9 differs from workspace version 1.2.3"));
+    Ok(())
+}
 
-    let flake_content =
-        fs::read_to_string(&flake_path).expect("flake.nix should exist and be readable");
-
-    let claude_content =
-        fs::read_to_string(&claude_path).expect("CLAUDE.md should exist and be readable");
-
-    let flake_version = extract_perl_lsp_version(&flake_content)
-        .expect("packages.perl-lsp.version should be found in flake.nix");
-
-    let latest_release = extract_latest_release_from_claude_md(&claude_content)
-        .expect("Latest Release should be found in CLAUDE.md line 3");
-
-    assert_eq!(
-        flake_version, latest_release,
-        "packages.perl-lsp version in flake.nix ({}) should match Latest Release in CLAUDE.md ({})",
-        flake_version, latest_release
-    );
+#[test]
+fn flake_version_comparison_rejects_missing_or_invalid_versions() {
+    for manifest in [
+        "not valid TOML [",
+        "version = \"1.2.3\"",
+        "[workspace.package]",
+        "[workspace.package]\nversion = 123",
+        "[workspace.package]\nversion = \"\"",
+    ] {
+        assert!(
+            verify_flake_workspace_version("version = \"1.2.3\";", manifest).is_err(),
+            "invalid workspace version accepted: {manifest}"
+        );
+    }
+    for flake in ["", "version = \"\";"] {
+        assert!(
+            verify_flake_workspace_version(flake, "[workspace.package]\nversion = \"1.2.3\"")
+                .is_err(),
+            "missing flake version accepted"
+        );
+    }
 }
 
 #[test]
