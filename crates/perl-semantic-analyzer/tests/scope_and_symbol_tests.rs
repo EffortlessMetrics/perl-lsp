@@ -4417,6 +4417,27 @@ print nested_func();
 }
 
 #[test]
+fn strict_subs_no_false_positive_on_fat_comma_bare_call_arg()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+sub signature_for { }
+signature_for execute => ( method => 1 );
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|issue| matches!(issue.kind, IssueKind::UnquotedBareword)
+            && issue.variable_name == "execute"),
+        "fat-arrow key in an unparenthesized call must not be flagged as a bareword; got: {:?}",
+        issues
+            .iter()
+            .filter(|issue| matches!(issue.kind, IssueKind::UnquotedBareword))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
 fn strict_subs_no_false_positive_on_arrow_deref_hash_key() -> Result<(), Box<dyn std::error::Error>>
 {
     let code = r#"

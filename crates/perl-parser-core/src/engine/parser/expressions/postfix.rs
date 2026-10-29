@@ -1181,6 +1181,15 @@ impl<'a> Parser<'a> {
                                             break;
                                         }
 
+                                        // A bareword immediately before `=>` is a
+                                        // hash key, even in an unparenthesized call:
+                                        // `signature_for execute => (...)`.
+                                        if self.peek_kind() == Some(TokenKind::FatArrow) {
+                                            if let Some(last) = args.last_mut() {
+                                                Self::autoquote_fat_arrow_key(last);
+                                            }
+                                        }
+
                                         self.consume_token()?;
                                         if self.is_at_statement_end() {
                                             break;
