@@ -370,11 +370,12 @@ fn quality_gate_cli_new_ripr_exception_policy_action_uses_new_ripr_mode_commands
     write_ripr_pr_receipt(&ripr_pr, &head, 0)?;
     write_empty_review_guidance_receipt(&review, &head)?;
 
-    let output =
-        new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
-            .arg("--exception-policy")
-            .arg(&missing_policy)
-            .output()?;
+    let output = new_ripr_quality_gate_command_without_policy(
+        &root, &ripr, &ripr_pr, &review, &receipt, &summary,
+    )?
+    .arg("--exception-policy")
+    .arg(&missing_policy)
+    .output()?;
     assert!(!output.status.success(), "missing exception policy must fail new-RIPR mode");
 
     let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
@@ -412,11 +413,12 @@ fn quality_gate_cli_new_ripr_invalid_exception_action_uses_new_ripr_mode_command
     write_empty_review_guidance_receipt(&review, &head)?;
     write_invalid_exception_policy(&policy)?;
 
-    let output =
-        new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
-            .arg("--exception-policy")
-            .arg(&policy)
-            .output()?;
+    let output = new_ripr_quality_gate_command_without_policy(
+        &root, &ripr, &ripr_pr, &review, &receipt, &summary,
+    )?
+    .arg("--exception-policy")
+    .arg(&policy)
+    .output()?;
     assert!(!output.status.success(), "invalid exception policy must fail new-RIPR mode");
 
     let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
@@ -811,6 +813,36 @@ fn quality_gate_cli_blocks_new_ripr_when_review_guidance_is_not_actionable() -> 
 }
 
 fn new_ripr_quality_gate_command(
+    root: &Path,
+    ripr: &Path,
+    ripr_pr: &Path,
+    review: &Path,
+    receipt: &Path,
+    summary: &Path,
+) -> TestResult<Command> {
+    // Synthetic RIPR cases must not inherit the live debt ledger's expiry.
+    let policy = receipt.with_extension("exceptions.toml");
+    fs::write(
+        &policy,
+        r#"schema_version = 1
+policy = "quality-gate-exceptions"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-28"
+due_review = "fail"
+
+[requirements]
+required_active = []
+"#,
+    )?;
+    let mut command = new_ripr_quality_gate_command_without_policy(
+        root, ripr, ripr_pr, review, receipt, summary,
+    )?;
+    command.arg("--exception-policy").arg(policy);
+    Ok(command)
+}
+
+fn new_ripr_quality_gate_command_without_policy(
     root: &Path,
     ripr: &Path,
     ripr_pr: &Path,
