@@ -34,6 +34,7 @@ check_disk() {
   fi
 }
 
+export DEVPLANE="$devplane"
 export CARGO_HOME="${CARGO_HOME:-$devplane/cargo-home}"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$devplane/target}"
 export CARGO_BUILD_BUILD_DIR="${CARGO_BUILD_BUILD_DIR:-$devplane/build}"

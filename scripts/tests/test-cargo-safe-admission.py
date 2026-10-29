@@ -69,7 +69,7 @@ with (Path(os.environ["DEVPLANE"]) / "locks/cargo-build.lock").open("a") as lock
     except BlockingIOError:
         held = True
 record = {"args": sys.argv[1:], "lock_held": held, "env": {
-    key: os.environ.get(key) for key in ["CARGO_HOME", "CARGO_TARGET_DIR",
+    key: os.environ.get(key) for key in ["DEVPLANE", "CARGO_HOME", "CARGO_TARGET_DIR",
     "CARGO_BUILD_BUILD_DIR", "CARGO_INCREMENTAL", "CARGO_BUILD_JOBS", "TMPDIR"]}}
 (root / "cargo.json").write_text(json.dumps(record))
 sys.exit(int(os.environ["CARGO_SAFE_TEST_STATUS"]))
@@ -128,6 +128,17 @@ sys.exit(int(os.environ["CARGO_SAFE_TEST_STATUS"]))
                     os.killpg(child.pid, signal.SIGKILL)
                     child.communicate(timeout=5)
 
+    def test_exports_computed_default_devplane_without_caller_variable(self):
+        del self.env["DEVPLANE"]
+        computed = self.root / "cache" / "devplane" / self.root.name
+        self.env["XDG_CACHE_HOME"] = str(self.root / "cache")
+        result = self.run_wrapper("check")
+        self.assertEqual(result.returncode, 17, result.stderr)
+        record = json.loads((self.root / "cargo.json").read_text())
+        self.assertEqual(record["env"]["DEVPLANE"], str(computed))
+        self.assertEqual(record["env"]["CARGO_TARGET_DIR"], str(computed / "target"))
+        self.assertTrue(record["lock_held"])
+
     def test_rechecks_free_space_after_waiting_for_lock(self):
         code, _, stderr = self.contended_run({"available_kb": 20 * GIB_KB - 1}, "test", "--locked")
         self.assertEqual(code, 75, stderr)
@@ -142,6 +153,7 @@ sys.exit(int(os.environ["CARGO_SAFE_TEST_STATUS"]))
 
     def test_post_lock_success_preserves_arguments_environment_status_and_lock(self):
         overrides = {
+            "DEVPLANE": str(self.devplane),
             "CARGO_HOME": str(self.root / "custom home"),
             "CARGO_TARGET_DIR": str(self.root / "custom target"),
             "CARGO_BUILD_BUILD_DIR": str(self.root / "custom build"),

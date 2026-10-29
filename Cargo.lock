@@ -3976,6 +3976,7 @@ dependencies = [
  "flate2",
  "glob",
  "indicatif",
+ "libc",
  "notify",
  "perl-ci-hygiene",
  "perl-core-harness",

@@ -39,6 +39,8 @@ use crate::utils::project_root;
 
 mod first_failure;
 mod planning_types;
+#[cfg(target_os = "linux")]
+mod storage;
 
 pub use first_failure::{is_cargo_test_command, parse_first_failure};
 
@@ -673,7 +675,11 @@ pub fn run(config: GateRunnerConfig) -> Result<()> {
         let baseline = load_receipt(baseline_path)?;
         let current = run_gate_plan(&plan, &policy, &config)?;
         let diff = compare_receipts(&baseline, &current)?;
-        return output_diff(&diff, &config);
+        output_diff(&diff, &config)?;
+        if current.gates.iter().any(is_guard_failure) {
+            bail!("Gate supervision failed; diff is incomplete");
+        }
+        return Ok(());
     }
 
     // Run gates
@@ -1427,7 +1433,7 @@ fn run_gate_plan(
         tier_summary.duration_ms += result.duration_ms;
         match result.status.as_str() {
             "pass" => tier_summary.passed += 1,
-            "fail" => tier_summary.failed += 1,
+            "fail" | "timeout" | "error" => tier_summary.failed += 1,
             "skip" => tier_summary.skipped += 1,
             _ => {}
         }
@@ -1447,6 +1453,35 @@ fn run_gate_plan(
                 gate.name,
                 result.duration_ms as f64 / 1000.0
             ));
+        }
+
+        // Storage failure is environmental, including for an optional gate. Do
+        // not launch more writers merely because --fail-fast was not requested.
+        if is_guard_failure(&result) {
+            results.push(result);
+            for pending in plan.selected.iter().skip(idx + 1) {
+                let gate = &pending.gate;
+                let tier = tier_summaries.entry(gate.tier.clone()).or_default();
+                tier.total += 1;
+                tier.skipped += 1;
+                results.push(GateResult {
+                    gate_name: gate.name.clone(),
+                    tier: gate.tier.clone(),
+                    status: "skip".to_owned(),
+                    required: Some(gate.required),
+                    duration_ms: 0,
+                    command: gate.command.clone(),
+                    exit_code: None,
+                    output_summary: Some(
+                        "NOT RUN: earlier gate supervision failed; inspect its error".to_owned(),
+                    ),
+                    log_path: None,
+                    metrics: None,
+                    artifacts: None,
+                    first_failure: None,
+                });
+            }
+            break;
         }
 
         // Check for fail-fast
@@ -1654,7 +1689,10 @@ fn agent_plan_receipt(plan: &GatePlan) -> AgentPlanReceipt {
 fn failure_guidance(results: &[GateResult]) -> (Vec<AgentFailure>, Vec<String>) {
     let failures: Vec<AgentFailure> = results
         .iter()
-        .filter(|result| is_blocking_gate_status(&result.status) && result.required.unwrap_or(true))
+        .filter(|result| {
+            is_guard_failure(result)
+                || (is_blocking_gate_status(&result.status) && result.required.unwrap_or(true))
+        })
         .map(|result| {
             let base_summary =
                 format!("Gate '{}' ended with status '{}'", result.gate_name, result.status);
@@ -1932,20 +1970,6 @@ fn run_single_gate(
     }
 
     if command
-        == "cargo build --release -p perl-lsp-rs --bin perl-lsp --locked && cargo xtask smoke inline-completion --binary target/release/perl-lsp"
-    {
-        return run_internal_xtask_gate(gate, &log_path, command, start, || {
-            cmd(
-                "cargo",
-                ["build", "--release", "-p", "perl-lsp-rs", "--bin", "perl-lsp", "--locked"],
-            )
-            .run()
-            .context("Failed to build release perl-lsp binary for inline-completion smoke")?;
-            super::inline_completion_smoke::run(PathBuf::from("target/release/perl-lsp"))
-        });
-    }
-
-    if command
         == "cargo xtask inline-completion-quality --receipt target/receipts/inline-completion-quality.json"
     {
         return run_internal_xtask_gate(gate, &log_path, command, start, || {
@@ -1970,12 +1994,18 @@ fn run_single_gate(
         });
     }
 
-    let execution = run_shell_command_with_timeout(command, &log_path, timeout_secs);
+    let receipt_path = config
+        .receipt_path
+        .clone()
+        .unwrap_or_else(|| log_dir.parent().unwrap_or(log_dir).join("receipt.json"));
+    let execution = run_shell_command_with_receipt(command, &log_path, timeout_secs, &receipt_path);
     let duration_ms = start.elapsed().as_millis() as u64;
 
     match execution {
         Ok(execution) => {
-            let status = if execution.timed_out {
+            let status = if execution.supervision_error {
+                "error".to_string()
+            } else if execution.timed_out {
                 "timeout".to_string()
             } else if execution.exit_code == 0 {
                 "pass".to_string()
@@ -2043,6 +2073,7 @@ struct ShellExecutionResult {
     stdout: String,
     exit_code: i32,
     timed_out: bool,
+    supervision_error: bool,
 }
 
 const MAX_GATE_OUTPUT_BYTES: u64 = 4 * 1024 * 1024;
@@ -2053,17 +2084,26 @@ fn is_cargo_package_context_variable(name: &std::ffi::OsStr, case_insensitive: b
     name == "CARGO_MANIFEST_DIR" || name == "CARGO_MANIFEST_PATH" || name.starts_with("CARGO_PKG_")
 }
 
+#[cfg(test)]
 fn run_shell_command_with_timeout(
     command: &str,
     log_path: &Path,
     timeout_secs: u64,
 ) -> Result<ShellExecutionResult> {
-    let log_file = fs::File::create(log_path)
-        .with_context(|| format!("Failed to create log file: {}", log_path.display()))?;
-    let log_file_err = log_file
-        .try_clone()
-        .with_context(|| format!("Failed to clone log file handle: {}", log_path.display()))?;
+    run_shell_command_with_receipt(
+        command,
+        log_path,
+        timeout_secs,
+        &log_path.with_extension("receipt.json"),
+    )
+}
 
+fn run_shell_command_with_receipt(
+    command: &str,
+    log_path: &Path,
+    timeout_secs: u64,
+    _receipt_path: &Path,
+) -> Result<ShellExecutionResult> {
     let mut command_process = shell_command_process(command, timeout_secs);
     // Cargo injects the runner's package metadata when launching `cargo run`.
     // Passing it into nested Cargo changes build-script fingerprints (notably
@@ -2075,6 +2115,50 @@ fn run_shell_command_with_timeout(
             command_process.env_remove(key);
         }
     }
+    #[cfg(target_os = "linux")]
+    {
+        let guarded =
+            storage::Policy::from_environment(log_path, _receipt_path).and_then(|policy| {
+                policy
+                    .map(|policy| {
+                        storage::run(
+                            &mut command_process,
+                            command,
+                            log_path,
+                            _receipt_path,
+                            shell_command_watchdog_timeout(timeout_secs),
+                            &policy,
+                        )
+                    })
+                    .transpose()
+            });
+        match guarded {
+            Ok(Some(result)) => {
+                return Ok(ShellExecutionResult {
+                    stdout: result.output,
+                    exit_code: result.exit_code,
+                    timed_out: result.timed_out,
+                    supervision_error: result.supervision_error,
+                });
+            }
+            // Fail closed before spawn if routing, probing or reserve allocation
+            // fails. No emergency-file durability is claimed for setup failure.
+            Err(error) => {
+                return Ok(ShellExecutionResult {
+                    stdout: format!("Storage guard setup failed; command not completed: {error:#}"),
+                    exit_code: 75,
+                    timed_out: false,
+                    supervision_error: true,
+                });
+            }
+            Ok(None) => {}
+        }
+    }
+    let log_file = fs::File::create(log_path)
+        .with_context(|| format!("Failed to create log file: {}", log_path.display()))?;
+    let log_file_err = log_file
+        .try_clone()
+        .with_context(|| format!("Failed to clone log file handle: {}", log_path.display()))?;
     let mut child = command_process
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_file_err))
@@ -2120,7 +2204,7 @@ fn run_shell_command_with_timeout(
 
     let stdout = read_gate_output(log_path);
 
-    Ok(ShellExecutionResult { stdout, exit_code, timed_out })
+    Ok(ShellExecutionResult { stdout, exit_code, timed_out, supervision_error: false })
 }
 
 fn read_gate_output(log_path: &Path) -> String {
@@ -2903,10 +2987,17 @@ fn is_blocking_gate_status(status: &str) -> bool {
     matches!(status, "fail" | "timeout" | "error")
 }
 
+fn is_guard_failure(result: &GateResult) -> bool {
+    result.status == "error" && matches!(result.exit_code, Some(70 | 75))
+}
+
 fn blocking_failure_gate_names(results: &[GateResult]) -> Vec<String> {
     results
         .iter()
-        .filter(|result| result.required.unwrap_or(true) && is_blocking_gate_status(&result.status))
+        .filter(|result| {
+            is_guard_failure(result)
+                || (result.required.unwrap_or(true) && is_blocking_gate_status(&result.status))
+        })
         .map(|result| result.gate_name.clone())
         .collect()
 }
@@ -4594,6 +4685,155 @@ printf 'gate-context-preserved\n'"#,
         assert!(is_blocking_gate_status("error"));
         assert!(!is_blocking_gate_status("pass"));
         assert!(!is_blocking_gate_status("skip"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn storage_guard_optional_failure_stops_plan_and_diff_remains_non_green()
+    -> color_eyre::eyre::Result<()> {
+        const CHILD: &str = "XTASK_STORAGE_PLAN_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let temp = tempdir()?;
+            let mut first = pr_gate(
+                "storage_optional_fixture",
+                GatePlanningRole::Static,
+                "printf started > \"$XTASK_STORAGE_START\"",
+            );
+            first.required = false;
+            let second = pr_gate(
+                "storage_later_fixture",
+                GatePlanningRole::Static,
+                "printf later > \"$XTASK_STORAGE_START\"",
+            );
+            let policy = policy_with_gates(vec![first, second]);
+            let config = GateRunnerConfig {
+                tier: GateTier::PrFast,
+                fail_fast: false,
+                output_format: OutputFormat::Json,
+                receipt_path: Some(temp.path().join("receipt.json")),
+                ..GateRunnerConfig::default()
+            };
+            let plan =
+                static_gate_plan(GateTier::PrFast, "HEAD".to_owned(), policy.gates.clone(), None);
+            let receipt = super::run_gate_plan(&plan, &policy, &config)?;
+            assert_eq!(receipt.summary.overall_status, "fail");
+            assert_eq!(receipt.gates.len(), 2);
+            assert_eq!(receipt.gates[0].status, "error");
+            assert_eq!(receipt.gates[0].exit_code, Some(75));
+            assert_eq!(receipt.gates[0].required, Some(false));
+            assert_eq!(receipt.gates[1].status, "skip");
+            assert!(
+                receipt.gates[1].output_summary.as_deref().is_some_and(|s| s.contains("NOT RUN"))
+            );
+            assert!(
+                !std::path::PathBuf::from(
+                    std::env::var_os("XTASK_STORAGE_START")
+                        .ok_or_else(|| color_eyre::eyre::eyre!("missing fixture marker"))?
+                )
+                .exists()
+            );
+            let agent = receipt
+                .agent_receipt
+                .as_ref()
+                .ok_or_else(|| color_eyre::eyre::eyre!("missing agent receipt"))?;
+            assert_eq!(agent.failures.len(), 1);
+            assert!(
+                !agent
+                    .suggested_next_actions
+                    .iter()
+                    .any(|action| action.contains("No blocking failures"))
+            );
+            let tiers = receipt
+                .summary
+                .tier_results
+                .as_ref()
+                .ok_or_else(|| color_eyre::eyre::eyre!("missing tiers"))?;
+            assert_eq!(tiers["pr_fast"].failed, 1);
+            let baseline = temp.path().join("baseline.json");
+            write_receipt(&receipt, &baseline)?;
+            // Drive the actual --diff execution path against one existing,
+            // read-only shell gate. The impossible fixture floor prevents spawn.
+            let result = super::run(GateRunnerConfig {
+                gate_filter: Some("readme_heading_check".to_owned()),
+                diff_baseline: Some(baseline),
+                ..config
+            });
+            assert!(result.is_err());
+            assert!(result.err().is_some_and(|e| e.to_string().contains("diff is incomplete")));
+            return Ok(());
+        }
+        let temp = tempdir()?;
+        let mut child = Command::new(std::env::current_exe()?);
+        child.args(["--exact", "tasks::gates::tests::storage_guard_optional_failure_stops_plan_and_diff_remains_non_green", "--nocapture"])
+            .env(CHILD, "1").env("MIN_FREE_GB", "999999").env("MAX_USED_PCT", "95")
+            .env("XTASK_STORAGE_START", temp.path().join("must-not-exist"));
+        for key in ["DEVPLANE", "CARGO_HOME", "CARGO_TARGET_DIR", "CARGO_BUILD_BUILD_DIR"] {
+            child.env(key, temp.path());
+        }
+        child.env_remove("SCCACHE_DIR");
+        let result = child.output()?;
+        assert!(
+            result.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(String::from_utf8_lossy(&result.stdout).contains("test result: ok. 1 passed;"));
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn storage_guard_release_build_uses_watched_shell_without_recursive_build()
+    -> color_eyre::eyre::Result<()> {
+        const CHILD: &str = "XTASK_STORAGE_RELEASE_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let temp = tempdir()?;
+            let command = "cargo build --release -p perl-lsp-rs --bin perl-lsp --locked && cargo xtask smoke inline-completion --binary target/release/perl-lsp";
+            let gate = pr_gate("storage_release_fixture", GatePlanningRole::Static, command);
+            let policy = policy_with_gates(vec![gate.clone()]);
+            let result =
+                run_single_gate(&gate, &policy, temp.path(), &GateRunnerConfig::default(), None)?;
+            assert_eq!(result.status, "pass", "{:?}", result.output_summary);
+            assert_eq!(
+                result.exit_code,
+                Some(0),
+                "must execute watched shell, not internal shortcut"
+            );
+            let recorded = fs::read_to_string(
+                std::env::var_os("XTASK_STORAGE_COMMANDS")
+                    .ok_or_else(|| color_eyre::eyre::eyre!("missing command log"))?,
+            )?;
+            assert_eq!(
+                recorded.lines().collect::<Vec<_>>(),
+                vec![
+                    "build --release -p perl-lsp-rs --bin perl-lsp --locked",
+                    "xtask smoke inline-completion --binary target/release/perl-lsp"
+                ]
+            );
+            return Ok(());
+        }
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempdir()?;
+        let cargo = temp.path().join("cargo");
+        fs::write(&cargo, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$XTASK_STORAGE_COMMANDS\"\n")?;
+        fs::set_permissions(&cargo, fs::Permissions::from_mode(0o700))?;
+        let startup = temp.path().join("startup.sh");
+        fs::write(&startup, "export PATH=\"$XTASK_STORAGE_BIN:$PATH\"\n")?;
+        let result = Command::new(std::env::current_exe()?)
+            .args(["--exact", "tasks::gates::tests::storage_guard_release_build_uses_watched_shell_without_recursive_build", "--nocapture"])
+            .env(CHILD, "1").env("BASH_ENV", startup)
+            .env("XTASK_STORAGE_BIN", temp.path())
+            .env("XTASK_STORAGE_COMMANDS", temp.path().join("commands"))
+            .output()?;
+        assert!(
+            result.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(String::from_utf8_lossy(&result.stdout).contains("test result: ok. 1 passed;"));
+        Ok(())
     }
 
     #[test]
