@@ -313,9 +313,26 @@ fn patch_quality_gate_command(
     summary: &Path,
     patch: Option<f64>,
 ) -> TestResult<Command> {
+    // These synthetic coverage cases must not depend on the live debt ledger's expiry.
+    // Keep the policy beside the receipt in the caller's live temporary directory.
+    let policy = receipt.with_extension("exceptions.toml");
+    fs::write(
+        &policy,
+        r#"schema_version = 1
+policy = "quality-gate-exceptions"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-28"
+due_review = "fail"
+
+[requirements]
+required_active = []
+"#,
+    )?;
     let mut command = Command::cargo_bin("xtask")?;
     command.current_dir(root).args(["quality-gate", "--mode", "enforce-patch-coverage"]);
     command.arg("--coverage-receipt").arg(coverage);
+    command.arg("--exception-policy").arg(policy);
     command.args(["--codecov", "codecov.yml"]);
     command.arg("--receipt").arg(receipt);
     command.arg("--summary").arg(summary);

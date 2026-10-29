@@ -475,7 +475,24 @@ fn patch_quality_gate_command(
 ) -> TestResult<Command> {
     let mut command = Command::cargo_bin("xtask")?;
     command.current_dir(root).args(["quality-gate", "--mode", "enforce-patch-coverage"]);
+    // Coverage assertions use a synthetic policy, independent of the live debt ledger.
+    // Reuse this path for --check while the caller's temporary directory is alive.
+    let policy = receipt.with_extension("exceptions.toml");
+    fs::write(
+        &policy,
+        r#"schema_version = 1
+policy = "quality-gate-exceptions"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-28"
+due_review = "fail"
+
+[requirements]
+required_active = []
+"#,
+    )?;
     command.arg("--coverage-receipt").arg(coverage);
+    command.arg("--exception-policy").arg(policy);
     command.args(["--codecov", "codecov.yml"]);
     command.arg("--receipt").arg(receipt);
     command.arg("--summary").arg(summary);
