@@ -24,7 +24,7 @@
 
 mod support;
 
-use serde_json::json;
+use serde_json::{Value, json};
 use support::lsp_harness::LspHarness;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -107,8 +107,9 @@ fn test_def_sub_call_resolves_to_declaration() -> TestResult {
     // Line 2: foo();
     let doc = "sub foo { }\n\nfoo();\n";
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///def_sub.pl", doc)?;
 
     // Position on the `foo` call -- line 2, character 0.
@@ -153,8 +154,9 @@ fn test_def_sub_declaration_precedes_call_site() -> TestResult {
         "my $v = compute();\n"  // 7
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///def_sub2.pl", doc)?;
 
     // Position on `compute` in `compute()` on line 7.
@@ -195,8 +197,9 @@ fn test_def_variable_resolves_to_my_declaration() -> TestResult {
     // Line 1: print $greeting;
     let doc = "my $greeting = \"hello\";\nprint $greeting;\n";
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///def_var.pl", doc)?;
 
     // Position on `$greeting` in `print $greeting;` -- line 1, character 6.
@@ -234,8 +237,9 @@ fn test_def_variable_mid_file_declaration() -> TestResult {
         "print $target * 2;\n",    // 4
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///def_var2.pl", doc)?;
 
     // Position on `$target` in `print $target;` -- line 3, character 6.
@@ -272,8 +276,9 @@ fn test_def_variable_mid_file_declaration() -> TestResult {
 fn test_def_use_parent_does_not_error() -> TestResult {
     let doc = "package Child;\nuse parent 'Base';\n1;\n";
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///use_parent.pl", doc)?;
 
     // Position on `Base` in `use parent 'Base'` -- line 1.
@@ -313,8 +318,9 @@ fn test_def_use_parent_does_not_error() -> TestResult {
 fn test_def_after_multibyte_prefix_does_not_error() -> TestResult {
     let doc = format!("{}{}\nsub foo {{}}\nfoo();\n", "🦀", "x".repeat(48));
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///def_utf8_window.pl", &doc)?;
 
     let result = harness.request(
@@ -359,8 +365,9 @@ fn test_def_package_qualified_call() -> TestResult {
         "my $r = Foo::bar();\n", // 8
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///pkg_qual.pl", doc)?;
 
     // Position on `bar` (character 13) inside `Foo::bar()` on line 8.
@@ -408,8 +415,9 @@ fn test_def_package_qualified_prefix_returns_no_sub() -> TestResult {
         "my $r = Foo::bar();\n", // 8
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///pkg_qual_prefix.pl", doc)?;
 
     // Cursor on `F` (character 8) — the start of the `Foo` prefix component.
@@ -474,8 +482,9 @@ fn test_def_package_qualified_separator_returns_no_sub() -> TestResult {
         "my $r = Foo::bar();\n", // 8
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///pkg_qual_sep.pl", doc)?;
 
     // Cursor on the first `:` of `::` (character 11).
@@ -517,8 +526,9 @@ fn test_def_three_component_qualified_middle_prefix() -> TestResult {
         "My::Utils::process();\n", // 8
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///three_component.pl", doc)?;
 
     // Line 8: `My::Utils::process();`
@@ -590,8 +600,9 @@ fn test_refs_variable_all_uses_counted() -> TestResult {
     );
     let min_expected = doc.matches("$item").count(); // 5
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///refs_var.pl", doc)?;
 
     // Position on `$item` declaration -- line 0, character 3.
@@ -648,8 +659,9 @@ fn test_refs_variable_returns_valid_locations_with_sibling_sigils() -> TestResul
         "print $data;\n",         // 3 -- $data usage
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///refs_sigil.pl", doc)?;
 
     // Position on `$data` declaration -- line 0, character 3.
@@ -707,8 +719,9 @@ fn test_refs_sub_all_call_sites_covered() -> TestResult {
     );
     let min_expected = doc.matches("greet").count(); // 4
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///refs_sub.pl", doc)?;
 
     // Position on `greet` in the declaration -- line 0, character 4.
@@ -759,8 +772,9 @@ fn test_refs_sub_no_prefix_contamination() -> TestResult {
         "check();\n",            // 4
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///refs_prefix.pl", doc)?;
 
     // Position on `check` in the `check` declaration -- line 0, character 4.
@@ -823,69 +837,54 @@ fn test_refs_scope_returns_valid_response_for_nested_scopes() -> TestResult {
         "}\n",                   // 7
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///refs_scope.pl", doc)?;
 
     // Query from if-block `$x` -- line 2, character 7.
-    let if_result = harness
-        .request(
-            "textDocument/references",
-            json!({
-                "textDocument": {"uri": "file:///refs_scope.pl"},
-                "position": {"line": 2, "character": 7},
-                "context": {"includeDeclaration": true}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let if_result = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": {"uri": "file:///refs_scope.pl"},
+            "position": {"line": 2, "character": 7},
+            "context": {"includeDeclaration": true}
+        }),
+    )?;
 
     // Query from else-block `$x` -- line 5, character 7.
-    let else_result = harness
-        .request(
-            "textDocument/references",
-            json!({
-                "textDocument": {"uri": "file:///refs_scope.pl"},
-                "position": {"line": 5, "character": 7},
-                "context": {"includeDeclaration": true}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let else_result = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": {"uri": "file:///refs_scope.pl"},
+            "position": {"line": 5, "character": 7},
+            "context": {"includeDeclaration": true}
+        }),
+    )?;
 
-    // Both responses must be structurally valid (not a crash or protocol error).
-    assert!(
-        if_result.is_null() || if_result.is_array(),
-        "if-scope `$x` references must be null or array, got: {if_result}"
-    );
-    assert!(
-        else_result.is_null() || else_result.is_array(),
-        "else-scope `$x` references must be null or array, got: {else_result}"
-    );
-
-    // At minimum, each query must return at least the lines in its own scope.
-    if let Some(if_locs) = if_result.as_array() {
-        let reported: Vec<u64> =
-            if_locs.iter().filter_map(|l| l.pointer("/range/start/line")?.as_u64()).collect();
-        assert!(
-            reported.contains(&2),
-            "if-scope query must include line 2 (declaration); reported: {reported:?}"
-        );
-        assert!(
-            reported.contains(&3),
-            "if-scope query must include line 3 (usage); reported: {reported:?}"
-        );
-    }
-
-    if let Some(else_locs) = else_result.as_array() {
-        let reported: Vec<u64> =
-            else_locs.iter().filter_map(|l| l.pointer("/range/start/line")?.as_u64()).collect();
-        assert!(
-            reported.contains(&5),
-            "else-scope query must include line 5 (declaration); reported: {reported:?}"
-        );
-        assert!(
-            reported.contains(&6),
-            "else-scope query must include line 6 (usage); reported: {reported:?}"
-        );
+    // Every result belongs to the one open document, and each query includes its own scope.
+    for (scope, result, expected) in [("if", &if_result, [2, 3]), ("else", &else_result, [5, 6])] {
+        let locations = result.as_array().ok_or("references must return an array")?;
+        let mut reported = Vec::new();
+        for location in locations {
+            assert_eq!(
+                location["uri"].as_str(),
+                Some("file:///refs_scope.pl"),
+                "unexpected {scope}-scope location: {location}"
+            );
+            let line = location
+                .pointer("/range/start/line")
+                .and_then(Value::as_u64)
+                .ok_or("reference must have a start line")?;
+            assert!(line < 8, "unexpected {scope}-scope line: {line}");
+            reported.push(line);
+        }
+        for line in expected {
+            assert!(
+                reported.contains(&line),
+                "{scope}-scope query must include line {line}; reported: {reported:?}"
+            );
+        }
     }
 
     Ok(())
@@ -910,8 +909,9 @@ fn test_rename_variable_all_occurrences_updated() -> TestResult {
     );
     let occurrence_count = doc.matches("$old_name").count(); // 4
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///rename_var.pl", doc)?;
 
     let response = harness
@@ -960,8 +960,9 @@ fn test_rename_variable_all_occurrences_updated() -> TestResult {
 fn test_rename_variable_old_name_absent_in_edits() -> TestResult {
     let doc = "my $alpha = 1;\nprint $alpha;\n$alpha++;\n";
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///rename_var2.pl", doc)?;
 
     let response = harness
@@ -1012,8 +1013,9 @@ fn test_rename_sub_declaration_and_calls_updated() -> TestResult {
     );
     let occurrence_count = doc.matches("foo").count(); // 4
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///rename_sub.pl", doc)?;
 
     let response = harness
@@ -1043,8 +1045,9 @@ fn test_rename_sub_declaration_and_calls_updated() -> TestResult {
 fn test_rename_sub_new_name_in_all_edits() -> TestResult {
     let doc = "sub process { 1 }\nprocess();\nprocess();\n";
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///rename_sub2.pl", doc)?;
 
     let response = harness
@@ -1096,8 +1099,9 @@ fn test_rename_scope_isolation_nested_same_name() -> TestResult {
         "print $x;\n",            // 5 -- outer usage
     );
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///rename_scope.pl", doc)?;
 
     // Rename the outer `$x` (line 0, character 3).

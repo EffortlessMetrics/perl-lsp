@@ -134,8 +134,9 @@ fn rollback_edits(mut text: String, inverse: &[InverseTextEdit]) -> String {
 /// Test renaming a variable and verifying the WorkspaceEdit response structure
 #[test]
 fn test_rename_variable() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename.pl";
     harness.open(
@@ -190,8 +191,9 @@ fn test_rename_variable() -> TestResult {
 
 #[test]
 fn test_rename_variable_without_sigil_infers_original_sigil() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename_infer_sigil.pl";
     harness.open(
@@ -232,8 +234,9 @@ fn test_rename_variable_without_sigil_infers_original_sigil() -> TestResult {
 
 #[test]
 fn test_prepare_rename_on_sigil_returns_symbol_range() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_prepare_on_sigil.pl";
     harness.open(
@@ -266,8 +269,9 @@ fn test_prepare_rename_on_sigil_returns_symbol_range() -> TestResult {
 /// Test prepareRename to validate that a position is renamable
 #[test]
 fn test_prepare_rename_valid() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_prepare_rename.pl";
     harness.open(
@@ -319,8 +323,9 @@ fn test_prepare_rename_valid() -> TestResult {
 /// Test prepareRename on a non-renamable location (e.g., a keyword or comment)
 #[test]
 fn test_prepare_rename_non_renamable() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_non_renamable.pl";
     harness.open(
@@ -365,8 +370,9 @@ sub test {
 /// Test that rename capability is advertised during initialization
 #[test]
 fn test_rename_capability_advertised() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let init_response = harness.initialize(None)?;
+    let init_response = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let capabilities = &init_response["capabilities"];
 
@@ -397,8 +403,9 @@ fn test_rename_capability_advertised() -> TestResult {
 /// Test renaming a subroutine name
 #[test]
 fn test_rename_subroutine() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename_sub.pl";
     harness.open(
@@ -450,8 +457,9 @@ sub caller {
 /// change variable semantics (scalar -> array).
 #[test]
 fn test_rename_mismatched_sigil_is_rejected() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename_mismatched_sigil.pl";
     harness.open(
@@ -506,8 +514,9 @@ fn test_rename_mismatched_sigil_is_rejected() -> TestResult {
 /// Test that renaming with an empty newName is rejected.
 #[test]
 fn test_rename_empty_new_name_is_rejected() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename_empty.pl";
     harness.open(
@@ -558,8 +567,9 @@ print $x;
 /// Test that renaming with an invalid identifier (digit-leading) is rejected.
 #[test]
 fn test_rename_invalid_identifier_is_rejected() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename_invalid_ident.pl";
     harness.open(
@@ -610,8 +620,9 @@ fn test_rename_invalid_identifier_is_rejected() -> TestResult {
 /// Test renaming an array variable preserves the `@` sigil.
 #[test]
 fn test_rename_array_preserves_at_sigil() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename_array.pl";
     harness.open(
@@ -659,8 +670,9 @@ fn test_rename_array_preserves_at_sigil() -> TestResult {
 /// Test that bare identifier rename of an array variable infers the `@` sigil.
 #[test]
 fn test_rename_array_bare_infers_at_sigil() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename_array_bare.pl";
     harness.open(
@@ -700,8 +712,9 @@ fn test_rename_array_bare_infers_at_sigil() -> TestResult {
 /// Test rename at an out-of-bounds position returns null gracefully
 #[test]
 fn test_rename_out_of_bounds() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_oob_rename.pl";
     harness.open(
@@ -741,8 +754,9 @@ fn test_rename_out_of_bounds() -> TestResult {
 /// rather than silently renaming the wrong symbol.
 #[test]
 fn test_workspace_rename_blocks_ambiguous_symbol_identity() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let foo_uri = "file:///Foo.pm";
     let bar_uri = "file:///Bar.pm";
@@ -773,8 +787,9 @@ fn test_workspace_rename_blocks_ambiguous_symbol_identity() -> TestResult {
 /// include edits in both the definition file and the usage file.
 #[test]
 fn test_workspace_rename_returns_multi_file_workspace_edit() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let lib_uri = "file:///A.pm";
     let app_uri = "file:///B.pm";
@@ -805,8 +820,9 @@ fn test_workspace_rename_returns_multi_file_workspace_edit() -> TestResult {
 /// the edit reaches the user's file.
 #[test]
 fn test_rename_sub_to_keyword_fails() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename_sub_keyword.pl";
     harness.open(
@@ -863,8 +879,9 @@ greet();
 /// because the sigil disambiguates them from the keyword at parse time.
 #[test]
 fn test_rename_variable_to_keyword_allowed() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_rename_var_keyword.pl";
     harness.open(
@@ -924,8 +941,9 @@ fn test_rename_variable_to_keyword_allowed() -> TestResult {
 /// refactor cutover can rely on them as a safe live operation.
 #[test]
 fn test_workspace_rename_workspace_edit_rolls_back_cleanly() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let lib_uri = "file:///Rollback/A.pm";
     let app_uri = "file:///Rollback/B.pm";
