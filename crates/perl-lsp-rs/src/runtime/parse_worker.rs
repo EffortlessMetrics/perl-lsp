@@ -302,6 +302,8 @@ struct Coordinator {
     state: Mutex<QueueState>,
     cvar: Condvar,
     shutdown: AtomicBool,
+    #[cfg(test)]
+    before_wait_hook: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     metrics: Arc<ParseWorkerMetrics>,
     /// Fired synchronously, on the enqueuing thread, exactly when a call to
     /// `enqueue` newly claims `active` ownership of a URI (`newly_active`) --
@@ -356,6 +358,8 @@ impl Coordinator {
             }),
             cvar: Condvar::new(),
             shutdown: AtomicBool::new(false),
+            #[cfg(test)]
+            before_wait_hook: Mutex::new(None),
             metrics,
             on_activated,
         }
@@ -421,6 +425,10 @@ impl Coordinator {
             if self.shutdown.load(Ordering::SeqCst) {
                 return None;
             }
+            #[cfg(test)]
+            if let Some(hook) = self.before_wait_hook.lock().as_ref() {
+                hook();
+            }
             self.cvar.wait(&mut state);
         }
     }
@@ -452,7 +460,11 @@ impl Coordinator {
     }
 
     fn request_shutdown(&self) {
+        // Synchronize the predicate change with take_next's check and wait.
+        // Otherwise notify_all can run before a worker actually begins waiting.
+        let state = self.state.lock();
         self.shutdown.store(true, Ordering::SeqCst);
+        drop(state);
         self.cvar.notify_all();
     }
 
@@ -1234,6 +1246,63 @@ mod tests {
     }
 
     // ---- Invariant 1: didChange returns before parse completes ----------
+
+    #[test]
+    fn shutdown_wakes_worker_at_check_to_wait_boundary() -> Result<(), Box<dyn std::error::Error>> {
+        use std::sync::mpsc;
+        let coordinator =
+            Arc::new(Coordinator::new(Arc::new(ParseWorkerMetrics::default()), Arc::new(|_| {})));
+        let (at_boundary_tx, at_boundary_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Mutex::new(release_rx);
+        let explicitly_released = Arc::new(AtomicBool::new(false));
+        let hook_released = Arc::clone(&explicitly_released);
+        *coordinator.before_wait_hook.lock() = Some(Box::new(move || {
+            let _ = at_boundary_tx.send(());
+            if release_rx.lock().recv_timeout(TEST_TIMEOUT).is_ok() {
+                hook_released.store(true, Ordering::SeqCst);
+            }
+        }));
+        let (worker_done_tx, worker_done_rx) = mpsc::channel();
+        let worker_coord = Arc::clone(&coordinator);
+        let worker = std::thread::spawn(move || {
+            let _ = worker_coord.take_next();
+            let _ = worker_done_tx.send(());
+        });
+        at_boundary_rx.recv_timeout(TEST_TIMEOUT)?;
+        let (shutdown_started_tx, shutdown_started_rx) = mpsc::channel();
+        let (shutdown_done_tx, shutdown_done_rx) = mpsc::channel();
+        let shutdown_coord = Arc::clone(&coordinator);
+        let shutdown = std::thread::spawn(move || {
+            let _ = shutdown_started_tx.send(());
+            shutdown_coord.request_shutdown();
+            let _ = shutdown_done_tx.send(());
+        });
+        shutdown_started_rx.recv_timeout(TEST_TIMEOUT)?;
+        // With the original bug, shutdown can finish while the worker still
+        // holds the queue lock, before the worker actually starts waiting.
+        let completed_before_wait =
+            shutdown_done_rx.recv_timeout(Duration::from_millis(250)).is_ok();
+        release_tx.send(())?;
+        if !completed_before_wait {
+            shutdown_done_rx.recv_timeout(TEST_TIMEOUT)?;
+        }
+        shutdown.join().map_err(|_| "shutdown thread panicked")?;
+        let woke_without_rescue = worker_done_rx.recv_timeout(Duration::from_secs(1)).is_ok();
+        if !woke_without_rescue {
+            // Unstick the old implementation so the negative control fails
+            // cleanly instead of leaking a sleeping thread.
+            let _state = coordinator.state.try_lock_for(TEST_TIMEOUT).ok_or("queue lock stuck")?;
+            coordinator.cvar.notify_all();
+            drop(_state);
+            worker_done_rx.recv_timeout(TEST_TIMEOUT)?;
+        }
+        worker.join().map_err(|_| "worker thread panicked")?;
+        assert!(explicitly_released.load(Ordering::SeqCst), "boundary hook timed out");
+        assert!(!completed_before_wait, "shutdown notified before the worker entered its wait");
+        assert!(woke_without_rescue, "shutdown wake was lost at the wait boundary");
+        Ok(())
+    }
 
     #[test]
     fn worker_publish_is_gated_behind_the_test_barrier() {
