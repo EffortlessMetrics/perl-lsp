@@ -5,6 +5,7 @@ use perl_lsp::{
     LspServer,
     server::{MessageType, ShowDocumentOptions},
 };
+use perl_lsp_rs_core::transport::framing::ContentLengthFramer;
 use serde_json::{Value, json};
 use std::io::Write;
 use std::sync::Arc;
@@ -22,24 +23,18 @@ impl OutputCapture {
 
     fn get_messages(&self) -> Vec<Value> {
         let buffer = self.buffer.lock();
-        let content = String::from_utf8_lossy(&buffer);
-
+        let mut framer = ContentLengthFramer::new();
+        framer.push(&buffer);
         let mut messages = Vec::new();
-        for chunk in content.split("\r\n\r\n") {
-            if chunk.trim().is_empty() {
-                continue;
-            }
-            // Skip Content-Length header
-            if let Some(json_str) = chunk.lines().nth(1) {
-                if let Ok(msg) = serde_json::from_str::<Value>(json_str) {
-                    messages.push(msg);
-                }
-            } else if !chunk.starts_with("Content-Length") {
-                if let Ok(msg) = serde_json::from_str::<Value>(chunk) {
-                    messages.push(msg);
-                }
-            }
+        while let Some(body) =
+            framer.try_next().unwrap_or_else(|error| panic!("invalid frame: {error}"))
+        {
+            messages.push(
+                serde_json::from_slice(&body)
+                    .unwrap_or_else(|error| panic!("invalid JSON: {error}")),
+            );
         }
+
         messages
     }
 
@@ -92,6 +87,22 @@ impl Clone for OutputCapture {
     fn clone(&self) -> Self {
         Self { buffer: Arc::clone(&self.buffer) }
     }
+}
+
+#[test]
+fn output_capture_reads_adjacent_frames() {
+    use perl_lsp_rs_core::transport::framing::frame;
+    let mut output = OutputCapture::new();
+    let first = json!({"method": "telemetry/event", "params": {"event": "test"}});
+    let second = json!({"method": "window/logMessage"});
+    let first_frame = frame(first.to_string().as_bytes());
+    let second_frame = frame(second.to_string().as_bytes());
+    assert!(output.write_all(&first_frame).is_ok());
+    let split = second_frame.len() / 2;
+    assert!(output.write_all(&second_frame[..split]).is_ok());
+    assert_eq!(output.get_messages(), vec![first.clone()]);
+    assert!(output.write_all(&second_frame[split..]).is_ok());
+    assert_eq!(output.get_messages(), vec![first, second]);
 }
 
 #[test]
