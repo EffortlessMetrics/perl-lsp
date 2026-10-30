@@ -7,7 +7,8 @@ use support::lsp_harness::LspHarness;
 
 fn test_implementation_find_subclasses() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test.pl";
     harness.open(
@@ -46,7 +47,8 @@ my $pet = Animal->new();
 
 fn test_implementation_method_overrides() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test.pl";
     harness.open(
@@ -100,7 +102,8 @@ sub process { print "Another process\n" }
 
 fn test_implementation_interface_pattern() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test.pl";
     harness.open(
@@ -139,7 +142,8 @@ sub deserialize { return "from xml" }
 
 fn test_implementation_no_implementations() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test.pl";
     harness.open(
@@ -177,7 +181,8 @@ my $obj = Standalone->new();
 #[test]
 fn test_implementation_correct_package_not_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_impl.pl";
     // Line 0: ""
@@ -238,7 +243,8 @@ fn test_implementation_correct_package_not_main() -> Result<(), Box<dyn std::err
 fn test_implementation_location_points_to_package_not_use_parent()
 -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_range.pl";
     // Line 0: ""
@@ -285,7 +291,8 @@ fn test_implementation_location_points_to_package_not_use_parent()
 fn test_implementation_multiple_overriders_all_returned() -> Result<(), Box<dyn std::error::Error>>
 {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_multi.pl";
     // Line 0: ""
@@ -329,7 +336,8 @@ fn test_implementation_multiple_overriders_all_returned() -> Result<(), Box<dyn 
 #[test]
 fn test_implementation_finds_block_package_methods() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    let _init = harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let _init = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let doc_uri = "file:///test_block_pkg.pl";
     harness.open(
