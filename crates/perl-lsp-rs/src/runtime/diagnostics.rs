@@ -2370,6 +2370,88 @@ mod tests {
     }
 
     #[test]
+    fn close_reopen_invalidates_inflight_full_diagnostics() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use std::sync::mpsc;
+        let (server, output) = make_server_with_capture();
+        let uri = "file:///close_reopen_boundary.pl";
+        server.client_supports_pull_diags.store(true, Ordering::SeqCst);
+        server.handle_did_open(Some(json!({"textDocument": {
+            "uri": uri, "languageId": "perl", "version": 1, "text": "my $unused;\n"
+        }})))?;
+        let old_generation = {
+            let docs = server.documents.lock();
+            StdArc::clone(&docs.get(uri).ok_or("missing old document")?.generation)
+        };
+        assert_eq!(old_generation.load(Ordering::SeqCst), 0);
+        let (snapshot_tx, snapshot_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let resume_rx = parking_lot::Mutex::new(resume_rx);
+        let released = StdArc::new(std::sync::atomic::AtomicBool::new(false));
+        let hook_released = StdArc::clone(&released);
+        *server.diagnostic_after_snapshot_hook.lock() = Some(Box::new(move || {
+            let _ = snapshot_tx.send(());
+            if resume_rx.lock().recv_timeout(Duration::from_secs(10)).is_ok() {
+                hook_released.store(true, Ordering::SeqCst);
+            }
+        }));
+        server.client_supports_pull_diags.store(false, Ordering::SeqCst);
+        std::thread::scope(|scope| -> Result<(), Box<dyn std::error::Error>> {
+            let worker = scope.spawn(|| server.publish_diagnostics(uri));
+            snapshot_rx.recv_timeout(Duration::from_secs(10))?;
+            let setup = (|| -> Result<(), Box<dyn std::error::Error>> {
+                server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+                if old_generation.load(Ordering::SeqCst) == 0 {
+                    return Err("close did not invalidate the old generation".into());
+                }
+                server.client_supports_pull_diags.store(true, Ordering::SeqCst);
+                server.handle_did_open(Some(json!({"textDocument": {
+                    "uri": uri, "languageId": "perl", "version": 1, "text": "use strict;\nuse warnings;\nprint 1;\n"
+                }})))?;
+                let new_generation = {
+                    let docs = server.documents.lock();
+                    StdArc::clone(&docs.get(uri).ok_or("missing reopened document")?.generation)
+                };
+                if StdArc::ptr_eq(&old_generation, &new_generation)
+                    || new_generation.load(Ordering::SeqCst) != 0
+                {
+                    return Err("reopen did not create a fresh generation at zero".into());
+                }
+                Ok(())
+            })();
+            server.client_supports_pull_diags.store(false, Ordering::SeqCst);
+            let _ = resume_tx.send(());
+            worker.join().map_err(|_| "publisher panicked")?;
+            if !released.load(Ordering::SeqCst) {
+                return Err("publisher timed out before explicit release".into());
+            }
+            setup?;
+            Ok(())
+        })?;
+        *server.diagnostic_after_snapshot_hook.lock() = None;
+        server.publish_diagnostics(uri);
+        drop(server); // joins the actual outbound writer
+        let bytes = output.lock().clone();
+        let text = String::from_utf8(bytes)?;
+        let messages: Vec<serde_json::Value> = text
+            .split("Content-Length: ")
+            .skip(1)
+            .map(|frame| -> Result<_, Box<dyn std::error::Error>> {
+                let (_, body) = frame.split_once("\r\n\r\n").ok_or("missing frame header")?;
+                Ok(serde_json::from_str(body)?)
+            })
+            .collect::<Result<_, _>>()?;
+        assert_eq!(messages.len(), 2, "unexpected notifications: {messages:?}");
+        assert_eq!(messages[0]["method"], "textDocument/publishDiagnostics");
+        assert_eq!(messages[0]["params"], json!({"uri": uri, "diagnostics": []}));
+        assert_eq!(messages[1]["method"], "textDocument/publishDiagnostics");
+        assert_eq!(messages[1]["params"]["uri"], uri);
+        assert_eq!(messages[1]["params"]["version"], 1);
+        assert_eq!(messages[1]["params"]["diagnostics"], json!([]));
+        Ok(())
+    }
+
+    #[test]
     fn native_critic_engine_publishes_native_policy_diagnostics() {
         let (server, buf) = make_server_with_capture();
         server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Native);
