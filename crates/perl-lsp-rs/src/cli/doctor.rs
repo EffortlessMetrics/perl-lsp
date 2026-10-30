@@ -739,7 +739,7 @@ mod tests {
 
         let original_permissions = std::fs::metadata(&locked_parent)?.permissions();
         let mut locked_permissions = original_permissions.clone();
-        locked_permissions.set_mode(0);
+        locked_permissions.set_mode(0o0);
 
         std::fs::set_permissions(&locked_parent, locked_permissions)?;
         let result = workspace_dir(child_dir);
