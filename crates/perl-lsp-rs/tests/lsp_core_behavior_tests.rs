@@ -22,8 +22,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 /// Server must return capabilities in the initialize response.
 #[test]
 fn init_returns_capabilities() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    let result = h.initialize(None)?;
+    let result = h.initialize_with_root(&workspace.root_uri, None)?;
 
     assert!(result.get("capabilities").is_some(), "initialize must return capabilities");
     h.shutdown_gracefully();
@@ -33,8 +34,9 @@ fn init_returns_capabilities() -> TestResult {
 /// Server must return serverInfo with name.
 #[test]
 fn init_returns_server_info() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    let result = h.initialize(None)?;
+    let result = h.initialize_with_root(&workspace.root_uri, None)?;
 
     let info = result.get("serverInfo");
     assert!(info.is_some(), "initialize must return serverInfo");
@@ -48,14 +50,18 @@ fn init_returns_server_info() -> TestResult {
 /// advertise completion capability.
 #[test]
 fn init_negotiates_completion() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    let result = h.initialize(Some(json!({
-        "textDocument": {
-            "completion": {
-                "completionItem": { "snippetSupport": true }
+    let result = h.initialize_with_root(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": {
+                "completion": {
+                    "completionItem": { "snippetSupport": true }
+                }
             }
-        }
-    })))?;
+        })),
+    )?;
 
     let caps = result.get("capabilities").ok_or("no capabilities")?;
     assert!(
@@ -69,8 +75,9 @@ fn init_negotiates_completion() -> TestResult {
 /// Server should advertise hover capability.
 #[test]
 fn init_advertises_hover() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    let result = h.initialize(None)?;
+    let result = h.initialize_with_root(&workspace.root_uri, None)?;
 
     let caps = result.get("capabilities").ok_or("no capabilities")?;
     assert!(caps.get("hoverProvider").is_some(), "hoverProvider should be advertised");
@@ -81,8 +88,9 @@ fn init_advertises_hover() -> TestResult {
 /// Server should advertise definition capability.
 #[test]
 fn init_advertises_definition() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    let result = h.initialize(None)?;
+    let result = h.initialize_with_root(&workspace.root_uri, None)?;
 
     let caps = result.get("capabilities").ok_or("no capabilities")?;
     assert!(caps.get("definitionProvider").is_some(), "definitionProvider should be advertised");
@@ -93,8 +101,9 @@ fn init_advertises_definition() -> TestResult {
 /// Server should advertise text document sync capability.
 #[test]
 fn init_advertises_text_sync() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    let result = h.initialize(None)?;
+    let result = h.initialize_with_root(&workspace.root_uri, None)?;
 
     let caps = result.get("capabilities").ok_or("no capabilities")?;
     assert!(caps.get("textDocumentSync").is_some(), "textDocumentSync should be advertised");
@@ -109,8 +118,9 @@ fn init_advertises_text_sync() -> TestResult {
 /// Opening a document should allow hover requests on it.
 #[test]
 fn document_open_enables_hover() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
     h.open("file:///test.pl", "my $x = 42;\n")?;
     h.barrier();
 
@@ -131,8 +141,9 @@ fn document_open_enables_hover() -> TestResult {
 /// Changing document content should reflect in subsequent requests.
 #[test]
 fn document_change_updates_state() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     let uri = "file:///changing.pl";
     h.open(uri, "my $x = 1;\n")?;
@@ -158,8 +169,9 @@ fn document_change_updates_state() -> TestResult {
 /// Closing a document should not cause server errors.
 #[test]
 fn document_close_graceful() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     let uri = "file:///closeme.pl";
     h.open(uri, "my $y = 'hello';\n")?;
@@ -177,8 +189,9 @@ fn document_close_graceful() -> TestResult {
 /// Multiple documents can be open simultaneously.
 #[test]
 fn multiple_documents_open() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     h.open("file:///a.pl", "my $a = 1;\n")?;
     h.open("file:///b.pl", "my $b = 2;\n")?;
@@ -203,8 +216,9 @@ fn multiple_documents_open() -> TestResult {
 /// Document version tracking: change bumps the version the server sees.
 #[test]
 fn document_version_tracking() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     let uri = "file:///versioned.pl";
     h.open(uri, "my $v = 1;\n")?;
@@ -236,8 +250,9 @@ fn document_version_tracking() -> TestResult {
 /// shutdown request must return null result per LSP spec.
 #[test]
 fn shutdown_returns_null() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     let result = h.request("shutdown", json!({}))?;
     assert!(result.is_null(), "shutdown must return null, got: {}", result);
@@ -249,8 +264,9 @@ fn shutdown_returns_null() -> TestResult {
 /// shutdown after performing actual work should succeed cleanly.
 #[test]
 fn shutdown_after_work() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     // Do some real work first
     h.open("file:///work.pl", "sub hello { return 1; }\n")?;
@@ -276,8 +292,9 @@ fn shutdown_after_work() -> TestResult {
 /// Unknown method should return MethodNotFound error.
 #[test]
 fn unknown_method_returns_error() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     let response = h.request_raw(json!({
         "jsonrpc": "2.0",
@@ -295,8 +312,9 @@ fn unknown_method_returns_error() -> TestResult {
 /// Hover on a document that was never opened should produce an error.
 #[test]
 fn request_on_nonexistent_document() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     // Request hover on a URI that was never opened
     let result = h.request(
@@ -320,8 +338,9 @@ fn request_on_nonexistent_document() -> TestResult {
 /// Hover at a position beyond the document length should not crash.
 #[test]
 fn hover_invalid_position() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     h.open("file:///short.pl", "my $x = 1;\n")?;
     h.barrier();
@@ -347,12 +366,12 @@ fn hover_invalid_position() -> TestResult {
 /// Request with empty/minimal params should not crash the server.
 #[test]
 fn empty_params_handled() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     // workspace/symbol with empty query is valid
-    let result = h.request("workspace/symbol", json!({"query": ""}));
-    assert!(result.is_ok(), "workspace/symbol with empty query should succeed");
+    h.request("workspace/symbol", json!({"query": ""}))?;
     h.shutdown_gracefully();
     Ok(())
 }
@@ -364,8 +383,9 @@ fn empty_params_handled() -> TestResult {
 /// Rapid sequential requests should all get responses.
 #[test]
 fn rapid_sequential_requests() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     h.open("file:///rapid.pl", "my $x = 1;\nmy $y = 2;\nmy $z = 3;\n")?;
     h.barrier();
@@ -392,8 +412,9 @@ fn rapid_sequential_requests() -> TestResult {
 /// Interleaved edit and query operations should not corrupt state.
 #[test]
 fn interleaved_edit_and_query() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     let uri = "file:///interleaved.pl";
     h.open(uri, "my $x = 1;\n")?;
@@ -427,8 +448,9 @@ fn interleaved_edit_and_query() -> TestResult {
 /// didChangeConfiguration with settings should not crash.
 #[test]
 fn did_change_configuration() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     h.notify(
         "workspace/didChangeConfiguration",
@@ -452,8 +474,9 @@ fn did_change_configuration() -> TestResult {
 /// Empty configuration change should be handled gracefully.
 #[test]
 fn empty_configuration_change() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     h.notify("workspace/didChangeConfiguration", json!({"settings": {}}));
     h.barrier();
@@ -467,8 +490,9 @@ fn empty_configuration_change() -> TestResult {
 /// Null settings in configuration change should not crash.
 #[test]
 fn null_configuration_settings() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     h.notify("workspace/didChangeConfiguration", json!({"settings": null}));
     h.barrier();
@@ -486,6 +510,7 @@ fn null_configuration_settings() -> TestResult {
 /// Request before initialize should produce an error (server not initialized).
 #[test]
 fn request_before_initialize() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new_without_initialize();
 
     let response = h.request_raw(json!({
@@ -508,7 +533,7 @@ fn request_before_initialize() -> TestResult {
     );
 
     // Should still be able to initialize normally after
-    let init_result = h.initialize(None);
+    let init_result = h.initialize_with_root(&workspace.root_uri, None);
     assert!(init_result.is_ok(), "should be able to initialize after pre-init request");
     h.shutdown_gracefully();
     Ok(())
@@ -517,8 +542,9 @@ fn request_before_initialize() -> TestResult {
 /// Opening the same document twice should not crash.
 #[test]
 fn double_open_same_document() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     let uri = "file:///double.pl";
     h.open(uri, "my $x = 1;\n")?;
@@ -542,8 +568,9 @@ fn double_open_same_document() -> TestResult {
 /// Closing a document that was never opened should not crash.
 #[test]
 fn close_never_opened() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut h = LspHarness::new();
-    h.initialize(None)?;
+    h.initialize_with_root(&workspace.root_uri, None)?;
 
     h.close("file:///never_opened.pl")?;
     h.barrier();
