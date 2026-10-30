@@ -1439,11 +1439,32 @@ mod tests {
     fn rapid_burst_coalesces_to_far_fewer_jobs_than_edits() {
         let uri = "file:///burst.pl";
         let (documents, generation_handle) = one_doc(uri, "my $a = 1;\n");
-        let (cb, _calls) = counting_callback();
+        let (cb, calls) = counting_callback();
         let worker = ParseWorker::spawn(Arc::clone(&documents), ast_cache(), cb);
+        let barrier = worker.test_barrier();
+        struct ReleaseOnDrop(Arc<ParseWorkerTestBarrier>);
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                self.0.release();
+            }
+        }
+        let _release = ReleaseOnDrop(Arc::clone(&barrier));
+
+        // Hold the first job before publication so the subsequent edits form
+        // a real queued burst, regardless of thread scheduling.
+        barrier.arm(uri, 1);
+        generation_handle.fetch_add(1, Ordering::SeqCst);
+        worker.enqueue(
+            uri.to_string(),
+            uri.to_string(),
+            1,
+            Arc::clone(&generation_handle),
+            Arc::from("my $a = 1;\n"),
+        );
+        barrier.wait_until_paused();
 
         const EDITS: u32 = 20;
-        for i in 1..=EDITS {
+        for i in 2..=EDITS {
             generation_handle.fetch_add(1, Ordering::SeqCst);
             worker.enqueue(
                 uri.to_string(),
@@ -1454,6 +1475,7 @@ mod tests {
             );
         }
 
+        barrier.release();
         assert!(
             worker.wait_until_settled(uri, TEST_TIMEOUT),
             "burst must settle within the timeout"
@@ -1470,6 +1492,12 @@ mod tests {
             metrics.jobs_started
         );
         assert!(metrics.jobs_coalesced > 0, "at least one job must have been coalesced away");
+        assert!(metrics.jobs_rejected_stale > 0, "the held initial job must be rejected as stale");
+        assert!(
+            wait_for(|| calls.lock().len() == 1, TEST_TIMEOUT),
+            "final publication callback must complete"
+        );
+        assert_eq!(calls.lock().as_slice(), &[(uri.to_string(), EDITS)]);
 
         let docs = documents.lock();
         let doc = must_some(docs.get(uri));
