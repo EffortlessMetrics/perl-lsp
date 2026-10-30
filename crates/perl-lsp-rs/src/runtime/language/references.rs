@@ -30,6 +30,70 @@ use crate::runtime::readiness::IndexReadinessPolicy;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
+// The Perl lexer skips line comments while preserving spans for strings,
+// quote-like operators and heredoc bodies. Only treat `#` in a skipped gap on
+// the cursor's line as a comment; a `#` inside a token is not a delimiter.
+#[derive(Debug, PartialEq, Eq)]
+enum CommentCursor {
+    Comment,
+    Code,
+    Deadline,
+    Unknown,
+}
+
+fn cursor_in_line_comment<F>(
+    source: &str,
+    offset: usize,
+    mut check: F,
+) -> Result<CommentCursor, JsonRpcError>
+where
+    F: FnMut() -> Result<bool, JsonRpcError>,
+{
+    let Some(before) = source.get(..offset) else { return Ok(CommentCursor::Code) };
+    let line_start = before.rfind(['\n', '\r']).map_or(0, |pos| pos + 1);
+    let on_hash = source.get(offset..).is_some_and(|tail| tail.starts_with('#'));
+    if !before[line_start..].contains('#') && !on_hash {
+        return Ok(CommentCursor::Code);
+    }
+
+    let mut lexer = perl_lexer::PerlLexer::with_body_tokens(source);
+    let mut previous_end = 0;
+    let mut tokens = 0usize;
+    loop {
+        if tokens.is_multiple_of(128) && !check()? {
+            return Ok(CommentCursor::Deadline);
+        }
+        let Some(token) = lexer.next_token() else { break };
+        tokens += 1;
+        if token.start > offset {
+            let gap_start = previous_end.max(line_start);
+            return Ok(
+                if source.get(gap_start..offset).is_some_and(|gap| gap.contains('#')) || on_hash {
+                    CommentCursor::Comment
+                } else {
+                    CommentCursor::Code
+                },
+            );
+        }
+        if token.start <= offset && offset < token.end {
+            if matches!(
+                token.token_type,
+                perl_lexer::TokenType::UnknownRest | perl_lexer::TokenType::Error(_)
+            ) {
+                return Ok(CommentCursor::Unknown);
+            }
+            return Ok(CommentCursor::Code);
+        }
+        previous_end = previous_end.max(token.end);
+    }
+    let gap_start = previous_end.max(line_start);
+    Ok(if source.get(gap_start..offset).is_some_and(|gap| gap.contains('#')) || on_hash {
+        CommentCursor::Comment
+    } else {
+        CommentCursor::Code
+    })
+}
+
 static QUALIFIED_NAME_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 const REFERENCE_TEXT_FALLBACK_MAX_DOCUMENTS: usize = 128;
@@ -587,6 +651,15 @@ impl LspServer {
         params: Option<Value>,
         request_id: Option<&Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_references_with_deadline(params, request_id, None)
+    }
+
+    fn handle_references_with_deadline(
+        &self,
+        params: Option<Value>,
+        request_id: Option<&Value>,
+        deadline_override: Option<Instant>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         let trace_context = Self::references_decision_trace_context(params.as_ref())?;
         let (
             result,
@@ -597,7 +670,7 @@ impl LspServer {
             latency_us,
             source_backed_attempt,
             fallback_receipt,
-        ) = self.handle_references_inner(params, request_id)?;
+        ) = self.handle_references_inner(params, request_id, deadline_override)?;
         self.record_references_provider_decision_trace(
             trace_context.as_ref(),
             result.as_ref(),
@@ -626,6 +699,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
         request_id: Option<&Value>,
+        deadline_override: Option<Instant>,
     ) -> Result<
         (
             Option<Value>,
@@ -647,7 +721,7 @@ impl LspServer {
         let fallback_budget = ReferenceTextFallbackBudget {
             max_documents: REFERENCE_TEXT_FALLBACK_MAX_DOCUMENTS,
             max_bytes: REFERENCE_TEXT_FALLBACK_MAX_BYTES,
-            deadline: start + deadline,
+            deadline: deadline_override.unwrap_or(start + deadline),
         };
         let typed_request_id = request_id.and_then(JsonRpcId::try_from_value);
         self.check_references_cancellation(typed_request_id.as_ref(), &mut fallback_receipt)?;
@@ -713,6 +787,50 @@ impl LspServer {
                 let parsed = doc.current_parsed();
                 if let Some(ast) = parsed.as_ref().and_then(|p| p.ast()) {
                     let offset = self.pos16_to_offset(doc, line, character);
+                    let comment_check = cursor_in_line_comment(&doc.text, offset, || {
+                        self.check_references_cancellation(
+                            typed_request_id.as_ref(),
+                            &mut fallback_receipt,
+                        )?;
+                        Ok(Instant::now() < fallback_budget.deadline)
+                    })?;
+                    match comment_check {
+                        CommentCursor::Deadline => {
+                            fallback_receipt.deadline_exhausted = true;
+                            fallback_receipt.fallback_completeness = "partial";
+                            fallback_receipt.fallback_reason =
+                                Some("reference_comment_scan_deadline".to_owned());
+                            return Ok((
+                                Some(json!([])),
+                                ReferencesAnsweringTier::Empty,
+                                "none",
+                                0,
+                                0,
+                                start.elapsed().as_micros(),
+                                source_backed_attempt,
+                                fallback_receipt,
+                            ));
+                        }
+                        CommentCursor::Comment => {
+                            return Ok((
+                                Some(json!([])),
+                                ReferencesAnsweringTier::Empty,
+                                "none",
+                                0,
+                                0,
+                                start.elapsed().as_micros(),
+                                source_backed_attempt,
+                                fallback_receipt,
+                            ));
+                        }
+                        CommentCursor::Code => {}
+                        CommentCursor::Unknown => {
+                            return Err(JsonRpcError::new(
+                                crate::protocol::INTERNAL_ERROR,
+                                "Unable to classify references cursor after lexer recovery",
+                            ));
+                        }
+                    }
                     let needle = token_under_cursor(&doc.text, line as usize, character as usize)
                         .unwrap_or_default();
 
@@ -1975,6 +2093,134 @@ impl LspServer {
 mod tests {
     use super::*;
     use std::error::Error;
+
+    #[test]
+    fn cursor_comment_check_respects_perl_token_boundaries() {
+        for source in [
+            "# comment",
+            "my $x = 1; # comment",
+            "my $x = 1; # comment\r\n",
+            "print '😀'; # comment",
+        ] {
+            let offset = source.find("comment").unwrap_or(source.len());
+            assert!(
+                cursor_in_line_comment(source, offset, || Ok(true)).ok()
+                    == Some(CommentCursor::Comment),
+                "expected comment: {source}"
+            );
+        }
+        for source in [
+            "my $x = '#'; print $x;",
+            "my $x = q{#}; print $x;",
+            "my $x = q#text#; print $x;",
+            "my $x = m#text#; print $x;",
+            "my @array = (); print $#array;",
+            "my $x = /#/; print $x;",
+            "my $x = <<'END';\n# inside heredoc\nEND\nprint $x;",
+        ] {
+            let offset = source.rfind('$').unwrap_or(source.len());
+            assert!(
+                cursor_in_line_comment(source, offset, || Ok(true)).ok()
+                    == Some(CommentCursor::Code),
+                "expected code: {source}"
+            );
+        }
+        for source in [
+            "my $x = '#'; print $x;",
+            "my $x = q{#}; print $x;",
+            "my $x = q#text#; print $x;",
+            "my $x = m#text#; print $x;",
+            "my @array = (); print $#array;",
+            "my $x = /#/; print $x;",
+        ] {
+            let hash = source.find('#').unwrap_or(source.len());
+            assert!(
+                cursor_in_line_comment(source, hash, || Ok(true)).ok() == Some(CommentCursor::Code),
+                "hash in Perl token is not a comment: {source}"
+            );
+        }
+        let source = "my $x = <<'END';\n# inside heredoc\nEND\nprint $x;";
+        let inside = source.find("inside").unwrap_or(source.len());
+        assert!(
+            cursor_in_line_comment(source, inside, || Ok(true)).ok() == Some(CommentCursor::Code),
+            "heredoc text is not a line comment"
+        );
+    }
+
+    #[test]
+    fn cursor_comment_scan_honors_checkpoints() {
+        let source = format!("{}# comment", "my $x = 1;\n".repeat(100));
+        let offset = source.find("comment").unwrap_or(source.len());
+        let mut checks = 0;
+        let result = cursor_in_line_comment(&source, offset, || {
+            checks += 1;
+            Ok(checks < 2)
+        });
+        assert!(
+            matches!(result, Ok(CommentCursor::Deadline)),
+            "deadline must stop the scan without classifying it"
+        );
+        assert_eq!(checks, 2, "the scan must recheck after processing tokens");
+
+        let cancelled = cursor_in_line_comment(&source, offset, || {
+            Err(JsonRpcError {
+                code: REQUEST_CANCELLED,
+                message: "cancelled".to_owned(),
+                data: None,
+            })
+        });
+        assert!(matches!(cancelled, Err(error) if error.code == REQUEST_CANCELLED));
+    }
+
+    #[test]
+    fn cursor_comment_scan_rejects_unknown_lexer_remainder() {
+        let source =
+            format!("/{}/ # comment", "a".repeat(perl_lexer::MAX_REGEX_PARSE_STEPS + 1024));
+        let offset = source.find("comment").unwrap_or(source.len());
+        let result = cursor_in_line_comment(&source, offset, || Ok(true));
+        assert!(
+            matches!(result, Ok(CommentCursor::Unknown)),
+            "unknown lexer remainder must not be classified as code or comment"
+        );
+    }
+
+    #[test]
+    fn references_comment_deadline_records_partial_and_cancellation_errors()
+    -> Result<(), Box<dyn Error>> {
+        use parking_lot::Mutex;
+        use std::io::Cursor;
+        use std::sync::Arc;
+        let output = Arc::new(Mutex::new(
+            Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>
+        ));
+        let server = LspServer::with_output(output);
+        let uri = "file:///deadline-comment.pl";
+        server.test_apply_did_open(uri, "my $x = 1; # comment\n", 1)?;
+        let params = json!({"textDocument":{"uri":uri}, "position":{"line":0,"character":16}, "context":{"includeDeclaration":true}});
+        let result = server.handle_references_with_deadline(
+            Some(params.clone()),
+            None,
+            Some(Instant::now()),
+        )?;
+        assert_eq!(result, Some(json!([])));
+        let explanation = server.handle_execute_command(Some(json!({"command":"perl.explainProviderDecision","arguments":[{"provider":"references"}]})))?.ok_or("missing receipt")?;
+        let receipt = explanation.get("request_receipt").ok_or("missing request receipt")?;
+        assert_eq!(receipt.get("deadline_exhausted"), Some(&json!(true)));
+        assert_eq!(receipt.get("fallback_completeness"), Some(&json!("partial")));
+        assert_eq!(receipt.get("fallback_reason"), Some(&json!("reference_comment_scan_deadline")));
+        let id = JsonRpcId::Integer(1021301);
+        server.cancel_mark(&id);
+        let err = server
+            .handle_references_with_deadline(
+                Some(params),
+                Some(&json!(1021301)),
+                Some(Instant::now()),
+            )
+            .err()
+            .ok_or("cancellation must error")?;
+        assert_eq!(err.code, REQUEST_CANCELLED);
+        Ok(())
+    }
 
     // ── ReferencesAnsweringTier unit tests ─────────────────────────────────
 

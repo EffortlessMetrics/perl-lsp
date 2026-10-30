@@ -27,6 +27,27 @@ use serde_json::json;
 use support::lsp_harness::LspHarness;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+fn assert_full_references_receipt(harness: &mut LspHarness) -> TestResult {
+    let explanation = harness.request(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.explainProviderDecision",
+            "arguments": [{"provider": "references"}]
+        }),
+    )?;
+    let receipt = explanation.get("request_receipt").ok_or("missing references receipt")?;
+    assert_eq!(
+        receipt.get("deadline_exhausted"),
+        Some(&json!(false)),
+        "references result must not be deadline-limited: {receipt}"
+    );
+    assert_ne!(
+        receipt.get("fallback_completeness"),
+        Some(&json!("partial")),
+        "references result must not be partial: {receipt}"
+    );
+    Ok(())
+}
 
 /// Helper to validate a Location object has proper structure.
 fn assert_valid_location(location: &serde_json::Value) {
@@ -51,8 +72,9 @@ my $doubled = $count * 2;
 $count++;
 "#;
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///refs.pl", doc)?;
 
     // Find all references to $count (with declaration included)
@@ -111,8 +133,9 @@ if (validate($email)) {
 validate($phone);
 "#;
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///subrefs.pl", doc)?;
 
     // Find references of "validate" subroutine
@@ -177,34 +200,62 @@ fn test_no_references_found() -> TestResult {
 my $lonely = 42;
 "#;
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///norefs.pl", doc)?;
 
     // Find references on a comment (no symbol)
-    let result = harness
-        .request(
-            "textDocument/references",
-            json!({
-                "textDocument": {"uri": "file:///norefs.pl"},
-                "position": {"line": 1, "character": 5}, // Inside comment
-                "context": {"includeDeclaration": true}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": {"uri": "file:///norefs.pl"},
+            "position": {"line": 1, "character": 5}, // Inside comment
+            "context": {"includeDeclaration": true}
+        }),
+    )?;
 
-    // Should return null or empty array for non-symbol positions
-    if !result.is_null() {
-        if result.is_array() {
-            let references = result.as_array().ok_or("Expected array result")?;
-            assert!(
-                references.is_empty(),
-                "References on comment should return empty array, got {} references",
-                references.len()
-            );
-        }
-    }
+    assert_eq!(result, json!([]), "comment text must not produce references");
+    assert_full_references_receipt(&mut harness)?;
 
+    Ok(())
+}
+
+/// UTF-16 positions inside an inline comment must not be treated as symbols.
+#[test]
+fn test_inline_comment_after_non_bmp_text_is_not_a_reference() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
+    let mut harness = LspHarness::new();
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    let uri = "file:///unicode_comment_refs.pl";
+    let line = "my $value = 1; print $value; # 😀 comment";
+    harness.open_document(uri, line)?;
+    let comment_byte = line.find("comment").ok_or("missing comment marker")?;
+    let comment_col = line[..comment_byte].encode_utf16().count();
+    let response = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": comment_col},
+            "context": {"includeDeclaration": true}
+        }),
+    )?;
+    assert_eq!(response, json!([]), "inline comment must not produce references");
+    assert_full_references_receipt(&mut harness)?;
+
+    let code_col = line.find("$value").ok_or("missing variable")? + 2;
+    let response = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 0, "character": code_col},
+            "context": {"includeDeclaration": true}
+        }),
+    )?;
+    assert!(
+        response.as_array().is_some_and(|locations| !locations.is_empty()),
+        "real variable references must still be found: {response}"
+    );
     Ok(())
 }
 
@@ -220,8 +271,9 @@ $total += 20;
 print $total;
 "#;
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///incldecl.pl", doc)?;
 
     // Find references WITH includeDeclaration = true
@@ -271,8 +323,9 @@ print $total;
 /// Validates graceful handling of find-references on an empty document.
 #[test]
 fn test_references_on_empty_file() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///empty.pl", "")?;
 
     let result = harness
@@ -328,22 +381,21 @@ sub compute { return 42; }
 sub bar { return compute() =~ /x/; }
 "#;
 
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///regex_bind_refs.pl", doc)?;
 
     // Find references of "compute" from its declaration site (line 1,
     // `sub compute { ... }` -- "compute" starts at character 4).
-    let result = harness
-        .request(
-            "textDocument/references",
-            json!({
-                "textDocument": {"uri": "file:///regex_bind_refs.pl"},
-                "position": {"line": 1, "character": 5},
-                "context": {"includeDeclaration": true}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": {"uri": "file:///regex_bind_refs.pl"},
+            "position": {"line": 1, "character": 5},
+            "context": {"includeDeclaration": true}
+        }),
+    )?;
 
     assert!(!result.is_null(), "references request must return a result -- got null for `compute`");
     assert!(result.is_array(), "References should return an array, got: {:?}", result);
@@ -394,8 +446,9 @@ sub bar { return compute() =~ /x/; }
 /// Validates that references capability is advertised in server capabilities.
 #[test]
 fn test_references_capability_advertised() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    let init_response = harness.initialize(None)?;
+    let init_response = harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let capabilities = &init_response["capabilities"];
 
