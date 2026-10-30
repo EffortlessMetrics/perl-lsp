@@ -228,14 +228,17 @@ fn completion_response_does_not_emit_apply_kind_without_client_support() -> Test
 
 #[test]
 fn code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
+    let uri = workspace.uri("test.pl");
+    let rename_uri = workspace.uri("rename.pl");
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
-    harness.open("file:///test.pl", "$undefined")?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    harness.open(&uri, "$undefined")?;
 
     let actions = harness.request(
         "textDocument/codeAction",
         json!({
-            "textDocument": { "uri": "file:///test.pl" },
+            "textDocument": { "uri": &uri },
             "range": {
                 "start": { "line": 0, "character": 0 },
                 "end": { "line": 0, "character": 10 }
@@ -248,6 +251,10 @@ fn code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes() ->
         }),
     )?;
 
+    assert!(
+        actions.as_array().is_some_and(|items| !items.is_empty()),
+        "expected a code action: {actions}"
+    );
     assert_no_key(&actions, "documentation")?;
     assert_no_key(&actions, "tags")?;
     assert_no_workspace_edit_metadata(&actions)?;
@@ -255,18 +262,24 @@ fn code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes() ->
     assert_no_command_tooltip(&actions)?;
 
     let mut rename_harness = LspHarness::new();
-    rename_harness.initialize(None)?;
-    rename_harness.open("file:///rename.pl", "my $old = 1;\n$old++;")?;
+    rename_harness.initialize_with_root(&workspace.root_uri, None)?;
+    rename_harness.open(&rename_uri, "my $old = 1;\n$old++;")?;
 
     let rename = rename_harness.request(
         "textDocument/rename",
         json!({
-            "textDocument": { "uri": "file:///rename.pl" },
+            "textDocument": { "uri": &rename_uri },
             "position": { "line": 0, "character": 4 },
             "newName": "new"
         }),
     )?;
 
+    assert!(
+        rename.get("changes").and_then(Value::as_object).is_some_and(|changes| {
+            changes.values().any(|edits| edits.as_array().is_some_and(|edits| !edits.is_empty()))
+        }),
+        "expected a rename text edit: {rename}"
+    );
     assert_no_workspace_edit_metadata(&rename)?;
     assert_no_key(&rename, "snippet")?;
     Ok(())
@@ -274,9 +287,13 @@ fn code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes() ->
 
 #[test]
 fn apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
+    let source = apply_edit_safe_delete_source();
+    workspace.write("lib/ApplyEdit/Pilot.pm", source)?;
+    let uri = workspace.uri("lib/ApplyEdit/Pilot.pm");
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready(
-        "file:///workspace",
+        &workspace.root_uri,
         Some(json!({
             "workspace": {
                 "applyEdit": true,
@@ -286,18 +303,17 @@ fn apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request() -
             }
         })),
     )?;
+    wait_for_index_ready(&mut harness)?;
     harness.drain_server_requests(250);
-
-    let uri = "file:///workspace/lib/ApplyEdit/Pilot.pm";
-    let source = apply_edit_safe_delete_source();
-    harness.open(uri, source)?;
+    harness.open(&uri, source)?;
+    wait_for_safe_delete_compiler(&mut harness, &uri)?;
     let (line, character) = (4_u32, 4_u32);
     let result = harness.request(
         "workspace/executeCommand",
         json!({
             "command": "perl.safeDeleteSymbol",
             "arguments": [{
-                "textDocument": { "uri": uri },
+                "textDocument": { "uri": &uri },
                 "position": { "line": line, "character": character }
             }]
         }),
@@ -350,13 +366,15 @@ fn apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request() -
 
 #[test]
 fn apply_workspace_edit_metadata_absent_without_metadata_support() -> TestResult {
-    let uri = "file:///workspace/lib/ApplyEdit/Pilot.pm";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let source = apply_edit_safe_delete_source();
+    workspace.write("lib/ApplyEdit/Pilot.pm", source)?;
+    let uri = workspace.uri("lib/ApplyEdit/Pilot.pm");
     let (line, character) = (4_u32, 4_u32);
 
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready(
-        "file:///workspace",
+        &workspace.root_uri,
         Some(json!({
             "workspace": {
                 "applyEdit": true,
@@ -364,14 +382,16 @@ fn apply_workspace_edit_metadata_absent_without_metadata_support() -> TestResult
             }
         })),
     )?;
+    wait_for_index_ready(&mut harness)?;
     harness.drain_server_requests(250);
-    harness.open(uri, source)?;
+    harness.open(&uri, source)?;
+    wait_for_safe_delete_compiler(&mut harness, &uri)?;
     let result = harness.request(
         "workspace/executeCommand",
         json!({
             "command": "perl.safeDeleteSymbol",
             "arguments": [{
-                "textDocument": { "uri": uri },
+                "textDocument": { "uri": &uri },
                 "position": { "line": line, "character": character }
             }]
         }),
@@ -389,7 +409,7 @@ fn apply_workspace_edit_metadata_absent_without_metadata_support() -> TestResult
 
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready(
-        "file:///workspace",
+        &workspace.root_uri,
         Some(json!({
             "workspace": {
                 "workspaceEdit": {
@@ -398,14 +418,16 @@ fn apply_workspace_edit_metadata_absent_without_metadata_support() -> TestResult
             }
         })),
     )?;
+    wait_for_index_ready(&mut harness)?;
     harness.drain_server_requests(250);
-    harness.open(uri, source)?;
+    harness.open(&uri, source)?;
+    wait_for_safe_delete_compiler(&mut harness, &uri)?;
     let result = harness.request(
         "workspace/executeCommand",
         json!({
             "command": "perl.safeDeleteSymbol",
             "arguments": [{
-                "textDocument": { "uri": uri },
+                "textDocument": { "uri": &uri },
                 "position": { "line": line, "character": character }
             }]
         }),
@@ -803,6 +825,36 @@ fn markdown_surfaces_do_not_emit_trusted_commands_or_theme_icons_without_support
     }
 
     Ok(())
+}
+
+fn wait_for_index_ready(harness: &mut LspHarness) -> TestResult {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        let params = harness.wait_for_notification("perl-lsp/index-ready", remaining)?;
+        if params.get("ready").and_then(Value::as_bool) == Some(true) {
+            return Ok(());
+        }
+    }
+}
+
+fn wait_for_safe_delete_compiler(harness: &mut LspHarness, uri: &str) -> TestResult {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let receipt = harness.request("workspace/executeCommand", json!({
+            "command": "perl.previewSafeDelete",
+            "arguments": [{"textDocument": {"uri": uri}, "position": {"line": 4, "character": 4}}]
+        }))?;
+        if !receipt.get("compiler_receipt").unwrap_or(&Value::Null).is_null()
+            && receipt.get("decision").and_then(Value::as_str) == Some("allowed")
+        {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(format!("safe-delete compiler receipt not ready: {receipt}").into());
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn apply_edit_safe_delete_source() -> &'static str {
