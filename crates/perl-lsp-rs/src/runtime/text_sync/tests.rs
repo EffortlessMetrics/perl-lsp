@@ -8,6 +8,20 @@ use std::io::{self, Write};
 use std::sync::Arc as StdArc;
 use std::time::Duration;
 
+#[cfg(feature = "workspace")]
+fn wait_for_pending_credit(mut credited: impl FnMut() -> bool) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if credited() {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::yield_now();
+    }
+}
+
 /// Shared-buffer writer for capturing outbound notifications in tests.
 struct SharedVecWriter {
     inner: StdArc<parking_lot::Mutex<Vec<u8>>>,
@@ -1896,8 +1910,8 @@ fn handle_did_change_without_version_uses_next_version() -> Result<(), Box<dyn s
 #[test]
 fn did_open_normalizes_legacy_windows_file_uri_form() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
-    let legacy_uri = r"file://C:\Users\dev\example.pl";
-    let canonical_uri = "file:///c:/Users/dev/example.pl";
+    let legacy_uri = r"file://C:\Fixtures\sample\example.pl";
+    let canonical_uri = "file:///c:/Fixtures/sample/example.pl";
 
     server.did_open(json!({
         "textDocument": {
@@ -1922,8 +1936,8 @@ fn did_open_normalizes_legacy_windows_file_uri_form() -> Result<(), Box<dyn std:
 #[test]
 fn did_open_normalizes_plain_windows_path_uri() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
-    let plain_path = r"C:\Users\dev\plain_path.pl";
-    let canonical_uri = "file:///c:/Users/dev/plain_path.pl";
+    let plain_path = r"C:\Fixtures\sample\plain_path.pl";
+    let canonical_uri = "file:///c:/Fixtures/sample/plain_path.pl";
 
     server.did_open(json!({
         "textDocument": {
@@ -2061,6 +2075,10 @@ fn panicking_new_lifecycle_job_still_credits_the_pending_parse_settle()
         "the panic injector must have actually fired for this test to prove anything; metrics={metrics:?}"
     );
 
+    assert!(
+        wait_for_pending_credit(|| coordinator.pending_parse_count() == baseline),
+        "pending parse credit did not reach baseline after panic"
+    );
     assert_eq!(
         coordinator.pending_parse_count(),
         baseline,
@@ -2097,6 +2115,13 @@ fn terminal_stale_reject_with_no_successor_still_credits_the_pending_parse_settl
 -> Result<(), Box<dyn std::error::Error>> {
     use perl_tdd_support::must_some;
 
+    struct ReleaseBarrier<'a>(&'a LspServer);
+    impl Drop for ReleaseBarrier<'_> {
+        fn drop(&mut self) {
+            self.0.test_parse_worker_release_barrier();
+        }
+    }
+
     let server = StdArc::new(LspServer::new());
     server.install_default_parse_worker();
     let uri = "file:///terminal_reject_credits_settle.pl";
@@ -2114,8 +2139,10 @@ fn terminal_stale_reject_with_no_successor_still_credits_the_pending_parse_settl
     // Pause generation 1's job immediately before it attempts to publish --
     // this is the new-lifecycle enqueue, so `notify_change` fires once here.
     server.test_parse_worker_arm_barrier(uri, 1);
+    let release_barrier = ReleaseBarrier(&server);
     server.test_apply_did_change(uri, "my $aa = 1;\n", 2)?;
     server.test_parse_worker_wait_until_paused();
+    let paused_pending = coordinator.pending_parse_count();
 
     // Close + reopen while generation 1 is paused: `didOpen` is always
     // synchronous (never touches the async worker), so nothing gets
@@ -2130,7 +2157,12 @@ fn terminal_stale_reject_with_no_successor_still_credits_the_pending_parse_settl
     // caller treats it as unpublished -- `jobs_rejected_stale` increments,
     // `on_published` never fires, and (with nothing queued behind it)
     // `finish()` takes its terminal branch on this rejected job.
-    server.test_parse_worker_release_barrier();
+    drop(release_barrier);
+    assert_eq!(
+        paused_pending,
+        baseline + 1,
+        "paused job must have activated a pending parse lifecycle"
+    );
     assert!(
         must_some(server.parse_worker())
             .wait_until_settled(&server.normalize_uri_key(uri), Duration::from_secs(5)),
@@ -2144,6 +2176,10 @@ fn terminal_stale_reject_with_no_successor_still_credits_the_pending_parse_settl
          prove anything; metrics={metrics:?}"
     );
 
+    assert!(
+        wait_for_pending_credit(|| coordinator.pending_parse_count() == baseline),
+        "pending parse credit did not reach baseline after stale rejection"
+    );
     assert_eq!(
         coordinator.pending_parse_count(),
         baseline,
