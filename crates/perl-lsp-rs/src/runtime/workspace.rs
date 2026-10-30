@@ -1811,35 +1811,40 @@ impl LspServer {
                     return Ok(());
                 }
 
-                if !change.added.is_empty() {
-                    let mut workspace_folders = self.workspace_folders.lock();
-                    for uri in &change.added {
-                        tracing::debug!(uri, "Added workspace folder");
-                        let mut folder_state =
-                            super::workspace_folder::WorkspaceFolderState::new(uri.clone());
+                let removed_uris: std::collections::HashSet<&str> =
+                    change.removed.iter().map(String::as_str).collect();
+                let mut workspace_folders = self.workspace_folders.lock();
+                let mut identities: std::collections::HashSet<String> = workspace_folders
+                    .iter()
+                    .filter(|folder| !removed_uris.contains(folder.uri.as_str()))
+                    .map(|folder| self.normalize_uri_key(&folder.uri))
+                    .collect();
+                let added: Vec<_> = change
+                    .added
+                    .iter()
+                    .filter(|uri| identities.insert(self.normalize_uri_key(uri)))
+                    .collect();
 
-                        // Resolve the folder path
-                        if let Some(path) = super::source_path_from_uri(uri) {
-                            folder_state = folder_state.with_path(path);
-                        }
-
-                        workspace_folders.push(folder_state);
-                    }
+                // Preserve all folder state on duplicate-only additions.
+                if added.is_empty() && change.removed.is_empty() {
+                    return Ok(());
                 }
 
-                if !change.removed.is_empty() {
-                    let mut workspace_folders = self.workspace_folders.lock();
-                    let removed_uris: std::collections::HashSet<String> =
-                        change.removed.iter().cloned().collect();
-
-                    for uri in &change.removed {
-                        tracing::debug!(uri, "Removed workspace folder");
-                        self.evict_workspace_folder_state(uri);
-                    }
-
-                    // Retain only folders that are not in the removed list
-                    workspace_folders.retain(|f| !removed_uris.contains(&f.uri));
+                for uri in &change.removed {
+                    tracing::debug!(uri, "Removed workspace folder");
+                    self.evict_workspace_folder_state(uri);
                 }
+                workspace_folders.retain(|folder| !removed_uris.contains(folder.uri.as_str()));
+                for uri in added {
+                    tracing::debug!(uri, "Added workspace folder");
+                    let mut folder_state =
+                        super::workspace_folder::WorkspaceFolderState::new(uri.clone());
+                    if let Some(path) = super::source_path_from_uri(uri) {
+                        folder_state = folder_state.with_path(path);
+                    }
+                    workspace_folders.push(folder_state);
+                }
+                drop(workspace_folders);
 
                 // Workspace folder membership changed, so any in-flight reverse
                 // request now has stale per-folder scoping. Drop pending entries
@@ -2751,6 +2756,81 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(server.pending_workspace_configuration_requests.lock().len(), 1);
         assert_eq!(server.workspace_indexing_invocation_count(), before_invocations);
+        Ok(())
+    }
+
+    #[test]
+    fn did_change_workspace_folders_deduplicates_and_preserves_state()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///tmp/existing-folder";
+        let alias = "file://localhost/tmp/existing-folder";
+        assert_eq!(server.normalize_uri_key(uri), server.normalize_uri_key(alias));
+        let mut folder = super::super::workspace_folder::WorkspaceFolderState::new(uri.into())
+            .with_name("kept".into());
+        folder.effective_workspace_config.include_paths = vec!["kept-setting".into()];
+        server.workspace_folders.lock().push(folder);
+        let id = crate::runtime::types::ServerRequestId::new(9).ok_or("valid id")?;
+        server.pending_workspace_configuration_requests.lock().insert(
+            id,
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                folder_uris: vec![uri.into()],
+                includes_global_item: true,
+                created_at: std::time::Instant::now(),
+            },
+        );
+        let count = server.workspace_indexing_invocation_count();
+        for _ in 0..2 {
+            server.handle_did_change_workspace_folders(Some(json!({"event": {
+                "added": [{"uri": uri}, {"uri": alias}, {"uri": uri}], "removed": []
+            }})))?;
+        }
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 1);
+        assert_eq!(folders[0].name.as_deref(), Some("kept"));
+        assert_eq!(folders[0].effective_workspace_config.include_paths, vec!["kept-setting"]);
+        drop(folders);
+        assert_eq!(server.pending_workspace_configuration_requests.lock().len(), 1);
+        assert_eq!(server.workspace_indexing_invocation_count(), count);
+        Ok(())
+    }
+
+    #[test]
+    fn did_change_workspace_folders_deduplicates_batch_and_handles_removal()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let a = "file:///tmp/folder-a";
+        let b = "file:///tmp/folder-b";
+        let b_alias = "file://localhost/tmp/folder-b";
+        server
+            .workspace_folders
+            .lock()
+            .push(super::super::workspace_folder::WorkspaceFolderState::new(a.into()));
+        server.handle_did_change_workspace_folders(Some(json!({"event": {
+            "added": [{"uri": b}, {"uri": b_alias}, {"uri": b}], "removed": []
+        }})))?;
+        assert_eq!(server.workspace_folder_uris(), vec![a, b]);
+        server.handle_did_change_workspace_folders(Some(json!({"event": {
+            "added": [{"uri": b_alias}, {"uri": a}], "removed": [{"uri": a}]
+        }})))?;
+        assert_eq!(server.workspace_folder_uris(), vec![b, a]);
+        Ok(())
+    }
+
+    #[test]
+    fn did_change_workspace_folders_allows_alias_replacement()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let original = "file:///tmp/replaced-folder";
+        let alias = "file://localhost/tmp/replaced-folder";
+        server
+            .workspace_folders
+            .lock()
+            .push(super::super::workspace_folder::WorkspaceFolderState::new(original.into()));
+        server.handle_did_change_workspace_folders(Some(json!({"event": {
+            "added": [{"uri": alias}], "removed": [{"uri": original}]
+        }})))?;
+        assert_eq!(server.workspace_folder_uris(), vec![alias]);
         Ok(())
     }
 
