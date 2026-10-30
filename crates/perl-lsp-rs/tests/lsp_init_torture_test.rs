@@ -47,6 +47,7 @@ fn get_iterations() -> usize {
 /// This catches the exact class of race that produced BrokenPipe errors.
 #[test]
 fn torture_init_shutdown_cycles() -> Result<(), Box<dyn std::error::Error>> {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let iterations = get_iterations();
     let mut success_count = 0;
     let mut failure_count = 0;
@@ -56,7 +57,7 @@ fn torture_init_shutdown_cycles() -> Result<(), Box<dyn std::error::Error>> {
             let mut harness = LspHarness::new_raw();
 
             // Initialize with barrier
-            harness.initialize_ready("file:///workspace", None)?;
+            harness.initialize_ready(&workspace.root_uri, None)?;
 
             // Open a tiny document
             harness.open("file:///test.pl", "my $x = 1;")?;
@@ -71,18 +72,23 @@ fn torture_init_shutdown_cycles() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             // Verify we got a response (success or null is fine, error is not)
-            assert!(result.is_ok(), "Request should complete without error");
+            result?;
 
             // Graceful shutdown (happens automatically on drop, but we can be explicit)
             harness.shutdown_gracefully();
             Ok(())
         });
 
-        if result.is_ok() {
-            success_count += 1;
-        } else {
-            failure_count += 1;
-            eprintln!("Init torture test failed on iteration {} with panic", i + 1);
+        match result {
+            Ok(Ok(())) => success_count += 1,
+            Ok(Err(error)) => {
+                failure_count += 1;
+                eprintln!("Init torture test failed on iteration {}: {error}", i + 1);
+            }
+            Err(_) => {
+                failure_count += 1;
+                eprintln!("Init torture test failed on iteration {} with panic", i + 1);
+            }
         }
     }
 
@@ -103,26 +109,24 @@ fn torture_init_shutdown_cycles() -> Result<(), Box<dyn std::error::Error>> {
 /// Validates that the TestContext compatibility wrapper also prevents races.
 #[test]
 fn torture_test_context_init_cycles() -> Result<(), Box<dyn std::error::Error>> {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let iterations = get_iterations();
     let mut success_count = 0;
 
     for _ in 0..iterations {
         let mut ctx = TestContext::new();
-        let _ = ctx.initialize();
+        let _ = ctx.initialize_with(&workspace.root_uri, None);
 
         ctx.open_document("file:///test.pl", "my $x = 1;");
 
-        let result = ctx.send_request(
+        ctx.send_request(
             "textDocument/hover",
             Some(json!({
                 "textDocument": { "uri": "file:///test.pl" },
                 "position": { "line": 0, "character": 4 }
             })),
-        );
-
-        // Test passes if we get here without panic/crash
-        // The request completing at all (Some or None) proves the server is responsive
-        let _ = result; // Explicitly acknowledge the result
+        )
+        .ok_or("TestContext hover request failed")?;
         success_count += 1;
     }
 
@@ -136,10 +140,11 @@ fn torture_test_context_init_cycles() -> Result<(), Box<dyn std::error::Error>> 
 /// Test: Multiple documents open/close in rapid succession
 #[test]
 fn torture_document_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let iterations = get_iterations();
 
     let mut harness = LspHarness::new_raw();
-    harness.initialize_ready("file:///workspace", None)?;
+    harness.initialize_ready(&workspace.root_uri, None)?;
 
     for i in 0..iterations {
         let uri = format!("file:///test_{}.pl", i);
@@ -167,10 +172,11 @@ fn torture_document_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
 /// Test: Rapid document updates
 #[test]
 fn torture_document_updates() -> Result<(), Box<dyn std::error::Error>> {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let iterations = get_iterations();
 
     let mut harness = LspHarness::new_raw();
-    harness.initialize_ready("file:///workspace", None)?;
+    harness.initialize_ready(&workspace.root_uri, None)?;
 
     let uri = "file:///test.pl";
     harness.open(uri, "my $x = 0;")?;
