@@ -61,7 +61,8 @@ fn find_pos(
 #[test]
 fn go_to_definition_on_qualified_function_call() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Open the module file that defines My::Utils::process
     harness.open(
@@ -705,7 +706,8 @@ boot_My__Module(pTHX_ CV* cv)
 #[test]
 fn go_to_definition_on_self_method_call() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Open a module that defines a class with methods
     harness.open(
@@ -763,7 +765,8 @@ sub greet {
 #[test]
 fn go_to_definition_on_super_method_uses_parent_chain() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     harness.open(
         "file:///lib/Animal.pm",
@@ -827,7 +830,8 @@ sub greet {
 #[test]
 fn go_to_definition_on_super_method_respects_c3_mro() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let code = r#"package Root;
 sub greet { "root" }
@@ -886,7 +890,8 @@ sub greet {
 #[test]
 fn go_to_definition_cross_file_method_call() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Open the base class with the method definition
     harness.open(
@@ -2052,7 +2057,8 @@ MyModule->process();
 #[test]
 fn go_to_definition_cross_file_package_method_falls_back_to_autoload() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     harness.open(
         "file:///lib/AutoDispatch.pm",
@@ -3157,7 +3163,8 @@ fn assert_no_location_points_to(response: &Value, needle: &str) {
 #[test]
 fn go_to_definition_on_prefix_sibling_method_does_not_leak() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // FooBar defines `new`. Foo is an unrelated package (NOT a parent of
     // FooBar, no @ISA) that only defines `greet` — it has no `new`.
@@ -3221,7 +3228,8 @@ my $obj = Foo->new();
 #[test]
 fn go_to_definition_on_nested_prefix_sibling_method_does_not_leak() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Foo::BarBaz defines `m`. Foo::Bar is an unrelated sibling package that
     // shares the `Foo::Bar` *string* prefix but is a distinct namespace.
@@ -3282,7 +3290,8 @@ my $r = Foo::Bar->m();
 #[test]
 fn go_to_definition_on_ancestor_prefix_does_not_leak_to_subpackage() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Foo::Bar defines `new`. Foo is the (unrelated) ancestor-named package --
     // Perl namespace nesting implies no `@ISA` relationship -- and has no
