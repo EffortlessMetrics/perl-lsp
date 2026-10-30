@@ -63,6 +63,7 @@ fn collect_document_symbols<'a>(symbols: &'a [Value], flattened: &mut Vec<&'a Va
 
 struct TestContext {
     server: LspServer,
+    _workspace: support::test_workspace::TempWorkspace,
     documents: HashMap<String, String>,
     storybook: Vec<String>,
     #[allow(dead_code)]
@@ -79,11 +80,14 @@ impl TestContext {
         let sink: Box<dyn Write + Send> = Box::new(SinkWriter);
         let server = LspServer::with_output(Arc::new(Mutex::new(sink)));
 
+        let workspace = support::test_workspace::TempWorkspace::new().expect("temporary workspace");
+        let workspace_root = workspace.root_uri.clone();
         Self {
             server,
+            _workspace: workspace,
             documents: HashMap::new(),
             storybook: Vec::new(),
-            workspace_root: "file:///workspace".to_string(),
+            workspace_root,
             request_id: 1,
         }
     }
@@ -100,7 +104,7 @@ impl TestContext {
     fn initialize(&mut self) {
         let params = json!({
             "processId": 1234,
-            "rootUri": "file:///workspace",
+            "rootUri": self.workspace_root,
             "capabilities": {
                 "textDocument": {
                     "completion": {
@@ -119,7 +123,39 @@ impl TestContext {
         self.send_notification("initialized", None);
     }
 
+    // Story URIs use a stable placeholder; keep them inside this test's isolated root.
+    fn resolve_story_uris(&self, value: &mut Value) {
+        match value {
+            Value::Object(fields) => {
+                for (key, child) in fields {
+                    if key == "uri" {
+                        if let Some(suffix) =
+                            child.as_str().and_then(|uri| uri.strip_prefix("file:///workspace/"))
+                        {
+                            *child = Value::String(format!(
+                                "{}/{suffix}",
+                                self.workspace_root.trim_end_matches('/')
+                            ));
+                        }
+                    } else {
+                        self.resolve_story_uris(child);
+                    }
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    self.resolve_story_uris(item);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn send_request(&mut self, method: &str, params: Option<Value>) -> Option<Value> {
+        let mut params = params;
+        if let Some(value) = &mut params {
+            self.resolve_story_uris(value);
+        }
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
             id: Some(perl_lsp::protocol::JsonRpcId::Integer((self.request_id) as i64)),
@@ -128,10 +164,19 @@ impl TestContext {
         };
         self.request_id += 1;
 
-        self.server.handle_request(request).and_then(|response| response.result)
+        self.server.handle_request(request).and_then(|response| {
+            if method == "textDocument/rename" {
+                assert!(response.error.is_none(), "Rename failed: {:?}", response.error);
+            }
+            response.result
+        })
     }
 
     fn send_notification(&mut self, method: &str, params: Option<Value>) {
+        let mut params = params;
+        if let Some(value) = &mut params {
+            self.resolve_story_uris(value);
+        }
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
             id: None,
