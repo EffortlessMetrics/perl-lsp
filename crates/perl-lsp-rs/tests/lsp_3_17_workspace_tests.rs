@@ -14,8 +14,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn test_workspace_symbol_3_17() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let response = harness.request(
         "workspace/symbol",
@@ -31,8 +32,9 @@ fn test_workspace_symbol_3_17() -> TestResult {
 
 #[test]
 fn test_workspace_symbol_resolve_3_17() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Mock workspace symbol to resolve
     let response = harness.request(
@@ -54,8 +56,9 @@ fn test_workspace_symbol_resolve_3_17() -> TestResult {
 
 #[test]
 fn test_execute_command_3_17() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let response = harness.request(
         "workspace/executeCommand",
@@ -78,8 +81,10 @@ fn test_execute_command_3_17() -> TestResult {
 
 #[test]
 fn test_workspace_folders_3_17() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
+    let added_workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // Notify of workspace folder changes
     harness.notify(
@@ -87,7 +92,7 @@ fn test_workspace_folders_3_17() -> TestResult {
         json!({
             "event": {
                 "added": [
-                    { "uri": "file:///workspace2", "name": "Workspace 2" }
+                    { "uri": added_workspace.root_uri, "name": "Workspace 2" }
                 ],
                 "removed": []
             }
@@ -101,8 +106,9 @@ fn test_workspace_folders_3_17() -> TestResult {
 
 #[test]
 fn test_file_operations_3_17() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     // willCreateFiles
     let response = harness.request(
@@ -180,8 +186,9 @@ fn test_file_operations_3_17() -> TestResult {
 
 #[test]
 fn test_watched_files_3_17() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
 
     harness.notify(
         "workspace/didChangeWatchedFiles",
