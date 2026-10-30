@@ -51,9 +51,10 @@ impl FileWatcherDebouncer {
         let (tx, rx) = std::sync::mpsc::channel();
         let pending_count = Arc::new(AtomicUsize::new(0));
         let worker_pending_count = Arc::clone(&pending_count);
-        if let Err(e) = thread::Builder::new()
-            .name("file-watcher-debounce".into())
-            .spawn(move || worker_loop(rx, interval, publish_fn, worker_pending_count))
+        if let Err(e) =
+            thread::Builder::new().name("file-watcher-debounce".into()).spawn(move || {
+                worker_loop(rx, interval, publish_fn, worker_pending_count, Instant::now)
+            })
         {
             tracing::error!(error = %e, "file watcher debounce thread spawn failed");
         }
@@ -83,21 +84,23 @@ impl Drop for FileWatcherDebouncer {
     }
 }
 
-fn worker_loop<F>(
+fn worker_loop<F, C>(
     rx: std::sync::mpsc::Receiver<WatcherMsg>,
     interval: Duration,
     publish_fn: F,
     pending_count: Arc<AtomicUsize>,
+    now: C,
 ) where
     F: Fn(Vec<String>) + Send + 'static,
+    C: Fn() -> Instant,
 {
     // pending maps uri -> deadline (last scheduled deadline wins)
     let mut pending: HashMap<String, Instant> = HashMap::new();
     loop {
-        let timeout = earliest_timeout(&pending);
+        let timeout = earliest_timeout(&pending, now());
         let msg = match timeout {
             Some(dur) if dur.is_zero() => {
-                fire_expired(&mut pending, &publish_fn, &pending_count);
+                fire_expired(&mut pending, &publish_fn, &pending_count, now());
                 match rx.try_recv() {
                     Ok(m) => Some(m),
                     Err(std::sync::mpsc::TryRecvError::Empty) => continue,
@@ -107,7 +110,7 @@ fn worker_loop<F>(
             Some(dur) => match rx.recv_timeout(dur) {
                 Ok(m) => Some(m),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    fire_expired(&mut pending, &publish_fn, &pending_count);
+                    fire_expired(&mut pending, &publish_fn, &pending_count, now());
                     continue;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
@@ -120,7 +123,7 @@ fn worker_loop<F>(
         match msg {
             Some(WatcherMsg::Schedule(uri)) => {
                 // Reset deadline on repeated schedules (last one wins)
-                pending.insert(uri, Instant::now() + interval);
+                pending.insert(uri, now() + interval);
                 pending_count.store(pending.len(), Ordering::SeqCst);
             }
             Some(WatcherMsg::Shutdown) => {
@@ -138,11 +141,10 @@ fn worker_loop<F>(
     }
 }
 
-fn earliest_timeout(pending: &HashMap<String, Instant>) -> Option<Duration> {
+fn earliest_timeout(pending: &HashMap<String, Instant>, now: Instant) -> Option<Duration> {
     if pending.is_empty() {
         return None;
     }
-    let now = Instant::now();
     let earliest = pending.values().min().copied().unwrap_or(now);
     Some(earliest.saturating_duration_since(now))
 }
@@ -151,10 +153,10 @@ fn fire_expired<F>(
     pending: &mut HashMap<String, Instant>,
     publish_fn: &F,
     pending_count: &AtomicUsize,
+    now: Instant,
 ) where
     F: Fn(Vec<String>),
 {
-    let now = Instant::now();
     let expired: Vec<String> = pending
         .iter()
         .filter(|(_, deadline)| **deadline <= now)
@@ -176,11 +178,58 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    // All 50 events share a controlled deadline; the live worker path is
+    // exercised separately with real time in the integration suite.
+    #[test]
+    fn file_watcher_debouncer_coalesces_bulk_operations() {
+        use std::sync::mpsc;
+
+        let (tx, rx) = mpsc::channel();
+        let (batches_tx, batches_rx) = mpsc::channel();
+        let pending = Arc::new(AtomicUsize::new(0));
+        let clock_pending = Arc::clone(&pending);
+        let start = Instant::now();
+        let interval = Duration::from_millis(100);
+        for i in 0..50 {
+            assert!(tx.send(WatcherMsg::Schedule(format!("file:///workspace/file{i}.pl"))).is_ok());
+        }
+        let worker = std::thread::spawn(move || {
+            worker_loop(
+                rx,
+                interval,
+                move |uris| {
+                    let _ = batches_tx.send(uris);
+                },
+                pending,
+                move || {
+                    if clock_pending.load(Ordering::SeqCst) == 50 {
+                        start + interval
+                    } else {
+                        start
+                    }
+                },
+            );
+        });
+        let batch = batches_rx.recv_timeout(Duration::from_secs(5)).expect("batch must arrive");
+        let mut expected: Vec<_> =
+            (0..50).map(|i| format!("file:///workspace/file{i}.pl")).collect();
+        let mut actual = batch;
+        expected.sort();
+        actual.sort();
+        assert_eq!(actual, expected, "all 50 distinct URIs must be delivered in one batch");
+        assert!(
+            batches_rx.try_recv().is_err(),
+            "identical deadlines must not split into additional batches"
+        );
+        assert!(tx.send(WatcherMsg::Shutdown).is_ok());
+        assert!(worker.join().is_ok());
+    }
+
     #[test]
     fn earliest_timeout_reports_none_for_empty_pending_set() {
         let pending = HashMap::new();
 
-        assert!(earliest_timeout(&pending).is_none());
+        assert!(earliest_timeout(&pending, Instant::now()).is_none());
     }
 
     #[test]
@@ -188,7 +237,7 @@ mod tests {
         let mut pending = HashMap::new();
         pending.insert("file:///expired.pl".to_string(), Instant::now() - Duration::from_millis(5));
 
-        assert_eq!(earliest_timeout(&pending), Some(Duration::ZERO));
+        assert_eq!(earliest_timeout(&pending, Instant::now()), Some(Duration::ZERO));
     }
 
     #[test]
@@ -208,6 +257,7 @@ mod tests {
                 batches.lock().push(uris);
             },
             &pending_count,
+            Instant::now(),
         );
 
         assert_eq!(
@@ -317,35 +367,5 @@ mod tests {
         // Give the background thread time to process the Shutdown message
         thread::sleep(Duration::from_millis(50));
         assert_eq!(count.load(Ordering::SeqCst), 1);
-    }
-
-    #[test]
-    fn file_watcher_debouncer_coalesces_bulk_operations() {
-        // Simulates a git checkout with 50 file changes arriving rapidly
-        let call_count = Arc::new(AtomicUsize::new(0));
-        let total_uris = Arc::new(AtomicUsize::new(0));
-        let c = Arc::clone(&call_count);
-        let t = Arc::clone(&total_uris);
-        let debouncer =
-            FileWatcherDebouncer::with_interval(Duration::from_millis(100), move |uris| {
-                c.fetch_add(1, Ordering::SeqCst);
-                t.fetch_add(uris.len(), Ordering::SeqCst);
-            });
-
-        // Rapid-fire 50 distinct file changes
-        for i in 0..50usize {
-            debouncer.schedule(&format!("file:///test{i}.pl"));
-        }
-
-        // Wait for debounce window to expire
-        thread::sleep(Duration::from_millis(300));
-
-        let calls = call_count.load(Ordering::SeqCst);
-        let uris = total_uris.load(Ordering::SeqCst);
-        // Should coalesce into <=6 batch calls — under CI scheduler load the 100ms
-        // window may fire before all 50 events arrive, splitting into a few batches.
-        // The meaningful check is that coalescence occurred (not 50 individual calls).
-        assert!(calls <= 6, "Expected <=6 batch calls for 50 rapid changes, got {calls}");
-        assert_eq!(uris, 50, "All 50 URIs should be delivered, got {uris}");
     }
 }

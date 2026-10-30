@@ -146,37 +146,33 @@ fn test_parser_no_cancellation_token_unchanged_behaviour() {
 
 // ── #2458: File watcher change notification debouncing ──────────────────────
 
-/// Verify that `FileWatcherDebouncer::with_interval` batches rapid events.
-///
-/// Uses the debouncer directly (unit level) to avoid filesystem I/O in the test.
+/// Verify live debouncer delivery for 50 independent URI changes.
+/// The controlled-clock unit test checks batching for equal deadlines.
 #[test]
-fn test_file_watcher_debouncer_coalesces_50_rapid_events() {
+fn test_file_watcher_debouncer_delivers_50_rapid_events() {
     use perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer;
+    use std::sync::mpsc;
 
-    let call_count = Arc::new(AtomicUsize::new(0));
-    let total_uris = Arc::new(AtomicUsize::new(0));
-    let c = Arc::clone(&call_count);
-    let t = Arc::clone(&total_uris);
-
+    let (tx, rx) = mpsc::channel();
     let debouncer = FileWatcherDebouncer::with_interval(Duration::from_millis(100), move |uris| {
-        c.fetch_add(1, Ordering::SeqCst);
-        t.fetch_add(uris.len(), Ordering::SeqCst);
+        let _ = tx.send(uris);
     });
-
-    // Simulate a git checkout: 50 file changes arriving within a few milliseconds
-    for i in 0..50usize {
-        debouncer.schedule(&format!("file:///workspace/file{i}.pl"));
+    let mut expected: Vec<_> = (0..50).map(|i| format!("file:///workspace/file{i}.pl")).collect();
+    for uri in &expected {
+        debouncer.schedule(uri);
     }
 
-    // Wait for the debounce window to expire and the batch to fire
-    thread::sleep(Duration::from_millis(300));
-
-    let calls = call_count.load(Ordering::SeqCst);
-    let uris = total_uris.load(Ordering::SeqCst);
-    // Under CI scheduler load the 100ms window can fire while the producer is
-    // still queueing events. The contract is coalescence, not a single batch.
-    assert!(calls <= 6, "Expected <=6 batch calls for 50 rapid changes, got {calls}");
-    assert_eq!(uris, 50, "All 50 URIs should be delivered, got {uris}");
+    let deadline = Instant::now() + Duration::from_millis(300);
+    let mut actual = Vec::new();
+    while actual.len() < expected.len() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let batch =
+            rx.recv_timeout(remaining).expect("all 50 URI events must be delivered within 300ms");
+        actual.extend(batch);
+    }
+    expected.sort();
+    actual.sort();
+    assert_eq!(actual, expected, "each scheduled URI must be delivered exactly once");
 }
 
 /// Verify that `FileWatcherDebouncer` is properly wired through `LspServer`.
