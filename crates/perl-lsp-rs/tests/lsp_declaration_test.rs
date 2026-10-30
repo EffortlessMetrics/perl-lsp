@@ -11,17 +11,14 @@ fn get_declaration(
     uri: &str,
     line: u32,
     character: u32,
-) -> Option<Value> {
-    let result = harness
-        .request(
-            "textDocument/declaration",
-            json!({
-                "textDocument": {"uri": uri},
-                "position": {"line": line, "character": character}
-            }),
-        )
-        .ok()?;
-    Some(result)
+) -> Result<Value, String> {
+    harness.request(
+        "textDocument/declaration",
+        json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character}
+        }),
+    )
 }
 
 #[test]
@@ -45,10 +42,7 @@ print $x;"#;
     harness.open(uri, content)?;
 
     // Click on $x on line 1 (character 0)
-    let result = get_declaration(&mut harness, uri, 1, 0);
-    assert!(result.is_some());
-
-    let locations = result.ok_or("Expected declaration result")?;
+    let locations = get_declaration(&mut harness, uri, 1, 0)?;
     assert!(locations.is_array());
     let locations = locations.as_array().ok_or("Expected locations array")?;
     assert_eq!(locations.len(), 1);
@@ -94,10 +88,7 @@ print $x;  # Should resolve to outer $x"#;
     harness.open(uri, content)?;
 
     // Click on inner $x usage (line 3, character 10)
-    let result = get_declaration(&mut harness, uri, 3, 10);
-    assert!(result.is_some());
-
-    let locations = result.ok_or("Expected declaration result for inner $x")?;
+    let locations = get_declaration(&mut harness, uri, 3, 10)?;
     assert!(locations.is_array());
     let locations = locations.as_array().ok_or("Expected locations array for inner $x")?;
     assert_eq!(locations.len(), 1);
@@ -113,10 +104,7 @@ print $x;  # Should resolve to outer $x"#;
     }
 
     // Click on outer $x usage (line 5, character 6)
-    let result = get_declaration(&mut harness, uri, 5, 6);
-    assert!(result.is_some());
-
-    let locations = result.ok_or("Expected declaration result for outer $x")?;
+    let locations = get_declaration(&mut harness, uri, 5, 6)?;
     assert!(locations.is_array());
     let locations = locations.as_array().ok_or("Expected locations array for outer $x")?;
     assert_eq!(locations.len(), 1);
@@ -157,10 +145,7 @@ my $result = foo();"#;
     harness.open(uri, content)?;
 
     // Click on foo() call (line 4, character 13)
-    let result = get_declaration(&mut harness, uri, 4, 13);
-    assert!(result.is_some());
-
-    let locations = result.ok_or("Expected declaration result for subroutine")?;
+    let locations = get_declaration(&mut harness, uri, 4, 13)?;
     assert!(locations.is_array());
     let locations = locations.as_array().ok_or("Expected locations array for subroutine")?;
     assert_eq!(locations.len(), 1);
@@ -203,10 +188,7 @@ my $result = Foo::bar();"#;
     harness.open(uri, content)?;
 
     // Click on Foo::bar() call (line 6, character 13)
-    let result = get_declaration(&mut harness, uri, 6, 18);
-    assert!(result.is_some());
-
-    let locations = result.ok_or("Expected declaration result for cross-package subroutine")?;
+    let locations = get_declaration(&mut harness, uri, 6, 18)?;
     assert!(locations.is_array());
     let locations =
         locations.as_array().ok_or("Expected locations array for cross-package subroutine")?;
@@ -249,10 +231,7 @@ my $x = FOO;"#;
     harness.open(uri, content)?;
 
     // Click on FOO usage (line 1, character 8)
-    let result = get_declaration(&mut harness, uri, 1, 8);
-    assert!(result.is_some());
-
-    let locations = result.ok_or("Expected declaration result for constant")?;
+    let locations = get_declaration(&mut harness, uri, 1, 8)?;
     assert!(locations.is_array());
     let locations = locations.as_array().ok_or("Expected locations array for constant")?;
     assert_eq!(locations.len(), 1);
@@ -291,10 +270,7 @@ print $π;"#;
 
     // Click on $π usage (line 1, character 6)
     // Note: π is 2 UTF-16 code units
-    let result = get_declaration(&mut harness, uri, 1, 6);
-    assert!(result.is_some());
-
-    let locations = result.ok_or("Expected declaration result for unicode variable")?;
+    let locations = get_declaration(&mut harness, uri, 1, 6)?;
     assert!(locations.is_array());
     let locations = locations.as_array().ok_or("Expected locations array for unicode variable")?;
     assert_eq!(locations.len(), 1);
