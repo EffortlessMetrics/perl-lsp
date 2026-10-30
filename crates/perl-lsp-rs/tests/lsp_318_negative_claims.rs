@@ -51,8 +51,9 @@ impl Write for OutputCapture {
 
 #[test]
 fn initialize_does_not_advertise_unimplemented_318_capabilities() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
-    let init = harness.initialize_ready("file:///workspace", Some(json!({})))?;
+    let init = harness.initialize_ready(&workspace.root_uri, Some(json!({})))?;
     let caps = init
         .get("capabilities")
         .ok_or_else(|| format!("initialize response missing capabilities: {init}"))?;
@@ -68,9 +69,10 @@ fn initialize_does_not_advertise_unimplemented_318_capabilities() -> TestResult 
 
 #[test]
 fn code_action_documentation_advertised_when_supported() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
     let init = harness.initialize_ready(
-        "file:///workspace",
+        &workspace.root_uri,
         Some(json!({
             "textDocument": {
                 "codeAction": {
@@ -132,8 +134,9 @@ fn semantic_tokens_delta_request_returns_real_response() -> TestResult {
     // Delta is now a supported surface (LSP 3.17): the server mints result-ids on
     // full results and answers `textDocument/semanticTokens/full/delta` with a real
     // response (edits, or a full fallback) instead of method-not-found.
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
-    harness.initialize_ready("file:///workspace", Some(json!({})))?;
+    harness.initialize_ready(&workspace.root_uri, Some(json!({})))?;
     harness.open("file:///test.pl", "use strict;\n")?;
 
     let response = harness.request_raw(json!({
@@ -167,9 +170,10 @@ fn semantic_tokens_delta_request_returns_real_response() -> TestResult {
 
 #[test]
 fn inline_completion_does_not_emit_object_form_string_value() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready(
-        "file:///workspace",
+        &workspace.root_uri,
         Some(json!({
             "textDocument": {
                 "inlineCompletion": {
@@ -203,8 +207,9 @@ fn inline_completion_does_not_emit_object_form_string_value() -> TestResult {
 
 #[test]
 fn completion_response_does_not_emit_apply_kind_without_client_support() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
-    harness.initialize_ready("file:///workspace", Some(json!({})))?;
+    harness.initialize_ready(&workspace.root_uri, Some(json!({})))?;
     harness.open("file:///test.pl", "sub alpha {}\nal")?;
 
     let completion = harness.request(
@@ -447,9 +452,10 @@ fn apply_workspace_edit_metadata_absent_without_metadata_support() -> TestResult
 
 #[test]
 fn code_actions_do_not_emit_llm_generated_tags_for_deterministic_actions() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready(
-        "file:///workspace",
+        &workspace.root_uri,
         Some(json!({
             "textDocument": {
                 "codeAction": {
@@ -490,8 +496,9 @@ fn code_actions_do_not_emit_llm_generated_tags_for_deterministic_actions() -> Te
 
 #[test]
 fn code_action_resolve_does_not_echo_tags_without_client_support() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
-    harness.initialize_ready("file:///workspace", Some(json!({})))?;
+    harness.initialize_ready(&workspace.root_uri, Some(json!({})))?;
 
     let resolved = harness.request(
         "codeAction/resolve",
@@ -508,9 +515,10 @@ fn code_action_resolve_does_not_echo_tags_without_client_support() -> TestResult
 
 #[test]
 fn code_action_pragmas_emit_snippet_text_edits_when_supported() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready(
-        "file:///workspace",
+        &workspace.root_uri,
         Some(json!({
             "workspace": {
                 "workspaceEdit": {
@@ -594,9 +602,10 @@ fn code_action_pragmas_emit_snippet_text_edits_when_supported() -> TestResult {
 
 #[test]
 fn code_action_pragmas_require_document_changes_for_snippet_text_edits() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready(
-        "file:///workspace",
+        &workspace.root_uri,
         Some(json!({
             "workspace": {
                 "workspaceEdit": {
@@ -648,8 +657,9 @@ fn code_action_pragmas_require_document_changes_for_snippet_text_edits() -> Test
 
 #[test]
 fn diagnostics_keep_plain_string_messages_without_markup_support() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
-    harness.initialize_ready("file:///workspace", Some(json!({})))?;
+    harness.initialize_ready(&workspace.root_uri, Some(json!({})))?;
     harness.open("file:///test.pl", "use strict\nmy $x = ;\n")?;
 
     let report = harness.request(
@@ -667,14 +677,18 @@ fn diagnostics_keep_plain_string_messages_without_markup_support() -> TestResult
 
 #[test]
 fn dynamic_file_watcher_registration_uses_string_globs_not_relative_patterns() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_with_tuning(RuntimeTuning::normal_defaults());
-    harness.initialize(Some(json!({
-        "workspace": {
-            "didChangeWatchedFiles": {
-                "dynamicRegistration": true
+    harness.initialize_with_root(
+        &workspace.root_uri,
+        Some(json!({
+            "workspace": {
+                "didChangeWatchedFiles": {
+                    "dynamicRegistration": true
+                }
             }
-        }
-    })))?;
+        })),
+    )?;
 
     let requests = harness.drain_server_requests(250);
     let registration = registration_for_method(&requests, "workspace/didChangeWatchedFiles")
@@ -746,9 +760,10 @@ fn window_message_type_does_not_emit_debug_level() -> TestResult {
 
 #[test]
 fn markdown_surfaces_do_not_emit_trusted_commands_or_theme_icons_without_support() -> TestResult {
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready(
-        "file:///workspace",
+        &workspace.root_uri,
         Some(json!({
             "textDocument": {
                 "completion": {
