@@ -45,18 +45,17 @@ fn test_hover_topic_variable_p2() -> TestResult {
     //  0123456789012345
     // $_ at offset 6; cursor on '_' at offset 7 to get the token "$_"
     let doc = "print $_ if $x;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///topic_var_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///topic_var_p2.pl"},
-                "position": {"line": 0, "character": 7}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///topic_var_p2.pl"},
+            "position": {"line": 0, "character": 7}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for $_")?;
     let lower = val.to_lowercase();
     assert!(
@@ -78,18 +77,17 @@ fn test_hover_subroutine_args_array_p2() -> TestResult {
     //  01234567890123456789012
     // @_ at offset 16; cursor on '_' at offset 17 to get the token "@_"
     let doc = "sub f { return @_; }\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///subroutine_args_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///subroutine_args_p2.pl"},
-                "position": {"line": 0, "character": 17}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///subroutine_args_p2.pl"},
+            "position": {"line": 0, "character": 17}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for @_")?;
     let lower = val.to_lowercase();
     assert!(
@@ -112,18 +110,17 @@ fn test_hover_program_name_p2() -> TestResult {
     // $0 at offset 6; '0' is at offset 7.
     // Cursor must be on '0' (offset 7) — the alphanumeric part — to get "$0" from tokenizer.
     let doc = "print $0;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///program_name_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///program_name_p2.pl"},
-                "position": {"line": 0, "character": 7}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///program_name_p2.pl"},
+            "position": {"line": 0, "character": 7}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for $0")?;
     let lower = val.to_lowercase();
     // $0 must describe the program name, not capture groups
@@ -153,18 +150,17 @@ fn test_hover_errno_p2() -> TestResult {
     // $! at offset 4; '!' is at offset 5 — either the sigil (4) or '!' (5) works
     // for extract_special_variable since it scans forward from sigil position.
     let doc = "die $! unless $ok;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///errno_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///errno_p2.pl"},
-                "position": {"line": 0, "character": 4}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///errno_p2.pl"},
+            "position": {"line": 0, "character": 4}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for $!")?;
     let lower = val.to_lowercase();
     assert!(
@@ -186,18 +182,17 @@ fn test_hover_eval_error_p2() -> TestResult {
     //  01234567890123
     // First $@ at offset 5; '@' is at offset 6.
     let doc = "warn $@ if $@;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///eval_error_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///eval_error_p2.pl"},
-                "position": {"line": 0, "character": 5}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///eval_error_p2.pl"},
+            "position": {"line": 0, "character": 5}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for $@")?;
     let lower = val.to_lowercase();
     assert!(
@@ -217,18 +212,17 @@ fn test_hover_eval_error_p2() -> TestResult {
 fn test_hover_input_record_separator_p2() -> TestResult {
     // "undef $/;\n"  — $/ at offset 6, '/' at offset 7
     let doc = "undef $/;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///irs_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///irs_p2.pl"},
-                "position": {"line": 0, "character": 7}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///irs_p2.pl"},
+            "position": {"line": 0, "character": 7}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for $/")?;
     let lower = val.to_lowercase();
     assert!(
@@ -249,20 +243,19 @@ fn test_hover_output_record_separator_p2() -> TestResult {
     // "print $\\;\n"  — $\ at offset 6, '\' at offset 7
     // In the actual file: "print $\;\n" (the backslash is a single char)
     let doc = "print $\\;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///ors_p2.pl", doc)?;
     // The file text is: p=0 r=1 i=2 n=3 t=4 ' '=5 $=6 \=7 ;=8 \n=9
     // Hover on '$' (offset 6) — extract_special_variable looks at next char '\' (offset 7)
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///ors_p2.pl"},
-                "position": {"line": 0, "character": 6}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///ors_p2.pl"},
+            "position": {"line": 0, "character": 6}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for $\\")?;
     let lower = val.to_lowercase();
     assert!(
@@ -282,19 +275,18 @@ fn test_hover_output_record_separator_p2() -> TestResult {
 fn test_hover_output_field_separator_p2() -> TestResult {
     // "print $,;\n"  — $, at offset 6, ',' at offset 7
     let doc = "print $,;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///ofs_p2.pl", doc)?;
     // Hover on '$' at offset 6; extract_special_variable sees ',' at offset 7
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///ofs_p2.pl"},
-                "position": {"line": 0, "character": 6}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///ofs_p2.pl"},
+            "position": {"line": 0, "character": 6}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for $,")?;
     let lower = val.to_lowercase();
     assert!(
@@ -317,18 +309,17 @@ fn test_hover_env_hash_p2() -> TestResult {
     // %ENV at offset 11; 'E' at offset 12.
     // Cursor on 'E' (12) to get "%ENV" from tokenizer.
     let doc = "print keys %ENV;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///env_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///env_p2.pl"},
-                "position": {"line": 0, "character": 12}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///env_p2.pl"},
+            "position": {"line": 0, "character": 12}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for %ENV")?;
     let lower = val.to_lowercase();
     assert!(
@@ -350,18 +341,17 @@ fn test_hover_sig_hash_p2() -> TestResult {
     //  01234567890123
     // %SIG at offset 8; 'S' at offset 9.
     let doc = "my %s = %SIG;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///sig_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///sig_p2.pl"},
-                "position": {"line": 0, "character": 9}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///sig_p2.pl"},
+            "position": {"line": 0, "character": 9}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for %SIG")?;
     let lower = val.to_lowercase();
     assert!(
@@ -383,18 +373,17 @@ fn test_hover_inc_array_p2() -> TestResult {
     //  0123456789012
     // @INC at offset 8; 'I' at offset 9.
     let doc = "unshift @INC, '/my/lib';\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///inc_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///inc_p2.pl"},
-                "position": {"line": 0, "character": 9}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///inc_p2.pl"},
+            "position": {"line": 0, "character": 9}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for @INC")?;
     let lower = val.to_lowercase();
     assert!(
@@ -416,18 +405,17 @@ fn test_hover_argv_array_p2() -> TestResult {
     //  01234567890123456789
     // @ARGV at offset 14; 'A' at offset 15.
     let doc = "print scalar @ARGV;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///argv_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///argv_p2.pl"},
-                "position": {"line": 0, "character": 15}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///argv_p2.pl"},
+            "position": {"line": 0, "character": 15}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for @ARGV")?;
     let lower = val.to_lowercase();
     assert!(
@@ -449,18 +437,17 @@ fn test_hover_inc_hash_p2() -> TestResult {
     //  01234567890123
     // %INC at offset 8; 'I' at offset 9.
     let doc = "my %m = %INC;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///inc_hash_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///inc_hash_p2.pl"},
-                "position": {"line": 0, "character": 9}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///inc_hash_p2.pl"},
+            "position": {"line": 0, "character": 9}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for %INC")?;
     let lower = val.to_lowercase();
     assert!(
@@ -483,18 +470,17 @@ fn test_hover_warning_flag_p2() -> TestResult {
     // $^W at offset 6; '^' at offset 7, 'W' at offset 8.
     // extract_special_variable handles $^X when cursor is on '$' or '^'.
     let doc = "print $^W;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///warn_flag_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///warn_flag_p2.pl"},
-                "position": {"line": 0, "character": 7}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///warn_flag_p2.pl"},
+            "position": {"line": 0, "character": 7}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for $^W")?;
     let lower = val.to_lowercase();
     assert!(
@@ -516,18 +502,17 @@ fn test_hover_os_name_p2() -> TestResult {
     //  0123456789
     // $^O at offset 6; '^' at offset 7, 'O' at offset 8.
     let doc = "print $^O;\n";
+    let workspace = support::test_workspace::TempWorkspace::new()?;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize_with_root(&workspace.root_uri, None)?;
     harness.open_document("file:///os_name_p2.pl", doc)?;
-    let result = harness
-        .request(
-            "textDocument/hover",
-            json!({
-                "textDocument": {"uri": "file:///os_name_p2.pl"},
-                "position": {"line": 0, "character": 7}
-            }),
-        )
-        .unwrap_or(json!(null));
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///os_name_p2.pl"},
+            "position": {"line": 0, "character": 7}
+        }),
+    )?;
     let val = hover_value(&result).ok_or("Expected hover content for $^O")?;
     let lower = val.to_lowercase();
     assert!(
