@@ -19,21 +19,21 @@
 #   - github.base_ref is absent; BASE_REF resolves via
 #     github.event.merge_group.base_ref (the queue target branch).
 #   - PR_LABELS is empty (no pull_request event); ripr runs without label routing.
-#   - IS_FORK_PR is false — merge queue only admits trusted same-repo SHAs.
-#   - ripr diff analysis uses origin/<base_ref>..HEAD; the merge-test commit HEAD
-#     is the squash of PR + base, so the diff is semantically equivalent to PR diff.
+#   - PR origin is unavailable, so use GitHub-hosted runners for the group.
+#   - ripr diff analysis uses origin/<base_ref>..HEAD for the queued composition;
+#     a group can contain changes from more than one PR.
 
 name: ripr
 
 on:
   pull_request:
     branches: [master, main]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled]
   merge_group:
   workflow_dispatch: {}
 
 concurrency:
-  group: ripr-${{ github.event.pull_request.number || github.ref }}
+  group: ripr-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:
@@ -47,7 +47,7 @@ jobs:
     name: Route ripr runner
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event.pull_request.draft != true || github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     outputs:
       target: ${{ steps.route.outputs.target }}
       reason: ${{ steps.route.outputs.reason }}
@@ -56,7 +56,8 @@ jobs:
       - name: Decide target runner
         id: route
         env:
-          GH_TOKEN: ${{ secrets.EM_RUNNER_READ_TOKEN }}
+          GH_TOKEN: ${{ github.event_name != 'merge_group' && secrets.EM_RUNNER_READ_TOKEN || '' }}
+          IS_MERGE_GROUP: ${{ github.event_name == 'merge_group' }}
           ORG: EffortlessMetrics
           IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
           PR_AUTHOR_LOGIN: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || '' }}
@@ -83,6 +84,11 @@ jobs:
               echo "- router_fallback_allowed: \`$fallback_allowed\`"
             } >> "$GITHUB_STEP_SUMMARY"
           }
+
+          if [ "$IS_MERGE_GROUP" = "true" ]; then
+            emit "github" "merge_group_unverified_origin" "true"
+            exit 0
+          fi
 
           # Fork PRs cannot access self-hosted runners -- GitHub blocks secrets.
           if [ "$IS_FORK_PR" = "true" ]; then
@@ -194,6 +200,8 @@ jobs:
     env:
       RIPR_VERSION: "0.9.0"
       BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+      BASE_REV: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || format('origin/{0}', github.event.repository.default_branch) }}
+      EXPECTED_HEAD: ${{ github.sha }}
       PR_LABELS: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
       CARGO_HOME: /mnt/ci-cache/cargo-home
       SCCACHE_DIR: /mnt/ci-cache/sccache
@@ -227,6 +235,13 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Verify event revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${BASE_REV}^{commit}"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
 
       - name: Preflight disk
         id: preflight
@@ -284,6 +299,7 @@ jobs:
             --memory="28g" \
             -e RIPR_VERSION="$RIPR_VERSION" \
             -e BASE_REF="$BASE_REF" \
+            -e BASE_REV="$BASE_REV" \
             -e PR_LABELS="$PR_LABELS" \
             -e CARGO_HOME=/cargo-home \
             -e SCCACHE_DIR=/sccache \
@@ -322,17 +338,17 @@ jobs:
 
               # Generation phase: keep going on individual failures so we can
               # still upload whatever artifacts were produced.
-              cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD || RIPR_FAILED=1
+              cargo xtask ripr-pr --base "$BASE_REV" --head HEAD || RIPR_FAILED=1
               cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json || RIPR_FAILED=1
-              cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --timeout-seconds 210 || RIPR_FAILED=1
+              cargo xtask ripr-review-comments --base "$BASE_REV" --head HEAD --timeout-seconds 210 || RIPR_FAILED=1
               cargo xtask impacted-evidence --labels-csv "$PR_LABELS" || RIPR_FAILED=1
               cargo xtask ripr-pr-summary || RIPR_FAILED=1
               cargo xtask ripr-annotations || RIPR_FAILED=1
 
               # Validation phase.
-              cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD --check
+              cargo xtask ripr-pr --base "$BASE_REV" --head HEAD --check
               cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
-              cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --check
+              cargo xtask ripr-review-comments --base "$BASE_REV" --head HEAD --check
               cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
               cargo xtask ripr-pr-summary --check
               cargo xtask ripr-annotations --check
@@ -343,7 +359,7 @@ jobs:
                 --ripr-receipt target/receipts/quality/ripr-plus.json \
                 --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
                 --review-receipt target/ripr/review/comments.json \
-                --ripr-base "origin/$BASE_REF" \
+                --ripr-base "$BASE_REV" \
                 --ripr-head HEAD \
                 --receipt target/receipts/quality/quality-gate-ripr.json \
                 --summary target/receipts/quality/quality-gate-ripr.md
@@ -352,7 +368,7 @@ jobs:
                 --ripr-receipt target/receipts/quality/ripr-plus.json \
                 --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
                 --review-receipt target/ripr/review/comments.json \
-                --ripr-base "origin/$BASE_REF" \
+                --ripr-base "$BASE_REV" \
                 --ripr-head HEAD \
                 --receipt target/receipts/quality/quality-gate-ripr.json \
                 --summary target/receipts/quality/quality-gate-ripr.md \
@@ -438,6 +454,8 @@ jobs:
     env:
       RIPR_VERSION: "0.9.0"
       BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+      BASE_REV: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || format('origin/{0}', github.event.repository.default_branch) }}
+      EXPECTED_HEAD: ${{ github.sha }}
       PR_LABELS: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
       CARGO_HOME: /mnt/ci-cache/cargo-home
       SCCACHE_DIR: /mnt/ci-cache/sccache
@@ -471,6 +489,13 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Verify event revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${BASE_REV}^{commit}"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
 
       - name: Preflight disk
         id: preflight
@@ -532,6 +557,7 @@ jobs:
             --memory="16g" \
             -e RIPR_VERSION="$RIPR_VERSION" \
             -e BASE_REF="$BASE_REF" \
+            -e BASE_REV="$BASE_REV" \
             -e PR_LABELS="$PR_LABELS" \
             -e CARGO_HOME=/cargo-home \
             -e SCCACHE_DIR=/sccache \
@@ -570,17 +596,17 @@ jobs:
 
               # Generation phase: keep going on individual failures so we can
               # still upload whatever artifacts were produced.
-              cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD || RIPR_FAILED=1
+              cargo xtask ripr-pr --base "$BASE_REV" --head HEAD || RIPR_FAILED=1
               cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json || RIPR_FAILED=1
-              cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --timeout-seconds 210 || RIPR_FAILED=1
+              cargo xtask ripr-review-comments --base "$BASE_REV" --head HEAD --timeout-seconds 210 || RIPR_FAILED=1
               cargo xtask impacted-evidence --labels-csv "$PR_LABELS" || RIPR_FAILED=1
               cargo xtask ripr-pr-summary || RIPR_FAILED=1
               cargo xtask ripr-annotations || RIPR_FAILED=1
 
               # Validation phase.
-              cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD --check
+              cargo xtask ripr-pr --base "$BASE_REV" --head HEAD --check
               cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
-              cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --check
+              cargo xtask ripr-review-comments --base "$BASE_REV" --head HEAD --check
               cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
               cargo xtask ripr-pr-summary --check
               cargo xtask ripr-annotations --check
@@ -591,7 +617,7 @@ jobs:
                 --ripr-receipt target/receipts/quality/ripr-plus.json \
                 --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
                 --review-receipt target/ripr/review/comments.json \
-                --ripr-base "origin/$BASE_REF" \
+                --ripr-base "$BASE_REV" \
                 --ripr-head HEAD \
                 --receipt target/receipts/quality/quality-gate-ripr.json \
                 --summary target/receipts/quality/quality-gate-ripr.md
@@ -600,7 +626,7 @@ jobs:
                 --ripr-receipt target/receipts/quality/ripr-plus.json \
                 --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
                 --review-receipt target/ripr/review/comments.json \
-                --ripr-base "origin/$BASE_REF" \
+                --ripr-base "$BASE_REV" \
                 --ripr-head HEAD \
                 --receipt target/receipts/quality/quality-gate-ripr.json \
                 --summary target/receipts/quality/quality-gate-ripr.md \
@@ -680,12 +706,21 @@ jobs:
     env:
       RIPR_VERSION: "0.9.0"
       BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+      BASE_REV: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || format('origin/{0}', github.event.repository.default_branch) }}
+      EXPECTED_HEAD: ${{ github.sha }}
       PR_LABELS: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Verify event revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${BASE_REV}^{commit}"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
 
       - name: Toolchain (rust-toolchain.toml pins 1.95.0)
         run: rustc --version
@@ -713,7 +748,7 @@ jobs:
         run: ripr doctor
 
       - name: Generate PR evidence
-        run: cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD
+        run: cargo xtask ripr-pr --base "$BASE_REV" --head HEAD
 
       - name: Generate repo-wide RIPR+ baseline receipt
         if: always()
@@ -721,7 +756,7 @@ jobs:
 
       - name: Generate review guidance
         if: always()
-        run: cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --timeout-seconds 210
+        run: cargo xtask ripr-review-comments --base "$BASE_REV" --head HEAD --timeout-seconds 210
 
       - name: Generate impacted evidence
         if: always()
@@ -738,9 +773,9 @@ jobs:
       - name: Validate PR evidence contracts
         if: always()
         run: |
-          cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD --check
+          cargo xtask ripr-pr --base "$BASE_REV" --head HEAD --check
           cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
-          cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --check
+          cargo xtask ripr-review-comments --base "$BASE_REV" --head HEAD --check
           cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
           cargo xtask ripr-pr-summary --check
           cargo xtask ripr-annotations --check
@@ -753,7 +788,7 @@ jobs:
             --ripr-receipt target/receipts/quality/ripr-plus.json \
             --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
             --review-receipt target/ripr/review/comments.json \
-            --ripr-base "origin/$BASE_REF" \
+            --ripr-base "$BASE_REV" \
             --ripr-head HEAD \
             --receipt target/receipts/quality/quality-gate-ripr.json \
             --summary target/receipts/quality/quality-gate-ripr.md
@@ -762,7 +797,7 @@ jobs:
             --ripr-receipt target/receipts/quality/ripr-plus.json \
             --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
             --review-receipt target/ripr/review/comments.json \
-            --ripr-base "origin/$BASE_REF" \
+            --ripr-base "$BASE_REV" \
             --ripr-head HEAD \
             --receipt target/receipts/quality/quality-gate-ripr.json \
             --summary target/receipts/quality/quality-gate-ripr.md \
@@ -829,6 +864,8 @@ jobs:
     env:
       RIPR_VERSION: "0.9.0"
       BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+      BASE_REV: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || format('origin/{0}', github.event.repository.default_branch) }}
+      EXPECTED_HEAD: ${{ github.sha }}
       PR_LABELS: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
     steps:
       - name: Annotate failover reason
@@ -847,6 +884,13 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Verify event revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${BASE_REV}^{commit}"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
 
       - name: Toolchain (rust-toolchain.toml pins 1.95.0)
         run: rustc --version
@@ -872,7 +916,7 @@ jobs:
         run: ripr doctor
 
       - name: Generate PR evidence
-        run: cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD
+        run: cargo xtask ripr-pr --base "$BASE_REV" --head HEAD
 
       - name: Generate repo-wide RIPR+ baseline receipt
         if: always()
@@ -880,7 +924,7 @@ jobs:
 
       - name: Generate review guidance
         if: always()
-        run: cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --timeout-seconds 210
+        run: cargo xtask ripr-review-comments --base "$BASE_REV" --head HEAD --timeout-seconds 210
 
       - name: Generate impacted evidence
         if: always()
@@ -897,9 +941,9 @@ jobs:
       - name: Validate PR evidence contracts
         if: always()
         run: |
-          cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD --check
+          cargo xtask ripr-pr --base "$BASE_REV" --head HEAD --check
           cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
-          cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --check
+          cargo xtask ripr-review-comments --base "$BASE_REV" --head HEAD --check
           cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
           cargo xtask ripr-pr-summary --check
           cargo xtask ripr-annotations --check
@@ -912,7 +956,7 @@ jobs:
             --ripr-receipt target/receipts/quality/ripr-plus.json \
             --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
             --review-receipt target/ripr/review/comments.json \
-            --ripr-base "origin/$BASE_REF" \
+            --ripr-base "$BASE_REV" \
             --ripr-head HEAD \
             --receipt target/receipts/quality/quality-gate-ripr.json \
             --summary target/receipts/quality/quality-gate-ripr.md
@@ -921,7 +965,7 @@ jobs:
             --ripr-receipt target/receipts/quality/ripr-plus.json \
             --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
             --review-receipt target/ripr/review/comments.json \
-            --ripr-base "origin/$BASE_REF" \
+            --ripr-base "$BASE_REV" \
             --ripr-head HEAD \
             --receipt target/receipts/quality/quality-gate-ripr.json \
             --summary target/receipts/quality/quality-gate-ripr.md \
@@ -965,14 +1009,14 @@ jobs:
   # 3. Result aggregator -- owns the "ripr+ New Gap Gate" required-check name.
   # -------------------------------------------------------------------------
   ripr:
-    name: ripr+ New Gap Gate
+    name: ${{ github.event_name == 'pull_request' && (github.event.label.name != 'ci:qualify' || github.event.pull_request.draft) && 'ripr+ New Gap Gate (qualification not requested)' || 'ripr+ New Gap Gate' }}
     needs:
       - route-ripr
       - ripr-cx53
       - ripr-cx43
       - ripr-github
       - ripr-fallback
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1008,19 +1052,6 @@ jobs:
             echo "- github_result: \`${GITHUB_RESULT:-}\`"
             echo "- fallback_result: \`${FALLBACK_RESULT:-}\`"
           } >> "$GITHUB_STEP_SUMMARY"
-
-          # Draft PRs intentionally skip ripr: route-ripr has
-          #   if: github.event.pull_request.draft != true || ...
-          # which causes ROUTE_RESULT=skipped for draft PRs.  A skipped router
-          # is NOT a gate failure — ripr simply does not apply yet.  Report
-          # neutral/pass so agents see the true failure class (gate-names-must-
-          # match-failure-classes.md, #1492).  When the PR is converted to
-          # ready-for-review the workflow re-triggers and ripr runs for real.
-          if [ "$ROUTE_RESULT" = "skipped" ]; then
-            echo "::notice::ripr router was skipped (draft PR or non-applicable event) — ripr gate is neutral/pass."
-            echo "ripr+ New Gap Gate: neutral (router skipped — draft PR or non-applicable event)"
-            exit 0
-          fi
 
           if [ "$ROUTE_RESULT" != "success" ]; then
             echo "::error::ripr router did not complete successfully: $ROUTE_RESULT"

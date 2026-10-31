@@ -2,6 +2,7 @@ name: Methodology Gate
 
 on:
   pull_request:
+    types: [labeled]
   merge_group:
   push:
     branches:
@@ -13,11 +14,12 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   methodology-gate:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,8 +30,10 @@ jobs:
 
       - name: Run methodology gate (advisory)
         run: |
+          jq --arg event "$GITHUB_EVENT_NAME" '. + {event_name: $event}' \
+            "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/methodology-event.json"
           cargo xtask methodology-gate \
-            --fixture "${GITHUB_EVENT_PATH}" \
+            --fixture "$RUNNER_TEMP/methodology-event.json" \
             --receipt target/receipts/methodology-gate.json
 
       - name: Upload methodology receipt

@@ -1,22 +1,15 @@
 name: CI
 
 # Tiered CI for perl-lsp (see tests/TAXONOMY.md)
-# - PR smoke: fast feedback on every push (~1-2 min)
-# - Merge gate: full validation on every PR push and push to main (~5-10 min)
+# - PR smoke: fast feedback on explicit qualification (~1-2 min)
+# - Merge gate: full validation on qualification, merge groups, and push to main
 # Cost: ~$0.05 per PR (smoke + merge gate; see #4675 for rationale)
 
 on:
   pull_request:
     branches: [ main, master ]
-    # Deliberately exclude `labeled` / `unlabeled` — every label-add (e.g., applying
-    # `ci-green`, `merge-ready`, pipeline sign-off labels) would trigger a fresh CI run
-    # that cancels the prior in-progress run (see `cancel-in-progress` below). This
-    # caused a cascade observed across ~20 admin-merges: each pipeline label applied by
-    # agents killed the running CI, restarting from scratch and eating minutes of compute
-    # per label. The merge-ready-reconciler.yml applies the same exclusion for the same
-    # reason (infinite-loop guard). `ready_for_review` and `converted_to_draft` are kept
-    # because they change the draft-pr-check guard behavior and must trigger CI.
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    # Only an explicit qualification request starts PR CI.
+    types: [labeled]
   merge_group: {}
   push:
     branches: [ main, master ]
@@ -25,7 +18,7 @@ on:
 # Cancel in-progress runs for PR events on new pushes; let push/merge_group runs complete.
 # The preflight SHA-staleness check provides additional skip logic for superseded SHAs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:
@@ -38,6 +31,7 @@ env:
 jobs:
   draft-pr-check:
     name: Draft PR guard
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     runs-on: ubuntu-24.04
     timeout-minutes: 1
     outputs:
@@ -466,7 +460,7 @@ jobs:
   # advisory, flaky, redundant lane (see the pr-smoke job) and must not false-red
   # this aggregate.
   merge-gate:
-    name: CI Gate (Advisory Aggregate)
+    name: ${{ github.event_name == 'pull_request' && (github.event.label.name != 'ci:qualify' || github.event.pull_request.draft) && 'CI Gate (qualification not requested)' || 'CI Gate (Advisory Aggregate)' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     needs:

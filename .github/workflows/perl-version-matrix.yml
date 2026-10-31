@@ -4,14 +4,14 @@ on:
   pull_request:
     branches: [ main, master ]
     # Keep label-gated runs alive after label is applied.
-    types: [opened, synchronize, reopened, labeled]
+    types: [labeled]
   schedule:
     # Weekly on Mondays at 04:30 UTC
     - cron: '30 4 * * 1'
   workflow_dispatch: {}
 
 concurrency:
-  group: perl-version-matrix-${{ github.event.pull_request.number || github.ref }}
+  group: perl-version-matrix-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
     name: Perl compatibility (${{ matrix.perl }})
     if: |
       github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:perl-matrix')
+      (!github.event.pull_request.draft && github.event.label.name == 'ci:perl-matrix')
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:

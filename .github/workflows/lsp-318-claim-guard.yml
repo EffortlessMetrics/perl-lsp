@@ -2,6 +2,7 @@ name: LSP 3.18 Claim Guard
 
 on:
   pull_request:
+    types: [labeled]
     paths:
       - '.github/workflows/lsp-318-claim-guard.yml'
       - 'policy/ci-lane-whitelist.toml'
@@ -43,7 +44,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: lsp-318-claim-guard-${{ github.event.pull_request.number || github.ref }}
+  group: lsp-318-claim-guard-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:
@@ -51,6 +52,7 @@ permissions:
 
 jobs:
   claim-guard:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: LSP 3.18 claim guard
     runs-on: ubuntu-24.04
     timeout-minutes: 10

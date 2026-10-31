@@ -11,7 +11,7 @@ on:
   pull_request:
     branches: [ main, master ]
     # Keep label-gated jobs alive after the label is applied.
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    types: [labeled]
   schedule:
     # Run nightly at 3am UTC
     - cron: '0 3 * * *'
@@ -55,7 +55,7 @@ on:
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
-  group: ci-nightly-${{ github.event.pull_request.number || github.ref }}
+  group: ci-nightly-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:
@@ -78,7 +78,7 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mutation != 'false') ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:mutation'))
+       (!github.event.pull_request.draft && github.event.label.name == 'ci:mutation'))
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -105,7 +105,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:bench')
+      (!github.event.pull_request.draft && github.event.label.name == 'ci:bench')
     runs-on: ubuntu-24.04
 
     steps:
@@ -337,8 +337,8 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_real_repo_latency != 'false') ||
       (github.event_name == 'pull_request' &&
-       (contains(github.event.pull_request.labels.*.name, 'ci:bench') ||
-        contains(github.event.pull_request.labels.*.name, 'ci:real-repo-latency')))
+       ((!github.event.pull_request.draft && github.event.label.name == 'ci:bench') ||
+        (!github.event.pull_request.draft && github.event.label.name == 'ci:real-repo-latency')))
     runs-on: ubuntu-24.04
 
     steps:
@@ -379,7 +379,7 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_corpus_differential != 'false') ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:corpus-differential'))
+       (!github.event.pull_request.draft && github.event.label.name == 'ci:corpus-differential'))
     runs-on: ubuntu-24.04
 
     steps:
@@ -421,7 +421,7 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_memory != 'false') ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:memory'))
+       (!github.event.pull_request.draft && github.event.label.name == 'ci:memory'))
     steps:
       - uses: actions/checkout@v7
 
@@ -715,7 +715,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:strict'))
+       (!github.event.pull_request.draft && github.event.label.name == 'ci:strict'))
     steps:
       - uses: actions/checkout@v7
 
@@ -748,7 +748,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:semver'))
+       (!github.event.pull_request.draft && github.event.label.name == 'ci:semver'))
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
@@ -830,7 +830,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:public-api'))
+       (!github.event.pull_request.draft && github.event.label.name == 'ci:public-api'))
     steps:
       - uses: actions/checkout@v7
 
@@ -865,7 +865,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:metrics-ratchet'))
+       (!github.event.pull_request.draft && github.event.label.name == 'ci:metrics-ratchet'))
     steps:
       - uses: actions/checkout@v7
 
@@ -896,7 +896,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:strict'))
+       (!github.event.pull_request.draft && github.event.label.name == 'ci:strict'))
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -929,7 +929,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:kwalitee'))
+       (!github.event.pull_request.draft && github.event.label.name == 'ci:kwalitee'))
     steps:
       - uses: actions/checkout@v7
 

@@ -16,13 +16,14 @@ name: Changelog Ledger (Advisory)
 
 on:
   pull_request:
+    types: [labeled]
   workflow_dispatch: {}
 
 permissions:
   contents: read
 
 concurrency:
-  group: changelog-advisory-${{ github.event.pull_request.number || github.ref }}
+  group: changelog-advisory-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event.action == 'synchronize' }}
 
 env:
@@ -35,6 +36,7 @@ env:
 
 jobs:
   changelog-disposition:
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     name: Changelog disposition (advisory)
     # Self-hosted Ubuntu runner only — never add a Windows/non-Ubuntu job here
     # (see CI runner economics: any non-Ubuntu job falls back to billed

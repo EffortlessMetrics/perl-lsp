@@ -11,6 +11,7 @@ name: Policy Validators
 
 on:
   pull_request:
+    types: [labeled]
     paths:
       - 'policy/**'
       - '.ci/gate-policy.yaml'
@@ -21,7 +22,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: policy-validators-${{ github.event.pull_request.number || github.ref }}
+  group: policy-validators-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   # Only cancel on synchronize to avoid label-event cancellation cascades
   # (workflow-policy-lint LABEL_EVENT_CANCELS_PR_RUN rule).
   cancel-in-progress: ${{ github.event.action == 'synchronize' }}
@@ -31,6 +32,7 @@ permissions:
 
 jobs:
   validate:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: Validate CI policy ledgers
     runs-on:
       group: em-ci-nano

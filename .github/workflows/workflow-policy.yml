@@ -2,6 +2,7 @@ name: Workflow Policy
 
 on:
   pull_request:
+    types: [labeled]
     paths:
       - '.github/workflows/**'
       - 'xtask/src/tasks/workflow_policy_lint.rs'
@@ -9,6 +10,8 @@ on:
       - 'xtask/src/tasks/mod.rs'
       - '.ci/receipts/schemas/workflow-policy.schema.json'
       - 'xtask/tests/fixtures/workflow-policy/**'
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main, master]
     paths:
@@ -25,6 +28,7 @@ permissions:
 
 jobs:
   workflow-policy-lint:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
