@@ -12,6 +12,7 @@ name: CI Gate Self-Tests
 
 on:
   pull_request:
+    types: [labeled]
     branches: [main, master]
     paths:
       - 'scripts/cargo-package-workspace-dry-run.sh'
@@ -48,6 +49,7 @@ permissions:
 
 jobs:
   publish-dry-run-self-test:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: Publish dry-run gate self-test
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -88,6 +90,7 @@ jobs:
           fi
 
   install-target-selection-self-test:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: Installer target-selection self-test
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -113,6 +116,7 @@ jobs:
           fi
 
   installer-zero-args-self-test:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: Installer zero-argument bootstrap self-test
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -138,6 +142,7 @@ jobs:
           fi
 
   check-pr-review-convergence-self-test:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: Review-convergence gate self-test
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -163,6 +168,7 @@ jobs:
           fi
 
   review-lease-self-test:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: Review-lease self-test
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -188,6 +194,7 @@ jobs:
           fi
 
   worktree-manager-self-test:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: Worktree-manager allocate self-test
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -213,6 +220,7 @@ jobs:
           fi
 
   target-isolation-self-test:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: Per-worktree cargo target-dir isolation self-test
     runs-on: ubuntu-24.04
     timeout-minutes: 10

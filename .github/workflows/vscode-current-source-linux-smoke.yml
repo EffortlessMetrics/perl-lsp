@@ -3,6 +3,7 @@ name: VS Code Current-Source Linux Smoke
 on:
   workflow_dispatch: {}
   pull_request:
+    types: [labeled]
     branches: [main, master]
     paths:
       - 'vscode-extension/**'
@@ -21,6 +22,7 @@ permissions:
 
 jobs:
   current-source-linux-smoke:
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     name: Current-source Linux smoke (${{ matrix.vscode_version }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25

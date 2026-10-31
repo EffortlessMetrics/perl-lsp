@@ -10,10 +10,7 @@ name: UX Regression Gate
 on:
   pull_request:
     branches: [main, master]
-    # Deliberately exclude `labeled` / `unlabeled` — label application should not
-    # restart this workflow under `cancel-in-progress`, or operators lose active CI
-    # runs to label churn instead of code changes.
-    types: [opened, synchronize, reopened]
+    types: [labeled]
     paths:
       - 'crates/perl-lsp*/**'
       - 'crates/perl-dap*/**'
@@ -38,6 +35,7 @@ env:
 
 jobs:
   ux-regression-gate:
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     name: UX Regression Gate
     runs-on: ubuntu-24.04
     # The active golden workload emits its structured receipt after the
@@ -392,6 +390,7 @@ jobs:
   # green before enforcement was enabled (#932).
   # ---------------------------------------------------------------------------
   extension-jest:
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     name: Extension Jest
     runs-on: ubuntu-24.04
     timeout-minutes: 15

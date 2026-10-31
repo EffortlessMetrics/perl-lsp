@@ -3,6 +3,7 @@ name: Valid Required Workflow
 on:
   pull_request:
     branches: [master]
+    types: [labeled]
   merge_group:
     types: [checks_requested]
   push:
@@ -14,6 +15,7 @@ concurrency:
 
 jobs:
   lint:
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     steps:
       - run: echo ok

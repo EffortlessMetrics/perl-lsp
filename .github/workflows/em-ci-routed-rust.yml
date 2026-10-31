@@ -20,7 +20,7 @@ on:
     # `main` is kept alongside it so the file stays correct if the publication
     # join ever renames the default branch.
     branches: [master, main]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled]
   merge_group:
 
 permissions:
@@ -40,6 +40,7 @@ env:
 jobs:
   route-rust-small:
     name: Route Perl LSP Rust Small
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -51,10 +52,11 @@ jobs:
       - name: Decide target runner
         id: route
         env:
-          GH_TOKEN: ${{ secrets.EM_RUNNER_READ_TOKEN }}
+          GH_TOKEN: ${{ github.event_name != 'merge_group' && secrets.EM_RUNNER_READ_TOKEN || '' }}
           ORG: EffortlessMetrics
           FORCE_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.force_target || 'auto' }}
           IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+          IS_MERGE_GROUP: ${{ github.event_name == 'merge_group' }}
           IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
           PR_AUTHOR_LOGIN: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || '' }}
           PR_AUTHOR_TYPE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.type || '' }}
@@ -83,6 +85,11 @@ jobs:
               echo "- router_fallback_allowed: \`$fallback_allowed\`"
             } >> "$GITHUB_STEP_SUMMARY"
           }
+
+          if [ "$IS_MERGE_GROUP" = "true" ]; then
+            emit "github" "merge_group_unverified_origin" "false" "true"
+            exit 0
+          fi
 
           if [ "$IS_FORK_PR" = "true" ]; then
             emit "github" "fork_pr" "false" "true"
@@ -648,7 +655,7 @@ jobs:
       - rust-small-cx43
       - rust-small-github
       - rust-small-fallback
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

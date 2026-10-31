@@ -19,16 +19,16 @@
 #   - github.base_ref is absent; BASE_REF resolves via
 #     github.event.merge_group.base_ref (the queue target branch).
 #   - PR_LABELS is empty (no pull_request event); ripr runs without label routing.
-#   - IS_FORK_PR is false — merge queue only admits trusted same-repo SHAs.
-#   - ripr diff analysis uses origin/<base_ref>..HEAD; the merge-test commit HEAD
-#     is the squash of PR + base, so the diff is semantically equivalent to PR diff.
+#   - PR origin is unavailable, so use GitHub-hosted runners for the group.
+#   - ripr diff analysis uses origin/<base_ref>..HEAD for the queued composition;
+#     a group can contain changes from more than one PR.
 
 name: ripr
 
 on:
   pull_request:
     branches: [master, main]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled]
   merge_group:
   workflow_dispatch: {}
 
@@ -47,7 +47,7 @@ jobs:
     name: Route ripr runner
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event.pull_request.draft != true || github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     outputs:
       target: ${{ steps.route.outputs.target }}
       reason: ${{ steps.route.outputs.reason }}
@@ -56,7 +56,8 @@ jobs:
       - name: Decide target runner
         id: route
         env:
-          GH_TOKEN: ${{ secrets.EM_RUNNER_READ_TOKEN }}
+          GH_TOKEN: ${{ github.event_name != 'merge_group' && secrets.EM_RUNNER_READ_TOKEN || '' }}
+          IS_MERGE_GROUP: ${{ github.event_name == 'merge_group' }}
           ORG: EffortlessMetrics
           IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
           PR_AUTHOR_LOGIN: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || '' }}
@@ -83,6 +84,11 @@ jobs:
               echo "- router_fallback_allowed: \`$fallback_allowed\`"
             } >> "$GITHUB_STEP_SUMMARY"
           }
+
+          if [ "$IS_MERGE_GROUP" = "true" ]; then
+            emit "github" "merge_group_unverified_origin" "true"
+            exit 0
+          fi
 
           # Fork PRs cannot access self-hosted runners -- GitHub blocks secrets.
           if [ "$IS_FORK_PR" = "true" ]; then
@@ -972,7 +978,7 @@ jobs:
       - ripr-cx43
       - ripr-github
       - ripr-fallback
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1008,19 +1014,6 @@ jobs:
             echo "- github_result: \`${GITHUB_RESULT:-}\`"
             echo "- fallback_result: \`${FALLBACK_RESULT:-}\`"
           } >> "$GITHUB_STEP_SUMMARY"
-
-          # Draft PRs intentionally skip ripr: route-ripr has
-          #   if: github.event.pull_request.draft != true || ...
-          # which causes ROUTE_RESULT=skipped for draft PRs.  A skipped router
-          # is NOT a gate failure — ripr simply does not apply yet.  Report
-          # neutral/pass so agents see the true failure class (gate-names-must-
-          # match-failure-classes.md, #1492).  When the PR is converted to
-          # ready-for-review the workflow re-triggers and ripr runs for real.
-          if [ "$ROUTE_RESULT" = "skipped" ]; then
-            echo "::notice::ripr router was skipped (draft PR or non-applicable event) — ripr gate is neutral/pass."
-            echo "ripr+ New Gap Gate: neutral (router skipped — draft PR or non-applicable event)"
-            exit 0
-          fi
 
           if [ "$ROUTE_RESULT" != "success" ]; then
             echo "::error::ripr router did not complete successfully: $ROUTE_RESULT"

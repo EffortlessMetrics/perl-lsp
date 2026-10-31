@@ -3,6 +3,7 @@ name: VS Code Managed Binary Smoke
 on:
   workflow_dispatch: {}
   pull_request:
+    types: [labeled]
     branches: [main, master]
     paths:
       - 'vscode-extension/**'
@@ -19,6 +20,7 @@ permissions:
 
 jobs:
   managed-binary-smoke:
+    if: github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)
     name: VS Code smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15

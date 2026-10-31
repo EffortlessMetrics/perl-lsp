@@ -42,7 +42,7 @@ name: Post-Merge Corpus Ratchet
 on:
   pull_request:
     branches: [ main, master ]
-    types: [opened, synchronize, reopened]
+    types: [labeled]
     # Only run on PRs that change the distribution list files, to avoid
     # triggering on every parser fix. The full 1000-dist ratchet is nightly-only;
     # the PR trigger runs the bounded (top-50) job for quick distribution-list review.
@@ -94,7 +94,7 @@ jobs:
     # which defaults to bounded for quick manual verification).
     # Not on schedule: the full nightly job provides the canonical ratchet.
     if: |
-      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft) ||
       (github.event_name == 'workflow_dispatch' &&
        (github.event.inputs.mode == 'bounded' || github.event.inputs.mode == ''))
     runs-on: ubuntu-24.04

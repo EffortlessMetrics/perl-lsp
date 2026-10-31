@@ -10,6 +10,8 @@ use serde_yaml_ng::Value;
 
 use crate::utils::project_root;
 
+const QUALIFY_GUARD: &str = "github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)";
+
 const REQUIRED_CANCEL_IN_PROGRESS: &str =
     "${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}";
 
@@ -205,11 +207,12 @@ fn evaluate_required_entry(
                         "concurrency.cancel-in-progress must be `{REQUIRED_CANCEL_IN_PROGRESS}`"
                     ));
                 }
-                if pull_request_has_label_triggers(yaml) {
-                    violations.push(
-                        "required CI workflows must not trigger on pull_request labeled/unlabeled"
-                            .to_string(),
-                    );
+                if !pull_request_labeled_only(yaml) {
+                    violations.push("pull_request types must be exactly [labeled]".to_string());
+                }
+                if !root_jobs_have_qualify_guard(yaml) {
+                    violations
+                        .push(format!("every root job must use qualify guard `{QUALIFY_GUARD}`"));
                 }
             }
         }
@@ -432,19 +435,97 @@ fn has_path_filters(workflow: &Value) -> bool {
     })
 }
 
-fn pull_request_has_label_triggers(workflow: &Value) -> bool {
+/// A label event is only an invitation to evaluate the job guard. Other PR
+/// actions must never start qualification, including implicit default types.
+fn pull_request_labeled_only(workflow: &Value) -> bool {
     get_on(workflow)
         .and_then(Value::as_mapping)
         .and_then(|on| on.get(Value::String("pull_request".to_string())))
         .and_then(Value::as_mapping)
         .and_then(|pr| pr.get(Value::String("types".to_string())))
         .and_then(Value::as_sequence)
-        .is_some_and(|types| {
-            types
-                .iter()
-                .filter_map(Value::as_str)
-                .any(|event| event == "labeled" || event == "unlabeled")
+        .is_some_and(|types| types.len() == 1 && types[0].as_str() == Some("labeled"))
+}
+
+/// Require each root job to gate the explicit label and non-draft status. Jobs
+/// downstream of roots normally require success. Explicit status functions can
+/// bypass that default, so only the known fail-closed aggregate is accepted.
+/// Exact expressions prevent accidental acceptance of weakened OR clauses.
+fn root_jobs_have_qualify_guard(workflow: &Value) -> bool {
+    let Some(jobs) = get_top_level_field(workflow, "jobs").and_then(Value::as_mapping) else {
+        return false;
+    };
+    if jobs.is_empty() {
+        return false;
+    }
+    if !jobs.keys().all(|name| {
+        name.as_str().is_some_and(|name| {
+            guarded_ancestry(jobs, name, &mut std::collections::BTreeSet::new())
         })
+    }) {
+        return false;
+    }
+    jobs.values().all(|job| {
+        let Some(job) = job.as_mapping() else { return false; };
+        if job.contains_key(Value::String("needs".to_string())) {
+            // Only implicit success or the current CI guards are recognized.
+            // An arbitrary expression could use status functions to override
+            // skipped dependencies, or add an OR that bypasses the guard.
+            let condition = job.get(Value::String("if".to_string())).and_then(Value::as_str).unwrap_or("").trim();
+            let safe = [
+                "",
+                "needs.draft-pr-check.outputs.run_ci == 'true'",
+                "needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'",
+                "always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'",
+            ];
+            if !safe.contains(&condition) { return false; }
+            if condition.is_empty() { return true; }
+            let needs = job.get(Value::String("needs".to_string()));
+            return match needs {
+                Some(Value::String(dep)) => dep == "draft-pr-check" && condition == safe[1],
+                Some(Value::Sequence(items)) => items.iter().any(|item| item.as_str() == Some("draft-pr-check")),
+                _ => false,
+            };
+        }
+        job.get(Value::String("if".to_string()))
+            .and_then(Value::as_str)
+            .is_some_and(|condition| {
+                let condition = condition.trim();
+                let condition = condition.strip_prefix("${{")
+                    .and_then(|s| s.strip_suffix("}}"))
+                    .map(str::trim)
+                    .unwrap_or(condition);
+                condition == QUALIFY_GUARD
+            })
+    })
+}
+
+/// Every dependency chain must terminate in a known guarded root; unknown
+/// dependencies, empty lists, non-string entries and cycles fail closed.
+fn guarded_ancestry(
+    jobs: &serde_yaml_ng::Mapping,
+    name: &str,
+    visiting: &mut std::collections::BTreeSet<String>,
+) -> bool {
+    if !visiting.insert(name.to_string()) {
+        return false;
+    }
+    let result =
+        jobs.get(Value::String(name.to_string())).and_then(Value::as_mapping).is_some_and(|job| {
+            match job.get(Value::String("needs".to_string())) {
+                None => true, // root's exact guard is checked separately
+                Some(Value::String(dep)) => guarded_ancestry(jobs, dep, visiting),
+                Some(Value::Sequence(deps)) => {
+                    !deps.is_empty()
+                        && deps.iter().all(|dep| {
+                            dep.as_str().is_some_and(|dep| guarded_ancestry(jobs, dep, visiting))
+                        })
+                }
+                Some(_) => false,
+            }
+        });
+    visiting.remove(name);
+    result
 }
 
 fn has_event_aware_concurrency(workflow: &Value) -> bool {
@@ -528,7 +609,7 @@ mod tests {
     }
 
     #[test]
-    fn labeled_pull_request_type_fixture_fails() -> Result<()> {
+    fn extra_pull_request_types_fixture_fails() -> Result<()> {
         let fixture = load_fixture("labeled-required.yml")?;
         let eval = evaluate_required_entry(
             "fixture",
@@ -539,7 +620,7 @@ mod tests {
             RuleSet::RequiredShape,
         );
         assert!(!eval.ok);
-        assert!(eval.violations.iter().any(|item| item.contains("labeled/unlabeled")));
+        assert!(eval.violations.iter().any(|item| item.contains("exactly [labeled]")));
         Ok(())
     }
 
@@ -556,6 +637,44 @@ mod tests {
         );
         assert!(!eval.ok);
         assert!(eval.violations.iter().any(|item| item.contains("merge_group")));
+        Ok(())
+    }
+
+    #[test]
+    fn qualification_requires_label_and_non_draft_on_every_root() -> Result<()> {
+        let good = load_fixture("valid-required.yml")?;
+        assert!(pull_request_labeled_only(&good));
+        assert!(root_jobs_have_qualify_guard(&good));
+        for (name, yaml) in [
+            ("missing types", "on: {pull_request: {}}\njobs: {x: {}}"),
+            ("unlabeled", "on: {pull_request: {types: [labeled, unlabeled]}}\njobs: {x: {}}"),
+            ("default events", "on: [pull_request]\njobs: {x: {}}"),
+        ] {
+            assert!(!pull_request_labeled_only(&parse(yaml)?), "{name}");
+        }
+        for condition in [
+            "github.event_name != 'pull_request' || github.event.label.name == 'ci:qualify'",
+            "github.event_name != 'pull_request' || !github.event.pull_request.draft",
+            "github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' || !github.event.pull_request.draft)",
+        ] {
+            let yaml = format!("jobs:\n  x:\n    if: \"{condition}\"\n");
+            assert!(!root_jobs_have_qualify_guard(&parse(&yaml)?), "{condition}");
+        }
+        let mixed = format!(
+            "jobs:\n  guarded:\n    if: \"{QUALIFY_GUARD}\"\n  unguarded: {{runs-on: ubuntu-latest}}\n"
+        );
+        assert!(!root_jobs_have_qualify_guard(&parse(&mixed)?));
+        assert!(!root_jobs_have_qualify_guard(&parse("jobs: {}")?));
+        let guarded_aggregate = format!(
+            "jobs:\n  draft-pr-check:\n    if: \"{QUALIFY_GUARD}\"\n  preflight-latest-check:\n    needs: draft-pr-check\n    if: needs.draft-pr-check.outputs.run_ci == 'true'\n  aggregate:\n    needs: [draft-pr-check, preflight-latest-check]\n    if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'\n"
+        );
+        assert!(root_jobs_have_qualify_guard(&parse(&guarded_aggregate)?));
+        let bypass = format!(
+            "jobs:\n  guarded:\n    if: \"{QUALIFY_GUARD}\"\n  bypass:\n    needs: guarded\n    if: always()\n"
+        );
+        assert!(!root_jobs_have_qualify_guard(&parse(&bypass)?));
+        assert!(!root_jobs_have_qualify_guard(&parse("jobs: {a: {needs: b}, b: {needs: a}}")?));
+        assert!(!root_jobs_have_qualify_guard(&parse("jobs: {a: {needs: missing}}")?));
         Ok(())
     }
 

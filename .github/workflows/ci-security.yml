@@ -6,6 +6,7 @@ name: CI (Security)
 
 on:
   pull_request:
+    types: [labeled]
     branches: [main, master]
     paths:
       - 'Cargo.toml'
@@ -38,6 +39,7 @@ env:
 jobs:
   # ── Preflight: skip superseded SHAs to save cost ─────────────────────
   preflight-latest-check:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false) }}
     name: Preflight — is this SHA latest?
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -75,7 +77,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: preflight-latest-check
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    if: ${{ (github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false)) && (needs.preflight-latest-check.outputs.is_latest == 'true') }}
     permissions:
       contents: read
       security-events: write
@@ -130,7 +132,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: preflight-latest-check
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    if: ${{ (github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false)) && (needs.preflight-latest-check.outputs.is_latest == 'true') }}
     permissions:
       contents: read
 
@@ -166,7 +168,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: preflight-latest-check
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    if: ${{ (github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false)) && (needs.preflight-latest-check.outputs.is_latest == 'true') }}
     permissions:
       contents: read
       security-events: write
@@ -224,7 +226,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: preflight-latest-check
-    if: (needs.preflight-latest-check.outputs.is_latest == 'true') && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    if: ${{ (github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && github.event.pull_request.draft == false)) && ((needs.preflight-latest-check.outputs.is_latest == 'true') && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
     permissions:
       contents: read
       security-events: write

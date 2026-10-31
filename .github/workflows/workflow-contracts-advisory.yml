@@ -23,12 +23,15 @@ name: Workflow Contracts (Advisory)
 
 on:
   pull_request:
+    types: [labeled]
     paths:
       - ".github/workflows/**"
       - "xtask/src/tasks/workflows.rs"
       - "xtask/src/tasks/workflow_policy_lint.rs"
       - "policy/workflow-contracts.toml"
       - ".ci/receipts/schemas/workflow-contracts.schema.json"
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
     paths:
@@ -57,6 +60,7 @@ env:
 
 jobs:
   workflow-contracts:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft) }}
     name: Workflow Contracts (advisory)
     # Self-hosted Ubuntu runner only — never add a Windows/non-Ubuntu job
     # here (see CI runner economics: any non-Ubuntu job falls back to billed

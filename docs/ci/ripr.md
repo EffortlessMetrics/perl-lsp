@@ -23,8 +23,8 @@ oracle-aware than coverage, far cheaper than mutation testing.
 During the proof-lane rollout, the `ripr` workflow now blocks PRs that introduce
 new diff-scoped RIPR gaps or fail to produce current RIPR receipts. Repo-wide
 RIPR+ total zero remains a burn-down target until the final enforcement slice.
-The workflow still runs for every PR when it is ready for review so docs-only,
-policy-only, workflow-only, and code PRs all carry current proof receipts.
+An explicit `ci:qualify` request runs the workflow for a non-draft PR, and
+merge-group events run it on the queued composition.
 
 ## What ripr does
 
@@ -55,14 +55,12 @@ Do **not** translate these into `killed` / `survived`. They mean something diffe
 
 ## When it runs
 
-- Every PR targeting `master` or `main`.
+- A non-draft PR targeting `master` or `main` when `ci:qualify` is added.
 - No path filter is applied: docs-only, policy-only, workflow-only, and code
-  PRs all run the RIPR proof workflow so every merge has current proof receipts.
-- Draft PRs are skipped while draft, then the explicit `ready_for_review`
-  trigger runs the workflow before the PR can merge.
+  PRs can request the same RIPR proof workflow.
+- Merge-group checks run on the queued composition. Reapply `ci:qualify` after
+  changing a PR head to request new PR evidence; the label alone is not proof.
 - Manual via `workflow_dispatch`.
-- Labels can still route deeper or more expensive evidence lanes elsewhere, but
-  this proof workflow is no longer label-gated.
 
 ---
 

@@ -1,4 +1,4 @@
-//! Contract tests for ready-for-review RIPR workflow routing.
+//! Contract tests for explicit qualification and queue RIPR routing.
 
 use std::fs;
 use std::path::PathBuf;
@@ -11,25 +11,31 @@ fn project_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn ripr_workflow_runs_on_ready_for_review_without_path_filter()
--> Result<(), Box<dyn std::error::Error>> {
+fn ripr_workflow_runs_on_explicit_qualification_without_path_filter(
+) -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root()?;
     let workflow = fs::read_to_string(root.join(".github/workflows/ripr.yml"))?;
     let xtask_main = fs::read_to_string(root.join("xtask/src/main.rs"))?;
 
     assert!(workflow.contains("pull_request:"), "ripr.yml must run from pull_request events");
     assert!(
-        workflow.contains("types: [opened, synchronize, reopened, ready_for_review]"),
-        "ripr.yml must rerun when a draft PR becomes ready for review because the job skips draft PRs"
+        workflow.contains("types: [labeled]"),
+        "ripr.yml must run PR CI only on explicit qualification"
     );
     assert!(
         !workflow.contains("\n    paths:"),
-        "ripr.yml must not path-filter the ready-for-review proof run"
+        "ripr.yml must not path-filter the qualification proof run"
     );
     assert!(
-        workflow.contains("if: github.event.pull_request.draft != true"),
-        "ripr.yml may skip draft PRs while they are still draft"
+        workflow.contains(
+            "github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft"
+        ),
+        "ripr.yml must only qualify non-draft PRs when requested"
     );
+    assert!(workflow.contains("IS_MERGE_GROUP: ${{ github.event_name == 'merge_group' }}"));
+    assert!(workflow.contains("github.event_name != 'merge_group' && secrets.EM_RUNNER_READ_TOKEN"));
+    assert!(workflow.contains("merge_group_unverified_origin"));
+    assert!(!workflow.contains("ripr router was skipped (draft PR"));
     let gate_step = workflow_step(&workflow, "Enforce new RIPR gap quality gate")
         .ok_or("missing RIPR gate step")?;
     assert!(
@@ -99,13 +105,13 @@ fn ripr_workflow_runs_on_ready_for_review_without_path_filter()
 }
 
 #[test]
-fn ripr_self_hosted_preflight_falls_back_when_required_image_is_missing()
--> Result<(), Box<dyn std::error::Error>> {
+fn ripr_self_hosted_preflight_falls_back_when_required_image_is_missing(
+) -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root()?;
     let workflow = fs::read_to_string(root.join(".github/workflows/ripr.yml"))?;
 
     assert_eq!(
-        workflow.matches("docker image inspect em-ci-rust:1.95").count(),
+        workflow.matches("if ! docker image inspect em-ci-rust:1.95").count(),
         2,
         "CX53 and CX43 preflight must both check the required Docker image before running ripr"
     );
@@ -124,8 +130,8 @@ fn ripr_self_hosted_preflight_falls_back_when_required_image_is_missing()
 }
 
 #[test]
-fn ripr_docs_describe_unfiltered_ready_for_review_receipt_routing()
--> Result<(), Box<dyn std::error::Error>> {
+fn ripr_docs_describe_unfiltered_qualification_receipt_routing(
+) -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root()?;
     let docs = fs::read_to_string(root.join("docs/ci/ripr.md"))?;
     let posture = section_block(&docs, "## Current routing posture")
@@ -142,8 +148,8 @@ fn ripr_docs_describe_unfiltered_ready_for_review_receipt_routing()
         "RIPR docs must describe the promoted new-gap blocking posture without final total-zero enforcement"
     );
     assert!(
-        when_it_runs.contains("Every PR targeting `master` or `main`"),
-        "RIPR docs must describe the workflow as an every-PR proof run"
+        when_it_runs.contains("non-draft PR targeting `master` or `main`"),
+        "RIPR docs must describe explicit qualification"
     );
     assert!(
         when_it_runs.contains("No path filter is applied")
@@ -153,8 +159,8 @@ fn ripr_docs_describe_unfiltered_ready_for_review_receipt_routing()
         "RIPR docs must make docs/policy/workflow-only PR coverage explicit"
     );
     assert!(
-        when_it_runs.contains("ready_for_review"),
-        "RIPR docs must say draft PRs run the workflow when they become ready"
+        when_it_runs.contains("ci:qualify") && when_it_runs.contains("Merge-group"),
+        "RIPR docs must describe qualification and merge-group proof"
     );
     assert!(
         behavior.contains("target/ripr/pr/")
@@ -229,7 +235,11 @@ fn section_block<'a>(content: &'a str, heading: &str) -> Option<&'a str> {
         })
         .find_map(
             |(offset, line)| {
-                if line.starts_with("## ") && line != heading { Some(offset) } else { None }
+                if line.starts_with("## ") && line != heading {
+                    Some(offset)
+                } else {
+                    None
+                }
             },
         )
         .unwrap_or(rest.len());
@@ -250,7 +260,11 @@ fn workflow_step<'a>(content: &'a str, name: &str) -> Option<&'a str> {
         })
         .find_map(
             |(offset, line)| {
-                if line.trim_start().starts_with("- name:") { Some(offset) } else { None }
+                if line.trim_start().starts_with("- name:") {
+                    Some(offset)
+                } else {
+                    None
+                }
             },
         )
         .unwrap_or(rest.len());

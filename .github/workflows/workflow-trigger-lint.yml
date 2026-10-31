@@ -2,6 +2,7 @@ name: Workflow Trigger Lint
 
 on:
   pull_request:
+    types: [labeled]
     branches: [main, master]
   merge_group:
     types: [checks_requested]
@@ -17,6 +18,7 @@ permissions:
 
 jobs:
   lint:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft) }}
     name: Workflow Trigger Lint
     runs-on: ubuntu-24.04
     steps:
