@@ -91,12 +91,37 @@ def snapshot(git_dir):
     }
 
 
+def fixture_temp_parent(env):
+    # Match cargo-safe's managed storage default for this source checkout. A
+    # direct normal hook need not have inherited cargo-safe's exported TMPDIR.
+    # Never lower admission or fall back to another volume after a denial.
+    cache = Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    devplane = Path(env.get("DEVPLANE") or cache / "devplane" / ROOT.name)
+    return devplane / "tmp"
+
+
+class FixtureStorageRouting(unittest.TestCase):
+    def test_managed_and_default_roots_do_not_depend_on_tmpdir(self):
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            env = {"DEVPLANE": str(base / "managed"), "XDG_CACHE_HOME": str(base / "cache"),
+                   "TMPDIR": str(base / "unrelated")}
+            self.assertEqual(fixture_temp_parent(env), base / "managed/tmp")
+            del env["DEVPLANE"]
+            self.assertEqual(fixture_temp_parent(env), base / "cache/devplane" / ROOT.name / "tmp")
+            del env["XDG_CACHE_HOME"]
+            self.assertEqual(fixture_temp_parent(env), Path.home() / ".cache/devplane" / ROOT.name / "tmp")
+
+
 class SingleCrateHook(unittest.TestCase):
     def setUp(self):
-        # Native qualification supplies TMPDIR on the admitted managed volume.
-        self.temp = tempfile.TemporaryDirectory(prefix="single-crate-hook-")
+        parent = fixture_temp_parent(os.environ)
+        parent.mkdir(parents=True, exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(prefix="single-crate-hook-", dir=parent)
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        self.assertEqual(self.root.parent.resolve(), parent.resolve())
+        self.assertEqual(self.root.stat().st_dev, parent.stat().st_dev)
         self.caller = self.root / "caller"
         self.receiver = self.root / "receiver.git"
         self.env = git_environment()
