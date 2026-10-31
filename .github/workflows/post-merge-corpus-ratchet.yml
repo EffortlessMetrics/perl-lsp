@@ -67,7 +67,7 @@ on:
 
 # Only one ratchet at a time; cancel stale in-progress runs on re-trigger.
 concurrency:
-  group: post-merge-corpus-ratchet-${{ github.ref }}
+  group: post-merge-corpus-ratchet-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: true
 
 permissions:

@@ -26,7 +26,7 @@ on:
 # preflight gate instead of cancelling in-flight work mid-run.
 # Note: scheduled runs always pass the preflight gate (no SHA comparison).
 concurrency:
-  group: ci-security-${{ github.ref }}
+  group: ci-security-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: false
 
 permissions:

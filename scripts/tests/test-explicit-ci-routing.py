@@ -31,6 +31,29 @@ class ExplicitRoutingTest(unittest.TestCase):
         self.assertEqual(workflow['on']['pull_request']['types'],
                          ['opened', 'edited', 'reopened', 'synchronize'])
 
+    def test_label_events_have_separate_concurrency_groups(self):
+        for filename in WORKFLOWS:
+            with self.subTest(filename=filename):
+                path = ROOT / '.github' / 'workflows' / filename
+                workflow = yaml.load(path.read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
+                if 'concurrency' in workflow:
+                    self.assertIn('github.event.label.name', workflow['concurrency']['group'])
+
+    def test_unrequested_result_names_are_distinct(self):
+        for filename, job, result, skipped in (
+            ('ci.yml', 'merge-gate', 'CI Gate (Advisory Aggregate)', 'CI Gate (qualification not requested)'),
+            ('em-ci-routed-rust.yml', 'rust-small-result', 'Perl LSP Rust Small Result', 'Perl LSP Rust Small Result (qualification not requested)'),
+            ('ripr.yml', 'ripr', 'ripr+ New Gap Gate', 'ripr+ New Gap Gate (qualification not requested)'),
+        ):
+            with self.subTest(filename=filename):
+                path = ROOT / '.github' / 'workflows' / filename
+                workflow = yaml.load(path.read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
+                name = workflow['jobs'][job]['name']
+                self.assertIn("github.event.label.name != 'ci:qualify'", name)
+                self.assertIn('github.event.pull_request.draft', name)
+                self.assertIn(skipped, name)
+                self.assertIn("'" + result + "'", name)
+
 
 if __name__ == '__main__':
     unittest.main()

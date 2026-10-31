@@ -41,7 +41,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: ci-gate-self-tests-${{ github.ref }}
+  group: ci-gate-self-tests-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: true
 
 permissions:

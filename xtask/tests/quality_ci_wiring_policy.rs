@@ -56,7 +56,10 @@ fn ripr_workflow_blocks_new_gaps_and_requires_receipts() {
     let root = repo_root();
     let workflow = must(fs::read_to_string(root.join(".github/workflows/ripr.yml")));
 
-    assert!(workflow.contains("name: ripr+ New Gap Gate"), "RIPR check name must be explicit");
+    assert!(
+        workflow.contains("'ripr+ New Gap Gate'"),
+        "RIPR qualifying check name must be explicit"
+    );
     let gate_step = must_some(workflow_step(&workflow, "Enforce new RIPR gap quality gate"));
     assert!(
         !gate_step.contains("continue-on-error: true"),
@@ -100,8 +103,8 @@ fn coverage_workflow_is_manual_or_nightly_only_and_requires_receipts() {
     let coverage_job = &coverage_tail[..coverage_end];
 
     assert!(
-        workflow.contains("types: [opened, synchronize, reopened, ready_for_review, labeled]"),
-        "ci-nightly may still host other label-gated jobs"
+        workflow.contains("types: [labeled]"),
+        "ci-nightly may host explicit label-gated jobs without PR lifecycle runs"
     );
     assert!(
         coverage_job.contains("name: Codecov / Patch 95"),
@@ -421,7 +424,11 @@ fn workflow_step<'a>(content: &'a str, name: &str) -> Option<&'a str> {
         })
         .find_map(
             |(offset, line)| {
-                if line.trim_start().starts_with("- name:") { Some(offset) } else { None }
+                if line.trim_start().starts_with("- name:") {
+                    Some(offset)
+                } else {
+                    None
+                }
             },
         )
         .unwrap_or(rest.len());

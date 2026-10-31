@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Context, Result, bail};
+use color_eyre::eyre::{bail, Context, Result};
 use serde::Serialize;
 use serde_yaml_ng::{Mapping, Value};
 use std::collections::HashSet;
@@ -241,6 +241,7 @@ fn lint_workflow_file(path: &Path, is_fixture: bool, issues: &mut Vec<LintIssue>
 
     if pull_request_has_label_triggers(&workflow)
         && cancel_in_progress_cancels_all_pr_events(&workflow)
+        && !concurrency_partitions_pr_labels(&workflow)
     {
         issues.push(LintIssue {
             level: "error",
@@ -668,6 +669,18 @@ fn pull_request_has_label_triggers(workflow: &Value) -> bool {
                 .iter()
                 .filter_map(Value::as_str)
                 .any(|event| event == "labeled" || event == "unlabeled")
+        })
+}
+
+fn concurrency_partitions_pr_labels(workflow: &Value) -> bool {
+    workflow
+        .get("concurrency")
+        .and_then(Value::as_mapping)
+        .and_then(|map| map.get(Value::String("group".to_string())))
+        .and_then(Value::as_str)
+        .is_some_and(|group| {
+            (group.contains("github.ref") || group.contains("github.event.pull_request.number"))
+                && group.ends_with("-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}")
         })
 }
 
@@ -1199,6 +1212,19 @@ mod tests {
         let mut issues = Vec::new();
         lint_workflow_file(&path, true, &mut issues)?;
         assert!(issues.iter().all(|issue| issue.code != "LABEL_EVENT_CANCELS_PR_RUN"));
+        Ok(())
+    }
+
+    #[test]
+    fn label_partition_requires_the_exact_suffix() -> Result<()> {
+        let safe: Value = serde_yaml_ng::from_str(
+            "concurrency:\n  group: \"build-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}\"\n  cancel-in-progress: true\n",
+        )?;
+        assert!(concurrency_partitions_pr_labels(&safe));
+        let unsafe_group: Value = serde_yaml_ng::from_str(
+            "concurrency:\n  group: build-${{ github.ref }}\n  cancel-in-progress: true\n",
+        )?;
+        assert!(!concurrency_partitions_pr_labels(&unsafe_group));
         Ok(())
     }
 

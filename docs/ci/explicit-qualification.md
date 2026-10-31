@@ -11,6 +11,11 @@ new head. A label is not a passing check: inspect the completed checks and bind
 evidence to the current head and base before queueing. GitHub's merge queue
 runs its configured integration checks on the composed candidate.
 
+Unrequested label events use distinct skipped result names so they cannot be
+confused with qualification. GitHub's actual skipped-check naming and queue
+admission behavior must be verified in a canary before requiring those result
+contexts in branch protection.
+
 Publication Sync Contract remains a separate required PR check, including on
 body edits, because the PR body is part of its contract. Its merge-group
 counterpart must be established before enabling a queue on the protected branch.

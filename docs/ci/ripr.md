@@ -60,6 +60,10 @@ Do **not** translate these into `killed` / `survived`. They mean something diffe
   PRs can request the same RIPR proof workflow.
 - Merge-group checks run on the queued composition. Reapply `ci:qualify` after
   changing a PR head to request new PR evidence; the label alone is not proof.
+- Merge groups use GitHub-hosted runners because constituent PR origins are not
+  available to the router. Large compositions have previously exhausted that
+  runner's memory; verify an isolated higher-memory route before relying on
+  queue qualification for those workloads.
 - Manual via `workflow_dispatch`.
 
 ---

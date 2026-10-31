@@ -33,7 +33,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: ripr-${{ github.event.pull_request.number || github.ref }}
+  group: ripr-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:
@@ -1009,7 +1009,7 @@ jobs:
   # 3. Result aggregator -- owns the "ripr+ New Gap Gate" required-check name.
   # -------------------------------------------------------------------------
   ripr:
-    name: ripr+ New Gap Gate
+    name: ${{ github.event_name == 'pull_request' && (github.event.label.name != 'ci:qualify' || github.event.pull_request.draft) && 'ripr+ New Gap Gate (qualification not requested)' || 'ripr+ New Gap Gate' }}
     needs:
       - route-ripr
       - ripr-cx53

@@ -14,7 +14,7 @@ on:
       - '.github/workflows/vscode-current-source-linux-smoke.yml'
 
 concurrency:
-  group: vscode-current-source-linux-smoke-${{ github.ref }}
+  group: vscode-current-source-linux-smoke-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: true
 
 permissions:

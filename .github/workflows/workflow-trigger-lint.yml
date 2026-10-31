@@ -10,7 +10,7 @@ on:
     branches: [main, master]
 
 concurrency:
-  group: workflow-trigger-lint-${{ github.ref }}
+  group: workflow-trigger-lint-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

@@ -28,7 +28,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: publish-dry-run-${{ github.ref }}
+  group: publish-dry-run-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: true
 
 permissions:

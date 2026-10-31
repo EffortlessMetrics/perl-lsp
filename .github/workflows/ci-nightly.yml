@@ -55,7 +55,7 @@ on:
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
-  group: ci-nightly-${{ github.event.pull_request.number || github.ref }}
+  group: ci-nightly-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:

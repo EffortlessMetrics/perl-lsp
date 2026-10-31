@@ -18,7 +18,7 @@ on:
 # Cancel in-progress runs for PR events on new pushes; let push/merge_group runs complete.
 # The preflight SHA-staleness check provides additional skip logic for superseded SHAs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:
@@ -460,7 +460,7 @@ jobs:
   # advisory, flaky, redundant lane (see the pr-smoke job) and must not false-red
   # this aggregate.
   merge-gate:
-    name: CI Gate (Advisory Aggregate)
+    name: ${{ github.event_name == 'pull_request' && (github.event.label.name != 'ci:qualify' || github.event.pull_request.draft) && 'CI Gate (qualification not requested)' || 'CI Gate (Advisory Aggregate)' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     needs:

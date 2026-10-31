@@ -4,13 +4,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use clap::ValueEnum;
-use color_eyre::eyre::{Context, Result, bail};
+use color_eyre::eyre::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
 
 use crate::utils::project_root;
 
 const QUALIFY_GUARD: &str = "github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' && !github.event.pull_request.draft)";
+
+const GUARD_JOB: &str = "draft-pr-check";
+const GUARD_OUTPUT: &str = "needs.draft-pr-check.outputs.run_ci == 'true'";
+const PREFLIGHT_OUTPUT: &str = "needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'";
+const AGGREGATE_GUARD: &str = "always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'";
 
 const REQUIRED_CANCEL_IN_PROGRESS: &str =
     "${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}";
@@ -97,7 +102,11 @@ pub fn run(
 
     output(&receipt, format)?;
 
-    if receipt.overall_ok { Ok(()) } else { bail!("workflow-trigger-lint found policy violations") }
+    if receipt.overall_ok {
+        Ok(())
+    } else {
+        bail!("workflow-trigger-lint found policy violations")
+    }
 }
 
 fn evaluate_policy(root: &Path, policy_path: &Path) -> Result<Vec<WorkflowEvaluation>> {
@@ -210,9 +219,9 @@ fn evaluate_required_entry(
                 if !pull_request_labeled_only(yaml) {
                     violations.push("pull_request types must be exactly [labeled]".to_string());
                 }
-                if !root_jobs_have_qualify_guard(yaml) {
+                if !jobs_have_qualification_guards(yaml) {
                     violations
-                        .push(format!("every root job must use qualify guard `{QUALIFY_GUARD}`"));
+                        .push(format!("job qualification guards or dependency ancestry are invalid; root jobs must use `{QUALIFY_GUARD}`"));
                 }
             }
         }
@@ -370,7 +379,11 @@ fn push_targets_master(workflow: &Value) -> bool {
     match on {
         Value::Mapping(mapping) => {
             let push = mapping.iter().find_map(|(key, value)| {
-                if key.as_str().is_some_and(|name| name == "push") { Some(value) } else { None }
+                if key.as_str().is_some_and(|name| name == "push") {
+                    Some(value)
+                } else {
+                    None
+                }
             });
 
             let Some(push) = push else {
@@ -451,7 +464,7 @@ fn pull_request_labeled_only(workflow: &Value) -> bool {
 /// downstream of roots normally require success. Explicit status functions can
 /// bypass that default, so only the known fail-closed aggregate is accepted.
 /// Exact expressions prevent accidental acceptance of weakened OR clauses.
-fn root_jobs_have_qualify_guard(workflow: &Value) -> bool {
+fn jobs_have_qualification_guards(workflow: &Value) -> bool {
     let Some(jobs) = get_top_level_field(workflow, "jobs").and_then(Value::as_mapping) else {
         return false;
     };
@@ -466,38 +479,43 @@ fn root_jobs_have_qualify_guard(workflow: &Value) -> bool {
         return false;
     }
     jobs.values().all(|job| {
-        let Some(job) = job.as_mapping() else { return false; };
+        let Some(job) = job.as_mapping() else {
+            return false;
+        };
+        let condition = job
+            .get(Value::String("if".to_string()))
+            .and_then(Value::as_str)
+            .map(normalize_condition)
+            .unwrap_or("");
         if job.contains_key(Value::String("needs".to_string())) {
             // Only implicit success or the current CI guards are recognized.
-            // An arbitrary expression could use status functions to override
-            // skipped dependencies, or add an OR that bypasses the guard.
-            let condition = job.get(Value::String("if".to_string())).and_then(Value::as_str).unwrap_or("").trim();
-            let safe = [
-                "",
-                "needs.draft-pr-check.outputs.run_ci == 'true'",
-                "needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'",
-                "always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'",
-            ];
-            if !safe.contains(&condition) { return false; }
-            if condition.is_empty() { return true; }
-            let needs = job.get(Value::String("needs".to_string()));
-            return match needs {
-                Some(Value::String(dep)) => dep == "draft-pr-check" && condition == safe[1],
-                Some(Value::Sequence(items)) => items.iter().any(|item| item.as_str() == Some("draft-pr-check")),
+            // An arbitrary expression could override skipped dependencies.
+            if !["", GUARD_OUTPUT, PREFLIGHT_OUTPUT, AGGREGATE_GUARD].contains(&condition) {
+                return false;
+            }
+            if condition.is_empty() {
+                return true;
+            }
+            return match job.get(Value::String("needs".to_string())) {
+                Some(Value::String(dep)) => dep == GUARD_JOB && condition == GUARD_OUTPUT,
+                Some(Value::Sequence(items)) => {
+                    items.iter().any(|item| item.as_str() == Some(GUARD_JOB))
+                }
                 _ => false,
             };
         }
-        job.get(Value::String("if".to_string()))
-            .and_then(Value::as_str)
-            .is_some_and(|condition| {
-                let condition = condition.trim();
-                let condition = condition.strip_prefix("${{")
-                    .and_then(|s| s.strip_suffix("}}"))
-                    .map(str::trim)
-                    .unwrap_or(condition);
-                condition == QUALIFY_GUARD
-            })
+        condition == QUALIFY_GUARD
     })
+}
+
+/// Normalize optional GitHub expression wrappers consistently for all jobs.
+fn normalize_condition(condition: &str) -> &str {
+    let condition = condition.trim();
+    condition
+        .strip_prefix("${{")
+        .and_then(|inner| inner.strip_suffix("}}"))
+        .map(str::trim)
+        .unwrap_or(condition)
 }
 
 /// Every dependency chain must terminate in a known guarded root; unknown
@@ -580,7 +598,11 @@ fn get_top_level_field<'a>(workflow: &'a Value, field: &str) -> Option<&'a Value
     };
 
     mapping.iter().find_map(|(key, value)| {
-        if key.as_str().is_some_and(|name| name == field) { Some(value) } else { None }
+        if key.as_str().is_some_and(|name| name == field) {
+            Some(value)
+        } else {
+            None
+        }
     })
 }
 
@@ -644,7 +666,7 @@ mod tests {
     fn qualification_requires_label_and_non_draft_on_every_root() -> Result<()> {
         let good = load_fixture("valid-required.yml")?;
         assert!(pull_request_labeled_only(&good));
-        assert!(root_jobs_have_qualify_guard(&good));
+        assert!(jobs_have_qualification_guards(&good));
         for (name, yaml) in [
             ("missing types", "on: {pull_request: {}}\njobs: {x: {}}"),
             ("unlabeled", "on: {pull_request: {types: [labeled, unlabeled]}}\njobs: {x: {}}"),
@@ -658,23 +680,33 @@ mod tests {
             "github.event_name != 'pull_request' || (github.event.label.name == 'ci:qualify' || !github.event.pull_request.draft)",
         ] {
             let yaml = format!("jobs:\n  x:\n    if: \"{condition}\"\n");
-            assert!(!root_jobs_have_qualify_guard(&parse(&yaml)?), "{condition}");
+            assert!(!jobs_have_qualification_guards(&parse(&yaml)?), "{condition}");
         }
         let mixed = format!(
             "jobs:\n  guarded:\n    if: \"{QUALIFY_GUARD}\"\n  unguarded: {{runs-on: ubuntu-latest}}\n"
         );
-        assert!(!root_jobs_have_qualify_guard(&parse(&mixed)?));
-        assert!(!root_jobs_have_qualify_guard(&parse("jobs: {}")?));
+        assert!(!jobs_have_qualification_guards(&parse(&mixed)?));
+        assert!(!jobs_have_qualification_guards(&parse("jobs: {}")?));
         let guarded_aggregate = format!(
             "jobs:\n  draft-pr-check:\n    if: \"{QUALIFY_GUARD}\"\n  preflight-latest-check:\n    needs: draft-pr-check\n    if: needs.draft-pr-check.outputs.run_ci == 'true'\n  aggregate:\n    needs: [draft-pr-check, preflight-latest-check]\n    if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'\n"
         );
-        assert!(root_jobs_have_qualify_guard(&parse(&guarded_aggregate)?));
+        assert!(jobs_have_qualification_guards(&parse(&guarded_aggregate)?));
+        // Wrap complete dependent expressions, including an aggregate with
+        // status function, rather than wrapping only an inner subexpression.
+        let wrapped = format!(
+            "jobs:\n  draft-pr-check:\n    if: \"${{{{ {QUALIFY_GUARD} }}}}\"\n  preflight-latest-check:\n    needs: draft-pr-check\n    if: \"${{{{ {GUARD_OUTPUT} }}}}\"\n  aggregate:\n    needs: [draft-pr-check, preflight-latest-check]\n    if: \"${{{{ {AGGREGATE_GUARD} }}}}\"\n"
+        );
+        assert!(jobs_have_qualification_guards(&parse(&wrapped)?));
+        let unsafe_wrapped = format!(
+            "jobs:\n  root:\n    if: \"${{{{ {QUALIFY_GUARD} }}}}\"\n  child:\n    needs: root\n    if: \"${{{{ always() }}}}\"\n"
+        );
+        assert!(!jobs_have_qualification_guards(&parse(&unsafe_wrapped)?));
         let bypass = format!(
             "jobs:\n  guarded:\n    if: \"{QUALIFY_GUARD}\"\n  bypass:\n    needs: guarded\n    if: always()\n"
         );
-        assert!(!root_jobs_have_qualify_guard(&parse(&bypass)?));
-        assert!(!root_jobs_have_qualify_guard(&parse("jobs: {a: {needs: b}, b: {needs: a}}")?));
-        assert!(!root_jobs_have_qualify_guard(&parse("jobs: {a: {needs: missing}}")?));
+        assert!(!jobs_have_qualification_guards(&parse(&bypass)?));
+        assert!(!jobs_have_qualification_guards(&parse("jobs: {a: {needs: b}, b: {needs: a}}")?));
+        assert!(!jobs_have_qualification_guards(&parse("jobs: {a: {needs: missing}}")?));
         Ok(())
     }
 

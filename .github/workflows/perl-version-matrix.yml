@@ -11,7 +11,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: perl-version-matrix-${{ github.event.pull_request.number || github.ref }}
+  group: perl-version-matrix-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:

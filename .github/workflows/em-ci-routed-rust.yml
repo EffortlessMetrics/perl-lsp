@@ -29,7 +29,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: em-ci-routed-rust-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  group: em-ci-routed-rust-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 env:
@@ -648,7 +648,7 @@ jobs:
           git diff --check
 
   rust-small-result:
-    name: Perl LSP Rust Small Result
+    name: ${{ github.event_name == 'pull_request' && (github.event.label.name != 'ci:qualify' || github.event.pull_request.draft) && 'Perl LSP Rust Small Result (qualification not requested)' || 'Perl LSP Rust Small Result' }}
     needs:
       - route-rust-small
       - rust-small-cx53

@@ -44,7 +44,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: lsp-318-claim-guard-${{ github.event.pull_request.number || github.ref }}
+  group: lsp-318-claim-guard-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:

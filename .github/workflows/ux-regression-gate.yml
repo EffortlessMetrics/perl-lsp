@@ -21,7 +21,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: ux-regression-gate-${{ github.ref }}
+  group: ux-regression-gate-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: true
 
 permissions:

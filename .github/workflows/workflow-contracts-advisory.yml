@@ -44,7 +44,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: workflow-contracts-advisory-${{ github.event.pull_request.number || github.ref }}
+  group: workflow-contracts-advisory-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name || 'non-pr' }}
   cancel-in-progress: ${{ github.event.action == 'synchronize' }}
 
 env:
