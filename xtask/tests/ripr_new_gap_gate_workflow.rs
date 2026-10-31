@@ -36,6 +36,9 @@ fn ripr_workflow_runs_on_explicit_qualification_without_path_filter(
     assert!(workflow.contains("github.event_name != 'merge_group' && secrets.EM_RUNNER_READ_TOKEN"));
     assert!(workflow.contains("merge_group_unverified_origin"));
     assert!(!workflow.contains("ripr router was skipped (draft PR"));
+    assert_eq!(workflow.matches("github.event.merge_group.base_sha").count(), 4);
+    assert_eq!(workflow.matches("name: Verify event revisions").count(), 4);
+    assert!(!workflow.contains("origin/$BASE_REF"));
     let gate_step = workflow_step(&workflow, "Enforce new RIPR gap quality gate")
         .ok_or("missing RIPR gate step")?;
     assert!(

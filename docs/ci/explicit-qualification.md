@@ -14,6 +14,7 @@ runs its configured integration checks on the composed candidate.
 Publication Sync Contract remains a separate required PR check, including on
 body edits, because the PR body is part of its contract. Its merge-group
 counterpart must be established before enabling a queue on the protected branch.
-PR labels are unavailable to merge-group events; methodology's PR-label
-enforcement is performed during explicit PR qualification and must not be
-represented as queue-side label validation.
+PR labels are unavailable to merge-group events. The existing methodology
+workflow is advisory for label contradictions, including on qualification;
+it must not be represented as enforcing those rules or as queue-side label
+validation.

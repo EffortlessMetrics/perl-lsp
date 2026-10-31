@@ -30,8 +30,10 @@ jobs:
 
       - name: Run methodology gate (advisory)
         run: |
+          jq --arg event "$GITHUB_EVENT_NAME" '. + {event_name: $event}' \
+            "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/methodology-event.json"
           cargo xtask methodology-gate \
-            --fixture "${GITHUB_EVENT_PATH}" \
+            --fixture "$RUNNER_TEMP/methodology-event.json" \
             --receipt target/receipts/methodology-gate.json
 
       - name: Upload methodology receipt
