@@ -1789,6 +1789,10 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Run the existing targeted pre-push checks with managed Linux storage supervision.
+    #[cfg(target_os = "linux")]
+    SingleCrateHook { package: String },
+
     /// Run CI gates with receipt generation
     ///
     /// Executes gates defined in .ci/gate-policy.yaml and generates
@@ -4351,6 +4355,14 @@ fn run_cli_with_ci_runner(cli: Cli, run_ci: &mut dyn FnMut() -> Result<()>) -> R
                 skip_bench,
                 verbose,
             })
+        }
+        #[cfg(target_os = "linux")]
+        Commands::SingleCrateHook { package } => {
+            let code = gates::single_crate_hook::run(package);
+            if code != 0 {
+                std::process::exit(code);
+            }
+            Ok(())
         }
         Commands::Gates {
             tier,

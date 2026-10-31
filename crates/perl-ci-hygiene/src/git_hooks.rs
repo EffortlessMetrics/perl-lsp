@@ -222,15 +222,33 @@ if [ "$SINGLE_CRATE_ALL_UNDER_CRATES" = true ] && [ "$SINGLE_CRATE_COUNT" = "1" 
     echo "   (Skip with: git push --no-verify)"
     echo ""
     run_single_crate_gate() {
-        cargo fmt -p "$SINGLE_CRATE_NAME" -- --check && \
-        cargo clippy -p "$SINGLE_CRATE_NAME" -- -D warnings && \
-        cargo test -p "$SINGLE_CRATE_NAME"
+        local hook_platform
+        if ! hook_platform="$(uname -s)"; then
+            echo "Cannot determine platform for single-crate storage supervision" >&2
+            return 70
+        fi
+        case "$hook_platform" in
+        Linux)
+            # One wrapper lock covers all three direct Cargo checks. Bootstrap
+            # compilation has admission; the running checks also have the existing
+            # Linux watchdog and bounded logs in target/receipts/single-crate-hook/.
+            "$REPO_ROOT/scripts/cargo-safe" run --package xtask --locked -- \
+                single-crate-hook "$SINGLE_CRATE_NAME"
+            ;;
+        Darwin|FreeBSD|OpenBSD|NetBSD|DragonFly|SunOS|AIX|CYGWIN_*|MINGW*|MSYS*)
+            cargo fmt -p "$SINGLE_CRATE_NAME" -- --check && \
+            cargo clippy -p "$SINGLE_CRATE_NAME" -- -D warnings && \
+            cargo test -p "$SINGLE_CRATE_NAME"
+            ;;
+        *)
+            echo "Unrecognized platform for single-crate storage supervision: $hook_platform" >&2
+            return 70
+            ;;
+        esac
     }
-    GATE_LOG="$(mktemp -t perl-lsp-prepush.XXXXXX.log 2>/dev/null || mktemp)"
-    trap 'rm -f "$GATE_LOG"' EXIT
     set +e
-    run_single_crate_gate 2>&1 | tee "$GATE_LOG"
-    GATE_STATUS=${PIPESTATUS[0]}
+    run_single_crate_gate
+    GATE_STATUS=$?
     set -e
     if [ "$GATE_STATUS" -ne 0 ]; then
         echo ""
@@ -368,4 +386,19 @@ fn write_git_hook(hook_path: &Path, hook: &str) -> Result<()> {
             .with_context(|| format!("setting executable bit for {:?}", hook_path))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn linux_single_crate_checks_enter_locked_supervisor() {
+        let hook = super::pre_push_hook_script();
+        assert!(
+            hook.contains("\"$REPO_ROOT/scripts/cargo-safe\" run --package xtask --locked --")
+                && hook.contains("single-crate-hook \"$SINGLE_CRATE_NAME\""),
+            "Linux targeted checks must enter the locked runtime supervisor"
+        );
+        // Exact argv, status, storage failures and caller preservation are tested
+        // through the real hook in xtask/tests/single_crate_storage_hook.rs.
+    }
 }

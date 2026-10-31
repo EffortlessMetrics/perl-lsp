@@ -40,6 +40,8 @@ use crate::utils::project_root;
 mod first_failure;
 mod planning_types;
 #[cfg(target_os = "linux")]
+pub mod single_crate_hook;
+#[cfg(target_os = "linux")]
 mod storage;
 
 pub use first_failure::{is_cargo_test_command, parse_first_failure};

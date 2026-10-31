@@ -13,10 +13,10 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::{
     fs::{MetadataExt, OpenOptionsExt},
-    process::CommandExt,
+    process::{CommandExt, ExitStatusExt},
 };
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
 const LOG_LIMIT: usize = 4 * 1024 * 1024;
@@ -477,7 +477,7 @@ impl OwnedChild {
         Ok(())
     }
 
-    fn settle(&mut self, grace: bool) -> Result<i32> {
+    fn settle(&mut self, grace: bool) -> Result<ExitStatus> {
         if grace {
             self.signal(libc::SIGTERM)?;
             std::thread::sleep(Duration::from_secs(1));
@@ -488,7 +488,7 @@ impl OwnedChild {
         self.signal(libc::SIGKILL)?;
         let status = self.child.wait().context("Cannot reap owned gate child")?;
         self.settled = true;
-        Ok(status.code().unwrap_or(-1))
+        Ok(status)
     }
 }
 
@@ -516,13 +516,41 @@ pub(super) fn run(
         receipt,
         timeout,
         policy,
-        Checks { space: &mut || policy.check(), remove_record: &|path| fs::remove_file(path) },
+        Checks {
+            space: &mut || policy.check(),
+            remove_record: &|path| fs::remove_file(path),
+            direct_exit: false,
+        },
+    )
+}
+
+/// Supervise a direct command without introducing a deadline or GNU-timeout statuses.
+pub(super) fn run_direct(
+    command: &mut Command,
+    text: &str,
+    log: &Path,
+    receipt: &Path,
+    policy: &Policy,
+) -> Result<Execution> {
+    run_with_checks(
+        command,
+        text,
+        log,
+        receipt,
+        Duration::MAX,
+        policy,
+        Checks {
+            space: &mut || policy.check(),
+            remove_record: &|path| fs::remove_file(path),
+            direct_exit: true,
+        },
     )
 }
 
 struct Checks<'a> {
     space: &'a mut dyn FnMut() -> Result<()>,
     remove_record: &'a dyn Fn(&Path) -> io::Result<()>,
+    direct_exit: bool,
 }
 
 #[cfg(test)]
@@ -542,7 +570,11 @@ fn run_with_probe(
         receipt,
         timeout,
         policy,
-        Checks { space: &mut check, remove_record: &|path| fs::remove_file(path) },
+        Checks {
+            space: &mut check,
+            remove_record: &|path| fs::remove_file(path),
+            direct_exit: false,
+        },
     )
 }
 
@@ -609,7 +641,11 @@ fn run_with_checks(
                     sampled = Instant::now();
                 }
                 if owned.exited()? {
-                    return Ok((owned.settle(false)?, false));
+                    let status = owned.settle(false)?;
+                    let code = status.code().unwrap_or_else(|| {
+                        if checks.direct_exit { 128 + status.signal().unwrap_or(0) } else { -1 }
+                    });
+                    return Ok((code, false));
                 }
                 if start.elapsed() >= timeout {
                     owned.settle(true)?;
@@ -657,7 +693,7 @@ fn run_with_checks(
         Ok((exit_code, timed_out)) => Ok(Execution {
             output: String::from_utf8_lossy(&tail.bytes()).into_owned(),
             exit_code,
-            timed_out: timed_out || exit_code == 124,
+            timed_out: timed_out || (!checks.direct_exit && exit_code == 124),
             supervision_error: false,
         }),
         Err(error) => {
@@ -714,6 +750,30 @@ mod tests {
             }
         }
         Ok(records)
+    }
+
+    #[test]
+    fn direct_commands_keep_ordinary_124_and_signal_status_without_a_deadline() -> Result<()> {
+        for (text, expected) in [("exit 124", 124), ("kill -TERM $$", 143)] {
+            let temp = tempfile::tempdir()?;
+            let result = run_with_checks(
+                &mut shell(text),
+                text,
+                &temp.path().join("gate.log"),
+                &temp.path().join("receipt.json"),
+                Duration::MAX,
+                &policy(temp.path()),
+                Checks {
+                    space: &mut || Ok(()),
+                    remove_record: &|path| fs::remove_file(path),
+                    direct_exit: true,
+                },
+            )?;
+            assert_eq!(result.exit_code, expected);
+            assert!(!result.timed_out);
+            assert!(!result.supervision_error);
+        }
+        Ok(())
     }
 
     #[test]
@@ -1024,6 +1084,7 @@ mod tests {
             &policy(temp.path()),
             Checks {
                 space: &mut || Ok(()),
+                direct_exit: false,
                 remove_record: &|_| Err(io::Error::from_raw_os_error(libc::EACCES)),
             },
         )?;
