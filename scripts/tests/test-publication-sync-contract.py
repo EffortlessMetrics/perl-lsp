@@ -384,15 +384,31 @@ class PublicationSyncContractTest(unittest.TestCase):
 
     def test_unreachable_s_fails_closed(self) -> None:
         fixture = SyncFixture(self.repo)
+        full = self.run_pr(fixture, BODY_YES)
+        self.assertEqual(full.returncode, 0, full.stdout + full.stderr)
         # Shallow clone at depth 1: R and S are beyond the boundary, so
         # ancestry/parent evidence is missing and must fail, never pass.
         self.repo.git("update-ref", "refs/heads/master", fixture.j)
+        self.repo.git("symbolic-ref", "HEAD", "refs/heads/master")
         shallow = Path(self._tmp.name) / "shallow"
         subprocess.run(
-            ["git", "clone", "-q", "--depth", "1", f"file://{self.repo.path}", str(shallow)],
+            ["git", "clone", "-q", "--depth", "1", self.repo.path.resolve().as_uri(), str(shallow)],
             check=True,
             capture_output=True,
         )
+        def shallow_git(*args: str) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                ["git", "-C", str(shallow), *args],
+                capture_output=True, text=True, check=False,
+            )
+
+        head = shallow_git("rev-parse", "HEAD")
+        self.assertEqual(head.returncode, 0, head.stderr)
+        self.assertEqual(head.stdout.strip(), fixture.j)
+        is_shallow = shallow_git("rev-parse", "--is-shallow-repository")
+        self.assertEqual(is_shallow.returncode, 0, is_shallow.stderr)
+        self.assertEqual(is_shallow.stdout.strip(), "true")
+        self.assertNotEqual(shallow_git("cat-file", "-e", f"{fixture.s}^{{commit}}").returncode, 0)
         proc = run_check([
             "pr", "--repo", str(shallow),
             "--base-sha", fixture.r, "--head-sha", fixture.j,
