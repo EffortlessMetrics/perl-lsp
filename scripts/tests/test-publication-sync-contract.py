@@ -383,23 +383,40 @@ class PublicationSyncContractTest(unittest.TestCase):
         self.assertIn("proof 7", proc.stdout)
 
     def test_unreachable_s_fails_closed(self) -> None:
-        fixture = SyncFixture(self.repo)
+        # Exercise file-URI escaping as well as the platform-specific path syntax.
+        source = Repo(Path(self._tmp.name) / "source repo #1")
+        fixture = SyncFixture(source)
         # Shallow clone at depth 1: R and S are beyond the boundary, so
         # ancestry/parent evidence is missing and must fail, never pass.
-        self.repo.git("update-ref", "refs/heads/master", fixture.j)
+        source.git("update-ref", "refs/heads/master", fixture.j)
+        source.git("symbolic-ref", "HEAD", "refs/heads/master")
         shallow = Path(self._tmp.name) / "shallow"
         subprocess.run(
-            ["git", "clone", "-q", "--depth", "1", f"file://{self.repo.path}", str(shallow)],
+            ["git", "clone", "-q", "--depth", "1", source.path.resolve().as_uri(), str(shallow)],
             check=True,
             capture_output=True,
         )
+        for args, expected in (
+            (("--is-shallow-repository",), "true"),
+            (("HEAD",), fixture.j),
+        ):
+            actual = subprocess.check_output(
+                ["git", "-C", str(shallow), "rev-parse", *args], text=True,
+            ).strip()
+            self.assertEqual(actual, expected)
+        for parent in (fixture.r, fixture.s):
+            missing = subprocess.run(
+                ["git", "-C", str(shallow), "cat-file", "-e", f"{parent}^{{commit}}"],
+                capture_output=True,
+            )
+            self.assertNotEqual(missing.returncode, 0, "parent must be beyond the shallow boundary")
         proc = run_check([
             "pr", "--repo", str(shallow),
             "--base-sha", fixture.r, "--head-sha", fixture.j,
             "--pr-body-file", self.write_body(BODY_YES),
         ])
         self.assertEqual(proc.returncode, 1)
-        self.assertIn("Publication Sync Contract FAILED", proc.stdout)
+        self.assertIn("Publication Sync Contract FAILED: proof 2:", proc.stdout)
 
     def test_unlisted_path_diff_fails(self) -> None:
         fixture = SyncFixture(
