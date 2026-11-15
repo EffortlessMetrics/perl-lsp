@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: perl-tidy-extraction-10233
@@ -28,7 +29,7 @@ jobs:
         with:
           toolchain: 1.95.0
           components: rustfmt, clippy
-      - name: Recover the reviewed extraction and correct the fixture declaration
+      - name: Recover the extraction and inspect the exact assertion
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -40,13 +41,14 @@ jobs:
           script = text.split(start, 1)[1].split('\n          PY', 1)[0]
           script = '\n'.join(line[10:] if line.startswith('          ') else line for line in script.splitlines())
           exec(compile(script, '<recovered-extraction>', 'exec'))
-          for crate in ['perl-tidy', 'perl-lsp-perltidy']:
-              path = Path('crates') / crate / 'tests/native_formatter_layout_tests.rs'
+          for crate in ['perl-tidy-perltidy', 'perl-lsp-perltidy']:
+              path = Path('crates') / crate / 'tests/config_tests.rs'
               text = path.read_text()
-              before = "const FIXTURES: [(&'static str, &'static str); 13]"
-              assert text.count(before) == 1, path
-              path.write_text(text.replace(before, 'const FIXTURES: [(&str, &str); 13]'))
-          # Correct the moved module's ownership documentation without changing behavior.
+              old = r'assert_eq!(formatted.contains("\n\n").then_some(()), Some(()));'
+              good = r'assert!(formatted.contains("\n\n"));'
+              assert old in text or good in text, f'Unexpected assertion in {path}'
+              print(f'{path}: unit comparison occurrences={text.count(old)}; direct assertion occurrences={text.count(good)}')
+              path.write_text(text.replace(old, good))
           p = Path('crates/perl-tidy/src/native.rs')
           text = p.read_text()
           start = text.index('mod config;')
@@ -73,7 +75,8 @@ jobs:
           git push origin HEAD:refs/heads/refactor/perl-tidy-extraction-10233
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "Candidate: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
-      - name: Check the actual production dependency closure
+      - name: Check the production dependency closure
+        id: closure
         run: |
           set -euo pipefail
           cargo tree --locked -p perl-tidy --edges normal,build --prefix none > /tmp/perl-tidy-tree.txt
@@ -82,12 +85,14 @@ jobs:
             echo 'Forbidden native dependency' >&2
             exit 1
           fi
-      - name: Test libraries, compatibility imports, and production provider
+      - name: Test owners, compatibility imports, and production provider
+        id: tests
         run: |
           set -euo pipefail
           cargo test --locked --profile agent -p perl-tidy -p perl-tidy-perltidy -p perl-lsp-perltidy
           cargo test --locked --profile agent -p perl-lsp-rs-core --lib providers::formatting
-      - name: Strict all-target formatter lint and workspace check
+      - name: Strict formatter lint and workspace check
+        id: checks
         run: |
           set -euo pipefail
           cargo fmt -p perl-tidy -p perl-tidy-perltidy -p perl-lsp-perltidy -p perl-lsp-rs-core -p perl-lsp-rs -- --check
@@ -95,10 +100,31 @@ jobs:
           cargo clippy --locked --profile agent -p perl-lsp-rs-core --lib -- -D warnings -A missing_docs
           cargo check --locked --profile agent --workspace
           git diff --exit-code
-      - name: Qualification summary
+      - name: Save SHA-bound qualification status
         if: always()
         env:
+          GH_TOKEN: ${{ github.token }}
           CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
-          JOB_STATUS: ${{ job.status }}
+          CLOSURE: ${{ steps.closure.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          CHECKS: ${{ steps.checks.outcome }}
         run: |
-          printf 'Tested candidate: `%s`\n\nResult: %s\n' "$CANDIDATE_SHA" "$JOB_STATUS" >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY'
+          import json, os, urllib.request
+          sha = os.environ.get('CANDIDATE_SHA') or 'No product commit produced'
+          body = '\n'.join([
+              '### Phase 1 automated qualification receipt',
+              f"Candidate: `{sha}`",
+              f"Run: https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              f"Production dependency closure: **{os.environ['CLOSURE']}**",
+              f"Formatter, compatibility, and focused core tests: **{os.environ['TESTS']}**",
+              f"Formatting, lint, and workspace check: **{os.environ['CHECKS']}**",
+              'This run does not prove byte API migration, CLI delivery, packaged external-consumer builds, full LSP process behavior, or independent review.'
+          ])
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f: f.write(body)
+          req = urllib.request.Request(
+              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/issues/10233/comments",
+              data=json.dumps({'body': body}).encode(),
+              headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'})
+          with urllib.request.urlopen(req) as response: print('Receipt saved:', response.status)
+          PY
