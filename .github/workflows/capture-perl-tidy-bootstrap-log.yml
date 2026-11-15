@@ -1,0 +1,41 @@
+name: Capture perl-tidy bootstrap failure
+
+on:
+  push:
+    branches:
+      - refactor/perl-tidy-extraction-10233
+    paths:
+      - .github/workflows/capture-perl-tidy-bootstrap-log.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  capture:
+    if: ${{ !contains(github.event.head_commit.message, '[capture complete]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: refactor/perl-tidy-extraction-10233
+      - name: Capture failed job log
+        run: |
+          set -euo pipefail
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/actions/jobs/132773950218/logs \
+            > bootstrap-perl-tidy-failure.log
+          test -s bootstrap-perl-tidy-failure.log
+      - name: Commit diagnostic receipt
+        run: |
+          set -euo pipefail
+          git config user.name "EffortlessSteven"
+          git config user.email "15812269+EffortlessSteven@users.noreply.github.com"
+          git add bootstrap-perl-tidy-failure.log
+          git commit -m "chore: capture perl-tidy bootstrap diagnostics (#10233)" -m "[capture complete]"
+          git push origin HEAD:refactor/perl-tidy-extraction-10233
