@@ -29,7 +29,7 @@ jobs:
         with:
           toolchain: 1.95.0
           components: rustfmt, clippy
-      - name: Recover the extraction and inspect the exact assertion
+      - name: Recover the extraction with byte-exact fixtures
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -49,6 +49,18 @@ jobs:
               assert old in text or good in text, f'Unexpected assertion in {path}'
               print(f'{path}: unit comparison occurrences={text.count(old)}; direct assertion occurrences={text.count(good)}')
               path.write_text(text.replace(old, good))
+          # These existing golden fixtures intentionally contain a final blank line.
+          # Preserve their exact bytes; do not trim source or expected output for git.
+          for crate in ['perl-tidy', 'perl-tidy-perltidy']:
+              fixture_root = Path('crates') / crate / 'tests/fixtures'
+              lines = ['# Golden formatter inputs/outputs preserve their final blank line.']
+              for name in ['indented_subroutine.pl', 'indented_subroutine.expected.pl', 'simple_subroutine.pl', 'simple_subroutine.expected.pl']:
+                  rel = 'native_formatter/' + name
+                  source = Path('crates/perl-lsp-perltidy/tests/fixtures') / rel
+                  target = fixture_root / rel
+                  assert target.read_bytes() == source.read_bytes(), target
+                  lines.append(rel + ' whitespace=-blank-at-eof')
+              (fixture_root / '.gitattributes').write_text('\n'.join(lines) + '\n')
           p = Path('crates/perl-tidy/src/native.rs')
           text = p.read_text()
           start = text.index('mod config;')
