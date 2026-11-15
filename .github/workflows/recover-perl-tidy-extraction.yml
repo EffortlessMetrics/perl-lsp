@@ -1,0 +1,104 @@
+name: Recover perl-tidy extraction
+
+on:
+  push:
+    branches: [refactor/perl-tidy-extraction-10233]
+    paths: [.github/workflows/recover-perl-tidy-extraction.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: perl-tidy-extraction-10233
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+      - name: Recover the reviewed extraction and correct the fixture declaration
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('.github/workflows/bootstrap-perl-tidy-extraction.yml').read_text()
+          start = "          python3 - <<'PY'\n"
+          assert text.count(start) == 1
+          script = text.split(start, 1)[1].split('\n          PY', 1)[0]
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in script.splitlines())
+          exec(compile(script, '<recovered-extraction>', 'exec'))
+          for crate in ['perl-tidy', 'perl-lsp-perltidy']:
+              path = Path('crates') / crate / 'tests/native_formatter_layout_tests.rs'
+              text = path.read_text()
+              before = "const FIXTURES: [(&'static str, &'static str); 13]"
+              assert text.count(before) == 1, path
+              path.write_text(text.replace(before, 'const FIXTURES: [(&str, &str); 13]'))
+          # Correct the moved module's ownership documentation without changing behavior.
+          p = Path('crates/perl-tidy/src/native.rs')
+          text = p.read_text()
+          start = text.index('mod config;')
+          p.write_text('//! Native formatter implementation and compatibility-era contracts.\n//!\n//! This package owns native formatting; external execution lives in\n//! `perl-tidy-perltidy`. Byte-oriented contracts are the next migration phase.\n\n' + text[start:])
+          p = Path('crates/perl-tidy/src/lib.rs')
+          text = p.read_text().replace('pub mod native;', '/// Native formatter implementation and public contracts.\npub mod native;')
+          p.write_text(text)
+          for name in ['bootstrap-perl-tidy-extraction.yml', 'capture-perl-tidy-bootstrap-log.yml', 'recover-perl-tidy-extraction.yml']:
+              (Path('.github/workflows') / name).unlink()
+          PY
+          cargo update --workspace --quiet
+          cargo fmt -p perl-tidy -p perl-tidy-perltidy -p perl-lsp-perltidy -p perl-lsp-rs-core -p perl-lsp-rs
+          git diff --check
+      - name: Preserve the concrete candidate before qualification
+        id: candidate
+        run: |
+          set -euo pipefail
+          git config user.name EffortlessSteven
+          git config user.email 15812269+EffortlessSteven@users.noreply.github.com
+          git add Cargo.toml Cargo.lock crates/perl-tidy crates/perl-tidy-perltidy crates/perl-lsp-perltidy crates/perl-lsp-rs-core crates/perl-lsp-rs/Cargo.toml docs/how-to/NATIVE_TOOLING_MIGRATION.md .github/workflows/bootstrap-perl-tidy-extraction.yml .github/workflows/capture-perl-tidy-bootstrap-log.yml .github/workflows/recover-perl-tidy-extraction.yml
+          git diff --cached --check
+          git diff --exit-code
+          git commit -m 'refactor(formatting): extract native and external formatter owners (#10233)'
+          git push origin HEAD:refs/heads/refactor/perl-tidy-extraction-10233
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Candidate: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Check the actual production dependency closure
+        run: |
+          set -euo pipefail
+          cargo tree --locked -p perl-tidy --edges normal,build --prefix none > /tmp/perl-tidy-tree.txt
+          cat /tmp/perl-tidy-tree.txt
+          if grep -E '^(lsp-types|perl-lsp-|perl-subprocess-runtime)' /tmp/perl-tidy-tree.txt; then
+            echo 'Forbidden native dependency' >&2
+            exit 1
+          fi
+      - name: Test libraries, compatibility imports, and production provider
+        run: |
+          set -euo pipefail
+          cargo test --locked --profile agent -p perl-tidy -p perl-tidy-perltidy -p perl-lsp-perltidy
+          cargo test --locked --profile agent -p perl-lsp-rs-core --lib providers::formatting
+      - name: Strict all-target formatter lint and workspace check
+        run: |
+          set -euo pipefail
+          cargo fmt -p perl-tidy -p perl-tidy-perltidy -p perl-lsp-perltidy -p perl-lsp-rs-core -p perl-lsp-rs -- --check
+          cargo clippy --locked --profile agent -p perl-tidy -p perl-tidy-perltidy -p perl-lsp-perltidy --all-targets -- -D warnings -A missing_docs
+          cargo clippy --locked --profile agent -p perl-lsp-rs-core --lib -- -D warnings -A missing_docs
+          cargo check --locked --profile agent --workspace
+          git diff --exit-code
+      - name: Qualification summary
+        if: always()
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          printf 'Tested candidate: `%s`\n\nResult: %s\n' "$CANDIDATE_SHA" "$JOB_STATUS" >> "$GITHUB_STEP_SUMMARY"
