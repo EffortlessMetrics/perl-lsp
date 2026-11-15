@@ -82,8 +82,10 @@ filters that still need manual review.
 ## Formatter Migration
 
 The native formatter is the default formatter engine in the Rust formatting
-provider. The subprocess-backed `PerlTidyFormatter` remains available as a
-compatibility adapter and comparison surface.
+provider. Its standalone library is `perl-tidy`. The subprocess-backed
+`PerlTidyFormatter` lives in `perl-tidy-perltidy` as an explicit compatibility
+adapter and comparison surface. `perl-lsp-perltidy` remains only as a temporary
+source-compatibility facade for downstream migration.
 
 Use native formatting when:
 

@@ -1,0 +1,3 @@
+my$result=build_result($alpha_beta_gamma_delta_epsilon_zeta_eta,$beta_gamma_delta_epsilon_zeta_eta_theta,$gamma_delta_epsilon_zeta_eta_theta_iota);
+my@items=($alpha_beta_gamma_delta_epsilon_zeta_eta,$beta_gamma_delta_epsilon_zeta_eta_theta,$gamma_delta_epsilon_zeta_eta_theta_iota);
+my$hash={alpha_beta_gamma_delta_epsilon_zeta_eta=>$alpha_beta_gamma_delta_epsilon_zeta_eta,beta_gamma_delta_epsilon_zeta_eta_theta=>$beta_gamma_delta_epsilon_zeta_eta_theta};

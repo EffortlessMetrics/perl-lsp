@@ -8,8 +8,8 @@ use crate::tooling::perltidy::{
     NativeFormatter, PerlFormatter, TextPosition, TextRange, TrailingComma,
 };
 
-/// Re-export PerlTidyConfig from perl-lsp-perltidy for convenience.
-pub use perl_lsp_perltidy::PerlTidyConfig;
+/// Re-export the explicit external-adapter configuration for convenience.
+pub use perl_tidy_perltidy::PerlTidyConfig;
 
 /// Count the number of UTF-16 code units in `s`.
 ///

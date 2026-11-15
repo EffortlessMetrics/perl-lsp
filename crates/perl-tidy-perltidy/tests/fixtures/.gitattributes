@@ -1,0 +1,5 @@
+# Golden formatter inputs/outputs preserve their final blank line.
+native_formatter/indented_subroutine.pl whitespace=-blank-at-eof
+native_formatter/indented_subroutine.expected.pl whitespace=-blank-at-eof
+native_formatter/simple_subroutine.pl whitespace=-blank-at-eof
+native_formatter/simple_subroutine.expected.pl whitespace=-blank-at-eof

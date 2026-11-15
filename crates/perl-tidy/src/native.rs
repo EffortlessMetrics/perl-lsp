@@ -1,9 +1,7 @@
-//! Native formatter contract types.
+//! Native formatter implementation and compatibility-era contracts.
 //!
-//! This module defines the Rust-native formatter API and default formatter
-//! implementation. It intentionally lives beside the subprocess-backed
-//! `PerlTidyFormatter` adapter so consumers can keep an explicit legacy
-//! compatibility path while the LSP runtime uses native formatting by default.
+//! This package owns native formatting; external execution lives in
+//! `perl-tidy-perltidy`. Byte-oriented contracts are the next migration phase.
 
 mod config;
 mod doc;

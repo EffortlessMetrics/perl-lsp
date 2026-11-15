@@ -29,9 +29,9 @@ pub use metadata_dependencies::{
     extract_meta_yml_requirements,
 };
 pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
-pub use perl_lsp_perltidy::FormatterMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use perl_oracle_env::PerlOracleEnv;
+pub use perl_tidy::FormatterMode;
 pub use toolchain_profile::PerlToolchainProfile;
 
 /// Critic diagnostic engine used for LSP policy diagnostics.

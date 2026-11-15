@@ -20,7 +20,8 @@ pub mod native_compat;
 
 /// Perltidy integration for code formatting.
 pub mod perltidy {
-    pub use perl_lsp_perltidy::*;
+    pub use perl_tidy::*;
+    pub use perl_tidy_perltidy::*;
 }
 
 /// Subprocess runtime abstraction.

@@ -1,0 +1,32 @@
+[package]
+name = "perl-tidy-perltidy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Explicit subprocess adapter for Perl::Tidy compatibility"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-tidy-perltidy"
+keywords = ["perl", "perltidy", "formatter", "formatting"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-subprocess-runtime = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

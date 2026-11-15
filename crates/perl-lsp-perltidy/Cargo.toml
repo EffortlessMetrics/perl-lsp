@@ -4,9 +4,9 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "Perl formatting integration with native contracts and perltidy compatibility"
+description = "Compatibility facade for perl-tidy and perl-tidy-perltidy"
 readme = "README.md"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-perltidy"
@@ -17,11 +17,11 @@ categories = ["development-tools", "text-editors"]
 doctest = false
 
 [dependencies]
-perl-parser-core = { workspace = true }
-perl-subprocess-runtime = { workspace = true }
-serde = { workspace = true }
+perl-tidy = { workspace = true }
+perl-tidy-perltidy = { workspace = true }
 
 [dev-dependencies]
+perl-subprocess-runtime = { workspace = true }
 perl-tdd-support = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

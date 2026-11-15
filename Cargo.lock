@@ -1641,10 +1641,10 @@ dependencies = [
 name = "perl-lsp-perltidy"
 version = "0.17.0"
 dependencies = [
- "perl-parser-core",
  "perl-subprocess-runtime",
  "perl-tdd-support",
- "serde",
+ "perl-tidy",
+ "perl-tidy-perltidy",
  "serde_json",
  "tempfile",
 ]
@@ -1710,7 +1710,6 @@ dependencies = [
  "perl-ast",
  "perl-diagnostics",
  "perl-lexer",
- "perl-lsp-perltidy",
  "perl-lsp-rs",
  "perl-module",
  "perl-parser",
@@ -1722,6 +1721,8 @@ dependencies = [
  "perl-subprocess-runtime",
  "perl-symbol",
  "perl-tdd-support",
+ "perl-tidy",
+ "perl-tidy-perltidy",
  "perl-workspace",
  "proptest",
  "regex",
@@ -1983,6 +1984,28 @@ dependencies = [
 [[package]]
 name = "perl-test-must"
 version = "0.17.0"
+
+[[package]]
+name = "perl-tidy"
+version = "0.17.0"
+dependencies = [
+ "perl-parser-core",
+ "perl-tdd-support",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "perl-tidy-perltidy"
+version = "0.17.0"
+dependencies = [
+ "perl-subprocess-runtime",
+ "perl-tdd-support",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "perl-token"

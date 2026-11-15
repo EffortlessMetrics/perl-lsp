@@ -55,7 +55,6 @@ perl-diagnostics = { workspace = true }
 # perl-lsp-critic-parser absorbed into perl-lsp-rs-core::critic_parser (Wave G3 step 7)
 perl-lsp-rs-core = { workspace = true, features = ["lsp-compat"] }
 # perl-lsp-performance absorbed into perl-lsp-rs-core::performance (Wave G3 step 5)
-perl-lsp-perltidy = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-semantic-facts = { workspace = true }
 perl-symbol = { workspace = true }
@@ -122,6 +121,7 @@ dap-phase3 = ["dap-phase1"]  # DAP Phase 3: Non-regression tests (AC17), require
 utf16-complete = ["perl-parser/utf16-complete"]  # Complete UTF-16 round-trip support
 
 [dev-dependencies]
+perl-lsp-perltidy = { workspace = true }
 assert_cmd = "2.2.2"
 insta = { version = "1.47.2", features = ["yaml"] }
 predicates = "3.1.3"

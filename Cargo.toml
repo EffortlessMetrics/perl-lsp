@@ -31,6 +31,8 @@ members = [
     # (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling — Wave G3 step 6)
     "crates/perl-lsp-perltidy",
+    "crates/perl-tidy",
+    "crates/perl-tidy-perltidy",
     # (perl-lsp-symbol-query absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-performance absorbed into perl-lsp-rs-core::tooling::performance — Wave G3 step 5)
     # (perl-lsp-critic-parser absorbed into perl-lsp-rs-core::critic_parser — Wave G3 step 7)
@@ -106,6 +108,7 @@ allow = [
     # (perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing — Wave Final PR B)
     # (perl-percentile absorbed into perl-parser — Wave D)
     "perl-subprocess-runtime",
+    "perl-tidy-perltidy",
     # (perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol — Wave G3 step 2)
     # (perl-lsp-symbol-query absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "perl-regex",
@@ -126,6 +129,7 @@ allow = [
     # Tier 2 — Core infrastructure
     # (perl-quote, perl-heredoc, perl-error, perl-edit absorbed into perl-parser-core — Wave D)
     "perl-parser-core",
+    "perl-tidy",
     "perl-test-must",
     "perl-tdd-support",
     # Tier 2+ — Rust-native tree-sitter facade (depends on perl-parser-core + perl-ast)
@@ -281,6 +285,8 @@ perl-core-harness = { path = "crates/perl-core-harness", version = "0.17.0" }
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.17.0" }
 # (perl-lsp-transport absorbed into perl-lsp-rs-core::transport — Wave G3 step 4)
 # (perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling — Wave G3 step 6)
+perl-tidy = { path = "crates/perl-tidy", version = "0.17.0" }
+perl-tidy-perltidy = { path = "crates/perl-tidy-perltidy", version = "0.17.0" }
 perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.17.0" }
 # (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-formatting-types absorbed into perl-lsp-rs-core::providers — Wave G1a)
